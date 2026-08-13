@@ -10,7 +10,8 @@
     "db:migrate:local": "wrangler d1 migrations apply execs --local",
     "db:migrate:prod": "wrangler d1 migrations apply execs --remote",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@execs/cfglint": "workspace:*",
@@ -32,6 +33,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",

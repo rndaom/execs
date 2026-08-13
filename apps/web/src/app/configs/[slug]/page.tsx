@@ -9,6 +9,9 @@ import { SafetyReport } from "@/components/safety-report";
 import { WhatThisChanges } from "@/components/what-this-changes";
 import { Badge } from "@/components/ui/badge";
 import { PreviewPanel } from "@/components/preview-panel";
+import { MediaManager } from "@/components/media-manager";
+import { ReportButton } from "@/components/report-button";
+import { getCurrentUser } from "@/lib/current-user";
 import { configs, configVersions } from "@/db/schema";
 import { getDb, getEnv } from "@/lib/cf";
 import { getConfigPage } from "@/lib/queries";
@@ -33,6 +36,7 @@ export default async function ConfigPage({
   const { uploaded } = await searchParams;
   const page = await getConfigPage(slug);
   if (!page || page.status === "removed") notFound();
+  const currentUser = await getCurrentUser();
 
   const latest = page.latest;
   const metadata: VersionMetadata | null = latest ? JSON.parse(latest.metadataJson) : null;
@@ -137,6 +141,10 @@ export default async function ConfigPage({
         </section>
       )}
 
+      {currentUser?.id === page.ownerId && (
+        <MediaManager configId={page.id} mediaIds={page.media.map((m) => m.id)} />
+      )}
+
       {page.media.length > 0 && (
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {page.media.map((m) =>
@@ -172,6 +180,8 @@ export default async function ConfigPage({
       </div>
 
       <CfgViewer files={viewerFiles} />
+
+      <ReportButton configId={page.id} />
 
       {page.versions.length > 1 && (
         <section className="rounded-lg border border-edge bg-panel p-4">

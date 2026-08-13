@@ -6,6 +6,21 @@ import { detectConflicts, installVersion } from "@/install/installer";
 import { getStoredTf2Dir, pickTf2Dir, supportsDirectInstall, Tf2DirError } from "@/install/tf2dir";
 import type { InstallConflict, VersionManifest } from "@/install/types";
 
+async function fetchPayloadWithRetry(r2Key: string, attempts = 4): Promise<ArrayBuffer> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`/files/${r2Key}`);
+      if (res.ok) return await res.arrayBuffer();
+      lastError = new Error(`HTTP ${res.status} fetching ${r2Key}`);
+    } catch (e) {
+      lastError = e;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** i));
+  }
+  throw lastError instanceof Error ? lastError : new Error(`failed to fetch ${r2Key}`);
+}
+
 type Phase =
   | "idle"
   | "picking"
@@ -51,11 +66,7 @@ export function InstallButton({
       }
 
       setPhase("installing");
-      await installVersion(root, manifest, async (r2Key) => {
-        const res = await fetch(`/files/${r2Key}`);
-        if (!res.ok) throw new Error(`failed to fetch ${r2Key}`);
-        return res.arrayBuffer();
-      });
+      await installVersion(root, manifest, (r2Key) => fetchPayloadWithRetry(r2Key));
       fetch(`/api/installs/${versionId}`, { method: "POST" }).catch(() => {});
       setPhase("done");
     } catch (e) {

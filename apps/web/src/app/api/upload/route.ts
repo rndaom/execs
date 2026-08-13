@@ -1,6 +1,6 @@
 import { type CfgFile, lint } from "@execs/cfglint";
 import { matchPreview } from "@execs/preview-matrix";
-import { eq } from "drizzle-orm";
+import { and, count, eq, gt } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ulid } from "ulidx";
 import { z } from "zod";
@@ -33,9 +33,28 @@ function shouldWithhold(warnCount: number, ruleIds: Set<string>): boolean {
   return warnCount >= 3 || ruleIds.has("mouse-tamper") || ruleIds.has("chat-bind");
 }
 
+const MAX_UPLOADS_PER_DAY = 5;
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "sign in to upload" }, { status: 401 });
+
+  {
+    const db = await getDb();
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recent = await db
+      .select({ n: count() })
+      .from(configVersions)
+      .innerJoin(configs, eq(configs.id, configVersions.configId))
+      .where(and(eq(configs.ownerId, user.id), gt(configVersions.createdAt, dayAgo)))
+      .get();
+    if ((recent?.n ?? 0) >= MAX_UPLOADS_PER_DAY) {
+      return NextResponse.json(
+        { error: `upload limit reached (${MAX_UPLOADS_PER_DAY}/day) — try tomorrow` },
+        { status: 429 },
+      );
+    }
+  }
 
   let form: FormData;
   try {
