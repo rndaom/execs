@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run",
+    "build-corpus": "node tools/build-corpus.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.0",
