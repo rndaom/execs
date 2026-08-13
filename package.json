@@ -1,0 +1,16 @@
+{
+  "name": "execs",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "pnpm --filter @execs/web dev",
+    "build": "pnpm --filter @execs/web build",
+    "preview": "pnpm --filter @execs/web preview",
+    "deploy": "pnpm --filter @execs/web deploy",
+    "test": "pnpm -r test",
+    "check": "biome check ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0"
+  }
+}

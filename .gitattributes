@@ -1,0 +1,7 @@
+# Force LF everywhere; .cfg fixtures especially must not be CRLF-corrupted on Windows.
+* text=auto eol=lf
+*.cfg text eol=lf
+*.png binary
+*.webp binary
+*.jpg binary
+*.woff2 binary
