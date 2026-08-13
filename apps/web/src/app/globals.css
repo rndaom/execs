@@ -15,9 +15,30 @@
   --color-ink-muted: #a89f8c;
   --color-ink-faint: #6f695c;
 
-  --color-accent: #cf6a32;
-  --color-accent-hover: #e8823f;
-  --color-on-accent: #121212;
+  --color-brand: #cf6a32;
+  --color-brand-hover: #e8823f;
+  --color-on-brand: #121212;
+
+  /* shadcn/ui semantic tokens mapped onto the palette above */
+  --color-background: #121212;
+  --color-foreground: #ebe2ca;
+  --color-card: #1c1a19;
+  --color-card-foreground: #ebe2ca;
+  --color-popover: #1c1a19;
+  --color-popover-foreground: #ebe2ca;
+  --color-primary: #cf6a32;
+  --color-primary-foreground: #121212;
+  --color-secondary: #34302d;
+  --color-secondary-foreground: #ebe2ca;
+  --color-muted: #262321;
+  --color-muted-foreground: #a89f8c;
+  --color-accent: #34302d;
+  --color-accent-foreground: #ebe2ca;
+  --color-destructive: #b8383b;
+  --color-destructive-foreground: #ebe2ca;
+  --color-border: #3f3a35;
+  --color-input: #3f3a35;
+  --color-ring: #cf6a32;
 
   --color-team-red: #b8383b;
   --color-team-blu: #5885a2;

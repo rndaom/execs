@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-dvh flex flex-col antialiased">
         <header className="border-b border-edge">
           <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-            <Link href="/" className="font-display text-2xl text-accent">
+            <Link href="/" className="font-display text-2xl text-brand">
               execs
             </Link>
             <nav className="flex items-center gap-4 text-sm text-ink-muted">

@@ -3,7 +3,7 @@ export default function HomePage() {
     <div className="flex flex-col gap-10">
       <section className="pt-10 text-center">
         <h1 className="font-display text-5xl leading-tight">
-          TF2 configs, <span className="text-accent">shared</span>
+          TF2 configs, <span className="text-brand">shared</span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-ink-muted">
           Browse community configs, see exactly what they change before you install, and put them
