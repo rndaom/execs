@@ -23,7 +23,7 @@
     { "binding": "R2_MEDIA", "bucket_name": "execs-media" }
   ],
   "vars": {
-    "APP_URL": "http://localhost:3000"
+    "APP_URL": "http://localhost:5184"
   }
   // Secrets (wrangler secret put / .dev.vars locally): STEAM_API_KEY, SESSION_SECRET
 }
