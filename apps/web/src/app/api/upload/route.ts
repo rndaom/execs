@@ -1,4 +1,5 @@
 import { type CfgFile, lint } from "@execs/cfglint";
+import { matchPreview } from "@execs/preview-matrix";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ulid } from "ulidx";
@@ -129,6 +130,12 @@ export async function POST(request: Request) {
       binds: Object.fromEntries(lintResult.binds),
       summary: lintResult.summary,
     });
+    const preview = matchPreview({
+      moduleLevels: lintResult.moduleLevels,
+      effective: Object.fromEntries(
+        [...lintResult.effective].map(([cvar, v]) => [cvar, v.value]),
+      ),
+    });
     const lintStatus = warns.length > 0 ? "warnings" : "clean";
     const status = shouldWithhold(warns.length, new Set(warns.map((w) => w.ruleId)))
       ? "withheld"
@@ -141,7 +148,12 @@ export async function POST(request: Request) {
       statements.push(
         db
           .update(configs)
-          .set({ latestVersionId: versionId, updatedAt: now, status })
+          .set({
+            latestVersionId: versionId,
+            updatedAt: now,
+            status,
+            previewTier: preview?.tier ?? null,
+          })
           .where(eq(configs.id, configId)),
       );
     } else {
@@ -162,6 +174,7 @@ export async function POST(request: Request) {
           category: meta.category,
           status,
           latestVersionId: versionId,
+          previewTier: preview?.tier ?? null,
           createdAt: now,
           updatedAt: now,
         }),
@@ -183,6 +196,7 @@ export async function POST(request: Request) {
         lintReportJson: JSON.stringify(lintResult.findings),
         lintStatus,
         metadataJson,
+        previewKeyJson: preview ? JSON.stringify(preview) : null,
         zipR2Key,
         totalSizeBytes: totalSize,
         fileCount: expanded.length,

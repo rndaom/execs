@@ -1,4 +1,6 @@
 import type { Finding, SummarySection } from "@execs/cfglint";
+import { matchPreview, type PreviewMatch } from "@execs/preview-matrix";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CfgViewer } from "@/components/cfg-viewer";
@@ -6,7 +8,9 @@ import { InstallButton } from "@/components/install-button";
 import { SafetyReport } from "@/components/safety-report";
 import { WhatThisChanges } from "@/components/what-this-changes";
 import { Badge } from "@/components/ui/badge";
-import { getEnv } from "@/lib/cf";
+import { PreviewPanel } from "@/components/preview-panel";
+import { configs, configVersions } from "@/db/schema";
+import { getDb, getEnv } from "@/lib/cf";
 import { getConfigPage } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +37,33 @@ export default async function ConfigPage({
   const latest = page.latest;
   const metadata: VersionMetadata | null = latest ? JSON.parse(latest.metadataJson) : null;
   const findings: Finding[] = latest ? JSON.parse(latest.lintReportJson) : [];
+
+  // Preview match — lazily backfilled for versions uploaded before the
+  // preview system existed (effective cvars reconstructed from the summary).
+  let preview: PreviewMatch | null = latest?.previewKeyJson
+    ? JSON.parse(latest.previewKeyJson)
+    : null;
+  if (!preview && latest && metadata) {
+    preview = matchPreview({
+      moduleLevels: metadata.moduleLevels,
+      effective: Object.fromEntries(
+        metadata.summary.flatMap((s) => s.entries.map((e) => [e.cvar, e.value])),
+      ),
+    });
+    if (preview) {
+      const db = await getDb();
+      await db.batch([
+        db
+          .update(configVersions)
+          .set({ previewKeyJson: JSON.stringify(preview) })
+          .where(eq(configVersions.id, latest.id)),
+        db
+          .update(configs)
+          .set({ previewTier: preview.tier })
+          .where(eq(configs.id, page.id)),
+      ]);
+    }
+  }
 
   // Pull cfg/txt contents from R2 for the file viewer (small files by upload cap).
   const env = await getEnv();
@@ -130,6 +161,8 @@ export default async function ConfigPage({
           )}
         </section>
       )}
+
+      {preview && <PreviewPanel match={preview} />}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <SafetyReport findings={findings} />
