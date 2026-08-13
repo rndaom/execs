@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@execs/cfglint": "workspace:*",
+    "@execs/preview-matrix": "workspace:^",
     "@opennextjs/cloudflare": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
