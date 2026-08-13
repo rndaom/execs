@@ -2,6 +2,7 @@ import type { Finding, SummarySection } from "@execs/cfglint";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CfgViewer } from "@/components/cfg-viewer";
+import { InstallButton } from "@/components/install-button";
 import { SafetyReport } from "@/components/safety-report";
 import { WhatThisChanges } from "@/components/what-this-changes";
 import { Badge } from "@/components/ui/badge";
@@ -85,15 +86,16 @@ export default async function ConfigPage({
 
       {latest && (
         <div className="flex flex-wrap items-center gap-3">
+          <InstallButton versionId={latest.id} versionLabel={latest.versionLabel} />
           <a
             href={`/api/download/${latest.id}`}
-            className="rounded-pill bg-brand px-6 py-2.5 font-semibold text-on-brand hover:bg-brand-hover"
+            className="rounded-pill border border-edge px-6 py-2 text-sm text-ink-muted hover:border-brand hover:text-brand"
           >
-            Download zip · v{latest.versionLabel}
+            Download zip
           </a>
           <span className="text-xs text-ink-faint">
             {(latest.totalSizeBytes / 1024).toFixed(1)} KB · {latest.fileCount} file
-            {latest.fileCount === 1 ? "" : "s"} · one-click install coming soon
+            {latest.fileCount === 1 ? "" : "s"}
           </span>
         </div>
       )}
