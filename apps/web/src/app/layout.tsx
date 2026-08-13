@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Big_Shoulders, Inter } from "next/font/google";
 import Link from "next/link";
+import { UserMenu } from "@/components/user-menu";
 import "./globals.css";
 
 const display = Big_Shoulders({
@@ -41,13 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
             </nav>
             <div className="ml-auto">
-              {/* Increment 2 replaces this with the official Steam sign-in button + session avatar */}
-              <Link
-                href="/api/auth/steam"
-                className="rounded-pill bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-hover"
-              >
-                Sign in through Steam
-              </Link>
+              <UserMenu />
             </div>
           </div>
         </header>
