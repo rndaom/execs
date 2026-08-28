@@ -55,6 +55,10 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - The app has an **in-app updater**: GitHub Releases + Tauri updater. Show “update available,” they click to install. No silent force-replace, no analytics/telemetry.
 - mastercomfig VPK updates are a **separate** control on the Comfig pane (their GitHub releases, not ours).
 
+## Implementation status
+- Product grill is **done**. This file is the V1 spec.
+- Next: scaffold `apps/desktop` (Tauri 2), process lock, TF2 finder, empty profile switcher. Do not start HUD/crosshair/viewmodel studios.
+
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.
 - Display font: Big Shoulders Display (free, OFL) behind the `--font-display` token — a TF2-Build lookalike. Swap only if TF2 Build web licensing is ever verified.
