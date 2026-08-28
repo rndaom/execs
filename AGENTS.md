@@ -57,7 +57,8 @@ Working agreement: durable product/design decisions get recorded here as they ar
 
 ## Implementation status
 - Product grill is **done**. This file is the V1 spec.
-- Next: scaffold `apps/desktop` (Tauri 2), process lock, TF2 finder, empty profile switcher. Do not start HUD/crosshair/viewmodel studios.
+- Linear: [execs](https://linear.app/rndaom/project/execs-a89f9a30e95c) (team Rndaom). Next issue: [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold `apps/desktop`.
+- Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.
