@@ -22,6 +22,8 @@ jobs:
         run: pnpm test
       - name: Lint & format
         run: pnpm check
+      - name: Desktop frontend
+        run: pnpm --filter @execs/desktop build
       - name: OpenNext production build (workerd compatibility gate)
         run: pnpm --filter @execs/web exec opennextjs-cloudflare build
       - name: Playwright smoke
