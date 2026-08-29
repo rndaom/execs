@@ -1,5 +1,16 @@
 # design-qa log
 
+## 2026-08-29 — absorb pack prompt (RND-150)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=absorb`: ready screen, Profiles `1 profile`, `Main` with Active badge, pack prompt “TF2 changed packs in custom. Update the active profile?”, Added `toonhud`, Removed `oldpack`, primary Update and secondary Keep.
+- Keep / Update dismiss the prompt in preview (no live tree). Save current as… still available.
+- `?preview=saved` / `library` / `locked`: no pack prompt. Locked stays read-only.
+
+Open items: native absorb after `tf_linux64` quit and Cloud dual-write need a Tauri window; not available on this VM.
+final result: pass for absorb pack-prompt chrome (preview fixtures).
+
 ## 2026-08-29 — save current as… (RND-148)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 

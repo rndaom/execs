@@ -9,6 +9,7 @@ export const PREVIEW_STATES = [
   "locked",
   "library",
   "saved",
+  "absorb",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -35,7 +36,8 @@ export function previewInstalls(state: PreviewState): Tf2Install[] {
     state === "confirmed" ||
     state === "locked" ||
     state === "library" ||
-    state === "saved"
+    state === "saved" ||
+    state === "absorb"
   ) {
     return [ONE];
   }
@@ -46,7 +48,13 @@ export function previewInstalls(state: PreviewState): Tf2Install[] {
 }
 
 export function previewConfirmed(state: PreviewState): Tf2Install | null {
-  if (state === "confirmed" || state === "locked" || state === "library" || state === "saved") {
+  if (
+    state === "confirmed" ||
+    state === "locked" ||
+    state === "library" ||
+    state === "saved" ||
+    state === "absorb"
+  ) {
     return ONE;
   }
   return null;
@@ -57,7 +65,7 @@ export function previewLocked(state: PreviewState): boolean {
 }
 
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
-  if (state === "saved") {
+  if (state === "saved" || state === "absorb") {
     return previewSavedLibrary(ONE.path);
   }
   if (state === "library") {

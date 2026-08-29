@@ -116,3 +116,42 @@ export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export type AbsorbDelta = {
+  ownedChanged: string[];
+  ownedMissing: string[];
+  packsAdded: string[];
+  packsRemoved: string[];
+  configCfg: boolean;
+};
+
+export type AbsorbOwnedResult = {
+  library: ProfileLibrary;
+  delta: AbsorbDelta;
+};
+
+export type PackChoice = "update" | "keep";
+
+export async function scanAbsorbDelta(): Promise<AbsorbDelta> {
+  try {
+    return await invoke<AbsorbDelta>("scan_absorb_delta");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function absorbOwned(): Promise<AbsorbOwnedResult> {
+  try {
+    return await invoke<AbsorbOwnedResult>("absorb_owned");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function absorbPacks(choice: PackChoice): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("absorb_packs", { choice });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}

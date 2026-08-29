@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canSaveCurrent, emptyLibrary, libraryStatusCopy, previewSavedLibrary } from "./library-ui";
+import {
+  canSaveCurrent,
+  emptyLibrary,
+  hasPackChanges,
+  libraryStatusCopy,
+  previewPackDelta,
+  previewSavedLibrary,
+} from "./library-ui";
 
 const ready = emptyLibrary("/tf2", true);
 
@@ -33,6 +40,19 @@ describe("library UI helpers", () => {
     expect(canSaveCurrent({ ...ready, usable: false, rootMismatch: true }, false, "Main")).toBe(
       false,
     );
+  });
+
+  it("flags pack add/remove for the absorb prompt", () => {
+    expect(hasPackChanges(previewPackDelta())).toBe(true);
+    expect(
+      hasPackChanges({
+        ownedChanged: ["tf/cfg/config.cfg"],
+        ownedMissing: [],
+        packsAdded: [],
+        packsRemoved: [],
+        configCfg: true,
+      }),
+    ).toBe(false);
   });
 
   it("builds a saved-preview library with an active profile", () => {
