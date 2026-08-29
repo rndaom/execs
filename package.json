@@ -7,6 +7,8 @@
     "build": "pnpm --filter @execs/web build",
     "preview": "pnpm --filter @execs/web preview",
     "deploy": "pnpm --filter @execs/web deploy",
+    "desktop": "pnpm --filter @execs/desktop tauri",
+    "desktop:dev": "pnpm --filter @execs/desktop tauri dev",
     "test": "pnpm -r test",
     "check": "biome check ."
   },
