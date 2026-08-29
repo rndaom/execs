@@ -61,7 +61,8 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold is on `main`. [RND-145](https://linear.app/rndaom/issue/RND-145) / [RND-146](https://linear.app/rndaom/issue/RND-146) finder + write-lock are on `main`.
 - [RND-147](https://linear.app/rndaom/issue/RND-147) profile library lives in app data (`profiles/` next to `settings.json`): index + per-file sha256, exclusive trees, `mastercomfig-base.vpk` shared by hash.
 - [RND-148](https://linear.app/rndaom/issue/RND-148) save-current snapshots the live file-safe surface (overrides / vanilla cfg, `config.cfg`, all of `tf/custom/`, launch options) into a named profile without deleting live files. First save sets the active profile. No switch or absorb yet.
-- Next: [RND-152](https://linear.app/rndaom/issue/RND-152) first-run split (existing → Save current only; unused → wizard).
+- [RND-150](https://linear.app/rndaom/issue/RND-150) after TF2 quits (and on boot if the game is closed), owned-file / `config.cfg` drift absorbs into the active profile. New or deleted `tf/custom/` packs prompt, default Update. Absorb dual-writes `config.cfg` to the live folder and Steam Cloud. Never rolls the live folder back. No switch yet.
+- Next: [RND-149](https://linear.app/rndaom/issue/RND-149) exact-replace switch. First-run split remains [RND-152](https://linear.app/rndaom/issue/RND-152).
 - Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions

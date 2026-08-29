@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  type AbsorbDelta,
+  absorbOwned,
+  absorbPacks,
   browseTf2Root,
   confirmTf2Root,
   getProfileLibrary,
@@ -14,7 +17,13 @@ import {
   type Tf2Install,
 } from "./lib/bridge";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
-import { canSaveCurrent, libraryStatusCopy, previewSavedProfile } from "./lib/library-ui";
+import {
+  canSaveCurrent,
+  hasPackChanges,
+  libraryStatusCopy,
+  previewPackDelta,
+  previewSavedProfile,
+} from "./lib/library-ui";
 import {
   type PreviewState,
   previewConfirmed,
@@ -41,7 +50,8 @@ export function App() {
     (preview === "confirmed" ||
       preview === "locked" ||
       preview === "library" ||
-      preview === "saved")
+      preview === "saved" ||
+      preview === "absorb")
       ? "ready"
       : "finder",
   );
@@ -66,6 +76,10 @@ export function App() {
   const [running, setRunning] = useState(() => !tauri && previewLocked(preview));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(() =>
+    !tauri && preview === "absorb" ? previewPackDelta() : null,
+  );
+  const [absorbNonce, setAbsorbNonce] = useState(0);
 
   useEffect(() => {
     if (!tauri) {
@@ -89,6 +103,9 @@ export function App() {
           const current = await getProfileLibrary();
           if (!cancelled) {
             setLibrary(current);
+            if (!lock.running) {
+              setAbsorbNonce((value) => value + 1);
+            }
           }
         }
         const found = await scanTf2Installs();
@@ -111,7 +128,14 @@ export function App() {
     }
 
     boot();
-    onTf2Running(setRunning)
+    let lastRunning = false;
+    onTf2Running((next) => {
+      if (lastRunning && !next) {
+        setAbsorbNonce((value) => value + 1);
+      }
+      lastRunning = next;
+      setRunning(next);
+    })
       .then((stop) => {
         unlisten = stop;
       })
@@ -148,6 +172,29 @@ export function App() {
       cancelled = true;
     };
   }, [tauri, confirmed, running, library]);
+
+  useEffect(() => {
+    if (!tauri || absorbNonce === 0 || running) {
+      return;
+    }
+    let cancelled = false;
+    absorbOwned()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setLibrary(result.library);
+        setPackPrompt(hasPackChanges(result.delta) ? result.delta : null);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not absorb live changes.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tauri, absorbNonce, running]);
 
   async function onBrowse() {
     setError(null);
@@ -228,6 +275,23 @@ export function App() {
     }
   }
 
+  async function onPackChoice(choice: "update" | "keep") {
+    setError(null);
+    if (!tauri) {
+      setPackPrompt(null);
+      return;
+    }
+    setBusy(true);
+    try {
+      setLibrary(await absorbPacks(choice));
+      setPackPrompt(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update packs.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function onChange() {
     setError(null);
     setScreen("finder");
@@ -261,8 +325,10 @@ export function App() {
             running={running}
             busy={busy}
             error={error}
+            packPrompt={packPrompt}
             onDraftName={setDraftName}
             onSave={onSaveCurrent}
+            onPackChoice={onPackChoice}
             onChange={onChange}
           />
         ) : (
@@ -383,8 +449,10 @@ function ReadyPanel({
   running,
   busy,
   error,
+  packPrompt,
   onDraftName,
   onSave,
+  onPackChoice,
   onChange,
 }: {
   path: string;
@@ -393,8 +461,10 @@ function ReadyPanel({
   running: boolean;
   busy: boolean;
   error: string | null;
+  packPrompt: AbsorbDelta | null;
   onDraftName: (name: string) => void;
   onSave: () => void;
+  onPackChoice: (choice: "update" | "keep") => void;
   onChange: () => void;
 }) {
   const canSave = library ? canSaveCurrent(library, running, draftName) && !busy : false;
@@ -465,6 +535,42 @@ function ReadyPanel({
         ) : null}
         {library && running ? (
           <p className="mt-3 text-sm text-ink-muted">Read-only while TF2 is running.</p>
+        ) : null}
+        {packPrompt && !running ? (
+          <div
+            data-testid="absorb-pack-prompt"
+            className="mt-4 rounded-lg border border-edge bg-bg px-4 py-3"
+          >
+            <p className="text-sm text-ink">TF2 changed packs in custom. Update the active profile?</p>
+            {packPrompt.packsAdded.length > 0 ? (
+              <p className="mt-2 text-xs text-ink-muted">Added: {packPrompt.packsAdded.join(", ")}</p>
+            ) : null}
+            {packPrompt.packsRemoved.length > 0 ? (
+              <p className="mt-1 text-xs text-ink-muted">
+                Removed: {packPrompt.packsRemoved.join(", ")}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-testid="absorb-pack-update"
+                disabled={busy}
+                onClick={() => onPackChoice("update")}
+                className="rounded-pill bg-brand px-4 py-1.5 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+              >
+                Update
+              </button>
+              <button
+                type="button"
+                data-testid="absorb-pack-keep"
+                disabled={busy}
+                onClick={() => onPackChoice("keep")}
+                className="rounded-pill border border-edge px-4 py-1.5 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+              >
+                Keep
+              </button>
+            </div>
+          </div>
         ) : null}
       </div>
 

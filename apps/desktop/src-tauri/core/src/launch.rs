@@ -58,9 +58,13 @@ pub fn find_cloud_config() -> Option<PathBuf> {
 }
 
 pub fn find_cloud_config_from(steam_roots: &[PathBuf]) -> Option<PathBuf> {
-    let account = pick_steam_account_from(steam_roots)?;
-    let path = account.cloud_config();
+    let path = cloud_config_path_from(steam_roots)?;
     path.is_file().then_some(path)
+}
+
+/// Cloud `config.cfg` path for the picked account, even if the file does not exist yet.
+pub fn cloud_config_path_from(steam_roots: &[PathBuf]) -> Option<PathBuf> {
+    pick_steam_account_from(steam_roots).map(|account| account.cloud_config())
 }
 
 pub fn pick_steam_account_from(steam_roots: &[PathBuf]) -> Option<SteamAccount> {

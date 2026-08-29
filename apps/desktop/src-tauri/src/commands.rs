@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use execs_core::{ProfileError, ProfileLibrary, Tf2Install, WriteLock};
+use execs_core::{
+    AbsorbDelta, AbsorbOwnedResult, PackChoice, ProfileError, ProfileLibrary, Tf2Install, WriteLock,
+};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
@@ -80,4 +82,19 @@ pub fn create_profile_record(name: String) -> Result<ProfileLibrary, String> {
 #[tauri::command]
 pub fn save_current_as(name: String) -> Result<ProfileLibrary, String> {
     execs_core::save_current_as(&confirmed_root()?, &name).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn scan_absorb_delta() -> Result<AbsorbDelta, String> {
+    execs_core::scan_absorb_delta(&confirmed_root()?).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn absorb_owned() -> Result<AbsorbOwnedResult, String> {
+    execs_core::absorb_owned(&confirmed_root()?).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn absorb_packs(choice: PackChoice) -> Result<ProfileLibrary, String> {
+    execs_core::absorb_packs(&confirmed_root()?, choice).map_err(|err| err.message())
 }

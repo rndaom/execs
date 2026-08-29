@@ -1,3 +1,4 @@
+pub mod absorb;
 pub mod blob;
 pub mod finder;
 pub mod hash;
@@ -9,6 +10,10 @@ pub mod steam_inf;
 pub mod surface;
 pub mod vdf;
 
+pub use absorb::{
+    absorb_owned, absorb_packs, scan_absorb_delta, write_config_cfg_dual, AbsorbDelta,
+    AbsorbOwnedResult, PackChoice,
+};
 pub use finder::{
     discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
     Tf2RootError,
