@@ -112,3 +112,54 @@ pub async fn switch_profile(app: AppHandle, id: String) -> Result<ProfileLibrary
     .await
     .map_err(|err| err.to_string())?
 }
+
+#[tauri::command]
+pub async fn export_profile(app: AppHandle, id: String) -> Result<Option<String>, String> {
+    let root = confirmed_root()?;
+    let library = execs_core::load_library(Some(&root)).map_err(|err| err.message())?;
+    let name = library
+        .profiles
+        .iter()
+        .find(|profile| profile.id == id)
+        .map(|profile| profile.name.as_str())
+        .ok_or_else(|| ProfileError::UnknownProfile.message())?;
+    let suggested = execs_core::safe_zip_file_name(name);
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Export profile")
+            .add_filter("Zip", &["zip"])
+            .set_file_name(&suggested)
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|err| err.to_string())?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let mut path = picked.into_path().map_err(|err| err.to_string())?;
+    if path.extension().is_none() {
+        path.set_extension("zip");
+    }
+    execs_core::export_profile(&root, &id, &path).map_err(|err| err.message())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+pub async fn import_profile(app: AppHandle) -> Result<ProfileLibrary, String> {
+    let root = confirmed_root()?;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Import profile")
+            .add_filter("Zip", &["zip"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|err| err.to_string())?;
+    let Some(picked) = picked else {
+        return execs_core::load_library(Some(&root)).map_err(|err| err.message());
+    };
+    let path = picked.into_path().map_err(|err| err.to_string())?;
+    execs_core::import_profile(&root, &path).map_err(|err| err.message())
+}

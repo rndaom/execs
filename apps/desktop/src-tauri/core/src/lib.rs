@@ -10,6 +10,7 @@ pub mod steam_inf;
 pub mod surface;
 pub mod switch;
 pub mod vdf;
+pub mod zip;
 
 pub use absorb::{
     absorb_owned, absorb_packs, scan_absorb_delta, write_config_cfg_dual, AbsorbDelta,
@@ -33,6 +34,9 @@ pub use settings::{
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
+pub use zip::{
+    export_profile, export_profile_to, import_profile, import_profile_from, safe_zip_file_name,
+};
 
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {

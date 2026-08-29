@@ -1,5 +1,18 @@
 # design-qa log
 
+## 2026-08-29 — profile zip export/import chrome (RND-151)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=import`: ready screen, Profiles `2 profiles`, `Main` with Active badge + Export, `Imported` with Export only. Import pill next to `Save current as…`. Active stays on Main.
+- `?preview=saved`: `1 profile`, Main Active + Export, Import next to Save.
+- `?preview=library`: `No profiles yet`, no Export rows, Import next to Save (enabled without a name).
+- `?preview=locked`: write-lock banner, no Import/Save form, copy `Read-only while TF2 is running. Export is still available.`
+- Finder regressions: `?preview=empty` Confirm disabled; `?preview=confirmed` empty Profiles + Save + Import, no banner.
+
+Open items: native zip save/open dialogs and live `tf_linux64` poll need a Tauri window; not available on this VM.
+final result: pass for export/import chrome (preview fixtures).
+
 ## 2026-08-29 — profile switch progress (RND-149)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 
