@@ -29,6 +29,16 @@ export function canSaveCurrent(library: ProfileLibrary, running: boolean, name: 
   return library.usable && !library.rootMismatch && !running && name.trim().length > 0;
 }
 
+/** Export reads app-data, so it stays available while TF2 is running. */
+export function canExportProfile(library: ProfileLibrary, _running: boolean): boolean {
+  return library.usable && !library.rootMismatch;
+}
+
+/** Import mutates the library, so the write-lock applies. */
+export function canImportProfile(library: ProfileLibrary, running: boolean): boolean {
+  return library.usable && !library.rootMismatch && !running;
+}
+
 export function previewSavedProfile(name: string, index: number): ProfileSummary {
   return {
     id: `preview-${index}`,
@@ -93,5 +103,16 @@ export function previewSwitchLibrary(tf2Root: string): ProfileLibrary {
     ...emptyLibrary(tf2Root, true),
     activeProfileId: main.id,
     profiles: [main, alt],
+  };
+}
+
+/** Two profiles after a fake import — first stays active. */
+export function previewImportedLibrary(tf2Root: string): ProfileLibrary {
+  const existing = previewSavedProfile("Main", 1);
+  const imported = previewSavedProfile("Imported", 2);
+  return {
+    ...emptyLibrary(tf2Root, true),
+    activeProfileId: existing.id,
+    profiles: [existing, imported],
   };
 }

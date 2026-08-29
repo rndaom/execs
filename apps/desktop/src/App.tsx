@@ -5,9 +5,11 @@ import {
   absorbPacks,
   browseTf2Root,
   confirmTf2Root,
+  exportProfile,
   getProfileLibrary,
   getTf2Root,
   getTf2WriteLock,
+  importProfile,
   initProfileLibrary,
   isTauri,
   onSwitchProgress,
@@ -21,6 +23,8 @@ import {
 } from "./lib/bridge";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
 import {
+  canExportProfile,
+  canImportProfile,
   canSaveCurrent,
   hasPackChanges,
   libraryStatusCopy,
@@ -52,15 +56,7 @@ export function App() {
   const tauri = isTauri();
   const [preview] = useState<PreviewState>(initialPreview);
   const [screen, setScreen] = useState<Screen>(() =>
-    !tauri &&
-    (preview === "confirmed" ||
-      preview === "locked" ||
-      preview === "library" ||
-      preview === "saved" ||
-      preview === "absorb" ||
-      preview === "switch")
-      ? "ready"
-      : "finder",
+    !tauri && previewConfirmed(preview) ? "ready" : "finder",
   );
   const [scanning, setScanning] = useState(tauri);
   const [installs, setInstalls] = useState<Tf2Install[]>(() =>
@@ -274,6 +270,52 @@ export function App() {
     }
   }
 
+  async function onExport(id: string) {
+    if (!library || !canExportProfile(library, running)) {
+      return;
+    }
+    setError(null);
+    if (!tauri) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await exportProfile(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not export that profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onImport() {
+    if (!library || !canImportProfile(library, running)) {
+      return;
+    }
+    setError(null);
+    if (!tauri) {
+      const next = previewSavedProfile(
+        `Imported ${library.profiles.length + 1}`,
+        library.profiles.length + 1,
+      );
+      setLibrary({
+        ...library,
+        initialized: true,
+        usable: true,
+        profiles: [...library.profiles, next],
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      setLibrary(await importProfile());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not import that profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onSaveCurrent() {
     if (!library || !canSaveCurrent(library, running, draftName)) {
       return;
@@ -387,6 +429,8 @@ export function App() {
             onSave={onSaveCurrent}
             onSwitch={onSwitch}
             onPackChoice={onPackChoice}
+            onExport={onExport}
+            onImport={onImport}
             onChange={onChange}
           />
         ) : (
@@ -513,6 +557,8 @@ function ReadyPanel({
   onSave,
   onSwitch,
   onPackChoice,
+  onExport,
+  onImport,
   onChange,
 }: {
   path: string;
@@ -527,11 +573,15 @@ function ReadyPanel({
   onSave: () => void;
   onSwitch: (id: string) => void;
   onPackChoice: (choice: "update" | "keep") => void;
+  onExport: (id: string) => void;
+  onImport: () => void;
   onChange: () => void;
 }) {
   const canSave = library ? canSaveCurrent(library, running, draftName) && !busy : false;
   const switching = busy && switchStep !== null && switchStep !== "done";
   const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
+  const showExport = library ? canExportProfile(library, running) : false;
+  const canImport = library ? canImportProfile(library, running) && !busy : false;
 
   return (
     <section className="flex w-full flex-col items-center text-center">
@@ -553,13 +603,16 @@ function ReadyPanel({
               const active = library.activeProfileId === profile.id;
               const canSwitch = !active && !running && !busy && !switching;
               return (
-                <li key={profile.id}>
+                <li
+                  key={profile.id}
+                  className="flex items-center gap-2 rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
+                >
                   <button
                     type="button"
                     data-testid="profile-name"
                     disabled={!canSwitch}
                     onClick={() => onSwitch(profile.id)}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-edge bg-bg px-4 py-2 text-left text-sm text-ink hover:bg-panel-raised disabled:hover:bg-bg disabled:opacity-70"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left hover:text-ink disabled:opacity-70"
                   >
                     <span>{profile.name}</span>
                     {active ? (
@@ -573,6 +626,17 @@ function ReadyPanel({
                       <span className="text-xs text-ink-muted">Switch</span>
                     )}
                   </button>
+                  {showExport ? (
+                    <button
+                      type="button"
+                      data-testid="profile-export"
+                      onClick={() => onExport(profile.id)}
+                      disabled={busy}
+                      className="shrink-0 rounded-pill border border-edge px-3 py-1 text-xs text-ink hover:bg-panel-raised disabled:opacity-50"
+                    >
+                      Export
+                    </button>
+                  ) : null}
                 </li>
               );
             })}
@@ -605,10 +669,21 @@ function ReadyPanel({
             >
               Save current as…
             </button>
+            <button
+              type="button"
+              data-testid="profile-import"
+              onClick={onImport}
+              disabled={!canImport}
+              className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+            >
+              Import
+            </button>
           </form>
         ) : null}
         {library && running ? (
-          <p className="mt-3 text-sm text-ink-muted">Read-only while TF2 is running.</p>
+          <p className="mt-3 text-sm text-ink-muted">
+            Read-only while TF2 is running. Export is still available.
+          </p>
         ) : null}
         {packPrompt && !running ? (
           <div

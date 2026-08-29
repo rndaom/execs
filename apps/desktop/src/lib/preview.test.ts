@@ -15,6 +15,7 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=saved")).toBe("saved");
     expect(previewStateFromSearch("?preview=absorb")).toBe("absorb");
     expect(previewStateFromSearch("?preview=switch")).toBe("switch");
+    expect(previewStateFromSearch("?preview=import")).toBe("import");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -46,5 +47,12 @@ describe("preview query", () => {
     expect(previewLibrary("absorb")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("switch")?.profiles).toHaveLength(2);
     expect(previewLibrary("switch")?.profiles[1].name).toBe("Alt");
+    expect(previewConfirmed("import")?.path).toContain("Team Fortress 2");
+    expect(previewLibrary("import")).toMatchObject({
+      initialized: true,
+      usable: true,
+      profiles: [{ name: "Main" }, { name: "Imported" }],
+    });
+    expect(previewLibrary("import")?.activeProfileId).toBe("preview-1");
   });
 });

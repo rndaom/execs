@@ -1,5 +1,10 @@
 import type { ProfileLibrary, Tf2Install } from "./bridge";
-import { emptyLibrary, previewSavedLibrary, previewSwitchLibrary } from "./library-ui";
+import {
+  emptyLibrary,
+  previewImportedLibrary,
+  previewSavedLibrary,
+  previewSwitchLibrary,
+} from "./library-ui";
 
 export const PREVIEW_STATES = [
   "empty",
@@ -11,6 +16,7 @@ export const PREVIEW_STATES = [
   "saved",
   "absorb",
   "switch",
+  "import",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -39,7 +45,8 @@ export function previewInstalls(state: PreviewState): Tf2Install[] {
     state === "library" ||
     state === "saved" ||
     state === "absorb" ||
-    state === "switch"
+    state === "switch" ||
+    state === "import"
   ) {
     return [ONE];
   }
@@ -56,7 +63,8 @@ export function previewConfirmed(state: PreviewState): Tf2Install | null {
     state === "library" ||
     state === "saved" ||
     state === "absorb" ||
-    state === "switch"
+    state === "switch" ||
+    state === "import"
   ) {
     return ONE;
   }
@@ -70,6 +78,9 @@ export function previewLocked(state: PreviewState): boolean {
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   if (state === "switch") {
     return previewSwitchLibrary(ONE.path);
+  }
+  if (state === "import") {
+    return previewImportedLibrary(ONE.path);
   }
   if (state === "saved" || state === "absorb") {
     return previewSavedLibrary(ONE.path);

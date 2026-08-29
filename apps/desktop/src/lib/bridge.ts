@@ -178,3 +178,19 @@ export async function onSwitchProgress(
     handler(event.payload);
   });
 }
+
+export async function exportProfile(id: string): Promise<string | null> {
+  try {
+    return await invoke<string | null>("export_profile", { id });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function importProfile(): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("import_profile");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
