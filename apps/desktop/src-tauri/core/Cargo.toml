@@ -1,0 +1,13 @@
+[package]
+name = "execs-core"
+version = "0.1.0"
+edition = "2021"
+description = "TF2 finder, settings, and write-lock logic (no Tauri / WebKit)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.33"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
