@@ -1,5 +1,17 @@
 # design-qa log
 
+## 2026-08-29 — save current as… (RND-148)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=saved`: ready screen, Profiles `1 profile`, `Main` with Active badge, primary CTA `Save current as…` (not Create).
+- `?preview=library`: `No profiles yet`, Save current as… disabled until a name is typed. Save `Main` then `Alt`: status `1 profile` → `2 profiles`, first stays Active, field clears. Not a switcher.
+- `?preview=locked`: write-lock banner, Profiles read-only (`Read-only while TF2 is running.`), no save form.
+- Finder / confirmed regressions: `?preview=empty` Confirm disabled; `?preview=confirmed` empty Profiles + Save current as… form, no banner.
+
+Open items: native library ingest, folder picker, and live `tf_linux64` poll need a Tauri window; not available on this VM.
+final result: pass for save-current chrome (preview fixtures).
+
 ## 2026-08-29 — profile library chrome (RND-147)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 
