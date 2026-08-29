@@ -1,5 +1,18 @@
 # design-qa log
 
+## 2026-08-29 — TF2 finder + write-lock chrome (RND-145 / RND-146)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + Playwright computed styles + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- Finder empty: `FIND TF2`, no-install copy, Browse enabled, Confirm disabled, Valve/Steam disclaimer.
+- One candidate + Browse demo path → Confirm → remembered root (`execs` wordmark, `TF2 INSTALL`, Change).
+- Multiple installs: two cards, Confirm disabled until a card is selected (`data-selected`).
+- Write-lock banner: `TF2 is running — execs is read-only until the game quits.` Change returns to finder with the banner still up; Browse and Confirm stay enabled.
+- Tokens: body bg `rgb(18, 18, 18)`, ink `rgb(235, 226, 202)`, brand `rgb(207, 106, 50)`, `Big Shoulders Display` on the heading, Inter on body.
+
+Open items: native folder picker and live `tf_linux64` poll need a Tauri window; not available on this VM.
+final result: pass for finder + write-lock chrome (preview fixtures).
+
 ## 2026-08-28 — desktop empty chrome (RND-144)
 Method: Vite preview at `http://localhost:4173/` + Playwright computed styles + browser walkthrough.
 
