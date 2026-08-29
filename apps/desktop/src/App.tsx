@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   browseTf2Root,
   confirmTf2Root,
-  createProfileRecord,
   getProfileLibrary,
   getTf2Root,
   getTf2WriteLock,
@@ -10,11 +9,12 @@ import {
   isTauri,
   onTf2Running,
   type ProfileLibrary,
+  saveCurrentAs,
   scanTf2Installs,
   type Tf2Install,
 } from "./lib/bridge";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
-import { canCreateProfile, libraryStatusCopy, previewCreatedProfile } from "./lib/library-ui";
+import { canSaveCurrent, libraryStatusCopy, previewSavedProfile } from "./lib/library-ui";
 import {
   type PreviewState,
   previewConfirmed,
@@ -37,7 +37,11 @@ export function App() {
   const tauri = isTauri();
   const [preview] = useState<PreviewState>(initialPreview);
   const [screen, setScreen] = useState<Screen>(() =>
-    !tauri && (preview === "confirmed" || preview === "locked" || preview === "library")
+    !tauri &&
+    (preview === "confirmed" ||
+      preview === "locked" ||
+      preview === "library" ||
+      preview === "saved")
       ? "ready"
       : "finder",
   );
@@ -196,30 +200,29 @@ export function App() {
     }
   }
 
-  async function onCreateProfile() {
-    if (!library || !canCreateProfile(library, running, draftName)) {
+  async function onSaveCurrent() {
+    if (!library || !canSaveCurrent(library, running, draftName)) {
       return;
     }
     setError(null);
     if (!tauri) {
+      const next = previewSavedProfile(draftName, library.profiles.length + 1);
       setLibrary({
         ...library,
         initialized: true,
         usable: true,
-        profiles: [
-          ...library.profiles,
-          previewCreatedProfile(draftName, library.profiles.length + 1),
-        ],
+        activeProfileId: library.activeProfileId ?? next.id,
+        profiles: [...library.profiles, next],
       });
       setDraftName("");
       return;
     }
     setBusy(true);
     try {
-      setLibrary(await createProfileRecord(draftName));
+      setLibrary(await saveCurrentAs(draftName));
       setDraftName("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create that profile.");
+      setError(err instanceof Error ? err.message : "Could not save that profile.");
     } finally {
       setBusy(false);
     }
@@ -259,7 +262,7 @@ export function App() {
             busy={busy}
             error={error}
             onDraftName={setDraftName}
-            onCreate={onCreateProfile}
+            onSave={onSaveCurrent}
             onChange={onChange}
           />
         ) : (
@@ -381,7 +384,7 @@ function ReadyPanel({
   busy,
   error,
   onDraftName,
-  onCreate,
+  onSave,
   onChange,
 }: {
   path: string;
@@ -391,10 +394,10 @@ function ReadyPanel({
   busy: boolean;
   error: string | null;
   onDraftName: (name: string) => void;
-  onCreate: () => void;
+  onSave: () => void;
   onChange: () => void;
 }) {
-  const canCreate = library ? canCreateProfile(library, running, draftName) && !busy : false;
+  const canSave = library ? canSaveCurrent(library, running, draftName) && !busy : false;
 
   return (
     <section className="flex w-full flex-col items-center text-center">
@@ -416,9 +419,17 @@ function ReadyPanel({
               <li
                 key={profile.id}
                 data-testid="profile-name"
-                className="rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
+                className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
               >
-                {profile.name}
+                <span>{profile.name}</span>
+                {library.activeProfileId === profile.id ? (
+                  <span
+                    data-testid="profile-active"
+                    className="rounded-pill border border-brand px-2 py-0.5 text-xs text-brand"
+                  >
+                    Active
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -429,7 +440,7 @@ function ReadyPanel({
             className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
             onSubmit={(event) => {
               event.preventDefault();
-              onCreate();
+              onSave();
             }}
           >
             <label className="sr-only" htmlFor="profile-name">
@@ -445,10 +456,10 @@ function ReadyPanel({
             />
             <button
               type="submit"
-              disabled={!canCreate}
+              disabled={!canSave}
               className="rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
             >
-              Create
+              Save current as…
             </button>
           </form>
         ) : null}
