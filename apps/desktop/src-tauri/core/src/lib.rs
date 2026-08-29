@@ -1,5 +1,8 @@
+pub mod blob;
 pub mod finder;
+pub mod hash;
 pub mod process_lock;
+pub mod profile;
 pub mod settings;
 pub mod steam_inf;
 pub mod vdf;
@@ -11,6 +14,10 @@ pub use finder::{
 pub use process_lock::{
     is_tf2_running, refuse_if_running, refuse_if_running_among, write_lock_status, WriteLock,
     WriteLockError,
+};
+pub use profile::{
+    create_profile_record, init_library, load_library, profiles_dir, ProfileError, ProfileLibrary,
+    ProfileSummary,
 };
 pub use settings::{
     remember_tf2_root, remember_tf2_root_to, remembered_tf2_root, remembered_tf2_root_from,
