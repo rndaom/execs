@@ -10,10 +10,13 @@ import {
   getTf2WriteLock,
   initProfileLibrary,
   isTauri,
+  onSwitchProgress,
   onTf2Running,
   type ProfileLibrary,
   saveCurrentAs,
   scanTf2Installs,
+  type SwitchStep,
+  switchProfile,
   type Tf2Install,
 } from "./lib/bridge";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
@@ -23,6 +26,9 @@ import {
   libraryStatusCopy,
   previewPackDelta,
   previewSavedProfile,
+  previewSwitchStep,
+  SWITCH_STEPS,
+  switchStepIndex,
 } from "./lib/library-ui";
 import {
   type PreviewState,
@@ -51,7 +57,8 @@ export function App() {
       preview === "locked" ||
       preview === "library" ||
       preview === "saved" ||
-      preview === "absorb")
+      preview === "absorb" ||
+      preview === "switch")
       ? "ready"
       : "finder",
   );
@@ -80,6 +87,9 @@ export function App() {
     !tauri && preview === "absorb" ? previewPackDelta() : null,
   );
   const [absorbNonce, setAbsorbNonce] = useState(0);
+  const [switchStep, setSwitchStep] = useState<SwitchStep | null>(() =>
+    !tauri && preview === "switch" ? previewSwitchStep() : null,
+  );
 
   useEffect(() => {
     if (!tauri) {
@@ -87,7 +97,6 @@ export function App() {
     }
 
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
 
     async function boot() {
       try {
@@ -129,6 +138,7 @@ export function App() {
 
     boot();
     let lastRunning = false;
+    const stops: Array<() => void> = [];
     onTf2Running((next) => {
       if (lastRunning && !next) {
         setAbsorbNonce((value) => value + 1);
@@ -137,13 +147,30 @@ export function App() {
       setRunning(next);
     })
       .then((stop) => {
-        unlisten = stop;
+        if (cancelled) {
+          stop();
+          return;
+        }
+        stops.push(stop);
+      })
+      .catch(() => {});
+    onSwitchProgress((progress) => {
+      setSwitchStep(progress.step);
+    })
+      .then((stop) => {
+        if (cancelled) {
+          stop();
+          return;
+        }
+        stops.push(stop);
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      for (const stop of stops) {
+        stop();
+      }
     };
   }, [tauri]);
 
@@ -275,6 +302,35 @@ export function App() {
     }
   }
 
+  async function onSwitch(id: string) {
+    if (!library || running || busy || library.activeProfileId === id) {
+      return;
+    }
+    setError(null);
+    setPackPrompt(null);
+    if (!tauri) {
+      setSwitchStep("closed");
+      setSwitchStep("pack");
+      setSwitchStep("remove");
+      setSwitchStep("write");
+      setSwitchStep("cloud");
+      setSwitchStep("done");
+      setLibrary({ ...library, activeProfileId: id });
+      return;
+    }
+    setBusy(true);
+    setSwitchStep("closed");
+    try {
+      setLibrary(await switchProfile(id));
+      setSwitchStep("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not switch profiles.");
+      setSwitchStep(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onPackChoice(choice: "update" | "keep") {
     setError(null);
     if (!tauri) {
@@ -326,8 +382,10 @@ export function App() {
             busy={busy}
             error={error}
             packPrompt={packPrompt}
+            switchStep={switchStep}
             onDraftName={setDraftName}
             onSave={onSaveCurrent}
+            onSwitch={onSwitch}
             onPackChoice={onPackChoice}
             onChange={onChange}
           />
@@ -450,8 +508,10 @@ function ReadyPanel({
   busy,
   error,
   packPrompt,
+  switchStep,
   onDraftName,
   onSave,
+  onSwitch,
   onPackChoice,
   onChange,
 }: {
@@ -462,12 +522,16 @@ function ReadyPanel({
   busy: boolean;
   error: string | null;
   packPrompt: AbsorbDelta | null;
+  switchStep: SwitchStep | null;
   onDraftName: (name: string) => void;
   onSave: () => void;
+  onSwitch: (id: string) => void;
   onPackChoice: (choice: "update" | "keep") => void;
   onChange: () => void;
 }) {
   const canSave = library ? canSaveCurrent(library, running, draftName) && !busy : false;
+  const switching = busy && switchStep !== null && switchStep !== "done";
+  const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
 
   return (
     <section className="flex w-full flex-col items-center text-center">
@@ -485,23 +549,33 @@ function ReadyPanel({
         </p>
         {library && library.profiles.length > 0 ? (
           <ul className="mt-3 flex flex-col gap-2">
-            {library.profiles.map((profile) => (
-              <li
-                key={profile.id}
-                data-testid="profile-name"
-                className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
-              >
-                <span>{profile.name}</span>
-                {library.activeProfileId === profile.id ? (
-                  <span
-                    data-testid="profile-active"
-                    className="rounded-pill border border-brand px-2 py-0.5 text-xs text-brand"
+            {library.profiles.map((profile) => {
+              const active = library.activeProfileId === profile.id;
+              const canSwitch = !active && !running && !busy && !switching;
+              return (
+                <li key={profile.id}>
+                  <button
+                    type="button"
+                    data-testid="profile-name"
+                    disabled={!canSwitch}
+                    onClick={() => onSwitch(profile.id)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-edge bg-bg px-4 py-2 text-left text-sm text-ink hover:bg-panel-raised disabled:hover:bg-bg disabled:opacity-70"
                   >
-                    Active
-                  </span>
-                ) : null}
-              </li>
-            ))}
+                    <span>{profile.name}</span>
+                    {active ? (
+                      <span
+                        data-testid="profile-active"
+                        className="rounded-pill border border-brand px-2 py-0.5 text-xs text-brand"
+                      >
+                        Active
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-muted">Switch</span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
 
@@ -571,6 +645,28 @@ function ReadyPanel({
               </button>
             </div>
           </div>
+        ) : null}
+        {switchStep ? (
+          <ol data-testid="switch-progress" className="mt-4 flex flex-col gap-1.5">
+            {SWITCH_STEPS.map((item, index) => {
+              const done = currentIndex > index || switchStep === "done";
+              const current = item.id === switchStep && switchStep !== "done";
+              return (
+                <li
+                  key={item.id}
+                  data-step={item.id}
+                  data-current={current ? "true" : "false"}
+                  data-done={done ? "true" : "false"}
+                  className={`text-sm ${
+                    current ? "text-brand" : done ? "text-ink" : "text-ink-faint"
+                  }`}
+                >
+                  {done ? "Done — " : current ? "Now — " : ""}
+                  {item.label}
+                </li>
+              );
+            })}
+          </ol>
         ) : null}
       </div>
 

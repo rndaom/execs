@@ -542,6 +542,26 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+pub fn set_active_profile_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running_names: I,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    refuse_writes(running_names)?;
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    if !index.profiles.iter().any(|profile| profile.id == profile_id) {
+        return Err(ProfileError::UnknownProfile);
+    }
+    index.active_profile_id = Some(profile_id.to_string());
+    write_json(&index_file(profiles_dir), &index)?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
 pub fn remove_manifest_files_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,

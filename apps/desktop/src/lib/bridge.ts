@@ -155,3 +155,26 @@ export async function absorbPacks(choice: PackChoice): Promise<ProfileLibrary> {
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export type SwitchStep = "closed" | "pack" | "remove" | "write" | "cloud" | "done";
+
+export type SwitchProgress = {
+  step: SwitchStep;
+  detail: string | null;
+};
+
+export async function switchProfile(id: string): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("switch_profile", { id });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function onSwitchProgress(
+  handler: (progress: SwitchProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<SwitchProgress>("profile-switch-progress", (event) => {
+    handler(event.payload);
+  });
+}
