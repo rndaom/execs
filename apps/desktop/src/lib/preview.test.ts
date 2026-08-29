@@ -14,6 +14,7 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=library")).toBe("library");
     expect(previewStateFromSearch("?preview=saved")).toBe("saved");
     expect(previewStateFromSearch("?preview=absorb")).toBe("absorb");
+    expect(previewStateFromSearch("?preview=switch")).toBe("switch");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -43,5 +44,7 @@ describe("preview query", () => {
     expect(previewLibrary("saved")?.activeProfileId).toBe("preview-1");
     expect(previewConfirmed("absorb")?.path).toContain("Team Fortress 2");
     expect(previewLibrary("absorb")?.activeProfileId).toBe("preview-1");
+    expect(previewLibrary("switch")?.profiles).toHaveLength(2);
+    expect(previewLibrary("switch")?.profiles[1].name).toBe("Alt");
   });
 });
