@@ -2,12 +2,14 @@
 name = "execs-core"
 version = "0.1.0"
 edition = "2021"
-description = "TF2 finder, settings, and write-lock logic (no Tauri / WebKit)"
+description = "TF2 finder, settings, write-lock, and profile library (no Tauri / WebKit)"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 sysinfo = "0.33"
+uuid = { version = "~1.11", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
