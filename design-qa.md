@@ -1,5 +1,17 @@
 # design-qa log
 
+## 2026-08-29 — profile library chrome (RND-147)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=library`: ready screen, `TF2 INSTALL` path, Profiles panel `No profiles yet`, Create disabled until a name is typed.
+- Create `Main` then `Alt`: status `1 profile` → `2 profiles`, names listed, field clears. Not a switcher.
+- `?preview=locked`: write-lock banner, Profiles read-only (`Read-only while TF2 is running.`), no Create form. Change returns to finder with the banner still up.
+- Finder regressions: `?preview=empty` Confirm disabled; `?preview=one` Confirm → ready with empty Profiles + Create form, no banner.
+
+Open items: native library writes, folder picker, and live `tf_linux64` poll need a Tauri window; not available on this VM.
+final result: pass for profile-library chrome (preview fixtures).
+
 ## 2026-08-29 — TF2 finder + write-lock chrome (RND-145 / RND-146)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + Playwright computed styles + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 

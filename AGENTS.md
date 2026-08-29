@@ -58,8 +58,9 @@ Working agreement: durable product/design decisions get recorded here as they ar
 ## Implementation status
 - Product grill is **done**. This file is the V1 spec.
 - Linear: [execs](https://linear.app/rndaom/project/execs-a89f9a30e95c) (team Rndaom).
-- [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold is on `main`. [RND-145](https://linear.app/rndaom/issue/RND-145) / [RND-146](https://linear.app/rndaom/issue/RND-146) are the finder + write-lock.
-- Next: [RND-147](https://linear.app/rndaom/issue/RND-147) profile library in app data.
+- [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold is on `main`. [RND-145](https://linear.app/rndaom/issue/RND-145) / [RND-146](https://linear.app/rndaom/issue/RND-146) finder + write-lock are on `main`.
+- [RND-147](https://linear.app/rndaom/issue/RND-147) profile library lives in app data (`profiles/` next to `settings.json`): index + per-file sha256, exclusive trees, `mastercomfig-base.vpk` shared by hash. No switch or live ingest yet.
+- Next: [RND-148](https://linear.app/rndaom/issue/RND-148) save the current TF2 setup as a named profile.
 - Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions
