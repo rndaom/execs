@@ -1,4 +1,4 @@
-import { isKnownName, lookupCvar } from "./corpus.ts";
+import { lookupCvar } from "./corpus.ts";
 import { parseCommands } from "./parser.ts";
 import {
   ALIAS_SHADOW_DENYLIST,

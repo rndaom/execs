@@ -1,5 +1,16 @@
 # design-qa log
 
+## 2026-08-28 — desktop empty chrome (RND-144)
+Method: Vite preview at `http://localhost:4173/` + Playwright computed styles + browser walkthrough.
+
+Verified:
+- Empty window chrome: uppercase `execs` wordmark, not-affiliated Valve/Steam disclaimer, no profile UI.
+- Tokens: body bg `rgb(18, 18, 18)` (`#121212`), ink `rgb(235, 226, 202)` (`#EBE2CA`), brand `rgb(207, 106, 50)` (`#CF6A32`), muted disclaimer `rgb(168, 159, 140)`.
+- Fonts: `Big Shoulders Display` 600 loaded on the wordmark; Inter 400 on body.
+
+Open items: TF2 finder and write-lock chrome (RND-145 / RND-146); no native Tauri window in this Linux VM (GTK/WebKit missing).
+final result: pass for desktop scaffold chrome.
+
 ## 2026-08-13 — v1 build pass (all increments)
 Method: DOM/computed-style inspection + curl (screenshot tooling unavailable in this environment); Playwright e2e for interaction flows.
 
