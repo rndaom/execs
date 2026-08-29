@@ -24,6 +24,13 @@ jobs:
         run: pnpm check
       - name: Desktop frontend
         run: pnpm --filter @execs/desktop build
+  desktop-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Finder and write-lock units
+        run: cargo test --manifest-path apps/desktop/src-tauri/core/Cargo.toml --locked
       - name: OpenNext production build (workerd compatibility gate)
         run: pnpm --filter @execs/web exec opennextjs-cloudflare build
       - name: Playwright smoke

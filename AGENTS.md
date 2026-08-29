@@ -57,13 +57,18 @@ Working agreement: durable product/design decisions get recorded here as they ar
 
 ## Implementation status
 - Product grill is **done**. This file is the V1 spec.
-- Linear: [execs](https://linear.app/rndaom/project/execs-a89f9a30e95c) (team Rndaom). Next issue: [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold `apps/desktop`.
+- Linear: [execs](https://linear.app/rndaom/project/execs-a89f9a30e95c) (team Rndaom).
+- [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold is on `main`. [RND-145](https://linear.app/rndaom/issue/RND-145) / [RND-146](https://linear.app/rndaom/issue/RND-146) are the finder + write-lock.
+- Next: [RND-147](https://linear.app/rndaom/issue/RND-147) profile library in app data.
 - Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.
 - Display font: Big Shoulders Display (free, OFL) behind the `--font-display` token — a TF2-Build lookalike. Swap only if TF2 Build web licensing is ever verified.
 - Not affiliated with Valve / Steam. Credit mastercomfig where we use it. "Powered by Steam" footer is hub-era; desktop copy still needs a not-affiliated disclaimer.
+- TF2 root is remembered only after Confirm. Settings live at Windows `%AppData%\execs\settings.json` and Linux `~/.local/share/execs/settings.json` (`{ "schema": 1, "tf2Root": "..." }`). Do not use Tauri's `com.rndaom.execs` app-data dir — RND-147 puts `profiles/` next to this file.
+- Finder: Steam roots (Windows `SteamPath` / `InstallPath`, Linux ticket paths plus `~/.steam/root` and lowercase `steam`) → `libraryfolders.vdf` / `appmanifest_440.acf` → accept only after `tf/steam.inf` app `440`. Multiple installs are a picker. Browse always stays visible. A `tf/` pick normalizes to its parent. A stored root that fails validation is unconfirmed.
+- Write lock: process **name** `tf_win64.exe` (Windows) / `tf_linux64` (Linux). `refuse_if_running()` wraps live-surface and profile-library writes. Confirming the TF2 root is an app-data settings write and stays allowed while the game is open. Do not lock on `steam`, `srcds`, `hl2.exe`, or Proton `tf_win64.exe` on Linux.
 
 ## Deployment (legacy hub — parked)
 - Old live URL: https://execs.anthonyrandomcarey.workers.dev (Cloudflare Worker "execs"). Do not treat as the product.
