@@ -19,6 +19,9 @@ pub fn run() {
             commands::init_profile_library,
             commands::create_profile_record,
             commands::save_current_as,
+            commands::scan_absorb_delta,
+            commands::absorb_owned,
+            commands::absorb_packs,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());

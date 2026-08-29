@@ -542,6 +542,44 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+pub fn remove_manifest_files_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    paths: &[String],
+    running_names: I,
+) -> Result<(), ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    refuse_writes(running_names)?;
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut changed = false;
+    for path in paths {
+        let path = normalize_rel_path(path)?;
+        let before = manifest.files.len();
+        manifest.files.retain(|file| file.path != path);
+        if manifest.files.len() != before {
+            changed = true;
+        }
+        let exclusive = exclusive_file_path(profiles_dir, profile_id, &path);
+        if exclusive.is_file() {
+            fs::remove_file(&exclusive).map_err(|e| ProfileError::Io(e.to_string()))?;
+        }
+    }
+    if !changed {
+        return Ok(());
+    }
+    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
+    touch_profile(&mut index, profile_id);
+    write_json(&index_file(profiles_dir), &index)?;
+    let referenced = referenced_shared_hashes(profiles_dir, &index)?;
+    gc_unreferenced_blobs(profiles_dir, &referenced)?;
+    Ok(())
+}
+
 pub fn load_manifest(
     profiles_dir: &Path,
     profile_id: &str,

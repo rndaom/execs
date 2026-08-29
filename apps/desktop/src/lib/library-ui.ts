@@ -1,4 +1,4 @@
-import type { ProfileLibrary, ProfileSummary } from "./bridge";
+import type { AbsorbDelta, ProfileLibrary, ProfileSummary } from "./bridge";
 
 export function emptyLibrary(tf2Root: string, initialized: boolean): ProfileLibrary {
   return {
@@ -44,5 +44,27 @@ export function previewSavedLibrary(tf2Root: string, name = "Main"): ProfileLibr
     ...emptyLibrary(tf2Root, true),
     activeProfileId: profile.id,
     profiles: [profile],
+  };
+}
+
+export function emptyAbsorbDelta(): AbsorbDelta {
+  return {
+    ownedChanged: [],
+    ownedMissing: [],
+    packsAdded: [],
+    packsRemoved: [],
+    configCfg: false,
+  };
+}
+
+export function hasPackChanges(delta: AbsorbDelta): boolean {
+  return delta.packsAdded.length > 0 || delta.packsRemoved.length > 0;
+}
+
+export function previewPackDelta(): AbsorbDelta {
+  return {
+    ...emptyAbsorbDelta(),
+    packsAdded: ["toonhud"],
+    packsRemoved: ["oldpack"],
   };
 }
