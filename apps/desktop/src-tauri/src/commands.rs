@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use execs_core::{Tf2Install, WriteLock};
+use execs_core::{ProfileError, ProfileLibrary, Tf2Install, WriteLock};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
@@ -55,4 +55,24 @@ pub fn get_tf2_root() -> Option<Tf2Install> {
 #[tauri::command]
 pub fn tf2_write_lock() -> WriteLock {
     execs_core::write_lock_status()
+}
+
+fn confirmed_root() -> Result<std::path::PathBuf, String> {
+    execs_core::remembered_tf2_root().ok_or_else(|| ProfileError::NoConfirmedRoot.message())
+}
+
+#[tauri::command]
+pub fn get_profile_library() -> Result<ProfileLibrary, String> {
+    let confirmed = execs_core::remembered_tf2_root();
+    execs_core::load_library(confirmed.as_deref()).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn init_profile_library() -> Result<ProfileLibrary, String> {
+    execs_core::init_library(&confirmed_root()?).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn create_profile_record(name: String) -> Result<ProfileLibrary, String> {
+    execs_core::create_profile_record(&confirmed_root()?, &name).map_err(|err| err.message())
 }

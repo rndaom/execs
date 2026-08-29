@@ -15,6 +15,9 @@ pub fn run() {
             commands::confirm_tf2_root,
             commands::get_tf2_root,
             commands::tf2_write_lock,
+            commands::get_profile_library,
+            commands::init_profile_library,
+            commands::create_profile_record,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());

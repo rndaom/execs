@@ -9,6 +9,23 @@ export type WriteLock = {
   running: boolean;
 };
 
+export type ProfileSummary = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProfileLibrary = {
+  initialized: boolean;
+  usable: boolean;
+  rootMismatch: boolean;
+  tf2Root: string | null;
+  confirmedRoot: string | null;
+  activeProfileId: string | null;
+  profiles: ProfileSummary[];
+};
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -66,4 +83,28 @@ export async function onTf2Running(handler: (running: boolean) => void): Promise
   return listen<boolean>("tf2-running", (event) => {
     handler(event.payload);
   });
+}
+
+export async function getProfileLibrary(): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("get_profile_library");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function initProfileLibrary(): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("init_profile_library");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function createProfileRecord(name: string): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("create_profile_record", { name });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
 }

@@ -1,6 +1,7 @@
-import type { Tf2Install } from "./bridge";
+import type { ProfileLibrary, Tf2Install } from "./bridge";
+import { emptyLibrary } from "./library-ui";
 
-export const PREVIEW_STATES = ["empty", "one", "many", "confirmed", "locked"] as const;
+export const PREVIEW_STATES = ["empty", "one", "many", "confirmed", "locked", "library"] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
 
@@ -21,7 +22,7 @@ export function previewStateFromSearch(search: string): PreviewState | null {
 }
 
 export function previewInstalls(state: PreviewState): Tf2Install[] {
-  if (state === "one" || state === "confirmed" || state === "locked") {
+  if (state === "one" || state === "confirmed" || state === "locked" || state === "library") {
     return [ONE];
   }
   if (state === "many") {
@@ -31,7 +32,7 @@ export function previewInstalls(state: PreviewState): Tf2Install[] {
 }
 
 export function previewConfirmed(state: PreviewState): Tf2Install | null {
-  if (state === "confirmed" || state === "locked") {
+  if (state === "confirmed" || state === "locked" || state === "library") {
     return ONE;
   }
   return null;
@@ -39,4 +40,14 @@ export function previewConfirmed(state: PreviewState): Tf2Install | null {
 
 export function previewLocked(state: PreviewState): boolean {
   return state === "locked";
+}
+
+export function previewLibrary(state: PreviewState): ProfileLibrary | null {
+  if (state === "library") {
+    return emptyLibrary(ONE.path, true);
+  }
+  if (state === "confirmed" || state === "locked") {
+    return emptyLibrary(ONE.path, false);
+  }
+  return null;
 }
