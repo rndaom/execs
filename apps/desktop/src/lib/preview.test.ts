@@ -12,6 +12,7 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=many")).toBe("many");
     expect(previewStateFromSearch("preview=locked")).toBe("locked");
     expect(previewStateFromSearch("?preview=library")).toBe("library");
+    expect(previewStateFromSearch("?preview=saved")).toBe("saved");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -32,5 +33,12 @@ describe("preview query", () => {
       rootMismatch: false,
       profiles: [],
     });
+    expect(previewConfirmed("saved")?.path).toContain("Team Fortress 2");
+    expect(previewLibrary("saved")).toMatchObject({
+      initialized: true,
+      usable: true,
+      profiles: [{ name: "Main" }],
+    });
+    expect(previewLibrary("saved")?.activeProfileId).toBe("preview-1");
   });
 });

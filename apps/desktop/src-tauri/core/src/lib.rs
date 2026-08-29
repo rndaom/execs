@@ -1,10 +1,12 @@
 pub mod blob;
 pub mod finder;
 pub mod hash;
+pub mod launch;
 pub mod process_lock;
 pub mod profile;
 pub mod settings;
 pub mod steam_inf;
+pub mod surface;
 pub mod vdf;
 
 pub use finder::{
@@ -16,13 +18,14 @@ pub use process_lock::{
     WriteLockError,
 };
 pub use profile::{
-    create_profile_record, init_library, load_library, profiles_dir, ProfileError, ProfileLibrary,
-    ProfileSummary,
+    create_profile_record, init_library, load_library, profiles_dir, save_current_as, ProfileError,
+    ProfileLibrary, ProfileSummary,
 };
 pub use settings::{
     remember_tf2_root, remember_tf2_root_to, remembered_tf2_root, remembered_tf2_root_from,
     settings_file, Settings,
 };
+pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {

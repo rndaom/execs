@@ -76,3 +76,8 @@ pub fn init_profile_library() -> Result<ProfileLibrary, String> {
 pub fn create_profile_record(name: String) -> Result<ProfileLibrary, String> {
     execs_core::create_profile_record(&confirmed_root()?, &name).map_err(|err| err.message())
 }
+
+#[tauri::command]
+pub fn save_current_as(name: String) -> Result<ProfileLibrary, String> {
+    execs_core::save_current_as(&confirmed_root()?, &name).map_err(|err| err.message())
+}

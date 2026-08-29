@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::hash::sha256_hex;
+use crate::hash::{copy_and_sha256, sha256_file, sha256_hex};
 use crate::profile::ProfileError;
 
 pub fn blobs_dir(profiles_dir: &Path) -> PathBuf {
@@ -29,6 +29,16 @@ pub fn put_blob(profiles_dir: &Path, bytes: &[u8]) -> Result<String, ProfileErro
         fs::create_dir_all(parent).map_err(|e| ProfileError::Io(e.to_string()))?;
     }
     fs::write(&dest, bytes).map_err(|e| ProfileError::Io(e.to_string()))?;
+    Ok(hash)
+}
+
+pub fn put_blob_from_path(profiles_dir: &Path, src: &Path) -> Result<String, ProfileError> {
+    let hash = sha256_file(src).map_err(|e| ProfileError::Io(e.to_string()))?;
+    let dest = blob_path(profiles_dir, &hash);
+    if dest.is_file() {
+        return Ok(hash);
+    }
+    copy_and_sha256(src, &dest).map_err(|e| ProfileError::Io(e.to_string()))?;
     Ok(hash)
 }
 

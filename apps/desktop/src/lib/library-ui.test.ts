@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCreateProfile, emptyLibrary, libraryStatusCopy } from "./library-ui";
+import { canSaveCurrent, emptyLibrary, libraryStatusCopy, previewSavedLibrary } from "./library-ui";
 
 const ready = emptyLibrary("/tf2", true);
 
@@ -26,12 +26,19 @@ describe("library UI helpers", () => {
     );
   });
 
-  it("creates only when the library is usable and unlocked", () => {
-    expect(canCreateProfile(ready, false, "Main")).toBe(true);
-    expect(canCreateProfile(ready, false, "  ")).toBe(false);
-    expect(canCreateProfile(ready, true, "Main")).toBe(false);
-    expect(canCreateProfile({ ...ready, usable: false, rootMismatch: true }, false, "Main")).toBe(
+  it("saves only when the library is usable and unlocked", () => {
+    expect(canSaveCurrent(ready, false, "Main")).toBe(true);
+    expect(canSaveCurrent(ready, false, "  ")).toBe(false);
+    expect(canSaveCurrent(ready, true, "Main")).toBe(false);
+    expect(canSaveCurrent({ ...ready, usable: false, rootMismatch: true }, false, "Main")).toBe(
       false,
     );
+  });
+
+  it("builds a saved-preview library with an active profile", () => {
+    const saved = previewSavedLibrary("/tf2", "Main");
+    expect(saved.profiles).toHaveLength(1);
+    expect(saved.profiles[0].name).toBe("Main");
+    expect(saved.activeProfileId).toBe(saved.profiles[0].id);
   });
 });
