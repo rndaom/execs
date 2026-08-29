@@ -108,3 +108,11 @@ export async function createProfileRecord(name: string): Promise<ProfileLibrary>
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("save_current_as", { name });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}

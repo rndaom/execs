@@ -8,10 +8,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::blob::{gc_unreferenced_blobs, put_blob};
-use crate::hash::sha256_hex;
+use crate::blob::{gc_unreferenced_blobs, put_blob, put_blob_from_path};
+use crate::hash::{copy_and_sha256, sha256_hex};
+use crate::launch::{find_cloud_config, read_launch_options, sanitize_launch_options};
 use crate::process_lock::{live_process_names, refuse_if_running_among, WriteLockError};
 use crate::settings::execs_data_dir;
+use crate::surface::inventory_live_surface_with;
 
 pub const LIBRARY_SCHEMA: u32 = 1;
 pub const SHARED_VPK_NAME: &str = "mastercomfig-base.vpk";
@@ -284,6 +286,87 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SaveCurrentOptions<'a> {
+    pub launch_options: Option<&'a str>,
+    pub cloud_config: Option<&'a Path>,
+}
+
+pub fn save_current_as(tf2_root: &Path, name: &str) -> Result<ProfileLibrary, ProfileError> {
+    let cloud = find_cloud_config();
+    save_current_as_to(
+        &profiles_dir(),
+        tf2_root,
+        name,
+        live_process_names(),
+        SaveCurrentOptions {
+            launch_options: None,
+            cloud_config: cloud.as_deref(),
+        },
+    )
+}
+
+pub fn save_current_as_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    name: &str,
+    running_names: I,
+    options: SaveCurrentOptions<'_>,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_writes(&running)?;
+    let name = normalize_name(name)?;
+    let mut index = init_unlocked(profiles_dir, tf2_root)?;
+    let profile_id = if let Some(existing) = reusable_empty_profile(profiles_dir, &index) {
+        rename_profile(profiles_dir, &mut index, &existing, &name)?;
+        existing
+    } else {
+        create_empty_record(profiles_dir, &mut index, &name)?
+    };
+
+    let inventory = inventory_live_surface_with(tf2_root, options.cloud_config)?;
+    for entry in inventory.entries {
+        if is_shared_rel_path(&entry.dest_rel) {
+            put_shared_blob_from_path_to(
+                profiles_dir,
+                tf2_root,
+                &profile_id,
+                &entry.dest_rel,
+                &entry.source,
+                &running,
+            )?;
+        } else {
+            put_exclusive_file_from_path_to(
+                profiles_dir,
+                tf2_root,
+                &profile_id,
+                &entry.dest_rel,
+                &entry.source,
+                &running,
+            )?;
+        }
+    }
+
+    let launch = match options.launch_options {
+        Some(raw) => sanitize_launch_options(raw),
+        None => read_launch_options(),
+    };
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    set_manifest_launch_options(profiles_dir, &mut index, &profile_id, launch)?;
+    if index.active_profile_id.is_none() {
+        index.active_profile_id = Some(profile_id);
+        write_json(&index_file(profiles_dir), &index)?;
+    }
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
 pub fn put_exclusive_file_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -323,6 +406,41 @@ where
     Ok(hash)
 }
 
+pub fn put_exclusive_file_from_path_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    source: &Path,
+    running_names: I,
+) -> Result<String, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    refuse_writes(running_names)?;
+    let path = checked_rel_path(rel_path)?;
+    if is_shared_rel_path(&path) {
+        return Err(ProfileError::MustBeShared(path));
+    }
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let dest = exclusive_file_path(profiles_dir, profile_id, &path);
+    let hash = copy_and_sha256(source, &dest).map_err(|e| ProfileError::Io(e.to_string()))?;
+    upsert_file(
+        &mut manifest,
+        ProfileFile {
+            path,
+            sha256: hash.clone(),
+            storage: FileStorage::Exclusive,
+        },
+    );
+    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
+    touch_profile(&mut index, profile_id);
+    write_json(&index_file(profiles_dir), &index)?;
+    Ok(hash)
+}
+
 pub fn put_shared_blob_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -343,6 +461,40 @@ where
     let mut index = usable_index(profiles_dir, tf2_root)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     let hash = put_blob(profiles_dir, bytes)?;
+    upsert_file(
+        &mut manifest,
+        ProfileFile {
+            path,
+            sha256: hash.clone(),
+            storage: FileStorage::Shared,
+        },
+    );
+    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
+    touch_profile(&mut index, profile_id);
+    write_json(&index_file(profiles_dir), &index)?;
+    Ok(hash)
+}
+
+pub fn put_shared_blob_from_path_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    source: &Path,
+    running_names: I,
+) -> Result<String, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    refuse_writes(running_names)?;
+    let path = checked_rel_path(rel_path)?;
+    if !is_shared_rel_path(&path) {
+        return Err(ProfileError::NotShareable(path));
+    }
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let hash = put_blob_from_path(profiles_dir, source)?;
     upsert_file(
         &mut manifest,
         ProfileFile {
@@ -402,6 +554,79 @@ pub fn load_manifest(
         return Err(ProfileError::Io("unsupported profile schema".into()));
     }
     Ok(manifest)
+}
+
+fn reusable_empty_profile(profiles_dir: &Path, index: &LibraryIndex) -> Option<String> {
+    if index.profiles.len() != 1 {
+        return None;
+    }
+    let id = index.profiles[0].id.clone();
+    let manifest = load_manifest(profiles_dir, &id).ok()?;
+    manifest.files.is_empty().then_some(id)
+}
+
+fn rename_profile(
+    profiles_dir: &Path,
+    index: &mut LibraryIndex,
+    profile_id: &str,
+    name: &str,
+) -> Result<(), ProfileError> {
+    if let Some(summary) = index
+        .profiles
+        .iter_mut()
+        .find(|profile| profile.id == profile_id)
+    {
+        summary.name = name.to_string();
+        summary.updated_at = utc_rfc3339();
+    }
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    manifest.name = name.to_string();
+    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
+    write_json(&index_file(profiles_dir), index)?;
+    Ok(())
+}
+
+fn create_empty_record(
+    profiles_dir: &Path,
+    index: &mut LibraryIndex,
+    name: &str,
+) -> Result<String, ProfileError> {
+    let now = utc_rfc3339();
+    let summary = ProfileSummary {
+        id: Uuid::new_v4().to_string(),
+        name: name.to_string(),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    let manifest = ProfileManifest {
+        schema: LIBRARY_SCHEMA,
+        id: summary.id.clone(),
+        name: name.to_string(),
+        tf2_root: index.tf2_root.clone(),
+        launch_options: String::new(),
+        files: Vec::new(),
+    };
+    write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
+    fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
+    let id = summary.id.clone();
+    index.profiles.push(summary);
+    write_json(&index_file(profiles_dir), index)?;
+    Ok(id)
+}
+
+fn set_manifest_launch_options(
+    profiles_dir: &Path,
+    index: &mut LibraryIndex,
+    profile_id: &str,
+    launch_options: String,
+) -> Result<(), ProfileError> {
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    manifest.launch_options = launch_options;
+    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
+    touch_profile(index, profile_id);
+    write_json(&index_file(profiles_dir), index)?;
+    Ok(())
 }
 
 fn refuse_writes<I, S>(running_names: I) -> Result<(), ProfileError>
@@ -850,6 +1075,216 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         let err = create_profile_record_to(&profiles, &root, "   ", unlocked()).unwrap_err();
         assert_eq!(err, ProfileError::InvalidName);
+        cleanup(&dir);
+    }
+
+    fn write_live(path: &Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, contents).unwrap();
+    }
+
+    fn snapshot_tree(root: &Path) -> std::collections::BTreeMap<String, String> {
+        let mut out = std::collections::BTreeMap::new();
+        fn walk(dir: &Path, root: &Path, out: &mut std::collections::BTreeMap<String, String>) {
+            let Ok(entries) = fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, root, out);
+                    continue;
+                }
+                if path.is_file() {
+                    let rel = path
+                        .strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    out.insert(rel, sha256_hex(&fs::read(&path).unwrap()));
+                }
+            }
+        }
+        if root.exists() {
+            walk(root, root, &mut out);
+        }
+        out
+    }
+
+    #[test]
+    fn save_current_copies_surface_and_leaves_live_untouched() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(
+            &root.join("tf/cfg/overrides/autoexec.cfg"),
+            "fov_desired 90\n",
+        );
+        write_live(&root.join("tf/cfg/user/autoexec.cfg"), "old autoexec\n");
+        write_live(
+            &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
+            "hud\n",
+        );
+        write_live(&root.join("tf/custom/mastercomfig-base.vpk"), "shared-vpk");
+        write_live(&root.join("tf/cfg/video.txt"), "video\n");
+        write_live(&root.join("tf/steam.inf"), "appID=440\n");
+        let before = snapshot_tree(&root);
+
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: Some("-novid -autoconfig -dxlevel 90 +quit -console"),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(library.profiles.len(), 1);
+        assert_eq!(library.profiles[0].name, "Main");
+        assert_eq!(
+            library.active_profile_id.as_deref(),
+            Some(library.profiles[0].id.as_str())
+        );
+        assert_eq!(snapshot_tree(&root), before);
+
+        let id = &library.profiles[0].id;
+        let manifest = load_manifest(&profiles, id).unwrap();
+        assert_eq!(manifest.launch_options, "-novid -console");
+        let paths: Vec<_> = manifest
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect();
+        assert!(paths.contains(&"tf/cfg/config.cfg"));
+        assert!(paths.contains(&"tf/cfg/overrides/autoexec.cfg"));
+        assert!(paths.contains(&"tf/cfg/overrides/.migrated/user/autoexec.cfg"));
+        assert!(paths.contains(&"tf/custom/hud/resource/ui/hudlayout.res"));
+        assert!(paths.contains(&"tf/custom/mastercomfig-base.vpk"));
+        assert!(!paths.iter().any(|path| path.contains("video.txt")));
+        assert!(!paths.iter().any(|path| path.contains("steam.inf")));
+
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                id,
+                "tf/cfg/overrides/autoexec.cfg"
+            ))
+            .unwrap(),
+            b"fov_desired 90\n"
+        );
+        let shared = manifest
+            .files
+            .iter()
+            .find(|file| file.path == "tf/custom/mastercomfig-base.vpk")
+            .unwrap();
+        assert_eq!(shared.storage, FileStorage::Shared);
+        assert_eq!(shared.sha256, sha256_hex(b"shared-vpk"));
+        assert!(crate::blob::blob_path(&profiles, &shared.sha256).is_file());
+        assert!(!exclusive_file_path(&profiles, id, "tf/custom/mastercomfig-base.vpk").exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn first_save_sets_active_second_does_not_steal() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/autoexec.cfg"), "fov_desired 90\n");
+
+        let first = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: Some(""),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        let first_id = first.profiles[0].id.clone();
+        assert_eq!(first.active_profile_id.as_deref(), Some(first_id.as_str()));
+
+        write_live(&root.join("tf/custom/alt/pack.txt"), "alt\n");
+        let second = save_current_as_to(
+            &profiles,
+            &root,
+            "Alt",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: Some("-novid"),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(second.profiles.len(), 2);
+        assert_eq!(second.active_profile_id.as_deref(), Some(first_id.as_str()));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn save_reuses_empty_singleton_and_uses_cloud_config() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        fs::create_dir_all(root.join("tf/custom")).unwrap();
+        let created =
+            create_profile_record_to(&profiles, &root, "Placeholder", unlocked()).unwrap();
+        let empty_id = created.profiles[0].id.clone();
+        let cloud = dir.join("cloud.cfg");
+        write_live(&cloud, "cloud bytes\n");
+
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Live",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: Some("-console"),
+                cloud_config: Some(&cloud),
+            },
+        )
+        .unwrap();
+        assert_eq!(library.profiles.len(), 1);
+        assert_eq!(library.profiles[0].id, empty_id);
+        assert_eq!(library.profiles[0].name, "Live");
+        let manifest = load_manifest(&profiles, &empty_id).unwrap();
+        assert_eq!(manifest.launch_options, "-console");
+        assert_eq!(manifest.files.len(), 1);
+        assert_eq!(manifest.files[0].path, "tf/cfg/config.cfg");
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &empty_id,
+                "tf/cfg/config.cfg"
+            ))
+            .unwrap(),
+            b"cloud bytes\n"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn save_current_refuses_while_tf2_running() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/autoexec.cfg"), "x\n");
+        let err = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            [tf2_name()],
+            SaveCurrentOptions::default(),
+        )
+        .unwrap_err();
+        assert_eq!(err, ProfileError::GameRunning);
+        assert!(!profiles.exists());
         cleanup(&dir);
     }
 }

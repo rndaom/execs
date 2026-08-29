@@ -25,15 +25,24 @@ export function libraryStatusCopy(library: ProfileLibrary): string {
   return `${library.profiles.length} profiles`;
 }
 
-export function canCreateProfile(library: ProfileLibrary, running: boolean, name: string): boolean {
+export function canSaveCurrent(library: ProfileLibrary, running: boolean, name: string): boolean {
   return library.usable && !library.rootMismatch && !running && name.trim().length > 0;
 }
 
-export function previewCreatedProfile(name: string, index: number): ProfileSummary {
+export function previewSavedProfile(name: string, index: number): ProfileSummary {
   return {
     id: `preview-${index}`,
     name: name.trim(),
     createdAt: "2026-08-29T00:00:00Z",
     updatedAt: "2026-08-29T00:00:00Z",
+  };
+}
+
+export function previewSavedLibrary(tf2Root: string, name = "Main"): ProfileLibrary {
+  const profile = previewSavedProfile(name, 1);
+  return {
+    ...emptyLibrary(tf2Root, true),
+    activeProfileId: profile.id,
+    profiles: [profile],
   };
 }

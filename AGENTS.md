@@ -59,8 +59,9 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - Product grill is **done**. This file is the V1 spec.
 - Linear: [execs](https://linear.app/rndaom/project/execs-a89f9a30e95c) (team Rndaom).
 - [RND-144](https://linear.app/rndaom/issue/RND-144) scaffold is on `main`. [RND-145](https://linear.app/rndaom/issue/RND-145) / [RND-146](https://linear.app/rndaom/issue/RND-146) finder + write-lock are on `main`.
-- [RND-147](https://linear.app/rndaom/issue/RND-147) profile library lives in app data (`profiles/` next to `settings.json`): index + per-file sha256, exclusive trees, `mastercomfig-base.vpk` shared by hash. No switch or live ingest yet.
-- Next: [RND-148](https://linear.app/rndaom/issue/RND-148) save the current TF2 setup as a named profile.
+- [RND-147](https://linear.app/rndaom/issue/RND-147) profile library lives in app data (`profiles/` next to `settings.json`): index + per-file sha256, exclusive trees, `mastercomfig-base.vpk` shared by hash.
+- [RND-148](https://linear.app/rndaom/issue/RND-148) save-current snapshots the live file-safe surface (overrides / vanilla cfg, `config.cfg`, all of `tf/custom/`, launch options) into a named profile without deleting live files. First save sets the active profile. No switch or absorb yet.
+- Next: [RND-152](https://linear.app/rndaom/issue/RND-152) first-run split (existing → Save current only; unused → wizard).
 - Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions
