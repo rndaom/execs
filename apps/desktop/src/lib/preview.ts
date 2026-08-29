@@ -1,4 +1,4 @@
-import type { ProfileLibrary, Tf2Install } from "./bridge";
+import type { FirstRunKind, ProfileLibrary, Tf2Install } from "./bridge";
 import {
   emptyLibrary,
   previewImportedLibrary,
@@ -17,6 +17,9 @@ export const PREVIEW_STATES = [
   "absorb",
   "switch",
   "import",
+  "first-existing",
+  "first-unused",
+  "first-unused-locked",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -30,6 +33,19 @@ const MANY: Tf2Install[] = [
   { path: "/mnt/games/SteamLibrary/steamapps/common/Team Fortress 2" },
 ];
 
+const READY: PreviewState[] = [
+  "confirmed",
+  "locked",
+  "library",
+  "saved",
+  "absorb",
+  "switch",
+  "import",
+  "first-existing",
+  "first-unused",
+  "first-unused-locked",
+];
+
 export function previewStateFromSearch(search: string): PreviewState | null {
   const value = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get(
     "preview",
@@ -38,41 +54,43 @@ export function previewStateFromSearch(search: string): PreviewState | null {
 }
 
 export function previewInstalls(state: PreviewState): Tf2Install[] {
-  if (
-    state === "one" ||
-    state === "confirmed" ||
-    state === "locked" ||
-    state === "library" ||
-    state === "saved" ||
-    state === "absorb" ||
-    state === "switch" ||
-    state === "import"
-  ) {
-    return [ONE];
-  }
   if (state === "many") {
     return MANY;
+  }
+  if (state === "one" || READY.includes(state)) {
+    return [ONE];
   }
   return [];
 }
 
 export function previewConfirmed(state: PreviewState): Tf2Install | null {
+  return READY.includes(state) ? ONE : null;
+}
+
+export function previewLocked(state: PreviewState): boolean {
+  return state === "locked" || state === "first-unused-locked";
+}
+
+export function previewFirstRunKind(state: PreviewState): FirstRunKind | null {
+  if (state === "first-unused" || state === "first-unused-locked") {
+    return "unused";
+  }
   if (
+    state === "first-existing" ||
     state === "confirmed" ||
-    state === "locked" ||
     state === "library" ||
-    state === "saved" ||
-    state === "absorb" ||
-    state === "switch" ||
-    state === "import"
+    state === "locked"
   ) {
-    return ONE;
+    return "existing";
   }
   return null;
 }
 
-export function previewLocked(state: PreviewState): boolean {
-  return state === "locked";
+export function previewFirstRunReasons(state: PreviewState): string[] {
+  if (previewFirstRunKind(state) === "existing") {
+    return ["Found autoexec.cfg", "Found packs in custom"];
+  }
+  return [];
 }
 
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
@@ -85,7 +103,12 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   if (state === "saved" || state === "absorb") {
     return previewSavedLibrary(ONE.path);
   }
-  if (state === "library") {
+  if (
+    state === "library" ||
+    state === "first-existing" ||
+    state === "first-unused" ||
+    state === "first-unused-locked"
+  ) {
     return emptyLibrary(ONE.path, true);
   }
   if (state === "confirmed" || state === "locked") {

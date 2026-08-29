@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
+import { FirstRunExisting } from "./FirstRunExisting";
+import { SetupWizard, wizardSpec } from "./SetupWizard";
 import {
   type AbsorbDelta,
   absorbOwned,
   absorbPacks,
+  applyUnusedWizard,
   browseTf2Root,
+  classifyFirstRun,
   confirmTf2Root,
   exportProfile,
+  type FirstRunKind,
   getProfileLibrary,
   getTf2Root,
   getTf2WriteLock,
@@ -23,12 +28,20 @@ import {
 } from "./lib/bridge";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
 import {
+  canApplyWizard,
+  type ComfigPresetId,
+  firstRunSurface,
+  type OfficialAddonId,
+  toggleAddon,
+} from "./lib/first-run-ui";
+import {
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
   hasPackChanges,
   libraryStatusCopy,
   previewPackDelta,
+  previewSavedLibrary,
   previewSavedProfile,
   previewSwitchStep,
   SWITCH_STEPS,
@@ -37,6 +50,8 @@ import {
 import {
   type PreviewState,
   previewConfirmed,
+  previewFirstRunKind,
+  previewFirstRunReasons,
   previewInstalls,
   previewLibrary,
   previewLocked,
@@ -86,6 +101,14 @@ export function App() {
   const [switchStep, setSwitchStep] = useState<SwitchStep | null>(() =>
     !tauri && preview === "switch" ? previewSwitchStep() : null,
   );
+  const [firstRunKind, setFirstRunKind] = useState<FirstRunKind | null>(() =>
+    tauri ? null : previewFirstRunKind(preview),
+  );
+  const [firstRunReasons, setFirstRunReasons] = useState<string[]>(() =>
+    tauri ? [] : previewFirstRunReasons(preview),
+  );
+  const [preset, setPreset] = useState<ComfigPresetId>("medium");
+  const [addons, setAddons] = useState<OfficialAddonId[]>([]);
 
   useEffect(() => {
     if (!tauri) {
@@ -219,6 +242,34 @@ export function App() {
     };
   }, [tauri, absorbNonce, running]);
 
+  useEffect(() => {
+    if (!tauri || !confirmed || !library) {
+      return;
+    }
+    if (library.rootMismatch || !library.usable || library.profiles.length > 0) {
+      setFirstRunKind(null);
+      setFirstRunReasons([]);
+      return;
+    }
+
+    let cancelled = false;
+    classifyFirstRun()
+      .then((result) => {
+        if (!cancelled) {
+          setFirstRunKind(result.kind);
+          setFirstRunReasons(result.reasons);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not check this install.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tauri, confirmed, library]);
+
   async function onBrowse() {
     setError(null);
     if (!tauri) {
@@ -254,6 +305,8 @@ export function App() {
     if (!tauri) {
       setConfirmed({ path: selected });
       setLibrary(previewLibrary("library"));
+      setFirstRunKind("existing");
+      setFirstRunReasons(previewFirstRunReasons("library"));
       setScreen("ready");
       return;
     }
@@ -330,15 +383,48 @@ export function App() {
         activeProfileId: library.activeProfileId ?? next.id,
         profiles: [...library.profiles, next],
       });
+      setFirstRunKind(null);
+      setFirstRunReasons([]);
       setDraftName("");
       return;
     }
     setBusy(true);
     try {
       setLibrary(await saveCurrentAs(draftName));
+      setFirstRunKind(null);
+      setFirstRunReasons([]);
       setDraftName("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save that profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onApplyWizard() {
+    if (!canApplyWizard(draftName, running, busy)) {
+      return;
+    }
+    setError(null);
+    if (!tauri) {
+      const path = confirmed?.path ?? "";
+      setLibrary(previewSavedLibrary(path, draftName.trim() || "Fresh"));
+      setFirstRunKind(null);
+      setFirstRunReasons([]);
+      setDraftName("");
+      return;
+    }
+    setBusy(true);
+    setSwitchStep("closed");
+    try {
+      setLibrary(await applyUnusedWizard(wizardSpec(draftName, preset, addons)));
+      setSwitchStep("done");
+      setFirstRunKind(null);
+      setFirstRunReasons([]);
+      setDraftName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply that setup.");
+      setSwitchStep(null);
     } finally {
       setBusy(false);
     }
@@ -401,6 +487,108 @@ export function App() {
   }
 
   const canConfirm = confirmEnabled(selected, scanning || busy);
+  const surface = firstRunSurface(library, firstRunKind);
+
+  function renderReady(path: string) {
+    if (surface === "first-existing") {
+      return (
+        <FirstRunExisting
+          path={path}
+          draftName={draftName}
+          reasons={firstRunReasons}
+          running={running}
+          busy={busy}
+          error={error}
+          onDraftName={setDraftName}
+          onSave={onSaveCurrent}
+          onChange={onChange}
+        />
+      );
+    }
+    if (surface === "first-unused") {
+      const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
+      return (
+        <>
+          <SetupWizard
+            title="Unused install"
+            draftName={draftName}
+            preset={preset}
+            addons={addons}
+            running={running}
+            busy={busy}
+            error={error}
+            onDraftName={setDraftName}
+            onPreset={setPreset}
+            onToggleAddon={(id) => setAddons((current) => toggleAddon(current, id))}
+            onApply={onApplyWizard}
+          />
+          {switchStep ? (
+            <ol data-testid="switch-progress" className="mt-4 w-full text-left">
+              {SWITCH_STEPS.map((item, index) => {
+                const done = currentIndex > index || switchStep === "done";
+                const current = item.id === switchStep && switchStep !== "done";
+                return (
+                  <li
+                    key={item.id}
+                    data-step={item.id}
+                    data-current={current ? "true" : "false"}
+                    data-done={done ? "true" : "false"}
+                    className={`text-sm ${
+                      current ? "text-brand" : done ? "text-ink" : "text-ink-faint"
+                    }`}
+                  >
+                    {done ? "Done — " : current ? "Now — " : ""}
+                    {item.label}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
+          <button
+            type="button"
+            onClick={onChange}
+            className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
+          >
+            Change
+          </button>
+        </>
+      );
+    }
+    if (surface === "loading") {
+      return (
+        <section className="flex w-full flex-col items-center text-center">
+          <h1 className="font-display text-6xl text-brand">execs</h1>
+          <p className="mt-6 text-sm text-ink-muted">Checking this install…</p>
+          <button
+            type="button"
+            onClick={onChange}
+            className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
+          >
+            Change
+          </button>
+        </section>
+      );
+    }
+    return (
+      <ReadyPanel
+        path={path}
+        library={library}
+        draftName={draftName}
+        running={running}
+        busy={busy}
+        error={error}
+        packPrompt={packPrompt}
+        switchStep={switchStep}
+        onDraftName={setDraftName}
+        onSave={onSaveCurrent}
+        onSwitch={onSwitch}
+        onPackChoice={onPackChoice}
+        onExport={onExport}
+        onImport={onImport}
+        onChange={onChange}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-ink">
@@ -416,23 +604,7 @@ export function App() {
 
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-6 py-10">
         {screen === "ready" && confirmed ? (
-          <ReadyPanel
-            path={confirmed.path}
-            library={library}
-            draftName={draftName}
-            running={running}
-            busy={busy}
-            error={error}
-            packPrompt={packPrompt}
-            switchStep={switchStep}
-            onDraftName={setDraftName}
-            onSave={onSaveCurrent}
-            onSwitch={onSwitch}
-            onPackChoice={onPackChoice}
-            onExport={onExport}
-            onImport={onImport}
-            onChange={onChange}
-          />
+          renderReady(confirmed.path)
         ) : (
           <FinderPanel
             scanning={scanning}

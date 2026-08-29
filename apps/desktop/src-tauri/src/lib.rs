@@ -1,3 +1,4 @@
+mod comfig_fetch;
 mod commands;
 
 use std::time::Duration;
@@ -25,6 +26,8 @@ pub fn run() {
             commands::switch_profile,
             commands::export_profile,
             commands::import_profile,
+            commands::classify_first_run,
+            commands::apply_unused_wizard,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());

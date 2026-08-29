@@ -64,7 +64,8 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - [RND-150](https://linear.app/rndaom/issue/RND-150) after TF2 quits (and on boot if the game is closed), owned-file / `config.cfg` drift absorbs into the active profile. New or deleted `tf/custom/` packs prompt, default Update. Absorb dual-writes `config.cfg` to the live folder and Steam Cloud. Never rolls the live folder back.
 - [RND-149](https://linear.app/rndaom/issue/RND-149) exact-replace switch with a real progress panel (closed → pack → remove → write → Cloud → done). Previous exclusive files are removed only when the live hash still matches. At most one HUD folder is mounted; extras write as `-name`.
 - [RND-151](https://linear.app/rndaom/issue/RND-151) zip export/import copies a named library profile to a versioned zip (`execs-profile.json` + exclusive `files/` + hashed `blobs/`). Import creates a new library record, rewrites `tf2_root`, and does not apply to live TF2 or change `activeProfileId`.
-- Next: [RND-152](https://linear.app/rndaom/issue/RND-152) first-run split (existing → Save current only; unused → wizard).
+- [RND-152](https://linear.app/rndaom/issue/RND-152) first launch classifies the live file-safe surface. Existing customization is Save current as… only (no Import, no comfig install). An unused install is the setup wizard (name + preset + official addons). Apply downloads official mastercomfig GitHub Release VPKs, materializes an inactive library profile, then exact-replace switches it on. No silent write on first sight.
+- Next: [RND-153](https://linear.app/rndaom/issue/RND-153) Create new as a fresh TF2 (wizard + inherit-binds checkbox).
 - Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions

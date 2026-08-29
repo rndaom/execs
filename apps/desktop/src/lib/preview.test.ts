@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   previewConfirmed,
+  previewFirstRunKind,
   previewInstalls,
   previewLibrary,
   previewLocked,
@@ -16,6 +17,9 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=absorb")).toBe("absorb");
     expect(previewStateFromSearch("?preview=switch")).toBe("switch");
     expect(previewStateFromSearch("?preview=import")).toBe("import");
+    expect(previewStateFromSearch("?preview=first-existing")).toBe("first-existing");
+    expect(previewStateFromSearch("?preview=first-unused")).toBe("first-unused");
+    expect(previewStateFromSearch("?preview=first-unused-locked")).toBe("first-unused-locked");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -54,5 +58,14 @@ describe("preview query", () => {
       profiles: [{ name: "Main" }, { name: "Imported" }],
     });
     expect(previewLibrary("import")?.activeProfileId).toBe("preview-1");
+    expect(previewConfirmed("first-existing")?.path).toContain("Team Fortress 2");
+    expect(previewLibrary("first-existing")?.profiles).toEqual([]);
+    expect(previewFirstRunKind("first-existing")).toBe("existing");
+    expect(previewFirstRunKind("confirmed")).toBe("existing");
+    expect(previewFirstRunKind("library")).toBe("existing");
+    expect(previewFirstRunKind("first-unused")).toBe("unused");
+    expect(previewFirstRunKind("first-unused-locked")).toBe("unused");
+    expect(previewLocked("first-unused-locked")).toBe(true);
+    expect(previewLibrary("first-unused")?.profiles).toEqual([]);
   });
 });
