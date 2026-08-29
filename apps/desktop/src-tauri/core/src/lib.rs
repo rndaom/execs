@@ -8,6 +8,7 @@ pub mod profile;
 pub mod settings;
 pub mod steam_inf;
 pub mod surface;
+pub mod switch;
 pub mod vdf;
 
 pub use absorb::{
@@ -31,6 +32,7 @@ pub use settings::{
     settings_file, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
+pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
 
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {

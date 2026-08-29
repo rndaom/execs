@@ -1,5 +1,15 @@
 # design-qa log
 
+## 2026-08-29 — profile switch progress (RND-149)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=switch`: ready screen, Profiles `2 profiles`, `Main` Active, `Alt` shows Switch, progress panel at Write (Game closed / Pack current / Remove live packs done, Write current, Cloud / Done pending).
+- Click `Alt`: Active moves to Alt, progress marks all steps Done. Locked / running hides switch actions.
+
+Open items: native switch against a live TF2 tree needs a Tauri window; not available on this VM.
+final result: pass for switch progress chrome (preview fixtures).
+
 ## 2026-08-29 — absorb pack prompt (RND-150)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 

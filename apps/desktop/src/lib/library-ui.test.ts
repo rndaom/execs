@@ -6,6 +6,8 @@ import {
   libraryStatusCopy,
   previewPackDelta,
   previewSavedLibrary,
+  previewSwitchLibrary,
+  switchStepIndex,
 } from "./library-ui";
 
 const ready = emptyLibrary("/tf2", true);
@@ -53,6 +55,14 @@ describe("library UI helpers", () => {
         configCfg: true,
       }),
     ).toBe(false);
+  });
+
+  it("builds a two-profile switch preview and orders steps", () => {
+    const library = previewSwitchLibrary("/tf2");
+    expect(library.profiles.map((profile) => profile.name)).toEqual(["Main", "Alt"]);
+    expect(library.activeProfileId).toBe("preview-1");
+    expect(switchStepIndex("write")).toBe(3);
+    expect(switchStepIndex("done")).toBe(5);
   });
 
   it("builds a saved-preview library with an active profile", () => {

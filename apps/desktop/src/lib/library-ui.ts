@@ -1,4 +1,4 @@
-import type { AbsorbDelta, ProfileLibrary, ProfileSummary } from "./bridge";
+import type { AbsorbDelta, ProfileLibrary, ProfileSummary, SwitchStep } from "./bridge";
 
 export function emptyLibrary(tf2Root: string, initialized: boolean): ProfileLibrary {
   return {
@@ -66,5 +66,32 @@ export function previewPackDelta(): AbsorbDelta {
     ...emptyAbsorbDelta(),
     packsAdded: ["toonhud"],
     packsRemoved: ["oldpack"],
+  };
+}
+
+export const SWITCH_STEPS: { id: SwitchStep; label: string }[] = [
+  { id: "closed", label: "Game closed" },
+  { id: "pack", label: "Pack current" },
+  { id: "remove", label: "Remove live packs" },
+  { id: "write", label: "Write files" },
+  { id: "cloud", label: "Cloud" },
+  { id: "done", label: "Done" },
+];
+
+export function switchStepIndex(step: SwitchStep): number {
+  return SWITCH_STEPS.findIndex((item) => item.id === step);
+}
+
+export function previewSwitchStep(): SwitchStep {
+  return "write";
+}
+
+export function previewSwitchLibrary(tf2Root: string): ProfileLibrary {
+  const main = previewSavedProfile("Main", 1);
+  const alt = previewSavedProfile("Alt", 2);
+  return {
+    ...emptyLibrary(tf2Root, true),
+    activeProfileId: main.id,
+    profiles: [main, alt],
   };
 }

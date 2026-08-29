@@ -22,6 +22,7 @@ pub fn run() {
             commands::scan_absorb_delta,
             commands::absorb_owned,
             commands::absorb_packs,
+            commands::switch_profile,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());

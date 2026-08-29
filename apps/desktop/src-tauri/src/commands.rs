@@ -1,9 +1,10 @@
 use std::path::Path;
 
 use execs_core::{
-    AbsorbDelta, AbsorbOwnedResult, PackChoice, ProfileError, ProfileLibrary, Tf2Install, WriteLock,
+    AbsorbDelta, AbsorbOwnedResult, PackChoice, ProfileError, ProfileLibrary, SwitchProgress,
+    Tf2Install, WriteLock,
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -97,4 +98,17 @@ pub fn absorb_owned() -> Result<AbsorbOwnedResult, String> {
 #[tauri::command]
 pub fn absorb_packs(choice: PackChoice) -> Result<ProfileLibrary, String> {
     execs_core::absorb_packs(&confirmed_root()?, choice).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub async fn switch_profile(app: AppHandle, id: String) -> Result<ProfileLibrary, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::switch_profile_with_progress(&root, &id, |progress: SwitchProgress| {
+            let _ = app.emit("profile-switch-progress", progress);
+        })
+        .map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
