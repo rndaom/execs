@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  canExportProfile,
+  canImportProfile,
   canSaveCurrent,
   emptyLibrary,
   hasPackChanges,
   libraryStatusCopy,
+  previewImportedLibrary,
   previewPackDelta,
   previewSavedLibrary,
   previewSwitchLibrary,
@@ -70,5 +73,21 @@ describe("library UI helpers", () => {
     expect(saved.profiles).toHaveLength(1);
     expect(saved.profiles[0].name).toBe("Main");
     expect(saved.activeProfileId).toBe(saved.profiles[0].id);
+  });
+
+  it("exports while running and refuses import while running", () => {
+    expect(canExportProfile(ready, false)).toBe(true);
+    expect(canExportProfile(ready, true)).toBe(true);
+    expect(canExportProfile({ ...ready, usable: false, rootMismatch: true }, false)).toBe(false);
+    expect(canImportProfile(ready, false)).toBe(true);
+    expect(canImportProfile(ready, true)).toBe(false);
+    expect(canImportProfile({ ...ready, usable: false, rootMismatch: true }, false)).toBe(false);
+  });
+
+  it("builds an import-preview library without stealing active", () => {
+    const imported = previewImportedLibrary("/tf2");
+    expect(imported.profiles.map((profile) => profile.name)).toEqual(["Main", "Imported"]);
+    expect(imported.activeProfileId).toBe("preview-1");
+    expect(imported.activeProfileId).not.toBe("preview-2");
   });
 });

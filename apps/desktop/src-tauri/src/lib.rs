@@ -23,6 +23,8 @@ pub fn run() {
             commands::absorb_owned,
             commands::absorb_packs,
             commands::switch_profile,
+            commands::export_profile,
+            commands::import_profile,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
