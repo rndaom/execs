@@ -1,5 +1,17 @@
 # design-qa log
 
+## 2026-08-30 — first-run split chrome (RND-152)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=first-existing`: save-only first hour. Copy about existing customization, reasons (`Found autoexec.cfg`, `Found packs in custom`), `Save current as…`. No Import, no Create new, no wizard. Save `Main` → ready Profiles `1 profile` with Active + Export + Import.
+- `?preview=first-unused`: setup wizard (`Unused install`), Medium preset default, official addon checkboxes, comfig.app credit. Apply disabled until a name. Name `Fresh`, check No tutorial, Apply → `1 profile` Fresh Active.
+- `?preview=first-unused-locked`: write-lock banner, wizard visible, Apply reads `Close TF2 to apply` and stays disabled after a name.
+- Finder regressions: `?preview=empty` Confirm disabled; `?preview=one` Confirm → first-run existing (not the wizard); `?preview=confirmed` / `library` are save-only first-run, not Save+Import.
+
+Open items: native classify against a live TF2 tree, GitHub VPK download, and wizard apply+switch need a Tauri window; not available on this VM.
+final result: pass for first-run chrome (preview fixtures).
+
 ## 2026-08-29 — profile zip export/import chrome (RND-151)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures. No native Tauri window (GTK/WebKit missing).
 
