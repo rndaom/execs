@@ -11,7 +11,8 @@ Working agreement: durable product/design decisions get recorded here as they ar
 
 ## Integrity line
 - File-safe only. Write `tf/custom/`, `tf/cfg/overrides/` (or vanilla `tf/cfg` user files if comfig is absent), and TF2's Steam Cloud `config.cfg` copy.
-- Never patch official `tf/tf2_*.vpk`, never edit `gameinfo.txt`, never ship a casual-pre-loader / `sv_pure` bypass.
+- Never patch official `tf/tf2_*.vpk`, never edit `gameinfo.txt`.
+- First-party Casual preload (RND-164) is a listen-map precache (`map itemtest` then `disconnect`) plus `+exec execs_preload`. It does not edit `gameinfo.txt` and does not patch official VPKs. Toggleable. Remade in-house — do not vendor cueki/Pilso/Horsie preloaders.
 - Skins/models/particles in `tf/custom/` may be stored and switched. Valve Casual will still strip most of them. Community/listen servers will not. Do not claim otherwise.
 - Never write `tf/cfg/user/` (removed in mastercomfig 9.9.3). Never write `tf/steam.inf`.
 
@@ -45,11 +46,12 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - **Binds** — click-to-record for usual actions (movement, jump/duck, medic, use, voice, loadout). No alias/script studio.
 - **Gameplay** — FOV, viewmodels, stock crosshair, obvious toggles. First-party; writes overrides.
 - **HUD** — hud-db catalog, pinned GitHub zip install (one HUD mounted), schema options for popular HUDs. First-party apply; do not embed TF2HUD.Editor.
+- **Crosshair** — per-weapon VTF builder (first-party shapes + user PNG). Writes `tf/custom/execs-crosshairs/`.
+- **Viewmodels** — Horsie-class animation compiler + first-party Casual preload. File-safe FOV/min stay on Gameplay.
 - **Files** — raw cfg + `cfglint`.
 - **Launch options** — copy-to-clipboard. Auto-write `localconfig.vdf` only if Steam is already closed. Never force-quit Steam to finish setup. Never store `-autoconfig`, `-default`, `-dxlevel`, or `+quit` on a profile.
 
 ## Not V1 (profiles still carry these files if already present)
-- Per-weapon VTF crosshair builder, Horsie/Yttrium animation compiler.
 - Sharing site / Steam auth. Later: export zip is enough to start.
 
 ## Updates
@@ -73,8 +75,9 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - [RND-157](https://linear.app/rndaom/issue/RND-157) Files pane: raw cfg editor + live `@execs/cfglint`. Block-tier (`ok === false`) refuses Save; no silent strip. Warn/info are advisory.
 - [RND-158](https://linear.app/rndaom/issue/RND-158) Launch options on the profile manifest; copy-to-clipboard. New/wizard profiles get the official comfig set (`-novid -nojoy -nosteamcontroller -nohltv -particles 1`). Auto-write `localconfig.vdf` only if Steam is closed. Switch uses the same rule. Never store `-autoconfig`, `-default`, `-dxlevel`, `+quit`, or `gamemoderun %command%`.
 - [RND-162](https://linear.app/rndaom/issue/RND-162) HUD pane: hud-db catalog (MIT), pinned `codeload` zip install, one-HUD replace/dash, optional `ProfileManifest.hud`. Schema options (rayshud, budhud, flawhud, m0rehud, kbnhud, hypnotize-hud) from TF2HUD.Editor JSON as data; first-party apply (folder swap, VDF merge, `#base`, WriteCfg). Non-GitHub rows are outbound links. Casual copy: layout/scheme usually work; custom materials usually do not.
+- [RND-163](https://linear.app/rndaom/issue/RND-163) Crosshair pane: first-party per-weapon VTF builder. Procedural shapes plus optional user PNG. Writes `tf/custom/execs-crosshairs/` (`materials/vgui/replay/thumbnails/` + patched `scripts/tf_weapon_*.txt`). Weapon script bodies are read from the user's local `tf2_misc_dir.vpk` (ICE decrypt in-process). Never write official VPKs. Never ship `vtf2tga.exe` or Valve sprites. Applying forces `cl_crosshair_file ""`. Color/scale stay on Gameplay.
+- [RND-164](https://linear.app/rndaom/issue/RND-164) Viewmodels pane: first-party Horsie-class compiler (origin/rotate/hide/keep-visible/static/left-arm). Valve animation trees are extracted from the user's local TF2 install and cached under app-data `studio/`, never committed. Windows compiles with the user's `studiomdl.exe`. Linux imports prebuilt VPKs. First-party Casual preload is `map itemtest` then `disconnect` via `+exec execs_preload` — remade in-house, toggleable, no hand-edit of autoexec. Never edit `gameinfo.txt`. Never store `+quit`.
 - Next: [RND-159](https://linear.app/rndaom/issue/RND-159) in-app updater (GitHub Releases + Tauri updater).
-- Do not start [RND-163](https://linear.app/rndaom/issue/RND-163) / [RND-164](https://linear.app/rndaom/issue/RND-164) (crosshair / viewmodel studios).
 
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.

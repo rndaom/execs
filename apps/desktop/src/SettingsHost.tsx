@@ -4,10 +4,14 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
+import { CrosshairPane } from "./CrosshairPane";
 import { HudPane } from "./HudPane";
 import { LaunchPane } from "./LaunchPane";
+import { ViewmodelPane } from "./ViewmodelPane";
 import {
+  applyCrosshairs,
   applyHudOptions,
+  compileViewmodels,
   getActiveProfileDetail,
   getComfigState,
   getHudCatalog,
@@ -15,6 +19,7 @@ import {
   getHudState,
   getProfileLaunchOptions,
   importComfigCustom,
+  importViewmodels,
   installHud,
   isTauri,
   matchHudCatalog,
@@ -26,6 +31,9 @@ import {
   setComfigPreset,
   setProfileLaunchOptions,
   type SteamWriteStatus,
+  removeCrosshairs,
+  removeViewmodels,
+  setViewmodelPreload,
   updateComfigVpks,
   updateHud,
   writeOwnedFile,
@@ -52,7 +60,9 @@ import {
   previewInstalledState,
   schemaSupportedIds,
 } from "./lib/hud-ui";
+import { previewCrosshairRecord } from "./lib/crosshair-ui";
 import { recommendedLaunchOptions as previewLaunchOptions } from "./lib/launch-ui";
+import { previewViewmodelRecord } from "./lib/viewmodel-ui";
 import type { PreviewState } from "./lib/preview";
 import type { SettingsTab } from "./lib/settings-ui";
 
@@ -475,6 +485,79 @@ export function SettingsHost({
           void runWrite(async () => {
             await applyHudOptions(options);
             await reloadHud(false);
+          });
+        }}
+      />
+    );
+  }
+
+  if (tab === "crosshair") {
+    const previewRecord =
+      !tauri && preview === "settings-crosshair" ? previewCrosshairRecord() : null;
+    return (
+      <CrosshairPane
+        running={running}
+        busy={busy}
+        record={detail?.crosshair ?? previewRecord}
+        onApply={(shape, assignments, customRgba) => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            await applyCrosshairs(shape, assignments, customRgba);
+          });
+        }}
+        onRemove={() => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            await removeCrosshairs();
+          });
+        }}
+      />
+    );
+  }
+
+  if (tab === "viewmodels") {
+    const previewRecord =
+      !tauri && preview === "settings-viewmodels" ? previewViewmodelRecord() : null;
+    return (
+      <ViewmodelPane
+        running={running}
+        busy={busy}
+        record={detail?.viewmodel ?? previewRecord}
+        platform={typeof navigator !== "undefined" ? navigator.platform.toLowerCase() : "linux"}
+        onCompile={(options, preload) => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            await compileViewmodels(options, preload);
+          });
+        }}
+        onImport={() => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            await importViewmodels();
+          });
+        }}
+        onRemove={() => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            await removeViewmodels();
+          });
+        }}
+        onTogglePreload={(enabled) => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            await setViewmodelPreload(enabled);
           });
         }}
       />

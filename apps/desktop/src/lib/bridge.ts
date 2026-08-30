@@ -281,6 +281,21 @@ export type HudRecord = {
   options: Record<string, string>;
 };
 
+export type CrosshairRecord = {
+  id: string;
+  shape: string;
+  assignments: Record<string, string>;
+};
+
+export type ViewmodelSource = "compiled" | "imported";
+
+export type ViewmodelRecord = {
+  id: string;
+  source: ViewmodelSource;
+  preload: boolean;
+  options: Record<string, string>;
+};
+
 export type HudCatalogEntry = {
   id: string;
   name: string;
@@ -335,6 +350,8 @@ export type ProfileDetail = {
   layer: CfgLayer;
   files: ProfileFile[];
   hud?: HudRecord | null;
+  crosshair?: CrosshairRecord | null;
+  viewmodel?: ViewmodelRecord | null;
 };
 
 export type ProfileFileContent = {
@@ -526,6 +543,65 @@ export async function getHudSchema(): Promise<HudSchemaView | null> {
 export async function applyHudOptions(options: Record<string, string>): Promise<ProfileDetail> {
   try {
     return await invoke<ProfileDetail>("apply_hud_options", { options });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function applyCrosshairs(
+  shape: string,
+  assignments: Record<string, string>,
+  customRgba?: number[],
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("apply_crosshairs", {
+      shape,
+      assignments,
+      custom_rgba: customRgba ?? null,
+    });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function removeCrosshairs(): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("remove_crosshairs");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function compileViewmodels(
+  options: Record<string, string>,
+  preload: boolean,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("compile_viewmodels", { options, preload });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function importViewmodels(): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("import_viewmodels");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function removeViewmodels(): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("remove_viewmodels");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_viewmodel_preload", { enabled });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }

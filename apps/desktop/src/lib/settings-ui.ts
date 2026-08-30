@@ -1,6 +1,15 @@
 import type { ProfileLibrary } from "./bridge";
 
-export const SETTINGS_TABS = ["comfig", "binds", "gameplay", "hud", "files", "launch"] as const;
+export const SETTINGS_TABS = [
+  "comfig",
+  "binds",
+  "gameplay",
+  "hud",
+  "crosshair",
+  "viewmodels",
+  "files",
+  "launch",
+] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
@@ -9,6 +18,8 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   binds: "Binds",
   gameplay: "Gameplay",
   hud: "HUD",
+  crosshair: "Crosshair",
+  viewmodels: "Viewmodels",
   files: "Files",
   launch: "Launch",
 };
