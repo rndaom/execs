@@ -1,5 +1,17 @@
 # design-qa log
 
+## 2026-08-30 — later studios (RND-163 / RND-164)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill tabs, Big Shoulders Display.
+
+Verified:
+- `?preview=settings-crosshair`: Settings tabs include Crosshair (active) and Viewmodels. 64×64 canvas, first-party shape radios (dot / cross / plus-gap / circle / t), Import PNG, class pills, per-weapon dropdowns. Preview record seeds Scattergun to `dot`. Apply reads Update crosshairs. Casual copy: replay/thumbnails + Gameplay stock file Default/None.
+- `?preview=settings-viewmodels`: Class pills, origin/rotate fields, Hide, Remove left arm, Keep visible, Static, weapon extras (medigun beam, flames, knife backstab set, shells, tracers), Casual preload on. Compile is Windows-only and disabled on Linux. Import prebuilt VPK enabled. Copy: compiled animations need first-party preload for Valve Casual.
+- `?preview=settings-locked`: write-lock banner, Crosshair Apply reads Close TF2 to apply and stays off; shape radios, PNG, and weapon dropdowns disabled. Viewmodels knobs, extras, preload, Import, and Compile disabled (Close TF2 to compile).
+- Tab regression: Comfig and Files still render from the same chrome.
+
+Open items: native Ice decrypt against a live `tf2_misc_dir.vpk`, studiomdl compile, and Crowbar decompile need a Windows TF2 tree; not available on this VM.
+final result: pass for later-studio chrome (preview fixtures).
+
 ## 2026-08-30 — HUD pane (RND-162)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill tabs, Big Shoulders Display.
 

@@ -748,7 +748,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn pack_paths_stay_file_safe() {
         assert!(crate::apply::is_file_safe_rel_path(
             "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt"
