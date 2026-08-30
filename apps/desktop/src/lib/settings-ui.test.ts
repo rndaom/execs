@@ -3,9 +3,13 @@ import { emptyLibrary, previewSavedLibrary } from "./library-ui";
 import { canWriteSettings, SETTINGS_TABS, SETTINGS_TAB_LABELS, showSettingsChrome } from "./settings-ui";
 
 describe("settings chrome", () => {
-  it("includes the HUD tab in the settings chrome", () => {
+  it("includes the HUD and later-studio tabs in the settings chrome", () => {
     expect(SETTINGS_TABS).toContain("hud");
+    expect(SETTINGS_TABS).toContain("crosshair");
+    expect(SETTINGS_TABS).toContain("viewmodels");
     expect(SETTINGS_TAB_LABELS.hud).toBe("HUD");
+    expect(SETTINGS_TAB_LABELS.crosshair).toBe("Crosshair");
+    expect(SETTINGS_TAB_LABELS.viewmodels).toBe("Viewmodels");
   });
 
   it("shows only when a usable library has an active profile", () => {
