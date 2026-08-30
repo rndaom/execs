@@ -2,8 +2,8 @@ use std::path::Path;
 
 use execs_core::{
     materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, FirstRunClass,
-    PackChoice, ProfileError, ProfileLibrary, SwitchProgress, Tf2Install, WizardAsset, WizardSpec,
-    WriteLock,
+    PackChoice, ProfileDetail, ProfileError, ProfileFile, ProfileFileContent, ProfileLibrary,
+    SwitchProgress, Tf2Install, WizardAsset, WizardSpec, WriteLock,
 };
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
@@ -211,6 +211,46 @@ fn fresh_bind_source(root: &std::path::Path) -> Result<BindSource, String> {
         return Err("Save or switch to a profile before inheriting binds.".into());
     };
     Ok(BindSource::Inherit { from_profile_id })
+}
+
+#[tauri::command]
+pub fn get_active_profile_detail() -> Result<Option<ProfileDetail>, String> {
+    execs_core::get_active_profile_detail(&confirmed_root()?).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn list_profile_files(id: Option<String>) -> Result<Vec<ProfileFile>, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::list_profile_files(&root, &profile_id).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn read_profile_file(path: String, id: Option<String>) -> Result<ProfileFileContent, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::read_profile_file(&root, &profile_id, &path).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn write_owned_file(
+    path: String,
+    text: String,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::write_owned_file(&root, &profile_id, &path, text.as_bytes()).map_err(|err| err.message())
+}
+
+fn resolve_profile_id(root: &Path, id: Option<String>) -> Result<String, String> {
+    if let Some(id) = id.filter(|value| !value.is_empty()) {
+        return Ok(id);
+    }
+    let library = execs_core::load_library(Some(root)).map_err(|err| err.message())?;
+    library
+        .active_profile_id
+        .ok_or_else(|| "Save or switch to a profile first.".into())
 }
 
 pub(crate) fn apply_wizard_and_switch(

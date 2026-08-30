@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "execs",
-        "width": 960,
-        "height": 640,
+        "width": 1200,
+        "height": 800,
         "backgroundColor": { "red": 18, "green": 18, "blue": 18, "alpha": 255 }
       }
     ],

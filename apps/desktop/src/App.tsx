@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { FirstRunExisting } from "./FirstRunExisting";
+import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard, wizardSpec } from "./SetupWizard";
 import {
   type AbsorbDelta,
@@ -61,8 +62,10 @@ import {
   previewInstalls,
   previewLibrary,
   previewLocked,
+  previewSettingsTab,
   previewStateFromSearch,
 } from "./lib/preview";
+import { showSettingsChrome, type SettingsTab } from "./lib/settings-ui";
 
 type Screen = "finder" | "ready";
 
@@ -117,6 +120,9 @@ export function App() {
   const [addons, setAddons] = useState<OfficialAddonId[]>([]);
   const [creating, setCreating] = useState(() => !tauri && previewCreating(preview));
   const [inheritBinds, setInheritBindsState] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(
+    () => previewSettingsTab(preview) ?? "comfig",
+  );
 
   useEffect(() => {
     if (!tauri) {
@@ -641,6 +647,11 @@ export function App() {
         packPrompt={packPrompt}
         switchStep={switchStep}
         inheritBinds={inheritBinds}
+        settings={
+          showSettingsChrome(library) ? (
+            <SettingsLayout tab={settingsTab} running={running} onTab={setSettingsTab} />
+          ) : null
+        }
         onDraftName={setDraftName}
         onSave={onSaveCurrent}
         onSwitch={onSwitch}
@@ -654,6 +665,13 @@ export function App() {
     );
   }
 
+  const settingsOpen =
+    screen === "ready" &&
+    confirmed !== null &&
+    surface === "ready" &&
+    !creating &&
+    showSettingsChrome(library);
+
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-ink">
       {running ? (
@@ -666,7 +684,13 @@ export function App() {
         </div>
       ) : null}
 
-      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-6 py-10">
+      <main
+        className={`mx-auto flex w-full flex-1 flex-col px-6 py-10 ${
+          settingsOpen
+            ? "max-w-6xl items-stretch"
+            : "max-w-xl items-center justify-center"
+        }`}
+      >
         {screen === "ready" && confirmed ? (
           renderReady(confirmed.path)
         ) : (
@@ -851,6 +875,7 @@ function ReadyPanel({
   onCreateNew,
   onToggleInherit,
   onChange,
+  settings,
 }: {
   path: string;
   library: ProfileLibrary | null;
@@ -861,6 +886,7 @@ function ReadyPanel({
   packPrompt: AbsorbDelta | null;
   switchStep: SwitchStep | null;
   inheritBinds: boolean;
+  settings?: ReactNode;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onSwitch: (id: string) => void;
@@ -879,7 +905,16 @@ function ReadyPanel({
   const showInherit = showCreateNewChrome(library, "ready");
 
   return (
-    <section className="flex w-full flex-col items-center text-center">
+    <section
+      className={`flex w-full gap-6 ${
+        settings ? "flex-col lg:flex-row lg:items-start" : "flex-col items-center text-center"
+      }`}
+    >
+      <div
+        className={`flex w-full flex-col ${
+          settings ? "lg:max-w-md" : "items-center text-center"
+        }`}
+      >
       <h1 className="font-display text-6xl text-brand">execs</h1>
       <p className="mt-6 font-display text-sm tracking-wide text-ink-muted">TF2 install</p>
       <p className="mt-2 max-w-lg break-all text-sm text-ink">{path}</p>
@@ -1050,6 +1085,8 @@ function ReadyPanel({
       >
         Change
       </button>
+      </div>
+      {settings}
     </section>
   );
 }
