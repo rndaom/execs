@@ -12,7 +12,7 @@ use crate::process_lock::live_process_names;
 use crate::profile::{
     exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path, load_library_from, load_manifest,
     normalize_rel_path, profiles_dir, put_exclusive_file_to, put_shared_blob_to, FileStorage,
-    ProfileError, ProfileFile,
+    HudRecord, ProfileError, ProfileFile,
 };
 use crate::surface::CfgLayer;
 
@@ -26,6 +26,8 @@ pub struct ProfileDetail {
     pub launch_options: String,
     pub layer: CfgLayer,
     pub files: Vec<ProfileFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hud: Option<HudRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,6 +56,17 @@ pub fn is_file_safe_rel_path(path: &str) -> bool {
         return false;
     }
     lower.starts_with("tf/cfg/") || lower.starts_with("tf/custom/")
+}
+
+pub fn detail_from_manifest(manifest: &crate::profile::ProfileManifest) -> ProfileDetail {
+    ProfileDetail {
+        id: manifest.id.clone(),
+        name: manifest.name.clone(),
+        launch_options: manifest.launch_options.clone(),
+        layer: cfg_layer_from_files(&manifest.files),
+        files: manifest.files.clone(),
+        hud: manifest.hud.clone(),
+    }
 }
 
 pub fn cfg_layer_from_files(files: &[ProfileFile]) -> CfgLayer {
@@ -191,13 +204,7 @@ where
 
 fn profile_detail_from(profiles_dir: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    Ok(ProfileDetail {
-        id: manifest.id,
-        name: manifest.name,
-        launch_options: manifest.launch_options,
-        layer: cfg_layer_from_files(&manifest.files),
-        files: manifest.files,
-    })
+    Ok(detail_from_manifest(&manifest))
 }
 
 fn apply_owned_file_to_live(

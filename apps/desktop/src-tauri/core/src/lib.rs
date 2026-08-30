@@ -6,6 +6,8 @@ pub mod comfig;
 pub mod finder;
 pub mod first_run;
 pub mod hash;
+pub mod hud;
+pub mod hud_apply;
 pub mod launch;
 pub mod process_lock;
 pub mod profile;
@@ -37,7 +39,21 @@ pub use launch::{
     get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
     LaunchWriteReason, SetLaunchResult,
 };
+pub use hud::{
+    apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
+    extract_hud_zip, hud_ui_state, hud_zip_url, install_hud_pack, load_catalog_cache_from,
+    load_hud_tree_from_profile, match_hud_catalog, resolve_hud, save_catalog_cache_to,
+    schema_file_name, schema_supported, set_hud_options, write_hud_tree_files, HudCatalogCache,
+    HudCatalogEntry, HudStatus, HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
+};
+pub use hud_apply::{
+    apply_hud_options, parse_hud_schema, schema_view, HudSchema, HudSchemaView,
+};
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
+pub use profile::{
+    create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,
+    HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary, ProfileSummary,
+};
 pub use finder::{
     discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
     Tf2RootError,
@@ -45,10 +61,6 @@ pub use finder::{
 pub use process_lock::{
     is_steam_running, is_tf2_running, refuse_if_running, refuse_if_running_among, write_lock_status,
     WriteLock, WriteLockError,
-};
-pub use profile::{
-    create_profile_record, init_library, load_library, profiles_dir, save_current_as, ProfileError,
-    ProfileFile, ProfileLibrary, ProfileSummary,
 };
 pub use settings::{
     inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
