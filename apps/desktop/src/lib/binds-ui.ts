@@ -1,0 +1,313 @@
+import { parseCommands } from "@execs/cfglint";
+
+export type BindsLayer = "comfig" | "vanilla";
+
+export type ManagedExecStem = "execs_binds" | "execs_gameplay";
+
+export const EXECS_BINDS_STEM = "execs_binds" satisfies ManagedExecStem;
+export const EXECS_GAMEPLAY_STEM = "execs_gameplay" satisfies ManagedExecStem;
+
+export const MANAGED_BINDS_HEADER = "// execs binds — managed, do not edit by hand";
+export const MANAGED_EXEC_COMMENT = "// execs:managed";
+
+export const BIND_ACTIONS = [
+  { id: "forward", label: "Forward", command: "+forward" },
+  { id: "back", label: "Back", command: "+back" },
+  { id: "moveleft", label: "Move left", command: "+moveleft" },
+  { id: "moveright", label: "Move right", command: "+moveright" },
+  { id: "jump", label: "Jump", command: "+jump" },
+  { id: "duck", label: "Duck", command: "+duck" },
+  { id: "medic", label: "Call medic", command: "voicemenu 0 0" },
+  { id: "use", label: "Use", command: "+use" },
+  { id: "voice", label: "Voice chat", command: "+voicerecord" },
+  { id: "loadout0", label: "Loadout A", command: "load_itempreset 0" },
+  { id: "loadout1", label: "Loadout B", command: "load_itempreset 1" },
+  { id: "loadout2", label: "Loadout C", command: "load_itempreset 2" },
+  { id: "loadout3", label: "Loadout D", command: "load_itempreset 3" },
+] as const;
+
+export type BindAction = (typeof BIND_ACTIONS)[number];
+export type BindActionId = BindAction["id"];
+
+export type BindMap = Map<string, string> | Record<string, string>;
+
+export type AutoexecPatch = {
+  path: string;
+  text: string;
+};
+
+const ACTION_IDS = new Set<string>(BIND_ACTIONS.map((action) => action.id));
+
+const COMMAND_TO_ACTION = new Map<string, BindAction>(
+  BIND_ACTIONS.map((action) => [normalizeBindCommand(action.command), action]),
+);
+
+const CODE_TO_SOURCE: Record<string, string> = {
+  Space: "space",
+  ShiftLeft: "shift",
+  ShiftRight: "shift",
+  ControlLeft: "ctrl",
+  ControlRight: "ctrl",
+  AltLeft: "alt",
+  AltRight: "alt",
+  Tab: "tab",
+  Enter: "enter",
+  NumpadEnter: "kp_enter",
+  Escape: "escape",
+  Backspace: "backspace",
+  Semicolon: "semicolin",
+  Comma: "comma",
+  Period: "period",
+  Slash: "slash",
+  Backslash: "backslash",
+  Quote: "apostrophe",
+  Minus: "minus",
+  Equal: "equal",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backquote: "`",
+  CapsLock: "capslock",
+  Insert: "ins",
+  Delete: "del",
+  Home: "home",
+  End: "end",
+  PageUp: "pgup",
+  PageDown: "pgdn",
+  ArrowUp: "uparrow",
+  ArrowDown: "downarrow",
+  ArrowLeft: "leftarrow",
+  ArrowRight: "rightarrow",
+  Mouse0: "mouse1",
+  Mouse1: "mouse2",
+  Mouse2: "mouse3",
+  Mouse3: "mouse4",
+  Mouse4: "mouse5",
+  Numpad0: "kp_ins",
+  Numpad1: "kp_end",
+  Numpad2: "kp_downarrow",
+  Numpad3: "kp_pgdn",
+  Numpad4: "kp_leftarrow",
+  Numpad5: "kp_5",
+  Numpad6: "kp_rightarrow",
+  Numpad7: "kp_home",
+  Numpad8: "kp_uparrow",
+  Numpad9: "kp_pgup",
+  NumpadDecimal: "kp_del",
+  NumpadDivide: "kp_slash",
+  NumpadMultiply: "kp_multiply",
+  NumpadSubtract: "kp_minus",
+  NumpadAdd: "kp_plus",
+};
+
+for (let index = 1; index <= 12; index += 1) {
+  CODE_TO_SOURCE[`F${index}`] = `f${index}`;
+}
+
+export function isBindActionId(value: string): value is BindActionId {
+  return ACTION_IDS.has(value);
+}
+
+export function bindActionById(id: string): BindAction | undefined {
+  return BIND_ACTIONS.find((action) => action.id === id);
+}
+
+export function normalizeBindCommand(command: string): string {
+  return command.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function canRecordBinds(running: boolean, busy: boolean): boolean {
+  return !running && !busy;
+}
+
+/** Source key name for a `KeyboardEvent.code`, or `Mouse0`–`Mouse4`. */
+export function sourceKeyFromCode(code: string): string | null {
+  if (CODE_TO_SOURCE[code]) {
+    return CODE_TO_SOURCE[code];
+  }
+  if (/^Key[A-Z]$/.test(code)) {
+    return code.slice(3).toLowerCase();
+  }
+  if (/^Digit[0-9]$/.test(code)) {
+    return code.slice(5);
+  }
+  return null;
+}
+
+export function sourceKeyFromMouseButton(button: number): string | null {
+  if (button >= 0 && button <= 4) {
+    return `mouse${button + 1}`;
+  }
+  return null;
+}
+
+export function sourceKeyFromWheelDelta(deltaY: number): "mwheelup" | "mwheeldown" | null {
+  if (deltaY < 0) {
+    return "mwheelup";
+  }
+  if (deltaY > 0) {
+    return "mwheeldown";
+  }
+  return null;
+}
+
+export function sourceKeyFromKeyboardEvent(event: {
+  code: string;
+  repeat?: boolean;
+}): string | null {
+  if (event.repeat) {
+    return null;
+  }
+  return sourceKeyFromCode(event.code);
+}
+
+export function ownedCfgPath(layer: BindsLayer, fileName: string): string {
+  return layer === "comfig" ? `tf/cfg/overrides/${fileName}` : `tf/cfg/${fileName}`;
+}
+
+export function bindsFilePath(layer: BindsLayer): string {
+  return ownedCfgPath(layer, `${EXECS_BINDS_STEM}.cfg`);
+}
+
+export function autoexecFilePath(layer: BindsLayer): string {
+  return ownedCfgPath(layer, "autoexec.cfg");
+}
+
+function bindEntries(binds: BindMap): Array<[string, string]> {
+  return binds instanceof Map ? [...binds.entries()] : Object.entries(binds);
+}
+
+/** Last key bound to `command` (cfglint key → command map). */
+export function lastKeyForCommand(binds: BindMap, command: string): string | null {
+  const wanted = normalizeBindCommand(command);
+  let found: string | null = null;
+  for (const [key, value] of bindEntries(binds)) {
+    if (normalizeBindCommand(value) === wanted) {
+      found = key.toLowerCase();
+    }
+  }
+  return found;
+}
+
+export function keyForAction(effectiveBinds: BindMap, actionId: BindActionId): string | null {
+  const action = bindActionById(actionId);
+  return action ? lastKeyForCommand(effectiveBinds, action.command) : null;
+}
+
+export function parseManagedBinds(text: string): Partial<Record<BindActionId, string>> {
+  const assigned: Partial<Record<BindActionId, string>> = {};
+  for (const command of parseCommands(text, "execs_binds.cfg")) {
+    if (command.name !== "bind" || command.args.length < 2) {
+      continue;
+    }
+    const key = command.args[0].toLowerCase();
+    const payload = command.args.slice(1).join(" ");
+    const action = COMMAND_TO_ACTION.get(normalizeBindCommand(payload));
+    if (action) {
+      assigned[action.id] = key;
+    }
+  }
+  return assigned;
+}
+
+function quoteCfgToken(value: string): string {
+  return /[\s"]/.test(value) ? `"${value}"` : value;
+}
+
+export function serializeManagedBinds(
+  actionKeys: Partial<Record<BindActionId, string>>,
+): string {
+  const lines = [MANAGED_BINDS_HEADER];
+  const usedKeys = new Set<string>();
+  for (const action of BIND_ACTIONS) {
+    const key = actionKeys[action.id]?.trim().toLowerCase();
+    if (!key || usedKeys.has(key)) {
+      continue;
+    }
+    usedKeys.add(key);
+    lines.push(`bind ${quoteCfgToken(key)} ${quoteCfgToken(action.command)}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export function applyRecordedBind(
+  currentFile: string,
+  actionId: string,
+  sourceKey: string,
+): string {
+  if (!isBindActionId(actionId)) {
+    return currentFile;
+  }
+  const key = sourceKey.trim().toLowerCase();
+  if (!key || key === "escape") {
+    return currentFile;
+  }
+  const next = { ...parseManagedBinds(currentFile) };
+  for (const id of BIND_ACTIONS.map((action) => action.id)) {
+    if (next[id] === key && id !== actionId) {
+      delete next[id];
+    }
+  }
+  next[actionId] = key;
+  return serializeManagedBinds(next);
+}
+
+/**
+ * If config.cfg rebound a tracked action onto another key, rewrite that
+ * action's bind in the managed file. Never emits `unbindall`.
+ */
+export function syncTrackedBindsFromConfig(currentFile: string, configBinds: BindMap): string {
+  const next = { ...parseManagedBinds(currentFile) };
+  let changed = false;
+  for (const action of BIND_ACTIONS) {
+    const configKey = lastKeyForCommand(configBinds, action.command);
+    if (!configKey || next[action.id] === configKey) {
+      continue;
+    }
+    for (const id of BIND_ACTIONS.map((item) => item.id)) {
+      if (next[id] === configKey && id !== action.id) {
+        delete next[id];
+      }
+    }
+    next[action.id] = configKey;
+    changed = true;
+  }
+  return changed || currentFile.trim().length === 0 ? serializeManagedBinds(next) : currentFile;
+}
+
+function execStem(target: string): string {
+  const base = target.replace(/\\/g, "/").split("/").pop() ?? target;
+  return base.replace(/\.cfg$/i, "").toLowerCase();
+}
+
+export function autoexecHasExecLine(existingAutoexec: string, fileStem: ManagedExecStem): boolean {
+  for (const command of parseCommands(existingAutoexec, "autoexec.cfg")) {
+    if (command.name === "exec" && command.args[0] && execStem(command.args[0]) === fileStem) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function ensureAutoexecExecLine(
+  existingAutoexec: string,
+  fileStem: ManagedExecStem,
+): string {
+  if (autoexecHasExecLine(existingAutoexec, fileStem)) {
+    return existingAutoexec;
+  }
+  const line = `exec ${fileStem} ${MANAGED_EXEC_COMMENT}`;
+  const trimmed = existingAutoexec.replace(/\s+$/u, "");
+  return trimmed.length > 0 ? `${trimmed}\n${line}\n` : `${line}\n`;
+}
+
+export function autoexecExecPatch(
+  layer: BindsLayer,
+  existingAutoexec: string,
+  fileStem: ManagedExecStem = EXECS_BINDS_STEM,
+): AutoexecPatch | undefined {
+  const text = ensureAutoexecExecLine(existingAutoexec, fileStem);
+  if (text === existingAutoexec) {
+    return undefined;
+  }
+  return { path: autoexecFilePath(layer), text };
+}
