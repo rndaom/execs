@@ -12,7 +12,7 @@ use crate::process_lock::live_process_names;
 use crate::profile::{
     exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path, load_library_from, load_manifest,
     normalize_rel_path, profiles_dir, put_exclusive_file_to, put_shared_blob_to, FileStorage,
-    HudRecord, ProfileError, ProfileFile,
+    CrosshairRecord, HudRecord, ProfileError, ProfileFile, ViewmodelRecord,
 };
 use crate::surface::CfgLayer;
 
@@ -28,6 +28,10 @@ pub struct ProfileDetail {
     pub files: Vec<ProfileFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hud: Option<HudRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crosshair: Option<CrosshairRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewmodel: Option<ViewmodelRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +70,8 @@ pub fn detail_from_manifest(manifest: &crate::profile::ProfileManifest) -> Profi
         layer: cfg_layer_from_files(&manifest.files),
         files: manifest.files.clone(),
         hud: manifest.hud.clone(),
+        crosshair: manifest.crosshair.clone(),
+        viewmodel: manifest.viewmodel.clone(),
     }
 }
 

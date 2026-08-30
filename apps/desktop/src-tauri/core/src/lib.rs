@@ -52,7 +52,8 @@ pub use hud_apply::{
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use profile::{
     create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,
-    HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary, ProfileSummary,
+    CrosshairRecord, HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary,
+    ProfileSummary, ViewmodelRecord, ViewmodelSource,
 };
 pub use finder::{
     discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
