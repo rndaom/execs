@@ -272,12 +272,69 @@ export type ProfileFile = {
   storage: "exclusive" | "shared";
 };
 
+export type HudSource = "hudDb" | "local";
+
+export type HudRecord = {
+  id: string;
+  hash?: string | null;
+  source: HudSource;
+  options: Record<string, string>;
+};
+
+export type HudCatalogEntry = {
+  id: string;
+  name: string;
+  author: string;
+  repo: string;
+  hash: string;
+  github: boolean;
+  flags: string[];
+  banner: string | null;
+  comfigUrl: string;
+  tf2hudsUrl: string;
+};
+
+export type HudUiState = {
+  installed: HudRecord | null;
+  inferred: boolean;
+  schemaSupported: boolean;
+  catalogHash: string | null;
+  updateAvailable: boolean;
+};
+
+export type HudSchemaChoice = {
+  label: string;
+  value: string;
+};
+
+export type HudSchemaControl = {
+  name: string;
+  label: string;
+  controlType: string;
+  value: string;
+  choices: HudSchemaChoice[];
+  minimum?: string;
+  maximum?: string;
+};
+
+export type HudSchemaSection = {
+  name: string;
+  controls: HudSchemaControl[];
+};
+
+export type HudSchemaView = {
+  author: string;
+  supported: boolean;
+  sections: HudSchemaSection[];
+};
+
 export type ProfileDetail = {
   id: string;
   name: string;
   launchOptions: string;
   layer: CfgLayer;
   files: ProfileFile[];
+  hud?: HudRecord | null;
 };
 
 export type ProfileFileContent = {
@@ -413,6 +470,62 @@ export async function setProfileLaunchOptions(
       options,
       id: id ?? null,
     });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function getHudCatalog(refresh = false): Promise<HudCatalogEntry[]> {
+  try {
+    return await invoke<HudCatalogEntry[]>("get_hud_catalog", { refresh });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function getHudState(): Promise<HudUiState> {
+  try {
+    return await invoke<HudUiState>("get_hud_state");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function installHud(id: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("install_hud", { id });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function matchHudCatalog(id: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("match_hud_catalog", { id });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function updateHud(): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("update_hud");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function getHudSchema(): Promise<HudSchemaView | null> {
+  try {
+    return await invoke<HudSchemaView | null>("get_hud_schema");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function applyHudOptions(options: Record<string, string>): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("apply_hud_options", { options });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }

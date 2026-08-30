@@ -25,6 +25,8 @@ export const PREVIEW_STATES = [
   "settings-comfig",
   "settings-binds",
   "settings-gameplay",
+  "settings-hud",
+  "settings-hud-installed",
   "settings-files",
   "settings-launch",
   "settings-locked",
@@ -56,6 +58,8 @@ const READY: PreviewState[] = [
   "settings-comfig",
   "settings-binds",
   "settings-gameplay",
+  "settings-hud",
+  "settings-hud-installed",
   "settings-files",
   "settings-launch",
   "settings-locked",
@@ -150,6 +154,9 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
       return "binds";
     case "settings-gameplay":
       return "gameplay";
+    case "settings-hud":
+    case "settings-hud-installed":
+      return "hud";
     case "settings-files":
       return "files";
     case "settings-launch":
