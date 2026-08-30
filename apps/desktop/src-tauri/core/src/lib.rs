@@ -3,11 +3,13 @@ pub mod apply;
 pub mod blob;
 pub mod cfg_script;
 pub mod comfig;
+pub mod crosshair;
 pub mod finder;
 pub mod first_run;
 pub mod hash;
 pub mod hud;
 pub mod hud_apply;
+pub mod ice;
 pub mod launch;
 pub mod process_lock;
 pub mod profile;
@@ -16,6 +18,8 @@ pub mod steam_inf;
 pub mod surface;
 pub mod switch;
 pub mod vdf;
+pub mod viewmodel;
+pub mod vpk;
 pub mod wizard;
 pub mod zip;
 
@@ -49,7 +53,11 @@ pub use hud::{
 pub use hud_apply::{
     apply_hud_options, parse_hud_schema, schema_view, HudSchema, HudSchemaView,
 };
+pub use crosshair::{apply_crosshairs, remove_crosshairs};
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
+pub use viewmodel::{
+    compile_viewmodels, import_viewmodel_vpk, remove_viewmodels, set_viewmodel_preload,
+};
 pub use profile::{
     create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,
     CrosshairRecord, HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary,
