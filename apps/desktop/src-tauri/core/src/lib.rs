@@ -2,6 +2,7 @@ pub mod absorb;
 pub mod apply;
 pub mod blob;
 pub mod cfg_script;
+pub mod comfig;
 pub mod finder;
 pub mod first_run;
 pub mod hash;
@@ -23,6 +24,14 @@ pub use absorb::{
 pub use apply::{
     get_active_profile_detail, list_profile_files, read_profile_file, write_owned_file,
     ProfileDetail, ProfileFileContent,
+};
+pub use comfig::{
+    apply_official_vpk_bytes, apply_official_vpk_bytes_to, import_comfig_custom,
+    import_comfig_custom_to, official_download_urls, official_package_rel_paths,
+    parse_modules_cfg, parse_setup_hook, read_active_comfig_state, read_active_comfig_state_from,
+    read_comfig_state, read_comfig_state_from, serialize_modules_cfg, serialize_setup_hook,
+    set_comfig_addons, set_comfig_addons_to, write_comfig_modules, write_comfig_modules_to,
+    write_comfig_preset, write_comfig_preset_to, ComfigState,
 };
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use finder::{
