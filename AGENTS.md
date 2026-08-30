@@ -55,7 +55,9 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - Sharing site / Steam auth. Later: export zip is enough to start.
 
 ## Updates
-- The app has an **in-app updater**: GitHub Releases + Tauri updater. Show “update available,” they click to install. No silent force-replace, no analytics/telemetry.
+- The app has an **in-app updater**: GitHub Releases + Tauri updater. Check on launch and via footer **Check for updates**. Show “update available,” they click **Install**. **Later** dismisses for the session. No silent force-replace, no analytics/telemetry.
+- Endpoint: `https://github.com/rndaom/execs/releases/latest/download/latest.json` (published, non-prerelease tags only). Sign with GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Pubkey lives in `apps/desktop/src-tauri/tauri.conf.json`. Never commit the private key.
+- Linux updates are AppImage. `.deb` is first-install only. Windows uses NSIS (`installMode: passive`). No macOS.
 - mastercomfig VPK updates are a **separate** control on the Comfig pane (their GitHub releases, not ours).
 
 ## Implementation status
@@ -77,7 +79,8 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - [RND-162](https://linear.app/rndaom/issue/RND-162) HUD pane: hud-db catalog (MIT), pinned `codeload` zip install, one-HUD replace/dash, optional `ProfileManifest.hud`. Schema options (rayshud, budhud, flawhud, m0rehud, kbnhud, hypnotize-hud) from TF2HUD.Editor JSON as data; first-party apply (folder swap, VDF merge, `#base`, WriteCfg). Non-GitHub rows are outbound links. Casual copy: layout/scheme usually work; custom materials usually do not.
 - [RND-163](https://linear.app/rndaom/issue/RND-163) Crosshair pane: first-party per-weapon VTF builder. Procedural shapes plus optional user PNG. Writes `tf/custom/execs-crosshairs/` (`materials/vgui/replay/thumbnails/` + patched `scripts/tf_weapon_*.txt`). Weapon script bodies are read from the user's local `tf2_misc_dir.vpk` (ICE decrypt in-process). Never write official VPKs. Never ship `vtf2tga.exe` or Valve sprites. Applying forces `cl_crosshair_file ""`. Color/scale stay on Gameplay.
 - [RND-164](https://linear.app/rndaom/issue/RND-164) Viewmodels pane: first-party Horsie-class compiler (origin/rotate/hide/keep-visible/static/left-arm). Valve animation trees are extracted from the user's local TF2 install and cached under app-data `studio/`, never committed. Windows compiles with the user's `studiomdl.exe`. Linux imports prebuilt VPKs. First-party Casual preload is `map itemtest` then `disconnect` via `+exec execs_preload` — remade in-house, toggleable, no hand-edit of autoexec. Never edit `gameinfo.txt`. Never store `+quit`.
-- Next: [RND-159](https://linear.app/rndaom/issue/RND-159) in-app updater (GitHub Releases + Tauri updater).
+- [RND-159](https://linear.app/rndaom/issue/RND-159) in-app updater: GitHub Releases + Tauri updater. Check on launch, banner, click to install. Endpoint `latest.json`. Signing via `TAURI_SIGNING_PRIVATE_KEY`. Linux updates are AppImage. No silent replace, no telemetry. mastercomfig VPK updates stay on the Comfig pane.
+- Next: [RND-160](https://linear.app/rndaom/issue/RND-160) Windows and Linux installers plus disclaimer.
 
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.
