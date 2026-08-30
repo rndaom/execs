@@ -606,3 +606,38 @@ export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDeta
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export async function getAppVersion(): Promise<string> {
+  const { getVersion } = await import("@tauri-apps/api/app");
+  return getVersion();
+}
+
+export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {
+  const { check } = await import("@tauri-apps/plugin-updater");
+  const update = await check();
+  if (!update) {
+    return null;
+  }
+  return { version: update.version, notes: update.body ?? null };
+}
+
+export async function installAppUpdate(
+  onProgress: (step: "downloading" | "installing" | "restarting") => void,
+): Promise<void> {
+  const { check } = await import("@tauri-apps/plugin-updater");
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+  const update = await check();
+  if (!update) {
+    throw new Error("No update available.");
+  }
+  onProgress("downloading");
+  await update.downloadAndInstall((event) => {
+    if (event.event === "Finished") {
+      onProgress("installing");
+    } else {
+      onProgress("downloading");
+    }
+  });
+  onProgress("restarting");
+  await relaunch();
+}
