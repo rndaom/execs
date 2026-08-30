@@ -322,3 +322,98 @@ export async function writeOwnedFile(
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export type ComfigState = {
+  preset: ComfigPreset;
+  modules: Record<string, string>;
+  addons: OfficialAddon[];
+  hasBaseVpk: boolean;
+  hasComfigCustom: boolean;
+};
+
+export async function getComfigState(id?: string): Promise<ComfigState | null> {
+  try {
+    return await invoke<ComfigState | null>("get_comfig_state", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setComfigPreset(preset: ComfigPreset, id?: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_comfig_preset", { preset, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setComfigModules(
+  modules: Record<string, string>,
+  id?: string,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_comfig_modules", { modules, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setComfigAddons(
+  addons: OfficialAddon[],
+  id?: string,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_comfig_addons", { addons, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function updateComfigVpks(id?: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("update_comfig_vpks", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function importComfigCustom(id?: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("import_comfig_custom", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export type SteamWriteStatus = "written" | "steam_open" | "no_account";
+
+export type SetLaunchResult = {
+  launchOptions: string;
+  steamWrite: SteamWriteStatus;
+};
+
+export async function recommendedLaunchOptions(): Promise<string> {
+  return invoke<string>("recommended_launch_options");
+}
+
+export async function getProfileLaunchOptions(id?: string): Promise<string> {
+  try {
+    return await invoke<string>("get_profile_launch_options", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setProfileLaunchOptions(
+  options: string,
+  id?: string,
+): Promise<SetLaunchResult> {
+  try {
+    return await invoke<SetLaunchResult>("set_profile_launch_options", {
+      options,
+      id: id ?? null,
+    });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}

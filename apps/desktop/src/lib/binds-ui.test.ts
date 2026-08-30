@@ -4,6 +4,7 @@ import {
   autoexecFilePath,
   autoexecHasExecLine,
   bindsFilePath,
+  configBindsFromFiles,
   canRecordBinds,
   ensureAutoexecExecLine,
   keyForAction,
@@ -103,6 +104,24 @@ describe("syncTrackedBindsFromConfig", () => {
       ]),
     );
     expect(parseManagedBinds(fromMap).medic).toBe("mouse3");
+  });
+
+  it("reads config.cfg binds and ignores the managed overlay file", () => {
+    expect(
+      configBindsFromFiles([
+        {
+          path: "tf/cfg/overrides/execs_binds.cfg",
+          text: "bind e \"voicemenu 0 0\"\nbind w +forward\n",
+        },
+        {
+          path: "tf/cfg/config.cfg",
+          text: "bind h \"voicemenu 0 0\"\nbind w +forward\n",
+        },
+      ]),
+    ).toEqual({
+      h: "voicemenu 0 0",
+      w: "+forward",
+    });
   });
 });
 

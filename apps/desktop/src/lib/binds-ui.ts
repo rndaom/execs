@@ -255,6 +255,27 @@ export function applyRecordedBind(
  * If config.cfg rebound a tracked action onto another key, rewrite that
  * action's bind in the managed file. Never emits `unbindall`.
  */
+/** Binds from `tf/cfg/config.cfg` only — not the managed overlay. */
+export function configBindsFromFiles(
+  files: Array<{ path: string; text: string }>,
+): Record<string, string> {
+  const config = files.find((file) => {
+    const path = file.path.replace(/\\/g, "/").toLowerCase();
+    return path === "tf/cfg/config.cfg" || path.endsWith("/config.cfg");
+  });
+  if (!config) {
+    return {};
+  }
+  const binds: Record<string, string> = {};
+  for (const command of parseCommands(config.text, "config.cfg")) {
+    if (command.name !== "bind" || command.args.length < 2) {
+      continue;
+    }
+    binds[command.args[0].toLowerCase()] = command.args.slice(1).join(" ");
+  }
+  return binds;
+}
+
 export function syncTrackedBindsFromConfig(currentFile: string, configBinds: BindMap): string {
   const next = { ...parseManagedBinds(currentFile) };
   let changed = false;

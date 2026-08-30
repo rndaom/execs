@@ -1,9 +1,12 @@
 use std::path::Path;
 
+use std::collections::BTreeMap;
+
 use execs_core::{
-    materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, FirstRunClass,
-    PackChoice, ProfileDetail, ProfileError, ProfileFile, ProfileFileContent, ProfileLibrary,
-    SwitchProgress, Tf2Install, WizardAsset, WizardSpec, WriteLock,
+    materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, ComfigPreset,
+    ComfigState, FirstRunClass, OfficialAddon, PackChoice, ProfileDetail, ProfileError,
+    ProfileFile, ProfileFileContent, ProfileLibrary, SetLaunchResult, SwitchProgress, Tf2Install,
+    WizardAsset, WizardSpec, WriteLock,
 };
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
@@ -241,6 +244,127 @@ pub fn write_owned_file(
     let root = confirmed_root()?;
     let profile_id = resolve_profile_id(&root, id)?;
     execs_core::write_owned_file(&root, &profile_id, &path, text.as_bytes()).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn get_comfig_state(id: Option<String>) -> Result<Option<ComfigState>, String> {
+    let root = confirmed_root()?;
+    let Ok(profile_id) = resolve_profile_id(&root, id) else {
+        return Ok(None);
+    };
+    execs_core::read_comfig_state(&root, &profile_id)
+        .map(Some)
+        .map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn set_comfig_preset(preset: ComfigPreset, id: Option<String>) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::write_comfig_preset(&root, &profile_id, preset).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn set_comfig_modules(
+    modules: BTreeMap<String, String>,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::write_comfig_modules(&root, &profile_id, &modules).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub async fn set_comfig_addons(
+    addons: Vec<OfficialAddon>,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        let state = execs_core::read_comfig_state(&root, &profile_id).map_err(|err| err.message())?;
+        let needed: Vec<String> = addons
+            .iter()
+            .filter(|addon| !state.addons.contains(addon))
+            .map(|addon| addon.rel_path())
+            .collect();
+        let owned = if needed.is_empty() {
+            Vec::new()
+        } else {
+            crate::comfig_fetch::fetch_official_assets(&needed)?
+        };
+        let assets: Vec<WizardAsset<'_>> = owned
+            .iter()
+            .map(|(path, bytes)| WizardAsset { path, bytes })
+            .collect();
+        execs_core::set_comfig_addons(&root, &profile_id, &addons, &assets).map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn update_comfig_vpks(id: Option<String>) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        let state = execs_core::read_comfig_state(&root, &profile_id).map_err(|err| err.message())?;
+        let rels = execs_core::official_package_rel_paths(&state.addons);
+        let owned = crate::comfig_fetch::fetch_official_assets(&rels)?;
+        let mut last = None;
+        for (rel, bytes) in &owned {
+            last = Some(
+                execs_core::apply_official_vpk_bytes(&root, &profile_id, rel, bytes)
+                    .map_err(|err| err.message())?,
+            );
+        }
+        last.ok_or_else(|| "Official mastercomfig release had no packages to apply.".to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn import_comfig_custom(app: AppHandle, id: Option<String>) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Import comfig-custom")
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|err| err.to_string())?;
+    let Some(picked) = picked else {
+        return execs_core::get_active_profile_detail(&root)
+            .map_err(|err| err.message())?
+            .ok_or_else(|| "Save or switch to a profile first.".to_string());
+    };
+    let path = picked.into_path().map_err(|err| err.to_string())?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::import_comfig_custom(&root, &profile_id, &path).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn recommended_launch_options() -> String {
+    execs_core::recommended_launch_options()
+}
+
+#[tauri::command]
+pub fn get_profile_launch_options(id: Option<String>) -> Result<String, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::get_profile_launch_options(&root, &profile_id).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn set_profile_launch_options(
+    options: String,
+    id: Option<String>,
+) -> Result<SetLaunchResult, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::set_profile_launch_options(&root, &profile_id, &options).map_err(|err| err.message())
 }
 
 fn resolve_profile_id(root: &Path, id: Option<String>) -> Result<String, String> {

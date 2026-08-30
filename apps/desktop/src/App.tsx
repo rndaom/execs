@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FirstRunExisting } from "./FirstRunExisting";
+import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard, wizardSpec } from "./SetupWizard";
 import {
@@ -649,7 +650,15 @@ export function App() {
         inheritBinds={inheritBinds}
         settings={
           showSettingsChrome(library) ? (
-            <SettingsLayout tab={settingsTab} running={running} onTab={setSettingsTab} />
+            <SettingsLayout tab={settingsTab} running={running} onTab={setSettingsTab}>
+              <SettingsHost
+                tab={settingsTab}
+                running={running}
+                preview={preview}
+                refreshKey={`${library?.activeProfileId ?? ""}:${absorbNonce}`}
+                onError={setError}
+              />
+            </SettingsLayout>
           ) : null
         }
         onDraftName={setDraftName}
