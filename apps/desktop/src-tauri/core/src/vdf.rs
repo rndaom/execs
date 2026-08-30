@@ -47,6 +47,47 @@ impl VdfMap {
         }
         set_path_rec(self, keys, value.into());
     }
+
+    /// Merge `other` into this map. Objects recurse; strings overwrite the last matching key.
+    pub fn merge_from(&mut self, other: &VdfMap) {
+        for (key, value) in &other.entries {
+            match value {
+                VdfValue::Str(text) => {
+                    if let Some((_, existing)) = self
+                        .entries
+                        .iter_mut()
+                        .rev()
+                        .find(|(k, _)| k.eq_ignore_ascii_case(key))
+                    {
+                        *existing = VdfValue::Str(text.clone());
+                    } else {
+                        self.entries
+                            .push((key.clone(), VdfValue::Str(text.clone())));
+                    }
+                }
+                VdfValue::Obj(obj) => {
+                    let idx = match self.entries.iter().rposition(|(k, _)| k.eq_ignore_ascii_case(key))
+                    {
+                        Some(i) => {
+                            if !matches!(self.entries[i].1, VdfValue::Obj(_)) {
+                                self.entries[i].1 = VdfValue::Obj(VdfMap::default());
+                            }
+                            i
+                        }
+                        None => {
+                            self.entries
+                                .push((key.clone(), VdfValue::Obj(VdfMap::default())));
+                            self.entries.len() - 1
+                        }
+                    };
+                    let VdfValue::Obj(child) = &mut self.entries[idx].1 else {
+                        unreachable!("merge_from created an object for {key}");
+                    };
+                    child.merge_from(obj);
+                }
+            }
+        }
+    }
 }
 
 fn set_path_rec(map: &mut VdfMap, keys: &[&str], value: String) {
@@ -527,5 +568,44 @@ mod tests {
             Some("-novid -nojoy")
         );
         assert_eq!(app.get("LastPlayed").and_then(VdfValue::as_str), Some("9"));
+    }
+
+    #[test]
+    fn merge_from_updates_nested_strings() {
+        let mut base = parse_vdf(
+            r#""Scheme"
+{
+	"Colors"
+	{
+		"Health"		"255 0 0 255"
+		"Keep"		"1 2 3 4"
+	}
+}
+"#,
+        )
+        .unwrap();
+        let patch = parse_vdf(
+            r#""Scheme"
+{
+	"Colors"
+	{
+		"Health"		"0 153 255 255"
+	}
+}
+"#,
+        )
+        .unwrap();
+        base.merge_from(&patch);
+        let colors = base
+            .get("Scheme")
+            .and_then(VdfValue::as_obj)
+            .and_then(|scheme| scheme.get("Colors"))
+            .and_then(VdfValue::as_obj)
+            .unwrap();
+        assert_eq!(
+            colors.get("Health").and_then(VdfValue::as_str),
+            Some("0 153 255 255")
+        );
+        assert_eq!(colors.get("Keep").and_then(VdfValue::as_str), Some("1 2 3 4"));
     }
 }

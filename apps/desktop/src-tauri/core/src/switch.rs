@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::absorb::{
     absorb_owned_to, absorb_packs_to, pack_key, write_config_cfg_dual_to, AbsorbOptions, PackChoice,
 };
+use crate::hud::{hud_packs, live_hud_names};
 use crate::blob::blob_path;
 use crate::hash::{copy_and_sha256, sha256_file};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
@@ -169,7 +170,7 @@ fn write_target_live(
     target: &ProfileManifest,
     live_huds: &[String],
 ) -> Result<(), ProfileError> {
-    let preferred_hud = preferred_hud(&target.files, live_huds);
+    let preferred_hud = preferred_hud(target, live_huds);
     let extra_huds = extra_hud_packs(&target.files, preferred_hud.as_deref());
     for file in &target.files {
         if is_forbidden_rel_path(&file.path) {
@@ -213,10 +214,15 @@ fn dual_write_target_config(
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
 }
 
-fn preferred_hud(files: &[ProfileFile], live_huds: &[String]) -> Option<String> {
-    let mut target_huds = hud_packs(files);
+fn preferred_hud(target: &ProfileManifest, live_huds: &[String]) -> Option<String> {
+    let mut target_huds = hud_packs(&target.files);
     if target_huds.is_empty() {
         return None;
+    }
+    if let Some(hud) = &target.hud {
+        if target_huds.iter().any(|pack| pack == &hud.id) {
+            return Some(hud.id.clone());
+        }
     }
     for live in live_huds {
         if target_huds.iter().any(|hud| hud == live) {
@@ -232,60 +238,6 @@ fn extra_hud_packs(files: &[ProfileFile], preferred: Option<&str>) -> Vec<String
         .into_iter()
         .filter(|hud| preferred != Some(hud.as_str()))
         .collect()
-}
-
-fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
-    let mut packs = Vec::new();
-    for file in files {
-        let Some(pack) = pack_key(&file.path) else {
-            continue;
-        };
-        if !is_hud_marker(&file.path) {
-            continue;
-        }
-        if !packs.contains(&pack) {
-            packs.push(pack);
-        }
-    }
-    packs
-}
-
-fn is_hud_marker(rel: &str) -> bool {
-    let lower = rel.to_ascii_lowercase();
-    let Some(rest) = lower.strip_prefix("tf/custom/") else {
-        return false;
-    };
-    let Some((_, after)) = rest.split_once('/') else {
-        return false;
-    };
-    after == "info.vdf" || after.starts_with("resource/ui/")
-}
-
-fn live_hud_names(tf2_root: &Path) -> Vec<String> {
-    let custom = tf2_root.join("tf").join("custom");
-    let Ok(entries) = fs::read_dir(&custom) else {
-        return Vec::new();
-    };
-    let mut names = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() || !is_hud_dir(&path) {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let key = name
-            .strip_prefix('-')
-            .unwrap_or(name.as_str())
-            .to_ascii_lowercase();
-        if !key.is_empty() && !names.contains(&key) {
-            names.push(key);
-        }
-    }
-    names
-}
-
-fn is_hud_dir(path: &Path) -> bool {
-    path.join("info.vdf").is_file() || path.join("resource").join("ui").is_dir()
 }
 
 fn rewrite_extra_hud_path(rel: &str, extra_huds: &[String]) -> String {

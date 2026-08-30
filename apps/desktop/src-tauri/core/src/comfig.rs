@@ -8,10 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::apply::{
-    cfg_layer_from_files, list_profile_files_from, write_owned_file_to, ProfileDetail,
-    WriteOwnedOptions,
-};
+use crate::apply::{write_owned_file_to, ProfileDetail, WriteOwnedOptions};
 use crate::blob::blob_path;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -531,18 +528,11 @@ fn find_asset<'a>(assets: &'a [WizardAsset<'a>], rel: &str) -> Option<&'a [u8]> 
 
 fn profile_detail(
     profiles_dir: &Path,
-    tf2_root: &Path,
+    _tf2_root: &Path,
     profile_id: &str,
 ) -> Result<ProfileDetail, ProfileError> {
-    let files = list_profile_files_from(profiles_dir, tf2_root, profile_id)?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    Ok(ProfileDetail {
-        id: manifest.id,
-        name: manifest.name,
-        launch_options: manifest.launch_options,
-        layer: cfg_layer_from_files(&files),
-        files,
-    })
+    Ok(crate::apply::detail_from_manifest(&manifest))
 }
 
 fn read_profile_text_from(
