@@ -141,6 +141,7 @@ export function SetupWizard({
             </button>
           ) : null}
         </div>
+      </form>
     </section>
   );
 }
