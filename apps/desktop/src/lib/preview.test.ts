@@ -28,6 +28,8 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=settings-gameplay")).toBe("settings-gameplay");
     expect(previewStateFromSearch("?preview=settings-hud")).toBe("settings-hud");
     expect(previewStateFromSearch("?preview=settings-hud-installed")).toBe("settings-hud-installed");
+    expect(previewStateFromSearch("?preview=settings-crosshair")).toBe("settings-crosshair");
+    expect(previewStateFromSearch("?preview=settings-viewmodels")).toBe("settings-viewmodels");
     expect(previewStateFromSearch("?preview=settings-files")).toBe("settings-files");
     expect(previewStateFromSearch("?preview=settings-launch")).toBe("settings-launch");
     expect(previewStateFromSearch("?preview=settings-locked")).toBe("settings-locked");
@@ -87,6 +89,8 @@ describe("preview query", () => {
     expect(previewSettingsTab("settings-gameplay")).toBe("gameplay");
     expect(previewSettingsTab("settings-hud")).toBe("hud");
     expect(previewSettingsTab("settings-hud-installed")).toBe("hud");
+    expect(previewSettingsTab("settings-crosshair")).toBe("crosshair");
+    expect(previewSettingsTab("settings-viewmodels")).toBe("viewmodels");
     expect(previewSettingsTab("settings-files")).toBe("files");
     expect(previewSettingsTab("settings-launch")).toBe("launch");
     expect(previewSettingsTab("settings-locked")).toBe("comfig");
@@ -94,6 +98,8 @@ describe("preview query", () => {
     expect(previewLibrary("settings-comfig")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("settings-hud")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("settings-hud-installed")?.activeProfileId).toBe("preview-1");
+    expect(previewLibrary("settings-crosshair")?.activeProfileId).toBe("preview-1");
+    expect(previewLibrary("settings-viewmodels")?.activeProfileId).toBe("preview-1");
     expect(previewLocked("settings-locked")).toBe(true);
     expect(previewFirstRunKind("settings-comfig")).toBeNull();
   });

@@ -140,6 +140,34 @@ pub struct HudRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CrosshairRecord {
+    pub id: String,
+    #[serde(default)]
+    pub shape: String,
+    #[serde(default)]
+    pub assignments: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ViewmodelSource {
+    Compiled,
+    Imported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewmodelRecord {
+    pub id: String,
+    pub source: ViewmodelSource,
+    #[serde(default)]
+    pub preload: bool,
+    #[serde(default)]
+    pub options: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProfileManifest {
     pub schema: u32,
     pub id: String,
@@ -149,6 +177,10 @@ pub struct ProfileManifest {
     pub files: Vec<ProfileFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hud: Option<HudRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crosshair: Option<CrosshairRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewmodel: Option<ViewmodelRecord>,
 }
 
 /// Read model for the UI. `profiles` is empty when the library is unusable.
@@ -298,6 +330,8 @@ where
         launch_options: String::new(),
         files: Vec::new(),
         hud: None,
+        crosshair: None,
+        viewmodel: None,
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
@@ -697,6 +731,8 @@ fn create_empty_record(
         launch_options: String::new(),
         files: Vec::new(),
         hud: None,
+        crosshair: None,
+        viewmodel: None,
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
