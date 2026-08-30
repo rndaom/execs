@@ -31,6 +31,10 @@ pub fn run() {
             commands::get_inherit_binds,
             commands::set_inherit_binds,
             commands::create_fresh_profile,
+            commands::get_active_profile_detail,
+            commands::list_profile_files,
+            commands::read_profile_file,
+            commands::write_owned_file,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
