@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use execs_core::{
-    AbsorbDelta, AbsorbOwnedResult, PackChoice, ProfileError, ProfileLibrary, SwitchProgress,
-    Tf2Install, WriteLock,
+    materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, FirstRunClass,
+    PackChoice, ProfileError, ProfileLibrary, SwitchProgress, Tf2Install, WizardAsset, WizardSpec,
+    WriteLock,
 };
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
@@ -162,4 +163,40 @@ pub async fn import_profile(app: AppHandle) -> Result<ProfileLibrary, String> {
     };
     let path = picked.into_path().map_err(|err| err.to_string())?;
     execs_core::import_profile(&root, &path).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn classify_first_run() -> Result<FirstRunClass, String> {
+    execs_core::classify_first_run(&confirmed_root()?).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub async fn apply_unused_wizard(app: AppHandle, spec: WizardSpec) -> Result<ProfileLibrary, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        apply_wizard_and_switch(&app, &root, spec, BindSource::Stock)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+pub(crate) fn apply_wizard_and_switch(
+    app: &AppHandle,
+    root: &std::path::Path,
+    spec: WizardSpec,
+    binds: BindSource,
+) -> Result<ProfileLibrary, String> {
+    let owned = crate::comfig_fetch::fetch_wizard_assets(&spec)?;
+    let assets: Vec<WizardAsset<'_>> = owned
+        .iter()
+        .map(|(path, bytes)| WizardAsset {
+            path,
+            bytes,
+        })
+        .collect();
+    let result = materialize_wizard_profile(root, &spec, &binds, &assets).map_err(|err| err.message())?;
+    execs_core::switch_profile_with_progress(root, &result.profile_id, |progress: SwitchProgress| {
+        let _ = app.emit("profile-switch-progress", progress);
+    })
+    .map_err(|err| err.message())
 }

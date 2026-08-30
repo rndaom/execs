@@ -194,3 +194,52 @@ export async function importProfile(): Promise<ProfileLibrary> {
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export type FirstRunKind = "unused" | "existing";
+
+export type FirstRunClass = {
+  kind: FirstRunKind;
+  reasons: string[];
+};
+
+export type ComfigPreset =
+  | "ultra"
+  | "high"
+  | "medium_high"
+  | "medium"
+  | "medium_low"
+  | "low"
+  | "very_low"
+  | "none";
+
+export type OfficialAddon =
+  | "no-footsteps"
+  | "no-pyroland"
+  | "no-soundscapes"
+  | "no-tutorial"
+  | "lowmem"
+  | "null-canceling-movement"
+  | "flat-mouse"
+  | "transparent-viewmodels";
+
+export type WizardSpec = {
+  name: string;
+  preset: ComfigPreset;
+  addons: OfficialAddon[];
+};
+
+export async function classifyFirstRun(): Promise<FirstRunClass> {
+  try {
+    return await invoke<FirstRunClass>("classify_first_run");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("apply_unused_wizard", { spec });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}

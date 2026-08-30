@@ -1,6 +1,8 @@
 pub mod absorb;
 pub mod blob;
+pub mod cfg_script;
 pub mod finder;
+pub mod first_run;
 pub mod hash;
 pub mod launch;
 pub mod process_lock;
@@ -10,12 +12,14 @@ pub mod steam_inf;
 pub mod surface;
 pub mod switch;
 pub mod vdf;
+pub mod wizard;
 pub mod zip;
 
 pub use absorb::{
     absorb_owned, absorb_packs, scan_absorb_delta, write_config_cfg_dual, AbsorbDelta,
     AbsorbOwnedResult, PackChoice,
 };
+pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use finder::{
     discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
     Tf2RootError,
@@ -34,6 +38,10 @@ pub use settings::{
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
+pub use wizard::{
+    download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, BindSource,
+    ComfigPreset, GitHubAsset, GitHubRelease, OfficialAddon, WizardAsset, WizardResult, WizardSpec,
+};
 pub use zip::{
     export_profile, export_profile_to, import_profile, import_profile_from, safe_zip_file_name,
 };
