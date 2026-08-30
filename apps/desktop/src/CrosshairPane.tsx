@@ -6,6 +6,7 @@ import {
   CROSSHAIR_CASUAL_COPY,
   CROSSHAIR_SHAPES,
   CROSSHAIR_STOCK_OVERRIDE_NOTE,
+  CUSTOM_CROSSHAIR_SHAPE,
   type CrosshairShape,
   renderCrosshairRgba,
   seedCrosshairDraft,
@@ -20,14 +21,12 @@ export function CrosshairPane({
   record,
   onApply,
   onRemove,
-  onImportPng,
 }: {
   running: boolean;
   busy: boolean;
   record: CrosshairRecord | null;
-  onApply: (shape: CrosshairShape, assignments: Record<string, string>) => void;
+  onApply: (shape: CrosshairShape, assignments: Record<string, string>, customRgba?: number[]) => void;
   onRemove: () => void;
-  onImportPng?: (bytes: Uint8Array, name: string) => void;
 }) {
   const locked = !canWriteSettings(running, busy);
   const seeded = useMemo(() => seedCrosshairDraft(record), [record]);
@@ -48,13 +47,44 @@ export function CrosshairPane({
     if (!ctx) {
       return;
     }
-    const pixels = renderCrosshairRgba(draft.shape);
     const image = ctx.createImageData(CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE);
-    image.data.set(pixels);
+    if (draft.shape === CUSTOM_CROSSHAIR_SHAPE && draft.customRgba) {
+      image.data.set(draft.customRgba);
+    } else {
+      image.data.set(renderCrosshairRgba(draft.shape));
+    }
     ctx.putImageData(image, 0, 0);
-  }, [draft.shape]);
+  }, [draft.shape, draft.customRgba]);
 
   const weapons = weaponsForClass(classId);
+  const shapeChoices: CrosshairShape[] =
+    draft.customRgba || draft.shape === CUSTOM_CROSSHAIR_SHAPE
+      ? [...CROSSHAIR_SHAPES, CUSTOM_CROSSHAIR_SHAPE]
+      : [...CROSSHAIR_SHAPES];
+
+  function importPng(file: File) {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const scratch = document.createElement("canvas");
+      scratch.width = CROSSHAIR_CANVAS_SIZE;
+      scratch.height = CROSSHAIR_CANVAS_SIZE;
+      const ctx = scratch.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      ctx.clearRect(0, 0, CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE);
+      ctx.drawImage(image, 0, 0, CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE);
+      const pixels = Array.from(ctx.getImageData(0, 0, CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE).data);
+      setDraft({ ...draft, shape: CUSTOM_CROSSHAIR_SHAPE, customRgba: pixels });
+      URL.revokeObjectURL(url);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+    };
+    image.src = url;
+  }
 
   return (
     <section data-testid="settings-crosshair" className="flex flex-col gap-5 text-left">
@@ -72,7 +102,7 @@ export function CrosshairPane({
         />
         <fieldset className="flex flex-col gap-2 text-sm text-ink">
           <legend className="font-display text-sm tracking-wide">Shape</legend>
-          {CROSSHAIR_SHAPES.map((shape) => (
+          {shapeChoices.map((shape) => (
             <label key={shape} className="flex items-center gap-2">
               <input
                 type="radio"
@@ -82,33 +112,29 @@ export function CrosshairPane({
                 disabled={locked}
                 onChange={() => setDraft({ ...draft, shape })}
               />
-              {shape}
+              {shape === CUSTOM_CROSSHAIR_SHAPE ? "imported PNG" : shape}
             </label>
           ))}
         </fieldset>
       </div>
 
-      {onImportPng ? (
-        <label className="text-sm text-ink">
-          Import PNG
-          <input
-            data-testid="crosshair-import-png"
-            type="file"
-            accept="image/png"
-            disabled={locked}
-            className="mt-1 block text-xs text-ink-muted"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (!file) {
-                return;
-              }
-              void file.arrayBuffer().then((buffer) => {
-                onImportPng(new Uint8Array(buffer), file.name);
-              });
-            }}
-          />
-        </label>
-      ) : null}
+      <label className="text-sm text-ink">
+        Import PNG
+        <input
+          data-testid="crosshair-import-png"
+          type="file"
+          accept="image/png"
+          disabled={locked}
+          className="mt-1 block text-xs text-ink-muted"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              importPng(file);
+            }
+            event.target.value = "";
+          }}
+        />
+      </label>
 
       <div className="flex flex-wrap gap-2">
         {TF2_CLASSES.map((id) => (
@@ -149,9 +175,9 @@ export function CrosshairPane({
               }}
               className="rounded-lg border border-edge bg-bg px-2 py-1 text-sm text-ink"
             >
-              {CROSSHAIR_SHAPES.map((shape) => (
+              {shapeChoices.map((shape) => (
                 <option key={shape} value={shape}>
-                  {shape}
+                  {shape === CUSTOM_CROSSHAIR_SHAPE ? "imported PNG" : shape}
                 </option>
               ))}
             </select>
@@ -164,7 +190,13 @@ export function CrosshairPane({
           type="button"
           data-testid="crosshair-apply"
           disabled={locked}
-          onClick={() => onApply(draft.shape, draft.assignments)}
+          onClick={() =>
+            onApply(
+              draft.shape,
+              draft.assignments,
+              draft.customRgba ?? undefined,
+            )
+          }
           className="rounded-pill bg-brand px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
         >
           {running ? "Close TF2 to apply" : record ? "Update crosshairs" : "Apply crosshairs"}

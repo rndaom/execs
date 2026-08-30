@@ -23,6 +23,7 @@ describe("crosshair ui", () => {
     expect(assignmentFor(draft, "tf_weapon_scattergun")).toBe("dot");
     expect(assignmentFor(draft, "tf_weapon_minigun")).toBe("cross");
     expect(isCrosshairShape("circle")).toBe(true);
+    expect(isCrosshairShape("custom")).toBe(true);
     expect(isCrosshairShape("valve")).toBe(false);
     expect(emptyCrosshairDraft().shape).toBe("cross");
   });

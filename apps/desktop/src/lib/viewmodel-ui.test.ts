@@ -29,6 +29,12 @@ describe("viewmodel ui", () => {
     });
     expect(parseWeaponOption(raw).hide).toBe(true);
     expect(parseWeaponOption(raw).originX).toBe(2);
+    const extras = serializeWeaponOption({
+      ...parseWeaponOption("{}"),
+      extra: { ...parseWeaponOption("{}").extra, keepBeamVisible: true, removeShells: true },
+    });
+    expect(parseWeaponOption(extras).extra.keepBeamVisible).toBe(true);
+    expect(parseWeaponOption(extras).extra.removeShells).toBe(true);
   });
 
   it("writes a file-safe itemtest preload cfg", () => {

@@ -211,6 +211,87 @@ export function ViewmodelPane({
         />
         Remove left arm
       </label>
+      <fieldset className="grid grid-cols-2 gap-2 text-sm text-ink">
+        <legend className="font-display text-sm tracking-wide">Keep visible if hidden</legend>
+        {(
+          [
+            ["draw", "Draw"],
+            ["reload", "Reload"],
+            ["attack", "Attack"],
+            ["altAttack", "Alt attack"],
+            ["idle", "Idle"],
+            ["special", "Special"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid={`viewmodel-keep-${key}`}
+              checked={current.keep[key]}
+              disabled={locked}
+              onChange={(event) =>
+                patchWeapon({ keep: { ...current.keep, [key]: event.target.checked } })
+              }
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="grid grid-cols-2 gap-2 text-sm text-ink">
+        <legend className="font-display text-sm tracking-wide">Static</legend>
+        {(
+          [
+            ["draw", "Draw"],
+            ["reload", "Reload"],
+            ["attack", "Attack"],
+            ["idle", "Idle"],
+            ["moreStaticIdle", "More static idle"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid={`viewmodel-static-${key}`}
+              checked={current.stat[key]}
+              disabled={locked}
+              onChange={(event) =>
+                patchWeapon({ stat: { ...current.stat, [key]: event.target.checked } })
+              }
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="grid grid-cols-2 gap-2 text-sm text-ink">
+        <legend className="font-display text-sm tracking-wide">Weapon extras</legend>
+        {(
+          [
+            ["keepBeamVisible", "Medigun beam"],
+            ["keepFlamesVisible", "Flamethrower flames"],
+            ["keepBackstabDetectionVisible", "Knife backstab detection"],
+            ["keepBackstabVisible", "Knife backstab"],
+            ["instantBackstabDetection", "Instant backstab detection"],
+            ["replaceBackstabWithNormalAttack", "Replace backstab with attack"],
+            ["staticBackstabDetection", "Static backstab detection"],
+            ["staticBackstab", "Static backstab"],
+            ["removeShells", "Remove shells"],
+            ["keepTracersVisible", "Tracers"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid={`viewmodel-extra-${key}`}
+              checked={current.extra[key]}
+              disabled={locked}
+              onChange={(event) =>
+                patchWeapon({ extra: { ...current.extra, [key]: event.target.checked } })
+              }
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
       <label className="flex items-center gap-2 text-sm text-ink">
         <input
           type="checkbox"
