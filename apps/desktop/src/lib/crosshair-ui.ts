@@ -7,7 +7,8 @@ export const CROSSHAIR_SCRIPTS_DIR = "scripts";
 export const CROSSHAIR_CANVAS_SIZE = 64;
 
 export const CROSSHAIR_SHAPES = ["dot", "cross", "plus-gap", "circle", "t"] as const;
-export type CrosshairShape = (typeof CROSSHAIR_SHAPES)[number];
+export const CUSTOM_CROSSHAIR_SHAPE = "custom";
+export type CrosshairShape = (typeof CROSSHAIR_SHAPES)[number] | typeof CUSTOM_CROSSHAIR_SHAPE;
 
 export const TF2_CLASSES = [
   "scout",
@@ -116,21 +117,23 @@ export const CROSSHAIR_STOCK_OVERRIDE_NOTE =
 export type CrosshairDraft = {
   shape: CrosshairShape;
   assignments: Record<string, CrosshairShape>;
+  customRgba: number[] | null;
 };
 
 export function emptyCrosshairDraft(): CrosshairDraft {
-  return { shape: "cross", assignments: {} };
+  return { shape: "cross", assignments: {}, customRgba: null };
 }
 
 export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): CrosshairDraft {
-  const shape = CROSSHAIR_SHAPES.find((item) => item === record?.shape) ?? "cross";
+  const raw = record?.shape ?? "cross";
+  const shape = isCrosshairShape(raw) ? raw : "cross";
   const assignments: Record<string, CrosshairShape> = {};
   for (const [script, value] of Object.entries(record?.assignments ?? {})) {
-    if (CROSSHAIR_SHAPES.includes(value as CrosshairShape)) {
-      assignments[script] = value as CrosshairShape;
+    if (isCrosshairShape(value)) {
+      assignments[script] = value;
     }
   }
-  return { shape, assignments };
+  return { shape, assignments, customRgba: null };
 }
 
 export function assignmentFor(draft: CrosshairDraft, script: string): CrosshairShape {
@@ -142,7 +145,7 @@ export function weaponsForClass(classId: Tf2Class): WeaponCatalogEntry[] {
 }
 
 export function isCrosshairShape(value: string): value is CrosshairShape {
-  return CROSSHAIR_SHAPES.includes(value as CrosshairShape);
+  return value === CUSTOM_CROSSHAIR_SHAPE || CROSSHAIR_SHAPES.includes(value as (typeof CROSSHAIR_SHAPES)[number]);
 }
 
 /** Draw a first-party shape into a 64×64 RGBA buffer (row-major, unpremultiplied). */
@@ -203,6 +206,8 @@ export function renderCrosshairRgba(shape: CrosshairShape): Uint8ClampedArray {
       for (let y = mid - 8; y <= mid + 12; y += 1) {
         set(mid, y);
       }
+      break;
+    case "custom":
       break;
     default:
       break;
