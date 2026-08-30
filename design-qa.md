@@ -1,5 +1,17 @@
 # design-qa log
 
+## 2026-08-30 — HUD pane (RND-162)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill tabs, Big Shoulders Display.
+
+Verified:
+- `?preview=settings-hud`: Settings tabs include HUD. Catalog search, Refresh catalog, rayshud Install enabled, ToonHUD Install disabled + “not a pinned GitHub zip”. Casual disclaimer (layout/scheme vs materials). Credit hud-db / comfig.app / TF2HUD.Editor MIT, first-party apply.
+- `?preview=settings-hud-installed`: Installed rayshud, Update HUD, Active badge. Options: Buff color + opacity, Minmode checkbox, Scoreboard combo, Ubercharge number. Apply enables when dirty and disables after save.
+- `?preview=settings-locked`: write-lock banner, HUD tab still reachable, Install reads Close TF2 to install (GitHub rows) and stays off. Non-GitHub Install stays labeled Install and disabled.
+- Tab regression: Comfig and Files still render from the same chrome.
+
+Open items: native hud-db fetch, pinned zip extract, live one-HUD replace, and schema apply need a Tauri window; not available on this VM.
+final result: pass for HUD chrome (preview fixtures).
+
 ## 2026-08-30 — settings panes (RND-154–158)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill tabs, Big Shoulders Display.
 
