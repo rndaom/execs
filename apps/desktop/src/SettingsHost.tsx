@@ -499,12 +499,12 @@ export function SettingsHost({
         running={running}
         busy={busy}
         record={detail?.crosshair ?? previewRecord}
-        onApply={(shape, assignments) => {
+        onApply={(shape, assignments, customRgba) => {
           if (!tauri) {
             return;
           }
           void runWrite(async () => {
-            await applyCrosshairs(shape, assignments);
+            await applyCrosshairs(shape, assignments, customRgba);
           });
         }}
         onRemove={() => {

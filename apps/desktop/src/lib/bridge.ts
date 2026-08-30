@@ -551,9 +551,14 @@ export async function applyHudOptions(options: Record<string, string>): Promise<
 export async function applyCrosshairs(
   shape: string,
   assignments: Record<string, string>,
+  customRgba?: number[],
 ): Promise<ProfileDetail> {
   try {
-    return await invoke<ProfileDetail>("apply_crosshairs", { shape, assignments });
+    return await invoke<ProfileDetail>("apply_crosshairs", {
+      shape,
+      assignments,
+      custom_rgba: customRgba ?? null,
+    });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }
