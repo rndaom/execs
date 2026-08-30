@@ -166,7 +166,13 @@ export function HudPane({
                     onClick={() => onInstall(entry.id)}
                     className="rounded-pill bg-brand px-4 py-1.5 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
                   >
-                    {current ? "Installed" : running ? "Close TF2 to install" : "Install"}
+                    {current
+                      ? "Installed"
+                      : !installable
+                        ? "Install"
+                        : running
+                          ? "Close TF2 to install"
+                          : "Install"}
                   </button>
                   <a
                     href={entry.comfigUrl}
