@@ -38,6 +38,104 @@ impl VdfMap {
             .find(|(k, _)| k.eq_ignore_ascii_case(key))
             .map(|(_, v)| v)
     }
+
+    /// Set a nested string, creating missing objects. Last key is the leaf.
+    /// Existing keys are matched ASCII case-insensitively; new keys use `keys` as given.
+    pub fn set_path(&mut self, keys: &[&str], value: impl Into<String>) {
+        if keys.is_empty() {
+            return;
+        }
+        set_path_rec(self, keys, value.into());
+    }
+}
+
+fn set_path_rec(map: &mut VdfMap, keys: &[&str], value: String) {
+    let key = keys[0];
+    if keys.len() == 1 {
+        if let Some((_, existing)) = map
+            .entries
+            .iter_mut()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case(key))
+        {
+            *existing = VdfValue::Str(value);
+        } else {
+            map.entries.push((key.to_string(), VdfValue::Str(value)));
+        }
+        return;
+    }
+
+    let idx = match map
+        .entries
+        .iter()
+        .rposition(|(k, _)| k.eq_ignore_ascii_case(key))
+    {
+        Some(i) => {
+            if !matches!(map.entries[i].1, VdfValue::Obj(_)) {
+                map.entries[i].1 = VdfValue::Obj(VdfMap::default());
+            }
+            i
+        }
+        None => {
+            map.entries
+                .push((key.to_string(), VdfValue::Obj(VdfMap::default())));
+            map.entries.len() - 1
+        }
+    };
+    let VdfValue::Obj(child) = &mut map.entries[idx].1 else {
+        unreachable!("set_path created an object for {key}");
+    };
+    set_path_rec(child, &keys[1..], value);
+}
+
+/// Quoted KeyValues. Objects use the Steam brace-on-next-line layout.
+pub fn serialize_vdf(map: &VdfMap) -> String {
+    let mut out = String::new();
+    write_map(&mut out, map, 0);
+    out
+}
+
+fn write_map(out: &mut String, map: &VdfMap, indent: usize) {
+    for (key, value) in &map.entries {
+        write_indent(out, indent);
+        write_quoted(out, key);
+        match value {
+            VdfValue::Str(s) => {
+                out.push_str("\t\t");
+                write_quoted(out, s);
+                out.push('\n');
+            }
+            VdfValue::Obj(obj) => {
+                out.push('\n');
+                write_indent(out, indent);
+                out.push_str("{\n");
+                write_map(out, obj, indent + 1);
+                write_indent(out, indent);
+                out.push_str("}\n");
+            }
+        }
+    }
+}
+
+fn write_indent(out: &mut String, n: usize) {
+    for _ in 0..n {
+        out.push('\t');
+    }
+}
+
+fn write_quoted(out: &mut String, s: &str) {
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,7 +248,9 @@ impl Parser {
 
     fn starts_with(&self, s: &str) -> bool {
         let rest = &self.chars[self.i..];
-        s.chars().enumerate().all(|(idx, ch)| rest.get(idx) == Some(&ch))
+        s.chars()
+            .enumerate()
+            .all(|(idx, ch)| rest.get(idx) == Some(&ch))
     }
 
     fn parse_pairs_until_end(&mut self, stop_on_brace: bool) -> Result<VdfMap, String> {
@@ -304,5 +404,128 @@ mod tests {
         .unwrap();
         let libs = steam_libraries(&vdf);
         assert_eq!(libs[0].path, "/games/steam");
+    }
+
+    #[test]
+    fn set_path_creates_objects_and_updates_leaf() {
+        let mut map = VdfMap::default();
+        map.set_path(
+            &[
+                "UserLocalConfigStore",
+                "Software",
+                "Valve",
+                "Steam",
+                "apps",
+                "440",
+                "LaunchOptions",
+            ],
+            "-novid",
+        );
+        map.set_path(
+            &[
+                "UserLocalConfigStore",
+                "Software",
+                "Valve",
+                "Steam",
+                "apps",
+                "440",
+                "LastPlayed",
+            ],
+            "123",
+        );
+        map.set_path(
+            &[
+                "UserLocalConfigStore",
+                "Software",
+                "Valve",
+                "Steam",
+                "apps",
+                "440",
+                "LaunchOptions",
+            ],
+            "-console",
+        );
+
+        let store = map.get("UserLocalConfigStore").unwrap().as_obj().unwrap();
+        let apps = store
+            .get("Software")
+            .and_then(VdfValue::as_obj)
+            .and_then(|software| software.get("Valve"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|valve| valve.get("Steam"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|steam| steam.get("apps"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|apps| apps.get("440"))
+            .and_then(VdfValue::as_obj)
+            .unwrap();
+        assert_eq!(
+            apps.get("LaunchOptions").and_then(VdfValue::as_str),
+            Some("-console")
+        );
+        assert_eq!(
+            apps.get("LastPlayed").and_then(VdfValue::as_str),
+            Some("123")
+        );
+    }
+
+    #[test]
+    fn serialize_round_trips_launch_options() {
+        let original = r#""UserLocalConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"apps"
+				{
+					"440"
+					{
+						"LastPlayed"		"9"
+						"LaunchOptions"		"-novid"
+					}
+				}
+			}
+		}
+	}
+}
+"#;
+        let mut vdf = parse_vdf(original).unwrap();
+        vdf.set_path(
+            &[
+                "UserLocalConfigStore",
+                "Software",
+                "Valve",
+                "Steam",
+                "apps",
+                "440",
+                "LaunchOptions",
+            ],
+            "-novid -nojoy",
+        );
+        let text = serialize_vdf(&vdf);
+        let again = parse_vdf(&text).unwrap();
+        assert_eq!(again, vdf);
+        let app = again
+            .get("UserLocalConfigStore")
+            .and_then(VdfValue::as_obj)
+            .and_then(|store| store.get("Software"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|software| software.get("Valve"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|valve| valve.get("Steam"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|steam| steam.get("apps"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|apps| apps.get("440"))
+            .and_then(VdfValue::as_obj)
+            .unwrap();
+        assert_eq!(
+            app.get("LaunchOptions").and_then(VdfValue::as_str),
+            Some("-novid -nojoy")
+        );
+        assert_eq!(app.get("LastPlayed").and_then(VdfValue::as_str), Some("9"));
     }
 }

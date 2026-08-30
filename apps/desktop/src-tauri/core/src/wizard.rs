@@ -8,7 +8,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::cfg_script::overlay_binds;
-use crate::launch::{read_launch_options, sanitize_launch_options};
+use crate::launch::{recommended_launch_options, sanitize_launch_options};
 use crate::process_lock::live_process_names;
 use crate::profile::{
     create_profile_record_to, exclusive_file_path, is_shared_rel_path, load_library_from,
@@ -245,7 +245,7 @@ where
 
     let launch = match options.launch_options {
         Some(raw) => sanitize_launch_options(raw),
-        None => read_launch_options(),
+        None => recommended_launch_options(),
     };
     let mut manifest = load_manifest(profiles_dir, &profile_id)?;
     manifest.launch_options = launch;
