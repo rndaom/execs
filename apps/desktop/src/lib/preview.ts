@@ -6,6 +6,7 @@ import {
   previewSwitchLibrary,
 } from "./library-ui";
 import type { SettingsTab } from "./settings-ui";
+import { type AppUpdateInfo, type AppUpdateProgress, PREVIEW_UPDATE_VERSION } from "./updater-ui";
 
 export const PREVIEW_STATES = [
   "empty",
@@ -32,6 +33,8 @@ export const PREVIEW_STATES = [
   "settings-files",
   "settings-launch",
   "settings-locked",
+  "update-available",
+  "update-installing",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -67,6 +70,8 @@ const READY: PreviewState[] = [
   "settings-files",
   "settings-launch",
   "settings-locked",
+  "update-available",
+  "update-installing",
 ];
 
 export function previewStateFromSearch(search: string): PreviewState | null {
@@ -169,7 +174,21 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
       return "files";
     case "settings-launch":
       return "launch";
+    case "update-available":
+    case "update-installing":
+      return "comfig";
     default:
       return null;
   }
+}
+
+export function previewUpdate(state: PreviewState): AppUpdateInfo | null {
+  if (state === "update-available" || state === "update-installing") {
+    return { version: PREVIEW_UPDATE_VERSION, notes: null };
+  }
+  return null;
+}
+
+export function previewUpdateProgress(state: PreviewState): AppUpdateProgress | null {
+  return state === "update-installing" ? "downloading" : null;
 }
