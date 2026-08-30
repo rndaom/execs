@@ -43,7 +43,11 @@ type CfgText = { path: string; text: string };
 const PREVIEW_FILES: CfgText[] = [
   {
     path: "tf/cfg/overrides/autoexec.cfg",
-    text: "exec execs_binds // execs:managed\nexec execs_gameplay // execs:managed\n",
+    text: "exec execs_binds // execs:managed\nexec execs_gameplay // execs:managed\nhost_writeconfig\n",
+  },
+  {
+    path: "tf/cfg/overrides/danger.cfg",
+    text: "unbindall\n",
   },
   {
     path: "tf/cfg/overrides/execs_binds.cfg",
