@@ -1,40 +1,40 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { FirstRunExisting } from "./FirstRunExisting";
-import { SettingsHost } from "./SettingsHost";
-import { SettingsLayout } from "./SettingsLayout";
-import { SetupWizard, wizardSpec } from "./SetupWizard";
 import {
   type AbsorbDelta,
   absorbOwned,
   absorbPacks,
   applyUnusedWizard,
   browseTf2Root,
+  checkAppUpdate,
   classifyFirstRun,
   confirmTf2Root,
   createFreshProfile,
   exportProfile,
   type FirstRunKind,
+  getAppVersion,
   getInheritBinds,
   getProfileLibrary,
   getTf2Root,
   getTf2WriteLock,
   importProfile,
   initProfileLibrary,
+  installAppUpdate,
   isTauri,
   onSwitchProgress,
   onTf2Running,
   type ProfileLibrary,
-  saveCurrentAs,
-  setInheritBinds,
-  scanTf2Installs,
   type SwitchStep,
+  saveCurrentAs,
+  scanTf2Installs,
+  setInheritBinds,
   switchProfile,
   type Tf2Install,
 } from "./lib/bridge";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
 import {
-  canApplyWizard,
   type ComfigPresetId,
+  canApplyWizard,
   firstRunSurface,
   type OfficialAddonId,
   showCreateNewChrome,
@@ -65,8 +65,27 @@ import {
   previewLocked,
   previewSettingsTab,
   previewStateFromSearch,
+  previewUpdate,
+  previewUpdateProgress,
 } from "./lib/preview";
-import { showSettingsChrome, type SettingsTab } from "./lib/settings-ui";
+import { type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
+import {
+  type AppUpdateInfo,
+  type AppUpdateProgress,
+  appVersionCopy,
+  CHECK_LABEL,
+  canInstallUpdate,
+  INSTALL_LABEL,
+  LATER_LABEL,
+  PREVIEW_APP_VERSION,
+  showUpdateBanner,
+  updateBannerCopy,
+  updateCheckCopy,
+  updateProgressCopy,
+} from "./lib/updater-ui";
+import { SettingsHost } from "./SettingsHost";
+import { SettingsLayout } from "./SettingsLayout";
+import { SetupWizard, wizardSpec } from "./SetupWizard";
 
 type Screen = "finder" | "ready";
 
@@ -124,6 +143,15 @@ export function App() {
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
     () => previewSettingsTab(preview) ?? "comfig",
   );
+  const [appVersion, setAppVersion] = useState(() => (tauri ? "" : PREVIEW_APP_VERSION));
+  const [availableUpdate, setAvailableUpdate] = useState<AppUpdateInfo | null>(() =>
+    tauri ? null : previewUpdate(preview),
+  );
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<AppUpdateProgress | null>(() =>
+    tauri ? null : previewUpdateProgress(preview),
+  );
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tauri) {
@@ -210,6 +238,38 @@ export function App() {
       for (const stop of stops) {
         stop();
       }
+    };
+  }, [tauri]);
+
+  useEffect(() => {
+    if (!tauri) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkLaunchUpdate() {
+      try {
+        const version = await getAppVersion();
+        if (!cancelled) {
+          setAppVersion(version);
+        }
+      } catch {
+        /* version stays empty until they check */
+      }
+      try {
+        const update = await checkAppUpdate();
+        if (!cancelled) {
+          setAvailableUpdate(update);
+        }
+      } catch {
+        /* auto-check stays silent */
+      }
+    }
+
+    void checkLaunchUpdate();
+    return () => {
+      cancelled = true;
     };
   }, [tauri]);
 
@@ -340,6 +400,48 @@ export function App() {
       setError(err instanceof Error ? err.message : "Could not remember that install.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onCheckUpdate() {
+    setUpdateCheckMessage(null);
+    if (!tauri) {
+      const seeded = previewUpdate(preview);
+      if (seeded) {
+        setAvailableUpdate(seeded);
+        setUpdateDismissed(false);
+        return;
+      }
+      setUpdateCheckMessage(updateCheckCopy("latest"));
+      return;
+    }
+    try {
+      const update = await checkAppUpdate();
+      if (update) {
+        setAvailableUpdate(update);
+        setUpdateDismissed(false);
+        return;
+      }
+      setUpdateCheckMessage(updateCheckCopy("latest"));
+    } catch {
+      setUpdateCheckMessage(updateCheckCopy("error"));
+    }
+  }
+
+  async function onInstallUpdate() {
+    if (!availableUpdate || !canInstallUpdate(updateProgress)) {
+      return;
+    }
+    setUpdateCheckMessage(null);
+    setUpdateProgress("downloading");
+    if (!tauri) {
+      return;
+    }
+    try {
+      await installAppUpdate((step) => setUpdateProgress(step));
+    } catch (err) {
+      setUpdateProgress(null);
+      setError(err instanceof Error ? err.message : "Could not install the update.");
     }
   }
 
@@ -692,12 +794,41 @@ export function App() {
           TF2 is running — execs is read-only until the game quits.
         </div>
       ) : null}
+      {showUpdateBanner(availableUpdate, updateDismissed) && availableUpdate ? (
+        <div
+          role="status"
+          data-testid="app-update-banner"
+          className="flex flex-wrap items-center justify-center gap-3 border-b border-brand bg-brand/20 px-4 py-2 text-sm text-ink"
+        >
+          <p>{updateBannerCopy(availableUpdate.version)}</p>
+          {updateProgress ? (
+            <p data-testid="app-update-progress">{updateProgressCopy(updateProgress)}</p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="app-update-install"
+                onClick={() => void onInstallUpdate()}
+                className="rounded-pill bg-brand px-4 py-1 text-sm font-medium text-on-brand hover:bg-brand-hover"
+              >
+                {INSTALL_LABEL}
+              </button>
+              <button
+                type="button"
+                data-testid="app-update-later"
+                onClick={() => setUpdateDismissed(true)}
+                className="rounded-pill border border-edge px-4 py-1 text-sm text-ink hover:bg-panel-raised"
+              >
+                {LATER_LABEL}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <main
         className={`mx-auto flex w-full flex-1 flex-col px-6 py-10 ${
-          settingsOpen
-            ? "max-w-6xl items-stretch"
-            : "max-w-xl items-center justify-center"
+          settingsOpen ? "max-w-6xl items-stretch" : "max-w-xl items-center justify-center"
         }`}
       >
         {screen === "ready" && confirmed ? (
@@ -716,10 +847,32 @@ export function App() {
           />
         )}
 
-        <p className="mt-10 max-w-md text-center text-sm text-ink-muted">
-          execs is a fan project and is not affiliated with Valve Corporation or Steam. Team
-          Fortress and Steam are trademarks of Valve Corporation.
-        </p>
+        <div className="mt-10 flex max-w-md flex-col items-center gap-2 text-center">
+          {appVersion ? (
+            <p className="text-sm text-ink-muted">
+              <span data-testid="app-version">{appVersionCopy(appVersion)}</span>
+              {" · "}
+              <button
+                type="button"
+                data-testid="app-update-check"
+                onClick={() => void onCheckUpdate()}
+                disabled={updateProgress !== null}
+                className="text-ink underline decoration-edge underline-offset-2 hover:text-ink disabled:opacity-40"
+              >
+                {CHECK_LABEL}
+              </button>
+            </p>
+          ) : null}
+          {updateCheckMessage ? (
+            <p data-testid="app-update-check-message" className="text-sm text-ink-muted">
+              {updateCheckMessage}
+            </p>
+          ) : null}
+          <p className="text-sm text-ink-muted">
+            execs is a fan project and is not affiliated with Valve Corporation or Steam. Team
+            Fortress and Steam are trademarks of Valve Corporation.
+          </p>
+        </div>
       </main>
     </div>
   );
@@ -823,10 +976,7 @@ function InheritBindsToggle({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <label
-      data-testid="inherit-binds"
-      className="flex items-center gap-2 text-sm text-ink"
-    >
+    <label data-testid="inherit-binds" className="flex items-center gap-2 text-sm text-ink">
       <input
         type="checkbox"
         checked={inheritBinds}
@@ -920,180 +1070,182 @@ function ReadyPanel({
       }`}
     >
       <div
-        className={`flex w-full flex-col ${
-          settings ? "lg:max-w-md" : "items-center text-center"
-        }`}
+        className={`flex w-full flex-col ${settings ? "lg:max-w-md" : "items-center text-center"}`}
       >
-      <h1 className="font-display text-6xl text-brand">execs</h1>
-      <p className="mt-6 font-display text-sm tracking-wide text-ink-muted">TF2 install</p>
-      <p className="mt-2 max-w-lg break-all text-sm text-ink">{path}</p>
+        <h1 className="font-display text-6xl text-brand">execs</h1>
+        <p className="mt-6 font-display text-sm tracking-wide text-ink-muted">TF2 install</p>
+        <p className="mt-2 max-w-lg break-all text-sm text-ink">{path}</p>
 
-      <div
-        data-testid="profile-library"
-        className="mt-8 w-full rounded-xl border border-edge bg-panel p-4 text-left"
-      >
-        <p className="font-display text-sm tracking-wide text-ink-muted">Profiles</p>
-        <p data-testid="profile-library-status" className="mt-2 text-sm text-ink">
-          {library ? libraryStatusCopy(library) : "Loading profiles…"}
-        </p>
-        {library && library.profiles.length > 0 ? (
-          <ul className="mt-3 flex flex-col gap-2">
-            {library.profiles.map((profile) => {
-              const active = library.activeProfileId === profile.id;
-              const canSwitch = !active && !running && !busy && !switching;
-              return (
-                <li
-                  key={profile.id}
-                  className="flex items-center gap-2 rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
-                >
-                  <button
-                    type="button"
-                    data-testid="profile-name"
-                    disabled={!canSwitch}
-                    onClick={() => onSwitch(profile.id)}
-                    className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left hover:text-ink disabled:opacity-70"
+        <div
+          data-testid="profile-library"
+          className="mt-8 w-full rounded-xl border border-edge bg-panel p-4 text-left"
+        >
+          <p className="font-display text-sm tracking-wide text-ink-muted">Profiles</p>
+          <p data-testid="profile-library-status" className="mt-2 text-sm text-ink">
+            {library ? libraryStatusCopy(library) : "Loading profiles…"}
+          </p>
+          {library && library.profiles.length > 0 ? (
+            <ul className="mt-3 flex flex-col gap-2">
+              {library.profiles.map((profile) => {
+                const active = library.activeProfileId === profile.id;
+                const canSwitch = !active && !running && !busy && !switching;
+                return (
+                  <li
+                    key={profile.id}
+                    className="flex items-center gap-2 rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
                   >
-                    <span>{profile.name}</span>
-                    {active ? (
-                      <span
-                        data-testid="profile-active"
-                        className="rounded-pill border border-brand px-2 py-0.5 text-xs text-brand"
-                      >
-                        Active
-                      </span>
-                    ) : (
-                      <span className="text-xs text-ink-muted">Switch</span>
-                    )}
-                  </button>
-                  {showExport ? (
                     <button
                       type="button"
-                      data-testid="profile-export"
-                      onClick={() => onExport(profile.id)}
-                      disabled={busy}
-                      className="shrink-0 rounded-pill border border-edge px-3 py-1 text-xs text-ink hover:bg-panel-raised disabled:opacity-50"
+                      data-testid="profile-name"
+                      disabled={!canSwitch}
+                      onClick={() => onSwitch(profile.id)}
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left hover:text-ink disabled:opacity-70"
                     >
-                      Export
+                      <span>{profile.name}</span>
+                      {active ? (
+                        <span
+                          data-testid="profile-active"
+                          className="rounded-pill border border-brand px-2 py-0.5 text-xs text-brand"
+                        >
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-muted">Switch</span>
+                      )}
                     </button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
+                    {showExport ? (
+                      <button
+                        type="button"
+                        data-testid="profile-export"
+                        onClick={() => onExport(profile.id)}
+                        disabled={busy}
+                        className="shrink-0 rounded-pill border border-edge px-3 py-1 text-xs text-ink hover:bg-panel-raised disabled:opacity-50"
+                      >
+                        Export
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
 
-        {library && !library.rootMismatch && !running ? (
-          <form
-            className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSave();
-            }}
-          >
-            <label className="sr-only" htmlFor="profile-name">
-              Profile name
-            </label>
-            <input
-              id="profile-name"
-              value={draftName}
-              onChange={(event) => onDraftName(event.target.value)}
-              placeholder="Name this profile"
-              disabled={busy}
-              className="min-w-0 flex-1 rounded-lg border border-edge bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!canSave}
-              className="rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+          {library && !library.rootMismatch && !running ? (
+            <form
+              className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSave();
+              }}
             >
-              Save current as…
-            </button>
-            <button
-              type="button"
-              data-testid="profile-import"
-              onClick={onImport}
-              disabled={!canImport}
-              className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
-            >
-              Import
-            </button>
-          </form>
-        ) : null}
-        {showCreate || showInherit ? (
-          <div className="mt-4 flex flex-col items-start gap-3">
-            {showInherit ? (
-              <InheritBindsToggle
-                inheritBinds={inheritBinds}
+              <label className="sr-only" htmlFor="profile-name">
+                Profile name
+              </label>
+              <input
+                id="profile-name"
+                value={draftName}
+                onChange={(event) => onDraftName(event.target.value)}
+                placeholder="Name this profile"
                 disabled={busy}
-                onChange={onToggleInherit}
+                className="min-w-0 flex-1 rounded-lg border border-edge bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
               />
-            ) : null}
-            {showCreate ? (
+              <button
+                type="submit"
+                disabled={!canSave}
+                className="rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+              >
+                Save current as…
+              </button>
               <button
                 type="button"
-                data-testid="create-new"
-                onClick={onCreateNew}
-                disabled={busy}
+                data-testid="profile-import"
+                onClick={onImport}
+                disabled={!canImport}
                 className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
               >
-                Create new
+                Import
               </button>
-            ) : null}
-          </div>
-        ) : null}
-        {library && running ? (
-          <p className="mt-3 text-sm text-ink-muted">
-            Read-only while TF2 is running. Export is still available.
-          </p>
-        ) : null}
-        {packPrompt && !running ? (
-          <div
-            data-testid="absorb-pack-prompt"
-            className="mt-4 rounded-lg border border-edge bg-bg px-4 py-3"
-          >
-            <p className="text-sm text-ink">TF2 changed packs in custom. Update the active profile?</p>
-            {packPrompt.packsAdded.length > 0 ? (
-              <p className="mt-2 text-xs text-ink-muted">Added: {packPrompt.packsAdded.join(", ")}</p>
-            ) : null}
-            {packPrompt.packsRemoved.length > 0 ? (
-              <p className="mt-1 text-xs text-ink-muted">
-                Removed: {packPrompt.packsRemoved.join(", ")}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                data-testid="absorb-pack-update"
-                disabled={busy}
-                onClick={() => onPackChoice("update")}
-                className="rounded-pill bg-brand px-4 py-1.5 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
-              >
-                Update
-              </button>
-              <button
-                type="button"
-                data-testid="absorb-pack-keep"
-                disabled={busy}
-                onClick={() => onPackChoice("keep")}
-                className="rounded-pill border border-edge px-4 py-1.5 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
-              >
-                Keep
-              </button>
+            </form>
+          ) : null}
+          {showCreate || showInherit ? (
+            <div className="mt-4 flex flex-col items-start gap-3">
+              {showInherit ? (
+                <InheritBindsToggle
+                  inheritBinds={inheritBinds}
+                  disabled={busy}
+                  onChange={onToggleInherit}
+                />
+              ) : null}
+              {showCreate ? (
+                <button
+                  type="button"
+                  data-testid="create-new"
+                  onClick={onCreateNew}
+                  disabled={busy}
+                  className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+                >
+                  Create new
+                </button>
+              ) : null}
             </div>
-          </div>
-        ) : null}
-        <SwitchProgressList switchStep={switchStep} />
-      </div>
+          ) : null}
+          {library && running ? (
+            <p className="mt-3 text-sm text-ink-muted">
+              Read-only while TF2 is running. Export is still available.
+            </p>
+          ) : null}
+          {packPrompt && !running ? (
+            <div
+              data-testid="absorb-pack-prompt"
+              className="mt-4 rounded-lg border border-edge bg-bg px-4 py-3"
+            >
+              <p className="text-sm text-ink">
+                TF2 changed packs in custom. Update the active profile?
+              </p>
+              {packPrompt.packsAdded.length > 0 ? (
+                <p className="mt-2 text-xs text-ink-muted">
+                  Added: {packPrompt.packsAdded.join(", ")}
+                </p>
+              ) : null}
+              {packPrompt.packsRemoved.length > 0 ? (
+                <p className="mt-1 text-xs text-ink-muted">
+                  Removed: {packPrompt.packsRemoved.join(", ")}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  data-testid="absorb-pack-update"
+                  disabled={busy}
+                  onClick={() => onPackChoice("update")}
+                  className="rounded-pill bg-brand px-4 py-1.5 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+                >
+                  Update
+                </button>
+                <button
+                  type="button"
+                  data-testid="absorb-pack-keep"
+                  disabled={busy}
+                  onClick={() => onPackChoice("keep")}
+                  className="rounded-pill border border-edge px-4 py-1.5 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+                >
+                  Keep
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <SwitchProgressList switchStep={switchStep} />
+        </div>
 
-      {error ? <p className="mt-4 text-sm text-team-red">{error}</p> : null}
+        {error ? <p className="mt-4 text-sm text-team-red">{error}</p> : null}
 
-      <button
-        type="button"
-        onClick={onChange}
-        className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
-      >
-        Change
-      </button>
+        <button
+          type="button"
+          onClick={onChange}
+          className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
+        >
+          Change
+        </button>
       </div>
       {settings}
     </section>

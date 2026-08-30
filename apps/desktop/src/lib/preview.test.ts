@@ -27,12 +27,16 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=settings-binds")).toBe("settings-binds");
     expect(previewStateFromSearch("?preview=settings-gameplay")).toBe("settings-gameplay");
     expect(previewStateFromSearch("?preview=settings-hud")).toBe("settings-hud");
-    expect(previewStateFromSearch("?preview=settings-hud-installed")).toBe("settings-hud-installed");
+    expect(previewStateFromSearch("?preview=settings-hud-installed")).toBe(
+      "settings-hud-installed",
+    );
     expect(previewStateFromSearch("?preview=settings-crosshair")).toBe("settings-crosshair");
     expect(previewStateFromSearch("?preview=settings-viewmodels")).toBe("settings-viewmodels");
     expect(previewStateFromSearch("?preview=settings-files")).toBe("settings-files");
     expect(previewStateFromSearch("?preview=settings-launch")).toBe("settings-launch");
     expect(previewStateFromSearch("?preview=settings-locked")).toBe("settings-locked");
+    expect(previewStateFromSearch("?preview=update-available")).toBe("update-available");
+    expect(previewStateFromSearch("?preview=update-installing")).toBe("update-installing");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -94,12 +98,16 @@ describe("preview query", () => {
     expect(previewSettingsTab("settings-files")).toBe("files");
     expect(previewSettingsTab("settings-launch")).toBe("launch");
     expect(previewSettingsTab("settings-locked")).toBe("comfig");
+    expect(previewSettingsTab("update-available")).toBe("comfig");
+    expect(previewSettingsTab("update-installing")).toBe("comfig");
     expect(previewSettingsTab("saved")).toBeNull();
     expect(previewLibrary("settings-comfig")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("settings-hud")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("settings-hud-installed")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("settings-crosshair")?.activeProfileId).toBe("preview-1");
     expect(previewLibrary("settings-viewmodels")?.activeProfileId).toBe("preview-1");
+    expect(previewLibrary("update-available")?.activeProfileId).toBe("preview-1");
+    expect(previewLibrary("update-installing")?.activeProfileId).toBe("preview-1");
     expect(previewLocked("settings-locked")).toBe(true);
     expect(previewFirstRunKind("settings-comfig")).toBeNull();
   });

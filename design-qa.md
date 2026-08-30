@@ -1,5 +1,17 @@
 # design-qa log
 
+## 2026-08-30 — in-app updater chrome (RND-159)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill buttons, Big Shoulders Display.
+
+Verified:
+- `?preview=update-available`: ready chrome with Settings, brand-tinted banner `Update available — execs 0.2.0`, Install + Later. Footer shows `execs 0.1.0` and Check for updates. Comfig pane still has Update packages (mastercomfig, not the app).
+- `?preview=update-installing`: same banner, progress reads Downloading, Install/Later hidden.
+- `?preview=settings-comfig` / `?preview=settings-locked`: no app-update banner. Write-lock strip still shows on locked. Footer version + Check stay visible.
+- Later is session-only (no settings.json field).
+
+Open items: native `check()` / signed install need a published GitHub Release, `TAURI_SIGNING_PRIVATE_KEY`, and a previous NSIS/AppImage build. Not available on this VM.
+final result: pass for updater chrome (preview fixtures).
+
 ## 2026-08-30 — later studios (RND-163 / RND-164)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill tabs, Big Shoulders Display.
 
