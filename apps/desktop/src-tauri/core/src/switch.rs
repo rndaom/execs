@@ -121,6 +121,15 @@ where
 
     progress(SwitchProgress::new(SwitchStep::Cloud));
     dual_write_target_config(tf2_root, profiles_dir, &target, &options)?;
+    let steam_roots = match options.steam_roots {
+        Some(roots) => roots.to_vec(),
+        None => crate::finder::discover_steam_roots(),
+    };
+    let _ = crate::launch::write_launch_options_to_localconfig_from(
+        &steam_roots,
+        &target.launch_options,
+        &running,
+    );
 
     progress(SwitchProgress::new(SwitchStep::Done));
     set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)
