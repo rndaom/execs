@@ -1,10 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  canSaveCfg,
-  cfgFiles,
-  findingTierClass,
-  lintBundle,
-} from "./lib/files-ui";
+import { canSaveCfg, cfgFiles, findingTierClass, lintBundle } from "./lib/files-ui";
 
 export function FilesPane({
   running,
@@ -55,15 +50,12 @@ export function FilesPane({
     <section data-testid="settings-files" className="flex flex-col gap-4 text-left">
       <p className="font-display text-sm tracking-wide text-ink-muted">Raw cfg</p>
       <p className="text-sm text-ink-muted">
-        Edit owned <code className="text-ink">.cfg</code> files. Block-tier commands are refused, not
-        stripped.
+        Edit owned <code className="text-ink">.cfg</code> files. Block-tier commands are refused,
+        not stripped.
       </p>
 
       <div className="flex flex-col gap-4 md:flex-row">
-        <ul
-          data-testid="files-list"
-          className="flex flex-col gap-1 md:w-56 md:shrink-0"
-        >
+        <ul data-testid="files-list" className="flex flex-col gap-1 md:w-56 md:shrink-0">
           {listed.length === 0 ? (
             <li className="text-sm text-ink-muted">No .cfg files in this profile.</li>
           ) : (
@@ -128,9 +120,9 @@ export function FilesPane({
               )}
               {lint.findings.length > 0 ? (
                 <ul className="flex flex-col gap-2">
-                  {lint.findings.map((finding, index) => (
+                  {lint.findings.map((finding) => (
                     <li
-                      key={`${finding.ruleId}-${finding.file}-${finding.line}-${index}`}
+                      key={`${finding.ruleId}-${finding.file}-${finding.line}-${finding.message}`}
                       data-testid="files-finding"
                       data-tier={finding.tier}
                       className="flex items-start gap-2 text-sm text-ink"
