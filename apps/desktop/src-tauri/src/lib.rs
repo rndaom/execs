@@ -35,6 +35,15 @@ pub fn run() {
             commands::list_profile_files,
             commands::read_profile_file,
             commands::write_owned_file,
+            commands::get_comfig_state,
+            commands::set_comfig_preset,
+            commands::set_comfig_modules,
+            commands::set_comfig_addons,
+            commands::update_comfig_vpks,
+            commands::import_comfig_custom,
+            commands::recommended_launch_options,
+            commands::get_profile_launch_options,
+            commands::set_profile_launch_options,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());

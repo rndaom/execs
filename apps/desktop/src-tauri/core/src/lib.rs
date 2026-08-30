@@ -33,6 +33,10 @@ pub use comfig::{
     set_comfig_addons, set_comfig_addons_to, write_comfig_modules, write_comfig_modules_to,
     write_comfig_preset, write_comfig_preset_to, ComfigState,
 };
+pub use launch::{
+    get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
+    LaunchWriteReason, SetLaunchResult,
+};
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use finder::{
     discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
