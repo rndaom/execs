@@ -1,6 +1,6 @@
 //! App-data profile library. Inactive profiles never live under `tf/custom/`.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -120,6 +120,24 @@ pub struct ProfileFile {
     pub storage: FileStorage,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HudSource {
+    HudDb,
+    Local,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HudRecord {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    pub source: HudSource,
+    #[serde(default)]
+    pub options: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileManifest {
@@ -129,6 +147,8 @@ pub struct ProfileManifest {
     pub tf2_root: String,
     pub launch_options: String,
     pub files: Vec<ProfileFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hud: Option<HudRecord>,
 }
 
 /// Read model for the UI. `profiles` is empty when the library is unusable.
@@ -277,6 +297,7 @@ where
         tf2_root: index.tf2_root.clone(),
         launch_options: String::new(),
         files: Vec::new(),
+        hud: None,
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
@@ -614,6 +635,18 @@ pub fn load_manifest(
     Ok(manifest)
 }
 
+pub(crate) fn save_manifest(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    manifest: &ProfileManifest,
+) -> Result<(), ProfileError> {
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    write_json(&manifest_file(profiles_dir, &manifest.id), manifest)?;
+    touch_profile(&mut index, &manifest.id);
+    write_json(&index_file(profiles_dir), &index)?;
+    Ok(())
+}
+
 fn reusable_empty_profile(profiles_dir: &Path, index: &LibraryIndex) -> Option<String> {
     if index.profiles.len() != 1 {
         return None;
@@ -663,6 +696,7 @@ fn create_empty_record(
         tf2_root: index.tf2_root.clone(),
         launch_options: String::new(),
         files: Vec::new(),
+        hud: None,
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))

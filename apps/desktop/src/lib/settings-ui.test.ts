@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { emptyLibrary, previewSavedLibrary } from "./library-ui";
-import { canWriteSettings, showSettingsChrome } from "./settings-ui";
+import { canWriteSettings, SETTINGS_TABS, SETTINGS_TAB_LABELS, showSettingsChrome } from "./settings-ui";
 
 describe("settings chrome", () => {
+  it("includes the HUD tab in the settings chrome", () => {
+    expect(SETTINGS_TABS).toContain("hud");
+    expect(SETTINGS_TAB_LABELS.hud).toBe("HUD");
+  });
+
   it("shows only when a usable library has an active profile", () => {
     expect(showSettingsChrome(null)).toBe(false);
     expect(showSettingsChrome(emptyLibrary("/tf2", true))).toBe(false);
