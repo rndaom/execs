@@ -4,9 +4,9 @@ use std::collections::BTreeMap;
 
 use execs_core::{
     materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, ComfigPreset,
-    ComfigState, FirstRunClass, OfficialAddon, PackChoice, ProfileDetail, ProfileError,
-    ProfileFile, ProfileFileContent, ProfileLibrary, SetLaunchResult, SwitchProgress, Tf2Install,
-    WizardAsset, WizardSpec, WriteLock,
+    ComfigState, FirstRunClass, HudCatalogEntry, HudSchemaView, HudUiState, OfficialAddon,
+    PackChoice, ProfileDetail, ProfileError, ProfileFile, ProfileFileContent, ProfileLibrary,
+    SetLaunchResult, SwitchProgress, Tf2Install, WizardAsset, WizardSpec, WriteLock,
 };
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
@@ -365,6 +365,153 @@ pub fn set_profile_launch_options(
     let root = confirmed_root()?;
     let profile_id = resolve_profile_id(&root, id)?;
     execs_core::set_profile_launch_options(&root, &profile_id, &options).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub async fn get_hud_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::hud_fetch::load_or_fetch_catalog(refresh))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_hud_state() -> Result<HudUiState, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        let catalog = crate::hud_fetch::load_or_fetch_catalog(false).unwrap_or_default();
+        let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
+            .map_err(|err| err.message())?;
+        Ok(execs_core::hud_ui_state(&manifest, &catalog))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn install_hud(id: String) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        install_hud_from_catalog(&root, &profile_id, &id, false)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub fn match_hud_catalog(id: String) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, None)?;
+    let entry = crate::hud_fetch::catalog_entry(&id)?;
+    execs_core::match_hud_catalog(&root, &profile_id, &entry.id, Some(entry.hash))
+        .map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub async fn update_hud() -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
+            .map_err(|err| err.message())?;
+        let status = execs_core::resolve_hud(&manifest)
+            .ok_or_else(|| "Install a HUD first.".to_string())?;
+        install_hud_from_catalog(&root, &profile_id, &status.record.id, true)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_hud_schema() -> Result<Option<HudSchemaView>, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
+            .map_err(|err| err.message())?;
+        let Some(status) = execs_core::resolve_hud(&manifest) else {
+            return Ok(None);
+        };
+        if !execs_core::schema_supported(&status.record.id) {
+            return Ok(None);
+        }
+        let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
+        let schema = execs_core::parse_hud_schema(&raw).map_err(|err| err.message())?;
+        Ok(Some(execs_core::schema_view(&schema)))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn apply_hud_options(
+    options: BTreeMap<String, String>,
+) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
+            .map_err(|err| err.message())?;
+        let status = execs_core::resolve_hud(&manifest)
+            .ok_or_else(|| "Install a HUD first.".to_string())?;
+        if !execs_core::schema_supported(&status.record.id) {
+            return Err("This HUD has no in-app options.".into());
+        }
+        let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
+        let schema = execs_core::parse_hud_schema(&raw).map_err(|err| err.message())?;
+        execs_core::apply_schema_options(&root, &profile_id, &schema, options)
+            .map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn install_hud_from_catalog(
+    root: &Path,
+    profile_id: &str,
+    id: &str,
+    preserve_options: bool,
+) -> Result<ProfileDetail, String> {
+    let entry = crate::hud_fetch::catalog_entry(id)?;
+    if !entry.github {
+        return Err("Open the author’s page for that HUD — it is not a GitHub zip.".into());
+    }
+    let bytes = crate::hud_fetch::fetch_hud_zip(&entry.repo, &entry.hash)?;
+    let extracted = execs_core::extract_hud_zip(&bytes).map_err(|err| err.message())?;
+    let mut tree = extracted.tree;
+    let mut options = BTreeMap::new();
+    if preserve_options {
+        if let Ok(manifest) = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id) {
+            if let Some(hud) = manifest.hud {
+                options = hud.options;
+            }
+        }
+    }
+    let mut cfg_writes = Vec::new();
+    if execs_core::schema_supported(&entry.id) && !options.is_empty() {
+        let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
+        let schema = execs_core::parse_hud_schema(&raw).map_err(|err| err.message())?;
+        let applied = execs_core::apply_hud_options(&mut tree, &schema, &entry.id, &options)
+            .map_err(|err| err.message())?;
+        cfg_writes = applied.cfg_writes;
+    }
+    let detail = execs_core::install_hud_pack(
+        root,
+        profile_id,
+        &tree,
+        execs_core::HudRecord {
+            id: entry.id.clone(),
+            hash: Some(entry.hash),
+            source: execs_core::HudSource::HudDb,
+            options,
+        },
+    )
+    .map_err(|err| err.message())?;
+    for (path, bytes) in cfg_writes {
+        execs_core::write_owned_file(root, profile_id, &path, &bytes).map_err(|err| err.message())?;
+    }
+    Ok(detail)
 }
 
 fn resolve_profile_id(root: &Path, id: Option<String>) -> Result<String, String> {
