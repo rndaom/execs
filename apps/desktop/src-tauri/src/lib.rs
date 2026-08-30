@@ -52,6 +52,12 @@ pub fn run() {
             commands::update_hud,
             commands::get_hud_schema,
             commands::apply_hud_options,
+            commands::apply_crosshairs,
+            commands::remove_crosshairs,
+            commands::compile_viewmodels,
+            commands::import_viewmodels,
+            commands::remove_viewmodels,
+            commands::set_viewmodel_preload,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
