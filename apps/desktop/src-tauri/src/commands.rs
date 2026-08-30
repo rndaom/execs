@@ -514,6 +514,78 @@ fn install_hud_from_catalog(
     Ok(detail)
 }
 
+#[tauri::command]
+pub fn apply_crosshairs(
+    shape: String,
+    assignments: BTreeMap<String, String>,
+    custom_rgba: Option<Vec<u8>>,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::apply_crosshairs(
+        &root,
+        &profile_id,
+        &shape,
+        &assignments,
+        custom_rgba.as_deref(),
+    )
+    .map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::remove_crosshairs(&root, &profile_id).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn compile_viewmodels(
+    options: BTreeMap<String, String>,
+    preload: bool,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::compile_viewmodels(&root, &profile_id, &options, preload).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub async fn import_viewmodels(app: AppHandle, id: Option<String>) -> Result<ProfileDetail, String> {
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Import viewmodel VPK")
+            .add_filter("VPK", &["vpk"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|err| err.to_string())?;
+    let Some(picked) = picked else {
+        return Err("Pick a VPK to import.".into());
+    };
+    let path = picked.into_path().map_err(|err| err.to_string())?;
+    let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::import_viewmodel_vpk(&root, &profile_id, &bytes, true).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn remove_viewmodels(id: Option<String>) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::remove_viewmodels(&root, &profile_id).map_err(|err| err.message())
+}
+
+#[tauri::command]
+pub fn set_viewmodel_preload(enabled: bool, id: Option<String>) -> Result<ProfileDetail, String> {
+    let root = confirmed_root()?;
+    let profile_id = resolve_profile_id(&root, id)?;
+    execs_core::set_viewmodel_preload(&root, &profile_id, enabled).map_err(|err| err.message())
+}
+
 fn resolve_profile_id(root: &Path, id: Option<String>) -> Result<String, String> {
     if let Some(id) = id.filter(|value| !value.is_empty()) {
         return Ok(id);

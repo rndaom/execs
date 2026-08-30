@@ -17,7 +17,7 @@ use crate::profile::{
     create_profile_record_to, exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path,
     load_library_from, load_manifest, manifest_file, normalize_rel_path, profiles_dir,
     put_exclusive_file_to, put_shared_blob_to, remove_profile_record_to, FileStorage, ProfileError,
-    HudRecord, ProfileFile, ProfileLibrary, ProfileManifest,
+    CrosshairRecord, HudRecord, ProfileFile, ProfileLibrary, ProfileManifest, ViewmodelRecord,
 };
 
 pub const ZIP_SCHEMA: u32 = 1;
@@ -37,6 +37,10 @@ struct ProfileZipManifest {
     tf2_root: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     hud: Option<HudRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    crosshair: Option<CrosshairRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    viewmodel: Option<ViewmodelRecord>,
 }
 
 struct ZipPayload {
@@ -182,6 +186,8 @@ fn write_profile_zip(
         id: Some(manifest.id.clone()),
         tf2_root: Some(manifest.tf2_root.clone()),
         hud: manifest.hud.clone(),
+        crosshair: manifest.crosshair.clone(),
+        viewmodel: manifest.viewmodel.clone(),
     };
 
     let file = fs::File::create(zip_path).map_err(io_err)?;
@@ -418,6 +424,8 @@ fn apply_payload(
         profile_id,
         &payload.manifest.launch_options,
         payload.manifest.hud.clone(),
+        payload.manifest.crosshair.clone(),
+        payload.manifest.viewmodel.clone(),
     )
 }
 
@@ -426,10 +434,14 @@ fn write_imported_launch_and_hud(
     profile_id: &str,
     launch: &str,
     hud: Option<HudRecord>,
+    crosshair: Option<CrosshairRecord>,
+    viewmodel: Option<ViewmodelRecord>,
 ) -> Result<(), ProfileError> {
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.launch_options = sanitize_launch_options(launch);
     manifest.hud = hud;
+    manifest.crosshair = crosshair;
+    manifest.viewmodel = viewmodel;
     let json = serde_json::to_string_pretty(&manifest).map_err(json_err)?;
     fs::write(manifest_file(profiles_dir, profile_id), format!("{json}\n")).map_err(io_err)
 }
