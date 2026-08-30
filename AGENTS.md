@@ -44,11 +44,12 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - **Comfig** — preset, modules, addons.
 - **Binds** — click-to-record for usual actions (movement, jump/duck, medic, use, voice, loadout). No alias/script studio.
 - **Gameplay** — FOV, viewmodels, stock crosshair, obvious toggles. First-party; writes overrides.
+- **HUD** — hud-db catalog, pinned GitHub zip install (one HUD mounted), schema options for popular HUDs. First-party apply; do not embed TF2HUD.Editor.
 - **Files** — raw cfg + `cfglint`.
 - **Launch options** — copy-to-clipboard. Auto-write `localconfig.vdf` only if Steam is already closed. Never force-quit Steam to finish setup. Never store `-autoconfig`, `-default`, `-dxlevel`, or `+quit` on a profile.
 
 ## Not V1 (profiles still carry these files if already present)
-- Schema HUD customizer, per-weapon VTF crosshair builder, Horsie/Yttrium animation compiler, HUD catalog beyond detecting a HUD folder.
+- Per-weapon VTF crosshair builder, Horsie/Yttrium animation compiler.
 - Sharing site / Steam auth. Later: export zip is enough to start.
 
 ## Updates
@@ -71,8 +72,9 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - [RND-156](https://linear.app/rndaom/issue/RND-156) Gameplay pane writes `execs_gameplay.cfg`: FOV 54–90, viewmodels, tracers, flip (not while connected), stock crosshair. Autoexec gets `exec execs_gameplay`.
 - [RND-157](https://linear.app/rndaom/issue/RND-157) Files pane: raw cfg editor + live `@execs/cfglint`. Block-tier (`ok === false`) refuses Save; no silent strip. Warn/info are advisory.
 - [RND-158](https://linear.app/rndaom/issue/RND-158) Launch options on the profile manifest; copy-to-clipboard. New/wizard profiles get the official comfig set (`-novid -nojoy -nosteamcontroller -nohltv -particles 1`). Auto-write `localconfig.vdf` only if Steam is closed. Switch uses the same rule. Never store `-autoconfig`, `-default`, `-dxlevel`, `+quit`, or `gamemoderun %command%`.
+- [RND-162](https://linear.app/rndaom/issue/RND-162) HUD pane: hud-db catalog (MIT), pinned `codeload` zip install, one-HUD replace/dash, optional `ProfileManifest.hud`. Schema options (rayshud, budhud, flawhud, m0rehud, kbnhud, hypnotize-hud) from TF2HUD.Editor JSON as data; first-party apply (folder swap, VDF merge, `#base`, WriteCfg). Non-GitHub rows are outbound links. Casual copy: layout/scheme usually work; custom materials usually do not.
 - Next: [RND-159](https://linear.app/rndaom/issue/RND-159) in-app updater (GitHub Releases + Tauri updater).
-- Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
+- Do not start [RND-163](https://linear.app/rndaom/issue/RND-163) / [RND-164](https://linear.app/rndaom/issue/RND-164) (crosshair / viewmodel studios).
 
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.

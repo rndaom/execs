@@ -1,5 +1,6 @@
 mod comfig_fetch;
 mod commands;
+mod hud_fetch;
 
 use std::time::Duration;
 
@@ -44,6 +45,13 @@ pub fn run() {
             commands::recommended_launch_options,
             commands::get_profile_launch_options,
             commands::set_profile_launch_options,
+            commands::get_hud_catalog,
+            commands::get_hud_state,
+            commands::install_hud,
+            commands::match_hud_catalog,
+            commands::update_hud,
+            commands::get_hud_schema,
+            commands::apply_hud_options,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
