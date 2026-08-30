@@ -263,3 +263,157 @@ export async function createFreshProfile(spec: WizardSpec): Promise<ProfileLibra
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export type CfgLayer = "comfig" | "vanilla";
+
+export type ProfileFile = {
+  path: string;
+  sha256: string;
+  storage: "exclusive" | "shared";
+};
+
+export type ProfileDetail = {
+  id: string;
+  name: string;
+  launchOptions: string;
+  layer: CfgLayer;
+  files: ProfileFile[];
+};
+
+export type ProfileFileContent = {
+  path: string;
+  text: string | null;
+  sha256: string;
+  binary: boolean;
+};
+
+export async function getActiveProfileDetail(): Promise<ProfileDetail | null> {
+  try {
+    return await invoke<ProfileDetail | null>("get_active_profile_detail");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function listProfileFiles(id?: string): Promise<ProfileFile[]> {
+  try {
+    return await invoke<ProfileFile[]>("list_profile_files", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function readProfileFile(path: string, id?: string): Promise<ProfileFileContent> {
+  try {
+    return await invoke<ProfileFileContent>("read_profile_file", { path, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function writeOwnedFile(
+  path: string,
+  text: string,
+  id?: string,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export type ComfigState = {
+  preset: ComfigPreset;
+  modules: Record<string, string>;
+  addons: OfficialAddon[];
+  hasBaseVpk: boolean;
+  hasComfigCustom: boolean;
+};
+
+export async function getComfigState(id?: string): Promise<ComfigState | null> {
+  try {
+    return await invoke<ComfigState | null>("get_comfig_state", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setComfigPreset(preset: ComfigPreset, id?: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_comfig_preset", { preset, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setComfigModules(
+  modules: Record<string, string>,
+  id?: string,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_comfig_modules", { modules, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setComfigAddons(
+  addons: OfficialAddon[],
+  id?: string,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("set_comfig_addons", { addons, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function updateComfigVpks(id?: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("update_comfig_vpks", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function importComfigCustom(id?: string): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("import_comfig_custom", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export type SteamWriteStatus = "written" | "steam_open" | "no_account";
+
+export type SetLaunchResult = {
+  launchOptions: string;
+  steamWrite: SteamWriteStatus;
+};
+
+export async function recommendedLaunchOptions(): Promise<string> {
+  return invoke<string>("recommended_launch_options");
+}
+
+export async function getProfileLaunchOptions(id?: string): Promise<string> {
+  try {
+    return await invoke<string>("get_profile_launch_options", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setProfileLaunchOptions(
+  options: string,
+  id?: string,
+): Promise<SetLaunchResult> {
+  try {
+    return await invoke<SetLaunchResult>("set_profile_launch_options", {
+      options,
+      id: id ?? null,
+    });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}

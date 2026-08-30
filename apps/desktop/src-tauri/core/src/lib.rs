@@ -1,6 +1,8 @@
 pub mod absorb;
+pub mod apply;
 pub mod blob;
 pub mod cfg_script;
+pub mod comfig;
 pub mod finder;
 pub mod first_run;
 pub mod hash;
@@ -19,18 +21,34 @@ pub use absorb::{
     absorb_owned, absorb_packs, scan_absorb_delta, write_config_cfg_dual, AbsorbDelta,
     AbsorbOwnedResult, PackChoice,
 };
+pub use apply::{
+    get_active_profile_detail, list_profile_files, read_profile_file, write_owned_file,
+    ProfileDetail, ProfileFileContent,
+};
+pub use comfig::{
+    apply_official_vpk_bytes, apply_official_vpk_bytes_to, import_comfig_custom,
+    import_comfig_custom_to, official_download_urls, official_package_rel_paths,
+    parse_modules_cfg, parse_setup_hook, read_active_comfig_state, read_active_comfig_state_from,
+    read_comfig_state, read_comfig_state_from, serialize_modules_cfg, serialize_setup_hook,
+    set_comfig_addons, set_comfig_addons_to, write_comfig_modules, write_comfig_modules_to,
+    write_comfig_preset, write_comfig_preset_to, ComfigState,
+};
+pub use launch::{
+    get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
+    LaunchWriteReason, SetLaunchResult,
+};
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use finder::{
     discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
     Tf2RootError,
 };
 pub use process_lock::{
-    is_tf2_running, refuse_if_running, refuse_if_running_among, write_lock_status, WriteLock,
-    WriteLockError,
+    is_steam_running, is_tf2_running, refuse_if_running, refuse_if_running_among, write_lock_status,
+    WriteLock, WriteLockError,
 };
 pub use profile::{
     create_profile_record, init_library, load_library, profiles_dir, save_current_as, ProfileError,
-    ProfileLibrary, ProfileSummary,
+    ProfileFile, ProfileLibrary, ProfileSummary,
 };
 pub use settings::{
     inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,

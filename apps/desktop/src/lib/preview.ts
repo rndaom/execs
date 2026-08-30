@@ -5,6 +5,7 @@ import {
   previewSavedLibrary,
   previewSwitchLibrary,
 } from "./library-ui";
+import type { SettingsTab } from "./settings-ui";
 
 export const PREVIEW_STATES = [
   "empty",
@@ -21,6 +22,12 @@ export const PREVIEW_STATES = [
   "first-unused",
   "first-unused-locked",
   "create",
+  "settings-comfig",
+  "settings-binds",
+  "settings-gameplay",
+  "settings-files",
+  "settings-launch",
+  "settings-locked",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -46,6 +53,12 @@ const READY: PreviewState[] = [
   "first-unused",
   "first-unused-locked",
   "create",
+  "settings-comfig",
+  "settings-binds",
+  "settings-gameplay",
+  "settings-files",
+  "settings-launch",
+  "settings-locked",
 ];
 
 export function previewStateFromSearch(search: string): PreviewState | null {
@@ -70,7 +83,7 @@ export function previewConfirmed(state: PreviewState): Tf2Install | null {
 }
 
 export function previewLocked(state: PreviewState): boolean {
-  return state === "locked" || state === "first-unused-locked";
+  return state === "locked" || state === "first-unused-locked" || state === "settings-locked";
 }
 
 export function previewFirstRunKind(state: PreviewState): FirstRunKind | null {
@@ -102,7 +115,12 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   if (state === "import") {
     return previewImportedLibrary(ONE.path);
   }
-  if (state === "saved" || state === "absorb" || state === "create") {
+  if (
+    state === "saved" ||
+    state === "absorb" ||
+    state === "create" ||
+    previewSettingsTab(state) !== null
+  ) {
     return previewSavedLibrary(ONE.path);
   }
   if (
@@ -121,4 +139,22 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
 
 export function previewCreating(state: PreviewState): boolean {
   return state === "create";
+}
+
+export function previewSettingsTab(state: PreviewState): SettingsTab | null {
+  switch (state) {
+    case "settings-comfig":
+    case "settings-locked":
+      return "comfig";
+    case "settings-binds":
+      return "binds";
+    case "settings-gameplay":
+      return "gameplay";
+    case "settings-files":
+      return "files";
+    case "settings-launch":
+      return "launch";
+    default:
+      return null;
+  }
 }
