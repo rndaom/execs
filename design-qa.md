@@ -7,7 +7,7 @@ Verified:
 - `?preview=settings-comfig`: two-column ready chrome, Profiles left, Settings right. Tabs Comfig · Binds · Gameplay · Files · Launch. Comfig preset radios (Medium default), module groups, official addon checkboxes, Update packages, comfig.app credit + extras/import. Not branded official mastercomfig.
 - `?preview=settings-binds`: click-to-record rows for movement, jump/duck, medic, use, voice, loadout A–D. No alias studio.
 - `?preview=settings-gameplay`: FOV slider, viewmodels, tracers, flip + “does not apply while connected”, stock crosshair.
-- `?preview=settings-files`: cfg list + textarea. Live lint; Save stays off when the draft is clean.
+- `?preview=settings-files`: cfg list + textarea. Live lint shows warn `host_writeconfig` and block `unbindall` (`danger.cfg`). Save stays off while block-tier findings exist; commands are not stripped.
 - `?preview=settings-launch`: launch options box, Copy + Save. Preview Save reports Steam open (copy remains the path).
 - `?preview=settings-locked`: write-lock banner, Settings read-only copy, pane controls disabled.
 - First-run regressions: `?preview=first-existing` save-only (no settings tabs); `?preview=first-unused` unused wizard; `?preview=create` create-new wizard. Inherit-binds stays on ready chrome.
