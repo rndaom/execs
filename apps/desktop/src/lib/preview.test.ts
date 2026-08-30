@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   previewConfirmed,
+  previewCreating,
   previewFirstRunKind,
   previewInstalls,
   previewLibrary,
@@ -20,6 +21,7 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=first-existing")).toBe("first-existing");
     expect(previewStateFromSearch("?preview=first-unused")).toBe("first-unused");
     expect(previewStateFromSearch("?preview=first-unused-locked")).toBe("first-unused-locked");
+    expect(previewStateFromSearch("?preview=create")).toBe("create");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -67,5 +69,9 @@ describe("preview query", () => {
     expect(previewFirstRunKind("first-unused-locked")).toBe("unused");
     expect(previewLocked("first-unused-locked")).toBe(true);
     expect(previewLibrary("first-unused")?.profiles).toEqual([]);
+    expect(previewCreating("create")).toBe(true);
+    expect(previewLibrary("create")?.profiles[0].name).toBe("Main");
+    expect(previewLibrary("create")?.activeProfileId).toBe("preview-1");
+    expect(previewFirstRunKind("create")).toBeNull();
   });
 });

@@ -65,16 +65,17 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - [RND-149](https://linear.app/rndaom/issue/RND-149) exact-replace switch with a real progress panel (closed → pack → remove → write → Cloud → done). Previous exclusive files are removed only when the live hash still matches. At most one HUD folder is mounted; extras write as `-name`.
 - [RND-151](https://linear.app/rndaom/issue/RND-151) zip export/import copies a named library profile to a versioned zip (`execs-profile.json` + exclusive `files/` + hashed `blobs/`). Import creates a new library record, rewrites `tf2_root`, and does not apply to live TF2 or change `activeProfileId`.
 - [RND-152](https://linear.app/rndaom/issue/RND-152) first launch classifies the live file-safe surface. Existing customization is Save current as… only (no Import, no comfig install). An unused install is the setup wizard (name + preset + official addons). Apply downloads official mastercomfig GitHub Release VPKs, materializes an inactive library profile, then exact-replace switches it on. No silent write on first sight.
-- Next: [RND-153](https://linear.app/rndaom/issue/RND-153) Create new as a fresh TF2 (wizard + inherit-binds checkbox).
+- [RND-153](https://linear.app/rndaom/issue/RND-153) Create new (only after a profile exists) reuses the wizard: stock `config_default.cfg` binds, wizard `setup_hook.cfg`, official VPKs they picked, empty `tf/custom/` otherwise. Apply materializes an inactive profile then `switch_profile` (pack absorbs the active profile first). Inherit-binds is a settings checkbox on the ready chrome, default off, not a wizard step.
+- Next: [RND-154](https://linear.app/rndaom/issue/RND-154) Comfig pane (preset/modules/addons + VPK update control).
 - Do not start HUD/crosshair/viewmodel studios (Later studios backlog).
 
 ## Design decisions
 - posts.tf dark minimalism × TF2 identity: bg `#121212`, ink = TF2 tan `#EBE2CA`, accent = item orange `#CF6A32`, pill buttons, item-quality colors for badges only.
 - Display font: Big Shoulders Display (free, OFL) behind the `--font-display` token — a TF2-Build lookalike. Swap only if TF2 Build web licensing is ever verified.
 - Not affiliated with Valve / Steam. Credit mastercomfig where we use it. "Powered by Steam" footer is hub-era; desktop copy still needs a not-affiliated disclaimer.
-- TF2 root is remembered only after Confirm. Settings live at Windows `%AppData%\execs\settings.json` and Linux `~/.local/share/execs/settings.json` (`{ "schema": 1, "tf2Root": "..." }`). Do not use Tauri's `com.rndaom.execs` app-data dir — RND-147 puts `profiles/` next to this file.
+- TF2 root is remembered only after Confirm. Settings live at Windows `%AppData%\execs\settings.json` and Linux `~/.local/share/execs/settings.json` (`{ "schema": 1, "tf2Root": "...", "inheritBinds"?: false }`). Do not use Tauri's `com.rndaom.execs` app-data dir — RND-147 puts `profiles/` next to this file.
 - Finder: Steam roots (Windows `SteamPath` / `InstallPath`, Linux ticket paths plus `~/.steam/root` and lowercase `steam`) → `libraryfolders.vdf` / `appmanifest_440.acf` → accept only after `tf/steam.inf` app `440`. Multiple installs are a picker. Browse always stays visible. A `tf/` pick normalizes to its parent. A stored root that fails validation is unconfirmed.
-- Write lock: process **name** `tf_win64.exe` (Windows) / `tf_linux64` (Linux). `refuse_if_running()` wraps live-surface and profile-library writes. Confirming the TF2 root is an app-data settings write and stays allowed while the game is open. Do not lock on `steam`, `srcds`, `hl2.exe`, or Proton `tf_win64.exe` on Linux.
+- Write lock: process **name** `tf_win64.exe` (Windows) / `tf_linux64` (Linux). `refuse_if_running()` wraps live-surface and profile-library writes. Confirming the TF2 root and toggling inherit-binds are app-data settings writes and stay allowed while the game is open. Do not lock on `steam`, `srcds`, `hl2.exe`, or Proton `tf_win64.exe` on Linux.
 
 ## Deployment (legacy hub — parked)
 - Old live URL: https://execs.anthonyrandomcarey.workers.dev (Cloudflare Worker "execs"). Do not treat as the product.

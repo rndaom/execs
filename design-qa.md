@@ -1,5 +1,18 @@
 # design-qa log
 
+## 2026-08-30 — create-new + inherit-binds chrome (RND-153)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
+
+Verified:
+- `?preview=create`: New profile wizard, inherit checkbox visible and off, primary **Create**, Cancel. Name `Alt` → ready `2 profiles`, Alt Active, inherit still off, Create new visible.
+- `?preview=saved`: `1 profile` Main Active, inherit checkbox off on ready chrome, Create new. Open wizard then Cancel returns to the same library.
+- `?preview=first-existing`: save-only. No inherit checkbox, no Create new, no Import, no wizard.
+- `?preview=first-unused`: Unused install wizard, Apply (not Create), no inherit checkbox.
+- Finder regressions: `?preview=empty` Confirm disabled; `?preview=one` Confirm → first-run existing (not Create new).
+
+Open items: native `create_fresh_profile` (GitHub VPK download + switch absorb) needs a Tauri window; not available on this VM.
+final result: pass for create-new chrome (preview fixtures).
+
 ## 2026-08-30 — first-run split chrome (RND-152)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 
