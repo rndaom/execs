@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use crate::profile::{
     is_forbidden_rel_path, is_shared_file_name, normalize_rel_path, ProfileError, SHARED_VPK_NAME,
 };
@@ -56,7 +58,8 @@ const JUNK_NAMES: &[&str] = &[
 
 const SKIP_CFG_DIRS: &[&str] = &["user", "app", "overrides"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CfgLayer {
     Comfig,
     Vanilla,

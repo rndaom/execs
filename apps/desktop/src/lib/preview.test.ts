@@ -6,6 +6,7 @@ import {
   previewInstalls,
   previewLibrary,
   previewLocked,
+  previewSettingsTab,
   previewStateFromSearch,
 } from "./preview";
 
@@ -22,6 +23,12 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=first-unused")).toBe("first-unused");
     expect(previewStateFromSearch("?preview=first-unused-locked")).toBe("first-unused-locked");
     expect(previewStateFromSearch("?preview=create")).toBe("create");
+    expect(previewStateFromSearch("?preview=settings-comfig")).toBe("settings-comfig");
+    expect(previewStateFromSearch("?preview=settings-binds")).toBe("settings-binds");
+    expect(previewStateFromSearch("?preview=settings-gameplay")).toBe("settings-gameplay");
+    expect(previewStateFromSearch("?preview=settings-files")).toBe("settings-files");
+    expect(previewStateFromSearch("?preview=settings-launch")).toBe("settings-launch");
+    expect(previewStateFromSearch("?preview=settings-locked")).toBe("settings-locked");
     expect(previewStateFromSearch("")).toBeNull();
     expect(previewStateFromSearch("?preview=nope")).toBeNull();
   });
@@ -73,5 +80,15 @@ describe("preview query", () => {
     expect(previewLibrary("create")?.profiles[0].name).toBe("Main");
     expect(previewLibrary("create")?.activeProfileId).toBe("preview-1");
     expect(previewFirstRunKind("create")).toBeNull();
+    expect(previewSettingsTab("settings-comfig")).toBe("comfig");
+    expect(previewSettingsTab("settings-binds")).toBe("binds");
+    expect(previewSettingsTab("settings-gameplay")).toBe("gameplay");
+    expect(previewSettingsTab("settings-files")).toBe("files");
+    expect(previewSettingsTab("settings-launch")).toBe("launch");
+    expect(previewSettingsTab("settings-locked")).toBe("comfig");
+    expect(previewSettingsTab("saved")).toBeNull();
+    expect(previewLibrary("settings-comfig")?.activeProfileId).toBe("preview-1");
+    expect(previewLocked("settings-locked")).toBe(true);
+    expect(previewFirstRunKind("settings-comfig")).toBeNull();
   });
 });

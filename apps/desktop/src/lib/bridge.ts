@@ -263,3 +263,62 @@ export async function createFreshProfile(spec: WizardSpec): Promise<ProfileLibra
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export type CfgLayer = "comfig" | "vanilla";
+
+export type ProfileFile = {
+  path: string;
+  sha256: string;
+  storage: "exclusive" | "shared";
+};
+
+export type ProfileDetail = {
+  id: string;
+  name: string;
+  launchOptions: string;
+  layer: CfgLayer;
+  files: ProfileFile[];
+};
+
+export type ProfileFileContent = {
+  path: string;
+  text: string | null;
+  sha256: string;
+  binary: boolean;
+};
+
+export async function getActiveProfileDetail(): Promise<ProfileDetail | null> {
+  try {
+    return await invoke<ProfileDetail | null>("get_active_profile_detail");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function listProfileFiles(id?: string): Promise<ProfileFile[]> {
+  try {
+    return await invoke<ProfileFile[]>("list_profile_files", { id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function readProfileFile(path: string, id?: string): Promise<ProfileFileContent> {
+  try {
+    return await invoke<ProfileFileContent>("read_profile_file", { path, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function writeOwnedFile(
+  path: string,
+  text: string,
+  id?: string,
+): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
