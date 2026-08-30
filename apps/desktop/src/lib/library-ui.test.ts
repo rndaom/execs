@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canCreateNew,
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
@@ -82,6 +83,11 @@ describe("library UI helpers", () => {
     expect(canImportProfile(ready, false)).toBe(true);
     expect(canImportProfile(ready, true)).toBe(false);
     expect(canImportProfile({ ...ready, usable: false, rootMismatch: true }, false)).toBe(false);
+    expect(canCreateNew(ready)).toBe(false);
+    expect(canCreateNew(previewSavedLibrary("/tf2"))).toBe(true);
+    expect(canCreateNew({ ...previewSavedLibrary("/tf2"), usable: false, rootMismatch: true })).toBe(
+      false,
+    );
   });
 
   it("builds an import-preview library without stealing active", () => {

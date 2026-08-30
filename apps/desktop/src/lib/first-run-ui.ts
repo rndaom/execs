@@ -57,6 +57,16 @@ export function toggleAddon(selected: OfficialAddonId[], id: OfficialAddonId): O
   return selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id];
 }
 
-export function wizardApplyCopy(running: boolean): string {
-  return running ? "Close TF2 to apply" : "Apply";
+export function wizardApplyCopy(running: boolean, creating = false): string {
+  if (running) {
+    return "Close TF2 to apply";
+  }
+  return creating ? "Create" : "Apply";
+}
+
+export function showCreateNewChrome(
+  library: ProfileLibrary | null,
+  surface: FirstRunSurface,
+): boolean {
+  return surface === "ready" && library !== null && library.profiles.length > 0;
 }

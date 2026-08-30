@@ -39,6 +39,11 @@ export function canImportProfile(library: ProfileLibrary, running: boolean): boo
   return library.usable && !library.rootMismatch && !running;
 }
 
+/** Create new is for people who already have a profile. */
+export function canCreateNew(library: ProfileLibrary): boolean {
+  return library.usable && !library.rootMismatch && library.profiles.length > 0;
+}
+
 export function previewSavedProfile(name: string, index: number): ProfileSummary {
   return {
     id: `preview-${index}`,

@@ -33,8 +33,8 @@ pub use profile::{
     ProfileLibrary, ProfileSummary,
 };
 pub use settings::{
-    remember_tf2_root, remember_tf2_root_to, remembered_tf2_root, remembered_tf2_root_from,
-    settings_file, Settings,
+    inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
+    remembered_tf2_root_from, set_inherit_binds, set_inherit_binds_to, settings_file, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};

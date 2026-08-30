@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { WizardSpec } from "./lib/bridge";
 import {
   canApplyWizard,
@@ -16,10 +17,13 @@ export function SetupWizard({
   running,
   busy,
   error,
+  creating = false,
+  chrome,
   onDraftName,
   onPreset,
   onToggleAddon,
   onApply,
+  onCancel,
 }: {
   title: string;
   draftName: string;
@@ -28,10 +32,13 @@ export function SetupWizard({
   running: boolean;
   busy: boolean;
   error: string | null;
+  creating?: boolean;
+  chrome?: ReactNode;
   onDraftName: (name: string) => void;
   onPreset: (preset: ComfigPresetId) => void;
   onToggleAddon: (id: OfficialAddonId) => void;
   onApply: () => void;
+  onCancel?: () => void;
 }) {
   const canApply = canApplyWizard(draftName, running, busy);
 
@@ -42,6 +49,7 @@ export function SetupWizard({
       <p className="mt-2 max-w-lg text-sm text-ink">
         Name this setup, pick a mastercomfig preset, then apply when TF2 is closed.
       </p>
+      {chrome ? <div className="mt-4">{chrome}</div> : null}
 
       <form
         data-testid="setup-wizard"
@@ -112,14 +120,27 @@ export function SetupWizard({
 
         {error ? <p className="mt-4 text-sm text-team-red">{error}</p> : null}
 
-        <button
-          type="submit"
-          data-testid="wizard-apply"
-          disabled={!canApply}
-          className="mt-5 rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
-        >
-          {wizardApplyCopy(running)}
-        </button>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            data-testid="wizard-apply"
+            disabled={!canApply}
+            className="rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+          >
+            {wizardApplyCopy(running, creating)}
+          </button>
+          {onCancel ? (
+            <button
+              type="button"
+              data-testid="wizard-cancel"
+              disabled={busy}
+              onClick={onCancel}
+              className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          ) : null}
+        </div>
       </form>
     </section>
   );

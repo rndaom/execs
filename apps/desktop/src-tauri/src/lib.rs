@@ -28,6 +28,9 @@ pub fn run() {
             commands::import_profile,
             commands::classify_first_run,
             commands::apply_unused_wizard,
+            commands::get_inherit_binds,
+            commands::set_inherit_binds,
+            commands::create_fresh_profile,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
