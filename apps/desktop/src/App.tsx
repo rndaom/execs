@@ -9,8 +9,10 @@ import {
   browseTf2Root,
   classifyFirstRun,
   confirmTf2Root,
+  createFreshProfile,
   exportProfile,
   type FirstRunKind,
+  getInheritBinds,
   getProfileLibrary,
   getTf2Root,
   getTf2WriteLock,
@@ -21,6 +23,7 @@ import {
   onTf2Running,
   type ProfileLibrary,
   saveCurrentAs,
+  setInheritBinds,
   scanTf2Installs,
   type SwitchStep,
   switchProfile,
@@ -32,9 +35,11 @@ import {
   type ComfigPresetId,
   firstRunSurface,
   type OfficialAddonId,
+  showCreateNewChrome,
   toggleAddon,
 } from "./lib/first-run-ui";
 import {
+  canCreateNew,
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
@@ -50,6 +55,7 @@ import {
 import {
   type PreviewState,
   previewConfirmed,
+  previewCreating,
   previewFirstRunKind,
   previewFirstRunReasons,
   previewInstalls,
@@ -109,6 +115,8 @@ export function App() {
   );
   const [preset, setPreset] = useState<ComfigPresetId>("medium");
   const [addons, setAddons] = useState<OfficialAddonId[]>([]);
+  const [creating, setCreating] = useState(() => !tauri && previewCreating(preview));
+  const [inheritBinds, setInheritBindsState] = useState(false);
 
   useEffect(() => {
     if (!tauri) {
@@ -119,11 +127,16 @@ export function App() {
 
     async function boot() {
       try {
-        const [stored, lock] = await Promise.all([getTf2Root(), getTf2WriteLock()]);
+        const [stored, lock, inherit] = await Promise.all([
+          getTf2Root(),
+          getTf2WriteLock(),
+          getInheritBinds(),
+        ]);
         if (cancelled) {
           return;
         }
         setRunning(lock.running);
+        setInheritBindsState(inherit);
         if (stored) {
           setConfirmed(stored);
           setSelected(stored.path);
@@ -401,14 +414,53 @@ export function App() {
     }
   }
 
+  function onOpenCreate() {
+    setCreating(true);
+    setError(null);
+    setDraftName("");
+    setPreset("medium");
+    setAddons([]);
+    setSwitchStep(null);
+  }
+
+  function onCancelCreate() {
+    setCreating(false);
+    setError(null);
+    setDraftName("");
+    setSwitchStep(null);
+  }
+
+  async function onToggleInherit(next: boolean) {
+    setInheritBindsState(next);
+    if (!tauri) {
+      return;
+    }
+    try {
+      setInheritBindsState(await setInheritBinds(next));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that setting.");
+    }
+  }
+
   async function onApplyWizard() {
     if (!canApplyWizard(draftName, running, busy)) {
       return;
     }
     setError(null);
     if (!tauri) {
-      const path = confirmed?.path ?? "";
-      setLibrary(previewSavedLibrary(path, draftName.trim() || "Fresh"));
+      const name = draftName.trim() || "Fresh";
+      if (creating && library) {
+        const next = previewSavedProfile(name, library.profiles.length + 1);
+        setLibrary({
+          ...library,
+          activeProfileId: next.id,
+          profiles: [...library.profiles, next],
+        });
+        setCreating(false);
+      } else {
+        const path = confirmed?.path ?? "";
+        setLibrary(previewSavedLibrary(path, name));
+      }
       setFirstRunKind(null);
       setFirstRunReasons([]);
       setDraftName("");
@@ -417,8 +469,10 @@ export function App() {
     setBusy(true);
     setSwitchStep("closed");
     try {
-      setLibrary(await applyUnusedWizard(wizardSpec(draftName, preset, addons)));
+      const spec = wizardSpec(draftName, preset, addons);
+      setLibrary(creating ? await createFreshProfile(spec) : await applyUnusedWizard(spec));
       setSwitchStep("done");
+      setCreating(false);
       setFirstRunKind(null);
       setFirstRunReasons([]);
       setDraftName("");
@@ -506,7 +560,6 @@ export function App() {
       );
     }
     if (surface === "first-unused") {
-      const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
       return (
         <>
           <SetupWizard
@@ -522,28 +575,7 @@ export function App() {
             onToggleAddon={(id) => setAddons((current) => toggleAddon(current, id))}
             onApply={onApplyWizard}
           />
-          {switchStep ? (
-            <ol data-testid="switch-progress" className="mt-4 w-full text-left">
-              {SWITCH_STEPS.map((item, index) => {
-                const done = currentIndex > index || switchStep === "done";
-                const current = item.id === switchStep && switchStep !== "done";
-                return (
-                  <li
-                    key={item.id}
-                    data-step={item.id}
-                    data-current={current ? "true" : "false"}
-                    data-done={done ? "true" : "false"}
-                    className={`text-sm ${
-                      current ? "text-brand" : done ? "text-ink" : "text-ink-faint"
-                    }`}
-                  >
-                    {done ? "Done — " : current ? "Now — " : ""}
-                    {item.label}
-                  </li>
-                );
-              })}
-            </ol>
-          ) : null}
+          <SwitchProgressList switchStep={switchStep} />
           <button
             type="button"
             onClick={onChange}
@@ -551,6 +583,35 @@ export function App() {
           >
             Change
           </button>
+        </>
+      );
+    }
+    if (creating && surface === "ready") {
+      return (
+        <>
+          <SetupWizard
+            title="New profile"
+            draftName={draftName}
+            preset={preset}
+            addons={addons}
+            running={running}
+            busy={busy}
+            error={error}
+            creating
+            chrome={
+              <InheritBindsToggle
+                inheritBinds={inheritBinds}
+                disabled={busy}
+                onChange={(next) => void onToggleInherit(next)}
+              />
+            }
+            onDraftName={setDraftName}
+            onPreset={setPreset}
+            onToggleAddon={(id) => setAddons((current) => toggleAddon(current, id))}
+            onApply={onApplyWizard}
+            onCancel={onCancelCreate}
+          />
+          <SwitchProgressList switchStep={switchStep} />
         </>
       );
     }
@@ -579,12 +640,15 @@ export function App() {
         error={error}
         packPrompt={packPrompt}
         switchStep={switchStep}
+        inheritBinds={inheritBinds}
         onDraftName={setDraftName}
         onSave={onSaveCurrent}
         onSwitch={onSwitch}
         onPackChoice={onPackChoice}
         onExport={onExport}
         onImport={onImport}
+        onCreateNew={onOpenCreate}
+        onToggleInherit={(next) => void onToggleInherit(next)}
         onChange={onChange}
       />
     );
@@ -716,6 +780,58 @@ function FinderPanel({
   );
 }
 
+function InheritBindsToggle({
+  inheritBinds,
+  disabled,
+  onChange,
+}: {
+  inheritBinds: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label
+      data-testid="inherit-binds"
+      className="flex items-center gap-2 text-sm text-ink"
+    >
+      <input
+        type="checkbox"
+        checked={inheritBinds}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      Inherit binds when creating a new profile
+    </label>
+  );
+}
+
+function SwitchProgressList({ switchStep }: { switchStep: SwitchStep | null }) {
+  if (!switchStep) {
+    return null;
+  }
+  const currentIndex = switchStepIndex(switchStep);
+  return (
+    <ol data-testid="switch-progress" className="mt-4 w-full text-left">
+      {SWITCH_STEPS.map((item, index) => {
+        const done = currentIndex > index || switchStep === "done";
+        const current = item.id === switchStep && switchStep !== "done";
+        return (
+          <li
+            key={item.id}
+            data-step={item.id}
+            data-current={current ? "true" : "false"}
+            data-done={done ? "true" : "false"}
+            className={`text-sm ${current ? "text-brand" : done ? "text-ink" : "text-ink-faint"}`}
+          >
+            {done ? "Done — " : current ? "Now — " : ""}
+            {item.label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function ReadyPanel({
   path,
   library,
@@ -725,12 +841,15 @@ function ReadyPanel({
   error,
   packPrompt,
   switchStep,
+  inheritBinds,
   onDraftName,
   onSave,
   onSwitch,
   onPackChoice,
   onExport,
   onImport,
+  onCreateNew,
+  onToggleInherit,
   onChange,
 }: {
   path: string;
@@ -741,19 +860,23 @@ function ReadyPanel({
   error: string | null;
   packPrompt: AbsorbDelta | null;
   switchStep: SwitchStep | null;
+  inheritBinds: boolean;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onSwitch: (id: string) => void;
   onPackChoice: (choice: "update" | "keep") => void;
   onExport: (id: string) => void;
   onImport: () => void;
+  onCreateNew: () => void;
+  onToggleInherit: (next: boolean) => void;
   onChange: () => void;
 }) {
   const canSave = library ? canSaveCurrent(library, running, draftName) && !busy : false;
   const switching = busy && switchStep !== null && switchStep !== "done";
-  const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
   const showExport = library ? canExportProfile(library, running) : false;
   const canImport = library ? canImportProfile(library, running) && !busy : false;
+  const showCreate = library ? canCreateNew(library) : false;
+  const showInherit = showCreateNewChrome(library, "ready");
 
   return (
     <section className="flex w-full flex-col items-center text-center">
@@ -852,6 +975,28 @@ function ReadyPanel({
             </button>
           </form>
         ) : null}
+        {showCreate || showInherit ? (
+          <div className="mt-4 flex flex-col items-start gap-3">
+            {showInherit ? (
+              <InheritBindsToggle
+                inheritBinds={inheritBinds}
+                disabled={busy}
+                onChange={onToggleInherit}
+              />
+            ) : null}
+            {showCreate ? (
+              <button
+                type="button"
+                data-testid="create-new"
+                onClick={onCreateNew}
+                disabled={busy}
+                className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+              >
+                Create new
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {library && running ? (
           <p className="mt-3 text-sm text-ink-muted">
             Read-only while TF2 is running. Export is still available.
@@ -893,28 +1038,7 @@ function ReadyPanel({
             </div>
           </div>
         ) : null}
-        {switchStep ? (
-          <ol data-testid="switch-progress" className="mt-4 flex flex-col gap-1.5">
-            {SWITCH_STEPS.map((item, index) => {
-              const done = currentIndex > index || switchStep === "done";
-              const current = item.id === switchStep && switchStep !== "done";
-              return (
-                <li
-                  key={item.id}
-                  data-step={item.id}
-                  data-current={current ? "true" : "false"}
-                  data-done={done ? "true" : "false"}
-                  className={`text-sm ${
-                    current ? "text-brand" : done ? "text-ink" : "text-ink-faint"
-                  }`}
-                >
-                  {done ? "Done — " : current ? "Now — " : ""}
-                  {item.label}
-                </li>
-              );
-            })}
-          </ol>
-        ) : null}
+        <SwitchProgressList switchStep={switchStep} />
       </div>
 
       {error ? <p className="mt-4 text-sm text-team-red">{error}</p> : null}

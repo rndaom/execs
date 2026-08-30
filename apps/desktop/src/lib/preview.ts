@@ -20,6 +20,7 @@ export const PREVIEW_STATES = [
   "first-existing",
   "first-unused",
   "first-unused-locked",
+  "create",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -44,6 +45,7 @@ const READY: PreviewState[] = [
   "first-existing",
   "first-unused",
   "first-unused-locked",
+  "create",
 ];
 
 export function previewStateFromSearch(search: string): PreviewState | null {
@@ -100,7 +102,7 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   if (state === "import") {
     return previewImportedLibrary(ONE.path);
   }
-  if (state === "saved" || state === "absorb") {
+  if (state === "saved" || state === "absorb" || state === "create") {
     return previewSavedLibrary(ONE.path);
   }
   if (
@@ -115,4 +117,8 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
     return emptyLibrary(ONE.path, false);
   }
   return null;
+}
+
+export function previewCreating(state: PreviewState): boolean {
+  return state === "create";
 }

@@ -180,6 +180,39 @@ pub async fn apply_unused_wizard(app: AppHandle, spec: WizardSpec) -> Result<Pro
     .map_err(|err| err.to_string())?
 }
 
+#[tauri::command]
+pub fn get_inherit_binds() -> bool {
+    execs_core::inherit_binds()
+}
+
+#[tauri::command]
+pub fn set_inherit_binds(inherit: bool) -> Result<bool, String> {
+    execs_core::set_inherit_binds(inherit)?;
+    Ok(execs_core::inherit_binds())
+}
+
+#[tauri::command]
+pub async fn create_fresh_profile(app: AppHandle, spec: WizardSpec) -> Result<ProfileLibrary, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let binds = fresh_bind_source(&root)?;
+        apply_wizard_and_switch(&app, &root, spec, binds)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+fn fresh_bind_source(root: &std::path::Path) -> Result<BindSource, String> {
+    if !execs_core::inherit_binds() {
+        return Ok(BindSource::Stock);
+    }
+    let library = execs_core::load_library(Some(root)).map_err(|err| err.message())?;
+    let Some(from_profile_id) = library.active_profile_id else {
+        return Err("Save or switch to a profile before inheriting binds.".into());
+    };
+    Ok(BindSource::Inherit { from_profile_id })
+}
+
 pub(crate) fn apply_wizard_and_switch(
     app: &AppHandle,
     root: &std::path::Path,

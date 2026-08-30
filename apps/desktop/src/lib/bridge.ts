@@ -243,3 +243,23 @@ export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrar
     throw new Error(invokeErrorMessage(error));
   }
 }
+
+export async function getInheritBinds(): Promise<boolean> {
+  return invoke<boolean>("get_inherit_binds");
+}
+
+export async function setInheritBinds(inherit: boolean): Promise<boolean> {
+  try {
+    return await invoke<boolean>("set_inherit_binds", { inherit });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function createFreshProfile(spec: WizardSpec): Promise<ProfileLibrary> {
+  try {
+    return await invoke<ProfileLibrary>("create_fresh_profile", { spec });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
