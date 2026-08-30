@@ -52,6 +52,42 @@ pub fn process_name_is_tf2(name: &str) -> bool {
     process_name_is_tf2_for(current_process_os(), name)
 }
 
+/// Steam main client only. `steamwebhelper` is not enough to block `localconfig.vdf`.
+pub fn process_name_is_steam_for(os: ProcessOs, name: &str) -> bool {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let lower = base.to_ascii_lowercase();
+    match os {
+        ProcessOs::Windows => lower == "steam.exe" || lower == "steam",
+        ProcessOs::Linux => lower == "steam",
+    }
+}
+
+pub fn process_name_is_steam(name: &str) -> bool {
+    process_name_is_steam_for(current_process_os(), name)
+}
+
+pub fn steam_running_among_for<I, S>(os: ProcessOs, names: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    names
+        .into_iter()
+        .any(|name| process_name_is_steam_for(os, name.as_ref()))
+}
+
+pub fn steam_running_among<I, S>(names: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    steam_running_among_for(current_process_os(), names)
+}
+
+pub fn is_steam_running() -> bool {
+    steam_running_among(live_process_names())
+}
+
 pub fn tf2_running_among_for<I, S>(os: ProcessOs, names: I) -> bool
 where
     I: IntoIterator<Item = S>,
@@ -130,6 +166,22 @@ mod tests {
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "tf_win64.exe"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "hl2_linux"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "steam"));
+    }
+
+    #[test]
+    fn steam_is_the_main_client_only() {
+        assert!(process_name_is_steam_for(ProcessOs::Windows, "steam.exe"));
+        assert!(process_name_is_steam_for(ProcessOs::Windows, r"C:\Program Files\Steam\steam.EXE"));
+        assert!(process_name_is_steam_for(ProcessOs::Linux, "steam"));
+        assert!(process_name_is_steam_for(ProcessOs::Linux, "/usr/bin/steam"));
+        assert!(!process_name_is_steam_for(ProcessOs::Windows, "steamwebhelper.exe"));
+        assert!(!process_name_is_steam_for(ProcessOs::Linux, "steamwebhelper"));
+        assert!(!process_name_is_steam_for(ProcessOs::Linux, "tf_linux64"));
+        assert!(steam_running_among_for(ProcessOs::Linux, ["bash", "steam"]));
+        assert!(!steam_running_among_for(
+            ProcessOs::Linux,
+            ["steamwebhelper", "tf_linux64"]
+        ));
     }
 
     #[test]

@@ -1,5 +1,20 @@
 # design-qa log
 
+## 2026-08-30 — settings panes (RND-154–158)
+Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill tabs, Big Shoulders Display.
+
+Verified:
+- `?preview=settings-comfig`: two-column ready chrome, Profiles left, Settings right. Tabs Comfig · Binds · Gameplay · Files · Launch. Comfig preset radios (Medium default), module groups, official addon checkboxes, Update packages, comfig.app credit + extras/import. Not branded official mastercomfig.
+- `?preview=settings-binds`: click-to-record rows for movement, jump/duck, medic, use, voice, loadout A–D. No alias studio.
+- `?preview=settings-gameplay`: FOV slider, viewmodels, tracers, flip + “does not apply while connected”, stock crosshair.
+- `?preview=settings-files`: cfg list + textarea. Live lint shows warn `host_writeconfig` and block `unbindall` (`danger.cfg`). Save stays off while block-tier findings exist; commands are not stripped.
+- `?preview=settings-launch`: launch options box, Copy + Save. Preview Save reports Steam open (copy remains the path).
+- `?preview=settings-locked`: write-lock banner, Settings read-only copy, pane controls disabled.
+- First-run regressions: `?preview=first-existing` save-only (no settings tabs); `?preview=first-unused` unused wizard; `?preview=create` create-new wizard. Inherit-binds stays on ready chrome.
+
+Open items: native owned-file apply, GitHub VPK fetch, `localconfig.vdf` write, and absorb bind-sync need a Tauri window; not available on this VM.
+final result: pass for settings chrome (preview fixtures).
+
 ## 2026-08-30 — create-new + inherit-binds chrome (RND-153)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing).
 
