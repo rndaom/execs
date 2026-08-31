@@ -11,6 +11,8 @@ pub mod hud;
 pub mod hud_apply;
 pub mod ice;
 pub mod launch;
+pub mod pcf;
+pub mod preloader;
 pub mod process_lock;
 pub mod profile;
 pub mod settings;
@@ -19,7 +21,10 @@ pub mod surface;
 pub mod switch;
 pub mod vdf;
 pub mod viewmodel;
+pub mod viewmodel_build;
+pub mod viewmodel_groups;
 pub mod vpk;
+pub mod vtf_read;
 pub mod wizard;
 pub mod zip;
 
@@ -53,12 +58,17 @@ pub use hud::{
 pub use hud_apply::{
     apply_hud_options, parse_hud_schema, schema_view, HudSchema, HudSchemaView,
 };
-pub use crosshair::{apply_crosshairs, remove_crosshairs};
+pub use crosshair::{
+    apply_crosshairs, extract_stock_crosshair_sprites, remove_crosshairs, stored_pack_crosshair,
+    CrosshairAsset, CrosshairAssetFormat, StockCrosshairSprite,
+};
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use viewmodel::{
-    compile_viewmodels, import_viewmodel_vpk, remove_viewmodels, set_viewmodel_preload,
-    viewmodel_compile_capability, ViewmodelCompileCapability,
+    ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
+    remove_profile_preload_if_unused, remove_viewmodels, set_viewmodel_preload,
 };
+pub use viewmodel_build::build_viewmodel_pack_vpk;
+pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use profile::{
     create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,
     CrosshairRecord, HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary,
@@ -73,8 +83,9 @@ pub use process_lock::{
     WriteLock, WriteLockError,
 };
 pub use settings::{
-    inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
-    remembered_tf2_root_from, set_inherit_binds, set_inherit_binds_to, settings_file, Settings,
+    execs_data_dir, inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to,
+    remembered_tf2_root, remembered_tf2_root_from, set_inherit_binds, set_inherit_binds_to,
+    settings_file, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};

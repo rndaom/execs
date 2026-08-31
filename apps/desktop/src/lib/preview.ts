@@ -30,6 +30,7 @@ export const PREVIEW_STATES = [
   "settings-hud-installed",
   "settings-crosshair",
   "settings-viewmodels",
+  "settings-mods",
   "settings-files",
   "settings-launch",
   "settings-locked",
@@ -67,6 +68,7 @@ const READY: PreviewState[] = [
   "settings-hud-installed",
   "settings-crosshair",
   "settings-viewmodels",
+  "settings-mods",
   "settings-files",
   "settings-launch",
   "settings-locked",
@@ -170,6 +172,8 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
       return "crosshair";
     case "settings-viewmodels":
       return "viewmodels";
+    case "settings-mods":
+      return "mods";
     case "settings-files":
       return "files";
     case "settings-launch":
