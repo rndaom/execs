@@ -37,12 +37,9 @@ describe("block-tier rules", () => {
   });
 
   it("blocks payloads hidden behind chained aliases", () => {
-    const cfg = [
-      'alias a3 "unbindall"',
-      'alias a2 "a3"',
-      'alias a1 "a2"',
-      "bind mouse1 a1",
-    ].join("\n");
+    const cfg = ['alias a3 "unbindall"', 'alias a2 "a3"', 'alias a1 "a2"', "bind mouse1 a1"].join(
+      "\n",
+    );
     expect(rules(one(cfg)).ids).toContain("block:unbindall");
   });
 
@@ -50,6 +47,41 @@ describe("block-tier rules", () => {
     expect(rules(one("bind escape kill")).ids).toContain("block:console-lockout");
     expect(rules(one("unbind escape")).ids).toContain("block:console-lockout");
     expect(rules(one("con_enable 0")).ids).toContain("block:console-lockout");
+  });
+
+  it("accepts Source's reset prologue only for an explicitly engine-managed config", () => {
+    const path = "tf/cfg/config.cfg";
+    const source = [
+      'cfgver "1"',
+      "unbindall",
+      'bind "w" "+forward"',
+      'bind "ESCAPE" "cancelselect"',
+      'con_enable "0"',
+    ].join("\n");
+    const result = lint(one(source, path), { engineManagedConfigPaths: [path] });
+
+    expect(lint(one(source, path)).ok).toBe(false);
+    expect(result.ok).toBe(true);
+    expect(result.findings.filter((finding) => finding.tier === "block")).toEqual([]);
+    expect(result.binds.get("escape")).toBe("cancelselect");
+    expect(result.effective.get("con_enable")?.value).toBe("0");
+    expect(
+      lint(one('unbindall\nbind "ESCAPE" "escape"', path), {
+        engineManagedConfigPaths: [path],
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("keeps engine-managed exceptions narrow", () => {
+    const path = "tf/cfg/config.cfg";
+    const opts = { engineManagedConfigPaths: [path] };
+
+    expect(lint(one('alias reset "unbindall"', path), opts).ok).toBe(false);
+    expect(lint(one('bind mouse1 "unbindall"', path), opts).ok).toBe(false);
+    expect(lint(one('bind escape "kill"', path), opts).ok).toBe(false);
+    expect(lint(one("unbind escape", path), opts).ok).toBe(false);
+    expect(lint(one("connect 203.0.113.7", path), opts).ok).toBe(false);
+    expect(lint(one("unbindall", "tf/cfg/autoexec.cfg"), opts).ok).toBe(false);
   });
 
   it("blocks quit bound to a gameplay key, warns on other keys", () => {
@@ -166,7 +198,9 @@ describe("clean configs and metadata", () => {
   });
 
   it("records binds last-write-wins", () => {
-    const { result } = rules(one('bind mouse3 "voicemenu 0 6"\nbind mouse3 "+use_action_slot_item"'));
+    const { result } = rules(
+      one('bind mouse3 "voicemenu 0 6"\nbind mouse3 "+use_action_slot_item"'),
+    );
     expect(result.binds.get("mouse3")).toBe("+use_action_slot_item");
   });
 
@@ -215,5 +249,69 @@ describe("clean configs and metadata", () => {
   it("sorts findings block first", () => {
     const { result } = rules(one("sensitivity 2\nunbindall"));
     expect(result.findings[0].tier).toBe("block");
+  });
+});
+
+describe("advisory (provided-file) paths", () => {
+  it("demotes block findings in advisory files to advisory warns and keeps ok true", () => {
+    const files: CfgFile[] = [
+      { path: "tf/custom/somehud/cfg/hud_reset.cfg", text: "unbindall\nsv_cheats 1\n" },
+    ];
+    const result = lint(files, { advisoryPaths: ["tf/custom/somehud/cfg/hud_reset.cfg"] });
+    const demoted = result.findings.filter((f) => f.advisory);
+    expect(demoted.length).toBeGreaterThanOrEqual(2);
+    for (const finding of demoted) {
+      expect(finding.tier).toBe("warn");
+    }
+    expect(result.findings.some((f) => f.tier === "block")).toBe(false);
+    expect(result.ok).toBe(true);
+  });
+
+  it("keeps blocking the same content in non-advisory files", () => {
+    const files: CfgFile[] = [
+      { path: "tf/cfg/overrides/autoexec.cfg", text: "unbindall\n" },
+      { path: "tf/custom/somehud/cfg/hud_reset.cfg", text: "unbindall\n" },
+    ];
+    const result = lint(files, { advisoryPaths: ["tf/custom/somehud/cfg/hud_reset.cfg"] });
+    const strict = result.findings.filter((f) => f.tier === "block");
+    expect(strict).toHaveLength(1);
+    expect(strict[0].file).toBe("tf/cfg/overrides/autoexec.cfg");
+    expect(result.ok).toBe(false);
+  });
+
+  it("demotes a block finding when a user file invokes an alias authored by an advisory file", () => {
+    const files: CfgFile[] = [
+      { path: "tf/custom/somehud/cfg/hud_extra.cfg", text: 'alias hud_reset "unbindall"\n' },
+      { path: "tf/cfg/overrides/autoexec.cfg", text: "hud_reset\n" },
+    ];
+    const result = lint(files, { advisoryPaths: ["tf/custom/somehud/cfg/hud_extra.cfg"] });
+    expect(result.findings.some((f) => f.tier === "block")).toBe(false);
+    expect(
+      result.findings.some(
+        (f) => f.advisory && f.ruleId === "unbindall" && f.file === "tf/cfg/overrides/autoexec.cfg",
+      ),
+    ).toBe(true);
+    expect(result.ok).toBe(true);
+  });
+
+  it("still blocks a user-authored alias payload even when invoked from anywhere", () => {
+    const files: CfgFile[] = [
+      { path: "tf/cfg/overrides/autoexec.cfg", text: 'alias boom "unbindall"\nboom\n' },
+    ];
+    const result = lint(files, { advisoryPaths: [] });
+    expect(result.findings.some((f) => f.tier === "block" && f.ruleId === "unbindall")).toBe(true);
+    expect(result.ok).toBe(false);
+  });
+
+  it("does not demote findings in a strict file that execs an advisory file", () => {
+    const files: CfgFile[] = [
+      { path: "tf/cfg/overrides/autoexec.cfg", text: "exec missing_target\nunbindall\n" },
+      { path: "tf/custom/somehud/cfg/extra.cfg", text: "echo hi\n" },
+    ];
+    const result = lint(files, { advisoryPaths: ["tf/custom/somehud/cfg/extra.cfg"] });
+    expect(
+      result.findings.some((f) => f.tier === "block" && f.file === "tf/cfg/overrides/autoexec.cfg"),
+    ).toBe(true);
+    expect(result.ok).toBe(false);
   });
 });

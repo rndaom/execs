@@ -675,6 +675,14 @@ mod tests {
         None::<&str>.into_iter()
     }
 
+    fn tf2_name() -> &'static str {
+        if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        }
+    }
+
     fn tf2_root(dir: &Path) -> PathBuf {
         let root = dir.join("Team Fortress 2");
         fs::create_dir_all(root.join("tf").join("cfg")).unwrap();
@@ -826,7 +834,7 @@ mod tests {
     }
 
     #[test]
-    fn refuses_while_tf_linux64_running() {
+    fn refuses_while_tf2_running() {
         let dir = test_temp_dir();
         let (profiles, root, id) = fresh_profile(&dir);
         let err = write_comfig_preset_to(
@@ -834,14 +842,14 @@ mod tests {
             &root,
             &id,
             ComfigPreset::High,
-            ["tf_linux64"],
+            [tf2_name()],
         )
         .unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
 
         let source = dir.join("comfig-custom");
         write_file(&source.join("note.txt"), "x\n");
-        let err = import_comfig_custom_to(&profiles, &root, &id, &source, ["tf_linux64"]).unwrap_err();
+        let err = import_comfig_custom_to(&profiles, &root, &id, &source, [tf2_name()]).unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
 
         let err = apply_official_vpk_bytes_to(
@@ -850,7 +858,7 @@ mod tests {
             &id,
             BASE_VPK,
             b"base",
-            ["tf_linux64"],
+            [tf2_name()],
         )
         .unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);

@@ -1,9 +1,15 @@
-import type { ViewmodelRecord, ViewmodelSource } from "./bridge";
+import type { ViewmodelCompileCapability, ViewmodelRecord, ViewmodelSource } from "./bridge";
 
 export const EXECS_VIEWMODELS_PACK = "execs-viewmodels";
 export const EXECS_VIEWMODELS_VPK = `tf/custom/${EXECS_VIEWMODELS_PACK}.vpk`;
 export const EXECS_PRELOAD_STEM = "execs_preload";
+export const EXECS_PRELOAD_OVERRIDES_STEM = "overrides/execs_preload";
 export const EXECS_PRELOAD_LAUNCH = `+exec ${EXECS_PRELOAD_STEM}`;
+export const SAFE_VIEWMODEL_COMPILE_CAPABILITY: ViewmodelCompileCapability = {
+  available: false,
+  reason:
+    "Compile is unavailable in this release while the first-party, file-safe compiler is rebuilt. Import a prebuilt VPK instead.",
+};
 
 export const VIEWMODEL_CASUAL_COPY =
   "Compiled animations need the first-party preload to apply on Valve Casual. Community and listen servers work without it. File-safe FOV and min viewmodels stay on the Gameplay pane.";
@@ -163,10 +169,7 @@ export function parseWeaponOption(raw: string): ViewmodelWeaponDraft {
 export function hasPreloadLaunch(options: string): boolean {
   const tokens = options.split(/\s+/).filter(Boolean);
   for (let i = 0; i < tokens.length; i += 1) {
-    if (tokens[i] === EXECS_PRELOAD_LAUNCH) {
-      return true;
-    }
-    if (tokens[i] === "+exec" && tokens[i + 1] === EXECS_PRELOAD_STEM) {
+    if (tokens[i] === "+exec" && isPreloadStem(tokens[i + 1])) {
       return true;
     }
   }
@@ -177,10 +180,7 @@ export function withPreloadLaunch(options: string, enabled: boolean): string {
   const tokens = options.split(/\s+/).filter(Boolean);
   const filtered: string[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
-    if (tokens[i] === EXECS_PRELOAD_LAUNCH) {
-      continue;
-    }
-    if (tokens[i] === "+exec" && tokens[i + 1] === EXECS_PRELOAD_STEM) {
+    if (tokens[i] === "+exec" && isPreloadStem(tokens[i + 1])) {
       i += 1;
       continue;
     }
@@ -192,8 +192,8 @@ export function withPreloadLaunch(options: string, enabled: boolean): string {
   return filtered.join(" ");
 }
 
-export function compileAvailable(platform: string): boolean {
-  return platform === "win32" || platform === "windows";
+function isPreloadStem(value: string | undefined): boolean {
+  return value === EXECS_PRELOAD_STEM || value === EXECS_PRELOAD_OVERRIDES_STEM;
 }
 
 export function previewViewmodelRecord(source: ViewmodelSource = "compiled"): ViewmodelRecord {

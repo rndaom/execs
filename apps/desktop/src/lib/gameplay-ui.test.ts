@@ -7,11 +7,11 @@ import {
   ensureAutoexecExecLine,
   FOV_MAX,
   FOV_MIN,
+  GAMEPLAY_HEADER,
+  GAMEPLAY_STEM,
   gameplayAutoexecPatch,
   gameplayFromEffective,
   gameplayPath,
-  GAMEPLAY_HEADER,
-  GAMEPLAY_STEM,
   parseGameplay,
   seedGameplay,
   serializeGameplay,
@@ -130,7 +130,9 @@ describe("autoexec exec line", () => {
     );
     expect(gameplayAutoexecPatch("comfig")?.path).toBe("tf/cfg/overrides/autoexec.cfg");
     expect(gameplayAutoexecPatch("vanilla")?.text).toBe("exec execs_gameplay // execs:managed\n");
-    expect(gameplayAutoexecPatch("vanilla", "exec execs_gameplay // execs:managed\n")).toBeUndefined();
+    expect(
+      gameplayAutoexecPatch("vanilla", "exec execs_gameplay // execs:managed\n"),
+    ).toBeUndefined();
   });
 });
 

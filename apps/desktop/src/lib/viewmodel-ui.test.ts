@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  compileAvailable,
   EXECS_PRELOAD_LAUNCH,
+  EXECS_PRELOAD_OVERRIDES_STEM,
   hasPreloadLaunch,
   parseWeaponOption,
+  SAFE_VIEWMODEL_COMPILE_CAPABILITY,
   serializePreloadCfg,
   serializeWeaponOption,
   withPreloadLaunch,
@@ -17,6 +18,9 @@ describe("viewmodel ui", () => {
     expect(enabled).toContain("execs_preload");
     expect(hasPreloadLaunch(enabled)).toBe(true);
     expect(hasPreloadLaunch(EXECS_PRELOAD_LAUNCH)).toBe(true);
+    const comfig = `-novid +exec ${EXECS_PRELOAD_OVERRIDES_STEM}`;
+    expect(hasPreloadLaunch(comfig)).toBe(true);
+    expect(withPreloadLaunch(comfig, false)).toBe("-novid");
     expect(withPreloadLaunch(enabled, false)).toBe(base);
     expect(withPreloadLaunch(`${base} -autoconfig +quit`, true)).toContain(EXECS_PRELOAD_LAUNCH);
   });
@@ -43,7 +47,7 @@ describe("viewmodel ui", () => {
     expect(cfg).toContain("disconnect");
     expect(cfg).not.toContain("+quit");
     expect(cfg).not.toContain("gameinfo");
-    expect(compileAvailable("win32")).toBe(true);
-    expect(compileAvailable("linux")).toBe(false);
+    expect(SAFE_VIEWMODEL_COMPILE_CAPABILITY.available).toBe(false);
+    expect(SAFE_VIEWMODEL_COMPILE_CAPABILITY.reason).toContain("Import a prebuilt VPK");
   });
 });

@@ -6,9 +6,10 @@ use execs_core::{
     materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, ComfigPreset,
     ComfigState, FirstRunClass, HudCatalogEntry, HudSchemaView, HudUiState, OfficialAddon,
     PackChoice, ProfileDetail, ProfileError, ProfileFile, ProfileFileContent, ProfileLibrary,
-    SetLaunchResult, SwitchProgress, Tf2Install, WizardAsset, WizardSpec, WriteLock,
+    SetLaunchResult, SwitchProgress, Tf2Install, ViewmodelCompileCapability, WizardAsset,
+    WizardSpec, WriteLock,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -85,23 +86,43 @@ pub fn create_profile_record(name: String) -> Result<ProfileLibrary, String> {
 }
 
 #[tauri::command]
-pub fn save_current_as(name: String) -> Result<ProfileLibrary, String> {
-    execs_core::save_current_as(&confirmed_root()?, &name).map_err(|err| err.message())
+pub async fn save_current_as(name: String) -> Result<ProfileLibrary, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::save_current_as(&root, &name).map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn scan_absorb_delta() -> Result<AbsorbDelta, String> {
-    execs_core::scan_absorb_delta(&confirmed_root()?).map_err(|err| err.message())
+pub async fn scan_absorb_delta() -> Result<AbsorbDelta, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::scan_absorb_delta(&root).map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn absorb_owned() -> Result<AbsorbOwnedResult, String> {
-    execs_core::absorb_owned(&confirmed_root()?).map_err(|err| err.message())
+pub async fn absorb_owned() -> Result<AbsorbOwnedResult, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::absorb_owned(&root).map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn absorb_packs(choice: PackChoice) -> Result<ProfileLibrary, String> {
-    execs_core::absorb_packs(&confirmed_root()?, choice).map_err(|err| err.message())
+pub async fn absorb_packs(choice: PackChoice) -> Result<ProfileLibrary, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::absorb_packs(&root, choice).map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
@@ -400,12 +421,16 @@ pub async fn install_hud(id: String) -> Result<ProfileDetail, String> {
 }
 
 #[tauri::command]
-pub fn match_hud_catalog(id: String) -> Result<ProfileDetail, String> {
+pub async fn match_hud_catalog(id: String) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, None)?;
-    let entry = crate::hud_fetch::catalog_entry(&id)?;
-    execs_core::match_hud_catalog(&root, &profile_id, &entry.id, Some(entry.hash))
-        .map_err(|err| err.message())
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        let entry = crate::hud_fetch::catalog_entry(&id)?;
+        execs_core::match_hud_catalog(&root, &profile_id, &entry.id, Some(entry.hash))
+            .map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
@@ -515,29 +540,44 @@ fn install_hud_from_catalog(
 }
 
 #[tauri::command]
-pub fn apply_crosshairs(
+pub async fn apply_crosshairs(
     shape: String,
     assignments: BTreeMap<String, String>,
     custom_rgba: Option<Vec<u8>>,
+    color: Option<[u8; 3]>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::apply_crosshairs(
-        &root,
-        &profile_id,
-        &shape,
-        &assignments,
-        custom_rgba.as_deref(),
-    )
-    .map_err(|err| err.message())
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::apply_crosshairs(
+            &root,
+            &profile_id,
+            &shape,
+            &assignments,
+            custom_rgba.as_deref(),
+            color,
+        )
+        .map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::remove_crosshairs(&root, &profile_id).map_err(|err| err.message())
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::remove_crosshairs(&root, &profile_id).map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub fn get_viewmodel_compile_capability() -> ViewmodelCompileCapability {
+    execs_core::viewmodel_compile_capability()
 }
 
 #[tauri::command]
@@ -552,7 +592,11 @@ pub fn compile_viewmodels(
 }
 
 #[tauri::command]
-pub async fn import_viewmodels(app: AppHandle, id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn import_viewmodels(
+    app: AppHandle,
+    preload: bool,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -562,14 +606,18 @@ pub async fn import_viewmodels(app: AppHandle, id: Option<String>) -> Result<Pro
     })
     .await
     .map_err(|err| err.to_string())?;
+    let root = confirmed_root()?;
     let Some(picked) = picked else {
-        return Err("Pick a VPK to import.".into());
+        // Cancelling the picker is a no-op, not an error.
+        return execs_core::get_active_profile_detail(&root)
+            .map_err(|err| err.message())?
+            .ok_or_else(|| "Save or switch to a profile first.".to_string());
     };
     let path = picked.into_path().map_err(|err| err.to_string())?;
     let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
-    let root = confirmed_root()?;
     let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::import_viewmodel_vpk(&root, &profile_id, &bytes, true).map_err(|err| err.message())
+    execs_core::import_viewmodel_vpk(&root, &profile_id, &bytes, preload)
+        .map_err(|err| err.message())
 }
 
 #[tauri::command]
@@ -584,6 +632,38 @@ pub fn set_viewmodel_preload(enabled: bool, id: Option<String>) -> Result<Profil
     let root = confirmed_root()?;
     let profile_id = resolve_profile_id(&root, id)?;
     execs_core::set_viewmodel_preload(&root, &profile_id, enabled).map_err(|err| err.message())
+}
+
+/// In-app windows for mastercomfig web surfaces. The pages are remote content
+/// and get no Tauri IPC (they are never added to any capability).
+#[tauri::command]
+pub async fn open_embedded_page(app: AppHandle, page: String) -> Result<(), String> {
+    let (label, url, title) = match page.as_str() {
+        "comfig-extras" => (
+            "comfig-extras",
+            "https://comfig.app/app/",
+            "mastercomfig extras",
+        ),
+        "comfig-docs" => (
+            "comfig-docs",
+            "https://docs.comfig.app/latest/",
+            "mastercomfig preset guide",
+        ),
+        _ => return Err("Unknown embedded page.".into()),
+    };
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.unminimize();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    let url: tauri::Url = url.parse().map_err(|_| "Invalid URL.".to_string())?;
+    tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
+        .title(title)
+        .inner_size(1160.0, 820.0)
+        .background_color(tauri::window::Color(18, 18, 18, 255))
+        .build()
+        .map_err(|err| err.to_string())?;
+    Ok(())
 }
 
 fn resolve_profile_id(root: &Path, id: Option<String>) -> Result<String, String> {

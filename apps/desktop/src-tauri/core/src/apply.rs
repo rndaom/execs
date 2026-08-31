@@ -288,6 +288,14 @@ mod tests {
         None::<&str>.into_iter()
     }
 
+    fn tf2_name() -> &'static str {
+        if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        }
+    }
+
     fn tf2_root(dir: &Path) -> PathBuf {
         let root = dir.join("Team Fortress 2");
         fs::create_dir_all(root.join("tf").join("cfg")).unwrap();
@@ -411,7 +419,7 @@ mod tests {
             &id,
             "tf/cfg/autoexec.cfg",
             b"echo hi\n",
-            ["tf_linux64"],
+            [tf2_name()],
             WriteOwnedOptions::default(),
         )
         .unwrap_err();

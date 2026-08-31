@@ -1,4 +1,13 @@
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  CaretDown,
+  Check,
+  Copy,
+  DownloadSimple,
+  FolderOpen,
+  Plus,
+  UploadSimple,
+} from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import { FirstRunExisting } from "./FirstRunExisting";
 import {
   type AbsorbDelta,
@@ -31,6 +40,7 @@ import {
   switchProfile,
   type Tf2Install,
 } from "./lib/bridge";
+import { COPY_FEEDBACK_MS, type CopyFeedback, copyToClipboard } from "./lib/copy-ui";
 import { confirmEnabled, formatInstallLabel } from "./lib/finder-ui";
 import {
   type ComfigPresetId,
@@ -69,6 +79,13 @@ import {
   previewUpdateProgress,
 } from "./lib/preview";
 import { type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
+import {
+  idleSwitchProgress,
+  SWITCH_DONE_HOLD_MS,
+  SWITCH_STEP_MIN_MS,
+  switchProgressNeedsAdvance,
+  switchProgressPresenterReducer,
+} from "./lib/switch-progress-ui";
 import {
   type AppUpdateInfo,
   type AppUpdateProgress,
@@ -123,13 +140,27 @@ export function App() {
   const [running, setRunning] = useState(() => !tauri && previewLocked(preview));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settingsBusy, setSettingsBusy] = useState(false);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(() =>
     !tauri && preview === "absorb" ? previewPackDelta() : null,
   );
   const [absorbNonce, setAbsorbNonce] = useState(0);
-  const [switchStep, setSwitchStep] = useState<SwitchStep | null>(() =>
-    !tauri && preview === "switch" ? previewSwitchStep() : null,
+  const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
+  const [switchProgress, dispatchSwitchProgress] = useReducer(
+    switchProgressPresenterReducer,
+    undefined,
+    () => {
+      const state = idleSwitchProgress();
+      if (!tauri && preview === "switch") {
+        return switchProgressPresenterReducer(
+          switchProgressPresenterReducer(state, { type: "start" }),
+          { type: "report", step: previewSwitchStep() },
+        );
+      }
+      return state;
+    },
   );
+  const switchStep = switchProgress.visibleStep;
   const [firstRunKind, setFirstRunKind] = useState<FirstRunKind | null>(() =>
     tauri ? null : previewFirstRunKind(preview),
   );
@@ -152,6 +183,32 @@ export function App() {
     tauri ? null : previewUpdateProgress(preview),
   );
   const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!switchProgress.visible || switchProgress.active || switchProgress.visibleStep !== "done") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      dispatchSwitchProgress({ type: "dismiss" });
+    }, SWITCH_DONE_HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [switchProgress.active, switchProgress.visible, switchProgress.visibleStep]);
+
+  // Paced reveal: each real backend stage stays on screen for a minimum beat.
+  // Keyed on the revealed step + whether a reveal is pending — NOT the whole
+  // state object — so queue appends from new backend reports never reset the
+  // running beat.
+  const advancePending = switchProgressNeedsAdvance(switchProgress);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed so queue appends don't reset the beat.
+  useEffect(() => {
+    if (!advancePending) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      dispatchSwitchProgress({ type: "advance" });
+    }, SWITCH_STEP_MIN_MS);
+    return () => window.clearTimeout(timer);
+  }, [advancePending, switchProgress.visibleStep]);
 
   useEffect(() => {
     if (!tauri) {
@@ -222,7 +279,7 @@ export function App() {
       })
       .catch(() => {});
     onSwitchProgress((progress) => {
-      setSwitchStep(progress.step);
+      dispatchSwitchProgress({ type: "report", step: progress.step });
     })
       .then((stop) => {
         if (cancelled) {
@@ -311,6 +368,9 @@ export function App() {
         }
         setLibrary(result.library);
         setPackPrompt(hasPackChanges(result.delta) ? result.delta : null);
+        if (result.configCfgAbsorbed) {
+          setBindSyncRequest((current) => (current ?? 0) + 1);
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -529,14 +589,14 @@ export function App() {
     setDraftName("");
     setPreset("medium");
     setAddons([]);
-    setSwitchStep(null);
+    dispatchSwitchProgress({ type: "cancel" });
   }
 
   function onCancelCreate() {
     setCreating(false);
     setError(null);
     setDraftName("");
-    setSwitchStep(null);
+    dispatchSwitchProgress({ type: "cancel" });
   }
 
   async function onToggleInherit(next: boolean) {
@@ -552,11 +612,15 @@ export function App() {
   }
 
   async function onApplyWizard() {
-    if (!canApplyWizard(draftName, running, busy)) {
+    if (!canApplyWizard(draftName, running, busy || settingsBusy) || switchProgress.active) {
       return;
     }
     setError(null);
+    dispatchSwitchProgress({ type: "start" });
     if (!tauri) {
+      for (const item of SWITCH_STEPS) {
+        dispatchSwitchProgress({ type: "report", step: item.id });
+      }
       const name = draftName.trim() || "Fresh";
       if (creating && library) {
         const next = previewSavedProfile(name, library.profiles.length + 1);
@@ -573,50 +637,55 @@ export function App() {
       setFirstRunKind(null);
       setFirstRunReasons([]);
       setDraftName("");
+      dispatchSwitchProgress({ type: "complete" });
       return;
     }
     setBusy(true);
-    setSwitchStep("closed");
     try {
       const spec = wizardSpec(draftName, preset, addons);
       setLibrary(creating ? await createFreshProfile(spec) : await applyUnusedWizard(spec));
-      setSwitchStep("done");
+      dispatchSwitchProgress({ type: "complete" });
       setCreating(false);
       setFirstRunKind(null);
       setFirstRunReasons([]);
       setDraftName("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not apply that setup.");
-      setSwitchStep(null);
+      dispatchSwitchProgress({ type: "cancel" });
     } finally {
       setBusy(false);
     }
   }
 
   async function onSwitch(id: string) {
-    if (!library || running || busy || library.activeProfileId === id) {
+    if (
+      !library ||
+      running ||
+      busy ||
+      settingsBusy ||
+      switchProgress.active ||
+      library.activeProfileId === id
+    ) {
       return;
     }
     setError(null);
     setPackPrompt(null);
+    dispatchSwitchProgress({ type: "start" });
     if (!tauri) {
-      setSwitchStep("closed");
-      setSwitchStep("pack");
-      setSwitchStep("remove");
-      setSwitchStep("write");
-      setSwitchStep("cloud");
-      setSwitchStep("done");
+      for (const item of SWITCH_STEPS) {
+        dispatchSwitchProgress({ type: "report", step: item.id });
+      }
       setLibrary({ ...library, activeProfileId: id });
+      dispatchSwitchProgress({ type: "complete" });
       return;
     }
     setBusy(true);
-    setSwitchStep("closed");
     try {
       setLibrary(await switchProfile(id));
-      setSwitchStep("done");
+      dispatchSwitchProgress({ type: "complete" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not switch profiles.");
-      setSwitchStep(null);
+      dispatchSwitchProgress({ type: "cancel" });
     } finally {
       setBusy(false);
     }
@@ -641,6 +710,7 @@ export function App() {
 
   function onChange() {
     setError(null);
+    setBindSyncRequest(null);
     setScreen("finder");
     if (confirmed && installs.some((item) => item.path === confirmed.path)) {
       setSelected(confirmed.path);
@@ -684,11 +754,16 @@ export function App() {
             onToggleAddon={(id) => setAddons((current) => toggleAddon(current, id))}
             onApply={onApplyWizard}
           />
-          <SwitchProgressList switchStep={switchStep} />
+          <SwitchProgressList
+            switchStep={switchStep}
+            active={switchProgress.active}
+            visible={switchProgress.visible}
+          />
           <button
             type="button"
             onClick={onChange}
-            className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
+            disabled={busy || switchProgress.active}
+            className="btn btn-ghost mt-6"
           >
             Change
           </button>
@@ -720,20 +795,20 @@ export function App() {
             onApply={onApplyWizard}
             onCancel={onCancelCreate}
           />
-          <SwitchProgressList switchStep={switchStep} />
+          <SwitchProgressList
+            switchStep={switchStep}
+            active={switchProgress.active}
+            visible={switchProgress.visible}
+          />
         </>
       );
     }
     if (surface === "loading") {
       return (
         <section className="flex w-full flex-col items-center text-center">
-          <h1 className="font-display text-6xl text-brand">execs</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-ink">execs</h1>
           <p className="mt-6 text-sm text-ink-muted">Checking this install…</p>
-          <button
-            type="button"
-            onClick={onChange}
-            className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
-          >
+          <button type="button" onClick={onChange} className="btn btn-ghost mt-6">
             Change
           </button>
         </section>
@@ -745,10 +820,12 @@ export function App() {
         library={library}
         draftName={draftName}
         running={running}
-        busy={busy}
+        busy={busy || settingsBusy}
         error={error}
         packPrompt={packPrompt}
         switchStep={switchStep}
+        progressActive={switchProgress.active}
+        progressVisible={switchProgress.visible}
         inheritBinds={inheritBinds}
         settings={
           showSettingsChrome(library) ? (
@@ -756,8 +833,14 @@ export function App() {
               <SettingsHost
                 tab={settingsTab}
                 running={running}
+                externalBusy={busy || switchProgress.active}
                 preview={preview}
                 refreshKey={`${library?.activeProfileId ?? ""}:${absorbNonce}`}
+                bindSyncRequest={bindSyncRequest}
+                onBindSyncHandled={(request) => {
+                  setBindSyncRequest((current) => (current === request ? null : current));
+                }}
+                onBusyChange={setSettingsBusy}
                 onError={setError}
               />
             </SettingsLayout>
@@ -782,9 +865,11 @@ export function App() {
     surface === "ready" &&
     !creating &&
     showSettingsChrome(library);
+  const wideOnboarding =
+    screen === "ready" && confirmed !== null && (surface === "first-unused" || creating);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-ink">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
       {running ? (
         <div
           role="status"
@@ -809,7 +894,7 @@ export function App() {
                 type="button"
                 data-testid="app-update-install"
                 onClick={() => void onInstallUpdate()}
-                className="rounded-pill bg-brand px-4 py-1 text-sm font-medium text-on-brand hover:bg-brand-hover"
+                className="btn btn-primary px-4 py-1"
               >
                 {INSTALL_LABEL}
               </button>
@@ -817,7 +902,7 @@ export function App() {
                 type="button"
                 data-testid="app-update-later"
                 onClick={() => setUpdateDismissed(true)}
-                className="rounded-pill border border-edge px-4 py-1 text-sm text-ink hover:bg-panel-raised"
+                className="btn btn-ghost px-4 py-1"
               >
                 {LATER_LABEL}
               </button>
@@ -827,8 +912,12 @@ export function App() {
       ) : null}
 
       <main
-        className={`mx-auto flex w-full flex-1 flex-col px-6 py-10 ${
-          settingsOpen ? "max-w-6xl items-stretch" : "max-w-xl items-center justify-center"
+        className={`flex min-h-0 w-full flex-1 flex-col ${
+          settingsOpen
+            ? "items-stretch overflow-hidden"
+            : `mx-auto items-center justify-start overflow-y-auto px-6 py-10 ${
+                wideOnboarding ? "max-w-6xl" : "max-w-xl"
+              }`
         }`}
       >
         {screen === "ready" && confirmed ? (
@@ -847,9 +936,15 @@ export function App() {
           />
         )}
 
-        <div className="mt-10 flex max-w-md flex-col items-center gap-2 text-center">
+        <div
+          className={
+            settingsOpen
+              ? "flex min-h-7 shrink-0 items-center justify-between gap-4 border-t border-edge bg-panel px-4 py-1 text-[10px] text-ink-muted"
+              : "mt-10 flex max-w-md flex-col items-center gap-2 text-center"
+          }
+        >
           {appVersion ? (
-            <p className="text-sm text-ink-muted">
+            <p className={settingsOpen ? "text-[10px] text-ink-muted" : "text-sm text-ink-muted"}>
               <span data-testid="app-version">{appVersionCopy(appVersion)}</span>
               {" · "}
               <button
@@ -868,9 +963,14 @@ export function App() {
               {updateCheckMessage}
             </p>
           ) : null}
-          <p className="text-sm text-ink-muted">
-            execs is a fan project and is not affiliated with Valve Corporation or Steam. Team
-            Fortress and Steam are trademarks of Valve Corporation.
+          <p
+            className={
+              settingsOpen ? "truncate text-[10px] text-ink-faint" : "text-sm text-ink-muted"
+            }
+          >
+            {settingsOpen
+              ? "Fan project — not affiliated with Valve or Steam."
+              : "execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation."}
           </p>
         </div>
       </main>
@@ -901,7 +1001,7 @@ function FinderPanel({
 }) {
   return (
     <section className="flex w-full flex-col items-center text-center">
-      <h1 className="font-display text-5xl text-brand">Find TF2</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-ink">Find TF2</h1>
       <p className="mt-3 max-w-md text-sm text-ink-muted">
         Scan Steam libraries and confirm this is Team Fortress 2 before any write. Profiles will be
         tied to this folder.
@@ -930,7 +1030,7 @@ function FinderPanel({
                         : "border-edge bg-bg hover:border-ink-faint"
                     }`}
                   >
-                    <div className="font-display text-lg text-ink">
+                    <div className="text-sm font-medium text-ink">
                       {formatInstallLabel(install.path)}
                     </div>
                     <div className="mt-1 break-all text-xs text-ink-faint">{install.path}</div>
@@ -945,19 +1045,14 @@ function FinderPanel({
       {error ? <p className="mt-4 text-sm text-team-red">{error}</p> : null}
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={onBrowse}
-          disabled={busy}
-          className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-50"
-        >
+        <button type="button" onClick={onBrowse} disabled={busy} className="btn btn-ghost">
           Browse
         </button>
         <button
           type="button"
           onClick={onConfirm}
           disabled={!canConfirm}
-          className="rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+          className="btn btn-primary"
         >
           Confirm
         </button>
@@ -976,42 +1071,118 @@ function InheritBindsToggle({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <label data-testid="inherit-binds" className="flex items-center gap-2 text-sm text-ink">
-      <input
-        type="checkbox"
-        checked={inheritBinds}
+    <div data-testid="inherit-binds" className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm text-ink">Inherit binds</p>
+        <p className="mt-0.5 text-xs text-ink-muted">Use this profile's binds for new profiles.</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={inheritBinds}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      Inherit binds when creating a new profile
-    </label>
+        onClick={() => onChange(!inheritBinds)}
+        className={`relative h-6 w-11 shrink-0 rounded-pill border transition-colors disabled:opacity-40 ${
+          inheritBinds ? "border-brand bg-brand" : "border-edge bg-bg"
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`absolute top-0.5 size-4 rounded-full transition-all ${
+            inheritBinds ? "left-[22px] bg-on-brand" : "left-1 bg-ink-muted"
+          }`}
+        />
+        <span className="sr-only">Inherit binds when creating a new profile</span>
+      </button>
+    </div>
   );
 }
 
-function SwitchProgressList({ switchStep }: { switchStep: SwitchStep | null }) {
-  if (!switchStep) {
+export function SwitchProgressList({
+  switchStep,
+  active,
+  visible,
+}: {
+  switchStep: SwitchStep | null;
+  active: boolean;
+  visible: boolean;
+}) {
+  if (!visible) {
     return null;
   }
-  const currentIndex = switchStepIndex(switchStep);
+  const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
+  const currentLabel = switchStep
+    ? (SWITCH_STEPS[currentIndex]?.label ?? "Applying profile")
+    : "Preparing profile operation…";
+  const complete = !active && switchStep === "done";
+  // Step-driven fill: revealed real stages over total — never an invented number.
+  const fraction =
+    switchStep === "done" ? 1 : switchStep === null ? 0 : (currentIndex + 1) / SWITCH_STEPS.length;
   return (
-    <ol data-testid="switch-progress" className="mt-4 w-full text-left">
-      {SWITCH_STEPS.map((item, index) => {
-        const done = currentIndex > index || switchStep === "done";
-        const current = item.id === switchStep && switchStep !== "done";
-        return (
-          <li
-            key={item.id}
-            data-step={item.id}
-            data-current={current ? "true" : "false"}
-            data-done={done ? "true" : "false"}
-            className={`text-sm ${current ? "text-brand" : done ? "text-ink" : "text-ink-faint"}`}
-          >
-            {done ? "Done — " : current ? "Now — " : ""}
-            {item.label}
-          </li>
-        );
-      })}
-    </ol>
+    <section
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      aria-busy={active}
+      aria-label="Profile progress"
+      className="overlay fixed inset-x-4 bottom-4 z-50 p-4 text-left sm:left-auto sm:right-6 sm:w-[26rem]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-ink">
+          {complete ? "Profile applied" : "Applying profile"}
+        </p>
+        {complete ? <Check size={16} weight="bold" className="text-health" /> : null}
+      </div>
+      <p data-testid="switch-progress-current" className="mt-0.5 text-[13px] text-ink-muted">
+        {complete ? "All profile steps completed." : `Current stage — ${currentLabel}`}
+      </p>
+
+      <div
+        data-testid="switch-progress-bar"
+        data-fraction={fraction.toFixed(3)}
+        aria-hidden="true"
+        className="mt-3 h-1 overflow-hidden rounded-pill bg-bg"
+      >
+        <div
+          className="h-full rounded-pill bg-brand transition-[width] duration-500 ease-out"
+          style={{ width: `${Math.round(fraction * 100)}%` }}
+        />
+      </div>
+
+      <ol data-testid="switch-progress" className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
+        {SWITCH_STEPS.map((item, index) => {
+          const done = complete || currentIndex > index;
+          const current = active && item.id === switchStep;
+          return (
+            <li
+              key={item.id}
+              data-step={item.id}
+              data-current={current ? "true" : "false"}
+              data-done={done ? "true" : "false"}
+              aria-current={current ? "step" : undefined}
+              aria-label={`${item.label}: ${done ? "done" : current ? "current" : "pending"}`}
+              className={`flex min-w-0 items-center gap-2 text-xs ${
+                current ? "text-brand" : done ? "text-ink" : "text-ink-faint"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`flex size-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                  current
+                    ? "border-brand bg-brand/15 text-brand"
+                    : done
+                      ? "border-health/60 bg-health/10 text-health"
+                      : "border-edge text-ink-faint"
+                }`}
+              >
+                {done ? <Check size={9} weight="bold" /> : index + 1}
+              </span>
+              <span className="truncate">{item.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -1024,6 +1195,8 @@ function ReadyPanel({
   error,
   packPrompt,
   switchStep,
+  progressActive,
+  progressVisible,
   inheritBinds,
   onDraftName,
   onSave,
@@ -1044,6 +1217,8 @@ function ReadyPanel({
   error: string | null;
   packPrompt: AbsorbDelta | null;
   switchStep: SwitchStep | null;
+  progressActive: boolean;
+  progressVisible: boolean;
   inheritBinds: boolean;
   settings?: ReactNode;
   onDraftName: (name: string) => void;
@@ -1056,198 +1231,329 @@ function ReadyPanel({
   onToggleInherit: (next: boolean) => void;
   onChange: () => void;
 }) {
-  const canSave = library ? canSaveCurrent(library, running, draftName) && !busy : false;
-  const switching = busy && switchStep !== null && switchStep !== "done";
+  const controlsBusy = busy || progressActive;
+  const canSave = library ? canSaveCurrent(library, running, draftName) && !controlsBusy : false;
   const showExport = library ? canExportProfile(library, running) : false;
-  const canImport = library ? canImportProfile(library, running) && !busy : false;
+  const canImport = library ? canImportProfile(library, running) && !controlsBusy : false;
   const showCreate = library ? canCreateNew(library) : false;
   const showInherit = showCreateNewChrome(library, "ready");
+  const activeProfile = library?.profiles.find((profile) => profile.id === library.activeProfileId);
+  const packPromptRef = useRef<HTMLDivElement | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>("idle");
+  const copyTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (packPrompt && !running) {
+      packPromptRef.current?.focus();
+    }
+  }, [packPrompt, running]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) {
+        window.clearTimeout(copyTimer.current);
+      }
+    };
+  }, []);
+
+  async function onCopyPath() {
+    const feedback = await copyToClipboard(path);
+    setCopyFeedback(feedback);
+    if (copyTimer.current !== null) {
+      window.clearTimeout(copyTimer.current);
+    }
+    copyTimer.current = window.setTimeout(() => {
+      setCopyFeedback("idle");
+      copyTimer.current = null;
+    }, COPY_FEEDBACK_MS);
+  }
 
   return (
-    <section
-      className={`flex w-full gap-6 ${
-        settings ? "flex-col lg:flex-row lg:items-start" : "flex-col items-center text-center"
-      }`}
-    >
-      <div
-        className={`flex w-full flex-col ${settings ? "lg:max-w-md" : "items-center text-center"}`}
-      >
-        <h1 className="font-display text-6xl text-brand">execs</h1>
-        <p className="mt-6 font-display text-sm tracking-wide text-ink-muted">TF2 install</p>
-        <p className="mt-2 max-w-lg break-all text-sm text-ink">{path}</p>
+    <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <header className="relative z-40 flex min-h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 sm:px-6">
+        <div className="mr-1 flex shrink-0 items-center gap-2">
+          <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
+          <span className="text-[15px] font-semibold tracking-tight text-ink">execs</span>
+        </div>
 
-        <div
-          data-testid="profile-library"
-          className="mt-8 w-full rounded-xl border border-edge bg-panel p-4 text-left"
-        >
-          <p className="font-display text-sm tracking-wide text-ink-muted">Profiles</p>
-          <p data-testid="profile-library-status" className="mt-2 text-sm text-ink">
-            {library ? libraryStatusCopy(library) : "Loading profiles…"}
-          </p>
-          {library && library.profiles.length > 0 ? (
-            <ul className="mt-3 flex flex-col gap-2">
-              {library.profiles.map((profile) => {
-                const active = library.activeProfileId === profile.id;
-                const canSwitch = !active && !running && !busy && !switching;
-                return (
-                  <li
-                    key={profile.id}
-                    className="flex items-center gap-2 rounded-lg border border-edge bg-bg px-4 py-2 text-sm text-ink"
-                  >
-                    <button
-                      type="button"
-                      data-testid="profile-name"
-                      disabled={!canSwitch}
-                      onClick={() => onSwitch(profile.id)}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left hover:text-ink disabled:opacity-70"
-                    >
-                      <span>{profile.name}</span>
-                      {active ? (
-                        <span
-                          data-testid="profile-active"
-                          className="rounded-pill border border-brand px-2 py-0.5 text-xs text-brand"
-                        >
-                          Active
-                        </span>
-                      ) : (
-                        <span className="text-xs text-ink-muted">Switch</span>
-                      )}
-                    </button>
-                    {showExport ? (
-                      <button
-                        type="button"
-                        data-testid="profile-export"
-                        onClick={() => onExport(profile.id)}
-                        disabled={busy}
-                        className="shrink-0 rounded-pill border border-edge px-3 py-1 text-xs text-ink hover:bg-panel-raised disabled:opacity-50"
-                      >
-                        Export
-                      </button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
+        <details data-testid="profile-library" className="group relative">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink hover:bg-panel [&::-webkit-details-marker]:hidden">
+            <span className="hidden text-ink-muted sm:inline">Profile</span>
+            <strong className="max-w-36 truncate font-medium text-brand">
+              {activeProfile?.name ?? "Profiles"}
+            </strong>
+            <CaretDown
+              size={14}
+              className="text-ink-muted transition-transform group-open:rotate-180"
+            />
+            {activeProfile ? (
+              <span
+                data-testid="profile-active"
+                className="hidden rounded-pill border border-brand/60 px-2 py-0.5 text-[11px] text-brand md:inline"
+              >
+                Active
+              </span>
+            ) : null}
+          </summary>
 
-          {library && !library.rootMismatch && !running ? (
-            <form
-              className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
-              onSubmit={(event) => {
-                event.preventDefault();
-                onSave();
-              }}
-            >
-              <label className="sr-only" htmlFor="profile-name">
-                Profile name
-              </label>
-              <input
-                id="profile-name"
-                value={draftName}
-                onChange={(event) => onDraftName(event.target.value)}
-                placeholder="Name this profile"
-                disabled={busy}
-                className="min-w-0 flex-1 rounded-lg border border-edge bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={!canSave}
-                className="rounded-pill bg-brand px-5 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
-              >
-                Save current as…
-              </button>
-              <button
-                type="button"
-                data-testid="profile-import"
-                onClick={onImport}
-                disabled={!canImport}
-                className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
-              >
-                Import
-              </button>
-            </form>
-          ) : null}
-          {showCreate || showInherit ? (
-            <div className="mt-4 flex flex-col items-start gap-3">
-              {showInherit ? (
-                <InheritBindsToggle
-                  inheritBinds={inheritBinds}
-                  disabled={busy}
-                  onChange={onToggleInherit}
-                />
-              ) : null}
+          <div className="overlay absolute top-[calc(100%+10px)] left-0 z-50 w-[min(430px,calc(100vw-2rem))] p-4 text-left">
+            <div className="flex items-start justify-between gap-4 border-b border-edge pb-3">
+              <div>
+                <p className="text-sm font-semibold text-ink">Profiles</p>
+                <p data-testid="profile-library-status" className="mt-1 text-xs text-ink-muted">
+                  {library ? libraryStatusCopy(library) : "Loading profiles…"}
+                </p>
+              </div>
               {showCreate ? (
                 <button
                   type="button"
                   data-testid="create-new"
                   onClick={onCreateNew}
-                  disabled={busy}
-                  className="rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+                  disabled={controlsBusy}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
                 >
-                  Create new
+                  <Plus size={14} weight="bold" />
+                  New profile
                 </button>
               ) : null}
             </div>
-          ) : null}
-          {library && running ? (
-            <p className="mt-3 text-sm text-ink-muted">
-              Read-only while TF2 is running. Export is still available.
-            </p>
-          ) : null}
-          {packPrompt && !running ? (
-            <div
-              data-testid="absorb-pack-prompt"
-              className="mt-4 rounded-lg border border-edge bg-bg px-4 py-3"
-            >
-              <p className="text-sm text-ink">
-                TF2 changed packs in custom. Update the active profile?
-              </p>
-              {packPrompt.packsAdded.length > 0 ? (
-                <p className="mt-2 text-xs text-ink-muted">
-                  Added: {packPrompt.packsAdded.join(", ")}
-                </p>
-              ) : null}
-              {packPrompt.packsRemoved.length > 0 ? (
-                <p className="mt-1 text-xs text-ink-muted">
-                  Removed: {packPrompt.packsRemoved.join(", ")}
-                </p>
-              ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
+
+            {library && library.profiles.length > 0 ? (
+              <ul className="mt-2 max-h-52 overflow-y-auto">
+                {library.profiles.map((profile) => {
+                  const active = library.activeProfileId === profile.id;
+                  const canSwitch = !active && !running && !controlsBusy;
+                  return (
+                    <li
+                      key={profile.id}
+                      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        active ? "bg-brand/10" : "hover:bg-panel/70"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        data-testid="profile-name"
+                        disabled={!canSwitch}
+                        onClick={() => onSwitch(profile.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+                      >
+                        <span
+                          className={`size-2 shrink-0 rounded-full ${active ? "bg-brand" : "bg-edge"}`}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
+                        <span className="text-[11px] text-ink-muted">
+                          {active ? "Current" : "Switch"}
+                        </span>
+                      </button>
+                      {showExport ? (
+                        <button
+                          type="button"
+                          data-testid="profile-export"
+                          title={`Export ${profile.name}`}
+                          aria-label={`Export ${profile.name}`}
+                          onClick={() => onExport(profile.id)}
+                          disabled={controlsBusy}
+                          className="rounded-md p-1.5 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
+                        >
+                          <DownloadSimple size={16} />
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+
+            {library && !library.rootMismatch && !running ? (
+              <form
+                className="mt-3 flex gap-2 border-t border-edge pt-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onSave();
+                }}
+              >
+                <label className="sr-only" htmlFor="profile-name">
+                  Profile name
+                </label>
+                <input
+                  id="profile-name"
+                  value={draftName}
+                  onChange={(event) => onDraftName(event.target.value)}
+                  placeholder="Save current as…"
+                  disabled={controlsBusy}
+                  className="min-w-0 flex-1 rounded-lg border border-edge bg-bg px-3 py-2 text-xs text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
+                />
                 <button
-                  type="button"
-                  data-testid="absorb-pack-update"
-                  disabled={busy}
-                  onClick={() => onPackChoice("update")}
-                  className="rounded-pill bg-brand px-4 py-1.5 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
+                  type="submit"
+                  disabled={!canSave}
+                  className="rounded-lg border border-edge px-3 py-2 text-xs text-ink hover:bg-panel-raised disabled:opacity-40"
                 >
-                  Update
+                  Save
                 </button>
-                <button
-                  type="button"
-                  data-testid="absorb-pack-keep"
-                  disabled={busy}
-                  onClick={() => onPackChoice("keep")}
-                  className="rounded-pill border border-edge px-4 py-1.5 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
-                >
-                  Keep
-                </button>
+              </form>
+            ) : null}
+
+            {showInherit ? (
+              <div className="mt-3 border-t border-edge pt-3">
+                <InheritBindsToggle
+                  inheritBinds={inheritBinds}
+                  disabled={controlsBusy}
+                  onChange={onToggleInherit}
+                />
               </div>
+            ) : null}
+
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-edge pt-3">
+              <button
+                type="button"
+                data-testid="profile-import"
+                onClick={onImport}
+                disabled={!canImport}
+                className="flex items-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-xs text-ink hover:bg-panel-raised disabled:opacity-40"
+              >
+                <UploadSimple size={15} />
+                Import
+              </button>
+              <button
+                type="button"
+                onClick={onChange}
+                disabled={controlsBusy}
+                className="flex items-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-xs text-ink hover:bg-panel-raised disabled:opacity-40"
+              >
+                <FolderOpen size={15} />
+                Change install
+              </button>
             </div>
-          ) : null}
-          <SwitchProgressList switchStep={switchStep} />
+            {library && running ? (
+              <p className="mt-3 text-xs text-ink-muted">
+                Read-only while TF2 is running. Export remains available.
+              </p>
+            ) : null}
+          </div>
+        </details>
+
+        <div className="mx-1 hidden h-7 w-px bg-edge md:block" />
+
+        <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
+          <span className="shrink-0 text-xs text-ink-muted">Install path</span>
+          <span className="truncate font-mono text-xs text-ink-muted" title={path}>
+            {path}
+          </span>
+          <button
+            type="button"
+            data-testid="install-path-copy"
+            title={copyFeedback === "copied" ? "Copied" : "Copy install path"}
+            aria-label={copyFeedback === "copied" ? "Copied install path" : "Copy install path"}
+            onClick={() => void onCopyPath()}
+            className={`flex shrink-0 items-center gap-1.5 rounded-md p-1.5 transition-colors ${
+              copyFeedback === "copied"
+                ? "text-health"
+                : "text-ink-muted hover:bg-panel-raised hover:text-ink"
+            }`}
+          >
+            {copyFeedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+            <span
+              aria-live="polite"
+              className={copyFeedback === "idle" ? "sr-only" : "text-[11px]"}
+            >
+              {copyFeedback === "copied"
+                ? "Copied"
+                : copyFeedback === "failed"
+                  ? "Copy failed"
+                  : ""}
+            </span>
+          </button>
         </div>
 
-        {error ? <p className="mt-4 text-sm text-team-red">{error}</p> : null}
+        <div className="ml-auto flex shrink-0 items-center gap-2 text-xs text-ink-muted">
+          <span
+            className={`size-2 rounded-full ${running ? "bg-team-red" : "bg-ink-faint"}`}
+            aria-hidden="true"
+          />
+          <span className="hidden sm:inline">{running ? "Game running" : "Game closed"}</span>
+        </div>
+      </header>
 
-        <button
-          type="button"
-          onClick={onChange}
-          className="mt-6 rounded-pill border border-edge px-5 py-2 text-sm text-ink hover:bg-panel-raised"
+      {error ? (
+        <div
+          role="alert"
+          className="shrink-0 border-b border-team-red/50 bg-team-red/10 px-5 py-2 text-sm text-ink"
         >
-          Change
-        </button>
-      </div>
-      {settings}
+          {error}
+        </div>
+      ) : null}
+
+      {packPrompt && !running ? (
+        <div
+          ref={packPromptRef}
+          data-testid="absorb-pack-prompt"
+          role="alertdialog"
+          aria-labelledby="absorb-pack-prompt-title"
+          aria-describedby="absorb-pack-prompt-description"
+          tabIndex={-1}
+          className="fixed top-20 right-5 z-50 w-[min(390px,calc(100vw-2.5rem))] rounded-xl border border-edge bg-panel-raised p-4 shadow-2xl shadow-black/50"
+        >
+          <p id="absorb-pack-prompt-title" className="text-sm font-semibold text-ink">
+            Custom files changed
+          </p>
+          <p id="absorb-pack-prompt-description" className="mt-1 text-sm text-ink-muted">
+            TF2 changed packs in custom. Update the active profile?
+          </p>
+          {packPrompt.packsAdded.length > 0 ? (
+            <p className="mt-2 text-xs text-ink-muted">Added: {packPrompt.packsAdded.join(", ")}</p>
+          ) : null}
+          {packPrompt.packsRemoved.length > 0 ? (
+            <p className="mt-1 text-xs text-ink-muted">
+              Removed: {packPrompt.packsRemoved.join(", ")}
+            </p>
+          ) : null}
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              data-testid="absorb-pack-update"
+              disabled={busy}
+              onClick={() => onPackChoice("update")}
+              className="btn btn-primary"
+            >
+              Update profile
+            </button>
+            <button
+              type="button"
+              data-testid="absorb-pack-keep"
+              disabled={busy}
+              onClick={() => onPackChoice("keep")}
+              className="btn btn-ghost"
+            >
+              Keep profile
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {settings ?? (
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="w-full max-w-lg rounded-xl border border-edge bg-panel p-6 text-center">
+            <p className="text-lg font-semibold text-ink">Profile library</p>
+            <p className="mt-2 text-sm text-ink-muted">
+              {library ? libraryStatusCopy(library) : "Loading profiles…"}
+            </p>
+            <button
+              type="button"
+              onClick={onChange}
+              disabled={controlsBusy}
+              className="btn btn-ghost mt-5"
+            >
+              Change install
+            </button>
+          </div>
+        </div>
+      )}
+
+      <SwitchProgressList
+        switchStep={switchStep}
+        active={progressActive}
+        visible={progressVisible}
+      />
     </section>
   );
 }

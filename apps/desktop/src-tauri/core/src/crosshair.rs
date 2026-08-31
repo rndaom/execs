@@ -15,7 +15,7 @@ use crate::profile::{
 };
 use crate::surface::CfgLayer;
 use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
-use crate::vpk::{read_vpk_dir_file, write_vpk_v1};
+use crate::vpk::{read_vpk_dir_file_filtered, write_vpk_v1};
 
 pub const EXECS_CROSSHAIRS_PACK: &str = "execs-crosshairs";
 pub const CROSSHAIR_SIZE: u32 = 64;
@@ -31,6 +31,7 @@ pub fn apply_crosshairs(
     shape: &str,
     assignments: &BTreeMap<String, String>,
     custom_rgba: Option<&[u8]>,
+    color: Option<[u8; 3]>,
 ) -> Result<ProfileDetail, ProfileError> {
     apply_crosshairs_to(
         &profiles_dir(),
@@ -39,6 +40,7 @@ pub fn apply_crosshairs(
         shape,
         assignments,
         custom_rgba,
+        color,
         live_process_names(),
     )
 }
@@ -50,6 +52,7 @@ pub fn apply_crosshairs_to<I, S>(
     shape: &str,
     assignments: &BTreeMap<String, String>,
     custom_rgba: Option<&[u8]>,
+    color: Option<[u8; 3]>,
     running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
 where
@@ -64,11 +67,13 @@ where
         shape,
         assignments,
         custom_rgba,
+        color,
         &scripts,
         running_names,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn apply_crosshairs_with_scripts<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -76,6 +81,7 @@ pub fn apply_crosshairs_with_scripts<I, S>(
     shape: &str,
     assignments: &BTreeMap<String, String>,
     custom_rgba: Option<&[u8]>,
+    color: Option<[u8; 3]>,
     scripts: &BTreeMap<String, String>,
     running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
@@ -92,8 +98,19 @@ where
             "Unknown crosshair shape {shape}."
         )));
     }
+    // Imported pixels are not stored on the manifest; when the caller has none
+    // (a re-apply after reload), recover them from the pack's own custom.vtf
+    // before that file is removed below.
+    let custom_needed =
+        shape == "custom" || assignments.values().any(|assigned| assigned == "custom");
+    let stored_custom = if custom_needed && custom_rgba.is_none() {
+        load_stored_custom_rgba(profiles_dir, profile_id)
+    } else {
+        None
+    };
+    let custom_source: Option<&[u8]> = custom_rgba.or(stored_custom.as_deref());
     let mut needed = BTreeMap::new();
-    needed.insert(shape.to_string(), shape_pixels(shape, custom_rgba)?);
+    needed.insert(shape.to_string(), shape_pixels(shape, custom_source, color)?);
     for assigned in assignments.values() {
         if !SHAPES.contains(&assigned.as_str()) {
             return Err(ProfileError::Io(format!(
@@ -103,7 +120,7 @@ where
         if needed.contains_key(assigned) {
             continue;
         }
-        needed.insert(assigned.clone(), shape_pixels(assigned, custom_rgba)?);
+        needed.insert(assigned.clone(), shape_pixels(assigned, custom_source, color)?);
     }
 
     let previous = pack_paths(profiles_dir, profile_id)?;
@@ -161,6 +178,7 @@ where
         id: EXECS_CROSSHAIRS_PACK.into(),
         shape: shape.to_string(),
         assignments: assignments.clone(),
+        color,
     });
     save_manifest(profiles_dir, tf2_root, &manifest)?;
     force_empty_stock_crosshair(profiles_dir, tf2_root, profile_id, &running)?;
@@ -209,7 +227,14 @@ pub fn load_weapon_scripts(tf2_root: &Path) -> Result<BTreeMap<String, String>, 
             "Could not find tf/tf2_misc_dir.vpk. Confirm the TF2 install.".into(),
         ));
     }
-    let archive = read_vpk_dir_file(&vpk).map_err(|err| ProfileError::Io(err.message()))?;
+    // Only weapon scripts are needed — never materialize the whole archive set.
+    let keep = |rel: &str| {
+        let lower = rel.to_ascii_lowercase();
+        lower.starts_with("scripts/tf_weapon_")
+            && (lower.ends_with(".ctx") || lower.ends_with(".txt"))
+    };
+    let archive =
+        read_vpk_dir_file_filtered(&vpk, &keep).map_err(|err| ProfileError::Io(err.message()))?;
     decode_weapon_scripts(&archive.files)
 }
 
@@ -364,7 +389,32 @@ pub fn encode_vmt(name: &str) -> String {
     )
 }
 
-fn shape_pixels(shape: &str, custom_rgba: Option<&[u8]>) -> Result<Vec<u8>, ProfileError> {
+/// Read the previously-applied imported pixels back out of the pack's VTF.
+fn load_stored_custom_rgba(profiles_dir: &Path, profile_id: &str) -> Option<Vec<u8>> {
+    let rel = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/custom.vtf");
+    let path = exclusive_file_path(profiles_dir, profile_id, &rel);
+    let bytes = std::fs::read(path).ok()?;
+    decode_vtf_bgra8888(&bytes, CROSSHAIR_SIZE, CROSSHAIR_SIZE)
+}
+
+/// Inverse of `encode_vtf_bgra8888` for the fixed-size VTFs this module writes.
+pub fn decode_vtf_bgra8888(bytes: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
+    let expected = 80 + (width * height * 4) as usize;
+    if bytes.len() < expected || &bytes[0..4] != b"VTF\0" {
+        return None;
+    }
+    let mut rgba = bytes[80..expected].to_vec();
+    for chunk in rgba.chunks_exact_mut(4) {
+        chunk.swap(0, 2);
+    }
+    Some(rgba)
+}
+
+fn shape_pixels(
+    shape: &str,
+    custom_rgba: Option<&[u8]>,
+    color: Option<[u8; 3]>,
+) -> Result<Vec<u8>, ProfileError> {
     if shape == "custom" {
         let pixels = custom_rgba.ok_or_else(|| {
             ProfileError::Io("Import a PNG before applying a custom crosshair.".into())
@@ -375,9 +425,18 @@ fn shape_pixels(shape: &str, custom_rgba: Option<&[u8]>) -> Result<Vec<u8>, Prof
                 "Custom crosshair must be a 64×64 RGBA buffer.".into(),
             ));
         }
+        // Imported PNGs keep their own colors; the tint applies to shapes only.
         return Ok(pixels.to_vec());
     }
-    Ok(render_shape_rgba(shape))
+    let mut pixels = render_shape_rgba(shape);
+    if let Some([r, g, b]) = color {
+        for chunk in pixels.chunks_exact_mut(4) {
+            chunk[0] = ((u16::from(chunk[0]) * u16::from(r)) / 255) as u8;
+            chunk[1] = ((u16::from(chunk[1]) * u16::from(g)) / 255) as u8;
+            chunk[2] = ((u16::from(chunk[2]) * u16::from(b)) / 255) as u8;
+        }
+    }
+    Ok(pixels)
 }
 
 pub fn render_shape_rgba(shape: &str) -> Vec<u8> {
@@ -502,27 +561,39 @@ fn force_empty_stock_crosshair(
 }
 
 pub fn force_empty_crosshair_file(text: &str) -> String {
-    let mut found = false;
+    // The engine multiplies every crosshair texture (stock file or the pack's
+    // VTFs) by cl_crosshair_red/green/blue. Pack colors are baked into the VTF,
+    // so normalize the tint cvars to 255 for a faithful render.
+    let forced: [(&str, &str); 4] = [
+        ("cl_crosshair_file", "cl_crosshair_file \"\""),
+        ("cl_crosshair_red", "cl_crosshair_red 255"),
+        ("cl_crosshair_green", "cl_crosshair_green 255"),
+        ("cl_crosshair_blue", "cl_crosshair_blue 255"),
+    ];
+    let mut found = [false; 4];
     let mut lines: Vec<String> = text
         .lines()
         .map(|line| {
-            if line
-                .trim_start()
-                .to_ascii_lowercase()
-                .starts_with("cl_crosshair_file")
-            {
-                found = true;
-                "cl_crosshair_file \"\"".to_string()
-            } else {
-                line.to_string()
+            let lower = line.trim_start().to_ascii_lowercase();
+            for (index, (prefix, replacement)) in forced.iter().enumerate() {
+                let matches_cvar = lower
+                    .strip_prefix(prefix)
+                    .is_some_and(|rest| !rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'));
+                if matches_cvar {
+                    found[index] = true;
+                    return (*replacement).to_string();
+                }
             }
+            line.to_string()
         })
         .collect();
-    if !found {
-        if !text.is_empty() && !text.ends_with('\n') {
-            lines.push(String::new());
+    if found.iter().any(|seen| !seen) && !text.is_empty() && !text.ends_with('\n') {
+        lines.push(String::new());
+    }
+    for (index, (_, replacement)) in forced.iter().enumerate() {
+        if !found[index] {
+            lines.push((*replacement).to_string());
         }
-        lines.push("cl_crosshair_file \"\"".into());
     }
     let mut out = lines.join("\n");
     if !out.ends_with('\n') {
@@ -571,7 +642,6 @@ pub fn build_script_vpk(scripts: &BTreeMap<String, String>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::process_lock::live_process_names;
     use crate::profile::{create_profile_record_to, set_active_profile_to};
     use crate::vpk::read_vpk_dir_bytes;
     use crate::{test_temp_dir, ProfileError};
@@ -580,14 +650,12 @@ mod tests {
         Vec::new()
     }
 
-    fn tf2_name() -> Vec<String> {
-        live_process_names()
-            .into_iter()
-            .take(1)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .chain(std::iter::once("tf_linux64".into()))
-            .collect()
+    fn tf2_name() -> &'static str {
+        if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        }
     }
 
     fn setup() -> (std::path::PathBuf, std::path::PathBuf, String) {
@@ -662,11 +730,13 @@ mod tests {
             "cross",
             &assignments,
             None,
+            Some([255, 64, 0]),
             &scripts,
             unlocked(),
         )
         .unwrap();
         assert_eq!(detail.crosshair.as_ref().unwrap().shape, "cross");
+        assert_eq!(detail.crosshair.as_ref().unwrap().color, Some([255, 64, 0]));
         assert!(tf2
             .join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt")
             .is_file());
@@ -677,6 +747,9 @@ mod tests {
         assert!(!tf2.join("tf/custom/execs-crosshairs/resource/ui").exists());
         let gameplay = std::fs::read_to_string(tf2.join("tf/cfg/execs_gameplay.cfg")).unwrap();
         assert!(gameplay.contains("cl_crosshair_file \"\""));
+        assert!(gameplay.contains("cl_crosshair_red 255"));
+        assert!(gameplay.contains("cl_crosshair_green 255"));
+        assert!(gameplay.contains("cl_crosshair_blue 255"));
         remove_crosshairs_to(&root.join("profiles"), &tf2, &id, unlocked()).unwrap();
         assert!(!tf2.join("tf/custom/execs-crosshairs").exists());
         cleanup(&root);
@@ -693,6 +766,7 @@ mod tests {
             &id,
             "custom",
             &BTreeMap::new(),
+            None,
             None,
             &scripts,
             unlocked(),
@@ -717,6 +791,7 @@ mod tests {
             "custom",
             &BTreeMap::new(),
             Some(&pixels),
+            None,
             &scripts,
             unlocked(),
         )
@@ -724,6 +799,52 @@ mod tests {
         assert!(tf2
             .join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/custom.vtf")
             .is_file());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn reapply_recovers_imported_pixels_from_the_pack() {
+        let (root, tf2, id) = setup();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        let mut pixels = vec![0u8; 64 * 64 * 4];
+        pixels[0] = 9;
+        pixels[1] = 40;
+        pixels[2] = 200;
+        pixels[3] = 255;
+        apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "custom",
+            &BTreeMap::new(),
+            Some(&pixels),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        // Re-apply without the pixel buffer (a reload dropped it) — the pack's
+        // stored custom.vtf must supply them.
+        let detail = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "custom",
+            &BTreeMap::new(),
+            None,
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        assert_eq!(detail.crosshair.as_ref().unwrap().shape, "custom");
+        let vtf = std::fs::read(
+            tf2.join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/custom.vtf"),
+        )
+        .unwrap();
+        let recovered = decode_vtf_bgra8888(&vtf, 64, 64).unwrap();
+        assert_eq!(&recovered[0..4], &[9, 40, 200, 255]);
         cleanup(&root);
     }
 
@@ -739,8 +860,9 @@ mod tests {
             "cross",
             &BTreeMap::new(),
             None,
+            None,
             &scripts,
-            tf2_name(),
+            [tf2_name()],
         )
         .unwrap_err();
         assert!(matches!(err, ProfileError::GameRunning));
