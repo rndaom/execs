@@ -17,15 +17,18 @@ importers:
       '@execs/cfglint':
         specifier: workspace:*
         version: link:../../packages/cfglint
-      '@fontsource/big-shoulders-display':
-        specifier: ^5.2.0
-        version: 5.3.0
       '@fontsource/inter':
         specifier: ^5.2.0
         version: 5.3.0
+      '@phosphor-icons/react':
+        specifier: ^2.1.10
+        version: 2.1.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tauri-apps/api':
         specifier: ^2
         version: 2.11.1
+      '@tauri-apps/plugin-opener':
+        specifier: ^2.5.4
+        version: 2.5.4
       '@tauri-apps/plugin-process':
         specifier: ^2.3.1
         version: 2.3.1
@@ -1388,9 +1391,6 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@fontsource/big-shoulders-display@5.3.0':
-    resolution: {integrity: sha512-d4+Tcsq/WfoKeqWfB6wFdeNDsSYYnilJbSNNpf5w53MlWrGHAc9YvkAjC6id6PgFDiGaFKsXfP0RFAQtpt0bog==}
-
   '@fontsource/inter@5.3.0':
     resolution: {integrity: sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==}
 
@@ -1796,6 +1796,13 @@ packages:
     peerDependenciesMeta:
       rclone.js:
         optional: true
+
+  '@phosphor-icons/react@2.1.10':
+    resolution: {integrity: sha512-vt8Tvq8GLjheAZZYa+YG/pW7HDbov8El/MANW8pOAz4eGxrwhnbfrQZq0Cp4q8zBEu8NIhHdnr+r8thnfRSNYA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>= 16.8'
+      react-dom: '>= 16.8'
 
   '@playwright/test@1.62.1':
     resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
@@ -2957,6 +2964,9 @@ packages:
     resolution: {integrity: sha512-R8xGtMpwyetawSqm9kYOuMmEqkhUbvcUy8n0aNXIxollKBLESUu5f4Fx+64hgASYm1H+jSWq6jCW6zqTnH6hqQ==}
     engines: {node: '>= 10'}
     hasBin: true
+
+  '@tauri-apps/plugin-opener@2.5.4':
+    resolution: {integrity: sha512-1HnPkb+AmgO29HBazm4uPLKB+r7zzcTBW1d0fyYp1uP+jwtpoiNDGKMMzz58SFp49nOIrxdE3aUJtT57lfO9CQ==}
 
   '@tauri-apps/plugin-process@2.3.1':
     resolution: {integrity: sha512-nCa4fGVaDL/B9ai03VyPOjfAHRHSBz5v6F/ObsB73r/dA3MHHhZtldaDMIc0V/pnUw9ehzr2iEG+XkSEyC0JJA==}
@@ -5620,8 +5630,6 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@fontsource/big-shoulders-display@5.3.0': {}
-
   '@fontsource/inter@5.3.0': {}
 
   '@img/colour@1.1.0': {}
@@ -5947,6 +5955,11 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  '@phosphor-icons/react@2.1.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
 
   '@playwright/test@1.62.1':
     dependencies:
@@ -7113,6 +7126,10 @@ snapshots:
       '@tauri-apps/cli-win32-arm64-msvc': 2.11.4
       '@tauri-apps/cli-win32-ia32-msvc': 2.11.4
       '@tauri-apps/cli-win32-x64-msvc': 2.11.4
+
+  '@tauri-apps/plugin-opener@2.5.4':
+    dependencies:
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-process@2.3.1':
     dependencies:

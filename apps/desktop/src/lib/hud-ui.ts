@@ -1,9 +1,4 @@
-import type {
-  HudCatalogEntry,
-  HudRecord,
-  HudSchemaView,
-  HudUiState,
-} from "./bridge";
+import type { HudCatalogEntry, HudRecord, HudSchemaView, HudUiState } from "./bridge";
 
 export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
   {
@@ -15,6 +10,11 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
     github: true,
     flags: ["menus", "customization"],
     banner: null,
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/hud.webp",
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/scoreboard.webp",
+    ],
+    album: null,
     comfigUrl: "https://comfig.app/huds/page/rayshud/",
     tf2hudsUrl: "https://tf2huds.dev/hud/rayshud",
   },
@@ -27,6 +27,8 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
     github: false,
     flags: ["customization"],
     banner: null,
+    screenshots: [],
+    album: null,
     comfigUrl: "https://comfig.app/huds/page/toonhud/",
     tf2hudsUrl: "https://tf2huds.dev/hud/toonhud",
   },
@@ -122,25 +124,58 @@ export function previewInferredState(): HudUiState {
   };
 }
 
-export function filterHudCatalog(
-  entries: HudCatalogEntry[],
-  query: string,
-): HudCatalogEntry[] {
-  const needle = query.trim().toLowerCase();
+export function filterHudCatalog(entries: HudCatalogEntry[], query: string): HudCatalogEntry[] {
+  const needle = normalizeHudSearch(query);
   if (!needle) {
     return entries;
   }
   return entries.filter((entry) => {
-    return (
-      entry.name.toLowerCase().includes(needle) ||
-      entry.author.toLowerCase().includes(needle) ||
-      entry.id.toLowerCase().includes(needle)
+    return [entry.name, entry.author, entry.id].some((value) =>
+      normalizeHudSearch(value).includes(needle),
     );
   });
 }
 
+function normalizeHudSearch(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
 export function hudUpdateAvailable(state: HudUiState): boolean {
   return state.updateAvailable;
+}
+
+export const HUD_CATALOG_PAGE_SIZE = 20;
+
+export type HudCatalogPage = {
+  items: HudCatalogEntry[];
+  page: number;
+  pageCount: number;
+  total: number;
+};
+
+/** Slice one page out of the (already filtered) catalog, clamping the page index. */
+export function paginateHudCatalog(
+  entries: HudCatalogEntry[],
+  page: number,
+  pageSize = HUD_CATALOG_PAGE_SIZE,
+): HudCatalogPage {
+  const total = entries.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const clamped = Math.min(Math.max(0, page), pageCount - 1);
+  return {
+    items: entries.slice(clamped * pageSize, clamped * pageSize + pageSize),
+    page: clamped,
+    pageCount,
+    total,
+  };
+}
+
+/** Step through a HUD's screenshots with wrap-around. */
+export function stepHudScreenshot(index: number, delta: number, count: number): number {
+  if (count <= 0) {
+    return 0;
+  }
+  return (((index + delta) % count) + count) % count;
 }
 
 export function optionValue(record: HudRecord | null, name: string, fallback: string): string {
@@ -196,7 +231,10 @@ export function isHudCheckboxOn(value: string): boolean {
 }
 
 export function parseHudRgba(value: string): { r: number; g: number; b: number; a: number } {
-  const parts = value.trim().split(/\s+/).map((part) => Number(part));
+  const parts = value
+    .trim()
+    .split(/\s+/)
+    .map((part) => Number(part));
   const clamp = (n: number) => Math.min(255, Math.max(0, Number.isFinite(n) ? Math.round(n) : 0));
   return {
     r: clamp(parts[0] ?? 255),

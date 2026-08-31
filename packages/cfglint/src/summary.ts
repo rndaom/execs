@@ -23,7 +23,5 @@ export function buildSummary(effective: Map<string, CvarValue>): SummarySection[
     });
   }
   const order = Object.keys(DOMAIN_LABELS);
-  return [...byDomain.values()].sort(
-    (a, b) => order.indexOf(a.domain) - order.indexOf(b.domain),
-  );
+  return [...byDomain.values()].sort((a, b) => order.indexOf(a.domain) - order.indexOf(b.domain));
 }

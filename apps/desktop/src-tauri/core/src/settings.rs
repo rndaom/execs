@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::finder::{normalize_tf2_root, Tf2RootError};
+use crate::finder::{normalize_tf2_root, user_path_string, Tf2RootError};
 
 pub const SETTINGS_SCHEMA: u32 = 1;
 
@@ -58,8 +58,16 @@ pub fn save_settings_to(file: &Path, settings: &Settings) -> Result<(), String> 
 
 /// Re-validates `steam.inf`. A moved or non-440 root is treated as unconfirmed.
 pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
-    let settings = load_settings_from(file)?;
-    normalize_tf2_root(Path::new(&settings.tf2_root)).ok()
+    let mut settings = load_settings_from(file)?;
+    let valid = normalize_tf2_root(Path::new(&settings.tf2_root)).ok()?;
+    let cleaned = user_path_string(&valid);
+    if settings.tf2_root != cleaned {
+        settings.tf2_root = cleaned;
+        // Settings writes are allowed while TF2 is open. A read-only settings
+        // file must not make an otherwise valid remembered install disappear.
+        let _ = save_settings_to(file, &settings);
+    }
+    Some(valid)
 }
 
 pub fn remember_tf2_root_to(file: &Path, root: &Path) -> Result<PathBuf, Tf2RootError> {
@@ -69,7 +77,7 @@ pub fn remember_tf2_root_to(file: &Path, root: &Path) -> Result<PathBuf, Tf2Root
         .unwrap_or(false);
     let settings = Settings {
         schema: SETTINGS_SCHEMA,
-        tf2_root: valid.to_string_lossy().into_owned(),
+        tf2_root: user_path_string(&valid),
         inherit_binds,
     };
     save_settings_to(file, &settings).map_err(Tf2RootError::Io)?;
@@ -164,6 +172,32 @@ mod tests {
         )
         .unwrap();
         assert!(!inherit_binds_from(&legacy));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn remembered_root_migrates_legacy_verbatim_settings() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        write_tf2(&root);
+        let file = dir.join("execs").join("settings.json");
+        let legacy = format!(r"\\?\{}", root.display());
+        save_settings_to(
+            &file,
+            &Settings {
+                schema: SETTINGS_SCHEMA,
+                tf2_root: legacy,
+                inherit_binds: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(remembered_tf2_root_from(&file).as_deref(), Some(root.as_path()));
+        let migrated = load_settings_from(&file).unwrap();
+        assert_eq!(migrated.tf2_root, root.to_string_lossy());
+        assert!(migrated.inherit_binds);
+        assert!(!fs::read_to_string(&file).unwrap().contains(r"\\?\"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

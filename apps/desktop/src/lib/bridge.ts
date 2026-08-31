@@ -128,6 +128,7 @@ export type AbsorbDelta = {
 export type AbsorbOwnedResult = {
   library: ProfileLibrary;
   delta: AbsorbDelta;
+  configCfgAbsorbed: boolean;
 };
 
 export type PackChoice = "update" | "keep";
@@ -285,6 +286,8 @@ export type CrosshairRecord = {
   id: string;
   shape: string;
   assignments: Record<string, string>;
+  /** Baked RGB tint for the first-party shapes; null/undefined = white. */
+  color?: [number, number, number] | null;
 };
 
 export type ViewmodelSource = "compiled" | "imported";
@@ -296,6 +299,11 @@ export type ViewmodelRecord = {
   options: Record<string, string>;
 };
 
+export type ViewmodelCompileCapability = {
+  available: boolean;
+  reason: string;
+};
+
 export type HudCatalogEntry = {
   id: string;
   name: string;
@@ -305,6 +313,10 @@ export type HudCatalogEntry = {
   github: boolean;
   flags: string[];
   banner: string | null;
+  /** Full-size hud-db screenshot URLs (video links are filtered out). */
+  screenshots: string[];
+  /** Optional external album page (e.g. Imgur). */
+  album: string | null;
   comfigUrl: string;
   tf2hudsUrl: string;
 };
@@ -552,12 +564,16 @@ export async function applyCrosshairs(
   shape: string,
   assignments: Record<string, string>,
   customRgba?: number[],
+  color?: [number, number, number] | null,
 ): Promise<ProfileDetail> {
   try {
+    // Tauri v2 matches invoke keys in camelCase only — a snake_case key here
+    // deserializes the Option as permanently-None.
     return await invoke<ProfileDetail>("apply_crosshairs", {
       shape,
       assignments,
-      custom_rgba: customRgba ?? null,
+      customRgba: customRgba ?? null,
+      color: color ?? null,
     });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
@@ -583,9 +599,17 @@ export async function compileViewmodels(
   }
 }
 
-export async function importViewmodels(): Promise<ProfileDetail> {
+export async function getViewmodelCompileCapability(): Promise<ViewmodelCompileCapability> {
   try {
-    return await invoke<ProfileDetail>("import_viewmodels");
+    return await invoke<ViewmodelCompileCapability>("get_viewmodel_compile_capability");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function importViewmodels(preload: boolean): Promise<ProfileDetail> {
+  try {
+    return await invoke<ProfileDetail>("import_viewmodels", { preload });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }
@@ -602,6 +626,40 @@ export async function removeViewmodels(): Promise<ProfileDetail> {
 export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
   try {
     return await invoke<ProfileDetail>("set_viewmodel_preload", { enabled });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+/** Open an external link in the system browser (plain anchors are inert in the packaged webview). */
+export async function openExternal(url: string): Promise<void> {
+  if (!isTauri()) {
+    window.open(url, "_blank", "noreferrer");
+    return;
+  }
+  try {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(url);
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export type EmbeddedPage = "comfig-extras" | "comfig-docs";
+
+const EMBEDDED_PAGE_URLS: Record<EmbeddedPage, string> = {
+  "comfig-extras": "https://comfig.app/app/",
+  "comfig-docs": "https://docs.comfig.app/latest/",
+};
+
+/** Open a mastercomfig web surface in an in-app window (browser preview falls back to a tab). */
+export async function openEmbeddedPage(page: EmbeddedPage): Promise<void> {
+  if (!isTauri()) {
+    window.open(EMBEDDED_PAGE_URLS[page], "_blank", "noreferrer");
+    return;
+  }
+  try {
+    await invoke("open_embedded_page", { page });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }

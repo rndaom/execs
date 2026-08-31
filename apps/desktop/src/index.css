@@ -1,48 +1,29 @@
-@import "@fontsource/big-shoulders-display/latin-600";
-@import "@fontsource/big-shoulders-display/latin-700";
-@import "@fontsource/big-shoulders-display/latin-800";
 @import "@fontsource/inter/latin-400";
 @import "@fontsource/inter/latin-500";
+@import "@fontsource/inter/latin-600";
+@import "@fontsource/inter/latin-700";
 @import "tailwindcss";
 
 /*
- * execs design tokens — posts.tf dark minimalism × TF2 identity.
- * Palette sources: TF2 clientscheme (tan/panel/RED/BLU/quality colors),
- * posts.tf (near-black ground, single warm accent, pill radii).
+ * execs design tokens — calm dark product surface with a single warm accent.
+ * The TF2 identity lives in the orange accent and the warm ink, not in a
+ * display face or card chrome. One typeface (Inter), flat sections divided by
+ * hairlines, boxes reserved for real surfaces (editors, previews, overlays).
  */
 @theme {
   --color-bg: #121212;
-  --color-panel: #1c1a19;
-  --color-panel-raised: #34302d;
-  --color-edge: #3f3a35;
+  --color-panel: #181716;
+  --color-panel-raised: #22201e;
+  --color-edge: #2b2926;
+  --color-edge-strong: #3f3a35;
 
-  --color-ink: #ebe2ca;
-  --color-ink-muted: #a89f8c;
+  --color-ink: #ece7da;
+  --color-ink-muted: #a49c8e;
   --color-ink-faint: #6f695c;
 
   --color-brand: #cf6a32;
   --color-brand-hover: #e8823f;
   --color-on-brand: #121212;
-
-  --color-background: #121212;
-  --color-foreground: #ebe2ca;
-  --color-card: #1c1a19;
-  --color-card-foreground: #ebe2ca;
-  --color-popover: #1c1a19;
-  --color-popover-foreground: #ebe2ca;
-  --color-primary: #cf6a32;
-  --color-primary-foreground: #121212;
-  --color-secondary: #34302d;
-  --color-secondary-foreground: #ebe2ca;
-  --color-muted: #262321;
-  --color-muted-foreground: #a89f8c;
-  --color-accent: #34302d;
-  --color-accent-foreground: #ebe2ca;
-  --color-destructive: #b8383b;
-  --color-destructive-foreground: #ebe2ca;
-  --color-border: #3f3a35;
-  --color-input: #3f3a35;
-  --color-ring: #cf6a32;
 
   --color-team-red: #b8383b;
   --color-team-blu: #5885a2;
@@ -55,7 +36,7 @@
   --color-q-unusual: #8650ac;
   --color-q-collectors: #aa0000;
 
-  --font-display: "Big Shoulders Display", "Arial Black", sans-serif;
+  --font-display: "Inter", ui-sans-serif, sans-serif;
   --font-body: "Inter", ui-sans-serif, sans-serif;
 
   --radius-pill: 9999px;
@@ -64,20 +45,159 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
+  margin: 0;
+  overflow: hidden;
   background-color: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand) 80%, transparent);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-color: var(--color-edge-strong) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--color-edge-strong) padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-faint) padding-box;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-brand) 45%, transparent);
+  color: var(--color-ink);
 }
 
 h1,
 h2,
-h3,
-.font-display {
-  font-family: var(--font-display);
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@layer components {
+  /* Tiny uppercase section label — the only uppercase voice left. */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  /* Flat content section separated by a hairline, the default page rhythm. */
+  .section {
+    border-top: 1px solid color-mix(in srgb, var(--color-edge) 70%, transparent);
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+  }
+
+  /* A real surface: editors, previews, media. Not a layout device. */
+  .surface {
+    border: 1px solid var(--color-edge);
+    border-radius: 0.75rem;
+    background: var(--color-panel);
+    overflow: hidden;
+  }
+
+  /* Elevated overlay: popovers, progress, prompts. */
+  .overlay {
+    border: 1px solid var(--color-edge-strong);
+    border-radius: 0.75rem;
+    background: var(--color-panel-raised);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .field {
+    border: 1px solid var(--color-edge-strong);
+    border-radius: 0.5rem;
+    background: var(--color-bg);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.5rem 0.875rem;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .btn-primary {
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+  }
+
+  .btn-primary:not(:disabled):hover {
+    background: var(--color-brand-hover);
+  }
+
+  .btn-ghost {
+    border: 1px solid var(--color-edge-strong);
+    color: var(--color-ink);
+  }
+
+  .btn-ghost:not(:disabled):hover {
+    background: var(--color-panel-raised);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-pill);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.125rem 0.5rem;
+  }
 }

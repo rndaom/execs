@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   assignmentFor,
+  assignSlotForAllClasses,
   CROSSHAIR_CANVAS_SIZE,
+  copyClassToAllClasses,
   emptyCrosshairDraft,
   isCrosshairShape,
   previewCrosshairRecord,
   renderCrosshairRgba,
   seedCrosshairDraft,
+  slotAssignment,
   WEAPON_CATALOG,
   weaponsForClass,
 } from "./crosshair-ui";
@@ -26,6 +29,37 @@ describe("crosshair ui", () => {
     expect(isCrosshairShape("custom")).toBe(true);
     expect(isCrosshairShape("valve")).toBe(false);
     expect(emptyCrosshairDraft().shape).toBe("cross");
+  });
+
+  it("fans a slot out to every class, clearing overrides when the base shape is picked", () => {
+    let draft = emptyCrosshairDraft(); // base "cross"
+    draft = assignSlotForAllClasses(draft, "primary", "dot");
+    expect(assignmentFor(draft, "tf_weapon_scattergun")).toBe("dot");
+    expect(assignmentFor(draft, "tf_weapon_minigun")).toBe("dot");
+    expect(slotAssignment(draft, "primary")).toBe("dot");
+    // Selecting the base shape reverts to the fallback instead of freezing it.
+    draft = assignSlotForAllClasses(draft, "primary", "cross");
+    expect(Object.keys(draft.assignments)).toHaveLength(0);
+    draft = { ...draft, shape: "circle" };
+    expect(assignmentFor(draft, "tf_weapon_scattergun")).toBe("circle");
+  });
+
+  it("copies a class's stock shapes to other classes without touching its own overrides", () => {
+    let draft = emptyCrosshairDraft();
+    draft = {
+      ...draft,
+      assignments: {
+        tf_weapon_scattergun: "dot", // scout stock primary
+        tf_weapon_soda_popper: "circle", // scout non-stock primary override
+      },
+    };
+    const next = copyClassToAllClasses(draft, "scout");
+    // Other classes' primaries follow scout's stock primary…
+    expect(assignmentFor(next, "tf_weapon_minigun")).toBe("dot");
+    expect(assignmentFor(next, "tf_weapon_rocketlauncher")).toBe("dot");
+    // …while scout's own overrides survive untouched.
+    expect(assignmentFor(next, "tf_weapon_soda_popper")).toBe("circle");
+    expect(assignmentFor(next, "tf_weapon_scattergun")).toBe("dot");
   });
 
   it("renders a 64x64 first-party shape with some opaque pixels", () => {

@@ -1,7 +1,7 @@
 //! Source VPK v1/v2 reader and a small v1 writer. Read-only against official TF2 VPKs.
 
 use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
 const SIGNATURE: u32 = 0x55AA_1234;
@@ -23,14 +23,29 @@ pub struct VpkArchive {
 
 pub fn read_vpk_dir_file(path: &Path) -> Result<VpkArchive, VpkError> {
     let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
-    read_vpk(&bytes, Some(path))
+    read_vpk(&bytes, Some(path), None)
+}
+
+/// Read only the entries whose relative path passes `keep`. Skipped entries
+/// never touch the sibling archives, so filtering `tf2_misc_dir.vpk` down to
+/// weapon scripts stays cheap instead of materializing gigabytes.
+pub fn read_vpk_dir_file_filtered(
+    path: &Path,
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<VpkArchive, VpkError> {
+    let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
+    read_vpk(&bytes, Some(path), Some(keep))
 }
 
 pub fn read_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkArchive, VpkError> {
-    read_vpk(bytes, None)
+    read_vpk(bytes, None, None)
 }
 
-fn read_vpk(bytes: &[u8], dir_path: Option<&Path>) -> Result<VpkArchive, VpkError> {
+fn read_vpk(
+    bytes: &[u8],
+    dir_path: Option<&Path>,
+    keep: Option<&dyn Fn(&str) -> bool>,
+) -> Result<VpkArchive, VpkError> {
     if bytes.len() < 12 {
         return Err(VpkError("VPK header is too short.".into()));
     }
@@ -60,7 +75,7 @@ fn read_vpk(bytes: &[u8], dir_path: Option<&Path>) -> Result<VpkArchive, VpkErro
         return Err(VpkError("VPK directory tree is truncated.".into()));
     }
     let data_base = tree_end;
-    let mut archives: BTreeMap<u16, Vec<u8>> = BTreeMap::new();
+    let mut archives: BTreeMap<u16, std::fs::File> = BTreeMap::new();
     let mut files = BTreeMap::new();
     while cur.position() < tree_end as u64 {
         let ext = read_cstring(&mut cur, tree_end)?;
@@ -95,6 +110,20 @@ fn read_vpk(bytes: &[u8], dir_path: Option<&Path>) -> Result<VpkArchive, VpkErro
                 let mut preload = vec![0u8; preload_len];
                 cur.read_exact(&mut preload)
                     .map_err(|err| VpkError(err.to_string()))?;
+                let rel = if path == " " || path.is_empty() {
+                    format!("{name}.{ext}")
+                } else {
+                    format!("{path}/{name}.{ext}")
+                };
+                if rel.contains("..") {
+                    return Err(VpkError("Refusing a VPK path that escapes.".into()));
+                }
+                let rel = rel.replace('\\', "/");
+                if let Some(keep) = keep {
+                    if !keep(&rel) {
+                        continue;
+                    }
+                }
                 let mut body = preload;
                 if length > 0 {
                     if archive_index == DIR_ARCHIVE {
@@ -112,27 +141,30 @@ fn read_vpk(bytes: &[u8], dir_path: Option<&Path>) -> Result<VpkArchive, VpkErro
                         };
                         if !archives.contains_key(&archive_index) {
                             let sibling = sibling_archive_path(dir_path, archive_index)?;
-                            let loaded =
-                                std::fs::read(&sibling).map_err(|err| VpkError(err.to_string()))?;
-                            archives.insert(archive_index, loaded);
+                            let opened = std::fs::File::open(&sibling)
+                                .map_err(|err| VpkError(err.to_string()))?;
+                            archives.insert(archive_index, opened);
                         }
-                        let archive = archives.get(&archive_index).expect("archive loaded");
-                        let end = offset.saturating_add(length);
-                        if end > archive.len() {
+                        let archive = archives.get_mut(&archive_index).expect("archive opened");
+                        let end = (offset as u64).saturating_add(length as u64);
+                        let available = archive
+                            .metadata()
+                            .map_err(|err| VpkError(err.to_string()))?
+                            .len();
+                        if end > available {
                             return Err(VpkError("VPK archive data is truncated.".into()));
                         }
-                        body.extend_from_slice(&archive[offset..end]);
+                        archive
+                            .seek(SeekFrom::Start(offset as u64))
+                            .map_err(|err| VpkError(err.to_string()))?;
+                        let mut chunk = vec![0u8; length];
+                        archive
+                            .read_exact(&mut chunk)
+                            .map_err(|err| VpkError(err.to_string()))?;
+                        body.extend_from_slice(&chunk);
                     }
                 }
-                let rel = if path == " " || path.is_empty() {
-                    format!("{name}.{ext}")
-                } else {
-                    format!("{path}/{name}.{ext}")
-                };
-                if rel.contains("..") {
-                    return Err(VpkError("Refusing a VPK path that escapes.".into()));
-                }
-                files.insert(rel.replace('\\', "/"), body);
+                files.insert(rel, body);
             }
         }
     }

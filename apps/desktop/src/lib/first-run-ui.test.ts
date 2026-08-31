@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { emptyLibrary, previewSavedLibrary } from "./library-ui";
 import {
   canApplyWizard,
   firstRunSurface,
@@ -7,6 +6,7 @@ import {
   toggleAddon,
   wizardApplyCopy,
 } from "./first-run-ui";
+import { emptyLibrary, previewSavedLibrary } from "./library-ui";
 
 const empty = emptyLibrary("/tf2", true);
 
@@ -23,9 +23,9 @@ describe("first-run routing", () => {
   });
 
   it("does not run first-run on a mismatched library", () => {
-    expect(
-      firstRunSurface({ ...empty, usable: false, rootMismatch: true }, "unused"),
-    ).toBe("ready");
+    expect(firstRunSurface({ ...empty, usable: false, rootMismatch: true }, "unused")).toBe(
+      "ready",
+    );
   });
 
   it("applies the wizard only with a name while unlocked", () => {
