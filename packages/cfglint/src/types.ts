@@ -32,6 +32,8 @@ export interface Finding {
   col: number;
   /** Set when the offending command lives inside a bind/alias payload. */
   via?: string;
+  /** True when a block-tier finding was demoted because it sits in an advisory (provided, non-user) file. */
+  advisory?: boolean;
 }
 
 export interface CvarValue {
@@ -67,6 +69,22 @@ export interface SummarySection {
 export interface LintOptions {
   /** exec targets outside the bundle that are considered safe. */
   externalExecAllowlist?: string[];
+  /**
+   * Paths written by the Source engine as its local settings snapshot.
+   *
+   * The engine legitimately emits a top-level `unbindall`, a menu-preserving
+   * ESCAPE bind, and the archived `con_enable` preference in `config.cfg`.
+   * Those narrow cases are accepted for these paths only; payloads hidden in
+   * binds/aliases and every other block-tier rule remain protected.
+   */
+  engineManagedConfigPaths?: string[];
+  /**
+   * Files provided by the engine, mastercomfig, or an installed pack rather
+   * than authored by the user (HUD cfg folders, comfig-custom imports, Valve
+   * extras). Their findings still report, but block-tier findings demote to
+   * advisory warnings so provided content can never lock the user's own saves.
+   */
+  advisoryPaths?: string[];
 }
 
 export interface LintResult {

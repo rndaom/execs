@@ -3,17 +3,12 @@ import {
   type AutoexecPatch,
   autoexecExecPatch,
   autoexecFilePath,
-  ensureAutoexecExecLine,
   EXECS_GAMEPLAY_STEM,
+  ensureAutoexecExecLine,
   ownedCfgPath,
 } from "./binds-ui";
 
-export {
-  type AutoexecPatch,
-  autoexecFilePath,
-  ensureAutoexecExecLine,
-  EXECS_GAMEPLAY_STEM,
-};
+export { type AutoexecPatch, autoexecFilePath, EXECS_GAMEPLAY_STEM, ensureAutoexecExecLine };
 
 export const GAMEPLAY_STEM = EXECS_GAMEPLAY_STEM;
 
@@ -300,4 +295,3 @@ function parseCrosshairFile(raw: string): CrosshairFile {
   }
   return "";
 }
-

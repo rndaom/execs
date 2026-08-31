@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::blob::{gc_unreferenced_blobs, put_blob, put_blob_from_path};
+use crate::finder::user_path_string;
 use crate::hash::{copy_and_sha256, sha256_hex};
 use crate::launch::{find_cloud_config, read_launch_options, sanitize_launch_options};
 use crate::process_lock::{live_process_names, refuse_if_running_among, WriteLockError};
@@ -146,6 +147,9 @@ pub struct CrosshairRecord {
     pub shape: String,
     #[serde(default)]
     pub assignments: BTreeMap<String, String>,
+    /// Baked RGB tint for the first-party shapes; None = white.
+    #[serde(default)]
+    pub color: Option<[u8; 3]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -266,7 +270,7 @@ pub fn load_library_from(
     profiles_dir: &Path,
     confirmed_root: Option<&Path>,
 ) -> Result<ProfileLibrary, ProfileError> {
-    let confirmed = confirmed_root.map(|path| path.to_string_lossy().into_owned());
+    let confirmed = confirmed_root.map(user_path_string);
     match load_index(profiles_dir)? {
         None => Ok(empty_library(false, confirmed_root.is_some(), confirmed)),
         Some(index) => Ok(library_from_index(index, confirmed_root, confirmed)),
@@ -661,11 +665,12 @@ pub fn load_manifest(
 ) -> Result<ProfileManifest, ProfileError> {
     let text = fs::read_to_string(manifest_file(profiles_dir, profile_id))
         .map_err(|_| ProfileError::UnknownProfile)?;
-    let manifest: ProfileManifest =
+    let mut manifest: ProfileManifest =
         serde_json::from_str(&text).map_err(|e| ProfileError::Io(e.to_string()))?;
     if manifest.schema != LIBRARY_SCHEMA {
         return Err(ProfileError::Io("unsupported profile schema".into()));
     }
+    manifest.tf2_root = user_path_string(Path::new(&manifest.tf2_root));
     Ok(manifest)
 }
 
@@ -771,12 +776,12 @@ fn init_unlocked(profiles_dir: &Path, tf2_root: &Path) -> Result<LibraryIndex, P
         Some(index) if roots_match(&index.tf2_root, tf2_root) => Ok(index),
         Some(index) => Err(ProfileError::RootMismatch {
             library_root: index.tf2_root,
-            confirmed_root: tf2_root.to_string_lossy().into_owned(),
+            confirmed_root: user_path_string(tf2_root),
         }),
         None => {
             let index = LibraryIndex {
                 schema: LIBRARY_SCHEMA,
-                tf2_root: tf2_root.to_string_lossy().into_owned(),
+                tf2_root: user_path_string(tf2_root),
                 active_profile_id: None,
                 profiles: Vec::new(),
             };
@@ -792,7 +797,7 @@ fn usable_index(profiles_dir: &Path, tf2_root: &Path) -> Result<LibraryIndex, Pr
         Some(index) if roots_match(&index.tf2_root, tf2_root) => Ok(index),
         Some(index) => Err(ProfileError::RootMismatch {
             library_root: index.tf2_root,
-            confirmed_root: tf2_root.to_string_lossy().into_owned(),
+            confirmed_root: user_path_string(tf2_root),
         }),
     }
 }
@@ -803,11 +808,12 @@ fn load_index(profiles_dir: &Path) -> Result<Option<LibraryIndex>, ProfileError>
         return Ok(None);
     }
     let text = fs::read_to_string(&file).map_err(|e| ProfileError::Io(e.to_string()))?;
-    let index: LibraryIndex =
+    let mut index: LibraryIndex =
         serde_json::from_str(&text).map_err(|e| ProfileError::Io(e.to_string()))?;
     if index.schema != LIBRARY_SCHEMA {
         return Err(ProfileError::Io("unsupported library schema".into()));
     }
+    index.tf2_root = user_path_string(Path::new(&index.tf2_root));
     Ok(Some(index))
 }
 
@@ -1003,6 +1009,46 @@ mod tests {
         assert!(library.usable);
         assert!(library.profiles.is_empty());
         assert!(!profiles.exists());
+        cleanup(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_verbatim_roots_are_clean_on_read_and_next_authorized_write() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let created = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = created.profiles[0].id.clone();
+        let legacy = format!(r"\\?\{}", root.display());
+
+        let mut index: LibraryIndex =
+            serde_json::from_str(&fs::read_to_string(index_file(&profiles)).unwrap()).unwrap();
+        index.tf2_root = legacy.clone();
+        write_json(&index_file(&profiles), &index).unwrap();
+        let mut manifest: ProfileManifest = serde_json::from_str(
+            &fs::read_to_string(manifest_file(&profiles, &id)).unwrap(),
+        )
+        .unwrap();
+        manifest.tf2_root = legacy;
+        write_json(&manifest_file(&profiles, &id), &manifest).unwrap();
+
+        let index_before = fs::read(index_file(&profiles)).unwrap();
+        let manifest_before = fs::read(manifest_file(&profiles, &id)).unwrap();
+        let loaded = load_library_from(&profiles, Some(&root)).unwrap();
+        assert!(loaded.usable);
+        assert!(!loaded.root_mismatch);
+        assert_eq!(loaded.tf2_root.as_deref(), Some(root.to_string_lossy().as_ref()));
+        assert_eq!(fs::read(index_file(&profiles)).unwrap(), index_before);
+
+        let loaded_manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(loaded_manifest.tf2_root, root.to_string_lossy());
+        assert_eq!(fs::read(manifest_file(&profiles, &id)).unwrap(), manifest_before);
+
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let persisted: LibraryIndex =
+            serde_json::from_str(&fs::read_to_string(index_file(&profiles)).unwrap()).unwrap();
+        assert_eq!(persisted.tf2_root, root.to_string_lossy());
         cleanup(&dir);
     }
 

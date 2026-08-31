@@ -1,5 +1,88 @@
 # design-qa log
 
+## 2026-08-30 — user-feedback pass: de-TF2 typography, de-carding, real imagery, functional fixes
+Method: Vite dev at `http://localhost:1425/?preview=` fixtures in the in-app browser at 1280×720 plus component/lib tests. Native Tauri behaviors (opener, embedded windows, clipboard in WebView2) not exercised in this pass.
+
+Driving feedback (verbal walkthrough of the running app): profile switching visually instant; copy buttons silent; "official packages installed" noise; Preset guide dead; AI preview images; extras opening externally; transparent viewmodels missing from Gameplay; HUD catalog one giant scroll with no screenshots; stock crosshair preview static; custom crosshairs mislabeled/colorless/no all-class; Viewmodels page overwhelming with an AI render; Files blocked by TF2-provided configs; TF2 font + card-everywhere design.
+
+Verified per pane:
+- Chrome: Inter everywhere (Big Shoulders removed), lowercase wordmark with brand mark, flat header/nav (`bg-panel`, 2px active bar), no radial gradient. Install-path copy flashes a green check + "Copied" (`install-path-copy`).
+- Switch progress (`?preview=switch`): overlay card with step-driven fill bar (no percent text, no role=progressbar), green check marks on completed stages, current stage in brand. Presenter now queues real backend stages and reveals each for ≥`SWITCH_STEP_MIN_MS` (550ms); completion still command-driven; errors reset instantly.
+- Comfig: status pill only for problem states — "Official packages installed" is gone. Preset cards sit beside the real koth_sawmill in-game screenshot for the selected preset (7 vendored MIT images incl. very-low→destitute mapping); "none" gets a text state. Preset guide and Open extras call `openEmbeddedPage` (in-app windows); credit/donate links via `openExternal`. Module matrix flattened to hairline rows; only non-default module choices render in brand.
+- Gameplay: flat sections, summary stat strip, and the new `gameplay-transparent-viewmodels` instant-apply addon toggle with honest constraints (HUD support + DX9, forces post-processing/AA off; disabled with pointer to Comfig when packages are missing).
+- HUD: paginated catalog helpers wired (Prev/Next appear past `HUD_CATALOG_PAGE_SIZE`=20, page clamps on search), and the screenshot lightbox opens from banner or "Screenshots (N)" with arrows, thumbnails, Esc/arrow keys, and optional external album link — verified against live hud-db rayshud imagery.
+- Crosshair: stock live preview now renders the actual selected sprite geometry (extracted frame-0 shapes; verified crosshair3 ring vs crosshair7 plus switch), scale follows ×scale/32, alpha slider carries an engine-honesty note. Builder retitled "Custom crosshairs" with a baked RGB color picker (+reset) tinting the canvas, an "All classes" per-slot tab (mixed-state aware) and per-class copy-to-all.
+- Viewmodels: page rebuilt around what works — pack import/replace/remove, Casual preload, compile-unavailable note — with all compiler-only controls hidden, not shown-disabled. First-person reference browser shows real wiki renders per class/slot (26 vendored WebPs, spy has no secondary) with weapon captions and Valve/wiki credit. AI render deleted.
+- Files: origin badges (TF2/HUD/pack/managed/comfig), provided files read-only with origin copy, advisory findings collapsed under "Advisory — provided files" and excluded from the Blocked gate (cfglint `advisoryPaths`); user files still block (fixture `danger.cfg` verified).
+- Binds/Launch/wizard/first-run: flat rows and `.btn` styles; Launch Copy shows Copied feedback.
+
+Verification: desktop 22 files / 119 tests; workspace incl. cfglint 69 tests; Rust core 151 tests; `cargo check` and `pnpm build` pass; biome clean on changed files (one pre-existing warning untouched).
+
+Adversarial review pass (multi-agent, findings verified then fixed): Tauri v2 invoke-key casing bug — `custom_rgba` was silently dropped (custom PNGs never reached the backend natively; now `customRgba`); cfglint advisory demotion now follows alias *authorship* (a HUD-defined alias invoked from a user file no longer blocks saves; user-authored payloads still do); imported crosshair PNGs are recovered from the pack's own `custom.vtf` on re-apply (backend decode + UI note) instead of erroring after a reload; crosshair draft reseeds by record content so unrelated writes don't wipe un-applied work; all-classes fanout clears overrides when the base shape is picked (fallback preserved) and copy-class-to-all leaves the source class untouched; paced-reveal timer keyed to the revealed step so slow real switches can't freeze the checklist; first-unused wizard's Change disabled during apply; cancelling the viewmodel VPK picker is a no-op instead of an error; preload preference selectable before the first import; lint finding rows keyed by col/via. Two pre-existing issues (HUD install O(N²) manifest writes; export zip extension edge) were spun off as separate tasks.
+final tallies: desktop 22 files / 121 tests; cfglint 71; Rust core 151; tsc, biome (one pre-existing warning), `cargo check`, and production build all pass.
+
+Open native checks: packaged Windows run for opener links, the two embedded comfig windows, WebView2 clipboard, tinted VTF render in game, HUD screenshot fetch over the v2 cache, and the paced progress feel during a real switch.
+final result: pass for preview fixtures; native walkthrough pending.
+
+## 2026-08-30 — Option 1 desktop redesign final pass
+Source truth: `C:/Users/Anthony/.codex/generated_images/01a053ba-af37-76b3-88a2-ba1bf8fd1f58/exec-6269f357-be66-4396-a419-272fb76a6742.png` (selected direction 1, 1487×1058).
+
+Implementation: `.artifacts/design-qa-2026-08-30/implementation-comfig-1280x720.png`, captured from `http://127.0.0.1:1421/?preview=settings-comfig` in the in-app browser at 1280×720, DPR 1. State: Main profile active, game closed, Medium preset selected, Graphics modules active.
+
+Density normalization: the full source was scaled proportionally to 720 px tall and placed beside the unchanged 1280×720 implementation in `.artifacts/design-qa-2026-08-30/comparison-full-normalized-final.png`. A top-focused source crop was normalized to 1280×720 and placed beside the implementation in `.artifacts/design-qa-2026-08-30/comparison-focused-top-final.png`. Both are actual combined comparison images, not separate visual reads.
+
+Full-view evidence:
+- The 64 px product header, dark navigation rail, TF2 tan/orange palette, display type, selected preset hierarchy, real industrial preview art, compact module categories, and two-column setting matrix align with the selected direction.
+- The app preserves its desktop product semantics: profile and install context stay in the global header, settings auto-save where already designed, and the footer carries update/disclaimer status instead of copying the concept's synthetic Apply bar.
+
+Focused comparison findings and iteration history:
+- Pass 1: Comfig repeated explanatory copy and a stacked credit/status row, pushing preset and module controls below the intended first-screen hierarchy.
+- Pass 2: the title, mastercomfig credit, package status, preset cards, preview, and module tabs were compacted into the same visual order and density as the source.
+- Final audit: fixed first-run flex centering that hid the required profile name; same-path Files draft leakage between profiles; duplicate bind tab stops; broken file-path wrapping; unavailable viewmodel edits; a stale selected weapon after record changes; the occluding viewmodel action bar; duplicate extras launching; incomplete ARIA tab selection/keyboard behavior; and missing alert-dialog focus for post-game pack drift.
+- No unresolved P0, P1, or P2 visual/interaction findings remain in the tested preview states.
+
+Interaction evidence:
+- Profile menu opens and closes; active profile state remains visible.
+- Comfig module tabs move with Left/Right/Home/End and transfer focus; search and segmented module choices remain operable.
+- Duck bind Record accepts Shift and immediately displays `shift`; only one focusable recorder remains for the row.
+- Gameplay contains no duplicate stock-crosshair controls; Crosshair contains stock controls first, then the per-weapon builder. Class tabs move with arrow keys and transfer focus.
+- HUD search for `toon` returns one ToonHUD card; Refresh leaves settings navigation enabled and retains cached results.
+- Viewmodel class/weapon preview remains visible; compiler-only controls are disabled when compilation is unavailable, Casual preload and prebuilt VPK import remain available, and the action area no longer overlays the preview.
+- Files uses a single-line, titled path label and a three-column editor/lint workspace; Launch Copy remains available.
+- `?preview=first-unused` starts at scrollTop 0 with the required profile name visible. `?preview=absorb` focuses an `alertdialog` with explicit label and description.
+- Browser runtime log: zero error-level entries from the final `:1421` server during the final interaction pass.
+
+Verification: desktop 21 test files / 105 tests passed; workspace 29 files / 218 tests passed; Rust core 149 tests passed; desktop production build and Tauri `cargo check` passed. The only build warning is the existing Vite chunk-size advisory; Tauri reports two existing dead-code warnings.
+
+Open native check: packaged Windows testing against a real TF2/Steam install is still required for live HUD downloads, studiomdl compilation, Steam Cloud/localconfig writes, process locking, and updater signing/install behavior.
+final result: passed
+
+## 2026-08-30 — pre-redesign stabilization pass
+Method: Vite preview at `http://127.0.0.1:1420/?preview=` with the in-app browser at 1440×1024, plus component and integration tests. Native Tauri writes were not invoked during visual QA.
+
+Verified:
+- `?preview=settings-binds`: Duck records Shift and immediately displays `shift`; managed bindings retain precedence over stale `config.cfg` values.
+- `?preview=settings-crosshair`: default TF2 file/color/scale controls now lead the Crosshair pane, followed by the per-weapon builder. Gameplay no longer duplicates these controls.
+- `?preview=settings-viewmodels`: Casual preload is visible near the action area. The incomplete compiler is clearly unavailable, while prebuilt VPK import remains available.
+- `?preview=switch`: newest real backend stage is shown immediately in a six-step checklist. There is no synthetic percent or delayed stage replay; the completed summary remains for five seconds without retaining the write lock.
+- HUD loading and failure states are local to the catalog, expose status/error copy, keep cached entries usable, and do not gray out the rest of Settings.
+- Current captures: `.artifacts/audit-2026-08-30/current/10-crosshair-relocated.png`, `12-viewmodels-preload-safe.png`, and `13-progress-honest.png`.
+
+Open items: the broad settings/setup redesign is awaiting selection from three generated visual directions. Native HUD network behavior, Steam launch-option persistence, and live TF2 write locking still need a packaged Windows walkthrough.
+final result: pass for the functional stabilization states; visual hierarchy remains intentionally pending redesign.
+
+## 2026-08-30 — truthful profile progress presenter
+Method: `?preview=switch` static fixture plus server-rendered progress-state checks. Native Tauri operations were not invoked in this pass.
+
+Verified:
+- The fixed progress card remains visible above the ready/settings chrome without changing page layout.
+- The newest backend stage is shown immediately in the six-step checklist; late or out-of-order events cannot move the UI backwards.
+- No synthetic percentage or delayed replay is shown. The final completed checklist remains readable for five seconds while the write lock is released as soon as the command completes.
+- Completed, current, and pending stages remain distinguishable using the existing TF2 tan/orange palette. Settings and profile mutations share the operation lock during exact replace.
+
+Open items: event timing against native profile creation/switching still needs a packaged Tauri walkthrough with a real TF2 install.
+final result: pass for the desktop preview fixture.
+
 ## 2026-08-30 — in-app updater chrome (RND-159)
 Method: Vite preview at `http://127.0.0.1:4173/?preview=` fixtures + browser walkthrough. No native Tauri window (GTK/WebKit missing). Tokens: bg `#121212`, ink `#EBE2CA`, accent `#CF6A32`, pill buttons, Big Shoulders Display.
 

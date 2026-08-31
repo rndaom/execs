@@ -16,7 +16,8 @@ async function collect(root) {
   if (st.isFile()) return [{ base: resolve(root, ".."), abs: resolve(root) }];
   const out = [];
   for (const entry of await readdir(root, { recursive: true })) {
-    if (entry.toLowerCase().endsWith(".cfg")) out.push({ base: resolve(root), abs: join(resolve(root), entry) });
+    if (entry.toLowerCase().endsWith(".cfg"))
+      out.push({ base: resolve(root), abs: join(resolve(root), entry) });
   }
   return out;
 }
@@ -37,14 +38,18 @@ for (const f of result.findings) {
   const via = f.via ? ` (via ${f.via})` : "";
   console.log(`${icons[f.tier]} [${f.tier}] ${f.file}:${f.line} ${f.message}${via} (${f.ruleId})`);
 }
-console.log(`\n${files.length} file(s), ${result.findings.length} finding(s) — ${result.ok ? "OK" : "BLOCKED"}`);
+console.log(
+  `\n${files.length} file(s), ${result.findings.length} finding(s) — ${result.ok ? "OK" : "BLOCKED"}`,
+);
 if (result.classesTouched.length) console.log(`classes: ${result.classesTouched.join(", ")}`);
 if (Object.keys(result.moduleLevels).length)
   console.log(`modules: ${JSON.stringify(result.moduleLevels)}`);
 for (const section of result.summary) {
   console.log(`\n${section.label}:`);
   for (const e of section.entries.slice(0, 12)) {
-    console.log(`  ${e.cvar} = ${e.value}${e.defaultValue !== undefined ? ` (default ${e.defaultValue})` : ""}`);
+    console.log(
+      `  ${e.cvar} = ${e.value}${e.defaultValue !== undefined ? ` (default ${e.defaultValue})` : ""}`,
+    );
   }
 }
 process.exit(result.ok ? 0 : 1);
