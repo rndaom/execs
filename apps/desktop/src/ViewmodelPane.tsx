@@ -1,63 +1,28 @@
+import { DownloadSimple, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
-import type { ViewmodelRecord } from "./lib/bridge";
+import type { ViewmodelCompileCapability, ViewmodelRecord } from "./lib/bridge";
 import { canWriteSettings } from "./lib/settings-ui";
 import {
-  compileAvailable,
+  VIEWMODEL_PREVIEW_CREDIT,
+  VIEWMODEL_PREVIEW_SLOTS,
+  VIEWMODEL_PREVIEW_WEAPONS,
+  type ViewmodelPreviewSlot,
+  viewmodelPreviewSrc,
+} from "./lib/viewmodel-previews";
+import {
   emptyWeaponDraft,
   seedViewmodelDraft,
+  serializeWeaponOption,
   VIEWMODEL_CASUAL_COPY,
   VIEWMODEL_CLASSES,
   type ViewmodelClass,
-  type ViewmodelWeaponDraft,
 } from "./lib/viewmodel-ui";
-
-const DEFAULT_WEAPONS: Record<ViewmodelClass, string[]> = {
-  scout: ["scattergun", "pistol", "bat"],
-  soldier: ["rocketlauncher", "shotgun", "shovel"],
-  pyro: ["flamethrower", "shotgun", "fireaxe"],
-  demoman: ["grenadelauncher", "stickybomb", "bottle"],
-  heavy: ["minigun", "shotgun", "fists"],
-  engineer: ["shotgun", "pistol", "wrench"],
-  medic: ["syringegun", "medigun", "bonesaw"],
-  sniper: ["sniperrifle", "smg", "kukri"],
-  spy: ["revolver", "knife", "invis"],
-};
-
-function NumberField({
-  id,
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  disabled: boolean;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-sm text-ink" htmlFor={id}>
-      {label}
-      <input
-        id={id}
-        data-testid={id}
-        type="number"
-        step="0.5"
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="rounded-lg border border-edge bg-bg px-2 py-1 text-sm text-ink"
-      />
-    </label>
-  );
-}
 
 export function ViewmodelPane({
   running,
   busy,
   record,
-  platform,
+  compileCapability,
   onCompile,
   onImport,
   onRemove,
@@ -66,282 +31,306 @@ export function ViewmodelPane({
   running: boolean;
   busy: boolean;
   record: ViewmodelRecord | null;
-  platform: string;
+  compileCapability: ViewmodelCompileCapability;
   onCompile: (options: Record<string, string>, preload: boolean) => void;
-  onImport: () => void;
+  onImport: (preload: boolean) => void;
   onRemove: () => void;
   onTogglePreload: (enabled: boolean) => void;
 }) {
   const locked = !canWriteSettings(running, busy);
   const seeded = useMemo(() => seedViewmodelDraft(record), [record]);
   const [draft, setDraft] = useState(seeded);
-  const [weapon, setWeapon] = useState(DEFAULT_WEAPONS.scout[0]);
-  const canCompile = compileAvailable(platform);
+  const [classId, setClassId] = useState<ViewmodelClass>("scout");
+  const [slot, setSlot] = useState<ViewmodelPreviewSlot>("primary");
+  const canCompile = compileCapability.available;
 
   useEffect(() => {
     setDraft(seeded);
   }, [seeded]);
 
-  const weapons = DEFAULT_WEAPONS[draft.classId];
-  const current = draft.weapons[weapon] ?? emptyWeaponDraft();
+  const slotsForClass = VIEWMODEL_PREVIEW_SLOTS.filter(
+    (item) => VIEWMODEL_PREVIEW_WEAPONS[classId][item] !== undefined,
+  );
+  const activeSlot = slotsForClass.includes(slot) ? slot : slotsForClass[0];
+  const previewSrc = viewmodelPreviewSrc(classId, activeSlot);
+  const previewWeapon = VIEWMODEL_PREVIEW_WEAPONS[classId][activeSlot];
+  const hiddenKey = `${classId}/${activeSlot}`;
+  const slotHidden = draft.weapons[hiddenKey]?.hide === true;
 
-  function patchWeapon(next: Partial<ViewmodelWeaponDraft>) {
+  function toggleSlotHidden() {
+    const existing = draft.weapons[hiddenKey] ?? emptyWeaponDraft();
     setDraft({
       ...draft,
       weapons: {
         ...draft.weapons,
-        [weapon]: { ...current, ...next },
+        [hiddenKey]: { ...existing, hide: !existing.hide },
       },
     });
   }
 
-  function optionsPayload(): Record<string, string> {
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(draft.weapons)) {
-      out[key] = JSON.stringify(value);
+  function compileOptions(): Record<string, string> {
+    const options: Record<string, string> = {};
+    for (const [key, weapon] of Object.entries(draft.weapons)) {
+      options[key] = serializeWeaponOption(weapon);
     }
-    return out;
+    return options;
   }
 
   return (
-    <section data-testid="settings-viewmodels" className="flex flex-col gap-5 text-left">
-      <p className="text-sm text-ink-muted">{VIEWMODEL_CASUAL_COPY}</p>
-
-      <div className="flex flex-wrap gap-2">
-        {VIEWMODEL_CLASSES.map((id) => (
-          <button
-            key={id}
-            type="button"
-            data-testid={`viewmodel-class-${id}`}
-            data-active={draft.classId === id ? "true" : "false"}
-            onClick={() => {
-              setDraft({ ...draft, classId: id });
-              setWeapon(DEFAULT_WEAPONS[id][0]);
-            }}
-            className={`rounded-pill px-3 py-1 text-xs ${
-              draft.classId === id
-                ? "bg-brand text-on-brand"
-                : "border border-edge text-ink hover:bg-panel-raised"
-            }`}
-          >
-            {id}
-          </button>
-        ))}
+    <section data-testid="settings-viewmodels" className="min-w-0 text-left">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-2xl text-[13px] leading-6 text-ink-muted">
+          Viewmodel animation packs replace how your weapon is held and moved. Hide-all, min
+          viewmodels, and viewmodel FOV are simple cvars and live on the Gameplay pane.
+        </p>
+        <span
+          data-testid="viewmodel-pack-status"
+          className={`badge ${
+            record
+              ? "border border-health/50 bg-health/10 text-health"
+              : "border border-edge text-ink-faint"
+          }`}
+        >
+          {record
+            ? record.source === "imported"
+              ? "Imported pack"
+              : "Compiled pack"
+            : "No pack installed"}
+        </span>
       </div>
 
-      <label className="flex flex-col gap-1 text-sm text-ink" htmlFor="viewmodel-weapon">
-        Weapon
-        <select
-          id="viewmodel-weapon"
-          data-testid="viewmodel-weapon"
-          value={weapon}
-          onChange={(event) => setWeapon(event.target.value)}
-          className="rounded-lg border border-edge bg-bg px-2 py-1 text-sm text-ink"
-        >
-          {weapons.map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-        </select>
-      </label>
+      <section className="section">
+        <h2 className="text-sm font-semibold text-ink">Your animation pack</h2>
+        <p className="mt-0.5 max-w-2xl text-xs leading-5 text-ink-muted">
+          Import a prebuilt viewmodel VPK (Yttrium-style packs work) and execs stores it with this
+          profile, file-safe.
+        </p>
 
-      <div className="grid grid-cols-3 gap-2">
-        <NumberField
-          id="viewmodel-origin-x"
-          label="Origin X"
-          value={current.originX}
-          disabled={locked}
-          onChange={(originX) => patchWeapon({ originX })}
-        />
-        <NumberField
-          id="viewmodel-origin-y"
-          label="Origin Y"
-          value={current.originY}
-          disabled={locked}
-          onChange={(originY) => patchWeapon({ originY })}
-        />
-        <NumberField
-          id="viewmodel-origin-z"
-          label="Origin Z"
-          value={current.originZ}
-          disabled={locked}
-          onChange={(originZ) => patchWeapon({ originZ })}
-        />
-        <NumberField
-          id="viewmodel-rotate-x"
-          label="Rotate X"
-          value={current.rotateX}
-          disabled={locked}
-          onChange={(rotateX) => patchWeapon({ rotateX })}
-        />
-        <NumberField
-          id="viewmodel-rotate-y"
-          label="Rotate Y"
-          value={current.rotateY}
-          disabled={locked}
-          onChange={(rotateY) => patchWeapon({ rotateY })}
-        />
-        <NumberField
-          id="viewmodel-rotate-z"
-          label="Rotate Z"
-          value={current.rotateZ}
-          disabled={locked}
-          onChange={(rotateZ) => patchWeapon({ rotateZ })}
-        />
-      </div>
-
-      <label className="flex items-center gap-2 text-sm text-ink">
-        <input
-          type="checkbox"
-          data-testid="viewmodel-hide"
-          checked={current.hide}
-          disabled={locked}
-          onChange={(event) => patchWeapon({ hide: event.target.checked })}
-        />
-        Hide
-      </label>
-      <label className="flex items-center gap-2 text-sm text-ink">
-        <input
-          type="checkbox"
-          data-testid="viewmodel-left-arm"
-          checked={current.removeLeftArm}
-          disabled={locked}
-          onChange={(event) => patchWeapon({ removeLeftArm: event.target.checked })}
-        />
-        Remove left arm
-      </label>
-      <fieldset className="grid grid-cols-2 gap-2 text-sm text-ink">
-        <legend className="font-display text-sm tracking-wide">Keep visible if hidden</legend>
-        {(
-          [
-            ["draw", "Draw"],
-            ["reload", "Reload"],
-            ["attack", "Attack"],
-            ["altAttack", "Alt attack"],
-            ["idle", "Idle"],
-            ["special", "Special"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              data-testid={`viewmodel-keep-${key}`}
-              checked={current.keep[key]}
-              disabled={locked}
-              onChange={(event) =>
-                patchWeapon({ keep: { ...current.keep, [key]: event.target.checked } })
-              }
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
-      <fieldset className="grid grid-cols-2 gap-2 text-sm text-ink">
-        <legend className="font-display text-sm tracking-wide">Static</legend>
-        {(
-          [
-            ["draw", "Draw"],
-            ["reload", "Reload"],
-            ["attack", "Attack"],
-            ["idle", "Idle"],
-            ["moreStaticIdle", "More static idle"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              data-testid={`viewmodel-static-${key}`}
-              checked={current.stat[key]}
-              disabled={locked}
-              onChange={(event) =>
-                patchWeapon({ stat: { ...current.stat, [key]: event.target.checked } })
-              }
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
-      <fieldset className="grid grid-cols-2 gap-2 text-sm text-ink">
-        <legend className="font-display text-sm tracking-wide">Weapon extras</legend>
-        {(
-          [
-            ["keepBeamVisible", "Medigun beam"],
-            ["keepFlamesVisible", "Flamethrower flames"],
-            ["keepBackstabDetectionVisible", "Knife backstab detection"],
-            ["keepBackstabVisible", "Knife backstab"],
-            ["instantBackstabDetection", "Instant backstab detection"],
-            ["replaceBackstabWithNormalAttack", "Replace backstab with attack"],
-            ["staticBackstabDetection", "Static backstab detection"],
-            ["staticBackstab", "Static backstab"],
-            ["removeShells", "Remove shells"],
-            ["keepTracersVisible", "Tracers"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              data-testid={`viewmodel-extra-${key}`}
-              checked={current.extra[key]}
-              disabled={locked}
-              onChange={(event) =>
-                patchWeapon({ extra: { ...current.extra, [key]: event.target.checked } })
-              }
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
-      <label className="flex items-center gap-2 text-sm text-ink">
-        <input
-          type="checkbox"
-          data-testid="viewmodel-preload"
-          checked={draft.preload}
-          disabled={locked}
-          onChange={(event) => {
-            const preload = event.target.checked;
-            setDraft({ ...draft, preload });
-            onTogglePreload(preload);
-          }}
-        />
-        Casual preload
-      </label>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          data-testid="viewmodel-compile"
-          disabled={locked || !canCompile}
-          onClick={() => onCompile(optionsPayload(), draft.preload)}
-          className="rounded-pill bg-brand px-4 py-2 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-40"
-        >
-          {running
-            ? "Close TF2 to compile"
-            : canCompile
-              ? "Compile viewmodels"
-              : "Compile is Windows-only"}
-        </button>
-        <button
-          type="button"
-          data-testid="viewmodel-import"
-          disabled={locked}
-          onClick={onImport}
-          className="rounded-pill border border-edge px-4 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
-        >
-          Import prebuilt VPK
-        </button>
-        {record ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            data-testid="viewmodel-remove"
+            data-testid="viewmodel-import"
             disabled={locked}
-            onClick={onRemove}
-            className="rounded-pill border border-edge px-4 py-2 text-sm text-ink hover:bg-panel-raised disabled:opacity-40"
+            onClick={() => onImport(draft.preload)}
+            className="btn btn-primary"
           >
-            Remove pack
+            <DownloadSimple size={15} />
+            {record ? "Replace with another VPK…" : "Import prebuilt VPK…"}
           </button>
+          {record ? (
+            <button
+              type="button"
+              data-testid="viewmodel-remove"
+              disabled={locked}
+              onClick={onRemove}
+              className="btn btn-ghost"
+            >
+              <Trash size={14} />
+              Remove pack
+            </button>
+          ) : null}
+        </div>
+
+        <label
+          htmlFor="viewmodel-preload"
+          className="mt-5 flex max-w-xl cursor-pointer items-start justify-between gap-4"
+        >
+          <span className="min-w-0">
+            <span className="block text-[13px] font-medium text-ink">Casual preload</span>
+            <span className="mt-0.5 block text-xs leading-5 text-ink-muted">
+              Precache on itemtest before joining Valve Casual so the pack applies there. Community
+              and listen servers work without it.
+            </span>
+          </span>
+          <input
+            id="viewmodel-preload"
+            data-testid="viewmodel-preload"
+            type="checkbox"
+            checked={draft.preload}
+            disabled={locked}
+            onChange={(event) => {
+              // Without a pack this only sets the preference the next import
+              // will use; with one it applies immediately.
+              setDraft({ ...draft, preload: event.target.checked });
+              if (record) {
+                onTogglePreload(event.target.checked);
+              }
+            }}
+            className="peer sr-only"
+          />
+          <span
+            aria-hidden="true"
+            className="relative mt-0.5 h-6 w-11 shrink-0 rounded-pill border border-edge-strong bg-bg transition-colors after:absolute after:left-1 after:top-1 after:size-3.5 after:rounded-full after:bg-ink-muted after:transition-transform peer-checked:border-brand peer-checked:bg-brand peer-checked:after:translate-x-5 peer-checked:after:bg-on-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-bg peer-disabled:opacity-40"
+          />
+        </label>
+
+        {!canCompile ? (
+          <p
+            data-testid="viewmodel-compile-reason"
+            className="mt-4 max-w-xl text-[11px] leading-4 text-ink-faint"
+          >
+            {compileCapability.reason}
+          </p>
         ) : null}
-      </div>
+      </section>
+
+      <section className="section">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">First-person reference</h2>
+            <p className="mt-0.5 max-w-2xl text-xs leading-5 text-ink-muted">
+              Real in-game viewmodels per class and slot — what each weapon looks like before a pack
+              changes it{canCompile ? ", and which slots your compile will hide" : ""}.
+            </p>
+          </div>
+        </div>
+
+        <div
+          className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-panel p-1 sm:grid-cols-5 lg:grid-cols-9"
+          role="tablist"
+          aria-label="TF2 class"
+        >
+          {VIEWMODEL_CLASSES.map((id, classIndex) => (
+            <button
+              key={id}
+              id={`viewmodel-class-tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={classId === id}
+              aria-controls="viewmodel-preview-panel"
+              tabIndex={classId === id ? 0 : -1}
+              data-testid={`viewmodel-class-${id}`}
+              data-active={classId === id ? "true" : "false"}
+              onClick={() => setClassId(id)}
+              onKeyDown={(event) => {
+                let nextIndex: number | null = null;
+                if (event.key === "ArrowRight") {
+                  nextIndex = (classIndex + 1) % VIEWMODEL_CLASSES.length;
+                } else if (event.key === "ArrowLeft") {
+                  nextIndex =
+                    (classIndex - 1 + VIEWMODEL_CLASSES.length) % VIEWMODEL_CLASSES.length;
+                } else if (event.key === "Home") {
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  nextIndex = VIEWMODEL_CLASSES.length - 1;
+                }
+                if (nextIndex === null) {
+                  return;
+                }
+                event.preventDefault();
+                const nextClass = VIEWMODEL_CLASSES[nextIndex];
+                setClassId(nextClass);
+                requestAnimationFrame(() => {
+                  document.getElementById(`viewmodel-class-tab-${nextClass}`)?.focus();
+                });
+              }}
+              className={`rounded-lg px-2 py-1.5 text-xs font-medium capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand ${
+                classId === id
+                  ? "bg-brand text-on-brand"
+                  : "text-ink-muted hover:bg-panel-raised hover:text-ink"
+              }`}
+            >
+              {id}
+            </button>
+          ))}
+        </div>
+
+        <div
+          id="viewmodel-preview-panel"
+          role="tabpanel"
+          aria-labelledby={`viewmodel-class-tab-${classId}`}
+          className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_14rem]"
+        >
+          <figure className="surface relative grid min-h-64 place-items-center bg-[#0d0d0d] p-4">
+            {previewSrc ? (
+              <img
+                data-testid="viewmodel-preview-image"
+                src={previewSrc}
+                alt={`${previewWeapon ?? activeSlot} first-person view for ${classId}`}
+                className={`max-h-72 w-auto max-w-full object-contain transition-opacity ${
+                  canCompile && slotHidden ? "opacity-20" : ""
+                }`}
+              />
+            ) : (
+              <p className="text-xs text-ink-muted">No reference image for this slot.</p>
+            )}
+            {canCompile && slotHidden ? (
+              <span className="badge absolute top-3 right-3 border border-brand bg-brand/15 text-brand">
+                Hidden in game
+              </span>
+            ) : null}
+            <figcaption className="absolute bottom-2.5 left-3 text-[11px] text-ink-muted">
+              <span className="capitalize">{classId}</span> · {previewWeapon ?? activeSlot}
+            </figcaption>
+          </figure>
+
+          <div className="flex flex-col gap-1">
+            {slotsForClass.map((item) => {
+              const weaponName = VIEWMODEL_PREVIEW_WEAPONS[classId][item];
+              const key = `${classId}/${item}`;
+              const hidden = draft.weapons[key]?.hide === true;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  data-testid={`viewmodel-slot-${item}`}
+                  data-active={activeSlot === item ? "true" : "false"}
+                  onClick={() => setSlot(item)}
+                  className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors ${
+                    activeSlot === item
+                      ? "bg-panel-raised text-ink"
+                      : "text-ink-muted hover:bg-panel hover:text-ink"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="block capitalize">{item}</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-ink-faint">
+                      {weaponName}
+                    </span>
+                  </span>
+                  {canCompile && hidden ? (
+                    <span className="badge border border-brand text-brand">Hidden</span>
+                  ) : null}
+                </button>
+              );
+            })}
+
+            {canCompile ? (
+              <button
+                type="button"
+                data-testid="viewmodel-toggle-hide"
+                disabled={locked}
+                onClick={toggleSlotHidden}
+                className="btn btn-ghost mt-2"
+              >
+                {slotHidden ? "Show this slot" : "Hide this slot"}
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {canCompile ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-edge/60 pt-4">
+            <p className="text-xs text-ink-muted">
+              Compiling builds a first-party pack from your slot choices in an isolated staging
+              root.
+            </p>
+            <button
+              type="button"
+              data-testid="viewmodel-compile"
+              disabled={locked}
+              onClick={() => onCompile(compileOptions(), draft.preload)}
+              className="btn btn-primary"
+            >
+              {running ? "Close TF2 to compile" : "Compile viewmodels"}
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <p className="section text-[11px] leading-relaxed text-ink-faint">
+        {VIEWMODEL_CASUAL_COPY} {VIEWMODEL_PREVIEW_CREDIT}
+      </p>
     </section>
   );
 }

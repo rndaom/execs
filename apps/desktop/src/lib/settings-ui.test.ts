@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { emptyLibrary, previewSavedLibrary } from "./library-ui";
-import { canWriteSettings, SETTINGS_TABS, SETTINGS_TAB_LABELS, showSettingsChrome } from "./settings-ui";
+import {
+  canWriteSettings,
+  SETTINGS_TAB_LABELS,
+  SETTINGS_TABS,
+  showSettingsChrome,
+} from "./settings-ui";
 
 describe("settings chrome", () => {
   it("includes the HUD and later-studio tabs in the settings chrome", () => {

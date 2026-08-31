@@ -40,6 +40,7 @@ interface ScanContext {
 }
 
 const MODULE_LINE_RE = /^([a-z0-9_]+)=([a-z0-9_.-]+)$/i;
+const ENGINE_MENU_COMMANDS = new Set(["cancelselect", "escape"]);
 
 export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const findings: Finding[] = [];
@@ -51,6 +52,15 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const externalAllow = new Set(
     (opts.externalExecAllowlist ?? DEFAULT_EXTERNAL_EXEC_ALLOWLIST).map((s) => s.toLowerCase()),
   );
+  const engineManagedConfigPaths = new Set(
+    (opts.engineManagedConfigPaths ?? []).map(normalizePath),
+  );
+  const advisoryPaths = new Set((opts.advisoryPaths ?? []).map(normalizePath));
+  // Files whose text authored the payload currently being scanned. An alias
+  // defined in an advisory (provided) file keeps its advisory status even when
+  // a user file invokes it — the finding anchors at the invocation site, but
+  // the dangerous text belongs to the provider.
+  const payloadOriginStack: string[] = [];
 
   const report = (
     tier: Finding["tier"],
@@ -62,6 +72,25 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     const key = `${ruleId}|${at.file}|${at.line}|${at.col}|${via ?? ""}`;
     if (seenFindings.has(key)) return;
     seenFindings.add(key);
+    const origin = payloadOriginStack[payloadOriginStack.length - 1];
+    // Provided (non-user) content never blocks: demote to an advisory warn.
+    if (
+      tier === "block" &&
+      (advisoryPaths.has(normalizePath(at.file)) ||
+        (origin !== undefined && advisoryPaths.has(normalizePath(origin))))
+    ) {
+      findings.push({
+        ruleId,
+        tier: "warn",
+        message,
+        file: at.file,
+        line: at.line,
+        col: at.col,
+        via,
+        advisory: true,
+      });
+      return;
+    }
     findings.push({ ruleId, tier, message, file: at.file, line: at.line, col: at.col, via });
   };
 
@@ -108,6 +137,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const checkCommand = (cmd: Command, ctx: ScanContext, aliasStack: string[]): void => {
     const { name } = cmd;
     const value = cmd.args[0]?.toLowerCase();
+    const isEngineManagedTopLevel =
+      ctx.via === undefined && engineManagedConfigPaths.has(normalizePath(cmd.file));
 
     if (NETWORK_HIJACK_COMMANDS.has(name)) {
       report(
@@ -120,27 +151,70 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       return;
     }
     if (name === "password" || RCON_NAMES.has(name)) {
-      report("block", "rcon-password", `\`${name}\` is never legitimate in a shared config`, cmd, ctx.via);
+      report(
+        "block",
+        "rcon-password",
+        `\`${name}\` is never legitimate in a shared config`,
+        cmd,
+        ctx.via,
+      );
       return;
     }
     if (name === "unbindall") {
-      report("block", "unbindall", "`unbindall` wipes every key bind (classic griefing payload)", cmd, ctx.via);
+      if (isEngineManagedTopLevel) return;
+      report(
+        "block",
+        "unbindall",
+        "`unbindall` wipes every key bind (classic griefing payload)",
+        cmd,
+        ctx.via,
+      );
       return;
     }
     if (name === "unbind" && value === "escape") {
-      report("block", "console-lockout", "unbinding ESCAPE locks the player out of the menu", cmd, ctx.via);
+      report(
+        "block",
+        "console-lockout",
+        "unbinding ESCAPE locks the player out of the menu",
+        cmd,
+        ctx.via,
+      );
       return;
     }
     if (name === "con_enable" && value === "0") {
-      report("block", "console-lockout", "`con_enable 0` disables the console, blocking recovery", cmd, ctx.via);
+      // `con_enable` is archived by Source into config.cfg. A zero there is a
+      // saved user preference, not a command smuggled into an executed script.
+      if (isEngineManagedTopLevel) {
+        effective.set(name, { value: cmd.args.join(" "), file: cmd.file, line: cmd.line });
+        return;
+      }
+      report(
+        "block",
+        "console-lockout",
+        "`con_enable 0` disables the console, blocking recovery",
+        cmd,
+        ctx.via,
+      );
       return;
     }
     if (name === "sv_cheats" && value !== undefined && value !== "0") {
-      report("block", "sv-cheats", "`sv_cheats` has no place in a shared client config", cmd, ctx.via);
+      report(
+        "block",
+        "sv-cheats",
+        "`sv_cheats` has no place in a shared client config",
+        cmd,
+        ctx.via,
+      );
       return;
     }
     if (name === "con_logfile") {
-      report("warn", "con-logfile", "`con_logfile` redirects console output to a file", cmd, ctx.via);
+      report(
+        "warn",
+        "con-logfile",
+        "`con_logfile` redirects console output to a file",
+        cmd,
+        ctx.via,
+      );
       return;
     }
     if (name === "host_writeconfig") {
@@ -176,8 +250,18 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     if (name === "bind" && cmd.args.length >= 1) {
       const key = cmd.args[0].toLowerCase();
       if (key === "escape") {
-        report("block", "console-lockout", "rebinding ESCAPE locks the player out of the menu", cmd, ctx.via);
-        return;
+        const payload = cmd.args.slice(1).join(" ").trim().toLowerCase();
+        const preservesMenu = isEngineManagedTopLevel && ENGINE_MENU_COMMANDS.has(payload);
+        if (!preservesMenu) {
+          report(
+            "block",
+            "console-lockout",
+            "rebinding ESCAPE locks the player out of the menu",
+            cmd,
+            ctx.via,
+          );
+          return;
+        }
       }
       const payload = cmd.args.slice(1).join(" ");
       if (payload) {
@@ -205,7 +289,12 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         report("warn", "disruptive-bind", `\`${name}\` inside ${ctx.via}`, cmd, ctx.via);
       } else {
         // Top level of an exec'd file: runs the moment the config loads.
-        report("warn", "disruptive-immediate", `\`${name}\` runs immediately when this config loads`, cmd);
+        report(
+          "warn",
+          "disruptive-immediate",
+          `\`${name}\` runs immediately when this config loads`,
+          cmd,
+        );
       }
       return;
     }
@@ -264,13 +353,18 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         report(
           "warn",
           "alias-depth",
-          `alias expansion for \`${name}\` ${aliasStack.includes(name) ? "cycles" : "exceeds depth " + MAX_ALIAS_DEPTH}`,
+          `alias expansion for \`${name}\` ${aliasStack.includes(name) ? "cycles" : `exceeds depth ${MAX_ALIAS_DEPTH}`}`,
           cmd,
           ctx.via,
         );
         return;
       }
-      scanPayload(aliasDef.payload, cmd, ctx, [...aliasStack, name]);
+      payloadOriginStack.push(aliasDef.site.file);
+      try {
+        scanPayload(aliasDef.payload, cmd, ctx, [...aliasStack, name]);
+      } finally {
+        payloadOriginStack.pop();
+      }
       return;
     }
 
@@ -339,7 +433,9 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 
   // Roots: files nothing else execs. Deterministic order: autoexec first,
   // then class configs, then the rest alphabetically.
-  const roots = [...parsed.keys()].filter((p) => !execdFrom.has(p) && basename(p) !== "modules.cfg");
+  const roots = [...parsed.keys()].filter(
+    (p) => !execdFrom.has(p) && basename(p) !== "modules.cfg",
+  );
   roots.sort((a, b) => rootRank(a) - rootRank(b) || a.localeCompare(b));
   for (const root of roots) {
     walkFile(root, 0, [root]);
@@ -383,6 +479,10 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 function basename(path: string): string {
   const idx = path.lastIndexOf("/");
   return idx === -1 ? path : path.slice(idx + 1);
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
 }
 
 function rootRank(path: string): number {

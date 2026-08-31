@@ -75,6 +75,12 @@ pub struct HudCatalogEntry {
     pub github: bool,
     pub flags: Vec<String>,
     pub banner: Option<String>,
+    /// Full-size screenshot URLs from hud-db's `resources` (image names only).
+    #[serde(default)]
+    pub screenshots: Vec<String>,
+    /// Optional external album page (e.g. Imgur) from hud-db's `social.album`.
+    #[serde(default)]
+    pub album: Option<String>,
     pub comfig_url: String,
     pub tf2huds_url: String,
 }
@@ -221,6 +227,11 @@ pub fn github_repo_parts(repo: &str) -> Option<(String, String)> {
 
 pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, ProfileError> {
     #[derive(Deserialize)]
+    struct RawSocial {
+        #[serde(default)]
+        album: Option<String>,
+    }
+    #[derive(Deserialize)]
     struct RawHud {
         name: String,
         author: String,
@@ -230,6 +241,8 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         flags: Vec<String>,
         #[serde(default)]
         resources: Vec<String>,
+        #[serde(default)]
+        social: Option<RawSocial>,
     }
     let parsed: RawHud =
         serde_json::from_str(raw).map_err(|err| ProfileError::Io(err.to_string()))?;
@@ -239,9 +252,19 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         _ => String::new(),
     };
     let id = sanitize_hud_id(id)?;
-    let banner = parsed.resources.first().map(|name| {
-        format!("{RAW_HUD_DB}/hud-resources/{id}/{name}.webp")
-    });
+    // `resources` mixes image names with full video URLs — only names are
+    // hud-db-hosted webp screenshots.
+    let screenshots: Vec<String> = parsed
+        .resources
+        .iter()
+        .filter(|name| !name.contains("://"))
+        .map(|name| format!("{RAW_HUD_DB}/hud-resources/{id}/{name}.webp"))
+        .collect();
+    let banner = screenshots.first().cloned();
+    let album = parsed
+        .social
+        .and_then(|social| social.album)
+        .filter(|album| album.starts_with("https://") || album.starts_with("http://"));
     Ok(HudCatalogEntry {
         comfig_url: format!("https://comfig.app/huds/page/{id}/"),
         tf2huds_url: format!("https://tf2huds.dev/hud/{id}"),
@@ -253,6 +276,8 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         hash,
         flags: parsed.flags,
         banner,
+        screenshots,
+        album,
     })
 }
 
@@ -261,7 +286,8 @@ pub fn catalog_cache_dir() -> PathBuf {
 }
 
 pub fn catalog_cache_file(dir: &Path) -> PathBuf {
-    dir.join("catalog.json")
+    // v2: entries gained screenshots/album; old caches are ignored and refetched.
+    dir.join("catalog-v2.json")
 }
 
 pub fn load_catalog_cache_from(dir: &Path) -> Option<HudCatalogCache> {
@@ -822,6 +848,14 @@ mod tests {
         None::<&str>.into_iter()
     }
 
+    fn tf2_name() -> &'static str {
+        if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        }
+    }
+
     fn tf2_root(dir: &Path) -> PathBuf {
         let root = dir.join("Team Fortress 2");
         fs::create_dir_all(root.join("tf").join("cfg")).unwrap();
@@ -905,6 +939,30 @@ mod tests {
         .unwrap();
         assert!(!toon.github);
         assert!(hud_zip_url(&toon.repo, &toon.hash).is_none());
+        assert!(toon.screenshots.is_empty());
+        assert_eq!(toon.album, None);
+    }
+
+    #[test]
+    fn catalog_entry_collects_screenshots_and_skips_video_urls() {
+        let entry = catalog_entry_from_json(
+            "budhud",
+            r#"{"name":"budhud","author":"whisker","repo":"https://github.com/rbjaxter/budhud","hash":"def456","resources":["https://youtu.be/abc","menu","hud-minmode"],"social":{"album":"https://imgur.com/a/vsxPG"}}"#,
+        )
+        .unwrap();
+        // The first resource is a video URL — the banner must skip it.
+        assert_eq!(
+            entry.banner.as_deref(),
+            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/menu.webp")
+        );
+        assert_eq!(
+            entry.screenshots,
+            vec![
+                "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/menu.webp",
+                "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/hud-minmode.webp",
+            ]
+        );
+        assert_eq!(entry.album.as_deref(), Some("https://imgur.com/a/vsxPG"));
     }
 
     #[test]
@@ -1036,7 +1094,7 @@ mod tests {
                 source: HudSource::HudDb,
                 options: BTreeMap::new(),
             },
-            ["tf_linux64"],
+            [tf2_name()],
         )
         .unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);

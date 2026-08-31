@@ -50,7 +50,58 @@ pub fn existing_canonical(path: &Path) -> Option<PathBuf> {
     if !path.exists() {
         return None;
     }
-    Some(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    Some(user_path(&canonical))
+}
+
+/// Stable path form for persisted metadata and user-facing read models.
+/// This is lexical so legacy metadata can be cleaned without touching disk.
+pub(crate) fn user_path(path: &Path) -> PathBuf {
+    without_windows_verbatim_prefix(path.to_path_buf())
+}
+
+pub(crate) fn user_path_string(path: &Path) -> String {
+    user_path(path).to_string_lossy().into_owned()
+}
+
+/// `std::fs::canonicalize` uses Windows' verbatim namespace (`\\?\`) even for
+/// ordinary drive and UNC paths. That form is useful to the OS, but it should
+/// never leak into settings, profile metadata, or the install picker.
+#[cfg(windows)]
+fn without_windows_verbatim_prefix(path: PathBuf) -> PathBuf {
+    use std::path::{Component, Prefix};
+
+    let Some(Component::Prefix(prefix)) = path.components().next() else {
+        return path;
+    };
+
+    let mut simplified = match prefix.kind() {
+        Prefix::VerbatimDisk(drive) => PathBuf::from(format!("{}:", char::from(drive))),
+        Prefix::VerbatimUNC(server, share) => {
+            let mut unc = PathBuf::from(r"\\");
+            unc.push(server);
+            unc.push(share);
+            unc
+        }
+        _ => return path,
+    };
+
+    for component in path.components().skip(1) {
+        match component {
+            Component::RootDir if simplified.has_root() => {}
+            Component::RootDir => simplified.push(Path::new(r"\")),
+            Component::CurDir => {}
+            Component::ParentDir => simplified.push(".."),
+            Component::Normal(part) => simplified.push(part),
+            Component::Prefix(_) => return path,
+        }
+    }
+    simplified
+}
+
+#[cfg(not(windows))]
+fn without_windows_verbatim_prefix(path: PathBuf) -> PathBuf {
+    path
 }
 
 /// Accept a TF2 root or a `tf/` pick. Folder name alone is never enough.
@@ -237,10 +288,14 @@ mod tests {
                 &lib.join("steamapps").join("libraryfolders.vdf"),
                 &format!(
                     "\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t\t\"apps\"\n\t\t{{\n\t\t\t\"440\"\t\t\"1\"\n\t\t}}\n\t}}\n}}\n",
-                    lib.display()
+                    vdf_path(lib)
                 ),
             );
         }
+    }
+
+    fn vdf_path(path: &Path) -> String {
+        path.to_string_lossy().replace('\u{5c}', r"\\")
     }
 
     fn cleanup(dir: &Path) {
@@ -257,7 +312,23 @@ mod tests {
         let from_tf = normalize_tf2_root(&root.join("tf")).unwrap();
         assert_eq!(from_root, from_tf);
         assert!(from_root.ends_with("Team Fortress 2"));
+        assert!(!from_root.to_string_lossy().starts_with(r"\\?\"));
         cleanup(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn removes_windows_verbatim_prefixes_from_user_facing_paths() {
+        assert_eq!(
+            without_windows_verbatim_prefix(PathBuf::from(
+                r"\\?\D:\SteamLibrary\steamapps\common\Team Fortress 2"
+            )),
+            PathBuf::from(r"D:\SteamLibrary\steamapps\common\Team Fortress 2")
+        );
+        assert_eq!(
+            without_windows_verbatim_prefix(PathBuf::from(r"\\?\UNC\server\games\Team Fortress 2")),
+            PathBuf::from(r"\\server\games\Team Fortress 2")
+        );
     }
 
     #[test]
@@ -284,8 +355,8 @@ mod tests {
             &steam.join("steamapps").join("libraryfolders.vdf"),
             &format!(
                 "\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t\t\"apps\"\n\t\t{{\n\t\t\t\"440\"\t\t\"1\"\n\t\t}}\n\t}}\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t\t\"apps\"\n\t\t{{\n\t\t}}\n\t}}\n}}\n",
-                steam.display(),
-                extra.display()
+                vdf_path(&steam),
+                vdf_path(&extra)
             ),
         );
 
@@ -327,7 +398,7 @@ mod tests {
             &steam.join("config").join("libraryfolders.vdf"),
             &format!(
                 "\"LibraryFolders\"\n{{\n\t\"1\"\t\t\"{}\"\n}}\n",
-                extra.display()
+                vdf_path(&extra)
             ),
         );
         let found = scan_tf2_installs_in(&[steam]);

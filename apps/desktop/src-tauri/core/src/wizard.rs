@@ -386,6 +386,14 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    fn tf2_name() -> &'static str {
+        if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        }
+    }
+
     fn tf2_root(dir: &Path) -> std::path::PathBuf {
         let root = dir.join("Team Fortress 2");
         write_file(&root.join("tf/cfg/config_default.cfg"), STOCK);
@@ -584,7 +592,7 @@ mod tests {
             &spec("Fresh"),
             &BindSource::Stock,
             &assets(b"base", b"addon"),
-            ["tf_linux64"],
+            [tf2_name()],
             WizardOptions::default(),
         )
         .unwrap_err();

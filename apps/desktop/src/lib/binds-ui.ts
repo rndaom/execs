@@ -99,6 +99,63 @@ const CODE_TO_SOURCE: Record<string, string> = {
   NumpadAdd: "kp_plus",
 };
 
+const NUMPAD_KEY_TO_SOURCE: Record<string, string> = {
+  "0": "kp_ins",
+  "1": "kp_end",
+  "2": "kp_downarrow",
+  "3": "kp_pgdn",
+  "4": "kp_leftarrow",
+  "5": "kp_5",
+  "6": "kp_rightarrow",
+  "7": "kp_home",
+  "8": "kp_uparrow",
+  "9": "kp_pgup",
+  Insert: "kp_ins",
+  End: "kp_end",
+  ArrowDown: "kp_downarrow",
+  PageDown: "kp_pgdn",
+  ArrowLeft: "kp_leftarrow",
+  Clear: "kp_5",
+  ArrowRight: "kp_rightarrow",
+  Home: "kp_home",
+  ArrowUp: "kp_uparrow",
+  PageUp: "kp_pgup",
+  Delete: "kp_del",
+  ".": "kp_del",
+  "/": "kp_slash",
+  "*": "kp_multiply",
+  "-": "kp_minus",
+  "+": "kp_plus",
+  Enter: "kp_enter",
+};
+
+const PUNCTUATION_KEY_TO_SOURCE: Record<string, string> = {
+  ";": "semicolin",
+  ":": "semicolin",
+  ",": "comma",
+  "<": "comma",
+  ".": "period",
+  ">": "period",
+  "/": "slash",
+  "?": "slash",
+  "\\": "backslash",
+  "|": "backslash",
+  "'": "apostrophe",
+  '"': "apostrophe",
+  "-": "minus",
+  _: "minus",
+  "=": "equal",
+  "+": "equal",
+  "[": "[",
+  "{": "[",
+  "]": "]",
+  "}": "]",
+  "`": "`",
+  "~": "`",
+};
+
+const DOM_KEY_LOCATION_NUMPAD = 3;
+
 for (let index = 1; index <= 12; index += 1) {
   CODE_TO_SOURCE[`F${index}`] = `f${index}`;
 }
@@ -151,13 +208,58 @@ export function sourceKeyFromWheelDelta(deltaY: number): "mwheelup" | "mwheeldow
 }
 
 export function sourceKeyFromKeyboardEvent(event: {
-  code: string;
+  code?: string;
+  key?: string;
+  location?: number;
   repeat?: boolean;
 }): string | null {
   if (event.repeat) {
     return null;
   }
-  return sourceKeyFromCode(event.code);
+  const fromCode = sourceKeyFromCode(event.code ?? "");
+  return fromCode ?? sourceKeyFromKey(event.key ?? "", event.location);
+}
+
+/** Fallback for WebViews that report an empty or `Unidentified` code. */
+export function sourceKeyFromKey(key: string, location = 0): string | null {
+  if (location === DOM_KEY_LOCATION_NUMPAD && NUMPAD_KEY_TO_SOURCE[key]) {
+    return NUMPAD_KEY_TO_SOURCE[key];
+  }
+  const named: Record<string, string> = {
+    " ": "space",
+    Spacebar: "space",
+    Shift: "shift",
+    Control: "ctrl",
+    Alt: "alt",
+    Tab: "tab",
+    Enter: "enter",
+    Escape: "escape",
+    Backspace: "backspace",
+    CapsLock: "capslock",
+    Insert: "ins",
+    Delete: "del",
+    Home: "home",
+    End: "end",
+    PageUp: "pgup",
+    PageDown: "pgdn",
+    ArrowUp: "uparrow",
+    ArrowDown: "downarrow",
+    ArrowLeft: "leftarrow",
+    ArrowRight: "rightarrow",
+  };
+  if (named[key]) {
+    return named[key];
+  }
+  if (PUNCTUATION_KEY_TO_SOURCE[key]) {
+    return PUNCTUATION_KEY_TO_SOURCE[key];
+  }
+  if (/^[a-z0-9]$/i.test(key)) {
+    return key.toLowerCase();
+  }
+  if (/^F(?:[1-9]|1[0-2])$/i.test(key)) {
+    return key.toLowerCase();
+  }
+  return null;
 }
 
 export function ownedCfgPath(layer: BindsLayer, fileName: string): string {
@@ -193,6 +295,42 @@ export function keyForAction(effectiveBinds: BindMap, actionId: BindActionId): s
   return action ? lastKeyForCommand(effectiveBinds, action.command) : null;
 }
 
+/** The managed overlay is what execs will apply, so it wins over stale config.cfg data. */
+export function displayedKeyForAction(
+  effectiveBinds: BindMap,
+  managedBinds: Partial<Record<BindActionId, string>>,
+  actionId: BindActionId,
+): string | null {
+  const managedKey = managedBinds[actionId]?.trim().toLowerCase();
+  if (managedKey) {
+    return managedKey;
+  }
+
+  const action = bindActionById(actionId);
+  if (!action) {
+    return null;
+  }
+  const claimedKeys = new Set(
+    Object.values(managedBinds)
+      .map((key) => key?.trim().toLowerCase())
+      .filter((key): key is string => Boolean(key)),
+  );
+  const wanted = normalizeBindCommand(action.command);
+  let found: string | null = null;
+  for (const [key, command] of bindEntries(effectiveBinds)) {
+    const normalizedKey = key.toLowerCase();
+    if (!claimedKeys.has(normalizedKey) && normalizeBindCommand(command) === wanted) {
+      found = normalizedKey;
+    }
+  }
+  return found;
+}
+
+/** Only a completed absorb that observed config.cfg drift may update managed binds. */
+export function shouldSyncTrackedBinds(bindSyncRequest: number | null, running: boolean): boolean {
+  return bindSyncRequest !== null && !running;
+}
+
 export function parseManagedBinds(text: string): Partial<Record<BindActionId, string>> {
   const assigned: Partial<Record<BindActionId, string>> = {};
   for (const command of parseCommands(text, "execs_binds.cfg")) {
@@ -213,9 +351,7 @@ function quoteCfgToken(value: string): string {
   return /[\s"]/.test(value) ? `"${value}"` : value;
 }
 
-export function serializeManagedBinds(
-  actionKeys: Partial<Record<BindActionId, string>>,
-): string {
+export function serializeManagedBinds(actionKeys: Partial<Record<BindActionId, string>>): string {
   const lines = [MANAGED_BINDS_HEADER];
   const usedKeys = new Set<string>();
   for (const action of BIND_ACTIONS) {
