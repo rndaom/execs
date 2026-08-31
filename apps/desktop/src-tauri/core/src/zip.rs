@@ -10,6 +10,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::blob::blob_path;
+use crate::finder::user_path_string;
 use crate::hash::sha256_hex;
 use crate::launch::sanitize_launch_options;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
@@ -184,7 +185,7 @@ fn write_profile_zip(
         launch_options: manifest.launch_options.clone(),
         files: manifest.files.clone(),
         id: Some(manifest.id.clone()),
-        tf2_root: Some(manifest.tf2_root.clone()),
+        tf2_root: Some(user_path_string(Path::new(&manifest.tf2_root))),
         hud: manifest.hud.clone(),
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
@@ -519,8 +520,8 @@ mod tests {
     use super::*;
     use crate::blob::{blob_path, blobs_dir};
     use crate::profile::{
-        exclusive_file_path, init_library_to, load_library_from, load_manifest, save_current_as_to,
-        FileStorage, ProfileError, SaveCurrentOptions,
+        exclusive_file_path, index_file, init_library_to, load_library_from, load_manifest,
+        save_current_as_to, FileStorage, ProfileError, SaveCurrentOptions,
     };
     use std::collections::BTreeMap;
     use std::io::Write;
@@ -696,6 +697,45 @@ mod tests {
         assert_eq!(shared.sha256, sha256_hex(b"shared-vpk"));
         assert!(blob_path(&profiles, &shared.sha256).is_file());
         assert_eq!(snapshot_tree(&root), before);
+        cleanup(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn export_cleans_legacy_verbatim_root_without_mutating_library() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        seed_live(&root);
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let id = saved.profiles[0].id.clone();
+        let legacy = format!(r"\\?\{}", root.display());
+
+        for path in [index_file(&profiles), manifest_file(&profiles, &id)] {
+            let mut json: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+            json["tf2Root"] = serde_json::Value::String(legacy.clone());
+            fs::write(&path, format!("{}\n", serde_json::to_string_pretty(&json).unwrap())).unwrap();
+        }
+        let index_before = fs::read(index_file(&profiles)).unwrap();
+        let manifest_before = fs::read(manifest_file(&profiles, &id)).unwrap();
+
+        let zip_path = dir.join("main.zip");
+        export_profile_to(&profiles, &root, &id, &zip_path, [tf2_name()]).unwrap();
+        let exported = read_profile_zip(&zip_path).unwrap();
+        assert_eq!(
+            exported.manifest.tf2_root.as_deref(),
+            Some(root.to_string_lossy().as_ref())
+        );
+        assert_eq!(fs::read(index_file(&profiles)).unwrap(), index_before);
+        assert_eq!(fs::read(manifest_file(&profiles, &id)).unwrap(), manifest_before);
         cleanup(&dir);
     }
 

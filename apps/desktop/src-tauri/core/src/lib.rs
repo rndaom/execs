@@ -57,6 +57,7 @@ pub use crosshair::{apply_crosshairs, remove_crosshairs};
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use viewmodel::{
     compile_viewmodels, import_viewmodel_vpk, remove_viewmodels, set_viewmodel_preload,
+    viewmodel_compile_capability, ViewmodelCompileCapability,
 };
 pub use profile::{
     create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,

@@ -85,9 +85,9 @@ describe("library UI helpers", () => {
     expect(canImportProfile({ ...ready, usable: false, rootMismatch: true }, false)).toBe(false);
     expect(canCreateNew(ready)).toBe(false);
     expect(canCreateNew(previewSavedLibrary("/tf2"))).toBe(true);
-    expect(canCreateNew({ ...previewSavedLibrary("/tf2"), usable: false, rootMismatch: true })).toBe(
-      false,
-    );
+    expect(
+      canCreateNew({ ...previewSavedLibrary("/tf2"), usable: false, rootMismatch: true }),
+    ).toBe(false);
   });
 
   it("builds an import-preview library without stealing active", () => {

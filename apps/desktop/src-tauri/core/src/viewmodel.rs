@@ -3,25 +3,49 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
+use serde::{Deserialize, Serialize};
 
 use crate::apply::{
     cfg_layer_from_files, detail_from_manifest, write_owned_file_to, ProfileDetail,
     WriteOwnedOptions,
 };
+use crate::finder::discover_steam_roots;
+use crate::hash::sha256_file;
 use crate::launch::{sanitize_launch_options, set_profile_launch_options_to};
-use crate::process_lock::live_process_names;
+use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, load_library_from, load_manifest, profiles_dir, remove_manifest_files_to,
-    save_manifest, ProfileError, ViewmodelRecord, ViewmodelSource,
+    load_library_from, load_manifest, profiles_dir, remove_manifest_files_to, save_manifest,
+    ProfileError, ProfileFile, ViewmodelRecord, ViewmodelSource,
 };
 use crate::settings::execs_data_dir;
 use crate::surface::CfgLayer;
-use crate::vpk::{read_vpk_dir_bytes, write_vpk_v1};
+use crate::vpk::read_vpk_dir_bytes;
+#[cfg(test)]
+use crate::vpk::write_vpk_v1;
 
 pub const EXECS_VIEWMODELS_PACK: &str = "execs-viewmodels";
 pub const EXECS_VIEWMODELS_VPK: &str = "tf/custom/execs-viewmodels.vpk";
 pub const EXECS_PRELOAD_STEM: &str = "execs_preload";
+pub const EXECS_PRELOAD_OVERRIDES_STEM: &str = "overrides/execs_preload";
+const EXECS_PRELOAD_VANILLA_PATH: &str = "tf/cfg/execs_preload.cfg";
+const EXECS_PRELOAD_COMFIG_PATH: &str = "tf/cfg/overrides/execs_preload.cfg";
+pub const VIEWMODEL_COMPILE_UNAVAILABLE_REASON: &str =
+    "Compile is unavailable in this release while the first-party, file-safe compiler is rebuilt. Import a prebuilt VPK instead.";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewmodelCompileCapability {
+    pub available: bool,
+    pub reason: String,
+}
+
+pub fn viewmodel_compile_capability() -> ViewmodelCompileCapability {
+    ViewmodelCompileCapability {
+        available: false,
+        reason: VIEWMODEL_COMPILE_UNAVAILABLE_REASON.into(),
+    }
+}
 
 pub fn studio_cache_dir() -> PathBuf {
     execs_data_dir().join("studio").join("viewmodels")
@@ -42,16 +66,23 @@ pub fn has_preload_launch(options: &str) -> bool {
     let tokens: Vec<&str> = options.split_whitespace().collect();
     tokens
         .windows(2)
-        .any(|pair| pair == ["+exec", EXECS_PRELOAD_STEM])
-        || tokens.iter().any(|token| *token == "+exec execs_preload")
+        .any(|pair| pair[0] == "+exec" && is_preload_stem(pair[1]))
 }
 
 pub fn with_preload_launch(options: &str, enabled: bool) -> String {
+    with_preload_launch_stem(options, enabled, EXECS_PRELOAD_STEM)
+}
+
+fn with_preload_launch_stem(options: &str, enabled: bool, stem: &str) -> String {
     let tokens: Vec<&str> = options.split_whitespace().collect();
     let mut out = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
-        if tokens[i] == "+exec" && tokens.get(i + 1) == Some(&EXECS_PRELOAD_STEM) {
+        if tokens[i] == "+exec"
+            && tokens
+                .get(i + 1)
+                .is_some_and(|candidate| is_preload_stem(candidate))
+        {
             i += 2;
             continue;
         }
@@ -60,9 +91,13 @@ pub fn with_preload_launch(options: &str, enabled: bool) -> String {
     }
     if enabled {
         out.push("+exec".into());
-        out.push(EXECS_PRELOAD_STEM.into());
+        out.push(stem.into());
     }
     sanitize_launch_options(&out.join(" "))
+}
+
+fn is_preload_stem(value: &str) -> bool {
+    value == EXECS_PRELOAD_STEM || value == EXECS_PRELOAD_OVERRIDES_STEM
 }
 
 #[derive(Debug, Clone, Default)]
@@ -235,7 +270,9 @@ pub fn import_viewmodel_vpk(
     vpk_bytes: &[u8],
     preload: bool,
 ) -> Result<ProfileDetail, ProfileError> {
-    import_viewmodel_vpk_to(
+    let process_names = live_process_names();
+    let steam_roots = discover_steam_roots();
+    import_viewmodel_vpk_to_with_launch(
         &profiles_dir(),
         tf2_root,
         profile_id,
@@ -243,7 +280,9 @@ pub fn import_viewmodel_vpk(
         preload,
         ViewmodelSource::Imported,
         BTreeMap::new(),
-        live_process_names(),
+        process_names.clone(),
+        process_names,
+        &steam_roots,
     )
 }
 
@@ -261,15 +300,53 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    import_viewmodel_vpk_to_with_launch(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        vpk_bytes,
+        preload,
+        source,
+        options,
+        running_names,
+        std::iter::empty::<String>(),
+        &[],
+    )
+}
+
+fn import_viewmodel_vpk_to_with_launch<I, J, S, T>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    vpk_bytes: &[u8],
+    preload: bool,
+    source: ViewmodelSource,
+    options: BTreeMap<String, String>,
+    running_names: I,
+    steam_names: J,
+    steam_roots: &[PathBuf],
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    J: IntoIterator<Item = T>,
+    T: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
+    let steam: Vec<String> = steam_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
     read_vpk_dir_bytes(vpk_bytes).map_err(|err| ProfileError::Io(err.message()))?;
-    let previous = pack_paths(profiles_dir, profile_id)?;
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    let previous = pack_files(profiles_dir, profile_id)?;
     if !previous.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &previous, &running)?;
-        remove_live_vpk(tf2_root)?;
+        let paths: Vec<String> = previous.iter().map(|file| file.path.clone()).collect();
+        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &paths, &running)?;
+        remove_live_paths_if_active(profiles_dir, tf2_root, profile_id, &previous)?;
     }
     write_owned_file_to(
         profiles_dir,
@@ -280,7 +357,15 @@ where
         running.iter().cloned(),
         WriteOwnedOptions::default(),
     )?;
-    set_preload_state(profiles_dir, tf2_root, profile_id, preload, &running)?;
+    set_preload_state(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        preload,
+        &running,
+        &steam,
+        steam_roots,
+    )?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.viewmodel = Some(ViewmodelRecord {
         id: EXECS_VIEWMODELS_PACK.into(),
@@ -296,7 +381,16 @@ where
 }
 
 pub fn remove_viewmodels(tf2_root: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
-    remove_viewmodels_to(&profiles_dir(), tf2_root, profile_id, live_process_names())
+    let process_names = live_process_names();
+    let steam_roots = discover_steam_roots();
+    remove_viewmodels_to_with_launch(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        process_names.clone(),
+        process_names,
+        &steam_roots,
+    )
 }
 
 pub fn remove_viewmodels_to<I, S>(
@@ -309,15 +403,45 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    remove_viewmodels_to_with_launch(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        running_names,
+        std::iter::empty::<String>(),
+        &[],
+    )
+}
+
+fn remove_viewmodels_to_with_launch<I, J, S, T>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running_names: I,
+    steam_names: J,
+    steam_roots: &[PathBuf],
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    J: IntoIterator<Item = T>,
+    T: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
-    let previous = pack_paths(profiles_dir, profile_id)?;
+    let steam: Vec<String> = steam_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    let previous = pack_files(profiles_dir, profile_id)?;
     if !previous.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &previous, &running)?;
+        let paths: Vec<String> = previous.iter().map(|file| file.path.clone()).collect();
+        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &paths, &running)?;
+        remove_live_paths_if_active(profiles_dir, tf2_root, profile_id, &previous)?;
     }
-    remove_live_vpk(tf2_root)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     let preload_was = manifest
         .viewmodel
@@ -326,7 +450,15 @@ where
     manifest.viewmodel = None;
     save_manifest(profiles_dir, tf2_root, &manifest)?;
     if preload_was {
-        set_preload_state(profiles_dir, tf2_root, profile_id, false, &running)?;
+        set_preload_state(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            false,
+            &running,
+            &steam,
+            steam_roots,
+        )?;
     }
     Ok(detail_from_manifest(&load_manifest(
         profiles_dir,
@@ -339,12 +471,16 @@ pub fn set_viewmodel_preload(
     profile_id: &str,
     enabled: bool,
 ) -> Result<ProfileDetail, ProfileError> {
-    set_viewmodel_preload_to(
+    let process_names = live_process_names();
+    let steam_roots = discover_steam_roots();
+    set_viewmodel_preload_to_with_launch(
         &profiles_dir(),
         tf2_root,
         profile_id,
         enabled,
-        live_process_names(),
+        process_names.clone(),
+        process_names,
+        &steam_roots,
     )
 }
 
@@ -359,18 +495,58 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    set_viewmodel_preload_to_with_launch(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        enabled,
+        running_names,
+        std::iter::empty::<String>(),
+        &[],
+    )
+}
+
+fn set_viewmodel_preload_to_with_launch<I, J, S, T>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    enabled: bool,
+    running_names: I,
+    steam_names: J,
+    steam_roots: &[PathBuf],
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    J: IntoIterator<Item = T>,
+    T: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
-    set_preload_state(profiles_dir, tf2_root, profile_id, enabled, &running)?;
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    if let Some(record) = manifest.viewmodel.as_mut() {
-        record.preload = enabled;
-    } else if enabled {
+    let steam: Vec<String> = steam_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    if enabled && manifest.viewmodel.is_none() {
         return Err(ProfileError::Io(
             "Import or compile viewmodels before enabling preload.".into(),
         ));
+    }
+    set_preload_state(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        enabled,
+        &running,
+        &steam,
+        steam_roots,
+    )?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    if let Some(record) = manifest.viewmodel.as_mut() {
+        record.preload = enabled;
     }
     save_manifest(profiles_dir, tf2_root, &manifest)?;
     Ok(detail_from_manifest(&load_manifest(
@@ -397,294 +573,21 @@ pub fn compile_viewmodels(
 }
 
 pub fn compile_viewmodels_to<I, S>(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    options: &BTreeMap<String, String>,
-    preload: bool,
-    studiomdl: Option<&Path>,
-    running_names: I,
+    _profiles_dir: &Path,
+    _tf2_root: &Path,
+    _profile_id: &str,
+    _options: &BTreeMap<String, String>,
+    _preload: bool,
+    _studiomdl: Option<&Path>,
+    _running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let running: Vec<String> = running_names
-        .into_iter()
-        .map(|name| name.as_ref().to_string())
-        .collect();
-    if cfg!(not(windows)) && studiomdl.is_none() {
-        return Err(ProfileError::Io(
-            "Compile is Windows-only because it uses TF2's studiomdl. Import a prebuilt VPK."
-                .into(),
-        ));
-    }
-    let compiler = studiomdl
-        .map(PathBuf::from)
-        .or_else(|| default_studiomdl(tf2_root));
-    let Some(compiler) = compiler else {
-        return Err(ProfileError::Io(
-            "Could not find Team Fortress 2/bin/studiomdl.exe.".into(),
-        ));
-    };
-
-    let cache = studio_work_dir(profiles_dir, profile_id);
-    std::fs::create_dir_all(&cache).map_err(|err| ProfileError::Io(err.to_string()))?;
-    bootstrap_tree(tf2_root, &cache)?;
-
-    let mut compiled = BTreeMap::new();
-    if options.is_empty() {
-        let qc = apply_qc_knobs(
-            "$modelname \"weapons/c_models/c_scout_animations.mdl\"\n",
-            (0.0, 0.0, 0.0),
-            false,
-            false,
-        );
-        let qc_path = cache.join("execs.qc");
-        std::fs::write(&qc_path, qc).map_err(|err| ProfileError::Io(err.to_string()))?;
-        run_studiomdl(&compiler, tf2_root, &qc_path)?;
-    }
-    for (weapon, raw) in options {
-        let knobs = parse_knobs(raw);
-        let qc_path = cache.join(format!("{weapon}.qc"));
-        let source_qc = if qc_path.is_file() {
-            std::fs::read_to_string(&qc_path).unwrap_or_default()
-        } else {
-            format!("$modelname \"weapons/c_models/c_{weapon}_animations.mdl\"\n")
-        };
-        let qc = apply_qc_edit(&source_qc, &knobs.to_qc_edit());
-        std::fs::write(&qc_path, qc).map_err(|err| ProfileError::Io(err.to_string()))?;
-        let smd_path = cache.join(format!("{weapon}.smd"));
-        if smd_path.is_file() {
-            if let Ok(smd) = std::fs::read_to_string(&smd_path) {
-                let edited = apply_smd_origin_rotate(
-                    &smd,
-                    (knobs.origin_x, knobs.origin_y, knobs.origin_z),
-                    (knobs.rotate_x, knobs.rotate_y, knobs.rotate_z),
-                );
-                std::fs::write(&smd_path, edited)
-                    .map_err(|err| ProfileError::Io(err.to_string()))?;
-            }
-        }
-        if knobs.stat_idle {
-            if let Ok(smd) = std::fs::read_to_string(cache.join(format!("{weapon}_idle.smd"))) {
-                std::fs::write(
-                    cache.join(format!("{weapon}_idle.smd")),
-                    apply_smd_static_idle(&smd),
-                )
-                .map_err(|err| ProfileError::Io(err.to_string()))?;
-            }
-        }
-        run_studiomdl(&compiler, tf2_root, &qc_path)?;
-        let mdl = cache.join(format!("c_{weapon}_animations.mdl"));
-        if mdl.is_file() {
-            compiled.insert(
-                format!("models/weapons/c_models/c_{weapon}_animations.mdl"),
-                std::fs::read(&mdl).map_err(|err| ProfileError::Io(err.to_string()))?,
-            );
-        }
-    }
-    if compiled.is_empty() {
-        // Fake / stub compilers may write a well-known output file.
-        let stub = cache.join("compiled.mdl");
-        if stub.is_file() {
-            compiled.insert(
-                "models/weapons/c_models/c_scout_animations.mdl".into(),
-                std::fs::read(&stub).map_err(|err| ProfileError::Io(err.to_string()))?,
-            );
-        }
-    }
-    if compiled.is_empty() {
-        return Err(ProfileError::Io(
-            "studiomdl finished but no compiled model was produced.".into(),
-        ));
-    }
-    let vpk = write_vpk_v1(&compiled);
-    import_viewmodel_vpk_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &vpk,
-        preload,
-        ViewmodelSource::Compiled,
-        options.clone(),
-        running,
-    )
-}
-
-fn bootstrap_tree(tf2_root: &Path, cache: &Path) -> Result<(), ProfileError> {
-    std::fs::create_dir_all(cache).map_err(|err| ProfileError::Io(err.to_string()))?;
-    let marker = cache.join("extracted.txt");
-    if marker.is_file() {
-        return Ok(());
-    }
-    let vpk = tf2_root.join("tf").join("tf2_misc_dir.vpk");
-    if vpk.is_file() {
-        if let Ok(archive) = read_vpk_dir_file_safe(&vpk) {
-            for (path, bytes) in archive {
-                let lower = path.to_ascii_lowercase();
-                if !(lower.contains("c_models")
-                    && (lower.ends_with(".mdl")
-                        || lower.ends_with(".smd")
-                        || lower.ends_with(".qc")))
-                {
-                    continue;
-                }
-                let dest = cache.join(&path);
-                if let Some(parent) = dest.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                let _ = std::fs::write(dest, bytes);
-            }
-        }
-    }
-    try_decompile_extracted(tf2_root, cache);
-    std::fs::write(&marker, "ok\n").map_err(|err| ProfileError::Io(err.to_string()))?;
-    Ok(())
-}
-
-fn try_decompile_extracted(tf2_root: &Path, cache: &Path) {
-    let Some(decompiler) = find_decompiler(tf2_root) else {
-        return;
-    };
-    if let Ok(entries) = std::fs::read_dir(cache) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("mdl") {
-                continue;
-            }
-            let _ = Command::new(&decompiler)
-                .arg("-p")
-                .arg(&path)
-                .arg("-o")
-                .arg(cache)
-                .status();
-        }
-    }
-}
-
-fn find_decompiler(tf2_root: &Path) -> Option<PathBuf> {
-    for name in ["crowbar", "Crowbar", "crowbar.exe", "Crowbar.exe"] {
-        if let Ok(path) = which_on_path(name) {
-            return Some(path);
-        }
-    }
-    let next_to_bin = tf2_root.join("bin").join("Crowbar.exe");
-    next_to_bin.is_file().then_some(next_to_bin)
-}
-
-fn which_on_path(name: &str) -> Result<PathBuf, ()> {
-    let Ok(path) = std::env::var("PATH") else {
-        return Err(());
-    };
-    for dir in std::env::split_paths(&path) {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-    Err(())
-}
-
-fn read_vpk_dir_file_safe(path: &Path) -> Result<BTreeMap<String, Vec<u8>>, ProfileError> {
-    match crate::vpk::read_vpk_dir_file(path) {
-        Ok(archive) => Ok(archive.files),
-        Err(err) => Err(ProfileError::Io(err.message())),
-    }
-}
-
-fn run_studiomdl(compiler: &Path, tf2_root: &Path, qc: &Path) -> Result<(), ProfileError> {
-    let status = Command::new(compiler)
-        .arg("-game")
-        .arg(tf2_root.join("tf"))
-        .arg(qc)
-        .status()
-        .map_err(|err| ProfileError::Io(format!("Could not run studiomdl: {err}")))?;
-    if !status.success() {
-        return Err(ProfileError::Io("studiomdl failed.".into()));
-    }
-    Ok(())
-}
-
-fn default_studiomdl(tf2_root: &Path) -> Option<PathBuf> {
-    let exe = tf2_root.join("bin").join("studiomdl.exe");
-    exe.is_file().then_some(exe)
-}
-
-#[derive(Default)]
-struct Knobs {
-    origin_x: f32,
-    origin_y: f32,
-    origin_z: f32,
-    rotate_x: f32,
-    rotate_y: f32,
-    rotate_z: f32,
-    hide: bool,
-    remove_left_arm: bool,
-    stat_idle: bool,
-    keep: Vec<String>,
-    extras: Vec<String>,
-}
-
-impl Knobs {
-    fn to_qc_edit(&self) -> QcEdit {
-        QcEdit {
-            origin: (self.origin_x, self.origin_y, self.origin_z),
-            rotate: (self.rotate_x, self.rotate_y, self.rotate_z),
-            hide: self.hide,
-            remove_left_arm: self.remove_left_arm,
-            keep: self.keep.clone(),
-            extras: self.extras.clone(),
-        }
-    }
-}
-
-fn parse_knobs(raw: &str) -> Knobs {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
-        return Knobs::default();
-    };
-    let num = |key: &str| {
-        value
-            .get(key)
-            .and_then(|item| item.as_f64().or_else(|| item.as_i64().map(|n| n as f64)))
-            .unwrap_or(0.0) as f32
-    };
-    let flag = |key: &str| {
-        value
-            .get(key)
-            .and_then(|item| item.as_bool())
-            .unwrap_or(false)
-    };
-    let nested_true = |group: &str| -> Vec<String> {
-        value
-            .get(group)
-            .and_then(|item| item.as_object())
-            .map(|map| {
-                map.iter()
-                    .filter(|(_, item)| item.as_bool() == Some(true))
-                    .map(|(key, _)| key.clone())
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
-    let stat_idle = value
-        .get("stat")
-        .and_then(|item| item.get("idle"))
-        .and_then(|item| item.as_bool())
-        .unwrap_or(false);
-    Knobs {
-        origin_x: num("originX"),
-        origin_y: num("originY"),
-        origin_z: num("originZ"),
-        rotate_x: num("rotateX"),
-        rotate_y: num("rotateY"),
-        rotate_z: num("rotateZ"),
-        hide: flag("hide"),
-        remove_left_arm: flag("removeLeftArm"),
-        stat_idle,
-        keep: nested_true("keep"),
-        extras: nested_true("extra"),
-    }
+    Err(ProfileError::Io(
+        VIEWMODEL_COMPILE_UNAVAILABLE_REASON.into(),
+    ))
 }
 
 fn set_preload_state(
@@ -693,12 +596,15 @@ fn set_preload_state(
     profile_id: &str,
     enabled: bool,
     running: &[String],
+    steam: &[String],
+    steam_roots: &[PathBuf],
 ) -> Result<(), ProfileError> {
+    refuse_if_running_among(running).map_err(ProfileError::from)?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let layer = cfg_layer_from_files(&manifest.files);
-    let path = match layer {
-        CfgLayer::Comfig => "tf/cfg/overrides/execs_preload.cfg",
-        CfgLayer::Vanilla => "tf/cfg/execs_preload.cfg",
+    let (path, launch_stem) = match layer {
+        CfgLayer::Comfig => (EXECS_PRELOAD_COMFIG_PATH, EXECS_PRELOAD_OVERRIDES_STEM),
+        CfgLayer::Vanilla => (EXECS_PRELOAD_VANILLA_PATH, EXECS_PRELOAD_STEM),
     };
     if enabled {
         write_owned_file_to(
@@ -710,24 +616,65 @@ fn set_preload_state(
             running.iter().cloned(),
             WriteOwnedOptions::default(),
         )?;
+    } else {
+        let preload_files: Vec<ProfileFile> = manifest
+            .files
+            .iter()
+            .filter(|file| is_preload_path(&file.path))
+            .cloned()
+            .collect();
+        let preload_paths: Vec<String> =
+            preload_files.iter().map(|file| file.path.clone()).collect();
+        remove_manifest_files_to(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            &preload_paths,
+            running.iter().cloned(),
+        )?;
+        remove_live_paths_if_active(profiles_dir, tf2_root, profile_id, &preload_files)?;
     }
-    let current = manifest.launch_options;
-    let next = with_preload_launch(&current, enabled);
+    let current = load_manifest(profiles_dir, profile_id)?.launch_options;
+    let next = with_preload_launch_stem(&current, enabled, launch_stem);
     set_profile_launch_options_to(
         profiles_dir,
         tf2_root,
         profile_id,
         &next,
         running.iter().cloned(),
-        std::iter::empty::<String>(),
-        &[],
+        steam.iter().cloned(),
+        steam_roots,
     )?;
-    let _ = exclusive_file_path(profiles_dir, profile_id, path);
     let _ = load_library_from(profiles_dir, Some(tf2_root))?;
     Ok(())
 }
 
-fn pack_paths(profiles_dir: &Path, profile_id: &str) -> Result<Vec<String>, ProfileError> {
+fn remove_live_paths_if_active(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[ProfileFile],
+) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() != Some(profile_id) {
+        return Ok(());
+    }
+    for file in files {
+        let mut dest = tf2_root.to_path_buf();
+        for part in file.path.split('/') {
+            dest.push(part);
+        }
+        if dest.is_file() {
+            let live_hash = sha256_file(&dest).map_err(|err| ProfileError::Io(err.to_string()))?;
+            if live_hash == file.sha256 {
+                std::fs::remove_file(&dest).map_err(|err| ProfileError::Io(err.to_string()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn pack_files(profiles_dir: &Path, profile_id: &str) -> Result<Vec<ProfileFile>, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
     Ok(manifest
         .files
@@ -735,29 +682,13 @@ fn pack_paths(profiles_dir: &Path, profile_id: &str) -> Result<Vec<String>, Prof
         .filter(|file| {
             file.path == EXECS_VIEWMODELS_VPK
                 || file.path.starts_with("tf/custom/execs-viewmodels/")
-                || file.path.ends_with("execs_preload.cfg")
+                || is_preload_path(&file.path)
         })
-        .map(|file| file.path)
         .collect())
 }
 
-fn remove_live_vpk(tf2_root: &Path) -> Result<(), ProfileError> {
-    let path = tf2_root
-        .join("tf")
-        .join("custom")
-        .join("execs-viewmodels.vpk");
-    if path.is_file() {
-        std::fs::remove_file(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    Ok(())
-}
-
-fn studio_work_dir(profiles_dir: &Path, profile_id: &str) -> PathBuf {
-    profiles_dir
-        .join("..")
-        .join("studio")
-        .join("viewmodels")
-        .join(profile_id)
+fn is_preload_path(path: &str) -> bool {
+    path == EXECS_PRELOAD_VANILLA_PATH || path == EXECS_PRELOAD_COMFIG_PATH
 }
 
 #[cfg(test)]
@@ -768,6 +699,14 @@ mod tests {
 
     fn unlocked() -> Vec<String> {
         Vec::new()
+    }
+
+    fn locked() -> Vec<String> {
+        vec![if cfg!(windows) {
+            "tf_win64.exe".into()
+        } else {
+            "tf_linux64".into()
+        }]
     }
 
     fn setup() -> (
@@ -796,6 +735,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    fn write_steam_account(steam: &Path, launch_options: &str) -> PathBuf {
+        let localconfig = steam
+            .join("userdata")
+            .join("111")
+            .join("config")
+            .join("localconfig.vdf");
+        std::fs::create_dir_all(localconfig.parent().unwrap()).unwrap();
+        std::fs::write(
+            &localconfig,
+            format!(
+                "\"UserLocalConfigStore\"\n{{\n  \"Software\"\n  {{\n    \"Valve\"\n    {{\n      \"Steam\"\n      {{\n        \"apps\"\n        {{\n          \"440\"\n          {{\n            \"LaunchOptions\" \"{launch_options}\"\n          }}\n        }}\n      }}\n    }}\n  }}\n}}\n"
+            ),
+        )
+        .unwrap();
+        localconfig
+    }
+
     #[test]
     fn preload_cfg_is_itemtest_and_never_mentions_gameinfo() {
         let cfg = serialize_preload_cfg();
@@ -806,6 +762,9 @@ mod tests {
         let enabled = with_preload_launch("-novid -nojoy", true);
         assert!(has_preload_launch(&enabled));
         assert!(!with_preload_launch(&enabled, false).contains("execs_preload"));
+        let comfig = format!("-novid +exec {EXECS_PRELOAD_OVERRIDES_STEM}");
+        assert!(has_preload_launch(&comfig));
+        assert_eq!(with_preload_launch(&comfig, false), "-novid");
         assert!(!with_preload_launch("-novid -autoconfig +quit", true).contains("+quit"));
     }
 
@@ -864,76 +823,167 @@ mod tests {
         assert!(detail.launch_options.contains("execs_preload"));
         remove_viewmodels_to(&profiles, &tf2, &id, unlocked()).unwrap();
         assert!(!tf2.join("tf/custom/execs-viewmodels.vpk").exists());
+        assert!(!tf2.join("tf/cfg/execs_preload.cfg").exists());
         cleanup(&root);
     }
 
     #[test]
-    fn compile_uses_injected_studiomdl_and_refuses_on_linux_without_it() {
+    fn enabling_preload_without_viewmodels_is_side_effect_free() {
         let (root, profiles, tf2, id) = setup();
-        let err = compile_viewmodels_to(
+        let before = load_manifest(&profiles, &id).unwrap();
+        let err = set_viewmodel_preload_to(&profiles, &tf2, &id, true, unlocked()).unwrap_err();
+        assert!(err.message().contains("Import or compile"));
+        let after = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after.launch_options, before.launch_options);
+        assert_eq!(after.files, before.files);
+        assert!(!tf2.join("tf/cfg/execs_preload.cfg").exists());
+        assert!(!tf2.join("tf/cfg/overrides/execs_preload.cfg").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn disabling_preload_removes_the_managed_cfg_and_launch_token() {
+        let (root, profiles, tf2, id) = setup();
+        let mut files = BTreeMap::new();
+        files.insert("models/a.mdl".into(), b"x".to_vec());
+        import_viewmodel_vpk_to(
             &profiles,
             &tf2,
             &id,
-            &BTreeMap::new(),
-            false,
-            None,
+            &write_vpk_v1(&files),
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
             unlocked(),
         )
-        .unwrap_err();
-        assert!(err.message().contains("Windows-only") || err.message().contains("studiomdl"));
+        .unwrap();
 
-        let fake = root.join("studiomdl");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::write(
-                &fake,
-                "#!/bin/sh\nqc=\"$3\"\ndir=$(dirname \"$qc\")\nprintf mdl > \"$dir/compiled.mdl\"\nexit 0\n",
-            )
-            .unwrap();
-            let mut perm = std::fs::metadata(&fake).unwrap().permissions();
-            perm.set_mode(0o755);
-            std::fs::set_permissions(&fake, perm).unwrap();
-        }
-        #[cfg(not(unix))]
-        {
-            std::fs::write(&fake, b"rem").unwrap();
-        }
+        let detail = set_viewmodel_preload_to(&profiles, &tf2, &id, false, unlocked()).unwrap();
+        assert!(!detail.viewmodel.as_ref().unwrap().preload);
+        assert!(!detail.launch_options.contains("execs_preload"));
+        assert!(!tf2.join("tf/cfg/execs_preload.cfg").exists());
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(!manifest
+            .files
+            .iter()
+            .any(|file| file.path.ends_with("execs_preload.cfg")));
+        cleanup(&root);
+    }
 
+    #[test]
+    fn comfig_preload_uses_the_overrides_exec_target() {
+        let (root, profiles, tf2, id) = setup();
+        write_owned_file_to(
+            &profiles,
+            &tf2,
+            &id,
+            "tf/cfg/overrides/modules.cfg",
+            b"lighting=high\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        let mut files = BTreeMap::new();
+        files.insert("models/a.mdl".into(), b"x".to_vec());
+        let detail = import_viewmodel_vpk_to(
+            &profiles,
+            &tf2,
+            &id,
+            &write_vpk_v1(&files),
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        assert!(tf2.join(EXECS_PRELOAD_COMFIG_PATH).is_file());
+        assert!(detail
+            .launch_options
+            .contains("+exec overrides/execs_preload"));
+        assert!(!detail.launch_options.contains("+exec execs_preload"));
+        cleanup(&root);
+    }
+
+    #[test]
+    fn preload_updates_steam_launch_options_when_steam_is_closed() {
+        let (root, profiles, tf2, id) = setup();
+        let steam = root.join("Steam");
+        let localconfig = write_steam_account(&steam, "-novid");
+        let mut files = BTreeMap::new();
+        files.insert("models/a.mdl".into(), b"x".to_vec());
+        import_viewmodel_vpk_to_with_launch(
+            &profiles,
+            &tf2,
+            &id,
+            &write_vpk_v1(&files),
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+            unlocked(),
+            &[steam],
+        )
+        .unwrap();
+        let text = std::fs::read_to_string(localconfig).unwrap();
+        assert!(text.contains("\"LaunchOptions\"\t\t\"+exec execs_preload\""));
+        cleanup(&root);
+    }
+
+    #[test]
+    fn compile_is_disabled_before_any_cache_or_live_mutation() {
+        let (root, profiles, tf2, id) = setup();
+        let before = load_manifest(&profiles, &id).unwrap();
         let work = profiles
             .join("..")
             .join("studio")
             .join("viewmodels")
             .join(&id);
-        std::fs::create_dir_all(&work).unwrap();
         let mut options = BTreeMap::new();
-        options.insert(
-            "scattergun".into(),
-            r#"{"originX":1,"originY":0,"originZ":0,"rotateZ":15,"hide":true,"removeLeftArm":false,"stat":{"idle":false},"keep":{"draw":true},"extra":{"keepBeamVisible":true}}"#.into(),
-        );
-        let detail = compile_viewmodels_to(
+        options.insert("../../escape".into(), "{}".into());
+        let err = compile_viewmodels_to(
             &profiles,
             &tf2,
             &id,
             &options,
             true,
-            Some(&fake),
+            Some(Path::new("studiomdl.exe")),
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("file-safe compiler is rebuilt"));
+        assert!(!work.exists());
+        assert!(!tf2.join("tf/models").exists());
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!viewmodel_compile_capability().available);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn remove_preserves_drifted_live_viewmodel_files() {
+        let (root, profiles, tf2, id) = setup();
+        let mut files = BTreeMap::new();
+        files.insert("models/a.mdl".into(), b"x".to_vec());
+        import_viewmodel_vpk_to(
+            &profiles,
+            &tf2,
+            &id,
+            &write_vpk_v1(&files),
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
             unlocked(),
         )
         .unwrap();
-        assert_eq!(
-            detail.viewmodel.as_ref().unwrap().source,
-            ViewmodelSource::Compiled
-        );
-        assert!(tf2.join("tf/custom/execs-viewmodels.vpk").is_file());
-        assert!(detail
-            .viewmodel
-            .as_ref()
-            .unwrap()
-            .options
-            .get("scattergun")
-            .unwrap()
-            .contains("keepBeamVisible"));
+        let live_vpk = tf2.join(EXECS_VIEWMODELS_VPK);
+        let live_preload = tf2.join(EXECS_PRELOAD_VANILLA_PATH);
+        std::fs::write(&live_vpk, b"user drift").unwrap();
+        std::fs::write(&live_preload, b"user drift\n").unwrap();
+
+        let detail = remove_viewmodels_to(&profiles, &tf2, &id, unlocked()).unwrap();
+        assert_eq!(std::fs::read(live_vpk).unwrap(), b"user drift");
+        assert_eq!(std::fs::read(live_preload).unwrap(), b"user drift\n");
+        assert!(detail.viewmodel.is_none());
+        assert!(!detail.launch_options.contains("execs_preload"));
         cleanup(&root);
     }
 
@@ -950,7 +1000,7 @@ mod tests {
             false,
             ViewmodelSource::Imported,
             BTreeMap::new(),
-            ["tf_linux64".to_string()],
+            locked(),
         )
         .unwrap_err();
         assert!(matches!(err, ProfileError::GameRunning));

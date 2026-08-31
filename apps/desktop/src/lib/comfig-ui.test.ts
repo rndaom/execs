@@ -81,7 +81,13 @@ describe("comfig addons", () => {
         name: "Main",
         launchOptions: "",
         layer: "comfig",
-        files: [{ path: "tf/custom/mastercomfig-addon-flat-mouse.vpk", sha256: "a", storage: "exclusive" }],
+        files: [
+          {
+            path: "tf/custom/mastercomfig-addon-flat-mouse.vpk",
+            sha256: "a",
+            storage: "exclusive",
+          },
+        ],
       }).addons,
     ).toEqual(["flat-mouse"]);
   });
