@@ -288,6 +288,10 @@ export type CrosshairRecord = {
   assignments: Record<string, string>;
   /** Baked RGB tint for the first-party shapes; null/undefined = white. */
   color?: [number, number, number] | null;
+  /** Installed non-builtin crosshairs: name -> "vtf" | "rgba". */
+  library?: Record<string, string>;
+  /** Serialized designer parameters for the "designed" entry. */
+  design?: string | null;
 };
 
 export type ViewmodelSource = "compiled" | "imported";
@@ -297,11 +301,6 @@ export type ViewmodelRecord = {
   source: ViewmodelSource;
   preload: boolean;
   options: Record<string, string>;
-};
-
-export type ViewmodelCompileCapability = {
-  available: boolean;
-  reason: string;
 };
 
 export type HudCatalogEntry = {
@@ -560,11 +559,18 @@ export async function applyHudOptions(options: Record<string, string>): Promise<
   }
 }
 
+export type CrosshairAssetPayload = {
+  format: "vtf" | "rgba";
+  bytes: number[];
+};
+
 export async function applyCrosshairs(
   shape: string,
   assignments: Record<string, string>,
   customRgba?: number[],
   color?: [number, number, number] | null,
+  library?: Record<string, CrosshairAssetPayload>,
+  design?: string | null,
 ): Promise<ProfileDetail> {
   try {
     // Tauri v2 matches invoke keys in camelCase only — a snake_case key here
@@ -574,7 +580,51 @@ export async function applyCrosshairs(
       assignments,
       customRgba: customRgba ?? null,
       color: color ?? null,
+      library: library ?? null,
+      design: design ?? null,
     });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export type CommunityCrosshair = {
+  file: string;
+  width: number;
+  height: number;
+  rgba: number[];
+  bytes: number[];
+};
+
+/** Download (with cache) one community crosshair and its decoded preview. */
+export async function fetchCommunityCrosshair(file: string): Promise<CommunityCrosshair> {
+  try {
+    return await invoke<CommunityCrosshair>("fetch_community_crosshair", { file });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+/** Decoded previews of the installed pack's library crosshairs. */
+export async function getPackCrosshairPreviews(): Promise<Record<string, StockCrosshairSprite>> {
+  try {
+    return await invoke<Record<string, StockCrosshairSprite>>("get_pack_crosshair_previews");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export type StockCrosshairSprite = {
+  width: number;
+  height: number;
+  /** Frame 0 as unpremultiplied RGBA. */
+  rgba: number[];
+};
+
+/** Valve's stock crosshair sprites decoded from the user's own game files. */
+export async function getStockCrosshairSprites(): Promise<Record<string, StockCrosshairSprite>> {
+  try {
+    return await invoke<Record<string, StockCrosshairSprite>>("get_stock_crosshair_sprites");
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }
@@ -588,20 +638,13 @@ export async function removeCrosshairs(): Promise<ProfileDetail> {
   }
 }
 
-export async function compileViewmodels(
-  options: Record<string, string>,
+/** Build a Yttrium-style pack from hidden animation groups and install it. */
+export async function buildViewmodelPack(
+  hidden: string[],
   preload: boolean,
 ): Promise<ProfileDetail> {
   try {
-    return await invoke<ProfileDetail>("compile_viewmodels", { options, preload });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
-}
-
-export async function getViewmodelCompileCapability(): Promise<ViewmodelCompileCapability> {
-  try {
-    return await invoke<ViewmodelCompileCapability>("get_viewmodel_compile_capability");
+    return await invoke<ProfileDetail>("build_viewmodel_pack", { hidden, preload });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }
@@ -660,6 +703,128 @@ export async function openEmbeddedPage(page: EmbeddedPage): Promise<void> {
   }
   try {
     await invoke("open_embedded_page", { page });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Preloader (gameinfo bypass + default mod library)
+// ---------------------------------------------------------------------------
+
+export type PreloaderSkipNotice = {
+  file: string;
+  modName: string;
+  reason: string;
+};
+
+export type PreloaderStatus = {
+  gameinfoFound: boolean;
+  gameinfoBypassed: boolean;
+  patchedFiles: string[];
+  addons: string[];
+  particleMods: string[];
+  skipped: PreloaderSkipNotice[];
+  stale: boolean;
+  customVpkPresent: boolean;
+};
+
+export type PreloaderStatusPayload = {
+  status: PreloaderStatus;
+  modsCached: boolean;
+  modsSizeBytes: number;
+};
+
+export type CatalogAddon = {
+  id: string;
+  name: string;
+  kind: string;
+  description: string;
+  fileCount: number;
+  bytes: number;
+  hasSound: boolean;
+};
+
+export type CatalogParticleMod = {
+  name: string;
+  pcfFiles: string[];
+  fileCount: number;
+  bytes: number;
+};
+
+export type ModsCatalog = {
+  addons: CatalogAddon[];
+  particleMods: CatalogParticleMod[];
+};
+
+export type DefaultModsPayload = {
+  cached: boolean;
+  catalog: ModsCatalog | null;
+};
+
+export type PreloaderReport = {
+  patchedFiles: string[];
+  skipped: PreloaderSkipNotice[];
+  addonsInstalled: string[];
+  particleModsInstalled: string[];
+  customVpkWritten: boolean;
+  gameinfoBypassed: boolean;
+  baselineReset: boolean;
+};
+
+export type PreloaderRevertReport = {
+  restoredFiles: string[];
+  failures: string[];
+  gameinfoRestored: boolean;
+  customVpkRemoved: boolean;
+};
+
+export async function getPreloaderStatus(): Promise<PreloaderStatusPayload> {
+  try {
+    return await invoke<PreloaderStatusPayload>("get_preloader_status");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function getDefaultMods(): Promise<DefaultModsPayload> {
+  try {
+    return await invoke<DefaultModsPayload>("get_default_mods");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function downloadDefaultMods(): Promise<DefaultModsPayload> {
+  try {
+    return await invoke<DefaultModsPayload>("download_default_mods");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function applyPreloaderMods(
+  addons: string[],
+  particleMods: string[],
+): Promise<PreloaderReport> {
+  try {
+    return await invoke<PreloaderReport>("apply_preloader_mods", { addons, particleMods });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function setGameinfoBypass(enabled: boolean): Promise<PreloaderStatusPayload> {
+  try {
+    return await invoke<PreloaderStatusPayload>("set_gameinfo_bypass", { enabled });
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
+export async function revertPreloader(): Promise<PreloaderRevertReport> {
+  try {
+    return await invoke<PreloaderRevertReport>("revert_preloader");
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }

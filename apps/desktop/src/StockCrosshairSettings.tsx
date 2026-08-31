@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { StockCrosshairSprite } from "./lib/bridge";
 import {
   COLOR_MAX,
   COLOR_MIN,
@@ -26,6 +27,7 @@ export function StockCrosshairSettings({
   busy,
   layer,
   effective,
+  sprites = null,
   managedText,
   onSave,
 }: {
@@ -33,6 +35,8 @@ export function StockCrosshairSettings({
   busy: boolean;
   layer: GameplayLayer;
   effective: Record<string, string>;
+  /** Real sprites from the user's game files; geometry fallback when null. */
+  sprites?: Record<string, StockCrosshairSprite> | null;
   managedText: string;
   onSave: (gameplayText: string) => void;
 }) {
@@ -62,6 +66,8 @@ export function StockCrosshairSettings({
   // opacity — cl_crosshair_alpha is not applied by the engine's draw path.
   const color = `rgb(${draft.cl_crosshair_red}, ${draft.cl_crosshair_green}, ${draft.cl_crosshair_blue})`;
   const primitives = stockCrosshairPrimitives(draft.cl_crosshair_file);
+  const sprite =
+    draft.cl_crosshair_file === "" ? null : (sprites?.[draft.cl_crosshair_file] ?? null);
   // Engine rule: rendered size = sprite size × cl_crosshair_scale / 32.
   const renderedSize = Math.round((64 * draft.cl_crosshair_scale) / 32);
 
@@ -92,7 +98,16 @@ export function StockCrosshairSettings({
             aria-label={`Preview of ${STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]} at scale ${draft.cl_crosshair_scale}`}
             className="surface relative grid aspect-square w-full place-items-center bg-black"
           >
-            {primitives ? (
+            {sprite ? (
+              <StockSpriteCanvas
+                file={draft.cl_crosshair_file}
+                sprite={sprite}
+                red={draft.cl_crosshair_red}
+                green={draft.cl_crosshair_green}
+                blue={draft.cl_crosshair_blue}
+                size={renderedSize}
+              />
+            ) : primitives ? (
               <StockShapeSvg
                 file={draft.cl_crosshair_file}
                 primitives={primitives}
@@ -224,6 +239,53 @@ export function StockCrosshairSettings({
         </button>
       </div>
     </form>
+  );
+}
+
+/** The real Valve sprite, tinted the way the engine tints it (RGB multiply). */
+function StockSpriteCanvas({
+  file,
+  sprite,
+  red,
+  green,
+  blue,
+  size,
+}: {
+  file: string;
+  sprite: StockCrosshairSprite;
+  red: number;
+  green: number;
+  blue: number;
+  size: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) {
+      return;
+    }
+    const image = ctx.createImageData(sprite.width, sprite.height);
+    for (let i = 0; i < sprite.rgba.length; i += 4) {
+      image.data[i] = (sprite.rgba[i] * red) / 255;
+      image.data[i + 1] = (sprite.rgba[i + 1] * green) / 255;
+      image.data[i + 2] = (sprite.rgba[i + 2] * blue) / 255;
+      image.data[i + 3] = sprite.rgba[i + 3];
+    }
+    ctx.putImageData(image, 0, 0);
+  }, [sprite, red, green, blue]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      data-testid="stock-crosshair-sprite"
+      data-file={file}
+      width={sprite.width}
+      height={sprite.height}
+      className="max-h-[85%] max-w-[85%]"
+      style={{ width: size, height: size, imageRendering: "pixelated" }}
+    />
   );
 }
 
