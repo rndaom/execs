@@ -7,6 +7,7 @@ export const SETTINGS_TABS = [
   "hud",
   "crosshair",
   "viewmodels",
+  "mods",
   "files",
   "launch",
 ] as const;
@@ -20,6 +21,7 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   hud: "HUD",
   crosshair: "Crosshair",
   viewmodels: "Viewmodels",
+  mods: "Mods",
   files: "Files",
   launch: "Launch",
 };

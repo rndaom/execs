@@ -8,7 +8,18 @@ export const CROSSHAIR_CANVAS_SIZE = 64;
 
 export const CROSSHAIR_SHAPES = ["dot", "cross", "plus-gap", "circle", "t"] as const;
 export const CUSTOM_CROSSHAIR_SHAPE = "custom";
-export type CrosshairShape = (typeof CROSSHAIR_SHAPES)[number] | typeof CUSTOM_CROSSHAIR_SHAPE;
+/** Name of the parametric-designer library entry. */
+export const DESIGNED_CROSSHAIR_NAME = "designed";
+export type BuiltinCrosshairShape =
+  | (typeof CROSSHAIR_SHAPES)[number]
+  | typeof CUSTOM_CROSSHAIR_SHAPE;
+/** Any pack crosshair name: builtin shape, "custom", or a library entry. */
+export type CrosshairShape = string;
+
+/** Names must survive VPK paths, VMT text, and material lookups unescaped. */
+export function validCrosshairName(name: string): boolean {
+  return /^[a-z0-9_-]{1,64}$/.test(name);
+}
 
 export const TF2_CLASSES = [
   "scout",
@@ -211,24 +222,48 @@ export const CROSSHAIR_STOCK_OVERRIDE_NOTE =
 
 export type CrosshairColor = [number, number, number];
 
+/** A named non-builtin crosshair. bytes null = stored in the installed pack
+ * (the backend recovers them on apply). */
+export type CrosshairLibraryEntry = {
+  format: "vtf" | "rgba";
+  bytes: number[] | null;
+};
+
 export type CrosshairDraft = {
   shape: CrosshairShape;
   assignments: Record<string, CrosshairShape>;
   customRgba: number[] | null;
   /** RGB tint baked into the shape VTFs; null = white. */
   color: CrosshairColor | null;
+  library: Record<string, CrosshairLibraryEntry>;
+  /** Serialized designer params for the "designed" entry. */
+  design: string | null;
 };
 
 export function emptyCrosshairDraft(): CrosshairDraft {
-  return { shape: "cross", assignments: {}, customRgba: null, color: null };
+  return {
+    shape: "cross",
+    assignments: {},
+    customRgba: null,
+    color: null,
+    library: {},
+    design: null,
+  };
 }
 
 export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): CrosshairDraft {
+  const library: Record<string, CrosshairLibraryEntry> = {};
+  for (const [name, format] of Object.entries(record?.library ?? {})) {
+    if (validCrosshairName(name)) {
+      library[name] = { format: format === "rgba" ? "rgba" : "vtf", bytes: null };
+    }
+  }
+  const known = (value: string) => isBuiltinCrosshairShape(value) || value in library;
   const raw = record?.shape ?? "cross";
-  const shape = isCrosshairShape(raw) ? raw : "cross";
+  const shape = known(raw) ? raw : "cross";
   const assignments: Record<string, CrosshairShape> = {};
   for (const [script, value] of Object.entries(record?.assignments ?? {})) {
-    if (isCrosshairShape(value)) {
+    if (known(value)) {
       assignments[script] = value;
     }
   }
@@ -237,7 +272,7 @@ export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): 
     storedColor && storedColor.length === 3
       ? [clampChannel(storedColor[0]), clampChannel(storedColor[1]), clampChannel(storedColor[2])]
       : null;
-  return { shape, assignments, customRgba: null, color };
+  return { shape, assignments, customRgba: null, color, library, design: record?.design ?? null };
 }
 
 function clampChannel(value: number): number {
@@ -310,16 +345,21 @@ export function copyClassToAllClasses(draft: CrosshairDraft, classId: Tf2Class):
   return next;
 }
 
-export function isCrosshairShape(value: string): value is CrosshairShape {
+export function isBuiltinCrosshairShape(value: string): value is BuiltinCrosshairShape {
   return (
     value === CUSTOM_CROSSHAIR_SHAPE ||
     CROSSHAIR_SHAPES.includes(value as (typeof CROSSHAIR_SHAPES)[number])
   );
 }
 
+/** @deprecated builtin check only — kept for older callers/tests. */
+export function isCrosshairShape(value: string): boolean {
+  return isBuiltinCrosshairShape(value);
+}
+
 /** Draw a first-party shape into a 64×64 RGBA buffer (row-major, unpremultiplied). */
 export function renderCrosshairRgba(
-  shape: CrosshairShape,
+  shape: string,
   color: CrosshairColor | null = null,
 ): Uint8ClampedArray {
   const size = CROSSHAIR_CANVAS_SIZE;
