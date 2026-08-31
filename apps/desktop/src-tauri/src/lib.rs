@@ -2,14 +2,49 @@ mod comfig_fetch;
 mod commands;
 mod hud_fetch;
 
+use std::io::Write;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
 
+/// Log panics to %AppData%\execs\logs\panic.log (or the Linux data dir) so a
+/// crash leaves a trace even when no console is attached.
+fn install_panic_logger() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let settings = execs_core::settings_file();
+        if let Some(dir) = settings.parent() {
+            let logs = dir.join("logs");
+            let _ = std::fs::create_dir_all(&logs);
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(logs.join("panic.log"))
+            {
+                let location = info
+                    .location()
+                    .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+                    .unwrap_or_else(|| "unknown".into());
+                let _ = writeln!(file, "[{}] panic at {location}: {info}", timestamp());
+            }
+        }
+        previous(info);
+    }));
+}
+
+fn timestamp() -> String {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(elapsed) => format!("unix {}", elapsed.as_secs()),
+        Err(_) => "unknown time".into(),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_panic_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -56,10 +91,12 @@ pub fn run() {
             commands::apply_hud_options,
             commands::apply_crosshairs,
             commands::remove_crosshairs,
+            commands::get_viewmodel_compile_capability,
             commands::compile_viewmodels,
             commands::import_viewmodels,
             commands::remove_viewmodels,
             commands::set_viewmodel_preload,
+            commands::open_embedded_page,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
@@ -73,10 +110,13 @@ fn spawn_lock_poller(app: AppHandle) {
     std::thread::spawn(move || {
         let mut last = None;
         loop {
-            let running = execs_core::is_tf2_running();
-            if last != Some(running) {
-                let _ = app.emit("tf2-running", running);
-                last = Some(running);
+            // A failed poll must never take the app down; skip the tick instead.
+            let running = std::panic::catch_unwind(execs_core::is_tf2_running);
+            if let Ok(running) = running {
+                if last != Some(running) {
+                    let _ = app.emit("tf2-running", running);
+                    last = Some(running);
+                }
             }
             std::thread::sleep(Duration::from_secs(1));
         }

@@ -110,10 +110,7 @@ export function setModuleLevel(
   return next;
 }
 
-export function toggleComfigAddon(
-  selected: OfficialAddon[],
-  id: OfficialAddon,
-): OfficialAddon[] {
+export function toggleComfigAddon(selected: OfficialAddon[], id: OfficialAddon): OfficialAddon[] {
   return toggleAddon(selected, id);
 }
 

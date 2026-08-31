@@ -4,15 +4,18 @@ import {
   autoexecFilePath,
   autoexecHasExecLine,
   bindsFilePath,
-  configBindsFromFiles,
   canRecordBinds,
+  configBindsFromFiles,
+  displayedKeyForAction,
   ensureAutoexecExecLine,
   keyForAction,
   lastKeyForCommand,
   MANAGED_BINDS_HEADER,
   parseManagedBinds,
   serializeManagedBinds,
+  shouldSyncTrackedBinds,
   sourceKeyFromCode,
+  sourceKeyFromKey,
   sourceKeyFromKeyboardEvent,
   sourceKeyFromMouseButton,
   syncTrackedBindsFromConfig,
@@ -32,6 +35,29 @@ describe("source key mapping", () => {
     expect(sourceKeyFromMouseButton(0)).toBe("mouse1");
     expect(sourceKeyFromCode("Semicolon")).toBe("semicolin");
     expect(sourceKeyFromCode("Numpad0")).toBe("kp_ins");
+  });
+
+  it("falls back to KeyboardEvent.key when a WebView omits code", () => {
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "Shift" })).toBe("shift");
+    expect(sourceKeyFromKeyboardEvent({ code: "Unidentified", key: "W" })).toBe("w");
+    expect(sourceKeyFromKey("F12")).toBe("f12");
+  });
+
+  it("maps punctuation and shifted punctuation when code is unavailable", () => {
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: ";" })).toBe("semicolin");
+    expect(sourceKeyFromKeyboardEvent({ code: "Unidentified", key: ":" })).toBe("semicolin");
+    expect(sourceKeyFromKey("?")).toBe("slash");
+    expect(sourceKeyFromKey("+")).toBe("equal");
+    expect(sourceKeyFromKey("{")).toBe("[");
+  });
+
+  it("uses location to preserve numpad identity without code", () => {
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "1", location: 3 })).toBe("kp_end");
+    expect(sourceKeyFromKeyboardEvent({ code: "Unidentified", key: "End", location: 3 })).toBe(
+      "kp_end",
+    );
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "+", location: 3 })).toBe("kp_plus");
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "Delete", location: 3 })).toBe("kp_del");
   });
 });
 
@@ -111,17 +137,23 @@ describe("syncTrackedBindsFromConfig", () => {
       configBindsFromFiles([
         {
           path: "tf/cfg/overrides/execs_binds.cfg",
-          text: "bind e \"voicemenu 0 0\"\nbind w +forward\n",
+          text: 'bind e "voicemenu 0 0"\nbind w +forward\n',
         },
         {
           path: "tf/cfg/config.cfg",
-          text: "bind h \"voicemenu 0 0\"\nbind w +forward\n",
+          text: 'bind h "voicemenu 0 0"\nbind w +forward\n',
         },
       ]),
     ).toEqual({
       h: "voicemenu 0 0",
       w: "+forward",
     });
+  });
+
+  it("is requested only after verified config drift and never while TF2 runs", () => {
+    expect(shouldSyncTrackedBinds(null, false)).toBe(false);
+    expect(shouldSyncTrackedBinds(1, false)).toBe(true);
+    expect(shouldSyncTrackedBinds(1, true)).toBe(false);
   });
 });
 
@@ -143,6 +175,20 @@ describe("display and paths", () => {
     expect(lastKeyForCommand(binds, "voicemenu 0 0")).toBe("h");
     expect(keyForAction(binds, "medic")).toBe("h");
     expect(keyForAction(binds, "forward")).toBe("w");
+  });
+
+  it("shows a newly recorded managed bind over stale config.cfg data", () => {
+    const effective = { ctrl: "+duck" };
+    const managed = parseManagedBinds(applyRecordedBind("", "duck", "shift"));
+    expect(displayedKeyForAction(effective, managed, "duck")).toBe("shift");
+  });
+
+  it("masks keys claimed by another managed action from stale effective data", () => {
+    const effective = { shift: "+duck", ctrl: "+duck" };
+    const managed = parseManagedBinds(applyRecordedBind("", "voice", "shift"));
+    expect(displayedKeyForAction(effective, managed, "voice")).toBe("shift");
+    expect(displayedKeyForAction(effective, managed, "duck")).toBe("ctrl");
+    expect(displayedKeyForAction({ shift: "+duck" }, managed, "duck")).toBeNull();
   });
 
   it("places the owned file on the comfig or vanilla layer", () => {

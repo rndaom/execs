@@ -1,7 +1,7 @@
+export { isKnownName, lookupCvar } from "./corpus.ts";
 export { lint } from "./engine.ts";
 export { parseCommands } from "./parser.ts";
 export { tokenizeCommands } from "./tokenizer.ts";
-export { lookupCvar, isKnownName } from "./corpus.ts";
 export type {
   CfgFile,
   Command,

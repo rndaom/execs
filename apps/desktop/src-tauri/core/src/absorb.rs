@@ -57,6 +57,8 @@ impl AbsorbDelta {
 pub struct AbsorbOwnedResult {
     pub library: ProfileLibrary,
     pub delta: AbsorbDelta,
+    /// True only when this absorb observed and stored a changed config.cfg.
+    pub config_cfg_absorbed: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -150,10 +152,12 @@ where
         return Ok(AbsorbOwnedResult {
             library,
             delta: AbsorbDelta::empty(),
+            config_cfg_absorbed: false,
         });
     };
 
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    let config_cfg_absorbed = classified.delta.config_cfg;
     for path in &classified.delta.owned_changed {
         put_live_file(
             profiles_dir,
@@ -184,6 +188,7 @@ where
     Ok(AbsorbOwnedResult {
         library: load_library_from(profiles_dir, Some(tf2_root))?,
         delta: remaining,
+        config_cfg_absorbed,
     })
 }
 
@@ -543,6 +548,7 @@ mod tests {
         let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
         assert!(result.library.active_profile_id.is_none());
         assert_eq!(result.delta, AbsorbDelta::empty());
+        assert!(!result.config_cfg_absorbed);
         cleanup(&dir);
     }
 
@@ -583,6 +589,7 @@ mod tests {
         let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
         assert!(result.delta.packs_added.contains(&"toon".into()));
         assert!(result.delta.owned_changed.is_empty());
+        assert!(result.config_cfg_absorbed);
         let manifest = load_manifest(&profiles, &id).unwrap();
         let autoexec = manifest
             .files
@@ -803,6 +810,7 @@ mod tests {
         write_live(&root.join("tf/custom/hud/extra.txt"), "extra\n");
         let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
         assert!(!result.delta.has_pack_changes());
+        assert!(!result.config_cfg_absorbed);
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert!(manifest
             .files
