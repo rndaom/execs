@@ -150,6 +150,13 @@ pub struct CrosshairRecord {
     /// Baked RGB tint for the first-party shapes; None = white.
     #[serde(default)]
     pub color: Option<[u8; 3]>,
+    /// Named non-builtin crosshairs stored in the pack: name -> "vtf" | "rgba".
+    /// Bytes live in the pack itself, never on the manifest.
+    #[serde(default)]
+    pub library: BTreeMap<String, String>,
+    /// Serialized designer parameters for the "designed" entry, for re-editing.
+    #[serde(default)]
+    pub design: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

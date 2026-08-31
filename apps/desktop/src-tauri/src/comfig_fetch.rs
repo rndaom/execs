@@ -25,6 +25,11 @@ pub fn fetch_latest_release() -> Result<execs_core::GitHubRelease, String> {
 pub fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
     let response = reqwest::blocking::Client::builder()
         .user_agent(USER_AGENT)
+        // A stalled connection must fail instead of pinning the UI's busy
+        // state forever. Ten minutes covers the 81 MB mod library on slow
+        // links; everything else we fetch is far smaller.
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(600))
         .build()
         .map_err(|err| err.to_string())?
         .get(url)

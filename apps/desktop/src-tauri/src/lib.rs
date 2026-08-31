@@ -1,6 +1,9 @@
 mod comfig_fetch;
 mod commands;
+mod crosshair_fetch;
 mod hud_fetch;
+mod mods_fetch;
+mod viewmodel_fetch;
 
 use std::io::Write;
 use std::time::Duration;
@@ -90,13 +93,21 @@ pub fn run() {
             commands::get_hud_schema,
             commands::apply_hud_options,
             commands::apply_crosshairs,
+            commands::fetch_community_crosshair,
+            commands::get_pack_crosshair_previews,
+            commands::get_stock_crosshair_sprites,
             commands::remove_crosshairs,
-            commands::get_viewmodel_compile_capability,
-            commands::compile_viewmodels,
+            commands::build_viewmodel_pack,
             commands::import_viewmodels,
             commands::remove_viewmodels,
             commands::set_viewmodel_preload,
             commands::open_embedded_page,
+            commands::get_preloader_status,
+            commands::get_default_mods,
+            commands::download_default_mods,
+            commands::apply_preloader_mods,
+            commands::set_gameinfo_bypass,
+            commands::revert_preloader,
         ])
         .setup(|app| {
             spawn_lock_poller(app.handle().clone());
