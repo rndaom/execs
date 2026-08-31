@@ -23,8 +23,38 @@ const THUMB_DIR: &str = "materials/vgui/replay/thumbnails";
 const IMAGE_FORMAT_BGRA8888: u32 = 12;
 const VTF_FLAGS: u32 = 0x0001 | 0x0004 | 0x0008 | 0x0100 | 0x0200 | 0x2000;
 
+/// Procedurally rendered first-party shapes. "custom" is the imported PNG.
 const SHAPES: [&str; 6] = ["dot", "cross", "plus-gap", "circle", "t", "custom"];
 
+/// Names must survive VPK paths, VMT text, and material lookups unescaped.
+pub fn valid_crosshair_name(name: &str) -> bool {
+    (1..=64).contains(&name.len())
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CrosshairAssetFormat {
+    /// A ready-made VTF written into the pack verbatim (community crosshairs).
+    Vtf,
+    /// 64×64 unpremultiplied RGBA to encode with our own VTF writer (designer).
+    Rgba,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct CrosshairAsset {
+    pub format: CrosshairAssetFormat,
+    pub bytes: Vec<u8>,
+}
+
+enum ResolvedAsset {
+    Rgba(Vec<u8>),
+    VtfVerbatim(Vec<u8>),
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn apply_crosshairs(
     tf2_root: &Path,
     profile_id: &str,
@@ -32,6 +62,8 @@ pub fn apply_crosshairs(
     assignments: &BTreeMap<String, String>,
     custom_rgba: Option<&[u8]>,
     color: Option<[u8; 3]>,
+    library: &BTreeMap<String, CrosshairAsset>,
+    design: Option<&str>,
 ) -> Result<ProfileDetail, ProfileError> {
     apply_crosshairs_to(
         &profiles_dir(),
@@ -41,10 +73,13 @@ pub fn apply_crosshairs(
         assignments,
         custom_rgba,
         color,
+        library,
+        design,
         live_process_names(),
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn apply_crosshairs_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -53,6 +88,8 @@ pub fn apply_crosshairs_to<I, S>(
     assignments: &BTreeMap<String, String>,
     custom_rgba: Option<&[u8]>,
     color: Option<[u8; 3]>,
+    library: &BTreeMap<String, CrosshairAsset>,
+    design: Option<&str>,
     running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
 where
@@ -68,6 +105,8 @@ where
         assignments,
         custom_rgba,
         color,
+        library,
+        design,
         &scripts,
         running_names,
     )
@@ -82,6 +121,8 @@ pub fn apply_crosshairs_with_scripts<I, S>(
     assignments: &BTreeMap<String, String>,
     custom_rgba: Option<&[u8]>,
     color: Option<[u8; 3]>,
+    library: &BTreeMap<String, CrosshairAsset>,
+    design: Option<&str>,
     scripts: &BTreeMap<String, String>,
     running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
@@ -93,34 +134,69 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
-    if !SHAPES.contains(&shape) {
-        return Err(ProfileError::Io(format!(
-            "Unknown crosshair shape {shape}."
-        )));
+    for name in library.keys() {
+        if !valid_crosshair_name(name) {
+            return Err(ProfileError::Io(format!(
+                "Crosshair name {name} must be 1-64 lowercase letters, digits, - or _."
+            )));
+        }
+        if SHAPES.contains(&name.as_str()) {
+            return Err(ProfileError::Io(format!(
+                "Crosshair name {name} is reserved for a built-in shape."
+            )));
+        }
     }
-    // Imported pixels are not stored on the manifest; when the caller has none
-    // (a re-apply after reload), recover them from the pack's own custom.vtf
-    // before that file is removed below.
-    let custom_needed =
-        shape == "custom" || assignments.values().any(|assigned| assigned == "custom");
+
+    // Every name the pack must contain: the base shape plus every override.
+    let mut referenced: Vec<&str> = vec![shape];
+    for assigned in assignments.values() {
+        if !referenced.contains(&assigned.as_str()) {
+            referenced.push(assigned);
+        }
+    }
+    for name in &referenced {
+        if !valid_crosshair_name(name) {
+            return Err(ProfileError::Io(format!(
+                "Unknown crosshair shape {name}."
+            )));
+        }
+    }
+
+    // Imported pixels / library bytes are not stored on the manifest; when the
+    // caller has none (a re-apply after reload), recover them from the pack's
+    // own VTFs before those files are removed below.
+    let custom_needed = referenced.contains(&"custom");
     let stored_custom = if custom_needed && custom_rgba.is_none() {
         load_stored_custom_rgba(profiles_dir, profile_id)
     } else {
         None
     };
     let custom_source: Option<&[u8]> = custom_rgba.or(stored_custom.as_deref());
-    let mut needed = BTreeMap::new();
-    needed.insert(shape.to_string(), shape_pixels(shape, custom_source, color)?);
-    for assigned in assignments.values() {
-        if !SHAPES.contains(&assigned.as_str()) {
-            return Err(ProfileError::Io(format!(
-                "Unknown crosshair shape {assigned}."
-            )));
-        }
-        if needed.contains_key(assigned) {
+
+    let mut needed: BTreeMap<String, ResolvedAsset> = BTreeMap::new();
+    for name in &referenced {
+        if needed.contains_key(*name) {
             continue;
         }
-        needed.insert(assigned.clone(), shape_pixels(assigned, custom_source, color)?);
+        let resolved = if SHAPES.contains(name) {
+            ResolvedAsset::Rgba(shape_pixels(name, custom_source, color)?)
+        } else if let Some(asset) = library.get(*name) {
+            resolve_library_asset(name, asset)?
+        } else if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, name) {
+            ResolvedAsset::VtfVerbatim(bytes)
+        } else {
+            return Err(ProfileError::Io(format!(
+                "Crosshair {name} is not in the library. Add it again before applying."
+            )));
+        };
+        needed.insert((*name).to_string(), resolved);
+    }
+    // Library entries that exist but are not referenced still ride along so
+    // they survive on the pack for later use.
+    for (name, asset) in library {
+        if !needed.contains_key(name) {
+            needed.insert(name.clone(), resolve_library_asset(name, asset)?);
+        }
     }
 
     let previous = pack_paths(profiles_dir, profile_id)?;
@@ -129,8 +205,19 @@ where
         remove_live_pack(tf2_root, EXECS_CROSSHAIRS_PACK)?;
     }
 
-    for (name, rgba) in &needed {
-        let vtf = encode_vtf_bgra8888(&rgba_to_bgra(rgba), CROSSHAIR_SIZE, CROSSHAIR_SIZE)?;
+    // Community VTFs keep their own dimensions; the weapon script must match.
+    let mut dimensions: BTreeMap<String, (u32, u32)> = BTreeMap::new();
+    for (name, asset) in &needed {
+        let vtf: Vec<u8> = match asset {
+            ResolvedAsset::Rgba(rgba) => {
+                dimensions.insert(name.clone(), (CROSSHAIR_SIZE, CROSSHAIR_SIZE));
+                encode_vtf_bgra8888(&rgba_to_bgra(rgba), CROSSHAIR_SIZE, CROSSHAIR_SIZE)?
+            }
+            ResolvedAsset::VtfVerbatim(bytes) => {
+                dimensions.insert(name.clone(), vtf_header_dimensions(bytes));
+                bytes.clone()
+            }
+        };
         let vmt = encode_vmt(name);
         write_pack_file(
             profiles_dir,
@@ -161,7 +248,11 @@ where
             .get(stem)
             .cloned()
             .unwrap_or_else(|| shape.to_string());
-        let patched = patch_crosshair_script(body, &used)
+        let (width, height) = dimensions
+            .get(&used)
+            .copied()
+            .unwrap_or((CROSSHAIR_SIZE, CROSSHAIR_SIZE));
+        let patched = patch_crosshair_script(body, &used, width, height)
             .map_err(|err| ProfileError::Io(format!("{script}: {err}")))?;
         write_pack_file(
             profiles_dir,
@@ -173,12 +264,25 @@ where
         )?;
     }
 
+    let library_record: BTreeMap<String, String> = needed
+        .iter()
+        .filter(|(name, _)| !SHAPES.contains(&name.as_str()))
+        .map(|(name, asset)| {
+            let format = match asset {
+                ResolvedAsset::Rgba(_) => "rgba",
+                ResolvedAsset::VtfVerbatim(_) => "vtf",
+            };
+            (name.clone(), format.to_string())
+        })
+        .collect();
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.crosshair = Some(CrosshairRecord {
         id: EXECS_CROSSHAIRS_PACK.into(),
         shape: shape.to_string(),
         assignments: assignments.clone(),
         color,
+        library: library_record,
+        design: design.map(|value| value.to_string()),
     });
     save_manifest(profiles_dir, tf2_root, &manifest)?;
     force_empty_stock_crosshair(profiles_dir, tf2_root, profile_id, &running)?;
@@ -186,6 +290,64 @@ where
         profiles_dir,
         profile_id,
     )?))
+}
+
+fn resolve_library_asset(name: &str, asset: &CrosshairAsset) -> Result<ResolvedAsset, ProfileError> {
+    match asset.format {
+        CrosshairAssetFormat::Rgba => {
+            let expected = (CROSSHAIR_SIZE * CROSSHAIR_SIZE * 4) as usize;
+            if asset.bytes.len() != expected {
+                return Err(ProfileError::Io(format!(
+                    "Crosshair {name} must be a 64×64 RGBA buffer."
+                )));
+            }
+            Ok(ResolvedAsset::Rgba(asset.bytes.clone()))
+        }
+        CrosshairAssetFormat::Vtf => {
+            if asset.bytes.len() < 80 || &asset.bytes[0..4] != b"VTF\0" {
+                return Err(ProfileError::Io(format!(
+                    "Crosshair {name} is not a valid VTF file."
+                )));
+            }
+            Ok(ResolvedAsset::VtfVerbatim(asset.bytes.clone()))
+        }
+    }
+}
+
+/// Width/height straight from the VTF header (bytes 16..20), 64 on nonsense.
+fn vtf_header_dimensions(bytes: &[u8]) -> (u32, u32) {
+    let width = bytes
+        .get(16..18)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .unwrap_or(CROSSHAIR_SIZE as u16);
+    let height = bytes
+        .get(18..20)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .unwrap_or(CROSSHAIR_SIZE as u16);
+    if width == 0 || height == 0 || width > 1024 || height > 1024 {
+        (CROSSHAIR_SIZE, CROSSHAIR_SIZE)
+    } else {
+        (u32::from(width), u32::from(height))
+    }
+}
+
+/// Read a previously-applied pack VTF back out of the exclusive store,
+/// verbatim — the pack itself is the byte store for library entries.
+pub fn stored_pack_crosshair(profiles_dir: &Path, profile_id: &str, name: &str) -> Option<Vec<u8>> {
+    load_stored_pack_vtf(profiles_dir, profile_id, name)
+}
+
+fn load_stored_pack_vtf(profiles_dir: &Path, profile_id: &str, name: &str) -> Option<Vec<u8>> {
+    if !valid_crosshair_name(name) {
+        return None;
+    }
+    let rel = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/{name}.vtf");
+    let path = exclusive_file_path(profiles_dir, profile_id, &rel);
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
+        return None;
+    }
+    Some(bytes)
 }
 
 pub fn remove_crosshairs(tf2_root: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
@@ -218,6 +380,59 @@ where
         profiles_dir,
         profile_id,
     )?))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StockCrosshairSprite {
+    pub width: u32,
+    pub height: u32,
+    /// Frame 0 as unpremultiplied RGBA.
+    pub rgba: Vec<u8>,
+}
+
+/// Decode Valve's stock crosshair sprites (crosshair1..7 + default) from the
+/// user's own tf2_textures_dir.vpk for pixel-perfect previews. Read-only.
+pub fn extract_stock_crosshair_sprites(
+    tf2_root: &Path,
+) -> Result<BTreeMap<String, StockCrosshairSprite>, ProfileError> {
+    let vpk = tf2_root.join("tf").join("tf2_textures_dir.vpk");
+    if !vpk.is_file() {
+        return Err(ProfileError::Io(
+            "Could not find tf/tf2_textures_dir.vpk. Confirm the TF2 install.".into(),
+        ));
+    }
+    let keep = |rel: &str| {
+        let lower = rel.to_ascii_lowercase();
+        lower.starts_with("materials/vgui/crosshairs/") && lower.ends_with(".vtf")
+    };
+    let archive =
+        read_vpk_dir_file_filtered(&vpk, &keep).map_err(|err| ProfileError::Io(err.message()))?;
+    let mut out = BTreeMap::new();
+    for (path, bytes) in &archive.files {
+        let stem = path
+            .rsplit('/')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches(".vtf")
+            .to_ascii_lowercase();
+        if let Ok(decoded) = crate::vtf_read::decode_vtf_frame0(bytes) {
+            out.insert(
+                stem,
+                StockCrosshairSprite {
+                    width: decoded.width,
+                    height: decoded.height,
+                    rgba: decoded.rgba,
+                },
+            );
+        }
+    }
+    if out.is_empty() {
+        return Err(ProfileError::Io(
+            "No crosshair sprites were found in the local TF2 VPK.".into(),
+        ));
+    }
+    Ok(out)
 }
 
 pub fn load_weapon_scripts(tf2_root: &Path) -> Result<BTreeMap<String, String>, ProfileError> {
@@ -283,43 +498,48 @@ fn looks_like_weapon_script(text: &str) -> bool {
     lower.contains("weapondata") || lower.contains("crosshair") || lower.contains("texturedata")
 }
 
-pub fn patch_crosshair_script(text: &str, shape: &str) -> Result<String, String> {
+pub fn patch_crosshair_script(
+    text: &str,
+    shape: &str,
+    width: u32,
+    height: u32,
+) -> Result<String, String> {
     let mut map = parse_vdf(text)?;
     let material = format!("vgui/replay/thumbnails/{shape}");
-    let patched = patch_crosshair_blocks(&mut map, &material);
+    let patched = patch_crosshair_blocks(&mut map, &material, width, height);
     if patched == 0 {
-        ensure_crosshair_block(&mut map, &material);
+        ensure_crosshair_block(&mut map, &material, width, height);
     }
     Ok(serialize_vdf(&map))
 }
 
-fn patch_crosshair_blocks(map: &mut VdfMap, material: &str) -> usize {
+fn patch_crosshair_blocks(map: &mut VdfMap, material: &str, width: u32, height: u32) -> usize {
     let mut count = 0;
-    patch_rec(map, material, &mut count);
+    patch_rec(map, material, width, height, &mut count);
     count
 }
 
-fn patch_rec(map: &mut VdfMap, material: &str, count: &mut usize) {
+fn patch_rec(map: &mut VdfMap, material: &str, width: u32, height: u32, count: &mut usize) {
     for (key, value) in &mut map.entries {
         if let VdfValue::Obj(child) = value {
             if key.eq_ignore_ascii_case("crosshair") {
-                set_crosshair_fields(child, material);
+                set_crosshair_fields(child, material, width, height);
                 *count += 1;
             }
-            patch_rec(child, material, count);
+            patch_rec(child, material, width, height, count);
         }
     }
 }
 
-fn set_crosshair_fields(map: &mut VdfMap, material: &str) {
+fn set_crosshair_fields(map: &mut VdfMap, material: &str, width: u32, height: u32) {
     map.set_path(&["file"], material);
     map.set_path(&["x"], "0");
     map.set_path(&["y"], "0");
-    map.set_path(&["width"], CROSSHAIR_SIZE.to_string());
-    map.set_path(&["height"], CROSSHAIR_SIZE.to_string());
+    map.set_path(&["width"], width.to_string());
+    map.set_path(&["height"], height.to_string());
 }
 
-fn ensure_crosshair_block(map: &mut VdfMap, material: &str) {
+fn ensure_crosshair_block(map: &mut VdfMap, material: &str, width: u32, height: u32) {
     if let Some(VdfValue::Obj(weapon)) = map
         .entries
         .iter_mut()
@@ -335,7 +555,7 @@ fn ensure_crosshair_block(map: &mut VdfMap, material: &str) {
             .map(|(_, v)| v)
         {
             let mut block = VdfMap::default();
-            set_crosshair_fields(&mut block, material);
+            set_crosshair_fields(&mut block, material, width, height);
             texture
                 .entries
                 .push(("crosshair".into(), VdfValue::Obj(block)));
@@ -343,7 +563,7 @@ fn ensure_crosshair_block(map: &mut VdfMap, material: &str) {
         }
         let mut texture = VdfMap::default();
         let mut block = VdfMap::default();
-        set_crosshair_fields(&mut block, material);
+        set_crosshair_fields(&mut block, material, width, height);
         texture
             .entries
             .push(("crosshair".into(), VdfValue::Obj(block)));
@@ -353,7 +573,7 @@ fn ensure_crosshair_block(map: &mut VdfMap, material: &str) {
         return;
     }
     let mut block = VdfMap::default();
-    set_crosshair_fields(&mut block, material);
+    set_crosshair_fields(&mut block, material, width, height);
     map.entries.push(("crosshair".into(), VdfValue::Obj(block)));
 }
 
@@ -364,6 +584,9 @@ pub fn encode_vtf_bgra8888(bgra: &[u8], width: u32, height: u32) -> Result<Vec<u
             "VTF pixel buffer is the wrong size.".into(),
         ));
     }
+    // Field offsets follow the VTF 7.2 header as observed in Valve's own and
+    // known-good community files: bumpScale@48, format@52, mips@56,
+    // lowResFormat@57, lowResDims@61/62, depth@63.
     let mut out = vec![0u8; 80 + bgra.len()];
     out[0..4].copy_from_slice(b"VTF\0");
     out[4..8].copy_from_slice(&7u32.to_le_bytes());
@@ -374,11 +597,12 @@ pub fn encode_vtf_bgra8888(bgra: &[u8], width: u32, height: u32) -> Result<Vec<u
     out[20..24].copy_from_slice(&VTF_FLAGS.to_le_bytes());
     out[24..26].copy_from_slice(&1u16.to_le_bytes());
     out[26..28].copy_from_slice(&0u16.to_le_bytes());
-    out[44..48].copy_from_slice(&1f32.to_le_bytes());
-    out[48..52].copy_from_slice(&IMAGE_FORMAT_BGRA8888.to_le_bytes());
-    out[52] = 1;
-    out[53..57].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
-    out[59..61].copy_from_slice(&1u16.to_le_bytes());
+    out[48..52].copy_from_slice(&1f32.to_le_bytes());
+    out[52..56].copy_from_slice(&IMAGE_FORMAT_BGRA8888.to_le_bytes());
+    out[56] = 1;
+    out[57..61].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+    // lowResWidth/Height stay 0 (no thumbnail); depth = 1.
+    out[63..65].copy_from_slice(&1u16.to_le_bytes());
     out[80..].copy_from_slice(bgra);
     Ok(out)
 }
@@ -698,7 +922,7 @@ mod tests {
 
     #[test]
     fn patch_changes_only_the_crosshair_block() {
-        let patched = patch_crosshair_script(&sample_script(), "dot").unwrap();
+        let patched = patch_crosshair_script(&sample_script(), "dot", 64, 64).unwrap();
         assert!(patched.contains("vgui/replay/thumbnails/dot"));
         assert!(patched.contains("\"Damage\""));
         assert!(patched.contains("\"6\""));
@@ -713,7 +937,15 @@ mod tests {
         assert_eq!(&vtf[4..8], &7u32.to_le_bytes());
         assert_eq!(&vtf[8..12], &2u32.to_le_bytes());
         assert_eq!(vtf.len(), 80 + 64 * 64 * 4);
+        // Spec offsets (matching known-good community VTFs): format@52, mips@56.
+        assert_eq!(&vtf[52..56], &12u32.to_le_bytes());
+        assert_eq!(vtf[56], 1);
+        assert_eq!(&vtf[57..61], &0xffff_ffffu32.to_le_bytes());
         assert!(rgba.iter().skip(3).step_by(4).any(|a| *a > 0));
+        // The spec-conformant reader must round-trip our own writer.
+        let decoded = crate::vtf_read::decode_vtf_frame0(&vtf).unwrap();
+        assert_eq!((decoded.width, decoded.height), (64, 64));
+        assert_eq!(decoded.rgba, rgba.to_vec());
     }
 
     #[test]
@@ -731,6 +963,8 @@ mod tests {
             &assignments,
             None,
             Some([255, 64, 0]),
+            &BTreeMap::new(),
+            None,
             &scripts,
             unlocked(),
         )
@@ -768,6 +1002,8 @@ mod tests {
             &BTreeMap::new(),
             None,
             None,
+            &BTreeMap::new(),
+            None,
             &scripts,
             unlocked(),
         )
@@ -791,6 +1027,8 @@ mod tests {
             "custom",
             &BTreeMap::new(),
             Some(&pixels),
+            None,
+            &BTreeMap::new(),
             None,
             &scripts,
             unlocked(),
@@ -820,6 +1058,8 @@ mod tests {
             &BTreeMap::new(),
             Some(&pixels),
             None,
+            &BTreeMap::new(),
+            None,
             &scripts,
             unlocked(),
         )
@@ -833,6 +1073,8 @@ mod tests {
             "custom",
             &BTreeMap::new(),
             None,
+            None,
+            &BTreeMap::new(),
             None,
             &scripts,
             unlocked(),
@@ -849,6 +1091,108 @@ mod tests {
     }
 
     #[test]
+    fn library_vtf_is_written_verbatim_with_its_own_dimensions() {
+        let (root, tf2, id) = setup();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        // A 128x128 BGRA "community" VTF.
+        let rgba = vec![7u8; 128 * 128 * 4];
+        let vtf = encode_vtf_bgra8888(&rgba_to_bgra(&rgba), 128, 128).unwrap();
+        let mut library = BTreeMap::new();
+        library.insert(
+            "seeker".to_string(),
+            CrosshairAsset {
+                format: CrosshairAssetFormat::Vtf,
+                bytes: vtf.clone(),
+            },
+        );
+        let mut assignments = BTreeMap::new();
+        assignments.insert("tf_weapon_scattergun".into(), "seeker".into());
+        let detail = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &assignments,
+            None,
+            None,
+            &library,
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let record = detail.crosshair.as_ref().unwrap();
+        assert_eq!(record.library.get("seeker").map(String::as_str), Some("vtf"));
+        let written = std::fs::read(
+            tf2.join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/seeker.vtf"),
+        )
+        .unwrap();
+        assert_eq!(written, vtf);
+        let script = std::fs::read_to_string(
+            tf2.join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt"),
+        )
+        .unwrap();
+        assert!(script.contains("vgui/replay/thumbnails/seeker"));
+        // The community VTF's own dimensions land in the weapon script.
+        assert!(script.contains("\"128\""));
+
+        // Re-apply without supplying bytes: recovered verbatim from the pack.
+        let detail = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "seeker",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        assert_eq!(detail.crosshair.as_ref().unwrap().shape, "seeker");
+        let rewritten = std::fs::read(
+            tf2.join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/seeker.vtf"),
+        )
+        .unwrap();
+        assert_eq!(rewritten, vtf);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn rejects_invalid_library_names() {
+        let (root, tf2, id) = setup();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        let mut library = BTreeMap::new();
+        library.insert(
+            "Bad Name!".to_string(),
+            CrosshairAsset {
+                format: CrosshairAssetFormat::Rgba,
+                bytes: vec![0u8; 64 * 64 * 4],
+            },
+        );
+        let err = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &library,
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("lowercase"));
+        cleanup(&root);
+    }
+
+    #[test]
     fn refuses_while_tf2_is_running() {
         let (root, tf2, id) = setup();
         let mut scripts = BTreeMap::new();
@@ -860,6 +1204,8 @@ mod tests {
             "cross",
             &BTreeMap::new(),
             None,
+            None,
+            &BTreeMap::new(),
             None,
             &scripts,
             [tf2_name()],

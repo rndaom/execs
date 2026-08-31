@@ -20,15 +20,20 @@ import {
 import {
   applyCrosshairs,
   applyHudOptions,
+  applyPreloaderMods,
+  buildViewmodelPack,
   type ComfigPreset,
-  compileViewmodels,
+  downloadDefaultMods,
   getActiveProfileDetail,
   getComfigState,
+  getDefaultMods,
   getHudCatalog,
   getHudSchema,
   getHudState,
+  getPackCrosshairPreviews,
+  getPreloaderStatus,
   getProfileLaunchOptions,
-  getViewmodelCompileCapability,
+  getStockCrosshairSprites,
   type HudCatalogEntry,
   type HudSchemaView,
   type HudUiState,
@@ -36,21 +41,27 @@ import {
   importViewmodels,
   installHud,
   isTauri,
+  type ModsCatalog,
   matchHudCatalog,
   type OfficialAddon,
+  openExternal,
+  type PreloaderReport,
+  type PreloaderStatusPayload,
   type ProfileDetail,
   readProfileFile,
   removeCrosshairs,
   removeViewmodels,
+  revertPreloader,
   type SteamWriteStatus,
+  type StockCrosshairSprite,
   setComfigAddons,
   setComfigModules,
   setComfigPreset,
+  setGameinfoBypass,
   setProfileLaunchOptions,
   setViewmodelPreload,
   updateComfigVpks,
   updateHud,
-  type ViewmodelCompileCapability,
   writeOwnedFile,
 } from "./lib/bridge";
 import {
@@ -70,10 +81,12 @@ import {
   schemaSupportedIds,
 } from "./lib/hud-ui";
 import { recommendedLaunchOptions as previewLaunchOptions } from "./lib/launch-ui";
+import { PRELOADER_REPO_URL, PREVIEW_MODS_CATALOG, PREVIEW_MODS_STATUS } from "./lib/mods-ui";
 import type { PreviewState } from "./lib/preview";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import type { SettingsTab } from "./lib/settings-ui";
-import { previewViewmodelRecord, SAFE_VIEWMODEL_COMPILE_CAPABILITY } from "./lib/viewmodel-ui";
+import { previewViewmodelRecord } from "./lib/viewmodel-ui";
+import { ModsPane } from "./ModsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
 type CfgText = { path: string; text: string };
@@ -181,8 +194,21 @@ export function SettingsHost({
   );
   const [hudCatalogLoading, setHudCatalogLoading] = useState(tauri);
   const [hudCatalogError, setHudCatalogError] = useState<string | null>(null);
-  const [viewmodelCompileCapability, setViewmodelCompileCapability] =
-    useState<ViewmodelCompileCapability>(SAFE_VIEWMODEL_COMPILE_CAPABILITY);
+  const [stockSprites, setStockSprites] = useState<Record<string, StockCrosshairSprite> | null>(
+    null,
+  );
+  const stockSpritesRequested = useRef(false);
+  const [packPreviews, setPackPreviews] = useState<Record<string, StockCrosshairSprite> | null>(
+    null,
+  );
+  const [modsPayload, setModsPayload] = useState<PreloaderStatusPayload | null>(() =>
+    tauri ? null : PREVIEW_MODS_STATUS,
+  );
+  const [modsCatalog, setModsCatalog] = useState<ModsCatalog | null>(() =>
+    tauri ? null : PREVIEW_MODS_CATALOG,
+  );
+  const [modsLoading, setModsLoading] = useState(false);
+  const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [settingsBusyQueue] = useState(
     () =>
       new SettingsBusyQueue((next) => {
@@ -228,7 +254,6 @@ export function SettingsHost({
       setComfig(comfigPreviewFromState(state));
     }
     setLaunch(next?.launchOptions || (await getProfileLaunchOptions()));
-    setViewmodelCompileCapability(await getViewmodelCompileCapability());
   }
 
   async function reloadHud(refresh: boolean, showCatalogProgress = false) {
@@ -338,6 +363,42 @@ export function SettingsHost({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tauri, tab, refreshKey, externalBusy]);
 
+  // Decode Valve's stock crosshair sprites once, on first Crosshair visit —
+  // pixel-perfect previews straight from the user's own game files.
+  useEffect(() => {
+    if (!tauri || tab !== "crosshair" || stockSpritesRequested.current) {
+      return;
+    }
+    stockSpritesRequested.current = true;
+    getStockCrosshairSprites()
+      .then(setStockSprites)
+      .catch(() => {
+        /* geometry fallback stays in place */
+      });
+  }, [tauri, tab]);
+
+  // Previews for library crosshairs stored in the installed pack.
+  const crosshairLibraryKey = JSON.stringify(detail?.crosshair?.library ?? null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by library content.
+  useEffect(() => {
+    if (!tauri || tab !== "crosshair" || !detail?.crosshair?.library) {
+      return;
+    }
+    let cancelled = false;
+    getPackCrosshairPreviews()
+      .then((previews) => {
+        if (!cancelled) {
+          setPackPreviews(previews);
+        }
+      })
+      .catch(() => {
+        /* library chips fall back to name-only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tauri, tab, crosshairLibraryKey]);
+
   async function runWrite(work: () => Promise<void>) {
     if (externalBusy || settingsBusyQueue.active) {
       return;
@@ -351,6 +412,54 @@ export function SettingsHost({
     } catch (err) {
       onError(err instanceof Error ? err.message : "Could not save that setting.");
     }
+  }
+
+  // Preloader state is global (game files + app data), not part of the
+  // profile detail, so the Mods tab loads it separately.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-arms the load; onError is a stable callback.
+  useEffect(() => {
+    if (!tauri || tab !== "mods") {
+      return;
+    }
+    let cancelled = false;
+    getPreloaderStatus()
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setModsPayload(payload);
+        if (payload.modsCached) {
+          setModsLoading(true);
+          getDefaultMods()
+            .then((mods) => {
+              if (!cancelled) {
+                setModsCatalog(mods.catalog);
+              }
+            })
+            .catch((err) => {
+              if (!cancelled) {
+                onError(err instanceof Error ? err.message : "Could not read the mod library.");
+              }
+            })
+            .finally(() => {
+              if (!cancelled) {
+                setModsLoading(false);
+              }
+            });
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          onError(err instanceof Error ? err.message : "Could not read the preloader state.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tauri, tab, refreshKey]);
+
+  async function refreshModsStatus() {
+    setModsPayload(await getPreloaderStatus());
   }
 
   async function writeManaged(
@@ -600,6 +709,8 @@ export function SettingsHost({
         record={detail?.crosshair ?? previewRecord}
         layer={layer}
         effective={maps.effective}
+        stockSprites={stockSprites}
+        packPreviews={packPreviews}
         managedText={files.find((file) => file.path === path)?.text ?? ""}
         onSaveStock={(gameplayText) => {
           if (!tauri) {
@@ -610,12 +721,12 @@ export function SettingsHost({
             await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
           });
         }}
-        onApply={(shape, assignments, customRgba, color) => {
+        onApply={(shape, assignments, customRgba, color, library, design) => {
           if (!tauri) {
             return;
           }
           void runWrite(async () => {
-            await applyCrosshairs(shape, assignments, customRgba, color);
+            await applyCrosshairs(shape, assignments, customRgba, color, library, design);
           });
         }}
         onRemove={() => {
@@ -638,13 +749,12 @@ export function SettingsHost({
         running={running}
         busy={busy}
         record={detail?.viewmodel ?? previewRecord}
-        compileCapability={viewmodelCompileCapability}
-        onCompile={(options, preload) => {
+        onBuild={(hidden, preload) => {
           if (!tauri) {
             return;
           }
           void runWrite(async () => {
-            await compileViewmodels(options, preload);
+            await buildViewmodelPack(hidden, preload);
           });
         }}
         onImport={(preload) => {
@@ -670,6 +780,82 @@ export function SettingsHost({
           void runWrite(async () => {
             await setViewmodelPreload(enabled);
           });
+        }}
+      />
+    );
+  }
+
+  if (tab === "mods") {
+    return (
+      <ModsPane
+        running={running}
+        busy={busy}
+        payload={modsPayload}
+        catalog={modsCatalog}
+        loading={modsLoading}
+        report={modsReport}
+        onDownloadLibrary={() => {
+          if (!tauri) {
+            return;
+          }
+          setModsLoading(true);
+          onError(null);
+          downloadDefaultMods()
+            .then((mods) => {
+              setModsCatalog(mods.catalog);
+              return refreshModsStatus();
+            })
+            .catch((err) => {
+              onError(err instanceof Error ? err.message : "Could not download the mod library.");
+            })
+            .finally(() => setModsLoading(false));
+        }}
+        onApply={(addons, particleMods) => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            try {
+              const report = await applyPreloaderMods(addons, particleMods);
+              setModsReport(report);
+            } finally {
+              // A failed apply still restored the previous install
+              // backend-side; the pane must reflect that, not the old state.
+              await refreshModsStatus().catch(() => {});
+            }
+          });
+        }}
+        onToggleBypass={(enabled) => {
+          if (!tauri) {
+            setModsPayload((current) =>
+              current
+                ? {
+                    ...current,
+                    status: { ...current.status, gameinfoBypassed: enabled },
+                  }
+                : current,
+            );
+            return;
+          }
+          void runWrite(async () => {
+            setModsPayload(await setGameinfoBypass(enabled));
+          });
+        }}
+        onRevert={() => {
+          if (!tauri) {
+            return;
+          }
+          void runWrite(async () => {
+            try {
+              await revertPreloader();
+              setModsReport(null);
+            } finally {
+              await refreshModsStatus().catch(() => {});
+            }
+          });
+        }}
+        onOpenRepo={() => {
+          void openExternal(PRELOADER_REPO_URL);
         }}
       />
     );

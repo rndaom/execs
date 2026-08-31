@@ -5,6 +5,7 @@ import {
   Keyboard,
   LockSimple,
   Monitor,
+  Package,
   Play,
   SlidersHorizontal,
   UserFocus,
@@ -21,6 +22,7 @@ const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
   hud: Monitor,
   crosshair: Crosshair,
   viewmodels: UserFocus,
+  mods: Package,
   files: FolderOpen,
   launch: Play,
 };
@@ -32,6 +34,7 @@ const SETTINGS_TAB_DESCRIPTIONS: Record<SettingsTab, string> = {
   hud: "Find, install, update, and personalize one HUD for this profile.",
   crosshair: "Configure the stock crosshair or install custom crosshairs.",
   viewmodels: "Manage animation packs and the first-party Casual preloader.",
+  mods: "Install particle and texture mods that survive Valve Casual.",
   files: "Inspect and safely edit the cfg files owned by this profile.",
   launch: "Review the launch string stored with this profile.",
 };

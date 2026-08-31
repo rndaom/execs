@@ -6,7 +6,7 @@ use execs_core::{
     materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, ComfigPreset,
     ComfigState, FirstRunClass, HudCatalogEntry, HudSchemaView, HudUiState, OfficialAddon,
     PackChoice, ProfileDetail, ProfileError, ProfileFile, ProfileFileContent, ProfileLibrary,
-    SetLaunchResult, SwitchProgress, Tf2Install, ViewmodelCompileCapability, WizardAsset,
+    SetLaunchResult, SwitchProgress, Tf2Install, WizardAsset,
     WizardSpec, WriteLock,
 };
 use tauri::{AppHandle, Emitter, Manager};
@@ -545,6 +545,8 @@ pub async fn apply_crosshairs(
     assignments: BTreeMap<String, String>,
     custom_rgba: Option<Vec<u8>>,
     color: Option<[u8; 3]>,
+    library: Option<BTreeMap<String, execs_core::CrosshairAsset>>,
+    design: Option<String>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
@@ -557,8 +559,89 @@ pub async fn apply_crosshairs(
             &assignments,
             custom_rgba.as_deref(),
             color,
+            &library.unwrap_or_default(),
+            design.as_deref(),
         )
         .map_err(|err| err.message())
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommunityCrosshair {
+    pub file: String,
+    pub width: u32,
+    pub height: u32,
+    /// Frame 0 as unpremultiplied RGBA, for the picker preview.
+    pub rgba: Vec<u8>,
+    /// The raw VTF bytes to pass back through apply_crosshairs' library.
+    pub bytes: Vec<u8>,
+}
+
+/// Download (with local cache) one Venom-pack crosshair and decode a preview.
+#[tauri::command]
+pub async fn fetch_community_crosshair(file: String) -> Result<CommunityCrosshair, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = crate::crosshair_fetch::fetch_crosshair_vtf(&file)?;
+        let decoded = execs_core::vtf_read::decode_vtf_frame0(&bytes)?;
+        if decoded.frames > 1 {
+            return Err("Animated crosshairs are not supported yet.".into());
+        }
+        Ok(CommunityCrosshair {
+            file,
+            width: decoded.width,
+            height: decoded.height,
+            rgba: decoded.rgba,
+            bytes,
+        })
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+/// Decode the active profile's installed library crosshairs for previews.
+#[tauri::command]
+pub async fn get_pack_crosshair_previews(
+) -> Result<BTreeMap<String, execs_core::StockCrosshairSprite>, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, None)?;
+        let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
+            .map_err(|err| err.message())?;
+        let mut out = BTreeMap::new();
+        if let Some(record) = manifest.crosshair {
+            for name in record.library.keys() {
+                let Some(bytes) =
+                    execs_core::stored_pack_crosshair(&execs_core::profiles_dir(), &profile_id, name)
+                else {
+                    continue;
+                };
+                if let Ok(decoded) = execs_core::vtf_read::decode_vtf_frame0(&bytes) {
+                    out.insert(
+                        name.clone(),
+                        execs_core::StockCrosshairSprite {
+                            width: decoded.width,
+                            height: decoded.height,
+                            rgba: decoded.rgba,
+                        },
+                    );
+                }
+            }
+        }
+        Ok(out)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_stock_crosshair_sprites(
+) -> Result<BTreeMap<String, execs_core::StockCrosshairSprite>, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::extract_stock_crosshair_sprites(&root).map_err(|err| err.message())
     })
     .await
     .map_err(|err| err.to_string())?
@@ -575,20 +658,33 @@ pub async fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, Stri
     .map_err(|err| err.to_string())?
 }
 
+/// Build a Yttrium-style pack: fetch the animation sources, hide the chosen
+/// groups, compile with TF2's own studiomdl in an isolated staging dir, and
+/// install the resulting VPK like an import.
 #[tauri::command]
-pub fn get_viewmodel_compile_capability() -> ViewmodelCompileCapability {
-    execs_core::viewmodel_compile_capability()
-}
-
-#[tauri::command]
-pub fn compile_viewmodels(
-    options: BTreeMap<String, String>,
+pub async fn build_viewmodel_pack(
+    hidden: Vec<String>,
     preload: bool,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::compile_viewmodels(&root, &profile_id, &options, preload).map_err(|err| err.message())
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        let hidden_set: std::collections::BTreeSet<String> = hidden.into_iter().collect();
+        let zip = crate::viewmodel_fetch::fetch_animations_zip()?;
+        let studiomdl = root.join("bin").join("studiomdl.exe");
+        let staging = execs_core::execs_data_dir().join("studio").join("staging");
+        let vpk =
+            execs_core::build_viewmodel_pack_vpk(&zip, &hidden_set, &studiomdl, &staging)
+                .map_err(|err| err.message())?;
+        let detail =
+            execs_core::install_built_viewmodel_pack(&root, &profile_id, &vpk, &hidden_set, preload)
+                .map_err(|err| err.message())?;
+        let _ = std::fs::remove_dir_all(&staging);
+        Ok(detail)
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
@@ -695,4 +791,158 @@ pub(crate) fn apply_wizard_and_switch(
         let _ = app.emit("profile-switch-progress", progress);
     })
     .map_err(|err| err.message())
+}
+
+// ---------------------------------------------------------------------------
+// Preloader (gameinfo bypass + default mod library)
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreloaderStatusPayload {
+    pub status: execs_core::preloader::PreloaderStatus,
+    pub mods_cached: bool,
+    pub mods_size_bytes: u64,
+}
+
+fn preloader_status_payload(
+    root: &std::path::Path,
+) -> Result<PreloaderStatusPayload, String> {
+    Ok(PreloaderStatusPayload {
+        status: execs_core::preloader::preloader_status(root, &execs_core::execs_data_dir())?,
+        mods_cached: crate::mods_fetch::is_cached(),
+        mods_size_bytes: crate::mods_fetch::MODS_SIZE_BYTES,
+    })
+}
+
+#[tauri::command]
+pub async fn get_preloader_status() -> Result<PreloaderStatusPayload, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || preloader_status_payload(&root))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefaultModsPayload {
+    pub cached: bool,
+    pub catalog: Option<execs_core::preloader::ModsCatalog>,
+}
+
+/// The catalog if the library zip is already cached; never downloads.
+#[tauri::command]
+pub async fn get_default_mods() -> Result<DefaultModsPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !crate::mods_fetch::is_cached() {
+            return Ok(DefaultModsPayload {
+                cached: false,
+                catalog: None,
+            });
+        }
+        let catalog = execs_core::preloader::read_mods_catalog(&crate::mods_fetch::cache_path())?;
+        Ok(DefaultModsPayload {
+            cached: true,
+            catalog: Some(catalog),
+        })
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+/// Download (or reuse) the pinned library zip and return its catalog.
+#[tauri::command]
+pub async fn download_default_mods() -> Result<DefaultModsPayload, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let zip = crate::mods_fetch::ensure_mods_zip()?;
+        let catalog = execs_core::preloader::read_mods_catalog(&zip)?;
+        Ok(DefaultModsPayload {
+            cached: true,
+            catalog: Some(catalog),
+        })
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+/// Apply a mod selection: restore previous patches, patch the selected
+/// particle files into tf2_misc, pack addon content into tf/custom, and turn
+/// the gameinfo bypass on. Refused while the game is running.
+#[tauri::command]
+pub async fn apply_preloader_mods(
+    addons: Vec<String>,
+    particle_mods: Vec<String>,
+) -> Result<execs_core::preloader::PreloaderReport, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::refuse_if_running().map_err(|err| err.message())?;
+        let zip = crate::mods_fetch::ensure_mods_zip()?;
+        let selection = execs_core::preloader::PreloaderSelection {
+            addons,
+            particle_mods,
+        };
+        let has_content = !selection.addons.is_empty() || !selection.particle_mods.is_empty();
+        let report = execs_core::preloader::apply_preloader_selection(
+            &root,
+            &execs_core::execs_data_dir(),
+            &zip,
+            &selection,
+        )?;
+        // Mods only survive Valve Casual when the shared preload cfg runs at
+        // launch, so installing content turns it on for the active profile —
+        // and records which profile that was, so revert can undo it later
+        // even if a different profile is active by then.
+        if has_content {
+            if let Ok(profile_id) = resolve_profile_id(&root, None) {
+                execs_core::ensure_profile_preload(&root, &profile_id)
+                    .map_err(|err| err.message())?;
+                execs_core::preloader::record_preload_profile(
+                    &execs_core::execs_data_dir(),
+                    &profile_id,
+                )?;
+            }
+        }
+        Ok(report)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn set_gameinfo_bypass(enabled: bool) -> Result<PreloaderStatusPayload, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::refuse_if_running().map_err(|err| err.message())?;
+        execs_core::preloader::set_gameinfo_bypass(&root, &execs_core::execs_data_dir(), enabled)?;
+        preloader_status_payload(&root)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+/// Restore every stock byte: particle snapshots, gameinfo.txt, custom VPK.
+#[tauri::command]
+pub async fn revert_preloader() -> Result<execs_core::preloader::RevertReport, String> {
+    let root = confirmed_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        execs_core::refuse_if_running().map_err(|err| err.message())?;
+        let report =
+            execs_core::preloader::revert_preloader(&root, &execs_core::execs_data_dir())?;
+        // Drop the shared preload cfg from every profile the mods install
+        // touched (plus the active one), unless a viewmodel pack wants it.
+        // A profile deleted in the meantime just fails its own cleanup.
+        let mut profiles =
+            execs_core::preloader::take_preload_profiles(&execs_core::execs_data_dir());
+        if let Ok(active) = resolve_profile_id(&root, None) {
+            if !profiles.contains(&active) {
+                profiles.push(active);
+            }
+        }
+        for profile_id in profiles {
+            let _ = execs_core::remove_profile_preload_if_unused(&root, &profile_id);
+        }
+        Ok(report)
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
