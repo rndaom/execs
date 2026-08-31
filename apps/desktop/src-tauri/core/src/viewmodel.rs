@@ -1,10 +1,9 @@
-//! First-party Horsie-class viewmodel compile + Casual itemtest preload.
-//! Never edits gameinfo.txt. Never writes official VPKs.
+//! Viewmodel pack install (imported or built) + Casual itemtest preload.
+//! This module never edits gameinfo.txt or official VPKs — the preloader
+//! module owns those (snapshot-first, revertible; see AGENTS.md).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-
-use serde::{Deserialize, Serialize};
 
 use crate::apply::{
     cfg_layer_from_files, detail_from_manifest, write_owned_file_to, ProfileDetail,
@@ -18,7 +17,6 @@ use crate::profile::{
     load_library_from, load_manifest, profiles_dir, remove_manifest_files_to, save_manifest,
     ProfileError, ProfileFile, ViewmodelRecord, ViewmodelSource,
 };
-use crate::settings::execs_data_dir;
 use crate::surface::CfgLayer;
 use crate::vpk::read_vpk_dir_bytes;
 #[cfg(test)]
@@ -30,33 +28,20 @@ pub const EXECS_PRELOAD_STEM: &str = "execs_preload";
 pub const EXECS_PRELOAD_OVERRIDES_STEM: &str = "overrides/execs_preload";
 const EXECS_PRELOAD_VANILLA_PATH: &str = "tf/cfg/execs_preload.cfg";
 const EXECS_PRELOAD_COMFIG_PATH: &str = "tf/cfg/overrides/execs_preload.cfg";
-pub const VIEWMODEL_COMPILE_UNAVAILABLE_REASON: &str =
-    "Compile is unavailable in this release while the first-party, file-safe compiler is rebuilt. Import a prebuilt VPK instead.";
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ViewmodelCompileCapability {
-    pub available: bool,
-    pub reason: String,
-}
-
-pub fn viewmodel_compile_capability() -> ViewmodelCompileCapability {
-    ViewmodelCompileCapability {
-        available: false,
-        reason: VIEWMODEL_COMPILE_UNAVAILABLE_REASON.into(),
-    }
-}
-
-pub fn studio_cache_dir() -> PathBuf {
-    execs_data_dir().join("studio").join("viewmodels")
-}
-
 pub fn serialize_preload_cfg() -> String {
     [
-        "// execs viewmodel preload — managed, do not edit by hand",
-        "sv_pure 0",
+        "// execs preload — managed, do not edit by hand",
+        // -1 loads without any pure whitelist; the point_servercommand cvar
+        // must be set before the map loads or Casual resets it.
+        "sv_pure -1",
+        "sv_allow_point_servercommand always",
         "map itemtest",
-        "wait 5; disconnect",
+        // wait counts frames; 10 gives heavier animation packs margin to finish caching.
+        "wait 10; disconnect",
+        // A beat for the disconnect to settle, then clean the console and
+        // restart the menu music the map load cut off.
+        "wait 1; clear",
+        "playmenumusic",
         "",
     ]
     .join("\n")
@@ -100,170 +85,6 @@ fn is_preload_stem(value: &str) -> bool {
     value == EXECS_PRELOAD_STEM || value == EXECS_PRELOAD_OVERRIDES_STEM
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct QcEdit {
-    pub origin: (f32, f32, f32),
-    pub rotate: (f32, f32, f32),
-    pub hide: bool,
-    pub remove_left_arm: bool,
-    pub keep: Vec<String>,
-    pub extras: Vec<String>,
-}
-
-pub fn apply_qc_knobs(
-    qc: &str,
-    origin: (f32, f32, f32),
-    hide: bool,
-    remove_left_arm: bool,
-) -> String {
-    apply_qc_edit(
-        qc,
-        &QcEdit {
-            origin,
-            hide,
-            remove_left_arm,
-            ..QcEdit::default()
-        },
-    )
-}
-
-pub fn apply_qc_edit(qc: &str, edit: &QcEdit) -> String {
-    let mut lines: Vec<String> = qc.lines().map(str::to_string).collect();
-    lines.retain(|line| {
-        let trim = line.trim_start();
-        !trim.to_ascii_lowercase().starts_with("$origin") && !trim.starts_with("// execs:")
-    });
-    let z = if edit.hide {
-        edit.origin.2 - 10_000.0
-    } else {
-        edit.origin.2
-    };
-    lines.insert(
-        0,
-        format!(
-            "$origin {} {} {} {}",
-            edit.origin.0, edit.origin.1, z, edit.rotate.2
-        ),
-    );
-    let mut note_at = 1;
-    if edit.rotate.0 != 0.0 || edit.rotate.1 != 0.0 || edit.rotate.2 != 0.0 {
-        lines.insert(
-            note_at,
-            format!(
-                "// execs: rotate {} {} {}",
-                edit.rotate.0, edit.rotate.1, edit.rotate.2
-            ),
-        );
-        note_at += 1;
-    }
-    if edit.hide {
-        lines.insert(
-            note_at,
-            "// execs: hide (off-screen origin, same sequence length)".into(),
-        );
-        note_at += 1;
-    }
-    if !edit.keep.is_empty() {
-        lines.insert(
-            note_at,
-            format!("// execs: keep_visible {}", edit.keep.join(" ")),
-        );
-    }
-    if edit.remove_left_arm {
-        lines.push("// execs: remove_left_arm".into());
-    }
-    for extra in &edit.extras {
-        lines.push(format!("// execs: {extra}"));
-    }
-    let mut out = lines.join("\n");
-    if !out.ends_with('\n') {
-        out.push('\n');
-    }
-    out
-}
-
-pub fn apply_smd_origin_rotate(
-    smd: &str,
-    origin: (f32, f32, f32),
-    rotate: (f32, f32, f32),
-) -> String {
-    let mut out = String::new();
-    let mut in_skeleton = false;
-    for line in smd.lines() {
-        let trim = line.trim_start();
-        if trim.eq_ignore_ascii_case("skeleton") {
-            in_skeleton = true;
-            out.push_str(line);
-            out.push('\n');
-            continue;
-        }
-        if in_skeleton && trim.eq_ignore_ascii_case("end") {
-            in_skeleton = false;
-        }
-        if in_skeleton && !trim.starts_with("time ") && !trim.is_empty() {
-            let parts: Vec<&str> = trim.split_whitespace().collect();
-            if parts.len() >= 7 && parts[0] == "0" {
-                if let (Ok(x), Ok(y), Ok(z), Ok(rx), Ok(ry), Ok(rz)) = (
-                    parts[1].parse::<f32>(),
-                    parts[2].parse::<f32>(),
-                    parts[3].parse::<f32>(),
-                    parts[4].parse::<f32>(),
-                    parts[5].parse::<f32>(),
-                    parts[6].parse::<f32>(),
-                ) {
-                    let edited = format!(
-                        "  0 {} {} {} {} {} {}",
-                        x + origin.0,
-                        y + origin.1,
-                        z + origin.2,
-                        rx + rotate.0,
-                        ry + rotate.1,
-                        rz + rotate.2
-                    );
-                    out.push_str(&edited);
-                    out.push('\n');
-                    continue;
-                }
-            }
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
-}
-
-pub fn apply_smd_static_idle(smd: &str) -> String {
-    let mut out = String::new();
-    let mut in_skeleton = false;
-    let mut first_time: Option<String> = None;
-    for line in smd.lines() {
-        let trim = line.trim_start();
-        if trim.eq_ignore_ascii_case("skeleton") {
-            in_skeleton = true;
-            out.push_str(line);
-            out.push('\n');
-            continue;
-        }
-        if in_skeleton && trim.eq_ignore_ascii_case("end") {
-            in_skeleton = false;
-        }
-        if in_skeleton && trim.starts_with("time ") {
-            if first_time.is_none() {
-                first_time = Some(line.to_string());
-                out.push_str(line);
-                out.push('\n');
-            }
-            continue;
-        }
-        if in_skeleton && first_time.is_some() && trim.starts_with("time ") {
-            continue;
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
-}
-
 pub fn import_viewmodel_vpk(
     tf2_root: &Path,
     profile_id: &str,
@@ -280,6 +101,37 @@ pub fn import_viewmodel_vpk(
         preload,
         ViewmodelSource::Imported,
         BTreeMap::new(),
+        process_names.clone(),
+        process_names,
+        &steam_roots,
+    )
+}
+
+/// Install a pack built from Yttrium-style hidden groups. Same machinery as
+/// import; the record remembers the hidden set for re-editing.
+pub fn install_built_viewmodel_pack(
+    tf2_root: &Path,
+    profile_id: &str,
+    vpk_bytes: &[u8],
+    hidden_groups: &std::collections::BTreeSet<String>,
+    preload: bool,
+) -> Result<ProfileDetail, ProfileError> {
+    let mut options = BTreeMap::new();
+    options.insert(
+        "hidden".into(),
+        hidden_groups.iter().cloned().collect::<Vec<_>>().join(","),
+    );
+    options.insert("schema".into(), "yttrium-1".into());
+    let process_names = live_process_names();
+    let steam_roots = discover_steam_roots();
+    import_viewmodel_vpk_to_with_launch(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        vpk_bytes,
+        preload,
+        ViewmodelSource::Compiled,
+        options,
         process_names.clone(),
         process_names,
         &steam_roots,
@@ -466,6 +318,51 @@ where
     )?))
 }
 
+/// The mods preloader needs the shared preload cfg + launch token too, with
+/// or without a viewmodel pack installed.
+pub fn ensure_profile_preload(tf2_root: &Path, profile_id: &str) -> Result<(), ProfileError> {
+    let running: Vec<String> = live_process_names();
+    let steam = running.clone();
+    let steam_roots = discover_steam_roots();
+    set_preload_state(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        true,
+        &running,
+        &steam,
+        &steam_roots,
+    )
+}
+
+/// Remove the preload cfg + launch token unless a viewmodel pack still wants
+/// it. Used when the mods preloader is fully reverted.
+pub fn remove_profile_preload_if_unused(
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<(), ProfileError> {
+    let manifest = load_manifest(&profiles_dir(), profile_id)?;
+    if manifest
+        .viewmodel
+        .as_ref()
+        .is_some_and(|record| record.preload)
+    {
+        return Ok(());
+    }
+    let running: Vec<String> = live_process_names();
+    let steam = running.clone();
+    let steam_roots = discover_steam_roots();
+    set_preload_state(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        false,
+        &running,
+        &steam,
+        &steam_roots,
+    )
+}
+
 pub fn set_viewmodel_preload(
     tf2_root: &Path,
     profile_id: &str,
@@ -532,7 +429,7 @@ where
     let manifest = load_manifest(profiles_dir, profile_id)?;
     if enabled && manifest.viewmodel.is_none() {
         return Err(ProfileError::Io(
-            "Import or compile viewmodels before enabling preload.".into(),
+            "Import or build a viewmodel pack before enabling preload.".into(),
         ));
     }
     set_preload_state(
@@ -553,41 +450,6 @@ where
         profiles_dir,
         profile_id,
     )?))
-}
-
-pub fn compile_viewmodels(
-    tf2_root: &Path,
-    profile_id: &str,
-    options: &BTreeMap<String, String>,
-    preload: bool,
-) -> Result<ProfileDetail, ProfileError> {
-    compile_viewmodels_to(
-        &profiles_dir(),
-        tf2_root,
-        profile_id,
-        options,
-        preload,
-        None,
-        live_process_names(),
-    )
-}
-
-pub fn compile_viewmodels_to<I, S>(
-    _profiles_dir: &Path,
-    _tf2_root: &Path,
-    _profile_id: &str,
-    _options: &BTreeMap<String, String>,
-    _preload: bool,
-    _studiomdl: Option<&Path>,
-    _running_names: I,
-) -> Result<ProfileDetail, ProfileError>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    Err(ProfileError::Io(
-        VIEWMODEL_COMPILE_UNAVAILABLE_REASON.into(),
-    ))
 }
 
 fn set_preload_state(
@@ -755,8 +617,11 @@ mod tests {
     #[test]
     fn preload_cfg_is_itemtest_and_never_mentions_gameinfo() {
         let cfg = serialize_preload_cfg();
+        assert!(cfg.contains("sv_pure -1"));
+        assert!(cfg.contains("sv_allow_point_servercommand always"));
         assert!(cfg.contains("map itemtest"));
         assert!(cfg.contains("disconnect"));
+        assert!(cfg.contains("playmenumusic"));
         assert!(!cfg.contains("gameinfo"));
         assert!(!cfg.contains("+quit"));
         let enabled = with_preload_launch("-novid -nojoy", true);
@@ -766,31 +631,6 @@ mod tests {
         assert!(has_preload_launch(&comfig));
         assert_eq!(with_preload_launch(&comfig, false), "-novid");
         assert!(!with_preload_launch("-novid -autoconfig +quit", true).contains("+quit"));
-    }
-
-    #[test]
-    fn qc_hide_keeps_a_timing_safe_offscreen_origin() {
-        let qc = apply_qc_edit(
-            "$modelname \"x.mdl\"\n",
-            &QcEdit {
-                origin: (1.0, 2.0, 3.0),
-                rotate: (4.0, 5.0, 6.0),
-                hide: true,
-                remove_left_arm: true,
-                keep: vec!["draw".into(), "reload".into()],
-                extras: vec!["keepBeamVisible".into()],
-            },
-        );
-        assert!(qc.contains("$origin 1 2 -9997 6"));
-        assert!(qc.contains("rotate 4 5 6"));
-        assert!(qc.contains("keep_visible draw reload"));
-        assert!(qc.contains("remove_left_arm"));
-        assert!(qc.contains("keepBeamVisible"));
-        let smd = "version 1\nskeleton\ntime 0\n  0 1 2 3 0 0 0\ntime 1\n  0 1 2 3 0 0 0\nend\n";
-        let moved = apply_smd_origin_rotate(smd, (10.0, 0.0, 0.0), (0.0, 0.0, 90.0));
-        assert!(moved.contains("11 2 3 0 0 90"));
-        let static_idle = apply_smd_static_idle(smd);
-        assert_eq!(static_idle.matches("time ").count(), 1);
     }
 
     #[test]
@@ -832,7 +672,7 @@ mod tests {
         let (root, profiles, tf2, id) = setup();
         let before = load_manifest(&profiles, &id).unwrap();
         let err = set_viewmodel_preload_to(&profiles, &tf2, &id, true, unlocked()).unwrap_err();
-        assert!(err.message().contains("Import or compile"));
+        assert!(err.message().contains("Import or build"));
         let after = load_manifest(&profiles, &id).unwrap();
         assert_eq!(after.launch_options, before.launch_options);
         assert_eq!(after.files, before.files);
@@ -926,35 +766,6 @@ mod tests {
         .unwrap();
         let text = std::fs::read_to_string(localconfig).unwrap();
         assert!(text.contains("\"LaunchOptions\"\t\t\"+exec execs_preload\""));
-        cleanup(&root);
-    }
-
-    #[test]
-    fn compile_is_disabled_before_any_cache_or_live_mutation() {
-        let (root, profiles, tf2, id) = setup();
-        let before = load_manifest(&profiles, &id).unwrap();
-        let work = profiles
-            .join("..")
-            .join("studio")
-            .join("viewmodels")
-            .join(&id);
-        let mut options = BTreeMap::new();
-        options.insert("../../escape".into(), "{}".into());
-        let err = compile_viewmodels_to(
-            &profiles,
-            &tf2,
-            &id,
-            &options,
-            true,
-            Some(Path::new("studiomdl.exe")),
-            unlocked(),
-        )
-        .unwrap_err();
-        assert!(err.message().contains("file-safe compiler is rebuilt"));
-        assert!(!work.exists());
-        assert!(!tf2.join("tf/models").exists());
-        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
-        assert!(!viewmodel_compile_capability().available);
         cleanup(&root);
     }
 

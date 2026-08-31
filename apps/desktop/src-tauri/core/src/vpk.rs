@@ -171,6 +171,210 @@ fn read_vpk(
     Ok(VpkArchive { files })
 }
 
+/// Where one entry's bytes live, plus where its CRC sits in the directory
+/// file — everything needed to rewrite the entry in place.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VpkEntryLocation {
+    pub rel: String,
+    pub crc: u32,
+    /// Byte offset of the CRC field inside the `_dir.vpk` file.
+    pub crc_pos: u64,
+    pub preload_len: u16,
+    pub archive_index: u16,
+    pub offset: u32,
+    pub length: u32,
+    /// Absolute offset of the post-tree data region in the `_dir.vpk` file
+    /// (start for `archive_index == 0x7fff` entries).
+    pub data_base: u64,
+}
+
+impl VpkEntryLocation {
+    pub fn total_len(&self) -> usize {
+        self.preload_len as usize + self.length as usize
+    }
+}
+
+/// Map every entry to its physical location without reading any file bodies.
+pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
+    let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
+    if bytes.len() < 12 {
+        return Err(VpkError("VPK header is too short.".into()));
+    }
+    let mut cur = Cursor::new(bytes.as_slice());
+    let signature = read_u32(&mut cur)?;
+    if signature != SIGNATURE {
+        return Err(VpkError("Not a VPK archive.".into()));
+    }
+    let version = read_u32(&mut cur)?;
+    let tree_size = read_u32(&mut cur)? as usize;
+    let header_size = match version {
+        1 => 12,
+        2 => {
+            if bytes.len() < 28 {
+                return Err(VpkError("VPK v2 header is too short.".into()));
+            }
+            cur.set_position(28);
+            28
+        }
+        _ => return Err(VpkError(format!("unsupported VPK version {version}"))),
+    };
+    let tree_end = header_size + tree_size;
+    if bytes.len() < tree_end {
+        return Err(VpkError("VPK directory tree is truncated.".into()));
+    }
+    let mut entries = BTreeMap::new();
+    while cur.position() < tree_end as u64 {
+        let ext = read_cstring(&mut cur, tree_end)?;
+        if ext.is_empty() {
+            break;
+        }
+        loop {
+            let path_part = read_cstring(&mut cur, tree_end)?;
+            if path_part.is_empty() {
+                break;
+            }
+            loop {
+                let name = read_cstring(&mut cur, tree_end)?;
+                if name.is_empty() {
+                    break;
+                }
+                if cur.position() as usize + 18 > tree_end {
+                    return Err(VpkError("VPK entry is truncated.".into()));
+                }
+                let crc_pos = cur.position();
+                let crc = read_u32(&mut cur)?;
+                let preload_len = read_u16(&mut cur)?;
+                let archive_index = read_u16(&mut cur)?;
+                let offset = read_u32(&mut cur)?;
+                let length = read_u32(&mut cur)?;
+                let term = read_u16(&mut cur)?;
+                if term != 0xffff {
+                    return Err(VpkError("VPK entry terminator missing.".into()));
+                }
+                if (cur.position() as usize) + preload_len as usize > tree_end {
+                    return Err(VpkError("VPK preload is truncated.".into()));
+                }
+                cur.set_position(cur.position() + u64::from(preload_len));
+                let rel = if path_part == " " || path_part.is_empty() {
+                    format!("{name}.{ext}")
+                } else {
+                    format!("{path_part}/{name}.{ext}")
+                };
+                if rel.contains("..") {
+                    return Err(VpkError("Refusing a VPK path that escapes.".into()));
+                }
+                entries.insert(
+                    rel.replace('\\', "/"),
+                    VpkEntryLocation {
+                        rel: rel.replace('\\', "/"),
+                        crc,
+                        crc_pos,
+                        preload_len,
+                        archive_index,
+                        offset,
+                        length,
+                        data_base: tree_end as u64,
+                    },
+                );
+            }
+        }
+    }
+    Ok(entries)
+}
+
+/// Read one entry's bytes via its location (no full-archive materialization).
+pub fn read_vpk_entry(dir_path: &Path, entry: &VpkEntryLocation) -> Result<Vec<u8>, VpkError> {
+    if entry.preload_len != 0 {
+        return Err(VpkError(format!(
+            "{} keeps preload bytes in the directory; not supported.",
+            entry.rel
+        )));
+    }
+    let (path, start) = if entry.archive_index == DIR_ARCHIVE {
+        (dir_path.to_path_buf(), entry.data_base + u64::from(entry.offset))
+    } else {
+        (
+            sibling_archive_path(dir_path, entry.archive_index)?,
+            u64::from(entry.offset),
+        )
+    };
+    let mut file = std::fs::File::open(&path).map_err(|err| VpkError(err.to_string()))?;
+    file.seek(SeekFrom::Start(start))
+        .map_err(|err| VpkError(err.to_string()))?;
+    let mut body = vec![0u8; entry.length as usize];
+    file.read_exact(&mut body)
+        .map_err(|err| VpkError(err.to_string()))?;
+    Ok(body)
+}
+
+/// Rewrite one entry in place. `data` must exactly match the stored length —
+/// callers pad shrunk files up to size first — and the directory CRC is
+/// updated to match, so the archive stays self-consistent.
+pub fn patch_vpk_entry(
+    dir_path: &Path,
+    entry: &VpkEntryLocation,
+    data: &[u8],
+) -> Result<(), VpkError> {
+    use std::io::Write;
+    if entry.preload_len != 0 {
+        return Err(VpkError(format!(
+            "{} keeps preload bytes in the directory; not supported.",
+            entry.rel
+        )));
+    }
+    if data.len() != entry.length as usize {
+        return Err(VpkError(format!(
+            "{}: replacement is {} bytes but the entry stores {}.",
+            entry.rel,
+            data.len(),
+            entry.length
+        )));
+    }
+    let (data_path, start) = if entry.archive_index == DIR_ARCHIVE {
+        (dir_path.to_path_buf(), entry.data_base + u64::from(entry.offset))
+    } else {
+        (
+            sibling_archive_path(dir_path, entry.archive_index)?,
+            u64::from(entry.offset),
+        )
+    };
+    let mut data_file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&data_path)
+        .map_err(|err| VpkError(err.to_string()))?;
+    let available = data_file
+        .metadata()
+        .map_err(|err| VpkError(err.to_string()))?
+        .len();
+    if start.saturating_add(data.len() as u64) > available {
+        return Err(VpkError(format!("{}: entry runs past the archive.", entry.rel)));
+    }
+    data_file
+        .seek(SeekFrom::Start(start))
+        .map_err(|err| VpkError(err.to_string()))?;
+    data_file
+        .write_all(data)
+        .map_err(|err| VpkError(err.to_string()))?;
+    data_file
+        .sync_all()
+        .map_err(|err| VpkError(err.to_string()))?;
+
+    let mut dir_file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(dir_path)
+        .map_err(|err| VpkError(err.to_string()))?;
+    dir_file
+        .seek(SeekFrom::Start(entry.crc_pos))
+        .map_err(|err| VpkError(err.to_string()))?;
+    dir_file
+        .write_all(&crc32(data).to_le_bytes())
+        .map_err(|err| VpkError(err.to_string()))?;
+    dir_file
+        .sync_all()
+        .map_err(|err| VpkError(err.to_string()))?;
+    Ok(())
+}
+
 /// `tf2_misc_dir.vpk` + archive 0 → same-folder `tf2_misc_000.vpk`. Never leaves that folder.
 pub fn sibling_archive_path(dir_path: &Path, index: u16) -> Result<std::path::PathBuf, VpkError> {
     let name = dir_path
@@ -283,7 +487,7 @@ fn write_cstring(out: &mut Vec<u8>, s: &str) {
     out.push(0);
 }
 
-fn crc32(data: &[u8]) -> u32 {
+pub(crate) fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xffff_ffffu32;
     for byte in data {
         crc ^= u32::from(*byte);

@@ -1,18 +1,13 @@
-import type { ViewmodelCompileCapability, ViewmodelRecord, ViewmodelSource } from "./bridge";
+import type { ViewmodelRecord, ViewmodelSource } from "./bridge";
 
 export const EXECS_VIEWMODELS_PACK = "execs-viewmodels";
 export const EXECS_VIEWMODELS_VPK = `tf/custom/${EXECS_VIEWMODELS_PACK}.vpk`;
 export const EXECS_PRELOAD_STEM = "execs_preload";
 export const EXECS_PRELOAD_OVERRIDES_STEM = "overrides/execs_preload";
 export const EXECS_PRELOAD_LAUNCH = `+exec ${EXECS_PRELOAD_STEM}`;
-export const SAFE_VIEWMODEL_COMPILE_CAPABILITY: ViewmodelCompileCapability = {
-  available: false,
-  reason:
-    "Compile is unavailable in this release while the first-party, file-safe compiler is rebuilt. Import a prebuilt VPK instead.",
-};
 
 export const VIEWMODEL_CASUAL_COPY =
-  "Compiled animations need the first-party preload to apply on Valve Casual. Community and listen servers work without it. File-safe FOV and min viewmodels stay on the Gameplay pane.";
+  "Animation packs need the first-party preload to apply on Valve Casual. Community and listen servers work without it. File-safe FOV and min viewmodels stay on the Gameplay pane.";
 
 export const VIEWMODEL_CLASSES = [
   "scout",
@@ -28,142 +23,45 @@ export const VIEWMODEL_CLASSES = [
 
 export type ViewmodelClass = (typeof VIEWMODEL_CLASSES)[number];
 
-export type KeepVisibleFlags = {
-  draw: boolean;
-  reload: boolean;
-  attack: boolean;
-  altAttack: boolean;
-  idle: boolean;
-  special: boolean;
-};
-
-export type StaticFlags = {
-  draw: boolean;
-  reload: boolean;
-  attack: boolean;
-  altAttack: boolean;
-  idle: boolean;
-  moreStaticIdle: boolean;
-  special: boolean;
-};
-
-export type WeaponSpecificFlags = {
-  keepBeamVisible: boolean;
-  keepFlamesVisible: boolean;
-  keepBackstabDetectionVisible: boolean;
-  keepBackstabVisible: boolean;
-  instantBackstabDetection: boolean;
-  replaceBackstabWithNormalAttack: boolean;
-  staticBackstabDetection: boolean;
-  staticBackstab: boolean;
-  removeShells: boolean;
-  keepTracersVisible: boolean;
-};
-
-export type ViewmodelWeaponDraft = {
-  originX: number;
-  originY: number;
-  originZ: number;
-  rotateX: number;
-  rotateY: number;
-  rotateZ: number;
-  hide: boolean;
-  removeLeftArm: boolean;
-  keep: KeepVisibleFlags;
-  stat: StaticFlags;
-  extra: WeaponSpecificFlags;
-};
-
+/** What the pane edits: preload plus the Yttrium-style hidden group ids. */
 export type ViewmodelDraft = {
-  classId: ViewmodelClass;
   preload: boolean;
-  weapons: Record<string, ViewmodelWeaponDraft>;
+  hidden: string[];
 };
-
-export function emptyKeep(): KeepVisibleFlags {
-  return {
-    draw: false,
-    reload: false,
-    attack: false,
-    idle: false,
-    altAttack: false,
-    special: false,
-  };
-}
-
-export function emptyStatic(): StaticFlags {
-  return {
-    draw: false,
-    reload: false,
-    attack: false,
-    altAttack: false,
-    idle: false,
-    moreStaticIdle: false,
-    special: false,
-  };
-}
-
-export function emptyExtra(): WeaponSpecificFlags {
-  return {
-    keepBeamVisible: false,
-    keepFlamesVisible: false,
-    keepBackstabDetectionVisible: false,
-    keepBackstabVisible: false,
-    instantBackstabDetection: false,
-    replaceBackstabWithNormalAttack: false,
-    staticBackstabDetection: false,
-    staticBackstab: false,
-    removeShells: false,
-    keepTracersVisible: false,
-  };
-}
-
-export function emptyWeaponDraft(): ViewmodelWeaponDraft {
-  return {
-    originX: 0,
-    originY: 0,
-    originZ: 0,
-    rotateX: 0,
-    rotateY: 0,
-    rotateZ: 0,
-    hide: false,
-    removeLeftArm: false,
-    keep: emptyKeep(),
-    stat: emptyStatic(),
-    extra: emptyExtra(),
-  };
-}
 
 export function emptyViewmodelDraft(): ViewmodelDraft {
-  return { classId: "scout", preload: true, weapons: {} };
+  return { preload: true, hidden: [] };
+}
+
+export function serializeHiddenGroups(hidden: string[]): string {
+  return [...new Set(hidden)].sort().join(",");
+}
+
+export function parseHiddenGroups(raw: string | undefined | null): string[] {
+  if (!raw) {
+    return [];
+  }
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    ),
+  ].sort();
 }
 
 export function seedViewmodelDraft(record: ViewmodelRecord | null | undefined): ViewmodelDraft {
-  const draft = emptyViewmodelDraft();
-  draft.preload = record?.preload ?? true;
-  for (const [key, value] of Object.entries(record?.options ?? {})) {
-    draft.weapons[key] = parseWeaponOption(value);
-  }
-  return draft;
+  return {
+    preload: record?.preload ?? true,
+    // Legacy compiled-era records stored per-weapon JSON blobs under other
+    // keys; only the hidden list matters now and unknown keys are ignored.
+    hidden: parseHiddenGroups(record?.options?.hidden),
+  };
 }
 
-export function serializeWeaponOption(draft: ViewmodelWeaponDraft): string {
-  return JSON.stringify(draft);
-}
-
-export function parseWeaponOption(raw: string): ViewmodelWeaponDraft {
-  try {
-    const parsed = JSON.parse(raw) as Partial<ViewmodelWeaponDraft>;
-    return {
-      ...emptyWeaponDraft(),
-      ...parsed,
-      keep: { ...emptyKeep(), ...parsed.keep },
-      stat: { ...emptyStatic(), ...parsed.stat },
-      extra: { ...emptyExtra(), ...parsed.extra },
-    };
-  } catch {
-    return emptyWeaponDraft();
-  }
+export function toggleHiddenGroup(hidden: string[], id: string): string[] {
+  return hidden.includes(id) ? hidden.filter((entry) => entry !== id) : [...hidden, id].sort();
 }
 
 export function hasPreloadLaunch(options: string): boolean {
@@ -201,17 +99,26 @@ export function previewViewmodelRecord(source: ViewmodelSource = "compiled"): Vi
     id: EXECS_VIEWMODELS_PACK,
     source,
     preload: true,
-    options: {},
+    options: { hidden: "scout/melee,scout/scatterguns", schema: "yttrium-1" },
   };
 }
 
-/** First-party itemtest listen preload. Never edits gameinfo.txt. Never stores +quit. */
+/** First-party itemtest listen preload. Must mirror the Rust serializer in
+ * core/src/viewmodel.rs. Never stores +quit. */
 export function serializePreloadCfg(): string {
   return [
-    "// execs viewmodel preload — managed, do not edit by hand",
-    "sv_pure 0",
+    "// execs preload — managed, do not edit by hand",
+    // -1 loads without any pure whitelist; the point_servercommand cvar must
+    // be set before the map loads or Casual resets it.
+    "sv_pure -1",
+    "sv_allow_point_servercommand always",
     "map itemtest",
-    "wait 5; disconnect",
+    // wait counts frames; 10 gives heavier animation packs margin to finish caching.
+    "wait 10; disconnect",
+    // A beat for the disconnect to settle, then clean the console and restart
+    // the menu music the map load cut off.
+    "wait 1; clear",
+    "playmenumusic",
     "",
   ].join("\n");
 }
