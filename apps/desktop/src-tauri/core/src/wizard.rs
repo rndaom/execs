@@ -171,7 +171,10 @@ pub fn file_name_for_rel(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-pub fn pick_release_asset<'a>(release: &'a GitHubRelease, file_name: &str) -> Option<&'a GitHubAsset> {
+pub fn pick_release_asset<'a>(
+    release: &'a GitHubRelease,
+    file_name: &str,
+) -> Option<&'a GitHubAsset> {
     release
         .assets
         .iter()
@@ -265,11 +268,13 @@ where
     let mut manifest = load_manifest(profiles_dir, &profile_id)?;
     manifest.launch_options = launch;
     let manifest_path = crate::profile::manifest_file(profiles_dir, &profile_id);
-    let json = serde_json::to_string_pretty(&manifest).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(&manifest).map_err(|err| ProfileError::Io(err.to_string()))?;
     if let Some(parent) = manifest_path.parent() {
         fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
     }
-    fs::write(&manifest_path, format!("{json}\n")).map_err(|err| ProfileError::Io(err.to_string()))?;
+    fs::write(&manifest_path, format!("{json}\n"))
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
 
     Ok(WizardResult {
         library: load_library_from(profiles_dir, Some(tf2_root))?,
@@ -341,7 +346,8 @@ fn build_config_cfg(
             "Valve config_default.cfg is missing from this TF2 install.".into(),
         ));
     }
-    let stock = fs::read_to_string(&default_path).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let stock =
+        fs::read_to_string(&default_path).map_err(|err| ProfileError::Io(err.to_string()))?;
     match binds {
         BindSource::Stock => Ok(stock),
         BindSource::Inherit { from_profile_id } => {
@@ -351,14 +357,17 @@ fn build_config_cfg(
                     "Active profile has no config.cfg to inherit.".into(),
                 ));
             }
-            let inherited =
-                fs::read_to_string(&inherited_path).map_err(|err| ProfileError::Io(err.to_string()))?;
+            let inherited = fs::read_to_string(&inherited_path)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
             Ok(overlay_binds(&stock, &inherited))
         }
     }
 }
 
-pub fn wizard_profile_rel_paths(profiles_dir: &Path, profile_id: &str) -> Result<Vec<String>, ProfileError> {
+pub fn wizard_profile_rel_paths(
+    profiles_dir: &Path,
+    profile_id: &str,
+) -> Result<Vec<String>, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
     Ok(manifest.files.into_iter().map(|file| file.path).collect())
 }
@@ -380,9 +389,9 @@ pub fn wizard_file_storage(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::absorb::AbsorbOptions;
     use crate::profile::{init_library_to, save_current_as_to, SaveCurrentOptions};
     use crate::switch::switch_profile_to;
-    use crate::absorb::AbsorbOptions;
     use std::fs::{self, File};
     use std::io::Write;
     use std::path::Path;
@@ -472,10 +481,7 @@ mod tests {
         assert_eq!(
             urls,
             vec![
-                (
-                    BASE_VPK.to_string(),
-                    "https://example.test/base.vpk".into()
-                ),
+                (BASE_VPK.to_string(), "https://example.test/base.vpk".into()),
                 (
                     "tf/custom/mastercomfig-addon-no-tutorial.vpk".into(),
                     "https://example.test/no-tutorial.vpk".into()
@@ -550,7 +556,9 @@ mod tests {
         assert_eq!(config, STOCK);
         let manifest = load_manifest(&profiles, &result.profile_id).unwrap();
         assert_eq!(manifest.launch_options, "-novid");
-        assert!(paths.iter().any(|path| path.ends_with("mastercomfig-base.vpk")));
+        assert!(paths
+            .iter()
+            .any(|path| path.ends_with("mastercomfig-base.vpk")));
         cleanup(&dir);
     }
 

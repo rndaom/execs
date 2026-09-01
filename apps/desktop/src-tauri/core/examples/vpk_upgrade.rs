@@ -21,7 +21,9 @@ fn main() {
             }
         };
         let out = write_vpk_v2(&before);
-        let after = read_vpk_dir_bytes(&out).expect("reread rewritten pack").files;
+        let after = read_vpk_dir_bytes(&out)
+            .expect("reread rewritten pack")
+            .files;
         if after != before {
             println!("REFUSED {arg}: contents would change");
             continue;

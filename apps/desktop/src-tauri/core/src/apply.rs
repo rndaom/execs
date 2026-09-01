@@ -10,9 +10,9 @@ use crate::blob::blob_path;
 use crate::finder::discover_steam_roots;
 use crate::process_lock::live_process_names;
 use crate::profile::{
-    exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path, load_library_from, load_manifest,
-    normalize_rel_path, profiles_dir, put_exclusive_file_to, put_shared_blob_to, FileStorage,
-    CrosshairRecord, HudRecord, ProfileError, ProfileFile, ViewmodelRecord,
+    exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path, load_library_from,
+    load_manifest, normalize_rel_path, profiles_dir, put_exclusive_file_to, put_shared_blob_to,
+    CrosshairRecord, FileStorage, HudRecord, ProfileError, ProfileFile, ViewmodelRecord,
 };
 use crate::surface::CfgLayer;
 
@@ -208,7 +208,10 @@ where
     profile_detail_from(profiles_dir, profile_id)
 }
 
-fn profile_detail_from(profiles_dir: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
+fn profile_detail_from(
+    profiles_dir: &Path,
+    profile_id: &str,
+) -> Result<ProfileDetail, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
     Ok(detail_from_manifest(&manifest))
 }
@@ -255,7 +258,10 @@ fn source_path(
         FileStorage::Exclusive => exclusive_file_path(profiles_dir, profile_id, &file.path),
     };
     if !path.is_file() {
-        return Err(ProfileError::Io(format!("Profile file missing: {}", file.path)));
+        return Err(ProfileError::Io(format!(
+            "Profile file missing: {}",
+            file.path
+        )));
     }
     Ok(path)
 }
@@ -323,9 +329,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
@@ -346,13 +350,8 @@ mod tests {
             fs::read_to_string(root.join("tf/cfg/overrides/autoexec.cfg")).unwrap(),
             "fov_desired 90\n"
         );
-        let read = read_profile_file_from(
-            &profiles,
-            &root,
-            &id,
-            "tf/cfg/overrides/autoexec.cfg",
-        )
-        .unwrap();
+        let read =
+            read_profile_file_from(&profiles, &root, &id, "tf/cfg/overrides/autoexec.cfg").unwrap();
         assert_eq!(read.text.as_deref(), Some("fov_desired 90\n"));
         assert!(!read.binary);
         cleanup(&dir);
@@ -364,9 +363,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
 
@@ -397,9 +394,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
 
@@ -444,9 +439,7 @@ mod tests {
         .unwrap();
 
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();

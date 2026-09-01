@@ -706,7 +706,11 @@ where
 {
     refuse_writes(running_names)?;
     let mut index = usable_index(profiles_dir, tf2_root)?;
-    if !index.profiles.iter().any(|profile| profile.id == profile_id) {
+    if !index
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id)
+    {
         return Err(ProfileError::UnknownProfile);
     }
     index.active_profile_id = Some(profile_id.to_string());
@@ -1175,10 +1179,9 @@ mod tests {
             serde_json::from_str(&fs::read_to_string(index_file(&profiles)).unwrap()).unwrap();
         index.tf2_root = legacy.clone();
         write_json(&index_file(&profiles), &index).unwrap();
-        let mut manifest: ProfileManifest = serde_json::from_str(
-            &fs::read_to_string(manifest_file(&profiles, &id)).unwrap(),
-        )
-        .unwrap();
+        let mut manifest: ProfileManifest =
+            serde_json::from_str(&fs::read_to_string(manifest_file(&profiles, &id)).unwrap())
+                .unwrap();
         manifest.tf2_root = legacy;
         write_json(&manifest_file(&profiles, &id), &manifest).unwrap();
 
@@ -1187,12 +1190,18 @@ mod tests {
         let loaded = load_library_from(&profiles, Some(&root)).unwrap();
         assert!(loaded.usable);
         assert!(!loaded.root_mismatch);
-        assert_eq!(loaded.tf2_root.as_deref(), Some(root.to_string_lossy().as_ref()));
+        assert_eq!(
+            loaded.tf2_root.as_deref(),
+            Some(root.to_string_lossy().as_ref())
+        );
         assert_eq!(fs::read(index_file(&profiles)).unwrap(), index_before);
 
         let loaded_manifest = load_manifest(&profiles, &id).unwrap();
         assert_eq!(loaded_manifest.tf2_root, root.to_string_lossy());
-        assert_eq!(fs::read(manifest_file(&profiles, &id)).unwrap(), manifest_before);
+        assert_eq!(
+            fs::read(manifest_file(&profiles, &id)).unwrap(),
+            manifest_before
+        );
 
         set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
         let persisted: LibraryIndex =

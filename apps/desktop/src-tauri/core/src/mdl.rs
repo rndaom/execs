@@ -45,7 +45,7 @@ pub fn material_dirs(bytes: &[u8]) -> Option<Vec<String>> {
     }
     let count = read_i32(bytes, OFF_NUM_CDTEXTURES)?;
     let index = read_i32(bytes, OFF_CDTEXTURE_INDEX)?;
-    if count < 0 || count > 64 || index <= 0 {
+    if !(0..=64).contains(&count) || index <= 0 {
         return None;
     }
     let mut dirs = Vec::with_capacity(count as usize);
@@ -84,7 +84,7 @@ pub fn rewrite_material_dirs(bytes: &[u8], dirs: &[String]) -> Option<Vec<u8>> {
     let mut out = bytes.to_vec();
     // The engine reads offsets as absolute file positions, so keep them 4-byte
     // aligned like studiomdl's own output.
-    while out.len() % 4 != 0 {
+    while !out.len().is_multiple_of(4) {
         out.push(0);
     }
     let mut offsets = Vec::with_capacity(dirs.len());
@@ -96,7 +96,7 @@ pub fn rewrite_material_dirs(bytes: &[u8], dirs: &[String]) -> Option<Vec<u8>> {
         out.extend_from_slice(dir.as_bytes());
         out.push(0);
     }
-    while out.len() % 4 != 0 {
+    while !out.len().is_multiple_of(4) {
         out.push(0);
     }
     let table = out.len() as i32;
@@ -138,7 +138,7 @@ mod tests {
             bytes.extend_from_slice(dir.as_bytes());
             bytes.push(0);
         }
-        while bytes.len() % 4 != 0 {
+        while !bytes.len().is_multiple_of(4) {
             bytes.push(0);
         }
         let table = bytes.len() as i32;
