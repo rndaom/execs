@@ -338,10 +338,17 @@ export function SettingsHost({
     };
   }, [api, tab]);
 
-  // Previews for library crosshairs stored in the installed pack.
-  const crosshairLibraryKey = JSON.stringify(detail?.crosshair?.library ?? null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by library content.
+  // Previews for library crosshairs stored in the installed pack. Keyed by the
+  // profile too: two profiles can hold the same library name with different
+  // bytes, and the stale pixels would otherwise sit on the chip until the new
+  // fetch resolved.
+  const crosshairLibraryKey = JSON.stringify([
+    detail?.id ?? null,
+    detail?.crosshair?.library ?? null,
+  ]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by profile + library content.
   useEffect(() => {
+    setPackPreviews(null);
     if (tab !== "crosshair" || !detail?.crosshair?.library) {
       return;
     }
