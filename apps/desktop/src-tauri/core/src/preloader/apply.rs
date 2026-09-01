@@ -20,8 +20,8 @@ use crate::vpk::{
 use super::catalog::zip_archive;
 use super::gameinfo::{gameinfo_bypass_state, set_gameinfo_bypass};
 use super::pack::{
-    is_excluded_addon_file, relocate_model_materials, scrub_ignorez, stock_shadowing_paths,
-    synthesize_missing_vmts,
+    is_excluded_addon_file, relocate_model_materials, scrub_ignorez, stock_entry_tables,
+    stock_shadowing_paths, synthesize_missing_vmts,
 };
 use super::state::{
     adopt_orphaned_snapshots, load_state, misc_vpk_path, originals_dir, restore_patched_entries,
@@ -136,15 +136,14 @@ pub fn apply_preloader_selection(
     // snapshots) stay perfectly valid, and the restore path re-validates
     // every entry by size anyway.
     let fingerprint = vpk_fingerprint(&vpk_path)?;
-    if !state.patched.is_empty() && state.vpk_len != 0 && state.vpk_len != fingerprint.0 {
+    if !state.patched.is_empty() && state.vpk_len != 0 && state.vpk_len != fingerprint {
         state.patched.clear();
         let _ = std::fs::remove_dir_all(originals_dir(data_dir));
         report.baseline_reset = true;
     }
     // Record the current length up front so state saved mid-install already
     // carries the right baseline for a crash-recovery run.
-    state.vpk_len = fingerprint.0;
-    state.vpk_mtime_ms = fingerprint.1;
+    state.vpk_len = fingerprint;
     save_state(data_dir, &state)?;
 
     let entries = map_vpk_entries(&vpk_path).map_err(|err| err.message())?;
@@ -310,7 +309,10 @@ pub fn apply_preloader_selection(
         } else {
             decoded
         };
-        remove_duplicate_elements(&mut processed);
+        if let Err(err) = remove_duplicate_elements(&mut processed) {
+            skip(format!("could not shrink: {}", err.0), &mut report);
+            continue;
+        }
         let encoded = match encode_pcf(&processed) {
             Ok(encoded) => encoded,
             Err(err) => {
@@ -380,15 +382,25 @@ pub fn apply_preloader_selection(
                     PatchedEntry {
                         owner: item.mod_name.clone(),
                         original_sha256: sha256_hex(&original),
+                        patched_sha256: String::new(),
+                        rel: target_rel.clone(),
                     },
                 );
             } else if let Some(patched) = state.patched.get_mut(&target_rel) {
                 patched.owner = item.mod_name.clone();
+                patched.rel = target_rel.clone();
             }
             // Track before writing: a crash mid-patch must leave the entry
             // marked patched so the next run restores it from the snapshot.
             save_state(data_dir, &state)?;
             patch_vpk_entry(&vpk_path, entry, &padded).map_err(|err| err.message())?;
+            // Recorded only after the write lands, so a crash mid-patch leaves
+            // it empty and the restore falls back to the size check alone
+            // rather than refusing on bytes that were never fully written.
+            if let Some(patched) = state.patched.get_mut(&target_rel) {
+                patched.patched_sha256 = sha256_hex(&padded);
+            }
+            save_state(data_dir, &state)?;
             report.patched_files.push(target_rel);
         }
     }
@@ -430,7 +442,10 @@ pub fn apply_preloader_selection(
             &mut archive,
             &format!("mods/particles/{mod_name}/"),
             &mut custom,
-            &|inner| inner.starts_with("materials/") || inner.starts_with("scripts/"),
+            &|inner| {
+                (inner.starts_with("materials/") || inner.starts_with("scripts/"))
+                    && !is_excluded_addon_file(inner)
+            },
         )?;
     }
     let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
@@ -454,7 +469,10 @@ pub fn apply_preloader_selection(
     // actively conflict, so drop those and say so. Materials and models stay:
     // the preloader exists to carry exactly those into Casual.
     let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
-    let shadowing = stock_shadowing_paths(tf2_root, &custom);
+    // The three official trees are parsed once per apply and shared, instead
+    // of each helper re-reading them.
+    let stock_tables = stock_entry_tables(tf2_root);
+    let shadowing = stock_shadowing_paths(&stock_tables, &custom);
     for rel in shadowing {
         custom.remove(&rel);
         let owner = addon_owner.get(&rel).cloned().unwrap_or_default();
@@ -477,7 +495,7 @@ pub fn apply_preloader_selection(
 
     // A texture with no material beside it is a checkerboard in game, so give
     // every orphan one before the pack is sealed.
-    let synthesized = synthesize_missing_vmts(tf2_root, &mut custom);
+    let synthesized = synthesize_missing_vmts(&stock_tables, &mut custom);
     if synthesized > 0 {
         report.synthesized_vmts = synthesized;
     }
@@ -493,15 +511,18 @@ pub fn apply_preloader_selection(
         report.custom_vpk_written = true;
     }
 
-    set_gameinfo_bypass(tf2_root, data_dir, true, running_names)?;
+    // "Uncheck everything, Apply" must not leave an edited official file
+    // behind with nothing installed; the bypass only goes on when there is
+    // something for it to carry.
+    if !custom.is_empty() || !report.patched_files.is_empty() {
+        set_gameinfo_bypass(tf2_root, data_dir, true, running_names)?;
+    }
     // Report what actually happened: a gameinfo.txt without the expected
     // line means the bypass is not in effect.
     report.gameinfo_bypassed = gameinfo_bypass_state(tf2_root)?.enabled;
 
-    let fingerprint = vpk_fingerprint(&vpk_path)?;
     state.schema = 1;
-    state.vpk_len = fingerprint.0;
-    state.vpk_mtime_ms = fingerprint.1;
+    state.vpk_len = vpk_fingerprint(&vpk_path)?;
     state.addons = selection.addons.clone();
     state.particle_mods = selection.particle_mods.clone();
     state.skipped = report.skipped.clone();
@@ -539,7 +560,7 @@ pub fn revert_preloader(
         // Only a resized VPK proves a game update (mtime drifts from our own
         // writes and from partially-failed restores; those snapshots are
         // still exactly right).
-        if state.vpk_len != 0 && state.vpk_len != fingerprint.0 {
+        if state.vpk_len != 0 && state.vpk_len != fingerprint {
             state.patched.clear();
             let _ = std::fs::remove_dir_all(originals_dir(data_dir));
             report.failures.push(
@@ -574,11 +595,8 @@ pub fn revert_preloader(
     if state.patched.is_empty() {
         let _ = std::fs::remove_dir_all(originals_dir(data_dir));
         state.vpk_len = 0;
-        state.vpk_mtime_ms = 0;
     } else {
-        let fingerprint = vpk_fingerprint(&vpk_path)?;
-        state.vpk_len = fingerprint.0;
-        state.vpk_mtime_ms = fingerprint.1;
+        state.vpk_len = vpk_fingerprint(&vpk_path)?;
     }
     state.addons.clear();
     state.particle_mods.clear();
@@ -629,7 +647,7 @@ pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderSta
     // patch writes.
     let stale = !state.patched.is_empty()
         && vpk_fingerprint(&vpk_path)
-            .map(|fingerprint| state.vpk_len != 0 && state.vpk_len != fingerprint.0)
+            .map(|fingerprint| state.vpk_len != 0 && state.vpk_len != fingerprint)
             .unwrap_or(true);
     Ok(PreloaderStatus {
         gameinfo_found: gameinfo.found,

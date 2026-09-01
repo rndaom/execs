@@ -482,7 +482,7 @@ fn orphan_textures_get_a_material_preferring_the_stock_one() {
     custom.insert("materials/world/has_one.vtf".into(), b"VTF ".to_vec());
     custom.insert("materials/world/has_one.vmt".into(), b"mine".to_vec());
 
-    let written = synthesize_missing_vmts(&root, &mut custom);
+    let written = synthesize_missing_vmts(&stock_entry_tables(&root), &mut custom);
 
     assert_eq!(written, 2, "only the two orphans get a material");
     assert_eq!(
@@ -843,4 +843,148 @@ fn rebuild_keep_lists_prefer_sole_homes() {
     // Shared only among rebuild files: alphabetically first keeps it.
     assert!(bigboom.contains(&"dup_only".to_string()));
     assert!(!keep["halloween.pcf"].contains(&"dup_only".to_string()));
+}
+
+/// The patched bytes live in the sibling archives, so a content update that
+/// rewrites `_000.vpk` while the directory file keeps its length used to be
+/// invisible — and the restore then wrote stale snapshot bytes at stale
+/// offsets into fresh game data.
+#[test]
+fn fingerprint_covers_the_sibling_archives() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+
+    apply_preloader_selection(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec![],
+            particle_mods: vec!["Blue Water".into()],
+        },
+        &[],
+    )
+    .unwrap();
+    assert!(!preloader_status(&root, &data).unwrap().stale);
+
+    // Grow only the sibling; the directory file is untouched.
+    let mut sibling = std::fs::read(&sibling_path).unwrap();
+    sibling.extend_from_slice(b"an update rewrote this archive");
+    std::fs::write(&sibling_path, &sibling).unwrap();
+
+    assert!(
+        preloader_status(&root, &data).unwrap().stale,
+        "a resized sibling archive is a game update"
+    );
+}
+
+/// `rel.replace('/', "__")` was not injective: any entry path containing `__`
+/// round-tripped to a different rel, so the adopt pass inserted a bogus entry
+/// while the real snapshot was orphaned and never restored.
+#[test]
+fn snapshot_names_are_hashed_and_legacy_names_migrate() {
+    let (_root, data) = fake_root();
+    let rel = "particles/blue__water.pcf";
+    let hashed = snapshot_path(&data, rel);
+    assert_eq!(
+        hashed.file_name().unwrap().to_str().unwrap(),
+        crate::hash::sha256_hex(rel.as_bytes())
+    );
+    // Distinct rels that used to collide now have distinct snapshot names.
+    assert_ne!(hashed, snapshot_path(&data, "particles/blue/water.pcf"));
+
+    // A snapshot written by an older build is adopted, migrated to the hashed
+    // name, and carries its rel forward.
+    let legacy = legacy_snapshot_path(&data, "particles/water.pcf");
+    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    std::fs::write(&legacy, b"pristine").unwrap();
+    let mut state = PreloaderState::default();
+    adopt_orphaned_snapshots(&data, &mut state);
+
+    let entry = state
+        .patched
+        .get("particles/water.pcf")
+        .expect("legacy snapshot adopted");
+    assert_eq!(entry.rel, "particles/water.pcf");
+    assert_eq!(entry.original_sha256, crate::hash::sha256_hex(b"pristine"));
+    assert!(!legacy.exists(), "the legacy file is moved, not copied");
+    assert_eq!(
+        std::fs::read(snapshot_path(&data, "particles/water.pcf")).unwrap(),
+        b"pristine"
+    );
+}
+
+/// A same-size replacement passes the length check, so the restore has to
+/// confirm the entry still holds exactly what we wrote before putting the
+/// snapshot back over it.
+#[test]
+fn restore_refuses_an_entry_the_game_replaced_in_place() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let vpk_path = root.join("tf").join(MISC_VPK);
+
+    apply_preloader_selection(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec![],
+            particle_mods: vec!["Blue Water".into()],
+        },
+        &[],
+    )
+    .unwrap();
+
+    let state = load_state(&data);
+    let (rel, tracked) = state.patched.iter().next().expect("something was patched");
+    assert!(
+        !tracked.patched_sha256.is_empty(),
+        "the patched hash is recorded so the restore can verify it"
+    );
+    let snapshot_before = std::fs::read(snapshot_path(&data, rel)).unwrap();
+
+    // Overwrite the entry in place with different bytes of the same length,
+    // exactly as a same-size content update would.
+    let entries = map_vpk_entries(&vpk_path).unwrap();
+    let entry = entries.get(rel).unwrap();
+    let replacement = vec![b'Z'; entry.length as usize];
+    crate::vpk::patch_vpk_entry(&vpk_path, entry, &replacement).unwrap();
+
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert!(
+        report
+            .failures
+            .iter()
+            .any(|failure| failure.contains("replaced this entry")),
+        "expected a refusal, got {:?}",
+        report.failures
+    );
+    // Fresh game data is left exactly as it was, and the snapshot is kept.
+    let after = crate::vpk::read_vpk_entry(&vpk_path, entry).unwrap();
+    assert_eq!(after, replacement);
+    assert_eq!(
+        std::fs::read(snapshot_path(&data, rel)).unwrap(),
+        snapshot_before
+    );
+}
+
+/// "Uncheck everything, Apply" must not leave an edited official file behind
+/// with nothing installed.
+#[test]
+fn an_empty_selection_does_not_force_the_bypass_on() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let before = std::fs::read(root.join("tf").join("gameinfo.txt")).unwrap();
+
+    let report =
+        apply_preloader_selection(&root, &data, &zip_path, &PreloaderSelection::default(), &[])
+            .unwrap();
+    assert!(report.patched_files.is_empty());
+    assert!(!report.gameinfo_bypassed);
+    assert_eq!(
+        std::fs::read(root.join("tf").join("gameinfo.txt")).unwrap(),
+        before,
+        "gameinfo.txt must be byte-identical"
+    );
 }
