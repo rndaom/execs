@@ -7,6 +7,8 @@ import { CROSSHAIR_CANVAS_SIZE, type CrosshairColor } from "./crosshair-ui";
  */
 export const DESIGN_STYLES = ["cross", "circle", "dot", "t", "x"] as const;
 
+const SIZE = CROSSHAIR_CANVAS_SIZE;
+
 export type DesignStyle = (typeof DESIGN_STYLES)[number];
 
 export type CrosshairDesign = {
@@ -51,23 +53,50 @@ export function defaultCrosshairDesign(): CrosshairDesign {
   };
 }
 
+function clampTo(value: number, limits: { min: number; max: number }): number {
+  return Math.min(
+    limits.max,
+    Math.max(limits.min, Math.round(Number.isFinite(value) ? value : limits.min)),
+  );
+}
+
+/** Styles whose reach starts at the gap; circle and dot ignore it. */
+function gapApplies(style: DesignStyle): boolean {
+  return style === "cross" || style === "t" || style === "x";
+}
+
+/**
+ * The largest `size` that still fits inside the 64×64 sprite.
+ *
+ * Everything is drawn from the centre (32), so the outermost pixel a design can
+ * touch is `gap + size + thickness/2 + outline`. Letting the slider run past
+ * that just clipped the arms flat against the sprite edge — the user dragged
+ * and nothing changed, and the clipped bitmap is what got baked into the VTF.
+ */
+export function maxDesignSize(
+  design: Pick<CrosshairDesign, "style" | "thickness" | "gap"> & Partial<CrosshairDesign>,
+): number {
+  const style = DESIGN_STYLES.includes(design.style) ? design.style : "cross";
+  const thickness = clampTo(design.thickness, DESIGN_LIMITS.thickness);
+  const gap = gapApplies(style) ? clampTo(design.gap, DESIGN_LIMITS.gap) : 0;
+  const outline = clampTo(design.outline ?? 0, DESIGN_LIMITS.outline);
+  const room = Math.floor(SIZE / 2 - gap - thickness / 2 - outline);
+  return Math.max(DESIGN_LIMITS.size.min, Math.min(DESIGN_LIMITS.size.max, room));
+}
+
 export function clampDesign(design: CrosshairDesign): CrosshairDesign {
-  const clamp = (value: number, limits: { min: number; max: number }) =>
-    Math.min(
-      limits.max,
-      Math.max(limits.min, Math.round(Number.isFinite(value) ? value : limits.min)),
-    );
-  return {
+  const next = {
     style: DESIGN_STYLES.includes(design.style) ? design.style : "cross",
-    size: clamp(design.size, DESIGN_LIMITS.size),
-    thickness: clamp(design.thickness, DESIGN_LIMITS.thickness),
-    gap: clamp(design.gap, DESIGN_LIMITS.gap),
+    size: clampTo(design.size, DESIGN_LIMITS.size),
+    thickness: clampTo(design.thickness, DESIGN_LIMITS.thickness),
+    gap: clampTo(design.gap, DESIGN_LIMITS.gap),
     dot: design.dot === true,
-    dotSize: clamp(design.dotSize, DESIGN_LIMITS.dotSize),
-    outline: clamp(design.outline, DESIGN_LIMITS.outline),
+    dotSize: clampTo(design.dotSize, DESIGN_LIMITS.dotSize),
+    outline: clampTo(design.outline, DESIGN_LIMITS.outline),
     shadow: design.shadow === true,
-    opacity: clamp(design.opacity, DESIGN_LIMITS.opacity),
+    opacity: clampTo(design.opacity, DESIGN_LIMITS.opacity),
   };
+  return { ...next, size: Math.min(next.size, maxDesignSize(next)) };
 }
 
 export function serializeDesign(design: CrosshairDesign): string {
@@ -89,12 +118,15 @@ export function parseDesign(raw: string | undefined | null): CrosshairDesign | n
   }
 }
 
-const SIZE = CROSSHAIR_CANVAS_SIZE;
-
-/** The sprite center. Stock TF2 crosshair sprites center on 32 with 2px-wide
- * strokes spanning [31,32]; odd thicknesses center on 32 alone. */
+/**
+ * The sprite centre line sits on the 31/32 boundary — Valve's own sprites use
+ * `x=31 w=2`, spanning [31,32]. `ceil` keeps every stroke on that side of the
+ * boundary: t=1 → [31,31], t=2 → [31,32], t=3 → [30,32], t=4 → [30,33]. The old
+ * `floor` put odd strokes one pixel down-right of centre, a visible aim offset
+ * once the sprite is scaled in game.
+ */
 function strokeSpan(center: number, thickness: number): [number, number] {
-  const start = center - Math.floor(thickness / 2);
+  const start = center - Math.ceil(thickness / 2);
   return [start, start + thickness - 1];
 }
 
@@ -192,36 +224,48 @@ export function designFillMask(input: CrosshairDesign): Uint8Array {
   return mask;
 }
 
-function dilate(mask: Uint8Array, by: number): Uint8Array {
+export type DilateKernel = "square" | "round";
+
+/**
+ * Grow a mask by `by` pixels in one pass with a real 2-D kernel.
+ *
+ * The old version iterated a 4-neighbour (von Neumann) kernel `by` times, which
+ * grows a diamond: `outline: 3` produced pointy corners instead of a uniform
+ * 3px ring. `square` is the Chebyshev disc (a full (2by+1)² block), `round` the
+ * Euclidean one — the latter keeps circular designs circular.
+ */
+export function dilate(mask: Uint8Array, by: number, kernel: DilateKernel = "round"): Uint8Array {
   if (by <= 0) {
     return mask;
   }
-  let current = mask;
-  for (let pass = 0; pass < by; pass += 1) {
-    const next = new Uint8Array(current);
-    for (let y = 0; y < SIZE; y += 1) {
-      for (let x = 0; x < SIZE; x += 1) {
-        if (current[y * SIZE + x] !== 1) {
-          continue;
-        }
-        for (const [ox, oy] of [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1],
-        ] as const) {
-          const nx = x + ox;
-          const ny = y + oy;
-          if (nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE) {
-            next[ny * SIZE + nx] = 1;
-          }
+  const offsets: [number, number][] = [];
+  for (let oy = -by; oy <= by; oy += 1) {
+    for (let ox = -by; ox <= by; ox += 1) {
+      if (kernel === "square" || Math.hypot(ox, oy) <= by + 0.5) {
+        offsets.push([ox, oy]);
+      }
+    }
+  }
+  const next = new Uint8Array(mask);
+  for (let y = 0; y < SIZE; y += 1) {
+    for (let x = 0; x < SIZE; x += 1) {
+      if (mask[y * SIZE + x] !== 1) {
+        continue;
+      }
+      for (const [ox, oy] of offsets) {
+        const nx = x + ox;
+        const ny = y + oy;
+        if (nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE) {
+          next[ny * SIZE + nx] = 1;
         }
       }
     }
-    current = next;
   }
-  return current;
+  return next;
 }
+
+/** Drop-shadow alpha at full fill opacity. */
+const SHADOW_ALPHA = 110;
 
 /** Render the design into an unpremultiplied 64×64 RGBA buffer. */
 export function renderCrosshairDesign(
@@ -231,7 +275,7 @@ export function renderCrosshairDesign(
   const design = clampDesign(input);
   const [red, green, blue] = color ?? [255, 255, 255];
   const fill = designFillMask(design);
-  const outlined = dilate(fill, design.outline);
+  const outlined = dilate(fill, design.outline, design.style === "circle" ? "round" : "square");
   const pixels = new Uint8ClampedArray(SIZE * SIZE * 4);
 
   const put = (index: number, r: number, g: number, b: number, a: number) => {
@@ -242,8 +286,23 @@ export function renderCrosshairDesign(
     pixels[index + 3] = a;
   };
 
+  for (let i = 0; i < SIZE * SIZE; i += 1) {
+    const index = i * 4;
+    if (fill[i] === 1) {
+      put(index, red, green, blue, design.opacity);
+    } else if (outlined[i] === 1) {
+      // Outline ring: dilated minus fill.
+      put(index, 0, 0, 0, design.opacity);
+    }
+  }
+
+  // The shadow runs AFTER the fill so its "don't paint over the crosshair"
+  // guard is real — the buffer was still empty when this ran first, so the
+  // guard always passed and the shadow overwrote the sprite's own pixels.
+  // Its alpha rides the fill opacity: a faint crosshair gets a faint shadow.
   if (design.shadow) {
     const shadowSource = design.outline > 0 ? outlined : fill;
+    const alpha = Math.round((SHADOW_ALPHA * design.opacity) / 255);
     for (let y = 0; y < SIZE; y += 1) {
       for (let x = 0; x < SIZE; x += 1) {
         if (shadowSource[y * SIZE + x] !== 1) {
@@ -254,20 +313,10 @@ export function renderCrosshairDesign(
         if (sx < SIZE && sy < SIZE) {
           const index = (sy * SIZE + sx) * 4;
           if (pixels[index + 3] === 0) {
-            put(index, 0, 0, 0, 110);
+            put(index, 0, 0, 0, alpha);
           }
         }
       }
-    }
-  }
-
-  for (let i = 0; i < SIZE * SIZE; i += 1) {
-    const index = i * 4;
-    if (fill[i] === 1) {
-      put(index, red, green, blue, design.opacity);
-    } else if (outlined[i] === 1) {
-      // Outline ring: dilated minus fill.
-      put(index, 0, 0, 0, design.opacity);
     }
   }
 

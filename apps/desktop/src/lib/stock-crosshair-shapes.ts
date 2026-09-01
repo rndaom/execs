@@ -18,7 +18,7 @@ const ARM_LEFT: StockShapePrimitive = { kind: "rect", x: 17, y: 31, w: 10, h: 2 
 const ARM_RIGHT: StockShapePrimitive = { kind: "rect", x: 37, y: 31, w: 10, h: 2 };
 const CENTER_DOT: StockShapePrimitive = { kind: "rect", x: 31, y: 31, w: 2, h: 2 };
 
-export const STOCK_CROSSHAIR_SHAPES: Record<Exclude<CrosshairFile, "">, StockShapePrimitive[]> = {
+const STOCK_CROSSHAIR_SHAPES: Record<Exclude<CrosshairFile, "">, StockShapePrimitive[]> = {
   crosshair1: [ARM_TOP, ARM_BOTTOM, ARM_LEFT, ARM_RIGHT, CENTER_DOT],
   crosshair2: [ARM_BOTTOM, ARM_LEFT, ARM_RIGHT, CENTER_DOT],
   crosshair3: [{ kind: "ring", cx: 32, cy: 32, r: 5.5, stroke: 2 }],
@@ -40,6 +40,14 @@ export function stockCrosshairPrimitives(file: CrosshairFile): StockShapePrimiti
     return null;
   }
   return STOCK_CROSSHAIR_SHAPES[file];
+}
+
+/**
+ * Engine rule: the crosshair draws at its sprite size × `cl_crosshair_scale`/32.
+ * The stock sprites are 64×64, so scale 32 is 1:1.
+ */
+export function stockCrosshairRenderedSize(scale: number, spriteSize = 64): number {
+  return Math.round((spriteSize * scale) / 32);
 }
 
 export const STOCK_CROSSHAIR_LABELS: Record<CrosshairFile, string> = {
