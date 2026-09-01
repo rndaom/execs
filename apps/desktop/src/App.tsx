@@ -103,10 +103,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     surface === "ready" &&
     !creating &&
     showSettingsChrome(profiles.library);
-  const wideOnboarding =
-    install.screen === "ready" &&
-    install.confirmed !== null &&
-    (surface === "first-unused" || creating);
 
   function renderReady(path: string) {
     if (surface === "first-existing") {
@@ -151,7 +147,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
               disabled={busy || progress.state.active}
               className="btn btn-ghost mt-6"
             >
-              Change
+              Change install
             </button>
           )}
         </>
@@ -159,11 +155,14 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     }
     if (surface === "loading") {
       return (
-        <section className="flex w-full flex-col items-center text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-ink">execs</h1>
-          <p className="mt-6 text-sm text-ink-muted">Checking this install…</p>
+        <section className="flex w-full max-w-[640px] flex-col items-center text-center">
+          <p className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-ink">
+            <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
+            execs
+          </p>
+          <p className="t-body mt-8 text-ink-muted">Checking this install…</p>
           <button type="button" onClick={install.change} className="btn btn-ghost mt-6">
-            Change
+            Change install
           </button>
         </section>
       );
@@ -176,7 +175,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         draftName={draftName}
         settings={
           showSettingsChrome(profiles.library) ? (
-            <SettingsLayout tab={settingsTab} running={lock.running} onTab={setSettingsTab}>
+            <SettingsLayout tab={settingsTab} onTab={setSettingsTab}>
               <SettingsHost
                 api={api}
                 tab={settingsTab}
@@ -216,9 +215,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           className={`flex min-h-0 w-full flex-1 flex-col ${
             settingsOpen
               ? "items-stretch overflow-hidden"
-              : `mx-auto items-center justify-start overflow-y-auto px-6 py-10 ${
-                  wideOnboarding ? "max-w-6xl" : "max-w-xl"
-                }`
+              : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
           }`}
         >
           {install.screen === "ready" && install.confirmed ? (

@@ -31,16 +31,14 @@ export function PaneSection({
   return (
     <Tag className={`${first ? "" : "section"} ${className}`.trim()} aria-labelledby={headingId}>
       {as === "fieldset" ? <legend className="sr-only">{title}</legend> : null}
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <div className="min-w-0">
-          <h2 id={headingId} className="text-sm font-semibold text-ink">
+          <h2 id={headingId} className="t-section">
             {title}
           </h2>
-          {description ? (
-            <p className="mt-0.5 text-xs leading-5 text-ink-muted">{description}</p>
-          ) : null}
+          {description ? <p className="t-meta mt-1">{description}</p> : null}
         </div>
-        {meta ? <div className="shrink-0 text-xs text-ink-faint">{meta}</div> : null}
+        {meta ? <div className="t-meta shrink-0 text-ink-faint">{meta}</div> : null}
       </div>
       {children}
     </Tag>

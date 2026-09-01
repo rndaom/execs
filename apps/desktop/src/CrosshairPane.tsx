@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ApplyBar } from "./components/ui/ApplyBar";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { CommunityPicker } from "./crosshair/CommunityPicker";
 import { CrosshairDesigner } from "./crosshair/CrosshairDesigner";
@@ -26,7 +27,7 @@ import {
   type CrosshairShape,
   CUSTOM_CROSSHAIR_SHAPE,
 } from "./lib/crosshair-ui";
-import type { GameplayLayer } from "./lib/gameplay-ui";
+import { type GameplayLayer, gameplayPath } from "./lib/gameplay-ui";
 import { StockCrosshairSettings } from "./StockCrosshairSettings";
 
 /**
@@ -100,8 +101,13 @@ export function CrosshairPane({
 
   return (
     <section data-testid="settings-crosshair" className="min-w-0 text-left">
+      <PaneHeader
+        title="Crosshair"
+        lede="TF2's own crosshair, or a first-party pack you build yourself."
+        actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
+      />
+
       <StockCrosshairSettings
-        layer={layer}
         effective={effective}
         sprites={stockSprites}
         managedText={managedText}
@@ -110,20 +116,14 @@ export function CrosshairPane({
 
       <PaneSection
         title="Custom crosshairs"
-        description="Install a first-party VTF crosshair for every weapon — pick a shape, a community crosshair, or design your own; then override individual weapons if you want."
+        description="Pick a shape, a community crosshair or design your own, then override individual weapons if you want."
         meta={
-          <span
-            className={`badge ${
-              record
-                ? "border border-health/50 bg-health/10 text-health"
-                : "border border-edge text-ink-faint"
-            }`}
-          >
+          <span className={`badge ${record ? "badge-ok" : ""}`}>
             {record ? "Pack installed" : "Not installed"}
           </span>
         }
       >
-        <div className="mt-4 grid gap-6 xl:grid-cols-[15rem_1fr]">
+        <div className="mt-5 grid gap-6 lg:grid-cols-[13rem_1fr]">
           <aside>
             <CrosshairPreview
               shape={draft.shape}
@@ -131,14 +131,14 @@ export function CrosshairPane({
               color={draft.color}
               preview={previewFor(draft.shape)}
             />
-            <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-ink-faint">
+            <div className="mt-2 flex items-center justify-between gap-2 text-[12px] text-ink-faint">
               <span>Selected</span>
               <span className="capitalize text-ink-muted">{crosshairShapeLabel(draft.shape)}</span>
             </div>
             {usesStoredCustom ? (
               <p
                 data-testid="crosshair-stored-custom"
-                className="mt-1 text-[10px] leading-4 text-ink-faint"
+                className="mt-1 text-[12px] leading-5 text-ink-faint"
               >
                 Your imported PNG is stored in the installed pack and stays in use on apply.
               </p>
@@ -147,7 +147,7 @@ export function CrosshairPane({
             <div className="mt-4">
               <label
                 htmlFor="crosshair-color"
-                className="flex items-center justify-between gap-3 text-xs font-medium text-ink"
+                className="t-row flex items-center justify-between gap-3"
               >
                 Color
                 <span className="flex items-center gap-2">
@@ -172,17 +172,16 @@ export function CrosshairPane({
                       data-testid="crosshair-color-reset"
                       disabled={locked}
                       onClick={() => setDraft((current) => ({ ...current, color: null }))}
-                      className="text-[11px] text-ink-muted underline decoration-edge underline-offset-2 hover:text-ink"
+                      className="text-[12px] text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
                     >
                       Reset
                     </button>
                   ) : null}
                 </span>
               </label>
-              <p className="mt-1 text-[10px] leading-4 text-ink-faint">
-                Tints every crosshair in the pack. It drives the same{" "}
-                <code className="font-mono">cl_crosshair_red/green/blue</code> cvars as the default
-                in-game crosshair above, so applying overwrites the colour set there.
+              <p className="mt-1.5 text-[12px] leading-5 text-ink-faint">
+                Tints the whole pack, through the same cvars as the crosshair above — applying
+                overwrites the colour set there.
               </p>
             </div>
 
@@ -213,13 +212,13 @@ export function CrosshairPane({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-x-8 gap-y-1 border-t border-edge/60 pt-4 text-xs leading-5 text-ink-muted md:grid-cols-2">
+        <div className="t-meta mt-8 grid gap-x-10 gap-y-1 border-t border-edge pt-4 md:grid-cols-2">
           <p>{CROSSHAIR_CASUAL_COPY}</p>
-          <p className="text-ink">{CROSSHAIR_STOCK_OVERRIDE_NOTE}</p>
+          <p>{CROSSHAIR_STOCK_OVERRIDE_NOTE}</p>
         </div>
       </PaneSection>
 
-      <p className="mt-4 text-[11px] leading-5 text-ink-faint">
+      <p className="t-meta mt-8 text-ink-faint">
         Applying writes a first-party pack to this profile's custom folder.{" "}
         {COMMUNITY_CROSSHAIR_CREDIT} Stock crosshair previews are decoded from your own copy of the
         game. execs is not affiliated with Valve or Steam; Team Fortress 2 and its sprites are ©
@@ -233,10 +232,10 @@ export function CrosshairPane({
               ? "Close TF2 before changing crosshair files."
               : "Finish the current profile task before changing crosshairs."
             : record
-              ? "Applying rewrites the installed crosshair pack."
-              : "Applying writes a new crosshair pack to this profile."
+              ? "Rewrites the installed pack."
+              : "Writes a new pack to this profile."
         }
-        actionLabel={record ? "Update crosshairs" : "Apply crosshairs"}
+        actionLabel={record ? "Update crosshair pack" : "Install crosshair pack"}
         lockedLabel="Close TF2 to apply"
         running={running}
         locked={locked}

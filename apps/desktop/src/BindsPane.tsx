@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
 import {
@@ -150,30 +151,26 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
 
   return (
     <section data-testid="settings-binds" className="min-w-0 text-left">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-[13px] leading-6 text-ink-muted">
-          Choose an action and press any keyboard key, mouse button, or scroll direction. Escape
-          cancels recording.
-        </p>
-        <span className="font-mono text-[11px] text-ink-faint">{bindsFilePath(layer)}</span>
-      </div>
+      <PaneHeader
+        title="Binds"
+        lede="Click an action, then press any key, mouse button or scroll direction. Escape cancels."
+        actions={<p className="t-meta font-mono text-ink-faint">{bindsFilePath(layer)}</p>}
+      />
 
       <div
         aria-live="polite"
-        className={`mt-3 overflow-hidden rounded-lg border transition-colors ${
-          recordingAction
-            ? "border-brand bg-brand/10 px-4 py-3"
-            : "h-0 border-transparent px-4 py-0"
+        className={`overflow-hidden rounded-lg border transition-colors duration-150 ${
+          recordingAction ? "border-brand px-4 py-3" : "h-0 border-transparent px-4 py-0"
         }`}
       >
         {recordingAction ? (
           <>
-            <p className="text-sm text-ink">
-              Recording <span className="font-medium text-brand">{recordingAction.label}</span> —
-              press the new key now.
+            <p className="t-body text-ink">
+              Recording <span className="font-medium">{recordingAction.label}</span> — press the new
+              key now.
             </p>
             {recorderNotice ? (
-              <p data-testid="bind-recorder-notice" className="mt-1 text-xs text-ink-muted">
+              <p data-testid="bind-recorder-notice" className="t-meta mt-1">
                 {recorderNotice} Try another key.
               </p>
             ) : null}
@@ -188,7 +185,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
           title={group.title}
           meta={group.description}
         >
-          <ul className="mt-1 grid sm:grid-cols-2 sm:gap-x-10 xl:grid-cols-3">
+          <ul className="mt-2 grid sm:grid-cols-2 sm:gap-x-10">
             {group.ids.map((actionId) => {
               const action = BIND_ACTIONS.find((item) => item.id === actionId);
               if (!action) {
@@ -201,9 +198,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
                   key={action.id}
                   data-testid={`bind-row-${action.id}`}
                   data-recording={listening ? "true" : "false"}
-                  className={`group border-b border-edge/60 transition-colors ${
-                    listening ? "bg-brand/10" : ""
-                  }`}
+                  className="group border-b border-edge"
                 >
                   <button
                     type="button"
@@ -212,19 +207,19 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
                     aria-label={`Record a key for ${action.label}. Current binding ${bound ?? "unbound"}`}
                     aria-pressed={listening}
                     onClick={() => onRow(action.id)}
-                    className="flex w-full min-w-0 items-center gap-3 rounded-md py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
+                    className="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-medium text-ink">{action.label}</span>
-                      <span className="mt-0.5 block text-xs text-ink-faint">
+                      <span className="t-row block">{action.label}</span>
+                      <span className="mt-0.5 block text-[12.5px] text-ink-faint">
                         {listening ? "Waiting for input" : "Click to rebind"}
                       </span>
                     </span>
                     <span
                       data-testid={`bind-key-${action.id}`}
-                      className={`min-w-14 shrink-0 rounded-md border px-2.5 py-1.5 text-center font-mono text-xs uppercase tracking-wide ${
+                      className={`min-w-14 shrink-0 rounded-md border px-2.5 py-1.5 text-center font-mono text-[12.5px] uppercase tracking-wide transition-colors duration-150 ${
                         listening
-                          ? "border-brand bg-brand text-on-brand"
+                          ? "border-brand text-ink"
                           : "border-edge-strong bg-bg text-ink group-hover:border-ink-faint"
                       }`}
                     >
@@ -239,7 +234,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
       ))}
 
       {!canRecord ? (
-        <p className="mt-4 text-sm text-ink-muted">
+        <p className="t-meta mt-8">
           {running ? "Close TF2 before changing binds." : "Finish the current profile task first."}
         </p>
       ) : null}
