@@ -11,6 +11,13 @@ pub enum VdfValue {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VdfMap {
     pub entries: Vec<(String, VdfValue)>,
+    /// KeyValues conditional suffixes (`[$WIN32]`, `[!$X360]`), index-aligned
+    /// with `entries` and captured verbatim so `serialize_vdf` re-emits them.
+    /// Trailing `None`s are trimmed, so this is shorter than `entries` (and
+    /// empty for the conditional-free files Steam writes); a missing slot just
+    /// means "no conditional". Callers that push straight onto `entries`
+    /// therefore stay correct without touching this field.
+    pub conditions: Vec<Option<String>>,
 }
 
 impl VdfValue {
@@ -30,6 +37,23 @@ impl VdfValue {
 }
 
 impl VdfMap {
+    /// The conditional captured on entry `index`, if any.
+    pub fn condition_at(&self, index: usize) -> Option<&str> {
+        self.conditions.get(index).and_then(Option::as_deref)
+    }
+
+    /// Attach a conditional to entry `index`, growing the sparse vector.
+    pub fn set_condition(&mut self, index: usize, condition: Option<String>) {
+        if condition.is_none() && index >= self.conditions.len() {
+            return;
+        }
+        while self.conditions.len() <= index {
+            self.conditions.push(None);
+        }
+        self.conditions[index] = condition;
+        trim_conditions(&mut self.conditions);
+    }
+
     /// Last matching key wins. Comparison is ASCII case-insensitive.
     pub fn get(&self, key: &str) -> Option<&VdfValue> {
         self.entries
@@ -137,16 +161,25 @@ pub fn serialize_vdf(map: &VdfMap) -> String {
 }
 
 fn write_map(out: &mut String, map: &VdfMap, indent: usize) {
-    for (key, value) in &map.entries {
+    for (index, (key, value)) in map.entries.iter().enumerate() {
+        let condition = map.condition_at(index);
         write_indent(out, indent);
         write_quoted(out, key);
         match value {
             VdfValue::Str(s) => {
                 out.push_str("\t\t");
                 write_quoted(out, s);
+                if let Some(condition) = condition {
+                    out.push(' ');
+                    out.push_str(condition);
+                }
                 out.push('\n');
             }
             VdfValue::Obj(obj) => {
+                if let Some(condition) = condition {
+                    out.push(' ');
+                    out.push_str(condition);
+                }
                 out.push('\n');
                 write_indent(out, indent);
                 out.push_str("{\n");
@@ -155,6 +188,12 @@ fn write_map(out: &mut String, map: &VdfMap, indent: usize) {
                 out.push_str("}\n");
             }
         }
+    }
+}
+
+fn trim_conditions(conditions: &mut Vec<Option<String>>) {
+    while conditions.last().is_some_and(Option::is_none) {
+        conditions.pop();
     }
 }
 
@@ -296,6 +335,7 @@ impl Parser {
 
     fn parse_pairs_until_end(&mut self, stop_on_brace: bool) -> Result<VdfMap, String> {
         let mut entries = Vec::new();
+        let mut conditions: Vec<Option<String>> = Vec::new();
         loop {
             self.skip_ws_and_comments();
             match self.peek() {
@@ -305,10 +345,45 @@ impl Parser {
                 _ => {}
             }
             let key = self.parse_string()?;
+            // A conditional sits either between a key and its `{` block or after
+            // a `"key" "value"` pair. Either way it belongs to this node — left
+            // to `parse_string` it would be read as the *next* key and shift the
+            // pairing of everything after it.
+            let mut condition = self.parse_conditional();
             let value = self.parse_value()?;
+            if condition.is_none() {
+                condition = self.parse_conditional();
+            }
             entries.push((key, value));
+            conditions.push(condition);
         }
-        Ok(VdfMap { entries })
+        trim_conditions(&mut conditions);
+        Ok(VdfMap {
+            entries,
+            conditions,
+        })
+    }
+
+    /// `[$WIN32]` / `[!$X360]`, captured verbatim.
+    fn parse_conditional(&mut self) -> Option<String> {
+        self.skip_ws_and_comments();
+        if self.peek() != Some('[') {
+            return None;
+        }
+        let start = self.i;
+        let mut out = String::new();
+        while let Some(ch) = self.bump() {
+            if ch == '\n' || ch == '{' || ch == '}' || ch == '"' {
+                break;
+            }
+            out.push(ch);
+            if ch == ']' {
+                return Some(out);
+            }
+        }
+        // Unterminated: rewind and let the normal tokenizer deal with it.
+        self.i = start;
+        None
     }
 
     fn parse_value(&mut self) -> Result<VdfValue, String> {
@@ -607,5 +682,63 @@ mod tests {
             Some("0 153 255 255")
         );
         assert_eq!(colors.get("Keep").and_then(VdfValue::as_str), Some("1 2 3 4"));
+    }
+
+    #[test]
+    fn conditionals_do_not_shift_the_following_key() {
+        let text = r#""Resource/UI/HudPlayerHealth.res"
+{
+	"visible"		"1" [$WIN32]
+	"ItemName"		"health"
+	"xpos"		"5" [!$X360]
+	"ypos"		"7"
+}
+"#;
+        let parsed = parse_vdf(text).unwrap();
+        let block = parsed
+            .get("Resource/UI/HudPlayerHealth.res")
+            .and_then(VdfValue::as_obj)
+            .unwrap();
+        // The conditional is a suffix, not a key: pairing must be untouched.
+        assert_eq!(
+            block
+                .entries
+                .iter()
+                .map(|(key, _)| key.as_str())
+                .collect::<Vec<_>>(),
+            vec!["visible", "ItemName", "xpos", "ypos"]
+        );
+        assert_eq!(block.get("ItemName").and_then(VdfValue::as_str), Some("health"));
+        assert_eq!(block.get("ypos").and_then(VdfValue::as_str), Some("7"));
+        assert_eq!(block.condition_at(0), Some("[$WIN32]"));
+        assert_eq!(block.condition_at(1), None);
+        assert_eq!(block.condition_at(2), Some("[!$X360]"));
+    }
+
+    #[test]
+    fn conditionals_round_trip_through_serialize() {
+        let text = r#""root"
+{
+	"key"		"value" [$WIN32]
+	"block" [$POSIX]
+	{
+		"inner"		"1"
+	}
+	"tail"		"2"
+}
+"#;
+        let parsed = parse_vdf(text).unwrap();
+        let serialized = serialize_vdf(&parsed);
+        assert!(serialized.contains("\"value\" [$WIN32]"));
+        assert!(serialized.contains("\"block\" [$POSIX]"));
+        // Byte-equivalent modulo our own formatting: reparsing is identical.
+        assert_eq!(parse_vdf(&serialized).unwrap(), parsed);
+    }
+
+    #[test]
+    fn a_bracket_that_is_not_a_conditional_stays_a_token() {
+        let parsed = parse_vdf("\"a\"\t\t[unterminated\n\"b\"\t\t\"2\"\n").unwrap();
+        assert_eq!(parsed.get("a").and_then(VdfValue::as_str), Some("[unterminated"));
+        assert_eq!(parsed.get("b").and_then(VdfValue::as_str), Some("2"));
     }
 }

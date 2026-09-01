@@ -7,6 +7,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 
 use crate::finder::discover_steam_roots;
+use crate::hash::write_atomic;
 use crate::process_lock::{
     current_process_os, live_process_names, refuse_if_running_among, steam_running_among, ProcessOs,
 };
@@ -152,8 +153,35 @@ where
     let text = fs::read_to_string(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
     let mut vdf = parse_vdf(&text).map_err(ProfileError::Io)?;
     set_launch_options_in_vdf(&mut vdf, &sanitize_launch_options(options));
-    fs::write(&path, serialize_vdf(&vdf)).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let serialized = serialize_vdf(&vdf);
+    // We re-emit the whole file through our own writer, so anything our parser
+    // does not model would be silently corrupted. Read our own output back and
+    // refuse to write unless it is the tree we meant to write. This is a
+    // Steam-owned file holding every app's launch options.
+    let reparsed = parse_vdf(&serialized).map_err(ProfileError::Io)?;
+    if reparsed != vdf {
+        return Err(ProfileError::Io(
+            "Refusing to rewrite localconfig.vdf: this file uses KeyValues syntax we would not \
+             round-trip intact. Set the launch options in Steam instead."
+                .into(),
+        ));
+    }
+    backup_localconfig_once(&path)?;
+    write_atomic(&path, serialized.as_bytes()).map_err(|err| ProfileError::Io(err.to_string()))?;
     Ok(LaunchWriteResult::ok())
+}
+
+/// Keep one pristine copy of the user's Steam config, made the first time we
+/// ever touch it.
+fn backup_localconfig_once(path: &Path) -> Result<(), ProfileError> {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".execs-backup");
+    let backup = path.with_file_name(name);
+    if backup.exists() {
+        return Ok(());
+    }
+    fs::copy(path, &backup).map_err(|err| ProfileError::Io(err.to_string()))?;
+    Ok(())
 }
 
 pub fn get_profile_launch_options(
@@ -345,7 +373,16 @@ pub fn sanitize_launch_options(raw: &str) -> String {
     while i < tokens.len() {
         let token = tokens[i];
         let lower = token.to_ascii_lowercase();
-        if matches!(lower.as_str(), "-autoconfig" | "-default" | "+quit") {
+        if matches!(
+            lower.as_str(),
+            "-autoconfig" | "-default" | "+quit" | "gamemoderun"
+        ) {
+            i += 1;
+            continue;
+        }
+        // A `%command%` wrapper carried across profiles is exactly the launch
+        // damage the rule exists to prevent (AGENTS.md RND-158).
+        if lower.contains("%command%") {
             i += 1;
             continue;
         }
@@ -511,6 +548,84 @@ mod tests {
         );
         assert_eq!(sanitize_launch_options("-dxlevel90 -novid"), "-novid");
         assert_eq!(sanitize_launch_options(""), "");
+        // AGENTS.md RND-158 names `gamemoderun %command%` alongside the rest.
+        assert_eq!(
+            sanitize_launch_options("gamemoderun %command% -novid"),
+            "-novid"
+        );
+        assert_eq!(
+            sanitize_launch_options("mangohud %command% -nojoy"),
+            "mangohud -nojoy"
+        );
+        assert_eq!(sanitize_launch_options("GAMEMODERUN -novid"), "-novid");
+    }
+
+    #[test]
+    fn localconfig_write_backs_up_once_and_leaves_no_part_file() {
+        let dir = crate::test_temp_dir();
+        let steam = dir.join("Steam");
+        write_account(&steam, "111", "-novid");
+        let path = steam
+            .join("userdata")
+            .join("111")
+            .join("config")
+            .join("localconfig.vdf");
+        let original = fs::read(&path).unwrap();
+
+        write_launch_options_to_localconfig_from(&[steam.clone()], "-nojoy", None::<&str>).unwrap();
+        let backup = path.with_file_name("localconfig.vdf.execs-backup");
+        assert_eq!(fs::read(&backup).unwrap(), original);
+        assert!(!path.with_file_name("localconfig.vdf.execs-part").exists());
+
+        // A second write must not overwrite the pristine copy.
+        write_launch_options_to_localconfig_from(&[steam.clone()], "-console", None::<&str>)
+            .unwrap();
+        assert_eq!(fs::read(&backup).unwrap(), original);
+        assert_eq!(read_launch_options_from(&[steam.clone()]), "-console");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn localconfig_conditionals_survive_the_rewrite() {
+        let dir = crate::test_temp_dir();
+        let steam = dir.join("Steam");
+        let path = steam
+            .join("userdata")
+            .join("111")
+            .join("config")
+            .join("localconfig.vdf");
+        // `"key" "value" [$WIN32]` used to be read as the key `[$WIN32]` whose
+        // value was the next key, shifting everything after it by one.
+        let text = localconfig("-novid").replace(
+            "\"LaunchOptions\"\t\t\"-novid\"",
+            "\"LaunchOptions\"\t\t\"-novid\"\n\t\t\t\t\t\t\t\"Cloud\"\t\t\"1\" [$WIN32]\n\t\t\t\t\t\t\t\"LastPlayed\"\t\t\"99\"",
+        );
+        write_file(&path, &text);
+        fs::create_dir_all(steam.join("userdata").join("111").join("440")).unwrap();
+
+        write_launch_options_to_localconfig_from(&[steam.clone()], "-nojoy", None::<&str>).unwrap();
+
+        let after = parse_vdf(&fs::read_to_string(&path).unwrap()).unwrap();
+        let app = vdf_get_obj(
+            &after,
+            &[
+                "UserLocalConfigStore",
+                "Software",
+                "Valve",
+                "Steam",
+                "apps",
+                "440",
+            ],
+        )
+        .unwrap();
+        assert_eq!(app.get("Cloud").and_then(VdfValue::as_str), Some("1"));
+        assert_eq!(app.get("LastPlayed").and_then(VdfValue::as_str), Some("99"));
+        assert_eq!(
+            app.get("LaunchOptions").and_then(VdfValue::as_str),
+            Some("-nojoy")
+        );
+        assert!(fs::read_to_string(&path).unwrap().contains("[$WIN32]"));
+        cleanup(&dir);
     }
 
     #[test]
