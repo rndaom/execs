@@ -16,6 +16,11 @@ export const GAMEPLAY_HEADER = "// execs gameplay — managed, do not edit by ha
 
 export const FLIP_VIEWMODELS_NOTE = "Does not apply while connected to a server.";
 
+/// r_drawtracers is FCVAR_CHEAT: the engine refuses it on any server without
+/// sv_cheats, logging "Can't use cheat cvar r_drawtracers in multiplayer".
+export const ALL_TRACERS_NOTE =
+  "Cheat-protected: the game ignores this on live servers, so it only applies with sv_cheats on.";
+
 export const FOV_MIN = 54;
 export const FOV_MAX = 90;
 export const CROSSHAIR_SCALE_MIN = 16;
@@ -53,7 +58,6 @@ export type GameplaySettings = {
   cl_crosshair_red: number;
   cl_crosshair_green: number;
   cl_crosshair_blue: number;
-  cl_crosshair_alpha: number;
 };
 
 const CROSSHAIR_FILE_SET = new Set<string>(CROSSHAIR_FILES);
@@ -89,7 +93,6 @@ export function defaultGameplay(): GameplaySettings {
     cl_crosshair_red: corpusNumber("cl_crosshair_red", 200),
     cl_crosshair_green: corpusNumber("cl_crosshair_green", 200),
     cl_crosshair_blue: corpusNumber("cl_crosshair_blue", 200),
-    cl_crosshair_alpha: corpusNumber("cl_crosshair_alpha", 200),
   };
 }
 
@@ -118,7 +121,6 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
     cl_crosshair_red: clampInt(settings.cl_crosshair_red, COLOR_MIN, COLOR_MAX),
     cl_crosshair_green: clampInt(settings.cl_crosshair_green, COLOR_MIN, COLOR_MAX),
     cl_crosshair_blue: clampInt(settings.cl_crosshair_blue, COLOR_MIN, COLOR_MAX),
-    cl_crosshair_alpha: clampInt(settings.cl_crosshair_alpha, COLOR_MIN, COLOR_MAX),
   };
 }
 
@@ -174,7 +176,6 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `cl_crosshair_red ${next.cl_crosshair_red}`,
     `cl_crosshair_green ${next.cl_crosshair_green}`,
     `cl_crosshair_blue ${next.cl_crosshair_blue}`,
-    `cl_crosshair_alpha ${next.cl_crosshair_alpha}`,
     "",
   ].join("\n");
 }
@@ -251,11 +252,6 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   if (blue !== undefined) {
     next.cl_crosshair_blue = parseIntish(blue, next.cl_crosshair_blue);
   }
-  const alpha = read("cl_crosshair_alpha");
-  if (alpha !== undefined) {
-    next.cl_crosshair_alpha = parseIntish(alpha, next.cl_crosshair_alpha);
-  }
-
   return clampGameplay(next);
 }
 

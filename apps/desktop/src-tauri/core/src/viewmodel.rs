@@ -39,9 +39,11 @@ pub fn serialize_preload_cfg() -> String {
         // wait counts frames; 10 gives heavier animation packs margin to finish caching.
         "wait 10; disconnect",
         // A beat for the disconnect to settle, then clean the console and
-        // restart the menu music the map load cut off.
+        // restart the menu music the map load cut off. TF2 has no
+        // `playmenumusic` command — it logs as unknown; the menu music is a
+        // VScript entry point.
         "wait 1; clear",
-        "playmenumusic",
+        "script_execute randommenumusic",
         "",
     ]
     .join("\n")
@@ -114,6 +116,7 @@ pub fn install_built_viewmodel_pack(
     profile_id: &str,
     vpk_bytes: &[u8],
     hidden_groups: &std::collections::BTreeSet<String>,
+    mode: crate::viewmodel_build::ViewmodelHideMode,
     preload: bool,
 ) -> Result<ProfileDetail, ProfileError> {
     let mut options = BTreeMap::new();
@@ -121,6 +124,7 @@ pub fn install_built_viewmodel_pack(
         "hidden".into(),
         hidden_groups.iter().cloned().collect::<Vec<_>>().join(","),
     );
+    options.insert("mode".into(), mode.as_str().into());
     options.insert("schema".into(), "yttrium-1".into());
     let process_names = live_process_names();
     let steam_roots = discover_steam_roots();
@@ -621,7 +625,7 @@ mod tests {
         assert!(cfg.contains("sv_allow_point_servercommand always"));
         assert!(cfg.contains("map itemtest"));
         assert!(cfg.contains("disconnect"));
-        assert!(cfg.contains("playmenumusic"));
+        assert!(cfg.contains("script_execute randommenumusic"));
         assert!(!cfg.contains("gameinfo"));
         assert!(!cfg.contains("+quit"));
         let enabled = with_preload_launch("-novid -nojoy", true);

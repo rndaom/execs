@@ -1,9 +1,10 @@
 import { ArrowSquareOut, DownloadSimple, Hammer, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
-import { openExternal, type ViewmodelRecord } from "./lib/bridge";
+import { openExternal, type ViewmodelHideMode, type ViewmodelRecord } from "./lib/bridge";
 import { canWriteSettings } from "./lib/settings-ui";
 import { viewmodelGroupsForClass } from "./lib/viewmodel-groups";
 import {
+  previewSlotHidden,
   VIEWMODEL_PREVIEW_CREDIT,
   VIEWMODEL_PREVIEW_SLOTS,
   VIEWMODEL_PREVIEW_WEAPONS,
@@ -11,6 +12,8 @@ import {
   viewmodelPreviewSrc,
 } from "./lib/viewmodel-previews";
 import {
+  HIDE_MODE_LABELS,
+  HIDE_MODE_NOTES,
   seedViewmodelDraft,
   serializeHiddenGroups,
   toggleHiddenGroup,
@@ -31,7 +34,7 @@ export function ViewmodelPane({
   running: boolean;
   busy: boolean;
   record: ViewmodelRecord | null;
-  onBuild: (hidden: string[], preload: boolean) => void;
+  onBuild: (hidden: string[], preload: boolean, hideMode: ViewmodelHideMode) => void;
   onImport: (preload: boolean) => void;
   onRemove: () => void;
   onTogglePreload: (enabled: boolean) => void;
@@ -56,7 +59,10 @@ export function ViewmodelPane({
   const previewWeapon = VIEWMODEL_PREVIEW_WEAPONS[classId][activeSlot];
   const groups = viewmodelGroupsForClass(classId);
   const hiddenSet = new Set(draft.hidden);
-  const dirty = serializeHiddenGroups(draft.hidden) !== serializeHiddenGroups(seeded.hidden);
+  const previewHidden = previewSlotHidden(classId, activeSlot, hiddenSet);
+  const dirty =
+    serializeHiddenGroups(draft.hidden) !== serializeHiddenGroups(seeded.hidden) ||
+    draft.hideMode !== seeded.hideMode;
   const builtPack = record?.source === "compiled";
 
   function hiddenCountFor(cls: ViewmodelClass): number {
@@ -166,17 +172,32 @@ export function ViewmodelPane({
           className="mt-3 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]"
         >
           <div>
-            <figure className="surface relative grid min-h-56 place-items-center bg-[#0d0d0d] p-4">
+            <figure className="surface relative aspect-video w-full bg-[radial-gradient(125%_120%_at_50%_0%,#4a4740_0%,#26241f_45%,#111010_100%)]">
               {previewSrc ? (
                 <img
                   data-testid="viewmodel-preview-image"
+                  data-hidden={previewHidden ? "true" : "false"}
                   src={previewSrc}
                   alt={`${previewWeapon ?? activeSlot} first-person view for ${classId}`}
-                  className="max-h-64 w-auto max-w-full object-contain"
+                  className={`absolute inset-0 size-full object-contain object-[80%_100%] p-5 drop-shadow-[0_12px_28px_rgba(0,0,0,0.6)] transition-opacity ${
+                    previewHidden ? "opacity-0" : "opacity-100"
+                  }`}
                 />
               ) : (
-                <p className="text-xs text-ink-muted">No reference image for this slot.</p>
+                <p className="absolute inset-0 grid place-items-center text-xs text-ink-muted">
+                  No reference image for this slot.
+                </p>
               )}
+              {previewHidden ? (
+                <p
+                  data-testid="viewmodel-preview-hidden"
+                  className="absolute inset-0 grid place-items-center px-6 text-center text-xs text-ink-muted"
+                >
+                  {draft.hideMode === "weapon"
+                    ? "Weapon hidden — your hands keep animating."
+                    : "Weapon and hands hidden."}
+                </p>
+              ) : null}
               <figcaption className="absolute bottom-2.5 left-3 text-[11px] text-ink-muted">
                 <span className="capitalize">{classId}</span> · {previewWeapon ?? activeSlot}
               </figcaption>
@@ -272,21 +293,45 @@ export function ViewmodelPane({
           </div>
         </div>
 
+        <div className="mt-4 border-t border-edge/60 pt-4">
+          <h3 className="eyebrow">What a hidden group removes</h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(["full", "weapon"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                data-testid={`viewmodel-mode-${mode}`}
+                aria-pressed={draft.hideMode === mode}
+                disabled={locked}
+                onClick={() => setDraft({ ...draft, hideMode: mode })}
+                className={`btn ${draft.hideMode === mode ? "btn-primary" : ""}`}
+              >
+                {HIDE_MODE_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 min-h-8 max-w-2xl text-[11px] leading-4 text-ink-faint">
+            {HIDE_MODE_NOTES[draft.hideMode]}
+          </p>
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-edge/60 pt-4">
-          <p className="text-xs text-ink-muted" aria-live="polite">
+          <p className="min-w-0 flex-1 text-xs text-ink-muted" aria-live="polite">
             {running
               ? "Close TF2 to build."
-              : draft.hidden.length === 0
-                ? "Nothing hidden yet — tick groups above, then build."
-                : dirty || !builtPack
-                  ? "Build compiles with TF2's own studiomdl in an isolated staging folder (Windows)."
-                  : "The installed pack matches these choices."}
+              : draft.hidden.length === 0 && record
+                ? "Nothing ticked — use Remove pack below to restore stock viewmodels."
+                : draft.hidden.length === 0
+                  ? "Nothing hidden yet — tick groups above, then build."
+                  : dirty || !builtPack
+                    ? "Build compiles with TF2's own studiomdl in an isolated staging folder (Windows)."
+                    : "The installed pack matches these choices."}
           </p>
           <button
             type="button"
             data-testid="viewmodel-build"
             disabled={locked || draft.hidden.length === 0 || (!dirty && builtPack)}
-            onClick={() => onBuild(draft.hidden, draft.preload)}
+            onClick={() => onBuild(draft.hidden, draft.preload, draft.hideMode)}
             className="btn btn-primary"
           >
             <Hammer size={15} weight="bold" />

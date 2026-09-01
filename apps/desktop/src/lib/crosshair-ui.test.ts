@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import {
   assignmentFor,
   assignSlotForAllClasses,
@@ -10,6 +10,7 @@ import {
   renderCrosshairRgba,
   seedCrosshairDraft,
   slotAssignment,
+  tintCrosshairRgba,
   WEAPON_CATALOG,
   weaponsForClass,
 } from "./crosshair-ui";
@@ -73,4 +74,12 @@ describe("crosshair ui", () => {
     }
     expect(opaque).toBeGreaterThan(20);
   });
+});
+
+test("tintCrosshairRgba multiplies color and leaves alpha and null tints alone", () => {
+  const source = new Uint8ClampedArray([255, 255, 255, 255, 128, 128, 128, 64]);
+  const red = tintCrosshairRgba(source, [255, 0, 0]);
+  expect(Array.from(red.slice(0, 4))).toEqual([255, 0, 0, 255]);
+  expect(Array.from(red.slice(4))).toEqual([128, 0, 0, 64]);
+  expect(Array.from(tintCrosshairRgba(source, null))).toEqual(Array.from(source));
 });

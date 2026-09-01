@@ -287,6 +287,37 @@ fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
     path
 }
 
+/// TF2 writes a `sound.cache` into every `tf/custom` folder it scans. It is the
+/// game's own regenerable file, so a pack whose files we removed is left as a
+/// husk that still reads as installed — that is how a swapped-away HUD keeps
+/// showing up next to the new one.
+fn only_game_caches(dir: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    let mut saw_one = false;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            // A husk nests: oldhud/sound/sound.cache.
+            if !only_game_caches(&path) {
+                return false;
+            }
+            saw_one = true;
+            continue;
+        }
+        let name = entry.file_name();
+        let disposable = name
+            .to_str()
+            .is_some_and(|name| name.eq_ignore_ascii_case("sound.cache"));
+        if !disposable {
+            return false;
+        }
+        saw_one = true;
+    }
+    saw_one
+}
+
 fn prune_empty_parents(start: &Path, tf2_root: &Path) {
     let stop = [
         tf2_root.to_path_buf(),
@@ -303,7 +334,14 @@ fn prune_empty_parents(start: &Path, tf2_root: &Path) {
             .ok()
             .is_some_and(|mut entries| entries.next().is_none());
         if !empty {
-            break;
+            // Only the game's own caches stand between us and an empty husk.
+            if !dir.starts_with(tf2_root.join("tf").join("custom")) || !only_game_caches(&dir) {
+                break;
+            }
+            let parent = dir.parent().map(Path::to_path_buf);
+            let _ = fs::remove_dir_all(&dir);
+            current = parent;
+            continue;
         }
         let parent = dir.parent().map(Path::to_path_buf);
         let _ = fs::remove_dir(&dir);
@@ -318,6 +356,41 @@ mod tests {
         create_profile_record_to, put_exclusive_file_to, save_current_as_to, SaveCurrentOptions,
     };
     use std::io::Write;
+
+    #[test]
+    fn pruning_clears_a_husk_left_by_the_game_sound_cache() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let pack = tf2.join("tf/custom/oldhud");
+        std::fs::create_dir_all(pack.join("resource/ui")).unwrap();
+        std::fs::create_dir_all(pack.join("sound")).unwrap();
+        // TF2 writes this itself; execs never owns it.
+        std::fs::write(pack.join("sound/sound.cache"), b"cache").unwrap();
+        let removed = pack.join("resource/ui/hudlayout.res");
+        std::fs::write(&removed, b"{}").unwrap();
+        std::fs::remove_file(&removed).unwrap();
+
+        prune_empty_parents(&removed, &tf2);
+
+        assert!(!pack.exists(), "the husk must not survive as a fake install");
+        assert!(tf2.join("tf/custom").is_dir(), "tf/custom itself stays");
+    }
+
+    #[test]
+    fn pruning_leaves_a_folder_that_still_has_real_files() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let pack = tf2.join("tf/custom/keepme");
+        std::fs::create_dir_all(pack.join("sound")).unwrap();
+        std::fs::write(pack.join("sound/sound.cache"), b"cache").unwrap();
+        std::fs::write(pack.join("sound/hitsound.wav"), b"wav").unwrap();
+        let removed = pack.join("sound/gone.wav");
+
+        prune_empty_parents(&removed, &tf2);
+
+        assert!(pack.join("sound/hitsound.wav").is_file());
+        assert!(pack.join("sound/sound.cache").is_file());
+    }
 
     fn unlocked() -> [&'static str; 1] {
         ["bash"]

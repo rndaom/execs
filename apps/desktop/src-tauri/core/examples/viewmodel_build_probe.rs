@@ -19,7 +19,17 @@ fn main() {
     println!("studiomdl: {} (exists: {})", studiomdl.display(), studiomdl.is_file());
 
     let started = std::time::Instant::now();
-    match execs_core::viewmodel_build::build_viewmodel_pack_vpk(&zip, &hidden, &studiomdl, staging)
+    // EXECS_HIDE_MODE=weapon to probe the keep-hands variant.
+    let mode_arg = std::env::var("EXECS_HIDE_MODE").ok();
+    let mode = execs_core::ViewmodelHideMode::from_str_or_default(mode_arg.as_deref());
+    println!("hide mode: {}", mode.as_str());
+    match execs_core::viewmodel_build::build_viewmodel_pack_vpk(
+        &zip,
+        &hidden,
+        mode,
+        &studiomdl,
+        staging,
+    )
     {
         Ok(vpk) => {
             println!("OK in {:?} — vpk bytes: {}", started.elapsed(), vpk.len());
