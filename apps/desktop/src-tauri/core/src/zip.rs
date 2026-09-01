@@ -14,11 +14,12 @@ use crate::finder::user_path_string;
 use crate::hash::sha256_hex;
 use crate::launch::sanitize_launch_options;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
+use crate::apply::is_file_safe_rel_path;
 use crate::profile::{
-    create_profile_record_to, exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path,
-    load_library_from, load_manifest, manifest_file, normalize_rel_path, profiles_dir,
-    put_exclusive_file_to, put_shared_blob_to, remove_profile_record_to, FileStorage, ProfileError,
-    CrosshairRecord, HudRecord, ProfileFile, ProfileLibrary, ProfileManifest, ViewmodelRecord,
+    create_profile_record_to, exclusive_file_path, is_shared_rel_path, load_library_from,
+    load_manifest, manifest_file, normalize_rel_path, profiles_dir, put_profile_files_to,
+    remove_profile_record_to, FileSource, FileStorage, ProfileError, CrosshairRecord, HudRecord,
+    ProfileFile, ProfileLibrary, ProfileManifest, ViewmodelRecord,
 };
 
 pub const ZIP_SCHEMA: u32 = 1;
@@ -325,7 +326,9 @@ fn classify_zip_entry(raw: &str) -> Result<Option<ZipRole>, ProfileError> {
             return Ok(None);
         }
         let dest = normalize_rel_path(rest)?;
-        if is_forbidden_rel_path(&dest) {
+        // Zip-slip out of the root is handled above; this is the gate on what
+        // an imported entry may land on *inside* the game folder.
+        if !is_file_safe_rel_path(&dest) {
             return Err(ProfileError::ForbiddenPath(dest));
         }
         if is_zip_file_name(&dest) {
@@ -349,7 +352,7 @@ fn validate_payload(payload: &ZipPayload) -> Result<(), ProfileError> {
 
     for file in &payload.manifest.files {
         let path = normalize_rel_path(&file.path)?;
-        if is_forbidden_rel_path(&path) {
+        if !is_file_safe_rel_path(&path) {
             return Err(ProfileError::ForbiddenPath(path));
         }
         if !seen.insert(path.clone()) {
@@ -406,20 +409,17 @@ fn apply_payload(
     payload: &ZipPayload,
     running: &[String],
 ) -> Result<(), ProfileError> {
+    // One manifest + index write for the whole import.
+    let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(payload.manifest.files.len());
     for file in &payload.manifest.files {
         let path = normalize_rel_path(&file.path)?;
-        match file.storage {
-            FileStorage::Exclusive => {
-                let bytes = &payload.exclusive[&path];
-                put_exclusive_file_to(profiles_dir, tf2_root, profile_id, &path, bytes, running)?;
-            }
-            FileStorage::Shared => {
-                let hash = file.sha256.to_ascii_lowercase();
-                let bytes = &payload.blobs[&hash];
-                put_shared_blob_to(profiles_dir, tf2_root, profile_id, &path, bytes, running)?;
-            }
-        }
+        let bytes: &[u8] = match file.storage {
+            FileStorage::Exclusive => &payload.exclusive[&path],
+            FileStorage::Shared => &payload.blobs[&file.sha256.to_ascii_lowercase()],
+        };
+        batch.push((path, FileSource::Bytes(bytes)));
     }
+    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, running)?;
     write_imported_launch_and_hud(
         profiles_dir,
         profile_id,
@@ -444,7 +444,11 @@ fn write_imported_launch_and_hud(
     manifest.crosshair = crosshair;
     manifest.viewmodel = viewmodel;
     let json = serde_json::to_string_pretty(&manifest).map_err(json_err)?;
-    fs::write(manifest_file(profiles_dir, profile_id), format!("{json}\n")).map_err(io_err)
+    crate::hash::write_atomic(
+        &manifest_file(profiles_dir, profile_id),
+        format!("{json}\n").as_bytes(),
+    )
+    .map_err(io_err)
 }
 
 fn read_hashed_file(path: &Path, expected: &str, label: &str) -> Result<Vec<u8>, ProfileError> {
@@ -917,6 +921,51 @@ mod tests {
         assert_ne!(manifest.tf2_root, "/old/machine/Team Fortress 2");
         assert_eq!(manifest.launch_options, "-novid -console");
         cleanup(&dir);
+    }
+
+    #[test]
+    fn import_rejects_entries_outside_the_file_safe_surface() {
+        // The old denylist accepted both of these: the game binary and the
+        // `tf/cfg/user/` folder AGENTS.md forbids twice. A manifest file is
+        // copied straight into the live tree by the next switch.
+        for (entry, storage_path) in [
+            ("files/bin/x64/client.dll", "bin/x64/client.dll"),
+            ("files/tf/cfg/user/autoexec.cfg", "tf/cfg/user/autoexec.cfg"),
+        ] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("execs").join("profiles");
+            let root = dir.join("Team Fortress 2");
+            fs::create_dir_all(root.join("tf/custom")).unwrap();
+
+            let payload = b"pwned";
+            let hash = sha256_hex(payload);
+            let json = format!(
+                r#"{{
+  "schema": 1,
+  "name": "Evil",
+  "launchOptions": "",
+  "files": [{{"path": "{storage_path}", "sha256": "{hash}", "storage": "exclusive"}}]
+}}
+"#
+            );
+            let zip_path = dir.join("evil.zip");
+            write_raw_zip(
+                &zip_path,
+                &[("execs-profile.json", json.as_bytes()), (entry, payload)],
+            );
+
+            let err = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+            assert_eq!(err.code(), "ForbiddenPath", "{entry}");
+            assert!(
+                load_library_from(&profiles, Some(&root))
+                    .unwrap()
+                    .profiles
+                    .is_empty(),
+                "a rejected import must leave no profile record"
+            );
+            assert!(!root.join(storage_path).exists());
+            cleanup(&dir);
+        }
     }
 
     #[test]
