@@ -8,9 +8,11 @@ import {
   canRecordBinds,
   displayedKeyForAction,
   parseManagedBinds,
+  recorderOutcomeForKey,
   sourceKeyFromKeyboardEvent,
   sourceKeyFromMouseButton,
   sourceKeyFromWheelDelta,
+  UNBINDABLE_KEY_NOTICE_MS,
 } from "./lib/binds-ui";
 
 export type BindsPaneProps = {
@@ -19,7 +21,7 @@ export type BindsPaneProps = {
   layer: BindsLayer;
   effectiveBinds: Record<string, string>;
   managedText: string;
-  onSave: (bindsText: string, autoexecPatch?: { path: string; text: string }) => void;
+  onSave: (bindsText: string) => void;
 };
 
 const BIND_GROUPS: Array<{
@@ -53,6 +55,7 @@ export function BindsPane({
   onSave,
 }: BindsPaneProps) {
   const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
+  const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
   const canRecord = canRecordBinds(running, busy);
   const managedKeys = parseManagedBinds(managedText);
 
@@ -67,14 +70,18 @@ export function BindsPane({
     }, 0);
 
     function finish(key: string | null) {
-      if (!key) {
+      const outcome = recorderOutcomeForKey(key);
+      if (outcome.kind === "unbindable") {
+        // Keep listening: the row must not sit on "Waiting for input" with no
+        // explanation just because the key is outside TF2's table.
+        setRecorderNotice(outcome.message);
         return;
       }
-      if (key === "escape" || !recordingId) {
+      if (outcome.kind === "cancel" || !recordingId) {
         setRecordingId(null);
         return;
       }
-      const next = applyRecordedBind(managedText, recordingId, key);
+      const next = applyRecordedBind(managedText, recordingId, outcome.key);
       setRecordingId(null);
       if (next !== managedText) {
         onSave(next);
@@ -100,7 +107,7 @@ export function BindsPane({
     }
 
     function onWheel(event: WheelEvent) {
-      if (!armed) {
+      if (!armed || event.deltaY === 0) {
         return;
       }
       event.preventDefault();
@@ -125,10 +132,21 @@ export function BindsPane({
     }
   }, [canRecord]);
 
+  // The notice is transient: it explains one rejected key, then gets out of the
+  // way so "Waiting for input" reads true again.
+  useEffect(() => {
+    if (recorderNotice === null) {
+      return;
+    }
+    const timer = window.setTimeout(() => setRecorderNotice(null), UNBINDABLE_KEY_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [recorderNotice]);
+
   function onRow(actionId: BindActionId) {
     if (!canRecord) {
       return;
     }
+    setRecorderNotice(null);
     setRecordingId((current) => (current === actionId ? null : actionId));
   }
 
@@ -155,10 +173,17 @@ export function BindsPane({
         }`}
       >
         {recordingAction ? (
-          <p className="text-sm text-ink">
-            Recording <span className="font-medium text-brand">{recordingAction.label}</span> —
-            press the new key now.
-          </p>
+          <>
+            <p className="text-sm text-ink">
+              Recording <span className="font-medium text-brand">{recordingAction.label}</span> —
+              press the new key now.
+            </p>
+            {recorderNotice ? (
+              <p data-testid="bind-recorder-notice" className="mt-1 text-xs text-ink-muted">
+                {recorderNotice} Try another key.
+              </p>
+            ) : null}
+          </>
         ) : null}
       </div>
 

@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  blockingFindingsForFile,
   type CfgFinding,
   canSaveCfg,
   cfgFileMeta,
   cfgFiles,
   findingTierClass,
   lintBundle,
+  shouldReseedDraft,
 } from "./lib/files-ui";
 
 export function FilesPane({
@@ -29,15 +31,28 @@ export function FilesPane({
       : (listed[0]?.path ?? null);
   const selectedMeta = selected !== null ? cfgFileMeta(selected, hudId) : null;
   const source = files.find((file) => file.path === selected)?.text ?? "";
-  const draftSource = useMemo(() => ({ path: selected, text: source }), [selected, source]);
   const [draft, setDraft] = useState(source);
-
-  useEffect(() => {
-    setDraft(draftSource.text);
-  }, [draftSource]);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
 
   const editable = selectedMeta?.editable ?? false;
   const dirty = selected !== null && editable && draft !== source;
+
+  const lastPathRef = useRef<string | null>(selected);
+  const lastSourceRef = useRef<string | null>(null);
+
+  // A reload hands this pane a brand-new `files` array even when the bytes are
+  // identical, so reseeding on identity alone throws away whatever the user was
+  // typing. Reseed on a real content change, or when the file itself changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `dirty` is read, not a trigger.
+  useEffect(() => {
+    const pathChanged = lastPathRef.current !== selected;
+    if (!pathChanged && !shouldReseedDraft(lastSourceRef.current, source, dirty)) {
+      return;
+    }
+    lastPathRef.current = selected;
+    lastSourceRef.current = source;
+    setDraft(source);
+  }, [selected, source]);
   const bundle = useMemo(
     () =>
       listed.map((file) => {
@@ -49,13 +64,54 @@ export function FilesPane({
   const lint = useMemo(() => lintBundle(bundle, hudId), [bundle, hudId]);
   const strictFindings = lint.findings.filter((finding) => !finding.advisory);
   const advisoryFindings = lint.findings.filter((finding) => finding.advisory);
-  const canSave = selected !== null && canSaveCfg(lint.ok, running, busy, dirty, editable);
+  // RND-157 scopes the refusal to the file being saved: a block finding in some
+  // other cfg is shown, but it is that file's problem, not this one's.
+  const blockingHere = useMemo(
+    () => blockingFindingsForFile(lint.findings, selected),
+    [lint.findings, selected],
+  );
+  const blockingElsewhere = strictFindings.filter(
+    (finding) => finding.tier === "block" && !blockingHere.includes(finding),
+  ).length;
+  const canSave = selected !== null && canSaveCfg(blockingHere, running, busy, dirty, editable);
 
   function handleSave() {
-    if (!selected || !canSaveCfg(lint.ok, running, busy, dirty, editable)) {
+    if (!selected || !canSaveCfg(blockingHere, running, busy, dirty, editable)) {
       return;
     }
     onSave(selected, draft);
+  }
+
+  function requestPick(path: string) {
+    if (path === selected) {
+      return;
+    }
+    if (dirty) {
+      // Never drop an edit on a list click — make the choice explicit.
+      setPendingPath(path);
+      return;
+    }
+    setPicked(path);
+  }
+
+  function discardAndSwitch() {
+    if (pendingPath === null) {
+      return;
+    }
+    setDraft(source);
+    setPicked(pendingPath);
+    setPendingPath(null);
+  }
+
+  function saveAndSwitch() {
+    if (pendingPath === null) {
+      return;
+    }
+    handleSave();
+    if (canSave) {
+      setPicked(pendingPath);
+    }
+    setPendingPath(null);
   }
 
   return (
@@ -96,7 +152,7 @@ export function FilesPane({
                       data-origin={file.origin}
                       data-active={active ? "true" : "false"}
                       aria-current={active ? "true" : undefined}
-                      onClick={() => setPicked(file.path)}
+                      onClick={() => requestPick(file.path)}
                       className={`flex w-full items-center justify-between gap-2 overflow-hidden rounded-md px-2.5 py-2 text-left font-mono text-[11px] leading-4 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand ${
                         active
                           ? "bg-brand/10 text-ink"
@@ -117,6 +173,44 @@ export function FilesPane({
               })
             )}
           </ul>
+          {pendingPath !== null ? (
+            <div
+              data-testid="files-switch-guard"
+              className="border-t border-edge px-3 py-2.5 text-[11px] leading-4 text-ink"
+            >
+              <p>
+                Unsaved changes — Save or Discard before opening{" "}
+                <span className="font-mono text-ink-muted">{pendingPath}</span>.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  data-testid="files-switch-save"
+                  disabled={!canSave}
+                  onClick={saveAndSwitch}
+                  className="btn btn-primary px-3 py-1 text-[11px]"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  data-testid="files-switch-discard"
+                  onClick={discardAndSwitch}
+                  className="btn btn-ghost px-3 py-1 text-[11px]"
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  data-testid="files-switch-cancel"
+                  onClick={() => setPendingPath(null)}
+                  className="btn btn-ghost px-3 py-1 text-[11px]"
+                >
+                  Keep editing
+                </button>
+              </div>
+            </div>
+          ) : null}
         </aside>
 
         <div className="surface flex min-w-0 flex-col lg:min-h-[31rem]">
@@ -192,18 +286,19 @@ export function FilesPane({
               <p className="text-[10px] text-ink-faint">Live cfg lint</p>
             </div>
             <span
+              data-testid="files-lint-badge"
               className={`badge border ${
-                lint.ok
+                blockingHere.length === 0
                   ? "border-health/50 bg-health/10 text-health"
                   : "border-team-red/50 bg-team-red/10 text-team-red"
               }`}
             >
-              {lint.ok ? "Ready" : "Blocked"}
+              {blockingHere.length === 0 ? "Ready" : "Blocked"}
             </span>
           </div>
 
           <div className="flex max-h-[27.5rem] flex-col gap-3 overflow-y-auto p-3">
-            {lint.ok ? null : (
+            {blockingHere.length > 0 ? (
               <p
                 data-testid="files-blocked"
                 className="rounded-lg border border-team-red/40 bg-team-red/10 px-3 py-2 text-xs leading-5 text-ink"
@@ -211,7 +306,17 @@ export function FilesPane({
                 Block-tier findings must be fixed before this file can be saved. Commands are not
                 stripped.
               </p>
-            )}
+            ) : null}
+
+            {blockingElsewhere > 0 ? (
+              <p
+                data-testid="files-blocked-elsewhere"
+                className="rounded-lg border border-edge px-3 py-2 text-xs leading-5 text-ink-muted"
+              >
+                {blockingElsewhere} block-tier {blockingElsewhere === 1 ? "issue" : "issues"} in
+                other files. They do not block this file&apos;s save — open those files to fix them.
+              </p>
+            ) : null}
 
             {strictFindings.length > 0 ? (
               <ul className="flex flex-col gap-2">
