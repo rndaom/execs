@@ -1,14 +1,12 @@
 import { lookupCvar, parseCommands } from "@execs/cfglint";
 import {
-  type AutoexecPatch,
-  autoexecExecPatch,
   autoexecFilePath,
   EXECS_GAMEPLAY_STEM,
   ensureAutoexecExecLine,
   ownedCfgPath,
 } from "./binds-ui";
 
-export { type AutoexecPatch, autoexecFilePath, EXECS_GAMEPLAY_STEM, ensureAutoexecExecLine };
+export { autoexecFilePath, EXECS_GAMEPLAY_STEM, ensureAutoexecExecLine };
 
 export const GAMEPLAY_STEM = EXECS_GAMEPLAY_STEM;
 
@@ -187,13 +185,6 @@ export function gameplayDirty(draft: GameplaySettings, saved: GameplaySettings):
 /** Pane write-lock: Apply stays off while TF2 is running or a write is in flight. */
 export function canApplyGameplay(running: boolean, busy: boolean): boolean {
   return !running && !busy;
-}
-
-export function gameplayAutoexecPatch(
-  layer: GameplayLayer,
-  existing = "",
-): AutoexecPatch | undefined {
-  return autoexecExecPatch(layer, existing, EXECS_GAMEPLAY_STEM);
 }
 
 function applyCvars(base: GameplaySettings, values: Record<string, string>): GameplaySettings {

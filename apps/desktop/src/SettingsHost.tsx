@@ -67,6 +67,7 @@ import {
   writeOwnedFile,
 } from "./lib/bridge";
 import {
+  defaultComfigState,
   hasBaseVpk,
   PREVIEW_COMFIG_STATE,
   type PreviewComfigState,
@@ -182,7 +183,12 @@ export function SettingsHost({
   const [localBusy, setLocalBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [files, setFiles] = useState<CfgText[]>(() => (tauri ? [] : PREVIEW_FILES));
-  const [comfig, setComfig] = useState<PreviewComfigState>(PREVIEW_COMFIG_STATE);
+  // Never seed the real app with demo data: until the first reload lands, the
+  // Comfig and Gameplay panes must show nothing rather than someone else's
+  // preset, module overrides and addons.
+  const [comfig, setComfig] = useState<PreviewComfigState>(() =>
+    tauri ? defaultComfigState() : PREVIEW_COMFIG_STATE,
+  );
   const [launch, setLaunch] = useState(() => previewLaunchOptions("linux"));
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
   const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>(() =>
@@ -220,6 +226,18 @@ export function SettingsHost({
   );
   const hudRequest = useRef(0);
   const hudReloadQueue = useRef(new HudReloadQueue());
+  /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
+  const loadRequest = useRef(0);
+
+  // A write in flight when this host unmounts still calls release() on the dead
+  // instance, which would leave App.settingsBusy latched true — switch, wizard
+  // apply and the whole ready panel disabled with no way back but a restart.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: unmount only; onBusyChange is stable.
+  useEffect(() => {
+    return () => {
+      onBusyChange(false);
+    };
+  }, []);
 
   const busy = externalBusy || localBusy;
   const layer = detail?.layer ?? "comfig";
@@ -229,7 +247,17 @@ export function SettingsHost({
     if (!tauri) {
       return;
     }
+    // Every profile file is a separate IPC round trip, so a switch can easily
+    // start a second reload that finishes first. Without this token the slower
+    // (older) load writes the previous profile's files into state — and the
+    // panes would then save profile A's content into profile B.
+    const request = ++loadRequest.current;
+    const stale = () => request !== loadRequest.current;
+
     const next = await getActiveProfileDetail();
+    if (stale()) {
+      return;
+    }
     setDetail(next);
     const cfgPaths = (next?.files ?? []).filter((file) => file.path.toLowerCase().endsWith(".cfg"));
     const loaded: CfgText[] = [];
@@ -239,6 +267,9 @@ export function SettingsHost({
       // reads to the user as "my settings reverted".
       try {
         const content = await readProfileFile(file.path);
+        if (stale()) {
+          return;
+        }
         if (content.text !== null) {
           loaded.push({ path: content.path, text: content.text });
         }
@@ -254,15 +285,25 @@ export function SettingsHost({
       const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
       if (synced !== managed) {
         await writeOwnedFile(bindsPath, synced);
+        if (stale()) {
+          return;
+        }
         nextFiles = upsertFile(nextFiles, bindsPath, synced);
       }
     }
     setFiles(nextFiles);
     const state = await getComfigState();
-    if (state) {
-      setComfig(comfigPreviewFromState(state));
+    if (stale()) {
+      return;
     }
-    setLaunch(next?.launchOptions || (await getProfileLaunchOptions()));
+    // A vanilla-layer profile returns null: clear the pane rather than leaving
+    // the previous profile's preset and addons on screen.
+    setComfig(state ? comfigPreviewFromState(state) : defaultComfigState());
+    const nextLaunch = next?.launchOptions || (await getProfileLaunchOptions());
+    if (stale()) {
+      return;
+    }
+    setLaunch(nextLaunch);
   }
 
   async function reloadHud(refresh: boolean, showCatalogProgress = false) {
@@ -409,7 +450,12 @@ export function SettingsHost({
   }, [tauri, tab, crosshairLibraryKey]);
 
   async function runWrite(work: () => Promise<void>) {
-    if (externalBusy || settingsBusyQueue.active) {
+    // The queue already serializes settings work — refusing a second write
+    // because one is in flight silently dropped clicks the panes had already
+    // applied optimistically. Only an *external* operation still blocks, and
+    // it says so instead of no-oping.
+    if (externalBusy) {
+      onError("Another change is still saving.");
       return;
     }
     onError(null);

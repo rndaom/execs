@@ -9,7 +9,6 @@ import {
   FOV_MIN,
   GAMEPLAY_HEADER,
   GAMEPLAY_STEM,
-  gameplayAutoexecPatch,
   gameplayFromEffective,
   gameplayPath,
   parseGameplay,
@@ -125,14 +124,10 @@ describe("autoexec exec line", () => {
     expect(ensureAutoexecExecLine("exec execs_gameplay.cfg\n", GAMEPLAY_STEM, "vanilla")).toBe(
       "exec execs_gameplay.cfg\n",
     );
-    expect(gameplayAutoexecPatch("comfig")?.path).toBe("tf/cfg/overrides/autoexec.cfg");
-    expect(gameplayAutoexecPatch("comfig")?.text).toBe(
+    // The exec line is addressed from tf/cfg on the comfig layer (RND-155).
+    expect(ensureAutoexecExecLine("", GAMEPLAY_STEM, "comfig")).toBe(
       "exec overrides/execs_gameplay // execs:managed\n",
     );
-    expect(gameplayAutoexecPatch("vanilla")?.text).toBe("exec execs_gameplay // execs:managed\n");
-    expect(
-      gameplayAutoexecPatch("vanilla", "exec execs_gameplay // execs:managed\n"),
-    ).toBeUndefined();
   });
 });
 
