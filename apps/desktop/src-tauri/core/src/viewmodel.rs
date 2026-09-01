@@ -12,6 +12,7 @@ use crate::apply::{
 use crate::finder::discover_steam_roots;
 use crate::hash::sha256_file;
 use crate::launch::{sanitize_launch_options, set_profile_launch_options_to};
+use crate::preloader::preload_is_wanted;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     load_library_from, load_manifest, profiles_dir, remove_manifest_files_to, save_manifest,
@@ -241,6 +242,7 @@ pub fn remove_viewmodels(tf2_root: &Path, profile_id: &str) -> Result<ProfileDet
     let steam_roots = discover_steam_roots();
     remove_viewmodels_to_with_launch(
         &profiles_dir(),
+        &crate::settings::execs_data_dir(),
         tf2_root,
         profile_id,
         process_names.clone(),
@@ -251,6 +253,7 @@ pub fn remove_viewmodels(tf2_root: &Path, profile_id: &str) -> Result<ProfileDet
 
 pub fn remove_viewmodels_to<I, S>(
     profiles_dir: &Path,
+    data_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     running_names: I,
@@ -261,6 +264,7 @@ where
 {
     remove_viewmodels_to_with_launch(
         profiles_dir,
+        data_dir,
         tf2_root,
         profile_id,
         running_names,
@@ -271,6 +275,7 @@ where
 
 fn remove_viewmodels_to_with_launch<I, J, S, T>(
     profiles_dir: &Path,
+    data_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     running_names: I,
@@ -292,7 +297,16 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
-    let previous = pack_files(profiles_dir, profile_id)?;
+    // The preload cfg is shared with the mods preloader. Removing the
+    // viewmodel pack must leave it alone while patched particles or addon
+    // content are still installed, or those mods silently stop working on
+    // Casual (AGENTS.md: "unless a viewmodel pack still uses it" — this is
+    // the mirror of that rule).
+    let keep_preload = preload_is_wanted(data_dir, tf2_root);
+    let mut previous = pack_files(profiles_dir, profile_id)?;
+    if keep_preload {
+        previous.retain(|file| !is_preload_path(&file.path));
+    }
     if !previous.is_empty() {
         let paths: Vec<String> = previous.iter().map(|file| file.path.clone()).collect();
         remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &paths, &running)?;
@@ -305,7 +319,7 @@ where
         .is_some_and(|record| record.preload);
     manifest.viewmodel = None;
     save_manifest(profiles_dir, tf2_root, &manifest)?;
-    if preload_was {
+    if preload_was && !keep_preload {
         set_preload_state(
             profiles_dir,
             tf2_root,
@@ -376,6 +390,7 @@ pub fn set_viewmodel_preload(
     let steam_roots = discover_steam_roots();
     set_viewmodel_preload_to_with_launch(
         &profiles_dir(),
+        &crate::settings::execs_data_dir(),
         tf2_root,
         profile_id,
         enabled,
@@ -387,6 +402,7 @@ pub fn set_viewmodel_preload(
 
 pub fn set_viewmodel_preload_to<I, S>(
     profiles_dir: &Path,
+    data_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     enabled: bool,
@@ -398,6 +414,7 @@ where
 {
     set_viewmodel_preload_to_with_launch(
         profiles_dir,
+        data_dir,
         tf2_root,
         profile_id,
         enabled,
@@ -409,6 +426,7 @@ where
 
 fn set_viewmodel_preload_to_with_launch<I, J, S, T>(
     profiles_dir: &Path,
+    data_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     enabled: bool,
@@ -436,15 +454,19 @@ where
             "Import or build a viewmodel pack before enabling preload.".into(),
         ));
     }
-    set_preload_state(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        enabled,
-        &running,
-        &steam,
-        steam_roots,
-    )?;
+    // Turning the viewmodel pack's preload off must not strip the shared cfg
+    // and launch token out from under the mods preloader.
+    if enabled || !preload_is_wanted(data_dir, tf2_root) {
+        set_preload_state(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            enabled,
+            &running,
+            &steam,
+            steam_roots,
+        )?;
+    }
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     if let Some(record) = manifest.viewmodel.as_mut() {
         record.preload = enabled;
@@ -601,6 +623,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    /// An app-data dir with no preloader state: nothing else wants the cfg.
+    fn no_mods(root: &Path) -> PathBuf {
+        root.join("data")
+    }
+
     fn write_steam_account(steam: &Path, launch_options: &str) -> PathBuf {
         let localconfig = steam
             .join("userdata")
@@ -665,7 +692,7 @@ mod tests {
         assert!(tf2.join("tf/custom/execs-viewmodels.vpk").is_file());
         assert!(tf2.join("tf/cfg/execs_preload.cfg").is_file());
         assert!(detail.launch_options.contains("execs_preload"));
-        remove_viewmodels_to(&profiles, &tf2, &id, unlocked()).unwrap();
+        remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &id, unlocked()).unwrap();
         assert!(!tf2.join("tf/custom/execs-viewmodels.vpk").exists());
         assert!(!tf2.join("tf/cfg/execs_preload.cfg").exists());
         cleanup(&root);
@@ -675,7 +702,7 @@ mod tests {
     fn enabling_preload_without_viewmodels_is_side_effect_free() {
         let (root, profiles, tf2, id) = setup();
         let before = load_manifest(&profiles, &id).unwrap();
-        let err = set_viewmodel_preload_to(&profiles, &tf2, &id, true, unlocked()).unwrap_err();
+        let err = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, true, unlocked()).unwrap_err();
         assert!(err.message().contains("Import or build"));
         let after = load_manifest(&profiles, &id).unwrap();
         assert_eq!(after.launch_options, before.launch_options);
@@ -702,7 +729,7 @@ mod tests {
         )
         .unwrap();
 
-        let detail = set_viewmodel_preload_to(&profiles, &tf2, &id, false, unlocked()).unwrap();
+        let detail = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, false, unlocked()).unwrap();
         assert!(!detail.viewmodel.as_ref().unwrap().preload);
         assert!(!detail.launch_options.contains("execs_preload"));
         assert!(!tf2.join("tf/cfg/execs_preload.cfg").exists());
@@ -794,11 +821,69 @@ mod tests {
         std::fs::write(&live_vpk, b"user drift").unwrap();
         std::fs::write(&live_preload, b"user drift\n").unwrap();
 
-        let detail = remove_viewmodels_to(&profiles, &tf2, &id, unlocked()).unwrap();
+        let detail = remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &id, unlocked()).unwrap();
         assert_eq!(std::fs::read(live_vpk).unwrap(), b"user drift");
         assert_eq!(std::fs::read(live_preload).unwrap(), b"user drift\n");
         assert!(detail.viewmodel.is_none());
         assert!(!detail.launch_options.contains("execs_preload"));
+        cleanup(&root);
+    }
+
+    /// A preloader state file that says mods are installed. The cfg and the
+    /// launch token are then shared property, not the viewmodel pack's.
+    fn mods_installed(root: &Path) -> PathBuf {
+        let data = root.join("mods-data");
+        std::fs::create_dir_all(data.join("preloader")).unwrap();
+        std::fs::write(
+            data.join("preloader/state.json"),
+            br#"{"schema":1,"vpkLen":0,"vpk_len":0,"vpk_mtime_ms":0,"particle_mods":["Blue Water"]}"#,
+        )
+        .unwrap();
+        assert!(crate::preloader::preload_is_wanted(&data, root));
+        data
+    }
+
+    /// AGENTS.md: full revert removes the preload cfg "unless a viewmodel pack
+    /// still uses it" — and the mirror, which this covers: removing the
+    /// viewmodel pack must not remove it while the mods preloader wants it.
+    #[test]
+    fn removing_a_viewmodel_pack_keeps_the_preload_the_mods_preloader_needs() {
+        let (root, profiles, tf2, id) = setup();
+        let data = mods_installed(&tf2);
+        let mut files = BTreeMap::new();
+        files.insert("models/a.mdl".into(), b"x".to_vec());
+        import_viewmodel_vpk_to(
+            &profiles,
+            &tf2,
+            &id,
+            &write_vpk_v1(&files),
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        let live_preload = tf2.join(EXECS_PRELOAD_VANILLA_PATH);
+        assert!(live_preload.is_file());
+
+        let detail = remove_viewmodels_to(&profiles, &data, &tf2, &id, unlocked()).unwrap();
+        assert!(detail.viewmodel.is_none());
+        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists(), "pack still removed");
+        // The shared cfg, its manifest entry, and the launch token all survive.
+        assert!(live_preload.is_file(), "shared preload cfg must survive");
+        assert!(detail.launch_options.contains("execs_preload"));
+        assert!(load_manifest(&profiles, &id)
+            .unwrap()
+            .files
+            .iter()
+            .any(|file| is_preload_path(&file.path)));
+
+        // Turning the (now absent) viewmodel preload off must not take it
+        // either.
+        let detail =
+            set_viewmodel_preload_to(&profiles, &data, &tf2, &id, false, unlocked()).unwrap();
+        assert!(live_preload.is_file());
+        assert!(detail.launch_options.contains("execs_preload"));
         cleanup(&root);
     }
 

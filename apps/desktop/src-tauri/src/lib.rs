@@ -8,7 +8,15 @@ mod viewmodel_fetch;
 use std::io::Write;
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+/// Serializes every command that writes the profile library or the live
+/// surface. Without it the auto-absorb path (fired from an effect when TF2
+/// quits) races the settings panes: both read `profiles/index.json`, both
+/// mutate it, and the last writer silently drops the other's changes.
+///
+/// `tokio::sync::Mutex`, not `std`: the guard is held across `.await`.
+pub struct WriteGate(pub tokio::sync::Mutex<()>);
 
 /// Log panics to %AppData%\execs\logs\panic.log (or the Linux data dir) so a
 /// crash leaves a trace even when no console is attached.
@@ -101,6 +109,7 @@ pub fn run() {
             commands::import_viewmodels,
             commands::remove_viewmodels,
             commands::set_viewmodel_preload,
+            commands::viewmodel_build_available,
             commands::open_embedded_page,
             commands::get_preloader_status,
             commands::get_default_mods,
@@ -110,6 +119,7 @@ pub fn run() {
             commands::revert_preloader,
         ])
         .setup(|app| {
+            app.manage(WriteGate(tokio::sync::Mutex::new(())));
             spawn_lock_poller(app.handle().clone());
             Ok(())
         })
