@@ -12,17 +12,34 @@ use execs_core::{
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
-#[tauri::command]
-pub fn scan_tf2_installs() -> Vec<Tf2Install> {
-    execs_core::scan_tf2_installs()
+use crate::WriteGate;
+
+/// Tauri v2 runs non-`async` commands on the MAIN thread. Every core write
+/// helper enumerates the whole OS process table for the write lock, and most
+/// of them walk the live file surface on top — none of that belongs on the UI
+/// thread. This is the one-liner that keeps the bodies off it.
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn validate_tf2_root(path: String) -> Result<Tf2Install, String> {
-    let root = execs_core::normalize_tf2_root(Path::new(&path)).map_err(|err| err.message())?;
-    Ok(Tf2Install {
-        path: root.to_string_lossy().into_owned(),
+pub async fn scan_tf2_installs() -> Result<Vec<Tf2Install>, String> {
+    blocking(|| Ok(execs_core::scan_tf2_installs())).await
+}
+
+#[tauri::command]
+pub async fn validate_tf2_root(path: String) -> Result<Tf2Install, String> {
+    blocking(move || {
+        let root = execs_core::normalize_tf2_root(Path::new(&path)).map_err(|err| err.message())?;
+        Ok(Tf2Install {
+            path: root.to_string_lossy().into_owned(),
+        })
     })
+    .await
 }
 
 #[tauri::command]
@@ -46,23 +63,33 @@ pub async fn browse_tf2_root(app: AppHandle) -> Result<Option<Tf2Install>, Strin
 }
 
 #[tauri::command]
-pub fn confirm_tf2_root(path: String) -> Result<Tf2Install, String> {
-    let root = execs_core::remember_tf2_root(Path::new(&path)).map_err(|err| err.message())?;
-    Ok(Tf2Install {
-        path: root.to_string_lossy().into_owned(),
+pub async fn confirm_tf2_root(
+    gate: tauri::State<'_, WriteGate>,
+    path: String,
+) -> Result<Tf2Install, String> {
+    let _guard = gate.0.lock().await;
+    blocking(move || {
+        let root = execs_core::remember_tf2_root(Path::new(&path)).map_err(|err| err.message())?;
+        Ok(Tf2Install {
+            path: root.to_string_lossy().into_owned(),
+        })
     })
+    .await
 }
 
 #[tauri::command]
-pub fn get_tf2_root() -> Option<Tf2Install> {
-    execs_core::remembered_tf2_root().map(|path| Tf2Install {
-        path: path.to_string_lossy().into_owned(),
+pub async fn get_tf2_root() -> Result<Option<Tf2Install>, String> {
+    blocking(|| {
+        Ok(execs_core::remembered_tf2_root().map(|path| Tf2Install {
+            path: path.to_string_lossy().into_owned(),
+        }))
     })
+    .await
 }
 
 #[tauri::command]
-pub fn tf2_write_lock() -> WriteLock {
-    execs_core::write_lock_status()
+pub async fn tf2_write_lock() -> Result<WriteLock, String> {
+    blocking(|| Ok(execs_core::write_lock_status())).await
 }
 
 fn confirmed_root() -> Result<std::path::PathBuf, String> {
@@ -70,85 +97,102 @@ fn confirmed_root() -> Result<std::path::PathBuf, String> {
 }
 
 #[tauri::command]
-pub fn get_profile_library() -> Result<ProfileLibrary, String> {
-    let confirmed = execs_core::remembered_tf2_root();
-    execs_core::load_library(confirmed.as_deref()).map_err(|err| err.message())
-}
-
-#[tauri::command]
-pub fn init_profile_library() -> Result<ProfileLibrary, String> {
-    execs_core::init_library(&confirmed_root()?).map_err(|err| err.message())
-}
-
-#[tauri::command]
-pub fn create_profile_record(name: String) -> Result<ProfileLibrary, String> {
-    execs_core::create_profile_record(&confirmed_root()?, &name).map_err(|err| err.message())
-}
-
-#[tauri::command]
-pub async fn save_current_as(name: String) -> Result<ProfileLibrary, String> {
-    let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
-        execs_core::save_current_as(&root, &name).map_err(|err| err.message())
+pub async fn get_profile_library() -> Result<ProfileLibrary, String> {
+    blocking(|| {
+        let confirmed = execs_core::remembered_tf2_root();
+        execs_core::load_library(confirmed.as_deref()).map_err(|err| err.message())
     })
     .await
-    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+pub async fn init_profile_library(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
+    let root = confirmed_root()?;
+    blocking(move || execs_core::init_library(&root).map_err(|err| err.message())).await
+}
+
+#[tauri::command]
+pub async fn create_profile_record(
+    gate: tauri::State<'_, WriteGate>,
+    name: String,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
+    let root = confirmed_root()?;
+    blocking(move || {
+        execs_core::create_profile_record(&root, &name).map_err(|err| err.message())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn save_current_as(
+    gate: tauri::State<'_, WriteGate>,
+    name: String,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
+    let root = confirmed_root()?;
+    blocking(move || execs_core::save_current_as(&root, &name).map_err(|err| err.message())).await
 }
 
 #[tauri::command]
 pub async fn scan_absorb_delta() -> Result<AbsorbDelta, String> {
     let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
-        execs_core::scan_absorb_delta(&root).map_err(|err| err.message())
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    blocking(move || execs_core::scan_absorb_delta(&root).map_err(|err| err.message())).await
 }
 
 #[tauri::command]
-pub async fn absorb_owned() -> Result<AbsorbOwnedResult, String> {
+pub async fn absorb_owned(gate: tauri::State<'_, WriteGate>) -> Result<AbsorbOwnedResult, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
-        execs_core::absorb_owned(&root).map_err(|err| err.message())
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    blocking(move || execs_core::absorb_owned(&root).map_err(|err| err.message())).await
 }
 
 #[tauri::command]
-pub async fn absorb_packs(choice: PackChoice) -> Result<ProfileLibrary, String> {
+pub async fn absorb_packs(
+    gate: tauri::State<'_, WriteGate>,
+    choice: PackChoice,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
-        execs_core::absorb_packs(&root, choice).map_err(|err| err.message())
-    })
-    .await
-    .map_err(|err| err.to_string())?
+    blocking(move || execs_core::absorb_packs(&root, choice).map_err(|err| err.message())).await
 }
 
 #[tauri::command]
-pub async fn switch_profile(app: AppHandle, id: String) -> Result<ProfileLibrary, String> {
+pub async fn switch_profile(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+    id: String,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
+    blocking(move || {
         execs_core::switch_profile_with_progress(&root, &id, |progress: SwitchProgress| {
             let _ = app.emit("profile-switch-progress", progress);
         })
         .map_err(|err| err.message())
     })
     .await
-    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
 pub async fn export_profile(app: AppHandle, id: String) -> Result<Option<String>, String> {
     let root = confirmed_root()?;
-    let library = execs_core::load_library(Some(&root)).map_err(|err| err.message())?;
-    let name = library
-        .profiles
-        .iter()
-        .find(|profile| profile.id == id)
-        .map(|profile| profile.name.as_str())
-        .ok_or_else(|| ProfileError::UnknownProfile.message())?;
-    let suggested = execs_core::safe_zip_file_name(name);
+    let for_name = (root.clone(), id.clone());
+    let suggested = blocking(move || {
+        let (root, id) = for_name;
+        let library = execs_core::load_library(Some(&root)).map_err(|err| err.message())?;
+        let name = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id == id)
+            .map(|profile| profile.name.clone())
+            .ok_or_else(|| ProfileError::UnknownProfile.message())?;
+        Ok(execs_core::safe_zip_file_name(&name))
+    })
+    .await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -166,12 +210,20 @@ pub async fn export_profile(app: AppHandle, id: String) -> Result<Option<String>
     if path.extension().is_none() {
         path.set_extension("zip");
     }
-    execs_core::export_profile(&root, &id, &path).map_err(|err| err.message())?;
-    Ok(Some(path.to_string_lossy().into_owned()))
+    // Zipping a whole profile (all of tf/custom/) does not belong on the
+    // async runtime's worker thread.
+    blocking(move || {
+        execs_core::export_profile(&root, &id, &path).map_err(|err| err.message())?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn import_profile(app: AppHandle) -> Result<ProfileLibrary, String> {
+pub async fn import_profile(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+) -> Result<ProfileLibrary, String> {
     let root = confirmed_root()?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -182,48 +234,61 @@ pub async fn import_profile(app: AppHandle) -> Result<ProfileLibrary, String> {
     })
     .await
     .map_err(|err| err.to_string())?;
+    // Take the gate only once the user has actually picked something: an open
+    // dialog must not block the absorb path behind it.
+    let _guard = gate.0.lock().await;
     let Some(picked) = picked else {
-        return execs_core::load_library(Some(&root)).map_err(|err| err.message());
+        return blocking(move || execs_core::load_library(Some(&root)).map_err(|err| err.message()))
+            .await;
     };
     let path = picked.into_path().map_err(|err| err.to_string())?;
-    execs_core::import_profile(&root, &path).map_err(|err| err.message())
+    blocking(move || execs_core::import_profile(&root, &path).map_err(|err| err.message())).await
 }
 
 #[tauri::command]
-pub fn classify_first_run() -> Result<FirstRunClass, String> {
-    execs_core::classify_first_run(&confirmed_root()?).map_err(|err| err.message())
-}
-
-#[tauri::command]
-pub async fn apply_unused_wizard(app: AppHandle, spec: WizardSpec) -> Result<ProfileLibrary, String> {
+pub async fn classify_first_run() -> Result<FirstRunClass, String> {
     let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
-        apply_wizard_and_switch(&app, &root, spec, BindSource::Stock)
+    blocking(move || execs_core::classify_first_run(&root).map_err(|err| err.message())).await
+}
+
+#[tauri::command]
+pub async fn apply_unused_wizard(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+    spec: WizardSpec,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
+    let root = confirmed_root()?;
+    blocking(move || apply_wizard_and_switch(&app, &root, spec, BindSource::Stock)).await
+}
+
+#[tauri::command]
+pub async fn get_inherit_binds() -> Result<bool, String> {
+    blocking(|| Ok(execs_core::inherit_binds())).await
+}
+
+#[tauri::command]
+pub async fn set_inherit_binds(inherit: bool) -> Result<bool, String> {
+    blocking(move || {
+        execs_core::set_inherit_binds(inherit)?;
+        Ok(execs_core::inherit_binds())
     })
     .await
-    .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]
-pub fn get_inherit_binds() -> bool {
-    execs_core::inherit_binds()
-}
-
-#[tauri::command]
-pub fn set_inherit_binds(inherit: bool) -> Result<bool, String> {
-    execs_core::set_inherit_binds(inherit)?;
-    Ok(execs_core::inherit_binds())
-}
-
-#[tauri::command]
-pub async fn create_fresh_profile(app: AppHandle, spec: WizardSpec) -> Result<ProfileLibrary, String> {
+pub async fn create_fresh_profile(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+    spec: WizardSpec,
+) -> Result<ProfileLibrary, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    tauri::async_runtime::spawn_blocking(move || {
+    blocking(move || {
         let binds = fresh_bind_source(&root)?;
         apply_wizard_and_switch(&app, &root, spec, binds)
     })
     .await
-    .map_err(|err| err.to_string())?
 }
 
 fn fresh_bind_source(root: &std::path::Path) -> Result<BindSource, String> {
@@ -238,68 +303,103 @@ fn fresh_bind_source(root: &std::path::Path) -> Result<BindSource, String> {
 }
 
 #[tauri::command]
-pub fn get_active_profile_detail() -> Result<Option<ProfileDetail>, String> {
-    execs_core::get_active_profile_detail(&confirmed_root()?).map_err(|err| err.message())
-}
-
-#[tauri::command]
-pub fn list_profile_files(id: Option<String>) -> Result<Vec<ProfileFile>, String> {
+pub async fn get_active_profile_detail() -> Result<Option<ProfileDetail>, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::list_profile_files(&root, &profile_id).map_err(|err| err.message())
+    blocking(move || execs_core::get_active_profile_detail(&root).map_err(|err| err.message()))
+        .await
 }
 
 #[tauri::command]
-pub fn read_profile_file(path: String, id: Option<String>) -> Result<ProfileFileContent, String> {
+pub async fn list_profile_files(id: Option<String>) -> Result<Vec<ProfileFile>, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::read_profile_file(&root, &profile_id, &path).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::list_profile_files(&root, &profile_id).map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn write_owned_file(
+pub async fn read_profile_file(
+    path: String,
+    id: Option<String>,
+) -> Result<ProfileFileContent, String> {
+    let root = confirmed_root()?;
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::read_profile_file(&root, &profile_id, &path).map_err(|err| err.message())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn write_owned_file(
+    gate: tauri::State<'_, WriteGate>,
     path: String,
     text: String,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::write_owned_file(&root, &profile_id, &path, text.as_bytes()).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::write_owned_file(&root, &profile_id, &path, text.as_bytes())
+            .map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn get_comfig_state(id: Option<String>) -> Result<Option<ComfigState>, String> {
+pub async fn get_comfig_state(id: Option<String>) -> Result<Option<ComfigState>, String> {
     let root = confirmed_root()?;
-    let Ok(profile_id) = resolve_profile_id(&root, id) else {
-        return Ok(None);
-    };
-    execs_core::read_comfig_state(&root, &profile_id)
-        .map(Some)
-        .map_err(|err| err.message())
+    blocking(move || {
+        let Ok(profile_id) = resolve_profile_id(&root, id) else {
+            return Ok(None);
+        };
+        execs_core::read_comfig_state(&root, &profile_id)
+            .map(Some)
+            .map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn set_comfig_preset(preset: ComfigPreset, id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn set_comfig_preset(
+    gate: tauri::State<'_, WriteGate>,
+    preset: ComfigPreset,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::write_comfig_preset(&root, &profile_id, preset).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::write_comfig_preset(&root, &profile_id, preset).map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn set_comfig_modules(
+pub async fn set_comfig_modules(
+    gate: tauri::State<'_, WriteGate>,
     modules: BTreeMap<String, String>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::write_comfig_modules(&root, &profile_id, &modules).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::write_comfig_modules(&root, &profile_id, &modules).map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn set_comfig_addons(
+    gate: tauri::State<'_, WriteGate>,
     addons: Vec<OfficialAddon>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
@@ -325,7 +425,11 @@ pub async fn set_comfig_addons(
 }
 
 #[tauri::command]
-pub async fn update_comfig_vpks(id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn update_comfig_vpks(
+    gate: tauri::State<'_, WriteGate>,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
@@ -346,7 +450,11 @@ pub async fn update_comfig_vpks(id: Option<String>) -> Result<ProfileDetail, Str
 }
 
 #[tauri::command]
-pub async fn import_comfig_custom(app: AppHandle, id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn import_comfig_custom(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -356,14 +464,23 @@ pub async fn import_comfig_custom(app: AppHandle, id: Option<String>) -> Result<
     })
     .await
     .map_err(|err| err.to_string())?;
+    let _guard = gate.0.lock().await;
     let Some(picked) = picked else {
-        return execs_core::get_active_profile_detail(&root)
-            .map_err(|err| err.message())?
-            .ok_or_else(|| "Save or switch to a profile first.".to_string());
+        return blocking(move || {
+            execs_core::get_active_profile_detail(&root)
+                .map_err(|err| err.message())?
+                .ok_or_else(|| "Save or switch to a profile first.".to_string())
+        })
+        .await;
     };
     let path = picked.into_path().map_err(|err| err.to_string())?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::import_comfig_custom(&root, &profile_id, &path).map_err(|err| err.message())
+    // The recursive folder copy is the expensive part; keep it off the
+    // async runtime's worker.
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::import_comfig_custom(&root, &profile_id, &path).map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -372,20 +489,29 @@ pub fn recommended_launch_options() -> String {
 }
 
 #[tauri::command]
-pub fn get_profile_launch_options(id: Option<String>) -> Result<String, String> {
+pub async fn get_profile_launch_options(id: Option<String>) -> Result<String, String> {
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::get_profile_launch_options(&root, &profile_id).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::get_profile_launch_options(&root, &profile_id).map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn set_profile_launch_options(
+pub async fn set_profile_launch_options(
+    gate: tauri::State<'_, WriteGate>,
     options: String,
     id: Option<String>,
 ) -> Result<SetLaunchResult, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::set_profile_launch_options(&root, &profile_id, &options).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::set_profile_launch_options(&root, &profile_id, &options)
+            .map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -410,7 +536,11 @@ pub async fn get_hud_state() -> Result<HudUiState, String> {
 }
 
 #[tauri::command]
-pub async fn install_hud(id: String) -> Result<ProfileDetail, String> {
+pub async fn install_hud(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, None)?;
@@ -434,7 +564,8 @@ pub async fn match_hud_catalog(id: String) -> Result<ProfileDetail, String> {
 }
 
 #[tauri::command]
-pub async fn update_hud() -> Result<ProfileDetail, String> {
+pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, None)?;
@@ -471,8 +602,10 @@ pub async fn get_hud_schema() -> Result<Option<HudSchemaView>, String> {
 
 #[tauri::command]
 pub async fn apply_hud_options(
+    gate: tauri::State<'_, WriteGate>,
     options: BTreeMap<String, String>,
 ) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, None)?;
@@ -541,6 +674,7 @@ fn install_hud_from_catalog(
 
 #[tauri::command]
 pub async fn apply_crosshairs(
+    gate: tauri::State<'_, WriteGate>,
     shape: String,
     assignments: BTreeMap<String, String>,
     custom_rgba: Option<Vec<u8>>,
@@ -549,6 +683,7 @@ pub async fn apply_crosshairs(
     design: Option<String>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
@@ -648,7 +783,11 @@ pub async fn get_stock_crosshair_sprites(
 }
 
 #[tauri::command]
-pub async fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn remove_crosshairs(
+    gate: tauri::State<'_, WriteGate>,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
@@ -663,23 +802,27 @@ pub async fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, Stri
 /// install the resulting VPK like an import.
 #[tauri::command]
 pub async fn build_viewmodel_pack(
+    gate: tauri::State<'_, WriteGate>,
     hidden: Vec<String>,
     preload: bool,
     hide_mode: Option<String>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
         let hidden_set: std::collections::BTreeSet<String> = hidden.into_iter().collect();
         let mode = execs_core::ViewmodelHideMode::from_str_or_default(hide_mode.as_deref());
         let zip = crate::viewmodel_fetch::fetch_animations_zip()?;
-        let studiomdl = root.join("bin").join("studiomdl.exe");
+        let studiomdl = studiomdl_path(&root);
+        // The core builder owns this dir: it empties it on entry and on every
+        // exit path, so nothing is left to clean up here.
         let staging = execs_core::execs_data_dir().join("studio").join("staging");
         let vpk =
             execs_core::build_viewmodel_pack_vpk(&zip, &hidden_set, mode, &studiomdl, &staging)
                 .map_err(|err| err.message())?;
-        let detail = execs_core::install_built_viewmodel_pack(
+        execs_core::install_built_viewmodel_pack(
             &root,
             &profile_id,
             &vpk,
@@ -687,16 +830,36 @@ pub async fn build_viewmodel_pack(
             mode,
             preload,
         )
-        .map_err(|err| err.message())?;
-        let _ = std::fs::remove_dir_all(&staging);
-        Ok(detail)
+        .map_err(|err| err.message())
     })
     .await
     .map_err(|err| err.to_string())?
 }
 
+/// TF2's own compiler, named for the host platform — a native Linux install
+/// ships `bin/studiomdl`, not `bin/studiomdl.exe`.
+fn studiomdl_path(root: &Path) -> std::path::PathBuf {
+    root.join("bin").join(execs_core::studiomdl_file_name())
+}
+
+/// Whether this machine can build a viewmodel pack at all. Only Windows for
+/// now: TF2 ships `bin/studiomdl.exe` there, and the Linux depot has no
+/// native compiler to point at. The pane disables Build rather than letting
+/// the user click into a dead end.
+#[tauri::command]
+pub async fn viewmodel_build_available() -> Result<bool, String> {
+    blocking(|| {
+        let Some(root) = execs_core::remembered_tf2_root() else {
+            return Ok(false);
+        };
+        Ok(cfg!(windows) && root.join("bin").join("studiomdl.exe").is_file())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn import_viewmodels(
+    gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
     preload: bool,
     id: Option<String>,
@@ -710,32 +873,55 @@ pub async fn import_viewmodels(
     })
     .await
     .map_err(|err| err.to_string())?;
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     let Some(picked) = picked else {
         // Cancelling the picker is a no-op, not an error.
-        return execs_core::get_active_profile_detail(&root)
-            .map_err(|err| err.message())?
-            .ok_or_else(|| "Save or switch to a profile first.".to_string());
+        return blocking(move || {
+            execs_core::get_active_profile_detail(&root)
+                .map_err(|err| err.message())?
+                .ok_or_else(|| "Save or switch to a profile first.".to_string())
+        })
+        .await;
     };
     let path = picked.into_path().map_err(|err| err.to_string())?;
-    let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::import_viewmodel_vpk(&root, &profile_id, &bytes, preload)
-        .map_err(|err| err.message())
+    // Reading a whole VPK and installing it is blocking work.
+    blocking(move || {
+        let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::import_viewmodel_vpk(&root, &profile_id, &bytes, preload)
+            .map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn remove_viewmodels(id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn remove_viewmodels(
+    gate: tauri::State<'_, WriteGate>,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::remove_viewmodels(&root, &profile_id).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::remove_viewmodels(&root, &profile_id).map_err(|err| err.message())
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn set_viewmodel_preload(enabled: bool, id: Option<String>) -> Result<ProfileDetail, String> {
+pub async fn set_viewmodel_preload(
+    gate: tauri::State<'_, WriteGate>,
+    enabled: bool,
+    id: Option<String>,
+) -> Result<ProfileDetail, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    let profile_id = resolve_profile_id(&root, id)?;
-    execs_core::set_viewmodel_preload(&root, &profile_id, enabled).map_err(|err| err.message())
+    blocking(move || {
+        let profile_id = resolve_profile_id(&root, id)?;
+        execs_core::set_viewmodel_preload(&root, &profile_id, enabled).map_err(|err| err.message())
+    })
+    .await
 }
 
 /// In-app windows for mastercomfig web surfaces. The pages are remote content
@@ -885,9 +1071,11 @@ pub async fn download_default_mods() -> Result<DefaultModsPayload, String> {
 /// the gameinfo bypass on. Refused while the game is running.
 #[tauri::command]
 pub async fn apply_preloader_mods(
+    gate: tauri::State<'_, WriteGate>,
     addons: Vec<String>,
     particle_mods: Vec<String>,
 ) -> Result<execs_core::preloader::PreloaderReport, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         execs_core::refuse_if_running().map_err(|err| err.message())?;
@@ -897,11 +1085,14 @@ pub async fn apply_preloader_mods(
             particle_mods,
         };
         let has_content = !selection.addons.is_empty() || !selection.particle_mods.is_empty();
+        // Re-read the process list AFTER the download: core checks it again
+        // right before the first byte goes into an official file.
         let report = execs_core::preloader::apply_preloader_selection(
             &root,
             &execs_core::execs_data_dir(),
             &zip,
             &selection,
+            &execs_core::process_lock::live_process_names(),
         )?;
         // Mods only survive Valve Casual when the shared preload cfg runs at
         // launch, so installing content turns it on for the active profile —
@@ -924,11 +1115,19 @@ pub async fn apply_preloader_mods(
 }
 
 #[tauri::command]
-pub async fn set_gameinfo_bypass(enabled: bool) -> Result<PreloaderStatusPayload, String> {
+pub async fn set_gameinfo_bypass(
+    gate: tauri::State<'_, WriteGate>,
+    enabled: bool,
+) -> Result<PreloaderStatusPayload, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
-        execs_core::refuse_if_running().map_err(|err| err.message())?;
-        execs_core::preloader::set_gameinfo_bypass(&root, &execs_core::execs_data_dir(), enabled)?;
+        execs_core::preloader::set_gameinfo_bypass(
+            &root,
+            &execs_core::execs_data_dir(),
+            enabled,
+            &execs_core::process_lock::live_process_names(),
+        )?;
         preloader_status_payload(&root)
     })
     .await
@@ -937,12 +1136,17 @@ pub async fn set_gameinfo_bypass(enabled: bool) -> Result<PreloaderStatusPayload
 
 /// Restore every stock byte: particle snapshots, gameinfo.txt, custom VPK.
 #[tauri::command]
-pub async fn revert_preloader() -> Result<execs_core::preloader::RevertReport, String> {
+pub async fn revert_preloader(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<execs_core::preloader::RevertReport, String> {
+    let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
-        execs_core::refuse_if_running().map_err(|err| err.message())?;
-        let report =
-            execs_core::preloader::revert_preloader(&root, &execs_core::execs_data_dir())?;
+        let report = execs_core::preloader::revert_preloader(
+            &root,
+            &execs_core::execs_data_dir(),
+            &execs_core::process_lock::live_process_names(),
+        )?;
         // Drop the shared preload cfg from every profile the mods install
         // touched (plus the active one), unless a viewmodel pack wants it.
         // A profile deleted in the meantime just fails its own cleanup.
