@@ -12,6 +12,7 @@ import {
   lastKeyForCommand,
   MANAGED_BINDS_HEADER,
   parseManagedBinds,
+  recorderOutcomeForKey,
   serializeManagedBinds,
   shouldSyncTrackedBinds,
   sourceKeyFromCode,
@@ -19,6 +20,7 @@ import {
   sourceKeyFromKeyboardEvent,
   sourceKeyFromMouseButton,
   syncTrackedBindsFromConfig,
+  UNBINDABLE_KEY_MESSAGE,
 } from "./binds-ui";
 
 describe("source key mapping", () => {
@@ -213,5 +215,26 @@ describe("display and paths", () => {
     expect(bindsFilePath("vanilla")).toBe("tf/cfg/execs_binds.cfg");
     expect(autoexecFilePath("comfig")).toBe("tf/cfg/overrides/autoexec.cfg");
     expect(autoexecFilePath("vanilla")).toBe("tf/cfg/autoexec.cfg");
+  });
+});
+
+describe("recorderOutcomeForKey", () => {
+  it("explains keys TF2 has no name for instead of going silent", () => {
+    expect(recorderOutcomeForKey(sourceKeyFromKey("MediaPlayPause"))).toEqual({
+      kind: "unbindable",
+      message: UNBINDABLE_KEY_MESSAGE,
+    });
+    expect(recorderOutcomeForKey(sourceKeyFromMouseButton(6))).toEqual({
+      kind: "unbindable",
+      message: UNBINDABLE_KEY_MESSAGE,
+    });
+  });
+
+  it("cancels on escape", () => {
+    expect(recorderOutcomeForKey("escape")).toEqual({ kind: "cancel" });
+  });
+
+  it("binds any other resolved key", () => {
+    expect(recorderOutcomeForKey("mouse5")).toEqual({ kind: "bind", key: "mouse5" });
   });
 });

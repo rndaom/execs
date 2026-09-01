@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { shouldReseedDraft } from "./lib/files-ui";
 import {
   ALL_TRACERS_NOTE,
   canApplyGameplay,
@@ -9,7 +10,6 @@ import {
   type GameplayLayer,
   type GameplaySettings,
   type GameplayToggle,
-  gameplayAutoexecPatch,
   gameplayDirty,
   gameplayPath,
   seedGameplay,
@@ -27,7 +27,7 @@ export type GameplayPaneProps = {
   /** Comfig-layer profile with official packages installed. */
   canUseComfigAddons: boolean;
   onToggleTransparentViewmodels: () => void;
-  onSave: (gameplayText: string, autoexecPatch?: { path: string; text: string }) => void;
+  onSave: (gameplayText: string) => void;
 };
 
 export function GameplayPane({
@@ -45,8 +45,19 @@ export function GameplayPane({
   const [draft, setDraft] = useState(seeded);
   const locked = !canApplyGameplay(running, busy);
   const dirty = gameplayDirty(draft, seeded);
+  // Serialized so an identical reload (every write triggers one, and every
+  // reload builds new objects) cannot silently discard unsaved edits.
+  const lastSeededRef = useRef<string | null>(null);
 
+  // `dirty` is read, not depended on: a reseed must be driven by incoming
+  // content only, never re-run because the user just started typing.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above.
   useEffect(() => {
+    const next = serializeGameplay(seeded);
+    if (!shouldReseedDraft(lastSeededRef.current, next, dirty)) {
+      return;
+    }
+    lastSeededRef.current = next;
     setDraft(seeded);
   }, [seeded]);
 
@@ -60,7 +71,7 @@ export function GameplayPane({
     }
     const next = clampGameplay(draft);
     setDraft(next);
-    onSave(serializeGameplay(next), gameplayAutoexecPatch(layer));
+    onSave(serializeGameplay(next));
   }
 
   return (
