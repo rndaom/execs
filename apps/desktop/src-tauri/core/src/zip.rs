@@ -521,8 +521,8 @@ mod tests {
     use super::*;
     use crate::blob::{blob_path, blobs_dir};
     use crate::profile::{
-        exclusive_file_path, index_file, init_library_to, load_library_from, load_manifest,
-        save_current_as_to, FileStorage, ProfileError, SaveCurrentOptions,
+        exclusive_file_path, init_library_to, load_library_from, load_manifest, save_current_as_to,
+        FileStorage, ProfileError, SaveCurrentOptions,
     };
     use std::collections::BTreeMap;
     use std::io::Write;
@@ -704,6 +704,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn export_cleans_legacy_verbatim_root_without_mutating_library() {
+        use crate::profile::index_file;
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
