@@ -31,11 +31,6 @@ export type BindActionId = BindAction["id"];
 
 export type BindMap = Map<string, string> | Record<string, string>;
 
-export type AutoexecPatch = {
-  path: string;
-  text: string;
-};
-
 const ACTION_IDS = new Set<string>(BIND_ACTIONS.map((action) => action.id));
 
 const COMMAND_TO_ACTION = new Map<string, BindAction>(
@@ -535,16 +530,4 @@ export function ensureAutoexecExecLine(
   }
   const trimmed = text.replace(/\s+$/u, "");
   return trimmed.length > 0 ? `${trimmed}\n${line}\n` : `${line}\n`;
-}
-
-export function autoexecExecPatch(
-  layer: BindsLayer,
-  existingAutoexec: string,
-  fileStem: ManagedExecStem = EXECS_BINDS_STEM,
-): AutoexecPatch | undefined {
-  const text = ensureAutoexecExecLine(existingAutoexec, fileStem, layer);
-  if (text === existingAutoexec) {
-    return undefined;
-  }
-  return { path: autoexecFilePath(layer), text };
 }
