@@ -61,7 +61,11 @@ export function useFirstRun(
   const [preset, setPreset] = useState<ComfigPresetId>("medium");
   const [addons, setAddons] = useState<OfficialAddonId[]>([]);
   const [creating, setCreating] = useState(seedCreating);
-  const [startFrom, setStartFrom] = useState<StartFrom>(() => defaultStartFrom(library));
+  // `null` = the user has not picked, so the default tracks the library: the
+  // library often arrives after this hook first runs (and `?preview=create`
+  // seeds the wizard open before it loads at all).
+  const [chosenStartFrom, setChosenStartFrom] = useState<StartFrom | null>(null);
+  const startFrom = chosenStartFrom ?? defaultStartFrom(library);
 
   useEffect(() => {
     if (!confirmed || !library) {
@@ -101,9 +105,9 @@ export function useFirstRun(
     setError(null);
     setPreset("medium");
     setAddons([]);
-    setStartFrom(defaultStartFrom(library));
+    setChosenStartFrom(null);
     progress.cancel();
-  }, [library, progress, setError]);
+  }, [progress, setError]);
 
   const cancelCreate = useCallback(() => {
     setCreating(false);
@@ -121,13 +125,11 @@ export function useFirstRun(
       setBusy(true);
       try {
         const spec = wizardSpec(name, preset, addons);
-        // First run has no active profile to copy, so it is always Fresh TF2.
+        // With no active profile there is nothing to copy, so the wizard shows
+        // no tiles and this stays "fresh".
         setLibrary(
           creating
-            ? await api.createFreshProfile(
-                spec,
-                defaultStartFrom(library) === "fresh" ? "fresh" : startFrom,
-              )
+            ? await api.createFreshProfile(spec, startFrom)
             : await api.applyUnusedWizard(spec),
         );
         progress.complete();
@@ -148,7 +150,6 @@ export function useFirstRun(
       busy,
       clear,
       creating,
-      library,
       preset,
       progress,
       running,
@@ -165,7 +166,7 @@ export function useFirstRun(
     setCreating(false);
     setPreset("medium");
     setAddons([]);
-    setStartFrom("fresh");
+    setChosenStartFrom(null);
   }, []);
 
   return {
@@ -177,7 +178,7 @@ export function useFirstRun(
     startFrom,
     setPreset,
     toggleAddon: (id) => setAddons((current) => toggleAddon(current, id)),
-    setStartFrom,
+    setStartFrom: setChosenStartFrom,
     openCreate,
     cancelCreate,
     applyWizard,
