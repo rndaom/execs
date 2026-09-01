@@ -86,12 +86,12 @@ export function CommunityPicker({
             setError(null);
           }}
           placeholder="Search crosshairs…"
-          className="field w-full py-2 pr-3 pl-8 text-xs text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
+          className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
         />
       </label>
 
       {error ? (
-        <Alert tone="error" className="mt-2 px-3 py-2 text-xs">
+        <Alert tone="error" className="mt-2 px-3 py-2 text-[13px]">
           {error}
         </Alert>
       ) : null}
@@ -108,14 +108,14 @@ export function CommunityPicker({
                 data-testid={`crosshair-community-${entry.id}`}
                 disabled={busyId !== null || added}
                 onClick={() => void pick(entry)}
-                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-[13px] transition-colors duration-150 ${
                   added
-                    ? "border-health/50 bg-health/10 text-health"
-                    : "border-edge bg-panel/60 text-ink-muted hover:border-edge-strong hover:text-ink"
+                    ? "border-ok/50 text-ok"
+                    : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
                 } disabled:cursor-not-allowed`}
               >
                 <span className="min-w-0 truncate">{entry.file}</span>
-                <span className="shrink-0 text-[10px] text-ink-faint">
+                <span className="shrink-0 text-[12px] text-ink-faint">
                   {added ? "Added" : busyId === entry.id ? "…" : ""}
                 </span>
               </button>
@@ -123,16 +123,16 @@ export function CommunityPicker({
           })}
         </div>
         {matches.length === 0 ? (
-          <p className="py-8 text-center text-xs text-ink-muted">No crosshairs match.</p>
+          <p className="t-meta py-10 text-center">No crosshairs match.</p>
         ) : null}
       </div>
 
-      <p className="mt-3 flex flex-wrap items-center gap-1 text-[11px] text-ink-faint">
+      <p className="mt-3 flex flex-wrap items-center gap-1 text-[12px] text-ink-faint">
         {COMMUNITY_CROSSHAIR_CREDIT}
         <button
           type="button"
           onClick={() => void openExternal("https://github.com/hbivnm/Venom-Crosshairs")}
-          className="inline-flex items-center gap-0.5 text-brand underline decoration-brand/40 underline-offset-2"
+          className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
           Venom Crosshairs
           <ArrowSquareOut size={11} />

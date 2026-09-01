@@ -1,5 +1,6 @@
 import { Check, CheckCircle, Copy, FloppyDisk, WarningCircle } from "@phosphor-icons/react";
 import { Alert } from "./components/ui/Alert";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useCopyFeedback } from "./hooks/useCopyFeedback";
 import { copyButtonLabel } from "./lib/copy-ui";
@@ -39,14 +40,16 @@ export function LaunchPane({
 
   return (
     <div data-testid="settings-launch" className="min-w-0 text-left">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <PaneHeader
+        title="Launch options"
+        lede="Stored with this profile. Steam is updated only while Steam is already closed; otherwise the string stays ready to copy."
+      />
+
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
         <section>
-          <div className="flex items-center justify-between gap-4">
-            <label className="text-sm font-semibold text-ink" htmlFor="launch-options">
-              Profile launch string
-            </label>
-            <span className="text-[11px] text-ink-faint">Stored with this profile</span>
-          </div>
+          <label className="t-row block" htmlFor="launch-options">
+            Profile launch string
+          </label>
           <textarea
             id="launch-options"
             data-testid="launch-options"
@@ -56,8 +59,8 @@ export function LaunchPane({
             aria-describedby={forbidden.length > 0 ? "launch-forbidden" : undefined}
             rows={8}
             spellCheck={false}
-            className={`surface mt-3 min-h-48 w-full resize-y bg-bg px-5 py-4 font-mono text-sm leading-7 text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-40 ${
-              forbidden.length > 0 ? "border-q-strange/70" : "focus:border-brand"
+            className={`surface mt-3 min-h-48 w-full resize-y bg-bg px-5 py-4 font-mono text-[13.5px] leading-7 text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-40 ${
+              forbidden.length > 0 ? "border-warn/70" : ""
             }`}
           />
 
@@ -85,9 +88,9 @@ export function LaunchPane({
             <p
               data-testid="launch-steam-status"
               aria-live="polite"
-              className="flex items-center gap-2 text-xs text-ink-muted"
+              className="t-meta flex items-center gap-2"
             >
-              {status ? <CheckCircle size={15} className="text-health" weight="fill" /> : null}
+              {status ? <CheckCircle size={15} className="text-ok" weight="fill" /> : null}
               {status || "Save after editing, then copy the same string into Steam if needed."}
             </p>
             <div className="flex gap-2">
@@ -95,7 +98,7 @@ export function LaunchPane({
                 type="button"
                 data-testid="launch-copy"
                 onClick={() => void copy(value)}
-                className={`btn btn-ghost ${feedback === "copied" ? "border-health/60 text-health" : ""}`}
+                className={`btn btn-ghost ${feedback === "copied" ? "border-ok/60 text-ok" : ""}`}
               >
                 {feedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
                 <span aria-live="polite">{copyButtonLabel(feedback)}</span>
@@ -114,13 +117,9 @@ export function LaunchPane({
           </div>
         </section>
 
-        <aside className="h-fit lg:border-l lg:border-edge/60 lg:pl-8">
-          <h2 className="text-sm font-semibold text-ink">How it applies</h2>
-          <p className="mt-2 text-[13px] leading-6 text-ink-muted">
-            execs keeps this string with the active profile. Steam is updated only while Steam is
-            already closed; otherwise the string stays ready to copy.
-          </p>
-          <p className="mt-3 text-xs leading-5 text-ink-faint">
+        <aside className="h-fit lg:border-l lg:border-edge lg:pl-8">
+          <h2 className="t-section">Never stored</h2>
+          <p className="t-meta mt-2">
             Reset and wrapper flags — <code className="text-ink-muted">-autoconfig</code>,{" "}
             <code className="text-ink-muted">-default</code>,{" "}
             <code className="text-ink-muted">-dxlevel</code>,{" "}

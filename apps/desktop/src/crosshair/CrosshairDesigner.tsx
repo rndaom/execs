@@ -87,9 +87,9 @@ export function CrosshairDesigner({
                 aria-pressed={design.style === style}
                 data-testid={`crosshair-designer-style-${style}`}
                 onClick={() => patch({ style })}
-                className={`rounded-lg px-2.5 py-1.5 text-xs capitalize transition-colors ${
+                className={`rounded-lg px-2.5 py-1.5 text-[13px] capitalize transition-colors duration-150 ${
                   design.style === style
-                    ? "bg-brand text-on-brand"
+                    ? "bg-panel-raised text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
                     : "bg-panel text-ink-muted hover:text-ink"
                 }`}
               >

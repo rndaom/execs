@@ -47,9 +47,7 @@ export function SwitchProgressList({
       className="overlay fixed inset-x-4 bottom-4 z-50 p-4 text-left sm:left-auto sm:right-6 sm:w-[26rem]"
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="t-row">
-          {complete ? "Profile applied" : "Applying profile"}
-        </p>
+        <p className="t-row">{complete ? "Profile applied" : "Applying profile"}</p>
         {complete ? <Check size={16} weight="bold" className="text-ok" /> : null}
       </div>
       <p data-testid="switch-progress-current" className="t-meta mt-1">

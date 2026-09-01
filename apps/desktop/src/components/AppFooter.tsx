@@ -41,11 +41,7 @@ export function AppFooter({ update, pinned }: { update: AppUpdateState; pinned: 
           {update.checkMessage}
         </p>
       ) : null}
-      <p
-        className={
-          pinned ? "min-w-0 truncate text-[10px] text-ink-faint" : "t-meta"
-        }
-      >
+      <p className={pinned ? "min-w-0 truncate text-[10px] text-ink-faint" : "t-meta"}>
         {pinned ? SHORT_DISCLAIMER : LONG_DISCLAIMER}
       </p>
     </div>
