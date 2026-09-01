@@ -46,6 +46,21 @@ impl ComfigPreset {
             Self::None => "none",
         }
     }
+
+    /// The alias mastercomfig actually defines in `cfg/comfig/define_presets.cfg`
+    /// — only destitute/low/medium/high/ultra/custom exist. Writing anything
+    /// else (`preset=very_low`) is an unknown command, so the preset silently
+    /// stays whatever it was before. `as_str` remains the manifest spelling.
+    pub fn alias(self) -> &'static str {
+        match self {
+            Self::Ultra => "ultra",
+            Self::High | Self::MediumHigh => "high",
+            Self::Medium => "medium",
+            Self::Low | Self::MediumLow => "low",
+            Self::VeryLow => "destitute",
+            Self::None => "custom",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -231,7 +246,7 @@ where
         &running,
     )?;
 
-    let hook = format!("preset={}\n", spec.preset.as_str());
+    let hook = format!("preset={}\n", spec.preset.alias());
     put_exclusive_file_to(
         profiles_dir,
         tf2_root,

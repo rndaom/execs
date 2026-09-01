@@ -63,7 +63,8 @@ export function StockCrosshairSettings({
   }
 
   // TF2 tints the drawn crosshair by cl_crosshair_red/green/blue at full
-  // opacity — cl_crosshair_alpha is not applied by the engine's draw path.
+  // opacity. There is no alpha cvar — cl_crosshair_alpha is CS:GO's, and TF2
+  // logs it as an unknown command.
   const color = `rgb(${draft.cl_crosshair_red}, ${draft.cl_crosshair_green}, ${draft.cl_crosshair_blue})`;
   const primitives = stockCrosshairPrimitives(draft.cl_crosshair_file);
   const sprite =
@@ -209,16 +210,6 @@ export function StockCrosshairSettings({
                 disabled={locked}
                 accentColor="#5885a2"
                 onChange={(cl_crosshair_blue) => patch({ cl_crosshair_blue })}
-              />
-              <StockSliderRow
-                id="stock-crosshair-alpha"
-                label="Opacity"
-                value={draft.cl_crosshair_alpha}
-                min={COLOR_MIN}
-                max={COLOR_MAX}
-                disabled={locked}
-                note="TF2 draws the crosshair fully opaque; this cvar is stored but has no visible effect."
-                onChange={(cl_crosshair_alpha) => patch({ cl_crosshair_alpha })}
               />
             </div>
           </div>

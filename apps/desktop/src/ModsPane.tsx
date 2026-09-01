@@ -87,6 +87,18 @@ export function ModsPane({
           selection again to re-install it on the fresh files.
         </p>
       ) : null}
+      {payload && anythingInstalled && !payload.preloadLaunchInSteam ? (
+        <p
+          role="alert"
+          data-testid="mods-launch-warning"
+          className="mt-4 rounded-card border border-edge-strong bg-panel-raised px-4 py-3 text-xs leading-5 text-ink"
+        >
+          The preload is not in your Steam launch options yet (Steam was open when they were saved).
+          Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}
+          <code className="font-mono">+exec</code> reaches Steam. Without it, mods stay invisible on
+          Valve servers.
+        </p>
+      ) : null}
       {status && !status.gameinfoFound ? (
         <p
           role="alert"

@@ -22,6 +22,20 @@ use crate::vpk::{map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v1,
 
 pub const PRELOADER_VPK: &str = "execs-preloader.vpk";
 pub const MISC_VPK: &str = "tf2_misc_dir.vpk";
+/// Official archives holding the assets the pure whitelist trusts.
+pub const STOCK_VPKS: [&str; 3] = [
+    "tf2_textures_dir.vpk",
+    "tf2_misc_dir.vpk",
+    "tf2_sound_misc_dir.vpk",
+];
+/// Roots a loose `tf/custom` file cannot serve from.
+///
+/// Materials and models are deliberately absent: the gameinfo `type` bypass
+/// plus the itemtest preload carry those into the cache before Casual's pure
+/// check runs, which is the whole point of the preloader. Particles are here
+/// because they are patched into the official VPK in place instead, and sound
+/// because the soundscript relocation that would make it work is not built.
+const TRUSTED_ROOTS: [&str; 2] = ["particles/", "sound/"];
 
 /// Stock files that carry duplicated copies of systems owned by other files.
 /// When particle mods are installed these get rebuilt from vanilla with the
@@ -469,6 +483,37 @@ fn scrub_ignorez(rel: &str, bytes: &mut Vec<u8>) {
 
 /// True for the sound-script text files the original preloader refuses to
 /// copy from addons (they fight the engine's generated sound caches).
+/// Paths in `files` that replace an asset the pure whitelist trusts, and so
+/// cannot be served from `tf/custom`. Paths outside the trusted roots (a mod's
+/// own new materials, scripts) are left alone.
+fn stock_shadowing_paths(tf2_root: &Path, files: &BTreeMap<String, Vec<u8>>) -> Vec<String> {
+    let candidates: BTreeSet<&String> = files
+        .keys()
+        .filter(|rel| TRUSTED_ROOTS.iter().any(|root| rel.starts_with(root)))
+        .collect();
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+    let mut shadowing = Vec::new();
+    for name in STOCK_VPKS {
+        let path = tf2_root.join("tf").join(name);
+        if !path.is_file() {
+            continue;
+        }
+        let Ok(entries) = map_vpk_entries(&path) else {
+            continue;
+        };
+        for rel in &candidates {
+            if entries.contains_key(*rel) {
+                shadowing.push((**rel).clone());
+            }
+        }
+    }
+    shadowing.sort();
+    shadowing.dedup();
+    shadowing
+}
+
 fn is_excluded_addon_file(inner: &str) -> bool {
     if inner == "mod.json" {
         return true;
@@ -918,13 +963,39 @@ pub fn apply_preloader_selection(
             &|inner| inner.starts_with("materials/") || inner.starts_with("scripts/"),
         )?;
     }
+    let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
     for mod_name in &selection.addons {
+        let before: BTreeSet<String> = custom.keys().cloned().collect();
         copy_zip_tree(
             &mut archive,
             &format!("mods/addons/{mod_name}/"),
             &mut custom,
             &|inner| !is_excluded_addon_file(inner),
         )?;
+        for rel in custom.keys() {
+            if !before.contains(rel) {
+                addon_owner.insert(rel.clone(), mod_name.clone());
+            }
+        }
+    }
+
+    // Files that duplicate an asset handled by another route (particles are
+    // patched in place; sound has no relocation path) would be dead weight or
+    // actively conflict, so drop those and say so. Materials and models stay:
+    // the preloader exists to carry exactly those into Casual.
+    let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
+    let shadowing = stock_shadowing_paths(tf2_root, &custom);
+    for rel in shadowing {
+        custom.remove(&rel);
+        let owner = addon_owner.get(&rel).cloned().unwrap_or_default();
+        *dropped.entry(owner).or_default() += 1;
+    }
+    for (mod_name, count) in dropped {
+        report.skipped.push(SkipNotice {
+            file: format!("{count} file{}", if count == 1 { "" } else { "s" }),
+            mod_name,
+            reason: "duplicates a stock asset execs handles outside tf/custom".into(),
+        });
     }
 
     let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
@@ -1155,12 +1226,62 @@ mod tests {
             disguise.resize(disguise.len() + 32, b' ');
             disguise
         });
-        std::fs::write(
-            root.join("tf").join(MISC_VPK),
-            crate::vpk::write_vpk_v1(&files),
-        )
-        .unwrap();
+        write_split_vpk(&root.join("tf").join(MISC_VPK), &files);
         (root, data)
+    }
+
+    /// A split VPK like the real tf2_misc: entries in the `_dir.vpk` tree,
+    /// data in a `_000.vpk` sibling — the layout the patcher requires.
+    fn write_split_vpk(dir_path: &Path, files: &BTreeMap<String, Vec<u8>>) {
+        let mut grouped: BTreeMap<String, BTreeMap<String, BTreeMap<String, Vec<u8>>>> =
+            BTreeMap::new();
+        for (rel, bytes) in files {
+            let (path, file) = rel.rsplit_once('/').unwrap_or((" ", rel.as_str()));
+            let (name, ext) = file.rsplit_once('.').unwrap_or((file, " "));
+            grouped
+                .entry(ext.to_string())
+                .or_default()
+                .entry(path.to_string())
+                .or_default()
+                .insert(name.to_string(), bytes.clone());
+        }
+        let mut tree = Vec::new();
+        let mut archive = Vec::new();
+        let mut cstr = |tree: &mut Vec<u8>, s: &str| {
+            tree.extend_from_slice(s.as_bytes());
+            tree.push(0);
+        };
+        for (ext, paths) in &grouped {
+            cstr(&mut tree, ext);
+            for (path, names) in paths {
+                cstr(&mut tree, path);
+                for (name, bytes) in names {
+                    cstr(&mut tree, name);
+                    tree.extend_from_slice(&crate::vpk::crc32(bytes).to_le_bytes());
+                    tree.extend_from_slice(&0u16.to_le_bytes());
+                    tree.extend_from_slice(&0u16.to_le_bytes());
+                    tree.extend_from_slice(&(archive.len() as u32).to_le_bytes());
+                    tree.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                    tree.extend_from_slice(&0xffffu16.to_le_bytes());
+                    archive.extend_from_slice(bytes);
+                }
+                tree.push(0);
+            }
+            tree.push(0);
+        }
+        tree.push(0);
+        let mut dir = Vec::with_capacity(12 + tree.len());
+        dir.extend_from_slice(&0x55aa_1234u32.to_le_bytes());
+        dir.extend_from_slice(&1u32.to_le_bytes());
+        dir.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        dir.extend_from_slice(&tree);
+        std::fs::write(dir_path, dir).unwrap();
+        let name = dir_path.file_name().unwrap().to_str().unwrap();
+        let sibling = dir_path
+            .parent()
+            .unwrap()
+            .join(name.replace("_dir.vpk", "_000.vpk"));
+        std::fs::write(sibling, archive).unwrap();
     }
 
     fn fake_mods_zip(dir: &Path) -> std::path::PathBuf {
@@ -1219,6 +1340,38 @@ mod tests {
     }
 
     #[test]
+    fn addon_materials_that_replace_stock_assets_still_ship_loose() {
+        // The gameinfo bypass plus the itemtest preload are what carry a
+        // replaced material into Casual, so shipping it is the whole point —
+        // dropping it would silently disable every texture mod.
+        let (root, data) = fake_root();
+        let zip_path = fake_mods_zip(root.parent().unwrap());
+        let mut stock = BTreeMap::new();
+        stock.insert(
+            "materials/models/flat.vmt".to_string(),
+            b"\"VertexlitGeneric\"
+{
+}
+".to_vec(),
+        );
+        write_split_vpk(&root.join("tf").join("tf2_textures_dir.vpk"), &stock);
+
+        let selection = PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+        };
+        let report = apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
+        assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+
+        let custom = root.join("tf/custom").join(PRELOADER_VPK);
+        let archive = read_vpk_dir_file(&custom).unwrap();
+        assert!(
+            archive.files.contains_key("materials/models/flat.vmt"),
+            "a material replacing a stock path must still ship for the preload"
+        );
+    }
+
+    #[test]
     fn catalog_lists_addons_and_particles() {
         let dir = test_temp_dir();
         let zip_path = fake_mods_zip(&dir);
@@ -1236,7 +1389,9 @@ mod tests {
         let (root, data) = fake_root();
         let zip_path = fake_mods_zip(root.parent().unwrap());
         let vpk_path = root.join("tf").join(MISC_VPK);
-        let pristine = std::fs::read(&vpk_path).unwrap();
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+        let pristine_dir = std::fs::read(&vpk_path).unwrap();
+        let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
         let selection = PreloaderSelection {
             addons: vec!["Flat Look".into()],
@@ -1263,12 +1418,19 @@ mod tests {
             system.attr(b"radius").unwrap().value,
             PcfValue::Float(4.0f32.to_bits())
         );
+        // The directory file must stay byte-pristine — the stock CRCs (over
+        // the now-modded data) are what the sv_pure check reads.
+        assert_eq!(
+            std::fs::read(&vpk_path).unwrap(),
+            pristine_dir,
+            "patching must never touch the _dir.vpk"
+        );
         let entries = map_vpk_entries(&vpk_path).unwrap();
         let crc_entry = entries.get("particles/water.pcf").unwrap();
-        assert_eq!(
+        assert_ne!(
             crc_entry.crc,
             crate::vpk::crc32(patched),
-            "directory CRC must match the patched bytes"
+            "the stock CRC stays stale over modded data by design"
         );
 
         // Custom VPK carries the addon material with $ignorez scrubbed and
@@ -1295,7 +1457,8 @@ mod tests {
 
         let report = revert_preloader(&root, &data).unwrap();
         assert!(report.gameinfo_restored);
-        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine);
+        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine_dir);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
         assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
         let status = preloader_status(&root, &data).unwrap();
         assert!(!status.gameinfo_bypassed);
@@ -1310,8 +1473,8 @@ mod tests {
     fn interrupted_apply_cannot_clobber_snapshots() {
         let (root, data) = fake_root();
         let zip_path = fake_mods_zip(root.parent().unwrap());
-        let vpk_path = root.join("tf").join(MISC_VPK);
-        let pristine = std::fs::read(&vpk_path).unwrap();
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+        let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
         let selection = PreloaderSelection {
             addons: vec![],
@@ -1331,7 +1494,7 @@ mod tests {
         apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
         let report = revert_preloader(&root, &data).unwrap();
         assert!(report.failures.is_empty(), "{:?}", report.failures);
-        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
     }
 
     /// mtime moves whenever we patch (and when restores half-fail); only a
@@ -1342,7 +1505,8 @@ mod tests {
         let (root, data) = fake_root();
         let zip_path = fake_mods_zip(root.parent().unwrap());
         let vpk_path = root.join("tf").join(MISC_VPK);
-        let pristine = std::fs::read(&vpk_path).unwrap();
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+        let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
         apply_preloader_selection(
             &root,
@@ -1366,7 +1530,7 @@ mod tests {
             "drift must not skip the restore: {:?}",
             report.failures
         );
-        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
     }
 
     #[test]
@@ -1412,6 +1576,7 @@ mod tests {
         writer.finish().unwrap();
 
         let vpk_before = std::fs::read(root.join("tf").join(MISC_VPK)).unwrap();
+        let sibling_before = std::fs::read(root.join("tf").join("tf2_misc_000.vpk")).unwrap();
         let report = apply_preloader_selection(
             &root,
             &data,
@@ -1428,6 +1593,10 @@ mod tests {
             .iter()
             .any(|notice| notice.file == "water.pcf" && notice.reason.contains("over the stock budget")));
         assert_eq!(std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(), vpk_before);
+        assert_eq!(
+            std::fs::read(root.join("tf").join("tf2_misc_000.vpk")).unwrap(),
+            sibling_before
+        );
     }
 
     #[test]
