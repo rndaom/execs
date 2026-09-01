@@ -778,6 +778,10 @@ export type PreloaderReport = {
   customVpkWritten: boolean;
   gameinfoBypassed: boolean;
   baselineReset: boolean;
+  /** Materials generated for textures a mod shipped without one. */
+  synthesizedVmts: number;
+  /** Model materials moved under console/ so Casual serves them. */
+  relocatedModelMaterials: number;
 };
 
 export type PreloaderRevertReport = {

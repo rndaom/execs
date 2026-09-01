@@ -28,6 +28,22 @@ describe("mods ui", () => {
     expect(selectionDirty(null, [], [])).toBe(false);
   });
 
+  it("reports relocated and generated materials", () => {
+    expect(
+      summarizeReport({
+        patchedFiles: [],
+        skipped: [],
+        addonsInstalled: ["Flat Textures"],
+        particleModsInstalled: [],
+        customVpkWritten: true,
+        gameinfoBypassed: true,
+        baselineReset: false,
+        synthesizedVmts: 1,
+        relocatedModelMaterials: 12,
+      }),
+    ).toBe("1 addon packed, 12 model materials relocated, 1 missing material generated");
+  });
+
   it("summarizes an apply report", () => {
     expect(
       summarizeReport({
@@ -38,6 +54,8 @@ describe("mods ui", () => {
         customVpkWritten: true,
         gameinfoBypassed: true,
         baselineReset: false,
+        synthesizedVmts: 0,
+        relocatedModelMaterials: 0,
       }),
     ).toBe("2 particle files patched, 1 addon packed, 1 skipped");
     expect(
@@ -48,6 +66,8 @@ describe("mods ui", () => {
         particleModsInstalled: [],
         customVpkWritten: false,
         gameinfoBypassed: true,
+        synthesizedVmts: 0,
+        relocatedModelMaterials: 0,
         baselineReset: true,
       }),
     ).toBe("nothing selected — stock files restored, game update detected, snapshots refreshed");
