@@ -538,8 +538,6 @@ export function SettingsHost({
     if (tab === "hud") {
       return (
         <HudPane
-          running={running}
-          busy={busy}
           catalogLoading={hudCatalogLoading}
           catalogError={hudCatalogError}
           catalog={hudCatalog}
@@ -584,8 +582,6 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <CrosshairPane
-          running={running}
-          busy={busy}
           record={detail?.crosshair ?? null}
           layer={layer}
           effective={maps.effective}
@@ -614,8 +610,6 @@ export function SettingsHost({
     if (tab === "viewmodels") {
       return (
         <ViewmodelPane
-          running={running}
-          busy={busy}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
             void runWrite(async () => {
@@ -644,8 +638,6 @@ export function SettingsHost({
     if (tab === "mods") {
       return (
         <ModsPane
-          running={running}
-          busy={busy}
           payload={modsPayload}
           catalog={modsCatalog}
           loading={modsLoading}

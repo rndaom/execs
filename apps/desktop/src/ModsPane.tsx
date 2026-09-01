@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { Alert } from "./components/ui/Alert";
+import { ApplyBar } from "./components/ui/ApplyBar";
+import { PaneSection } from "./components/ui/PaneSection";
+import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useSeededDraft } from "./hooks/useSeededDraft";
 import type {
   CatalogAddon,
   CatalogParticleMod,
@@ -8,16 +13,15 @@ import type {
 } from "./lib/bridge";
 import {
   formatModBytes,
+  modsApplyEnabled,
+  modsStatusLine,
   PRELOADER_CREDIT,
   PRELOADER_EXPLAINER,
-  selectionDirty,
   summarizeReport,
   toggleName,
 } from "./lib/mods-ui";
 
 export type ModsPaneProps = {
-  running: boolean;
-  busy: boolean;
   payload: PreloaderStatusPayload | null;
   catalog: ModsCatalog | null;
   loading: boolean;
@@ -29,9 +33,9 @@ export type ModsPaneProps = {
   onOpenRepo: () => void;
 };
 
+type ModSelection = { addons: string[]; particleMods: string[] };
+
 export function ModsPane({
-  running,
-  busy,
   payload,
   catalog,
   loading,
@@ -42,23 +46,19 @@ export function ModsPane({
   onRevert,
   onOpenRepo,
 }: ModsPaneProps) {
+  const { running, busy } = useAppStatus();
   const status = payload?.status ?? null;
-  const installedKey = useMemo(
-    () => JSON.stringify([status?.addons ?? [], status?.particleMods ?? []]),
+  const installed = useMemo<ModSelection>(
+    () => ({ addons: status?.addons ?? [], particleMods: status?.particleMods ?? [] }),
     [status],
   );
-  const [addons, setAddons] = useState<string[]>(status?.addons ?? []);
-  const [particleMods, setParticleMods] = useState<string[]>(status?.particleMods ?? []);
+  const [selection, setSelection] = useSeededDraft(installed, (value) =>
+    JSON.stringify([[...value.addons].sort(), [...value.particleMods].sort()]),
+  );
+  const { addons, particleMods } = selection;
 
-  // Reseed the selection whenever the installed state changes underneath us.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: installedKey stands in for the two arrays it serializes.
-  useEffect(() => {
-    setAddons(status?.addons ?? []);
-    setParticleMods(status?.particleMods ?? []);
-  }, [installedKey]);
-
-  const locked = running || busy;
-  const dirty = selectionDirty(payload, addons, particleMods);
+  const locked = !useCanWrite();
+  const canApply = modsApplyEnabled(payload, addons, particleMods);
   const anythingInstalled =
     (status?.patchedFiles.length ?? 0) > 0 ||
     (status?.addons.length ?? 0) > 0 ||
@@ -79,43 +79,36 @@ export function ModsPane({
       </div>
 
       {status?.stale ? (
-        <p
-          role="status"
-          className="mt-4 rounded-card border border-edge-strong bg-panel-raised px-4 py-3 text-xs leading-5 text-ink"
-        >
+        <Alert tone="warn" testId="mods-stale" className="mt-4 text-xs">
           TF2 updated since the last install. The old patches are gone with the update — apply your
           selection again to re-install it on the fresh files.
-        </p>
+        </Alert>
       ) : null}
       {payload && anythingInstalled && !payload.preloadLaunchInSteam ? (
-        <p
-          role="alert"
-          data-testid="mods-launch-warning"
-          className="mt-4 rounded-card border border-edge-strong bg-panel-raised px-4 py-3 text-xs leading-5 text-ink"
-        >
+        <Alert tone="warn" testId="mods-launch-warning" className="mt-4 text-xs">
           The preload is not in your Steam launch options yet (Steam was open when they were saved).
           Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}
           <code className="font-mono">+exec</code> reaches Steam. Without it, mods stay invisible on
           Valve servers.
-        </p>
+        </Alert>
       ) : null}
       {status && !status.gameinfoFound ? (
-        <p
-          role="alert"
-          className="mt-4 rounded-card border border-edge-strong bg-panel-raised px-4 py-3 text-xs leading-5 text-ink"
-        >
+        <Alert tone="error" testId="mods-no-gameinfo" className="mt-4 text-xs">
           gameinfo.txt was not found — check the TF2 folder on the launcher screen.
-        </p>
+        </Alert>
       ) : null}
 
-      <section className="section">
-        <h2 className="text-sm font-semibold text-ink">Casual preload bypass</h2>
-        <p className="mt-0.5 max-w-2xl text-xs leading-5 text-ink-muted">
-          Comments out one line in gameinfo.txt (
-          <code className="font-mono">type multiplayer_only</code>) so preloaded materials, models,
-          and particles stay live on sv_pure servers. The pristine file is backed up first and the
-          change reverses cleanly.
-        </p>
+      <PaneSection
+        title="Casual preload bypass"
+        description={
+          <>
+            Comments out one line in gameinfo.txt (
+            <code className="font-mono">type multiplayer_only</code>) so preloaded materials,
+            models, and particles stay live on sv_pure servers. The pristine file is backed up first
+            and the change reverses cleanly.
+          </>
+        }
+      >
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -144,18 +137,13 @@ export function ModsPane({
           Mods load on Valve servers after the preload runs — keep “Preload on launch” enabled on
           the Viewmodels pane (it shares the same itemtest preload).
         </p>
-      </section>
+      </PaneSection>
 
-      <section className="section">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Default mod library</h2>
-            <p className="mt-0.5 max-w-2xl text-xs leading-5 text-ink-muted">
-              The curated set the original preloader ships: texture addons packed into tf/custom,
-              and particle mods patched into the game archives.
-            </p>
-          </div>
-          {payload && !payload.modsCached ? (
+      <PaneSection
+        title="Default mod library"
+        description="The curated set the original preloader ships: texture addons packed into tf/custom, and particle mods patched into the game archives."
+        meta={
+          payload && !payload.modsCached ? (
             <button
               type="button"
               data-testid="mods-download"
@@ -167,9 +155,9 @@ export function ModsPane({
                 ? "Downloading…"
                 : `Download library (${formatModBytes(payload.modsSizeBytes)})`}
             </button>
-          ) : null}
-        </div>
-
+          ) : null
+        }
+      >
         {payload && !payload.modsCached && !loading ? (
           <p className="mt-3 text-xs leading-5 text-ink-muted">
             One-time download from the pinned casual-pre-loader release; verified and cached for
@@ -196,7 +184,12 @@ export function ModsPane({
                     addon={addon}
                     checked={addons.includes(addon.id)}
                     disabled={locked}
-                    onToggle={() => setAddons((current) => toggleName(current, addon.id))}
+                    onToggle={() =>
+                      setSelection((current) => ({
+                        ...current,
+                        addons: toggleName(current.addons, addon.id),
+                      }))
+                    }
                   />
                 ))}
               </ul>
@@ -213,14 +206,19 @@ export function ModsPane({
                     mod={mod}
                     checked={particleMods.includes(mod.name)}
                     disabled={locked}
-                    onToggle={() => setParticleMods((current) => toggleName(current, mod.name))}
+                    onToggle={() =>
+                      setSelection((current) => ({
+                        ...current,
+                        particleMods: toggleName(current.particleMods, mod.name),
+                      }))
+                    }
                   />
                 ))}
               </ul>
             </div>
           </div>
         ) : null}
-      </section>
+      </PaneSection>
 
       {report ? (
         <section className="section" data-testid="mods-report">
@@ -264,24 +262,19 @@ export function ModsPane({
         </button>
       </p>
 
-      <div className="sticky bottom-0 z-10 mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-edge bg-bg/95 py-3 backdrop-blur">
-        <p className="text-xs text-ink-muted" aria-live="polite">
-          {running
-            ? "TF2 is open — game files cannot be patched while it runs."
-            : dirty
-              ? "Selection differs from what's installed"
-              : "Installed mods match your selection"}
-        </p>
-        <button
-          type="button"
-          data-testid="mods-apply"
-          className="btn btn-primary"
-          disabled={locked || !dirty || !payload?.modsCached}
-          onClick={() => onApply(addons, particleMods)}
-        >
-          {running ? "Close TF2 to apply" : "Apply mod selection"}
-        </button>
-      </div>
+      <ApplyBar
+        status={modsStatusLine(payload, addons, particleMods, running)}
+        actionLabel="Apply mod selection"
+        lockedLabel="Close TF2 to apply"
+        running={running}
+        locked={locked}
+        // Not `selectionDirty`: a TF2 update wipes the patches without touching
+        // the recorded selection, so Apply used to be disabled exactly when the
+        // stale notice told the user to press it.
+        dirty={canApply}
+        testId="mods-apply"
+        onApply={() => onApply(addons, particleMods)}
+      />
     </div>
   );
 }

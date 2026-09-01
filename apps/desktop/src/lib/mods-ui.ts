@@ -47,6 +47,46 @@ export function selectionDirty(
   );
 }
 
+/**
+ * Whether Apply should be live.
+ *
+ * A TF2 update wipes the patched bytes without touching the recorded selection,
+ * so `selectionDirty` is false exactly when the stale notice is telling the user
+ * to apply again. Stale therefore enables Apply on its own.
+ */
+export function modsApplyEnabled(
+  status: PreloaderStatusPayload | null,
+  addons: string[],
+  particleMods: string[],
+): boolean {
+  if (!status?.modsCached) {
+    return false;
+  }
+  return selectionDirty(status, addons, particleMods) || status.status.stale === true;
+}
+
+/** The one-line reason under the Apply button. */
+export function modsStatusLine(
+  status: PreloaderStatusPayload | null,
+  addons: string[],
+  particleMods: string[],
+  running: boolean,
+): string {
+  if (running) {
+    return "TF2 is open — game files cannot be patched while it runs.";
+  }
+  if (status && !status.modsCached) {
+    return "Download the mod library before applying a selection.";
+  }
+  if (selectionDirty(status, addons, particleMods)) {
+    return "Selection differs from what's installed";
+  }
+  if (status?.status.stale) {
+    return "TF2 updated since the last install — re-apply to put these mods back on the fresh files";
+  }
+  return "Installed mods match your selection";
+}
+
 /** Short human summary for the report banner after an apply. */
 export function summarizeReport(report: PreloaderReport): string {
   const parts: string[] = [];
