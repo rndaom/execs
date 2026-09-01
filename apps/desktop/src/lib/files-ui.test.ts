@@ -89,9 +89,9 @@ describe("blockingFindingsForFile", () => {
   });
 
   it("compares paths case- and separator-insensitively, and tolerates no selection", () => {
-    expect(blockingFindingsForFile([finding({ file: "TF\\CFG\\A.cfg" })], "tf/cfg/a.cfg")).toHaveLength(
-      1,
-    );
+    expect(
+      blockingFindingsForFile([finding({ file: "TF\\CFG\\A.cfg" })], "tf/cfg/a.cfg"),
+    ).toHaveLength(1);
     expect(blockingFindingsForFile([finding()], null)).toEqual([]);
   });
 });
