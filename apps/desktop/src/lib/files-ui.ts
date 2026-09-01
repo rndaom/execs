@@ -156,11 +156,11 @@ export function shouldReseedDraft(
 export function findingTierClass(tier: "block" | "warn" | "info"): string {
   switch (tier) {
     case "block":
-      return "bg-team-red text-ink";
+      return "badge-error";
     case "warn":
-      return "bg-q-strange text-on-brand";
+      return "badge-warn";
     case "info":
-      return "bg-panel-raised text-ink";
+      return "";
   }
 }
 

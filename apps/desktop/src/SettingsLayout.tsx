@@ -10,11 +10,7 @@ import {
   UserFocus,
 } from "@phosphor-icons/react";
 import type { ComponentType, ReactNode } from "react";
-import {
-  SETTINGS_TAB_GROUPS,
-  SETTINGS_TAB_LABELS,
-  type SettingsTab,
-} from "./lib/settings-ui";
+import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
 type NavIcon = ComponentType<{ size?: number; weight?: "regular" | "bold" }>;
 

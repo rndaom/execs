@@ -139,10 +139,13 @@ describe("shouldReseedDraft", () => {
 });
 
 describe("findingTierClass", () => {
-  it("returns a distinct token class per tier", () => {
-    expect(findingTierClass("block")).toContain("team-red");
-    expect(findingTierClass("warn")).toContain("q-strange");
-    expect(findingTierClass("info")).toContain("panel-raised");
+  it("returns a distinct semantic badge class per tier", () => {
+    // Info is the plain `.badge`: only block and warn carry semantic colour.
+    expect(findingTierClass("block")).toBe("badge-error");
+    expect(findingTierClass("warn")).toBe("badge-warn");
+    expect(findingTierClass("info")).toBe("");
+    const all = ["block", "warn", "info"] as const;
+    expect(new Set(all.map(findingTierClass)).size).toBe(all.length);
   });
 });
 

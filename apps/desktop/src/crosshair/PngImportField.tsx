@@ -123,13 +123,13 @@ export function PngImportField({
       </label>
 
       {error ? (
-        <Alert tone="error" testId="crosshair-import-error" className="mt-2 px-3 py-2 text-xs">
+        <Alert tone="error" testId="crosshair-import-error" className="mt-2 px-3 py-2 text-[13px]">
           {error}
         </Alert>
       ) : null}
 
       {pending ? (
-        <div data-testid="crosshair-import-resize" className="mt-2 text-[11px] leading-4">
+        <div data-testid="crosshair-import-resize" className="mt-2 text-[12.5px] leading-5">
           <p className="text-ink-muted">
             That PNG is {pending.width} × {pending.height}. Crosshair sprites are 64 × 64.
           </p>
@@ -137,7 +137,7 @@ export function PngImportField({
             <button
               type="button"
               data-testid="crosshair-import-scale"
-              className="btn btn-ghost px-3 py-1 text-[11px]"
+              className="btn btn-ghost"
               onClick={() => {
                 const pixels = rasterize(pending.image, pending.width, pending.height);
                 reset();
@@ -150,11 +150,7 @@ export function PngImportField({
             >
               Scale to 64 × 64
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost px-3 py-1 text-[11px]"
-              onClick={() => reset()}
-            >
+            <button type="button" className="btn btn-ghost" onClick={() => reset()}>
               Cancel
             </button>
           </div>

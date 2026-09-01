@@ -139,9 +139,12 @@ a:focus-visible,
   *,
   *::before,
   *::after {
+    /* biome-ignore-start lint/complexity/noImportantStyles: honouring the OS
+       setting has to beat every utility class, including inline ones. */
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
   }
 }
 
@@ -261,6 +264,18 @@ a:focus-visible,
     border-radius: 0.75rem;
     background: var(--color-panel);
     overflow: hidden;
+  }
+
+  /* The viewmodel reference stage — a lit backdrop so a first-person render
+     reads as a scene rather than a floating cut-out. Lives here because no
+     hex belongs in a component (AGENTS.md, Design decisions). */
+  .vm-stage {
+    background: radial-gradient(
+      125% 120% at 50% 0%,
+      color-mix(in srgb, var(--color-ink) 22%, var(--color-bg)) 0%,
+      var(--color-panel-raised) 45%,
+      var(--color-bg) 100%
+    );
   }
 
   /* Elevated overlay: popovers, progress, prompts, modals. */
