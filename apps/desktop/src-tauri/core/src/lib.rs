@@ -11,6 +11,7 @@ pub mod hud;
 pub mod hud_apply;
 pub mod ice;
 pub mod launch;
+pub mod mdl;
 pub mod pcf;
 pub mod preloader;
 pub mod process_lock;
