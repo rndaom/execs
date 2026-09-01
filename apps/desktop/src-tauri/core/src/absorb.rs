@@ -222,11 +222,39 @@ where
     let Some(profile_id) = library.active_profile_id.clone() else {
         return Ok(library);
     };
-    if choice == PackChoice::Keep {
-        return load_library_from(profiles_dir, Some(tf2_root));
+    if choice == PackChoice::Update {
+        // Update is the user changing their mind about every pack they had
+        // previously kept out, so the ignore list has to go before `classify`
+        // filters those packs back out of the delta.
+        let mut manifest = load_manifest(profiles_dir, &profile_id)?;
+        if !manifest.ignored_packs.is_empty() {
+            manifest.ignored_packs.clear();
+            crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+        }
     }
 
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    if choice == PackChoice::Keep {
+        // Record exactly what was on screen. Anything that appears later is a
+        // new decision, not a re-prompt of this one.
+        let mut manifest = load_manifest(profiles_dir, &profile_id)?;
+        let before = manifest.ignored_packs.len();
+        manifest.ignored_packs.extend(
+            classified
+                .delta
+                .packs_added
+                .iter()
+                .chain(classified.delta.packs_removed.iter())
+                .cloned(),
+        );
+        manifest.ignored_packs.sort();
+        manifest.ignored_packs.dedup();
+        if manifest.ignored_packs.len() != before {
+            crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+        }
+        return load_library_from(profiles_dir, Some(tf2_root));
+    }
+
     let added: Vec<String> = classified
         .delta
         .packs_added
@@ -361,8 +389,19 @@ fn classify(
     let pack_manifest_files = group_by_pack(manifest_paths.iter());
     let live_packs: BTreeSet<String> = pack_live_files.keys().cloned().collect();
     let manifest_packs: BTreeSet<String> = pack_manifest_files.keys().cloned().collect();
-    let packs_added: Vec<String> = live_packs.difference(&manifest_packs).cloned().collect();
-    let packs_removed: Vec<String> = manifest_packs.difference(&live_packs).cloned().collect();
+    // Packs the user chose to Keep stay out of both deltas, so the prompt does
+    // not return on every boot.
+    let ignored: BTreeSet<String> = manifest.ignored_packs.iter().cloned().collect();
+    let packs_added: Vec<String> = live_packs
+        .difference(&manifest_packs)
+        .filter(|pack| !ignored.contains(*pack))
+        .cloned()
+        .collect();
+    let packs_removed: Vec<String> = manifest_packs
+        .difference(&live_packs)
+        .filter(|pack| !ignored.contains(*pack))
+        .cloned()
+        .collect();
 
     if live.contains_key(CONFIG_CFG) && !manifest_paths.contains(CONFIG_CFG) {
         config_cfg = true;
@@ -684,6 +723,53 @@ mod tests {
             .files
             .iter()
             .any(|file| file.path == "tf/custom/hud/resource/ui/hudlayout.res"));
+        cleanup(&dir);
+    }
+
+    /// Keep used to record nothing, so the same pack prompt came back on every
+    /// boot and after every TF2 quit until the user gave in and chose Update.
+    #[test]
+    fn keep_is_remembered_so_the_prompt_does_not_return() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/old/pack.txt"), "old\n");
+        let id = save_main(&profiles, &root);
+        fs::remove_dir_all(root.join("tf/custom/old")).unwrap();
+        write_live(&root.join("tf/custom/new/pack.txt"), "new\n");
+
+        let before = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
+        assert!(before.has_pack_changes());
+        assert!(before.packs_added.contains(&"new".to_string()));
+        assert!(before.packs_removed.contains(&"old".to_string()));
+
+        absorb_packs_to(&profiles, &root, PackChoice::Keep, unlocked(), opts(None)).unwrap();
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(
+            manifest.ignored_packs,
+            vec!["new".to_string(), "old".into()]
+        );
+
+        // Same live tree, same profile: the prompt is gone.
+        let after = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
+        assert!(!after.has_pack_changes(), "{after:?}");
+
+        // A pack that appears later is a fresh decision, not a re-prompt.
+        write_live(&root.join("tf/custom/third/pack.txt"), "third\n");
+        let third = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
+        assert_eq!(third.packs_added, vec!["third".to_string()]);
+        assert!(third.packs_removed.is_empty());
+
+        // Update is the user changing their mind about everything they kept out.
+        absorb_packs_to(&profiles, &root, PackChoice::Update, unlocked(), opts(None)).unwrap();
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest.ignored_packs.is_empty());
+        assert!(!manifest.files.iter().any(|file| file.path.contains("old")));
+        assert!(manifest
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/new/pack.txt"));
         cleanup(&dir);
     }
 

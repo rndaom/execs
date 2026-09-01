@@ -192,6 +192,11 @@ pub struct ProfileManifest {
     pub crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewmodel: Option<ViewmodelRecord>,
+    /// Pack keys the user chose to Keep out of the profile. Without this the
+    /// same prompt returns on every boot and after every TF2 quit until they
+    /// pick Update. Cleared by an Update.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored_packs: Vec<String>,
 }
 
 /// Read model for the UI. `profiles` is empty when the library is unusable.
@@ -375,6 +380,7 @@ where
         hud: None,
         crosshair: None,
         viewmodel: None,
+        ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
@@ -891,6 +897,7 @@ fn create_empty_record(
         hud: None,
         crosshair: None,
         viewmodel: None,
+        ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
