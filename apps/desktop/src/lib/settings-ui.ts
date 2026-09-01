@@ -28,8 +28,7 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
 
 export function showSettingsChrome(library: ProfileLibrary | null): boolean {
   return (
-    library !== null &&
-    library.usable &&
+    library?.usable === true &&
     !library.rootMismatch &&
     library.profiles.length > 0 &&
     library.activeProfileId !== null
