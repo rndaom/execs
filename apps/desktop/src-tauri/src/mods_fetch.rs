@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use crate::net::{self, Verify};
+
 const MODS_RELEASE: &str = "v1.7.1";
 const MODS_URL: &str =
     "https://github.com/cueki/casual-pre-loader/releases/download/v1.7.1/mods.zip";
@@ -17,6 +19,8 @@ pub fn cache_path() -> PathBuf {
         .join(format!("mods-{MODS_RELEASE}.zip"))
 }
 
+/// A cheap "has the user already paid the 81 MB" probe for the pane. Not a
+/// verification — `ensure_mods_zip` hashes before handing the path out.
 pub fn is_cached() -> bool {
     cache_path()
         .metadata()
@@ -24,24 +28,22 @@ pub fn is_cached() -> bool {
         .unwrap_or(false)
 }
 
-/// The library zip path, downloading and verifying it first if needed.
+/// The library zip path, downloading and verifying it first if needed. The
+/// hash is checked on a cache hit too: a truncated or tampered cache file is
+/// re-downloaded rather than unzipped into the user's game.
 pub fn ensure_mods_zip() -> Result<PathBuf, String> {
     let cached = cache_path();
-    if let Ok(meta) = cached.metadata() {
-        // Hashing 81MB on every install is wasteful; the size check catches
-        // truncated downloads and the hash ran when the file was written.
-        if meta.len() == MODS_SIZE_BYTES {
-            return Ok(cached);
-        }
-    }
-    let bytes = crate::comfig_fetch::download_bytes(MODS_URL)?;
-    if execs_core::hash::sha256_hex(&bytes) != MODS_SHA256 {
-        return Err("The downloaded mod library failed verification.".into());
-    }
-    if let Some(parent) = cached.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    std::fs::write(&cached, &bytes)
-        .map_err(|err| format!("Could not cache the mod library: {err}"))?;
+    net::download_pinned(
+        MODS_URL,
+        &cached,
+        Verify::Sha256(MODS_SHA256),
+        MODS_SIZE_BYTES,
+    )
+    .map_err(|err| {
+        err.replace(
+            "The download failed verification.",
+            "The downloaded mod library failed verification.",
+        )
+    })?;
     Ok(cached)
 }
