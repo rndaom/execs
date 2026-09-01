@@ -74,6 +74,12 @@ const PREVIEW_FILES: { path: string; text: string }[] = [
   },
 ];
 
+/** Non-cfg profile files, so the Comfig pane sees installed packages. */
+const PREVIEW_PACKAGES = [
+  "tf/custom/mastercomfig-base.vpk",
+  "tf/custom/mastercomfig-addon-no-tutorial.vpk",
+];
+
 const BROWSED: Tf2Install = {
   path: "/home/user/.local/share/Steam/steamapps/common/Team Fortress 2",
 };
@@ -109,8 +115,8 @@ export function createPreviewApi(state: PreviewState): Api {
       name: active.name,
       launchOptions,
       layer: "comfig",
-      files: files.map((file) => ({
-        path: file.path,
+      files: [...files.map((file) => file.path), ...PREVIEW_PACKAGES].map((path) => ({
+        path,
         sha256: "",
         storage: "exclusive" as const,
       })),
