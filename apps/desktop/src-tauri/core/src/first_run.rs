@@ -99,20 +99,27 @@ pub fn classify_first_run_with(
 }
 
 fn config_cfg_reason(tf2_root: &Path, source: &Path) -> Result<Option<String>, ProfileError> {
-    let live = fs::read_to_string(source).map_err(|err| ProfileError::Io(err.to_string()))?;
+    // Only a bind signature is needed, and the engine happily writes non-UTF-8
+    // bytes into config.cfg (a Latin-1 `name`, say). Reading strictly here used
+    // to dead-end the entire first-run screen.
+    let live = read_lossy(source)?;
     let default_path = tf2_root.join("tf").join("cfg").join("config_default.cfg");
     if !default_path.is_file() {
         return Ok(Some(
             "Could not compare config.cfg to Valve defaults".into(),
         ));
     }
-    let default =
-        fs::read_to_string(&default_path).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let default = read_lossy(&default_path)?;
     if gameplay_script_signature(&live) == gameplay_script_signature(&default) {
         Ok(None)
     } else {
         Ok(Some("Binds differ from Valve defaults".into()))
     }
+}
+
+fn read_lossy(path: &Path) -> Result<String, ProfileError> {
+    let bytes = fs::read(path).map_err(|err| ProfileError::Io(err.to_string()))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn is_mastercomfig_vpk(name: &str) -> bool {
@@ -158,6 +165,34 @@ mod tests {
         fs::create_dir_all(root.join("tf/custom")).unwrap();
         fs::create_dir_all(root.join("tf/cfg")).unwrap();
         root
+    }
+
+    /// The engine writes whatever bytes the user typed into `name`, so a
+    /// Latin-1 config.cfg is ordinary. It used to make `classify_first_run`
+    /// return `Io(...)` and dead-end the entire first-run screen.
+    #[test]
+    fn a_non_utf8_config_cfg_still_classifies() {
+        let dir = crate::test_temp_dir();
+        let root = stock_root(&dir);
+        let mut bytes = STOCK.as_bytes().to_vec();
+        // `name "Jorg"` with a raw Latin-1 o-umlaut.
+        bytes.extend_from_slice(b"name \"J\xf6rg\"\n");
+        let config = root.join("tf/cfg/config.cfg");
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(&config, &bytes).unwrap();
+
+        let class = classify_first_run_with(&root, None).unwrap();
+        // The extra `name` line is not a bind change, so the signature still
+        // matches Valve's defaults and nothing is reported against config.cfg.
+        assert!(
+            !class
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("config.cfg")),
+            "{:?}",
+            class.reasons
+        );
+        cleanup(&dir);
     }
 
     #[test]

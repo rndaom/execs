@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 use crate::finder::discover_steam_roots;
 use crate::hash::write_atomic;
 use crate::process_lock::{
-    current_process_os, live_process_names, refuse_if_running_among, steam_running_among, ProcessOs,
+    live_process_names, refuse_if_running_among, steam_running_among, ProcessOs,
 };
-use crate::profile::{load_library_from, load_manifest, manifest_file, profiles_dir, ProfileError};
+use crate::profile::{load_library_from, load_manifest, profiles_dir, ProfileError};
 use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
 
 const TF2_APP: &str = "440";
@@ -76,11 +76,14 @@ pub fn read_launch_options_from(steam_roots: &[PathBuf]) -> String {
 
 /// Official mastercomfig recommended set. Same on Windows and Linux (no `gamemoderun`).
 pub fn recommended_launch_options() -> String {
-    recommended_launch_options_for(current_process_os())
+    sanitize_launch_options(RECOMMENDED_LAUNCH_OPTIONS)
 }
 
+#[deprecated(
+    note = "the OS distinction was removed with gamemoderun; call recommended_launch_options()"
+)]
 pub fn recommended_launch_options_for(_os: ProcessOs) -> String {
-    sanitize_launch_options(RECOMMENDED_LAUNCH_OPTIONS)
+    recommended_launch_options()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,12 +129,6 @@ impl LaunchWriteResult {
 pub struct SetLaunchResult {
     pub launch_options: String,
     pub steam_write: LaunchWriteReason,
-}
-
-pub fn write_launch_options_to_localconfig(
-    options: &str,
-) -> Result<LaunchWriteResult, ProfileError> {
-    write_launch_options_to_localconfig_from(&discover_steam_roots(), options, live_process_names())
 }
 
 pub fn write_launch_options_to_localconfig_from<I, S>(
@@ -232,10 +229,20 @@ where
     J: IntoIterator<Item = T>,
     T: AsRef<str>,
 {
-    refuse_if_running_among(running_tf2_names)?;
+    let running: Vec<String> = running_tf2_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running)?;
     ensure_library_usable(profiles_dir, tf2_root)?;
     let sanitized = sanitize_launch_options(raw);
-    write_manifest_launch_options(profiles_dir, profile_id, &sanitized)?;
+    crate::profile::set_manifest_launch_options(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        sanitized.clone(),
+        &running,
+    )?;
     let steam = write_launch_options_to_localconfig_from(steam_roots, &sanitized, steam_names)?;
     Ok(SetLaunchResult {
         launch_options: sanitized,
@@ -255,22 +262,6 @@ fn ensure_library_usable(profiles_dir: &Path, tf2_root: &Path) -> Result<(), Pro
         return Err(ProfileError::NotInitialized);
     }
     Ok(())
-}
-
-fn write_manifest_launch_options(
-    profiles_dir: &Path,
-    profile_id: &str,
-    launch_options: &str,
-) -> Result<(), ProfileError> {
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    manifest.launch_options = launch_options.to_string();
-    let path = manifest_file(profiles_dir, profile_id);
-    let json =
-        serde_json::to_string_pretty(&manifest).map_err(|err| ProfileError::Io(err.to_string()))?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    fs::write(&path, format!("{json}\n")).map_err(|err| ProfileError::Io(err.to_string()))
 }
 
 fn set_launch_options_in_vdf(vdf: &mut VdfMap, options: &str) {
@@ -741,8 +732,11 @@ mod tests {
     fn recommended_is_the_official_comfig_set() {
         let expected = "-novid -nojoy -nosteamcontroller -nohltv -particles 1";
         assert_eq!(recommended_launch_options(), expected);
-        assert_eq!(recommended_launch_options_for(ProcessOs::Windows), expected);
-        assert_eq!(recommended_launch_options_for(ProcessOs::Linux), expected);
+        #[allow(deprecated)]
+        {
+            assert_eq!(recommended_launch_options_for(ProcessOs::Windows), expected);
+            assert_eq!(recommended_launch_options_for(ProcessOs::Linux), expected);
+        }
         assert_eq!(
             sanitize_launch_options(&format!(
                 "{expected} -autoconfig -default -dxlevel 90 +quit"
@@ -937,6 +931,47 @@ mod tests {
         .unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
         assert_eq!(load_manifest(&profiles, &id).unwrap().launch_options, "");
+        cleanup(&dir);
+    }
+
+    /// Every manifest write goes through `save_manifest`, so the index's
+    /// `updated_at` moves with it — the launch-options writer used to skip it
+    /// and leave the UI showing a stale "last updated".
+    #[test]
+    fn setting_launch_options_touches_the_profile_record() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let profiles = dir.join("profiles");
+        write_file(&root.join("tf/steam.inf"), "appID=440\n");
+        let library =
+            crate::profile::create_profile_record_to(&profiles, &root, "Main", None::<&str>)
+                .unwrap();
+        let id = library.profiles[0].id.clone();
+
+        let index_path = crate::profile::index_file(&profiles);
+        let mut index: crate::profile::LibraryIndex =
+            serde_json::from_str(&fs::read_to_string(&index_path).unwrap()).unwrap();
+        index.profiles[0].updated_at = "2000-01-01T00:00:00Z".to_string();
+        fs::write(
+            &index_path,
+            format!("{}\n", serde_json::to_string_pretty(&index).unwrap()),
+        )
+        .unwrap();
+
+        set_profile_launch_options_to(
+            &profiles,
+            &root,
+            &id,
+            "-novid",
+            None::<&str>,
+            ["steam"],
+            &[],
+        )
+        .unwrap();
+
+        let after: crate::profile::LibraryIndex =
+            serde_json::from_str(&fs::read_to_string(&index_path).unwrap()).unwrap();
+        assert_ne!(after.profiles[0].updated_at, "2000-01-01T00:00:00Z");
         cleanup(&dir);
     }
 }

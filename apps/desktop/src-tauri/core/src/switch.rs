@@ -11,7 +11,8 @@ use crate::absorb::{
 use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
 use crate::hash::{copy_and_sha256, sha256_file};
-use crate::hud::{hud_packs, live_hud_names};
+use crate::hud::{hud_packs, live_hud_keys};
+use crate::launch::LaunchWriteReason;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     clear_active_profile_to, exclusive_file_path, load_library_from, load_manifest, profiles_dir,
@@ -42,6 +43,29 @@ impl SwitchProgress {
     fn new(step: SwitchStep) -> Self {
         Self { step, detail: None }
     }
+
+    fn with_detail(step: SwitchStep, detail: impl Into<String>) -> Self {
+        Self {
+            step,
+            detail: Some(detail.into()),
+        }
+    }
+}
+
+/// A switch's full result. `steam_write` says whether the profile's launch
+/// options actually reached `localconfig.vdf`, or were skipped because Steam
+/// was open / no account was found — the same first-class reason every other
+/// launch-options path reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchOutcome {
+    pub library: ProfileLibrary,
+    /// `None` when the write failed outright; `steam_write_error` says why.
+    /// A failed launch-options write never fails the switch itself — the live
+    /// tree is already correct by this point.
+    pub steam_write: Option<LaunchWriteReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steam_write_error: Option<String>,
 }
 
 pub fn switch_profile(tf2_root: &Path, profile_id: &str) -> Result<ProfileLibrary, ProfileError> {
@@ -56,12 +80,31 @@ pub fn switch_profile_with_progress<F>(
 where
     F: FnMut(SwitchProgress),
 {
-    switch_profile_to(
+    Ok(switch_profile_outcome(tf2_root, profile_id, progress)?.library)
+}
+
+/// Same as [`switch_profile_with_progress`], but keeps the `localconfig.vdf`
+/// write reason instead of discarding it.
+pub fn switch_profile_outcome<F>(
+    tf2_root: &Path,
+    profile_id: &str,
+    progress: F,
+) -> Result<SwitchOutcome, ProfileError>
+where
+    F: FnMut(SwitchProgress),
+{
+    // The Cloud copy is the only place a `config.cfg` may live, so the pack
+    // step has to see it here exactly as `absorb_owned` does.
+    let cloud = crate::launch::find_cloud_config();
+    switch_profile_to_outcome(
         &profiles_dir(),
         tf2_root,
         profile_id,
         live_process_names(),
-        AbsorbOptions::default(),
+        AbsorbOptions {
+            cloud_config: cloud.as_deref(),
+            ..AbsorbOptions::default()
+        },
         progress,
     )
 }
@@ -72,8 +115,32 @@ pub fn switch_profile_to<I, S, F>(
     profile_id: &str,
     running_names: I,
     options: AbsorbOptions<'_>,
-    mut progress: F,
+    progress: F,
 ) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    F: FnMut(SwitchProgress),
+{
+    Ok(switch_profile_to_outcome(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        running_names,
+        options,
+        progress,
+    )?
+    .library)
+}
+
+pub fn switch_profile_to_outcome<I, S, F>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running_names: I,
+    options: AbsorbOptions<'_>,
+    mut progress: F,
+) -> Result<SwitchOutcome, ProfileError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
@@ -99,7 +166,11 @@ where
     }
     if library.active_profile_id.as_deref() == Some(profile_id) {
         progress(SwitchProgress::new(SwitchStep::Done));
-        return Ok(library);
+        return Ok(SwitchOutcome {
+            library,
+            steam_write: Some(LaunchWriteReason::Written),
+            steam_write_error: None,
+        });
     }
 
     let target = load_manifest(profiles_dir, profile_id)?;
@@ -108,7 +179,7 @@ where
     // deleted and the new ones half-written.
     preflight_target(profiles_dir, &target)?;
 
-    let live_huds = live_hud_names(tf2_root);
+    let live_huds = live_hud_keys(tf2_root);
     let previous = library.active_profile_id.clone();
     progress(SwitchProgress::new(SwitchStep::Pack));
     if previous.is_some() {
@@ -150,14 +221,43 @@ where
         Some(roots) => roots.to_vec(),
         None => crate::finder::discover_steam_roots(),
     };
-    let _ = crate::launch::write_launch_options_to_localconfig_from(
-        &steam_roots,
-        &target.launch_options,
-        &running,
-    );
+    let (steam_write, steam_write_error) =
+        match crate::launch::write_launch_options_to_localconfig_from(
+            &steam_roots,
+            &target.launch_options,
+            &running,
+        ) {
+            Ok(result) => (Some(result.reason), None),
+            Err(err) => (None, Some(err.message())),
+        };
 
-    progress(SwitchProgress::new(SwitchStep::Done));
-    set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)
+    progress(SwitchProgress::with_detail(
+        SwitchStep::Done,
+        launch_write_detail(steam_write, steam_write_error.as_deref()),
+    ));
+    let library = set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)?;
+    Ok(SwitchOutcome {
+        library,
+        steam_write,
+        steam_write_error,
+    })
+}
+
+fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -> String {
+    match reason {
+        Some(LaunchWriteReason::Written) => "Launch options written to Steam.".into(),
+        Some(LaunchWriteReason::SteamOpen) => {
+            "Steam is open, so the launch options were not written — copy them from the Launch pane."
+                .into()
+        }
+        Some(LaunchWriteReason::NoAccount) => {
+            "No Steam account config was found, so the launch options were not written.".into()
+        }
+        None => format!(
+            "The launch options could not be written to Steam: {}",
+            error.unwrap_or("unknown error")
+        ),
+    }
 }
 
 fn mid_switch_error(err: &ProfileError) -> ProfileError {
@@ -375,6 +475,9 @@ fn prune_empty_parents(start: &Path, tf2_root: &Path) {
         tf2_root.to_path_buf(),
         tf2_root.join("tf"),
         tf2_root.join("tf").join("cfg"),
+        // Deleting overrides/ flips detect_layer to Vanilla for any inventory
+        // taken before write_target_live recreates it.
+        tf2_root.join("tf").join("cfg").join("overrides"),
         tf2_root.join("tf").join("custom"),
     ];
     let mut current = start.parent().map(Path::to_path_buf);
@@ -538,6 +641,52 @@ mod tests {
 
     fn steps_of(progress: &[SwitchProgress]) -> Vec<SwitchStep> {
         progress.iter().map(|item| item.step).collect()
+    }
+
+    /// The `localconfig.vdf` write result used to be dropped with `let _`, so a
+    /// switch never told the user their launch options were skipped because
+    /// Steam was open. It is now on the outcome and on the final progress step.
+    #[test]
+    fn switch_surfaces_the_launch_options_write_reason() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let steam = dir.join("Steam");
+        write_live(&root.join("tf/steam.inf"), "appID=440\n");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        let _a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
+
+        let mut steps = Vec::new();
+        let outcome = switch_profile_to_outcome(
+            &profiles,
+            &root,
+            &b,
+            unlocked(),
+            AbsorbOptions {
+                steam_roots: Some(std::slice::from_ref(&steam)),
+                ..AbsorbOptions::default()
+            },
+            |step| steps.push(step),
+        )
+        .unwrap();
+
+        // No Steam account exists under this root, so the write is skipped —
+        // reported, not swallowed.
+        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NoAccount));
+        assert_eq!(outcome.steam_write_error, None);
+        let done = steps.last().unwrap();
+        assert_eq!(done.step, SwitchStep::Done);
+        assert!(done
+            .detail
+            .as_deref()
+            .is_some_and(|text| text.contains("not written")));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
