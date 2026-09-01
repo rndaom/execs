@@ -90,7 +90,10 @@ impl VdfMap {
                     }
                 }
                 VdfValue::Obj(obj) => {
-                    let idx = match self.entries.iter().rposition(|(k, _)| k.eq_ignore_ascii_case(key))
+                    let idx = match self
+                        .entries
+                        .iter()
+                        .rposition(|(k, _)| k.eq_ignore_ascii_case(key))
                     {
                         Some(i) => {
                             if !matches!(self.entries[i].1, VdfValue::Obj(_)) {
@@ -681,7 +684,10 @@ mod tests {
             colors.get("Health").and_then(VdfValue::as_str),
             Some("0 153 255 255")
         );
-        assert_eq!(colors.get("Keep").and_then(VdfValue::as_str), Some("1 2 3 4"));
+        assert_eq!(
+            colors.get("Keep").and_then(VdfValue::as_str),
+            Some("1 2 3 4")
+        );
     }
 
     #[test]
@@ -708,7 +714,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["visible", "ItemName", "xpos", "ypos"]
         );
-        assert_eq!(block.get("ItemName").and_then(VdfValue::as_str), Some("health"));
+        assert_eq!(
+            block.get("ItemName").and_then(VdfValue::as_str),
+            Some("health")
+        );
         assert_eq!(block.get("ypos").and_then(VdfValue::as_str), Some("7"));
         assert_eq!(block.condition_at(0), Some("[$WIN32]"));
         assert_eq!(block.condition_at(1), None);
@@ -738,7 +747,10 @@ mod tests {
     #[test]
     fn a_bracket_that_is_not_a_conditional_stays_a_token() {
         let parsed = parse_vdf("\"a\"\t\t[unterminated\n\"b\"\t\t\"2\"\n").unwrap();
-        assert_eq!(parsed.get("a").and_then(VdfValue::as_str), Some("[unterminated"));
+        assert_eq!(
+            parsed.get("a").and_then(VdfValue::as_str),
+            Some("[unterminated")
+        );
         assert_eq!(parsed.get("b").and_then(VdfValue::as_str), Some("2"));
     }
 }

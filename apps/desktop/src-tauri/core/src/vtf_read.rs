@@ -32,9 +32,7 @@ fn read_i32(bytes: &[u8], at: usize) -> Option<i32> {
 
 fn format_data_size(format: i32, width: u32, height: u32) -> Option<usize> {
     match format {
-        FORMAT_RGBA8888 | FORMAT_ABGR8888 | FORMAT_BGRA8888 => {
-            Some((width * height * 4) as usize)
-        }
+        FORMAT_RGBA8888 | FORMAT_ABGR8888 | FORMAT_BGRA8888 => Some((width * height * 4) as usize),
         FORMAT_DXT1 => Some((width.div_ceil(4) * height.div_ceil(4) * 8) as usize),
         FORMAT_DXT5 => Some((width.div_ceil(4) * height.div_ceil(4) * 16) as usize),
         FORMAT_NONE => Some(0),
@@ -80,9 +78,12 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
         let mut found = None;
         for index in 0..resource_count {
             let entry = 80 + index * 8;
-            let tag = bytes.get(entry..entry + 3).ok_or("VTF resources truncated.")?;
+            let tag = bytes
+                .get(entry..entry + 3)
+                .ok_or("VTF resources truncated.")?;
             if tag == [0x30, 0x00, 0x00] {
-                found = Some(read_u32(bytes, entry + 4).ok_or("VTF resources truncated.")? as usize);
+                found =
+                    Some(read_u32(bytes, entry + 4).ok_or("VTF resources truncated.")? as usize);
                 break;
             }
         }
@@ -116,14 +117,14 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
         FORMAT_RGBA8888 => data.to_vec(),
         FORMAT_ABGR8888 => {
             let mut out = data.to_vec();
-            for chunk in out.chunks_exact_mut(4) {
+            for chunk in out.as_chunks_mut::<4>().0 {
                 chunk.reverse();
             }
             out
         }
         FORMAT_BGRA8888 => {
             let mut out = data.to_vec();
-            for chunk in out.chunks_exact_mut(4) {
+            for chunk in out.as_chunks_mut::<4>().0 {
                 chunk.swap(0, 2);
             }
             out
@@ -232,13 +233,11 @@ fn decode_dxt5_alpha(block: &[u8]) -> [u8; 16] {
     palette[1] = a1;
     if a0 > a1 {
         for i in 1..7u16 {
-            palette[(i + 1) as usize] =
-                (((7 - i) * u16::from(a0) + i * u16::from(a1)) / 7) as u8;
+            palette[(i + 1) as usize] = (((7 - i) * u16::from(a0) + i * u16::from(a1)) / 7) as u8;
         }
     } else {
         for i in 1..5u16 {
-            palette[(i + 1) as usize] =
-                (((5 - i) * u16::from(a0) + i * u16::from(a1)) / 5) as u8;
+            palette[(i + 1) as usize] = (((5 - i) * u16::from(a0) + i * u16::from(a1)) / 5) as u8;
         }
         palette[6] = 0;
         palette[7] = 255;
@@ -300,6 +299,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn decodes_dxt1_solid_block() {
         // One 4x4 DXT1 block, both endpoints pure red, all indices 0.
         let mut bytes = header(2, 4, 4, 1, FORMAT_DXT1, 1, 80);

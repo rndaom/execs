@@ -14,9 +14,8 @@ pub fn md5(bytes: &[u8]) -> [u8; 16] {
         9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10,
         15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
     ];
-    let k: [u32; 64] = std::array::from_fn(|i| {
-        ((i as f64 + 1.0).sin().abs() * 4294967296.0) as u32
-    });
+    let k: [u32; 64] =
+        std::array::from_fn(|i| ((i as f64 + 1.0).sin().abs() * 4294967296.0) as u32);
 
     let mut msg = bytes.to_vec();
     let bit_len = (bytes.len() as u64).wrapping_mul(8);
@@ -27,7 +26,7 @@ pub fn md5(bytes: &[u8]) -> [u8; 16] {
     msg.extend_from_slice(&bit_len.to_le_bytes());
 
     let mut state: [u32; 4] = [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476];
-    for chunk in msg.chunks_exact(64) {
+    for chunk in msg.as_chunks::<64>().0 {
         let m: [u32; 16] = std::array::from_fn(|i| {
             u32::from_le_bytes([
                 chunk[i * 4],
@@ -47,10 +46,7 @@ pub fn md5(bytes: &[u8]) -> [u8; 16] {
             let tmp = d;
             d = c;
             c = b;
-            let sum = a
-                .wrapping_add(f)
-                .wrapping_add(k[i])
-                .wrapping_add(m[g]);
+            let sum = a.wrapping_add(f).wrapping_add(k[i]).wrapping_add(m[g]);
             b = b.wrapping_add(sum.rotate_left(S[i]));
             a = tmp;
         }
@@ -195,7 +191,9 @@ mod tests {
         );
         // Spans several blocks, so the length padding is exercised too.
         assert_eq!(
-            hex(b"12345678901234567890123456789012345678901234567890123456789012345678901234567890"),
+            hex(
+                b"12345678901234567890123456789012345678901234567890123456789012345678901234567890"
+            ),
             "57edf4a22be3c955ac49da2e2107b67a"
         );
     }

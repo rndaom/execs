@@ -40,9 +40,15 @@ fn main() {
     println!("  custom vpk written:      {}", report.custom_vpk_written);
     println!("  gameinfo bypassed:       {}", report.gameinfo_bypassed);
     println!("  particles patched:       {}", report.patched_files.len());
-    println!("  model materials moved:   {}", report.relocated_model_materials);
+    println!(
+        "  model materials moved:   {}",
+        report.relocated_model_materials
+    );
     println!("  materials generated:     {}", report.synthesized_vmts);
     for notice in &report.skipped {
-        println!("  skipped: {} ({}) — {}", notice.file, notice.mod_name, notice.reason);
+        println!(
+            "  skipped: {} ({}) — {}",
+            notice.file, notice.mod_name, notice.reason
+        );
     }
 }

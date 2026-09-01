@@ -31,33 +31,21 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "scout",
         zip_folder: "scout",
         label: "Double Barrels",
-        files: &[
-            "db_draw",
-            "db_idle",
-            "db_fire",
-            "db_reload",
-        ],
+        files: &["db_draw", "db_idle", "db_fire", "db_reload"],
     },
     ViewmodelGroup {
         id: "scout/shortstop",
         class_id: "scout",
         zip_folder: "scout",
         label: "Shortstop",
-        files: &[
-            "ss_draw",
-            "ss_idle",
-            "ss_fire",
-            "ss_reload",
-        ],
+        files: &["ss_draw", "ss_idle", "ss_fire", "ss_reload"],
     },
     ViewmodelGroup {
         id: "scout/shortstop-push",
         class_id: "scout",
         zip_folder: "scout",
         label: "Shortstop Push",
-        files: &[
-            "ss_alt_fire",
-        ],
+        files: &["ss_alt_fire"],
     },
     ViewmodelGroup {
         id: "scout/primary-inspect",
@@ -78,34 +66,21 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "scout",
         zip_folder: "scout",
         label: "Pistols",
-        files: &[
-            "p_draw",
-            "p_idle",
-            "p_fire",
-            "p_reload",
-        ],
+        files: &["p_draw", "p_idle", "p_fire", "p_reload"],
     },
     ViewmodelGroup {
         id: "scout/throwables",
         class_id: "scout",
         zip_folder: "scout",
         label: "Throwables",
-        files: &[
-            "throw_draw",
-            "throw_idle",
-            "throw_fire",
-        ],
+        files: &["throw_draw", "throw_idle", "throw_fire"],
     },
     ViewmodelGroup {
         id: "scout/drinks",
         class_id: "scout",
         zip_folder: "scout",
         label: "Drinks",
-        files: &[
-            "ed_draw",
-            "ed_idle",
-            "ed_throw",
-        ],
+        files: &["ed_draw", "ed_idle", "ed_throw"],
     },
     ViewmodelGroup {
         id: "scout/secondary-inspect",
@@ -150,11 +125,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "sniper",
         zip_folder: "sniper",
         label: "Rifles",
-        files: &[
-            "draw",
-            "fire",
-            "idle",
-        ],
+        files: &["draw", "fire", "idle"],
     },
     ViewmodelGroup {
         id: "sniper/huntsman",
@@ -192,23 +163,14 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "sniper",
         zip_folder: "sniper",
         label: "SMGs",
-        files: &[
-            "smg_draw",
-            "smg_idle",
-            "smg_fire",
-            "smg_reload",
-        ],
+        files: &["smg_draw", "smg_idle", "smg_fire", "smg_reload"],
     },
     ViewmodelGroup {
         id: "sniper/throwables",
         class_id: "sniper",
         zip_folder: "sniper",
         label: "Throwables",
-        files: &[
-            "pj_draw",
-            "pj_idle",
-            "pj_fire",
-        ],
+        files: &["pj_draw", "pj_idle", "pj_fire"],
     },
     ViewmodelGroup {
         id: "sniper/secondary-inspect",
@@ -433,12 +395,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "medic",
         zip_folder: "medic",
         label: "Primaries",
-        files: &[
-            "sg_draw",
-            "sg_idle",
-            "sg_fire",
-            "sg_reload",
-        ],
+        files: &["sg_draw", "sg_idle", "sg_fire", "sg_reload"],
     },
     ViewmodelGroup {
         id: "medic/primary-inspect",
@@ -456,13 +413,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "medic",
         zip_folder: "medic",
         label: "Mediguns",
-        files: &[
-            "draw",
-            "idle",
-            "fire_on",
-            "fire_loop",
-            "fire_off",
-        ],
+        files: &["draw", "idle", "fire_on", "fire_loop", "fire_off"],
     },
     ViewmodelGroup {
         id: "medic/secondary-inspect",
@@ -535,10 +486,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "heavy",
         zip_folder: "heavy",
         label: "Consumables",
-        files: &[
-            "sw_draw",
-            "sw_idle",
-        ],
+        files: &["sw_draw", "sw_idle"],
     },
     ViewmodelGroup {
         id: "heavy/secondary-inspect",
@@ -623,12 +571,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         zip_folder: "pyro",
         label: "Flare Guns",
         files: &[
-            "fg_draw",
-            "fg_idle",
-            "fg_fire",
-            "mm_draw",
-            "mm_idle",
-            "mm_fire",
+            "fg_draw", "fg_idle", "fg_fire", "mm_draw", "mm_idle", "mm_fire",
         ],
     },
     ViewmodelGroup {
@@ -648,11 +591,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "pyro",
         zip_folder: "pyro",
         label: "Gas Passer",
-        files: &[
-            "gascan_draw",
-            "gascan_idle",
-            "gascan_fire",
-        ],
+        files: &["gascan_draw", "gascan_idle", "gascan_fire"],
     },
     ViewmodelGroup {
         id: "pyro/secondary-inspect",
@@ -692,13 +631,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "spy",
         zip_folder: "spy",
         label: "Revolvers",
-        files: &[
-            "draw",
-            "idle",
-            "fire",
-            "reload",
-            "reload2",
-        ],
+        files: &["draw", "idle", "fire", "reload", "reload2"],
     },
     ViewmodelGroup {
         id: "spy/primary-inspect",
@@ -824,12 +757,7 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "engineer",
         zip_folder: "engineer",
         label: "Pistols",
-        files: &[
-            "pstl_draw",
-            "pstl_idle",
-            "pstl_fire",
-            "pstl_reload",
-        ],
+        files: &["pstl_draw", "pstl_idle", "pstl_fire", "pstl_reload"],
     },
     ViewmodelGroup {
         id: "engineer/wrangler",
@@ -912,22 +840,14 @@ pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
         class_id: "engineer",
         zip_folder: "engineer",
         label: "PDA",
-        files: &[
-            "pda_idle",
-            "pda_draw",
-            "bld_idle",
-            "bld_draw",
-        ],
+        files: &["pda_idle", "pda_draw", "bld_idle", "bld_draw"],
     },
     ViewmodelGroup {
         id: "engineer/toolbox",
         class_id: "engineer",
         zip_folder: "engineer",
         label: "Toolbox",
-        files: &[
-            "box_idle",
-            "box_draw",
-        ],
+        files: &["box_idle", "box_draw"],
     },
 ];
 

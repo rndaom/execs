@@ -191,7 +191,10 @@ mod tests {
         write_file(&root.join("tf/cfg/autoexec.cfg"), "fov_desired 90\n");
         let class = classify_first_run_with(&root, None).unwrap();
         assert_eq!(class.kind, FirstRunKind::Existing);
-        assert!(class.reasons.iter().any(|item| item.contains("autoexec.cfg")));
+        assert!(class
+            .reasons
+            .iter()
+            .any(|item| item.contains("autoexec.cfg")));
         cleanup(&dir);
     }
 
@@ -199,7 +202,10 @@ mod tests {
     fn existing_from_custom_pack() {
         let dir = crate::test_temp_dir();
         let root = stock_root(&dir);
-        write_file(&root.join("tf/custom/hud/resource/ui/hudlayout.res"), "hud\n");
+        write_file(
+            &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
+            "hud\n",
+        );
         let class = classify_first_run_with(&root, None).unwrap();
         assert_eq!(class.kind, FirstRunKind::Existing);
         assert!(class.reasons.iter().any(|item| item.contains("custom")));
@@ -210,12 +216,18 @@ mod tests {
     fn existing_from_overrides_and_comfig_vpk() {
         let dir = crate::test_temp_dir();
         let root = stock_root(&dir);
-        write_file(&root.join("tf/cfg/overrides/modules.cfg"), "lighting=high\n");
+        write_file(
+            &root.join("tf/cfg/overrides/modules.cfg"),
+            "lighting=high\n",
+        );
         write_file(&root.join("tf/custom/mastercomfig-base.vpk"), "vpk\n");
         let class = classify_first_run_with(&root, None).unwrap();
         assert_eq!(class.kind, FirstRunKind::Existing);
         assert!(class.reasons.iter().any(|item| item.contains("overrides")));
-        assert!(class.reasons.iter().any(|item| item.contains("mastercomfig")));
+        assert!(class
+            .reasons
+            .iter()
+            .any(|item| item.contains("mastercomfig")));
         cleanup(&dir);
     }
 
@@ -239,7 +251,10 @@ mod tests {
         );
         let class = classify_first_run_with(&root, None).unwrap();
         assert_eq!(class.kind, FirstRunKind::Existing);
-        assert!(class.reasons.iter().any(|item| item.contains("Binds differ")));
+        assert!(class
+            .reasons
+            .iter()
+            .any(|item| item.contains("Binds differ")));
         cleanup(&dir);
     }
 
@@ -251,12 +266,10 @@ mod tests {
         write_file(&root.join("tf/steam.inf"), "appID=440\n");
         let class = classify_first_run_with(&root, None).unwrap();
         assert_eq!(class.kind, FirstRunKind::Existing);
-        assert!(
-            class
-                .reasons
-                .iter()
-                .any(|item| item.contains("Could not compare"))
-        );
+        assert!(class
+            .reasons
+            .iter()
+            .any(|item| item.contains("Could not compare")));
         cleanup(&dir);
     }
 
@@ -268,7 +281,10 @@ mod tests {
         write_file(&cloud, "unbindall\nbind w +back\n");
         let class = classify_first_run_with(&root, Some(&cloud)).unwrap();
         assert_eq!(class.kind, FirstRunKind::Existing);
-        assert!(class.reasons.iter().any(|item| item.contains("Binds differ")));
+        assert!(class
+            .reasons
+            .iter()
+            .any(|item| item.contains("Binds differ")));
         cleanup(&dir);
     }
 }

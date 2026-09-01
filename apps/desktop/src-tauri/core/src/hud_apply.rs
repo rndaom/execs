@@ -118,10 +118,7 @@ pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
         .iter()
         .map(|(name, controls)| HudSchemaSection {
             name: name.clone(),
-            controls: controls
-                .iter()
-                .filter_map(view_control)
-                .collect(),
+            controls: controls.iter().filter_map(view_control).collect(),
         })
         .filter(|section| !section.controls.is_empty())
         .collect();
@@ -221,20 +218,34 @@ fn apply_control(
             }
             if let Some(rename) = &control.rename_file {
                 if on {
-                    tree.rename(&normalize_folder(&rename.old_name), &normalize_folder(&rename.new_name));
+                    tree.rename(
+                        &normalize_folder(&rename.old_name),
+                        &normalize_folder(&rename.new_name),
+                    );
                 } else {
-                    tree.rename(&normalize_folder(&rename.new_name), &normalize_folder(&rename.old_name));
+                    tree.rename(
+                        &normalize_folder(&rename.new_name),
+                        &normalize_folder(&rename.old_name),
+                    );
                 }
             }
             if let Some(files) = &control.files {
                 merge_files(tree, files, if on { "1" } else { "0" })?;
             }
             if let Some(write) = &control.write_file {
-                let text = if on { &write.true_text } else { &write.false_text };
-                tree.insert(&normalize_folder(&write.file_name), text.as_bytes().to_vec());
+                let text = if on {
+                    &write.true_text
+                } else {
+                    &write.false_text
+                };
+                tree.insert(normalize_folder(&write.file_name), text.as_bytes().to_vec());
             }
             if let Some(write) = &control.write_cfg {
-                let text = if on { &write.true_text } else { &write.false_text };
+                let text = if on {
+                    &write.true_text
+                } else {
+                    &write.false_text
+                };
                 cfg_writes.push((
                     format!("tf/cfg/{hud_id}/{}", normalize_folder(&write.file_name)),
                     text.as_bytes().to_vec(),
@@ -281,7 +292,7 @@ fn apply_value_files(
     }
     if let Some(write) = &control.write_file {
         tree.insert(
-            &normalize_folder(&write.file_name),
+            normalize_folder(&write.file_name),
             write.true_text.as_bytes().to_vec(),
         );
     }
@@ -308,7 +319,11 @@ fn swap_custom_file(tree: &mut HudTree, custom: &str, enabled: &str, file_name: 
     tree.rename(&from, &to);
 }
 
-fn merge_files(tree: &mut HudTree, files: &serde_json::Value, value: &str) -> Result<(), ProfileError> {
+fn merge_files(
+    tree: &mut HudTree,
+    files: &serde_json::Value,
+    value: &str,
+) -> Result<(), ProfileError> {
     let Some(map) = files.as_object() else {
         return Ok(());
     };
@@ -359,13 +374,21 @@ fn decode_hud_text(rel: &str, bytes: &[u8]) -> Result<(String, TextEncoding), Pr
             .ok()
     };
     if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
-        let mut units = rest.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]]));
+        let mut units = rest
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| u16::from_le_bytes([p[0], p[1]]));
         return decode_utf16(&mut units)
             .map(|text| (text, TextEncoding::Utf16Le))
             .ok_or_else(|| ProfileError::Io(format!("{rel} is not valid UTF-16LE")));
     }
     if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
-        let mut units = rest.chunks_exact(2).map(|p| u16::from_be_bytes([p[0], p[1]]));
+        let mut units = rest
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| u16::from_be_bytes([p[0], p[1]]));
         return decode_utf16(&mut units)
             .map(|text| (text, TextEncoding::Utf16Be))
             .ok_or_else(|| ProfileError::Io(format!("{rel} is not valid UTF-16BE")));
@@ -616,7 +639,8 @@ mod tests {
         options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
         options.insert("minmode".into(), "true".into());
         let result = apply_hud_options(&mut tree, &schema, "budhud", &options).unwrap();
-        let colors = std::str::from_utf8(tree.get("resource/clientscheme_colors.res").unwrap()).unwrap();
+        let colors =
+            std::str::from_utf8(tree.get("resource/clientscheme_colors.res").unwrap()).unwrap();
         assert!(colors.contains("0 153 255 255"));
         assert!(colors.contains("Keep"));
         assert!(tree.get("#customization/_enabled/minmode.res").is_some());

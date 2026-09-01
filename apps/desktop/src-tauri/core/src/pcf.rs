@@ -925,7 +925,7 @@ pub fn find_root_systems(pcf: &PcfFile) -> Vec<String> {
     }
 
     let mut referenced: BTreeSet<String> = BTreeSet::new();
-    for (_, &index) in &system_last_index {
+    for &index in system_last_index.values() {
         let element = &pcf.elements[index];
         for (name, attr) in &element.attributes {
             let attr_name = lossy(name).to_lowercase();
@@ -1200,7 +1200,11 @@ mod tests {
             version: PCF_HEADERS[1].to_string(),
             string_dictionary: base_dict(),
             elements: vec![
-                element(0, "root", vec![("particleSystemDefinitions", elements_array(&[1, 2]))]),
+                element(
+                    0,
+                    "root",
+                    vec![("particleSystemDefinitions", elements_array(&[1, 2]))],
+                ),
                 element(
                     1,
                     "effect_a",
@@ -1210,11 +1214,7 @@ mod tests {
                         ("radius", attr(ty::FLOAT, float(5.0))),
                     ],
                 ),
-                element(
-                    1,
-                    "effect_b",
-                    vec![("functionName", elements_array(&[4]))],
-                ),
+                element(1, "effect_b", vec![("functionName", elements_array(&[4]))]),
                 element(3, "op", vec![("radius", attr(ty::FLOAT, float(2.5)))]),
                 element(3, "op", vec![("radius", attr(ty::FLOAT, float(2.5)))]),
                 element(
@@ -1334,10 +1334,7 @@ mod tests {
         // effect_b, so effect_b is not a root.
         let mut file = sample_file();
         // Fix the child ref so the hop resolves.
-        file.elements[5].set_attr(
-            b"child",
-            attr(ty::ELEMENT, PcfValue::Element(2)),
-        );
+        file.elements[5].set_attr(b"child", attr(ty::ELEMENT, PcfValue::Element(2)));
         assert_eq!(find_root_systems(&file), vec!["effect_a".to_string()]);
     }
 
@@ -1374,10 +1371,9 @@ mod tests {
             panic!("set EXECS_PCF_CORPUS to the corpus root");
         };
         let root = std::path::PathBuf::from(corpus);
-        let manifest: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(root.join("refcorpus/manifest.json")).unwrap(),
-        )
-        .unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("refcorpus/manifest.json")).unwrap())
+                .unwrap();
         let disguise_parents: BTreeSet<String> = manifest["disguise_parents"]
             .as_array()
             .unwrap()
@@ -1445,8 +1441,7 @@ mod tests {
             ];
             if HASH_COLLISION_DIVERGENCES.contains(&tag) {
                 assert!(
-                    encoded.len() >= expected.len()
-                        && encoded.len() <= expected.len() + 1024,
+                    encoded.len() >= expected.len() && encoded.len() <= expected.len() + 1024,
                     "{tag}: unexpected size delta vs reference"
                 );
                 let reference = decode_pcf(&expected).unwrap();
@@ -1482,10 +1477,9 @@ mod tests {
             panic!("set EXECS_PCF_CORPUS to the corpus root");
         };
         let root = std::path::PathBuf::from(corpus);
-        let manifest: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(root.join("refcorpus/manifest.json")).unwrap(),
-        )
-        .unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("refcorpus/manifest.json")).unwrap())
+                .unwrap();
         let derived: serde_json::Value =
             serde_json::from_slice(&std::fs::read(root.join("derived_roots.json")).unwrap())
                 .unwrap();

@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::hash::sha256_hex;
-use crate::process_lock::refuse_if_running_among;
 use crate::pcf::{
     check_parents, decode_pcf, encode_pcf, extract_elements, find_root_systems,
     get_parent_elements, remove_duplicate_elements, update_materials, PcfFile,
 };
+use crate::process_lock::refuse_if_running_among;
 use crate::vpk::{
     map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v2, VpkEntryLocation,
 };
@@ -115,7 +115,9 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 /// Where the `type` key sits on a `type multiplayer_only` line, and whether a
@@ -202,8 +204,7 @@ fn refresh_gameinfo_backup(
     }
     std::fs::create_dir_all(preloader_dir(data_dir))
         .map_err(|err| format!("Could not prepare the preloader folder: {err}"))?;
-    std::fs::write(&backup, bytes)
-        .map_err(|err| format!("Could not back up gameinfo.txt: {err}"))
+    std::fs::write(&backup, bytes).map_err(|err| format!("Could not back up gameinfo.txt: {err}"))
 }
 
 /// Put the pristine gameinfo.txt back from the app-data backup. Returns false
@@ -241,8 +242,8 @@ pub fn set_gameinfo_bypass(
 ) -> Result<bool, String> {
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let path = gameinfo_path(tf2_root);
-    let bytes = std::fs::read(&path)
-        .map_err(|err| format!("Could not read gameinfo.txt: {err}"))?;
+    let bytes =
+        std::fs::read(&path).map_err(|err| format!("Could not read gameinfo.txt: {err}"))?;
 
     let currently_enabled = split_lines_inclusive(&bytes)
         .iter()
@@ -269,8 +270,7 @@ pub fn set_gameinfo_bypass(
     // the caller's entry check can be minutes old (downloads happen between).
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let updated: Vec<u8> = lines.concat();
-    std::fs::write(&path, updated)
-        .map_err(|err| format!("Could not write gameinfo.txt: {err}"))?;
+    std::fs::write(&path, updated).map_err(|err| format!("Could not write gameinfo.txt: {err}"))?;
     Ok(true)
 }
 
@@ -343,8 +343,8 @@ fn save_state(data_dir: &Path, state: &PreloaderState) -> Result<(), String> {
 }
 
 fn vpk_fingerprint(path: &Path) -> Result<(u64, u128), String> {
-    let meta = std::fs::metadata(path)
-        .map_err(|err| format!("Could not read {MISC_VPK}: {err}"))?;
+    let meta =
+        std::fs::metadata(path).map_err(|err| format!("Could not read {MISC_VPK}: {err}"))?;
     let mtime = meta
         .modified()
         .ok()
@@ -581,7 +581,7 @@ const SCRUB_PREFIXES: [&str; 6] = [
     "materials/sprites/healbeam",
 ];
 
-fn scrub_ignorez(rel: &str, bytes: &mut Vec<u8>) {
+fn scrub_ignorez(rel: &str, bytes: &mut [u8]) {
     let lower = rel.to_lowercase();
     if !lower.ends_with(".vmt") || !SCRUB_PREFIXES.iter().any(|prefix| lower.contains(prefix)) {
         return;
@@ -626,7 +626,9 @@ fn relocate_model_materials(custom: &mut BTreeMap<String, Vec<u8>>) -> usize {
     let mut relocate: BTreeSet<String> = BTreeSet::new();
     let mut rewrites: Vec<(String, Vec<String>)> = Vec::new();
     for model in &models {
-        let Some(dirs) = custom.get(model).and_then(|bytes| crate::mdl::material_dirs(bytes))
+        let Some(dirs) = custom
+            .get(model)
+            .and_then(|bytes| crate::mdl::material_dirs(bytes))
         else {
             continue;
         };
@@ -789,11 +791,14 @@ fn default_vmt(vmt: &str) -> Vec<u8> {
     } else {
         "LightmappedGeneric"
     };
-    format!("\"{shader}\"
+    format!(
+        "\"{shader}\"
 {{
 	\"$basetexture\"	\"{texture}\"
 }}
-").into_bytes()
+"
+    )
+    .into_bytes()
 }
 
 /// Paths in `files` that replace an asset the pure whitelist trusts, and so
@@ -986,7 +991,9 @@ pub fn apply_preloader_selection(
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let vpk_path = misc_vpk_path(tf2_root);
     if !vpk_path.is_file() {
-        return Err(format!("{MISC_VPK} was not found — is the TF2 folder right?"));
+        return Err(format!(
+            "{MISC_VPK} was not found — is the TF2 folder right?"
+        ));
     }
 
     let mut report = PreloaderReport::default();
@@ -1135,10 +1142,14 @@ pub fn apply_preloader_selection(
     let disguise_parents = if work.is_empty() {
         BTreeSet::new()
     } else {
-        get_parent_elements(&decode_vanilla(tf2_root, &entries, "particles/disguise.pcf")?)
+        get_parent_elements(&decode_vanilla(
+            tf2_root,
+            &entries,
+            "particles/disguise.pcf",
+        )?)
     };
 
-    for (_, item) in &work {
+    for item in work.values() {
         let rel = format!("particles/{}", item.target);
         let skip = |reason: String, report: &mut PreloaderReport| {
             report.skipped.push(SkipNotice {
@@ -1256,9 +1267,9 @@ pub fn apply_preloader_selection(
     // Inner paths keep their game-relative shape (materials/…, scripts/…).
     let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let copy_zip_tree = |archive: &mut zip::ZipArchive<std::fs::File>,
-                             prefix: &str,
-                             custom: &mut BTreeMap<String, Vec<u8>>,
-                             allow: &dyn Fn(&str) -> bool|
+                         prefix: &str,
+                         custom: &mut BTreeMap<String, Vec<u8>>,
+                         allow: &dyn Fn(&str) -> bool|
      -> Result<(), String> {
         for index in 0..archive.len() {
             let mut entry = archive
@@ -1401,9 +1412,9 @@ pub fn revert_preloader(
         if state.vpk_len != 0 && state.vpk_len != fingerprint.0 {
             state.patched.clear();
             let _ = std::fs::remove_dir_all(originals_dir(data_dir));
-            report
-                .failures
-                .push("The game updated since the last install; stock files are already fresh.".into());
+            report.failures.push(
+                "The game updated since the last install; stock files are already fresh.".into(),
+            );
         } else {
             // Re-check right before the first write into the official VPK.
             refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
@@ -1597,7 +1608,7 @@ mod tests {
         }
         let mut tree = Vec::new();
         let mut archive = Vec::new();
-        let mut cstr = |tree: &mut Vec<u8>, s: &str| {
+        let cstr = |tree: &mut Vec<u8>, s: &str| {
             tree.extend_from_slice(s.as_bytes());
             tree.push(0);
         };
@@ -1641,11 +1652,17 @@ mod tests {
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
         writer
-            .start_file("mods/particles/Blue Water/actual_particles/water.pcf", options)
+            .start_file(
+                "mods/particles/Blue Water/actual_particles/water.pcf",
+                options,
+            )
             .unwrap();
         writer.write_all(&tiny_pcf("water_effect", 4.0)).unwrap();
         writer
-            .start_file("mods/particles/Blue Water/materials/water/blue.vmt", options)
+            .start_file(
+                "mods/particles/Blue Water/materials/water/blue.vmt",
+                options,
+            )
             .unwrap();
         writer.write_all(b"\"LightmappedGeneric\" {}").unwrap();
         writer
@@ -1661,7 +1678,10 @@ mod tests {
             .write_all(b"\"VertexlitGeneric\"\n{\n\t\"$ignorez\" \"1\"\n}\n")
             .unwrap();
         writer
-            .start_file("mods/addons/Flat Look/scripts/game_sounds_custom.txt", options)
+            .start_file(
+                "mods/addons/Flat Look/scripts/game_sounds_custom.txt",
+                options,
+            )
             .unwrap();
         writer.write_all(b"ignored").unwrap();
         writer.finish().unwrap();
@@ -1753,8 +1773,8 @@ mod tests {
     fn gameinfo_toggles_only_the_first_type_line() {
         let (root, data) = fake_root();
         let path = root.join("tf/gameinfo.txt");
-        let before = b"\"GameInfo\"\n{\n\ttype multiplayer_only\n\t//type multiplayer_only\n}\n"
-            .to_vec();
+        let before =
+            b"\"GameInfo\"\n{\n\ttype multiplayer_only\n\t//type multiplayer_only\n}\n".to_vec();
         std::fs::write(&path, &before).unwrap();
 
         set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
@@ -1783,7 +1803,9 @@ mod tests {
         set_gameinfo_bypass(&root, &data, false, &[]).unwrap();
 
         // A game update rewrites the file with the bypass off.
-        let updated = b"\"GameInfo\"\r\n{\r\n\tgame \"Team Fortress\"\r\n\ttype multiplayer_only\r\n}\r\n".to_vec();
+        let updated =
+            b"\"GameInfo\"\r\n{\r\n\tgame \"Team Fortress\"\r\n\ttype multiplayer_only\r\n}\r\n"
+                .to_vec();
         std::fs::write(&path, &updated).unwrap();
         set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
         assert_eq!(std::fs::read(&backup).unwrap(), updated);
@@ -1926,7 +1948,8 @@ mod tests {
             b"\"VertexlitGeneric\"
 {
 }
-".to_vec(),
+"
+            .to_vec(),
         );
         write_split_vpk(&root.join("tf").join("tf2_textures_dir.vpk"), &stock);
 
@@ -1957,7 +1980,8 @@ mod tests {
 {
 	\"$stockmarker\"	\"1\"
 }
-".to_vec(),
+"
+            .to_vec(),
         );
         write_split_vpk(&root.join("tf").join("tf2_textures_dir.vpk"), &stock);
 
@@ -1976,7 +2000,8 @@ mod tests {
 {
 	\"$stockmarker\"	\"1\"
 }
-".to_vec(),
+"
+            .to_vec(),
             "a replaced texture reuses the stock material verbatim"
         );
         let generated = String::from_utf8(custom["materials/world/new_rock.vmt"].clone()).unwrap();
@@ -1999,7 +2024,7 @@ mod tests {
         let offset = bytes.len() as i32;
         bytes.extend_from_slice(dir.as_bytes());
         bytes.push(0);
-        while bytes.len() % 4 != 0 {
+        while !bytes.len().is_multiple_of(4) {
             bytes.push(0);
         }
         let table = bytes.len() as i32;
@@ -2026,7 +2051,7 @@ mod tests {
 	\"$basetexture\"	\"models/props_gameplay/locker\"
 }
 "
-                .to_vec(),
+            .to_vec(),
         );
         custom.insert(
             "materials/models/props_gameplay/locker.vtf".into(),
@@ -2041,19 +2066,23 @@ mod tests {
         assert_eq!(moved, 2, "the vmt and vtf move together");
         assert!(custom.contains_key("materials/console/models/props_gameplay/locker.vtf"));
         assert!(!custom.contains_key("materials/models/props_gameplay/locker.vtf"));
-        assert!(custom.contains_key("materials/wood/wall.vtf"), "world stays");
+        assert!(
+            custom.contains_key("materials/wood/wall.vtf"),
+            "world stays"
+        );
 
         // The material now points at the relocated texture.
-        let vmt = String::from_utf8(
-            custom["materials/console/models/props_gameplay/locker.vmt"].clone(),
-        )
-        .unwrap();
-        assert!(vmt.contains("console/models/props_gameplay/locker"), "{vmt}");
+        let vmt =
+            String::from_utf8(custom["materials/console/models/props_gameplay/locker.vmt"].clone())
+                .unwrap();
+        assert!(
+            vmt.contains("console/models/props_gameplay/locker"),
+            "{vmt}"
+        );
         assert!(vmt.contains("VertexLitGeneric"), "{vmt}");
 
         // The model searches the relocated dir first, stock second.
-        let dirs =
-            crate::mdl::material_dirs(&custom["models/props_gameplay/locker.mdl"]).unwrap();
+        let dirs = crate::mdl::material_dirs(&custom["models/props_gameplay/locker.mdl"]).unwrap();
         assert_eq!(dirs[0], "console/models/props_gameplay/");
         assert_eq!(dirs[1], "models/props_gameplay/");
     }
@@ -2136,8 +2165,7 @@ mod tests {
 
         // Custom VPK carries the addon material with $ignorez scrubbed and
         // skips the sound-script text file.
-        let custom =
-            read_vpk_dir_file(&root.join("tf/custom").join(PRELOADER_VPK)).unwrap();
+        let custom = read_vpk_dir_file(&root.join("tf/custom").join(PRELOADER_VPK)).unwrap();
         let vmt = custom.files.get("materials/models/flat.vmt").unwrap();
         assert!(!vmt.windows(8).any(|window| window == b"$ignorez"));
         assert!(custom.files.contains_key("materials/water/blue.vmt"));
@@ -2294,8 +2322,12 @@ mod tests {
         assert!(report
             .skipped
             .iter()
-            .any(|notice| notice.file == "water.pcf" && notice.reason.contains("over the stock budget")));
-        assert_eq!(std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(), vpk_before);
+            .any(|notice| notice.file == "water.pcf"
+                && notice.reason.contains("over the stock budget")));
+        assert_eq!(
+            std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(),
+            vpk_before
+        );
         assert_eq!(
             std::fs::read(root.join("tf").join("tf2_misc_000.vpk")).unwrap(),
             sibling_before
@@ -2307,7 +2339,11 @@ mod tests {
         let mut roots = BTreeMap::new();
         roots.insert(
             "bigboom.pcf".to_string(),
-            vec!["boom_own".to_string(), "shared".to_string(), "dup_only".to_string()],
+            vec![
+                "boom_own".to_string(),
+                "shared".to_string(),
+                "dup_only".to_string(),
+            ],
         );
         roots.insert("explosion.pcf".to_string(), vec!["shared".to_string()]);
         roots.insert("halloween.pcf".to_string(), vec!["dup_only".to_string()]);
