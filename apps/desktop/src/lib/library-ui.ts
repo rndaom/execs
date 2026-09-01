@@ -72,6 +72,18 @@ export function emptyAbsorbDelta(): AbsorbDelta {
   };
 }
 
+/**
+ * Should a write-lock transition trigger an absorb?
+ *
+ * `previous` is the last known lock state, `null` when it was never observed.
+ * The Rust poller emits the current value on its first tick — often before the
+ * webview registered its listener — so "unknown → closed" has to count as a
+ * quit too, or a session that started with TF2 already open never absorbs.
+ */
+export function shouldAbsorbOnLockChange(previous: boolean | null, next: boolean): boolean {
+  return next === false && previous !== false;
+}
+
 export function hasPackChanges(delta: AbsorbDelta): boolean {
   return delta.packsAdded.length > 0 || delta.packsRemoved.length > 0;
 }
