@@ -6,7 +6,9 @@ import { CrosshairPane } from "./CrosshairPane";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
+import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { LaunchPane } from "./LaunchPane";
+import type { Api } from "./lib/api";
 import {
   autoexecFilePath,
   bindsFilePath,
@@ -19,109 +21,34 @@ import {
   shouldSyncTrackedBinds,
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
-import {
-  applyCrosshairs,
-  applyHudOptions,
-  applyPreloaderMods,
-  buildViewmodelPack,
-  type ComfigPreset,
-  downloadDefaultMods,
-  getActiveProfileDetail,
-  getComfigState,
-  getDefaultMods,
-  getHudCatalog,
-  getHudSchema,
-  getHudState,
-  getPackCrosshairPreviews,
-  getPreloaderStatus,
-  getProfileLaunchOptions,
-  getStockCrosshairSprites,
-  type HudCatalogEntry,
-  type HudSchemaView,
-  type HudUiState,
-  importComfigCustom,
-  importViewmodels,
-  installHud,
-  isTauri,
-  type ModsCatalog,
-  matchHudCatalog,
-  type OfficialAddon,
-  openExternal,
-  type PreloaderReport,
-  type PreloaderStatusPayload,
-  type ProfileDetail,
-  readProfileFile,
-  removeCrosshairs,
-  removeViewmodels,
-  revertPreloader,
-  type SteamWriteStatus,
-  type StockCrosshairSprite,
-  setComfigAddons,
-  setComfigModules,
-  setComfigPreset,
-  setGameinfoBypass,
-  setProfileLaunchOptions,
-  setViewmodelPreload,
-  updateComfigVpks,
-  updateHud,
-  writeOwnedFile,
+import type {
+  HudCatalogEntry,
+  HudSchemaView,
+  HudUiState,
+  ModsCatalog,
+  PreloaderReport,
+  PreloaderStatusPayload,
+  ProfileDetail,
+  SteamWriteStatus,
+  StockCrosshairSprite,
 } from "./lib/bridge";
 import {
+  type ComfigUiState,
   defaultComfigState,
   hasBaseVpk,
-  PREVIEW_COMFIG_STATE,
-  type PreviewComfigState,
   toggleComfigAddon,
 } from "./lib/comfig-ui";
-import { previewCrosshairRecord } from "./lib/crosshair-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
 import { HudReloadQueue } from "./lib/hud-reload-ui";
-import {
-  emptyHudState,
-  PREVIEW_HUD_CATALOG,
-  PREVIEW_HUD_SCHEMA,
-  previewInstalledState,
-  schemaSupportedIds,
-} from "./lib/hud-ui";
-import { recommendedLaunchOptions as previewLaunchOptions } from "./lib/launch-ui";
-import { PRELOADER_REPO_URL, PREVIEW_MODS_CATALOG, PREVIEW_MODS_STATUS } from "./lib/mods-ui";
-import type { PreviewState } from "./lib/preview";
+import { emptyHudState } from "./lib/hud-ui";
+import { recommendedLaunchOptions } from "./lib/launch-ui";
+import { PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import type { SettingsTab } from "./lib/settings-ui";
-import { previewViewmodelRecord } from "./lib/viewmodel-ui";
 import { ModsPane } from "./ModsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
 type CfgText = { path: string; text: string };
-
-const PREVIEW_FILES: CfgText[] = [
-  {
-    path: "tf/cfg/overrides/autoexec.cfg",
-    text: "exec execs_binds // execs:managed\nexec execs_gameplay // execs:managed\nhost_writeconfig\n",
-  },
-  {
-    path: "tf/cfg/overrides/danger.cfg",
-    text: "unbindall\n",
-  },
-  {
-    path: "tf/cfg/overrides/execs_binds.cfg",
-    text: "// execs binds — managed, do not edit by hand\nbind w +forward\nbind space +jump\n",
-  },
-  {
-    path: "tf/cfg/overrides/execs_gameplay.cfg",
-    text: "// execs gameplay — managed, do not edit by hand\nfov_desired 90\nviewmodel_fov 70\n",
-  },
-  {
-    path: "tf/cfg/config.cfg",
-    text: "bind w +forward\nbind space +jump\nfov_desired 90\n",
-  },
-];
-
-const PREVIEW_BINDS: Record<string, string> = {
-  w: "+forward",
-  s: "+back",
-  space: "+jump",
-};
 
 function mapsFromFiles(files: CfgText[]): {
   binds: Record<string, string>;
@@ -139,18 +66,6 @@ function mapsFromFiles(files: CfgText[]): {
   return { binds, effective };
 }
 
-function comfigPreviewFromState(state: {
-  preset: ComfigPreset;
-  modules: Record<string, string>;
-  addons: OfficialAddon[];
-}): PreviewComfigState {
-  return {
-    preset: state.preset,
-    modules: state.modules,
-    addons: state.addons,
-  };
-}
-
 function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
   if (files.some((file) => file.path === path)) {
     return files.map((file) => (file.path === path ? { path, text } : file));
@@ -159,48 +74,38 @@ function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
 }
 
 export function SettingsHost({
+  api,
   tab,
   running,
   externalBusy,
-  preview,
   refreshKey,
   bindSyncRequest,
   onBindSyncHandled,
   onBusyChange,
   onError,
 }: {
+  api: Api;
   tab: SettingsTab;
   running: boolean;
   externalBusy: boolean;
-  preview: PreviewState;
   refreshKey: string | number;
   bindSyncRequest: number | null;
   onBindSyncHandled: (request: number) => void;
   onBusyChange: (busy: boolean) => void;
   onError: (message: string | null) => void;
 }) {
-  const tauri = isTauri();
+  const { error } = useAppStatus();
   const [localBusy, setLocalBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
-  const [files, setFiles] = useState<CfgText[]>(() => (tauri ? [] : PREVIEW_FILES));
-  // Never seed the real app with demo data: until the first reload lands, the
-  // Comfig and Gameplay panes must show nothing rather than someone else's
-  // preset, module overrides and addons.
-  const [comfig, setComfig] = useState<PreviewComfigState>(() =>
-    tauri ? defaultComfigState() : PREVIEW_COMFIG_STATE,
-  );
-  const [launch, setLaunch] = useState(() => previewLaunchOptions("linux"));
+  const [files, setFiles] = useState<CfgText[]>([]);
+  const [comfig, setComfig] = useState<ComfigUiState>(defaultComfigState);
+  const [launch, setLaunch] = useState(recommendedLaunchOptions);
+  const [launchSaved, setLaunchSaved] = useState<{ sent: string; saved: string } | null>(null);
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
-  const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>(() =>
-    tauri ? [] : PREVIEW_HUD_CATALOG,
-  );
-  const [hudState, setHudState] = useState<HudUiState>(() =>
-    !tauri && preview === "settings-hud-installed" ? previewInstalledState() : emptyHudState(),
-  );
-  const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(() =>
-    !tauri && preview === "settings-hud-installed" ? PREVIEW_HUD_SCHEMA : null,
-  );
-  const [hudCatalogLoading, setHudCatalogLoading] = useState(tauri);
+  const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
+  const [hudState, setHudState] = useState<HudUiState>(emptyHudState);
+  const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(null);
+  const [hudCatalogLoading, setHudCatalogLoading] = useState(true);
   const [hudCatalogError, setHudCatalogError] = useState<string | null>(null);
   const [stockSprites, setStockSprites] = useState<Record<string, StockCrosshairSprite> | null>(
     null,
@@ -209,12 +114,8 @@ export function SettingsHost({
   const [packPreviews, setPackPreviews] = useState<Record<string, StockCrosshairSprite> | null>(
     null,
   );
-  const [modsPayload, setModsPayload] = useState<PreloaderStatusPayload | null>(() =>
-    tauri ? null : PREVIEW_MODS_STATUS,
-  );
-  const [modsCatalog, setModsCatalog] = useState<ModsCatalog | null>(() =>
-    tauri ? null : PREVIEW_MODS_CATALOG,
-  );
+  const [modsPayload, setModsPayload] = useState<PreloaderStatusPayload | null>(null);
+  const [modsCatalog, setModsCatalog] = useState<ModsCatalog | null>(null);
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [settingsBusyQueue] = useState(
@@ -244,9 +145,6 @@ export function SettingsHost({
   const maps = useMemo(() => mapsFromFiles(files), [files]);
 
   async function reload(opts?: { syncBinds?: boolean }) {
-    if (!tauri) {
-      return;
-    }
     // Every profile file is a separate IPC round trip, so a switch can easily
     // start a second reload that finishes first. Without this token the slower
     // (older) load writes the previous profile's files into state — and the
@@ -254,7 +152,7 @@ export function SettingsHost({
     const request = ++loadRequest.current;
     const stale = () => request !== loadRequest.current;
 
-    const next = await getActiveProfileDetail();
+    const next = await api.getActiveProfileDetail();
     if (stale()) {
       return;
     }
@@ -266,7 +164,7 @@ export function SettingsHost({
       // its stale value and every pane would reseed from its defaults, which
       // reads to the user as "my settings reverted".
       try {
-        const content = await readProfileFile(file.path);
+        const content = await api.readProfileFile(file.path);
         if (stale()) {
           return;
         }
@@ -284,7 +182,7 @@ export function SettingsHost({
       const managed = nextFiles.find((file) => file.path === bindsPath)?.text ?? "";
       const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
       if (synced !== managed) {
-        await writeOwnedFile(bindsPath, synced);
+        await api.writeOwnedFile(bindsPath, synced);
         if (stale()) {
           return;
         }
@@ -292,14 +190,18 @@ export function SettingsHost({
       }
     }
     setFiles(nextFiles);
-    const state = await getComfigState();
+    const state = await api.getComfigState();
     if (stale()) {
       return;
     }
     // A vanilla-layer profile returns null: clear the pane rather than leaving
     // the previous profile's preset and addons on screen.
-    setComfig(state ? comfigPreviewFromState(state) : defaultComfigState());
-    const nextLaunch = next?.launchOptions || (await getProfileLaunchOptions());
+    setComfig(
+      state
+        ? { preset: state.preset, modules: state.modules, addons: state.addons }
+        : defaultComfigState(),
+    );
+    const nextLaunch = next?.launchOptions || (await api.getProfileLaunchOptions());
     if (stale()) {
       return;
     }
@@ -307,9 +209,6 @@ export function SettingsHost({
   }
 
   async function reloadHud(refresh: boolean, showCatalogProgress = false) {
-    if (!tauri) {
-      return;
-    }
     const request = ++hudRequest.current;
     if (showCatalogProgress) {
       setHudCatalogLoading(true);
@@ -317,19 +216,19 @@ export function SettingsHost({
     }
     return hudReloadQueue.current.enqueue(async () => {
       try {
-        const nextCatalog = await getHudCatalog(refresh);
+        const nextCatalog = await api.getHudCatalog(refresh);
         if (request !== hudRequest.current) {
           return;
         }
         setHudCatalogError(null);
-        const nextState = await getHudState();
+        const nextState = await api.getHudState();
         if (request !== hudRequest.current) {
           return;
         }
         setHudCatalog(nextCatalog);
         setHudState(nextState);
         if (nextState.schemaSupported) {
-          const nextSchema = await getHudSchema();
+          const nextSchema = await api.getHudSchema();
           if (request === hudRequest.current) {
             setHudSchema(nextSchema);
           }
@@ -353,7 +252,7 @@ export function SettingsHost({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refresh exactly when the profile/TF2 state key changes.
   useEffect(() => {
-    if (!tauri || externalBusy) {
+    if (externalBusy) {
       return;
     }
     let cancelled = false;
@@ -385,12 +284,11 @@ export function SettingsHost({
     };
     // Ordinary mounts and profile refreshes only reload. A bind sync request is
     // issued after absorb confirms that config.cfg actually drifted.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tauri, refreshKey, bindSyncRequest, running, externalBusy]);
+  }, [refreshKey, bindSyncRequest, running, externalBusy]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload the catalog only on HUD entry or an external refresh.
   useEffect(() => {
-    if (!tauri || tab !== "hud" || externalBusy) {
+    if (tab !== "hud" || externalBusy) {
       return;
     }
     let cancelled = false;
@@ -410,32 +308,44 @@ export function SettingsHost({
       hudRequest.current += 1;
       setHudCatalogLoading(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tauri, tab, refreshKey, externalBusy]);
+  }, [tab, refreshKey, externalBusy]);
 
-  // Decode Valve's stock crosshair sprites once, on first Crosshair visit —
-  // pixel-perfect previews straight from the user's own game files.
+  // Decode Valve's stock crosshair sprites on the first Crosshair visit —
+  // pixel-perfect previews straight from the user's own game files. A failure
+  // releases the one-shot so the next visit retries instead of leaving the
+  // fallback geometry in place for the rest of the session.
   useEffect(() => {
-    if (!tauri || tab !== "crosshair" || stockSpritesRequested.current) {
+    if (tab !== "crosshair" || stockSpritesRequested.current) {
       return;
     }
     stockSpritesRequested.current = true;
-    getStockCrosshairSprites()
-      .then(setStockSprites)
+    let cancelled = false;
+    api
+      .getStockCrosshairSprites()
+      .then((sprites) => {
+        if (!cancelled) {
+          setStockSprites(sprites);
+        }
+      })
       .catch(() => {
+        stockSpritesRequested.current = false;
         /* geometry fallback stays in place */
       });
-  }, [tauri, tab]);
+    return () => {
+      cancelled = true;
+    };
+  }, [api, tab]);
 
   // Previews for library crosshairs stored in the installed pack.
   const crosshairLibraryKey = JSON.stringify(detail?.crosshair?.library ?? null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by library content.
   useEffect(() => {
-    if (!tauri || tab !== "crosshair" || !detail?.crosshair?.library) {
+    if (tab !== "crosshair" || !detail?.crosshair?.library) {
       return;
     }
     let cancelled = false;
-    getPackCrosshairPreviews()
+    api
+      .getPackCrosshairPreviews()
       .then((previews) => {
         if (!cancelled) {
           setPackPreviews(previews);
@@ -447,7 +357,7 @@ export function SettingsHost({
     return () => {
       cancelled = true;
     };
-  }, [tauri, tab, crosshairLibraryKey]);
+  }, [api, tab, crosshairLibraryKey]);
 
   async function runWrite(work: () => Promise<void>) {
     // The queue already serializes settings work — refusing a second write
@@ -473,11 +383,12 @@ export function SettingsHost({
   // profile detail, so the Mods tab loads it separately.
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-arms the load; onError is a stable callback.
   useEffect(() => {
-    if (!tauri || tab !== "mods") {
+    if (tab !== "mods") {
       return;
     }
     let cancelled = false;
-    getPreloaderStatus()
+    api
+      .getPreloaderStatus()
       .then((payload) => {
         if (cancelled) {
           return;
@@ -485,7 +396,8 @@ export function SettingsHost({
         setModsPayload(payload);
         if (payload.modsCached) {
           setModsLoading(true);
-          getDefaultMods()
+          api
+            .getDefaultMods()
             .then((mods) => {
               if (!cancelled) {
                 setModsCatalog(mods.catalog);
@@ -511,10 +423,10 @@ export function SettingsHost({
     return () => {
       cancelled = true;
     };
-  }, [tauri, tab, refreshKey]);
+  }, [api, tab, refreshKey]);
 
   async function refreshModsStatus() {
-    setModsPayload(await getPreloaderStatus());
+    setModsPayload(await api.getPreloaderStatus());
   }
 
   async function writeManaged(
@@ -522,7 +434,7 @@ export function SettingsHost({
     text: string,
     stem: typeof EXECS_BINDS_STEM | typeof EXECS_GAMEPLAY_STEM,
   ) {
-    await writeOwnedFile(path, text);
+    await api.writeOwnedFile(path, text);
     const autoPath = autoexecFilePath(layer);
     const existing = files.find((file) => file.path === autoPath)?.text ?? "";
     // autoexec.cfg is written whole, so it has to carry every managed stem we
@@ -539,409 +451,280 @@ export function SettingsHost({
       }
     }
     if (next !== existing) {
-      await writeOwnedFile(autoPath, next);
+      await api.writeOwnedFile(autoPath, next);
     }
   }
 
-  if (tab === "comfig") {
-    return (
-      <ComfigPane
-        running={running}
-        busy={busy}
-        detail={detail}
-        preview={!tauri}
-        previewState={comfig}
-        onApplyPreset={(preset) => {
-          if (!tauri) {
-            setComfig({ ...comfig, preset });
-            return;
-          }
-          void runWrite(async () => {
-            await setComfigPreset(preset);
-          });
-        }}
-        onApplyModules={(modules) => {
-          if (!tauri) {
-            setComfig({ ...comfig, modules });
-            return;
-          }
-          void runWrite(async () => {
-            await setComfigModules(modules);
-          });
-        }}
-        onToggleAddon={(id) => {
-          const addons = toggleComfigAddon(comfig.addons, id);
-          if (!tauri) {
-            setComfig({ ...comfig, addons });
-            return;
-          }
-          void runWrite(async () => {
-            await setComfigAddons(addons);
-          });
-        }}
-        onUpdatePackages={() => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await updateComfigVpks();
-          });
-        }}
-        onImportCustom={() => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await importComfigCustom();
-          });
-        }}
-      />
-    );
-  }
-
-  if (tab === "binds") {
-    const path = bindsFilePath(layer);
-    return (
-      <BindsPane
-        running={running}
-        busy={busy}
-        layer={layer}
-        effectiveBinds={tauri ? maps.binds : PREVIEW_BINDS}
-        managedText={files.find((file) => file.path === path)?.text ?? ""}
-        onSave={(bindsText) => {
-          if (!tauri) {
-            setFiles((current) => upsertFile(current, path, bindsText));
-            return;
-          }
-          void runWrite(async () => {
-            await writeManaged(path, bindsText, EXECS_BINDS_STEM);
-          });
-        }}
-      />
-    );
-  }
-
-  if (tab === "gameplay") {
-    const path = gameplayPath(layer);
-    const canUseComfigAddons =
-      layer === "comfig" &&
-      (tauri ? detail !== null && hasBaseVpk(detail.files.map((file) => file.path)) : true);
-    return (
-      <GameplayPane
-        running={running}
-        busy={busy}
-        layer={layer}
-        effective={maps.effective}
-        managedText={files.find((file) => file.path === path)?.text ?? ""}
-        transparentViewmodels={comfig.addons.includes("transparent-viewmodels")}
-        canUseComfigAddons={canUseComfigAddons}
-        onToggleTransparentViewmodels={() => {
-          const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
-          if (!tauri) {
-            setComfig({ ...comfig, addons });
-            return;
-          }
-          void runWrite(async () => {
-            await setComfigAddons(addons);
-          });
-        }}
-        onSave={(gameplayText) => {
-          if (!tauri) {
-            setFiles((current) => upsertFile(current, path, gameplayText));
-            return;
-          }
-          void runWrite(async () => {
-            await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
-          });
-        }}
-      />
-    );
-  }
-
-  if (tab === "hud") {
-    return (
-      <HudPane
-        running={running}
-        busy={busy}
-        catalogLoading={hudCatalogLoading}
-        catalogError={hudCatalogError}
-        catalog={hudCatalog}
-        state={hudState}
-        schema={hudSchema}
-        onRefresh={() => {
-          if (!tauri) {
-            setHudCatalog(PREVIEW_HUD_CATALOG);
-            return;
-          }
-          void reloadHud(true, true)
-            .then(() => onError(null))
-            .catch((err) => {
-              onError(err instanceof Error ? err.message : "Could not refresh the HUD catalog.");
+  function pane() {
+    if (tab === "comfig") {
+      return (
+        <ComfigPane
+          detail={detail}
+          state={comfig}
+          onApplyPreset={(preset) => {
+            void runWrite(async () => {
+              await api.setComfigPreset(preset);
             });
-        }}
-        onInstall={(id) => {
-          if (!tauri) {
-            const entry = hudCatalog.find((item) => item.id === id);
-            if (!entry?.github) {
-              return;
-            }
-            const supported = schemaSupportedIds().includes(id);
-            setHudState({
-              installed: {
-                id,
-                hash: entry.hash,
-                source: "hudDb",
-                options: {},
-              },
-              inferred: false,
-              schemaSupported: supported,
-              catalogHash: entry.hash,
-              updateAvailable: false,
+          }}
+          onApplyModules={(modules) => {
+            void runWrite(async () => {
+              await api.setComfigModules(modules);
             });
-            setHudSchema(supported ? PREVIEW_HUD_SCHEMA : null);
-            return;
-          }
-          void runWrite(async () => {
-            await installHud(id);
-            await reloadHud(false);
-          });
-        }}
-        onUpdate={() => {
-          if (!tauri) {
-            if (!hudState.installed || !hudState.catalogHash) {
-              return;
-            }
-            setHudState({
-              ...hudState,
-              installed: { ...hudState.installed, hash: hudState.catalogHash },
-              updateAvailable: false,
+          }}
+          onToggleAddon={(id) => {
+            const addons = toggleComfigAddon(comfig.addons, id);
+            void runWrite(async () => {
+              await api.setComfigAddons(addons);
             });
-            return;
-          }
-          void runWrite(async () => {
-            await updateHud();
-            await reloadHud(false);
-          });
-        }}
-        onMatch={(id) => {
-          if (!tauri) {
-            const entry = hudCatalog.find((item) => item.id === id);
-            setHudState({
-              installed: {
-                id,
-                hash: entry?.hash ?? null,
-                source: "hudDb",
-                options: hudState.installed?.options ?? {},
-              },
-              inferred: false,
-              schemaSupported: schemaSupportedIds().includes(id),
-              catalogHash: entry?.hash ?? null,
-              updateAvailable: false,
+          }}
+          onUpdatePackages={() => {
+            void runWrite(async () => {
+              await api.updateComfigVpks();
             });
-            return;
-          }
-          void runWrite(async () => {
-            await matchHudCatalog(id);
-            await reloadHud(false);
-          });
-        }}
-        onApplyOptions={(options) => {
-          if (!tauri) {
-            if (!hudState.installed) {
-              return;
-            }
-            setHudState({
-              ...hudState,
-              installed: { ...hudState.installed, options },
+          }}
+          onImportCustom={() => {
+            void runWrite(async () => {
+              await api.importComfigCustom();
             });
-            return;
-          }
-          void runWrite(async () => {
-            await applyHudOptions(options);
-            await reloadHud(false);
-          });
-        }}
-      />
-    );
-  }
+          }}
+        />
+      );
+    }
 
-  if (tab === "crosshair") {
-    const path = gameplayPath(layer);
-    const previewRecord =
-      !tauri && preview === "settings-crosshair" ? previewCrosshairRecord() : null;
-    return (
-      <CrosshairPane
-        running={running}
-        busy={busy}
-        record={detail?.crosshair ?? previewRecord}
-        layer={layer}
-        effective={maps.effective}
-        stockSprites={stockSprites}
-        packPreviews={packPreviews}
-        managedText={files.find((file) => file.path === path)?.text ?? ""}
-        onSaveStock={(gameplayText) => {
-          if (!tauri) {
-            setFiles((current) => upsertFile(current, path, gameplayText));
-            return;
-          }
-          void runWrite(async () => {
-            await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
-          });
-        }}
-        onApply={(shape, assignments, customRgba, color, library, design) => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await applyCrosshairs(shape, assignments, customRgba, color, library, design);
-          });
-        }}
-        onRemove={() => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await removeCrosshairs();
-          });
-        }}
-      />
-    );
-  }
+    if (tab === "binds") {
+      const path = bindsFilePath(layer);
+      return (
+        <BindsPane
+          layer={layer}
+          effectiveBinds={maps.binds}
+          managedText={files.find((file) => file.path === path)?.text ?? ""}
+          onSave={(bindsText) => {
+            void runWrite(async () => {
+              await writeManaged(path, bindsText, EXECS_BINDS_STEM);
+            });
+          }}
+        />
+      );
+    }
 
-  if (tab === "viewmodels") {
-    const previewRecord =
-      !tauri && preview === "settings-viewmodels" ? previewViewmodelRecord() : null;
-    return (
-      <ViewmodelPane
-        running={running}
-        busy={busy}
-        record={detail?.viewmodel ?? previewRecord}
-        onBuild={(hidden, preload, hideMode) => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await buildViewmodelPack(hidden, preload, hideMode);
-          });
-        }}
-        onImport={(preload) => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await importViewmodels(preload);
-          });
-        }}
-        onRemove={() => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await removeViewmodels();
-          });
-        }}
-        onTogglePreload={(enabled) => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            await setViewmodelPreload(enabled);
-          });
-        }}
-      />
-    );
-  }
+    if (tab === "gameplay") {
+      const path = gameplayPath(layer);
+      const canUseComfigAddons =
+        layer === "comfig" && detail !== null && hasBaseVpk(detail.files.map((file) => file.path));
+      return (
+        <GameplayPane
+          layer={layer}
+          effective={maps.effective}
+          managedText={files.find((file) => file.path === path)?.text ?? ""}
+          transparentViewmodels={comfig.addons.includes("transparent-viewmodels")}
+          canUseComfigAddons={canUseComfigAddons}
+          onToggleTransparentViewmodels={() => {
+            const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
+            void runWrite(async () => {
+              await api.setComfigAddons(addons);
+            });
+          }}
+          onSave={(gameplayText) => {
+            void runWrite(async () => {
+              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+            });
+          }}
+        />
+      );
+    }
 
-  if (tab === "mods") {
-    return (
-      <ModsPane
-        running={running}
-        busy={busy}
-        payload={modsPayload}
-        catalog={modsCatalog}
-        loading={modsLoading}
-        report={modsReport}
-        onDownloadLibrary={() => {
-          if (!tauri) {
-            return;
-          }
-          setModsLoading(true);
-          onError(null);
-          downloadDefaultMods()
-            .then((mods) => {
-              setModsCatalog(mods.catalog);
-              return refreshModsStatus();
-            })
-            .catch((err) => {
-              onError(err instanceof Error ? err.message : "Could not download the mod library.");
-            })
-            .finally(() => setModsLoading(false));
-        }}
-        onApply={(addons, particleMods) => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            try {
-              const report = await applyPreloaderMods(addons, particleMods);
-              setModsReport(report);
-            } finally {
-              // A failed apply still restored the previous install
-              // backend-side; the pane must reflect that, not the old state.
-              await refreshModsStatus().catch(() => {});
-            }
-          });
-        }}
-        onToggleBypass={(enabled) => {
-          if (!tauri) {
-            setModsPayload((current) =>
-              current
-                ? {
-                    ...current,
-                    status: { ...current.status, gameinfoBypassed: enabled },
-                  }
-                : current,
-            );
-            return;
-          }
-          void runWrite(async () => {
-            setModsPayload(await setGameinfoBypass(enabled));
-          });
-        }}
-        onRevert={() => {
-          if (!tauri) {
-            return;
-          }
-          void runWrite(async () => {
-            try {
-              await revertPreloader();
-              setModsReport(null);
-            } finally {
-              await refreshModsStatus().catch(() => {});
-            }
-          });
-        }}
-        onOpenRepo={() => {
-          void openExternal(PRELOADER_REPO_URL);
-        }}
-      />
-    );
-  }
+    if (tab === "hud") {
+      return (
+        <HudPane
+          running={running}
+          busy={busy}
+          catalogLoading={hudCatalogLoading}
+          catalogError={hudCatalogError}
+          catalog={hudCatalog}
+          state={hudState}
+          schema={hudSchema}
+          onRefresh={() => {
+            void reloadHud(true, true)
+              .then(() => onError(null))
+              .catch((err) => {
+                onError(err instanceof Error ? err.message : "Could not refresh the HUD catalog.");
+              });
+          }}
+          onInstall={(id) => {
+            void runWrite(async () => {
+              await api.installHud(id);
+              await reloadHud(false);
+            });
+          }}
+          onUpdate={() => {
+            void runWrite(async () => {
+              await api.updateHud();
+              await reloadHud(false);
+            });
+          }}
+          onMatch={(id) => {
+            void runWrite(async () => {
+              await api.matchHudCatalog(id);
+              await reloadHud(false);
+            });
+          }}
+          onApplyOptions={(options) => {
+            void runWrite(async () => {
+              await api.applyHudOptions(options);
+              await reloadHud(false);
+            });
+          }}
+        />
+      );
+    }
 
-  if (tab === "files") {
+    if (tab === "crosshair") {
+      const path = gameplayPath(layer);
+      return (
+        <CrosshairPane
+          running={running}
+          busy={busy}
+          record={detail?.crosshair ?? null}
+          layer={layer}
+          effective={maps.effective}
+          stockSprites={stockSprites}
+          packPreviews={packPreviews}
+          managedText={files.find((file) => file.path === path)?.text ?? ""}
+          onSaveStock={(gameplayText) => {
+            void runWrite(async () => {
+              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+            });
+          }}
+          onApply={(shape, assignments, customRgba, color, library, design) => {
+            void runWrite(async () => {
+              await api.applyCrosshairs(shape, assignments, customRgba, color, library, design);
+            });
+          }}
+          onRemove={() => {
+            void runWrite(async () => {
+              await api.removeCrosshairs();
+            });
+          }}
+        />
+      );
+    }
+
+    if (tab === "viewmodels") {
+      return (
+        <ViewmodelPane
+          running={running}
+          busy={busy}
+          record={detail?.viewmodel ?? null}
+          onBuild={(hidden, preload, hideMode) => {
+            void runWrite(async () => {
+              await api.buildViewmodelPack(hidden, preload, hideMode);
+            });
+          }}
+          onImport={(preload) => {
+            void runWrite(async () => {
+              await api.importViewmodels(preload);
+            });
+          }}
+          onRemove={() => {
+            void runWrite(async () => {
+              await api.removeViewmodels();
+            });
+          }}
+          onTogglePreload={(enabled) => {
+            void runWrite(async () => {
+              await api.setViewmodelPreload(enabled);
+            });
+          }}
+        />
+      );
+    }
+
+    if (tab === "mods") {
+      return (
+        <ModsPane
+          running={running}
+          busy={busy}
+          payload={modsPayload}
+          catalog={modsCatalog}
+          loading={modsLoading}
+          report={modsReport}
+          onDownloadLibrary={() => {
+            setModsLoading(true);
+            onError(null);
+            api
+              .downloadDefaultMods()
+              .then((mods) => {
+                setModsCatalog(mods.catalog);
+                return refreshModsStatus();
+              })
+              .catch((err) => {
+                onError(err instanceof Error ? err.message : "Could not download the mod library.");
+              })
+              .finally(() => setModsLoading(false));
+          }}
+          onApply={(addons, particleMods) => {
+            void runWrite(async () => {
+              try {
+                setModsReport(await api.applyPreloaderMods(addons, particleMods));
+              } finally {
+                // A failed apply still restored the previous install
+                // backend-side; the pane must reflect that, not the old state.
+                await refreshModsStatus().catch(() => {});
+              }
+            });
+          }}
+          onToggleBypass={(enabled) => {
+            void runWrite(async () => {
+              setModsPayload(await api.setGameinfoBypass(enabled));
+            });
+          }}
+          onRevert={() => {
+            void runWrite(async () => {
+              try {
+                await api.revertPreloader();
+                setModsReport(null);
+              } finally {
+                await refreshModsStatus().catch(() => {});
+              }
+            });
+          }}
+          onOpenRepo={() => {
+            void api.openExternal(PRELOADER_REPO_URL);
+          }}
+        />
+      );
+    }
+
+    if (tab === "files") {
+      return (
+        <FilesPane
+          files={files}
+          hudId={detail?.hud?.id ?? null}
+          onSave={(path, text) => {
+            void runWrite(async () => {
+              await api.writeOwnedFile(path, text);
+            });
+          }}
+        />
+      );
+    }
+
     return (
-      <FilesPane
-        running={running}
-        busy={busy}
-        files={files}
-        hudId={detail?.hud?.id ?? null}
-        onSave={(path, text) => {
-          if (!tauri) {
-            setFiles((current) => upsertFile(current, path, text));
-            return;
-          }
+      <LaunchPane
+        value={launch}
+        steamWrite={steamWrite}
+        lastSave={launchSaved}
+        onChange={(next) => {
+          setLaunch(next);
+          setLaunchSaved(null);
+        }}
+        onSave={() => {
+          const sent = launch;
           void runWrite(async () => {
-            await writeOwnedFile(path, text);
+            const result = await api.setProfileLaunchOptions(sent);
+            setLaunch(result.launchOptions);
+            setLaunchSaved({ sent, saved: result.launchOptions });
+            setSteamWrite(result.steamWrite);
           });
         }}
       />
@@ -949,23 +732,8 @@ export function SettingsHost({
   }
 
   return (
-    <LaunchPane
-      running={running}
-      busy={busy}
-      value={launch}
-      steamWrite={steamWrite}
-      onChange={setLaunch}
-      onSave={() => {
-        if (!tauri) {
-          setSteamWrite("steam_open");
-          return;
-        }
-        void runWrite(async () => {
-          const result = await setProfileLaunchOptions(launch);
-          setLaunch(result.launchOptions);
-          setSteamWrite(result.steamWrite);
-        });
-      }}
-    />
+    <AppStatusProvider value={{ error, setError: onError, busy, running }}>
+      {pane()}
+    </AppStatusProvider>
   );
 }
