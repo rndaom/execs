@@ -15,7 +15,7 @@ import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
 import type { Api } from "./lib/api";
 import { confirmEnabled } from "./lib/finder-ui";
-import { firstRunSurface } from "./lib/first-run-ui";
+import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
 import { previewSwitchStep } from "./lib/library-ui";
 import {
   type PreviewState,
@@ -33,7 +33,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [draftName, setDraftName] = useState("");
-  const [inheritBinds, setInheritBinds] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
     () => previewSettingsTab(preview) ?? "comfig",
   );
@@ -84,22 +83,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
 
   const creating = firstRun.creating;
 
-  const onToggleInherit = useCallback(
-    async (next: boolean) => {
-      const previous = inheritBinds;
-      setInheritBinds(next);
-      try {
-        setInheritBinds(await api.setInheritBinds(next));
-      } catch (err) {
-        // settings.json still holds the old value — the switch must not claim
-        // otherwise.
-        setInheritBinds(previous);
-        setError(err instanceof Error ? err.message : "Could not save that setting.");
-      }
-    },
-    [api, inheritBinds],
-  );
-
   const onSaveCurrent = useCallback(async () => {
     if (await profiles.saveCurrent(draftName)) {
       firstRun.clear();
@@ -148,9 +131,11 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             preset={firstRun.preset}
             addons={firstRun.addons}
             creating={isCreate}
+            startFrom={showStartFromChoice(profiles.library, isCreate) ? firstRun.startFrom : null}
             onDraftName={setDraftName}
             onPreset={firstRun.setPreset}
             onToggleAddon={firstRun.toggleAddon}
+            onStartFrom={firstRun.setStartFrom}
             onApply={() => void onApplyWizard()}
             onCancel={isCreate ? firstRun.cancelCreate : undefined}
           />
@@ -189,7 +174,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         profiles={profiles}
         progress={progress}
         draftName={draftName}
-        inheritBinds={inheritBinds}
         settings={
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout tab={settingsTab} running={lock.running} onTab={setSettingsTab}>
@@ -210,7 +194,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         onDraftName={setDraftName}
         onSave={() => void onSaveCurrent()}
         onCreateNew={firstRun.openCreate}
-        onToggleInherit={(next) => void onToggleInherit(next)}
         onChangeInstall={install.change}
       />
     );

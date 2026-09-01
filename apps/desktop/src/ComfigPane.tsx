@@ -22,45 +22,14 @@ import {
   COMFIG_MODULE_GROUPS,
   type ComfigModule,
   type ComfigModuleGroupId,
+  comfigPresetLabel,
+  FEATURED_PRESETS,
+  presetListExpanded,
+  visibleComfigPresets,
 } from "./lib/comfig-catalog";
 import { type ComfigUiState, hasBaseVpk, hasComfigCustom, setModuleLevel } from "./lib/comfig-ui";
-import { COMFIG_PRESETS, OFFICIAL_ADDONS } from "./lib/first-run-ui";
+import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { canWriteSettings } from "./lib/settings-ui";
-
-const PRESET_DETAILS: Record<ComfigPreset, { description: string; balance: string }> = {
-  ultra: {
-    description: "Maximum fidelity with the highest system requirements.",
-    balance: "Fidelity",
-  },
-  high: {
-    description: "High visual quality for modern systems.",
-    balance: "Quality",
-  },
-  medium_high: {
-    description: "Sharper visuals without the full performance cost.",
-    balance: "Balanced +",
-  },
-  medium: {
-    description: "A balanced mix of visual quality and performance.",
-    balance: "Balanced",
-  },
-  medium_low: {
-    description: "Performance-first settings with readable detail.",
-    balance: "Performance +",
-  },
-  low: {
-    description: "Maximum performance with reduced visual effects.",
-    balance: "Performance",
-  },
-  very_low: {
-    description: "Minimum visual cost for the highest frame rate.",
-    balance: "Maximum FPS",
-  },
-  none: {
-    description: "Skip preset tuning and configure modules yourself.",
-    balance: "Manual",
-  },
-};
 
 /** Real in-game screenshots per preset (koth_sawmill, staged identically),
  * from the mastercomfig comfig-app repo (MIT). */
@@ -86,7 +55,6 @@ const ADDON_DETAILS: Record<OfficialAddon, string> = {
 };
 
 const DEFAULT_VISIBLE_MODULES = 12;
-const FEATURED_PRESETS = new Set<ComfigPreset>(["ultra", "high", "medium", "low"]);
 
 function readableLevel(level: string): string {
   const spaced = level.replaceAll("_", " ");
@@ -185,12 +153,9 @@ export function ComfigPane({
   const paths = detail?.files.map((file) => file.path) ?? [];
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
-  const presetListExpanded = showAllPresets || !FEATURED_PRESETS.has(draft.preset);
-  const visiblePresets = presetListExpanded
-    ? COMFIG_PRESETS
-    : COMFIG_PRESETS.filter((item) => FEATURED_PRESETS.has(item.id));
-  const selectedPresetLabel =
-    COMFIG_PRESETS.find((item) => item.id === draft.preset)?.label ?? draft.preset;
+  const presetsExpanded = presetListExpanded(draft.preset, showAllPresets);
+  const visiblePresets = visibleComfigPresets(draft.preset, showAllPresets);
+  const selectedPresetLabel = comfigPresetLabel(draft.preset);
   const presetImage = draft.preset === "none" ? null : PRESET_IMAGES[draft.preset];
   const activeGroup =
     COMFIG_MODULE_GROUPS.find((group) => group.id === activeGroupId) ?? COMFIG_MODULE_GROUPS[0];
@@ -275,7 +240,7 @@ export function ComfigPane({
                 onClick={() => setShowAllPresets((current) => !current)}
                 className="btn btn-ghost text-xs"
               >
-                {showAllPresets ? "Show core presets" : "Show all presets"}
+                {presetsExpanded ? "Show core presets" : "Show all presets"}
               </button>
             ) : null}
             <button
@@ -294,7 +259,7 @@ export function ComfigPane({
           <div data-testid="comfig-preset" className="grid content-start gap-2 sm:grid-cols-2">
             {visiblePresets.map((item) => {
               const selected = draft.preset === item.id;
-              const details = PRESET_DETAILS[item.id];
+
               return (
                 <label key={item.id} className="group relative min-w-0 cursor-pointer">
                   <input
@@ -323,11 +288,11 @@ export function ComfigPane({
                             : "border border-edge-strong text-ink-faint"
                         }`}
                       >
-                        {selected ? "Selected" : details.balance}
+                        {selected ? "Selected" : item.balance}
                       </span>
                     </span>
                     <span className="mt-2 text-xs leading-5 text-ink-muted">
-                      {details.description}
+                      {item.description}
                     </span>
                   </span>
                 </label>

@@ -246,12 +246,6 @@ export function createPreviewApi(state: PreviewState): Api {
       emitSwitchSteps();
       return addProfile(spec.name, true);
     },
-    async getInheritBinds() {
-      return false;
-    },
-    async setInheritBinds(inherit: boolean) {
-      return inherit;
-    },
 
     // --- profile files ------------------------------------------------------
     async getActiveProfileDetail() {
