@@ -46,7 +46,10 @@ fn main() {
         for (rel, bytes) in &archive.files {
             if rel.to_ascii_lowercase().contains(&want) {
                 println!("--- {rel} ({} bytes)", bytes.len());
-                println!("{}", String::from_utf8_lossy(&bytes[..bytes.len().min(400)]));
+                println!(
+                    "{}",
+                    String::from_utf8_lossy(&bytes[..bytes.len().min(400)])
+                );
                 println!("--- hex: {:02x?}", &bytes[..bytes.len().min(48)]);
             }
         }

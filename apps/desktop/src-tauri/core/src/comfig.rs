@@ -702,9 +702,7 @@ mod tests {
         let root = tf2_root(dir);
         let profiles = dir.join("execs").join("profiles");
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         (profiles, root, id)
@@ -719,7 +717,10 @@ mod tests {
         );
         assert_eq!(parse_setup_hook(""), ComfigPreset::Medium);
         let modules = parse_modules_cfg("texture_quality=high\nshadows=off\n// skip\n");
-        assert_eq!(modules.get("texture_quality").map(String::as_str), Some("high"));
+        assert_eq!(
+            modules.get("texture_quality").map(String::as_str),
+            Some("high")
+        );
         assert_eq!(modules.get("shadows").map(String::as_str), Some("off"));
         assert_eq!(
             serialize_modules_cfg(&modules),
@@ -749,7 +750,10 @@ mod tests {
 
         let state = read_comfig_state_from(&profiles, &root, &id).unwrap();
         assert_eq!(state.preset, ComfigPreset::Medium);
-        assert_eq!(state.modules.get("texture_quality").map(String::as_str), Some("high"));
+        assert_eq!(
+            state.modules.get("texture_quality").map(String::as_str),
+            Some("high")
+        );
         let hook = exclusive_file_path(&profiles, &id, SETUP_HOOK);
         assert_eq!(
             fs::read_to_string(&hook).unwrap(),
@@ -785,7 +789,10 @@ mod tests {
             .map(|file| file.path)
             .collect();
         assert!(paths.contains(&rel));
-        assert_eq!(fs::read(root.join("tf/custom").join(addon.vpk_file_name())).unwrap(), b"addon-vpk");
+        assert_eq!(
+            fs::read(root.join("tf/custom").join(addon.vpk_file_name())).unwrap(),
+            b"addon-vpk"
+        );
 
         set_comfig_addons_to(&profiles, &root, &id, &[], &[], unlocked()).unwrap();
         let state = read_comfig_state_from(&profiles, &root, &id).unwrap();
@@ -829,7 +836,9 @@ mod tests {
             .map(|file| file.path)
             .collect();
         assert!(paths.contains(&rel.to_string()));
-        assert!(!paths.iter().any(|path| path.to_ascii_lowercase().contains("ds_store")));
+        assert!(!paths
+            .iter()
+            .any(|path| path.to_ascii_lowercase().contains("ds_store")));
         cleanup(&dir);
     }
 
@@ -837,30 +846,19 @@ mod tests {
     fn refuses_while_tf2_running() {
         let dir = test_temp_dir();
         let (profiles, root, id) = fresh_profile(&dir);
-        let err = write_comfig_preset_to(
-            &profiles,
-            &root,
-            &id,
-            ComfigPreset::High,
-            [tf2_name()],
-        )
-        .unwrap_err();
+        let err = write_comfig_preset_to(&profiles, &root, &id, ComfigPreset::High, [tf2_name()])
+            .unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
 
         let source = dir.join("comfig-custom");
         write_file(&source.join("note.txt"), "x\n");
-        let err = import_comfig_custom_to(&profiles, &root, &id, &source, [tf2_name()]).unwrap_err();
+        let err =
+            import_comfig_custom_to(&profiles, &root, &id, &source, [tf2_name()]).unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
 
-        let err = apply_official_vpk_bytes_to(
-            &profiles,
-            &root,
-            &id,
-            BASE_VPK,
-            b"base",
-            [tf2_name()],
-        )
-        .unwrap_err();
+        let err =
+            apply_official_vpk_bytes_to(&profiles, &root, &id, BASE_VPK, b"base", [tf2_name()])
+                .unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
         cleanup(&dir);
     }

@@ -143,6 +143,7 @@ pub fn install_built_viewmodel_pack(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn import_viewmodel_vpk_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -171,6 +172,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn import_viewmodel_vpk_to_with_launch<I, J, S, T>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -424,6 +426,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn set_viewmodel_preload_to_with_launch<I, J, S, T>(
     profiles_dir: &Path,
     data_dir: &Path,
@@ -702,7 +705,8 @@ mod tests {
     fn enabling_preload_without_viewmodels_is_side_effect_free() {
         let (root, profiles, tf2, id) = setup();
         let before = load_manifest(&profiles, &id).unwrap();
-        let err = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, true, unlocked()).unwrap_err();
+        let err = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, true, unlocked())
+            .unwrap_err();
         assert!(err.message().contains("Import or build"));
         let after = load_manifest(&profiles, &id).unwrap();
         assert_eq!(after.launch_options, before.launch_options);
@@ -729,7 +733,9 @@ mod tests {
         )
         .unwrap();
 
-        let detail = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, false, unlocked()).unwrap();
+        let detail =
+            set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, false, unlocked())
+                .unwrap();
         assert!(!detail.viewmodel.as_ref().unwrap().preload);
         assert!(!detail.launch_options.contains("execs_preload"));
         assert!(!tf2.join("tf/cfg/execs_preload.cfg").exists());
@@ -821,7 +827,8 @@ mod tests {
         std::fs::write(&live_vpk, b"user drift").unwrap();
         std::fs::write(&live_preload, b"user drift\n").unwrap();
 
-        let detail = remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &id, unlocked()).unwrap();
+        let detail =
+            remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &id, unlocked()).unwrap();
         assert_eq!(std::fs::read(live_vpk).unwrap(), b"user drift");
         assert_eq!(std::fs::read(live_preload).unwrap(), b"user drift\n");
         assert!(detail.viewmodel.is_none());
@@ -868,7 +875,10 @@ mod tests {
 
         let detail = remove_viewmodels_to(&profiles, &data, &tf2, &id, unlocked()).unwrap();
         assert!(detail.viewmodel.is_none());
-        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists(), "pack still removed");
+        assert!(
+            !tf2.join(EXECS_VIEWMODELS_VPK).exists(),
+            "pack still removed"
+        );
         // The shared cfg, its manifest entry, and the launch token all survive.
         assert!(live_preload.is_file(), "shared preload cfg must survive");
         assert!(detail.launch_options.contains("execs_preload"));

@@ -9,16 +9,16 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
 use crate::finder::user_path_string;
 use crate::hash::sha256_hex;
 use crate::launch::sanitize_launch_options;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
-use crate::apply::is_file_safe_rel_path;
 use crate::profile::{
     create_profile_record_to, exclusive_file_path, is_shared_rel_path, load_library_from,
     load_manifest, manifest_file, normalize_rel_path, profiles_dir, put_profile_files_to,
-    remove_profile_record_to, FileSource, FileStorage, ProfileError, CrosshairRecord, HudRecord,
+    remove_profile_record_to, CrosshairRecord, FileSource, FileStorage, HudRecord, ProfileError,
     ProfileFile, ProfileLibrary, ProfileManifest, ViewmodelRecord,
 };
 
@@ -493,10 +493,7 @@ fn is_zip_file_name(path: &str) -> bool {
 }
 
 fn is_sha256_hex(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F'))
+    value.len() == 64 && value.bytes().all(|byte: u8| byte.is_ascii_hexdigit())
 }
 
 fn invalid_zip(message: impl Into<String>) -> ProfileError {
@@ -726,7 +723,11 @@ mod tests {
             let mut json: serde_json::Value =
                 serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
             json["tf2Root"] = serde_json::Value::String(legacy.clone());
-            fs::write(&path, format!("{}\n", serde_json::to_string_pretty(&json).unwrap())).unwrap();
+            fs::write(
+                &path,
+                format!("{}\n", serde_json::to_string_pretty(&json).unwrap()),
+            )
+            .unwrap();
         }
         let index_before = fs::read(index_file(&profiles)).unwrap();
         let manifest_before = fs::read(manifest_file(&profiles, &id)).unwrap();
@@ -739,7 +740,10 @@ mod tests {
             Some(root.to_string_lossy().as_ref())
         );
         assert_eq!(fs::read(index_file(&profiles)).unwrap(), index_before);
-        assert_eq!(fs::read(manifest_file(&profiles, &id)).unwrap(), manifest_before);
+        assert_eq!(
+            fs::read(manifest_file(&profiles, &id)).unwrap(),
+            manifest_before
+        );
         cleanup(&dir);
     }
 

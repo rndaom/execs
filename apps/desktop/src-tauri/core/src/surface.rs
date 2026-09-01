@@ -537,7 +537,7 @@ fn is_user_cfg(name: &str) -> bool {
 }
 
 fn is_stock_cfg(lower_name: &str) -> bool {
-    if STOCK_CFG.iter().any(|item| *item == lower_name) {
+    if STOCK_CFG.contains(&lower_name) {
         return true;
     }
     (lower_name.starts_with("chapter") && lower_name.ends_with(".cfg"))
@@ -621,7 +621,10 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         write_file(&root.join("tf/cfg/config.cfg"), "unbindall\n");
         write_file(&root.join("tf/custom/execs-preloader.vpk"), "global\n");
-        write_file(&root.join("tf/custom/execs-preloader.vpk.sound.cache"), "x\n");
+        write_file(
+            &root.join("tf/custom/execs-preloader.vpk.sound.cache"),
+            "x\n",
+        );
         // Profile-owned packs must still be collected.
         write_file(&root.join("tf/custom/execs-viewmodels.vpk"), "owned\n");
         write_file(&root.join("tf/custom/myhud/info.vdf"), "hud\n");
@@ -633,11 +636,9 @@ mod tests {
         assert!(taken.contains(&"tf/custom/myhud/info.vdf"));
         // Deliberate, not a reported problem. (Its `.sound.cache` sibling is
         // listed as junk like every other one — that part is expected.)
-        assert!(!inventory
-            .skipped
-            .iter()
-            .any(|rel| rel.starts_with("tf/custom/execs-preloader.vpk")
-                && !rel.ends_with(".cache")));
+        assert!(!inventory.skipped.iter().any(|rel| rel
+            .starts_with("tf/custom/execs-preloader.vpk")
+            && !rel.ends_with(".cache")));
         cleanup(&dir);
     }
 
