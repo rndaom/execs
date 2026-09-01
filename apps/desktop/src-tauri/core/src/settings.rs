@@ -151,6 +151,19 @@ mod tests {
         file.write_all(b"appID=440\n").unwrap();
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn data_dir_refuses_an_unset_appdata() {
+        // The old fallback silently built `./AppData/execs` next to whatever
+        // the process CWD happened to be — a second, invisible profile library.
+        assert!(data_dir_from_appdata(None).is_err());
+        assert!(data_dir_from_appdata(Some(std::ffi::OsString::new())).is_err());
+        assert_eq!(
+            data_dir_from_appdata(Some(std::ffi::OsString::from(r"D:\Roaming"))).unwrap(),
+            PathBuf::from(r"D:\Roaming").join("execs")
+        );
+    }
+
     #[test]
     fn round_trip_and_reject_stale_root() {
         let dir = crate::test_temp_dir();
