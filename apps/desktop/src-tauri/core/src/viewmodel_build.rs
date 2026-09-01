@@ -89,6 +89,23 @@ pub fn hide_smd_sequence(text: &str, mode: ViewmodelHideMode) -> Result<String, 
 /// Faithful to CompVMInstaller's EditFile: keep everything before `skeleton`,
 /// emit frame 0 with all bones at (-100,-100,-100) rot 0, then empty frames so
 /// the original frame count (and therefore timing/anim events) is preserved.
+/// Byte offset of `lines[index]` within `text`. `str::lines` drops the line
+/// terminators, so the offsets have to be accumulated rather than searched for.
+fn line_offset(text: &str, lines: &[&str], index: usize) -> usize {
+    let mut offset = 0usize;
+    for line in lines.iter().take(index) {
+        offset += line.len();
+        // Re-add whatever terminator followed this line.
+        let rest = &text[offset..];
+        if let Some(stripped) = rest.strip_prefix("\r\n") {
+            offset += rest.len() - stripped.len();
+        } else if rest.starts_with('\n') {
+            offset += 1;
+        }
+    }
+    offset
+}
+
 fn hide_all_bones(text: &str) -> Result<String, String> {
     let lines: Vec<&str> = text.lines().collect();
     let nodes = section(&lines, "nodes").ok_or("SMD has no nodes section.")?;
@@ -102,9 +119,11 @@ fn hide_all_bones(text: &str) -> Result<String, String> {
         .filter(|line| line.trim_start().starts_with("time "))
         .count()
         .max(1);
-    let cut = text
-        .find("skeleton")
-        .ok_or("SMD has no skeleton keyword.")?;
+    // Cut at the byte offset of the `skeleton` line we actually located. A
+    // bone named `*skeleton*` or a header comment containing the word would
+    // otherwise truncate the nodes section and produce an SMD studiomdl
+    // rejects.
+    let cut = line_offset(text, &lines, skeleton);
     let mut out = String::with_capacity(cut + bones * 32 + frames * 10 + 16);
     out.push_str(&text[..cut]);
     out.push_str("skeleton\n  time 0\n");
@@ -439,6 +458,22 @@ fn build_in_staging(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `text.find("skeleton")` used to cut at the first literal occurrence of
+    /// the word, so a bone whose name contains it truncated the nodes section
+    /// and produced an SMD studiomdl rejects.
+    #[test]
+    fn hide_all_bones_cuts_at_the_located_line_not_the_first_word() {
+        let smd = "version 1\nnodes\n  0 \"skeleton_root\" -1\n  1 \"bip_hand_R\" 0\nend\n\
+                   skeleton\n  time 0\n    0 1 2 3 4 5 6\n    1 1 2 3 4 5 6\nend\n";
+        let out = hide_all_bones(smd).unwrap();
+        // The nodes section survives intact.
+        assert!(out.contains("\"skeleton_root\""), "{out}");
+        assert!(out.contains("\"bip_hand_R\""), "{out}");
+        // Both bones are parked off-screen, and only once each.
+        assert_eq!(out.matches("-100 -100 -100").count(), 2, "{out}");
+        assert!(out.trim_end().ends_with("end"), "{out}");
+    }
 
     /// A Linux user must never be told to go find `studiomdl.exe`, and a
     /// failed build must not leave its staging tree on disk.

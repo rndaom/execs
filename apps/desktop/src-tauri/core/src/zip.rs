@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
@@ -12,18 +12,31 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
 use crate::finder::user_path_string;
-use crate::hash::sha256_hex;
+use crate::hash::sha256_file;
 use crate::launch::sanitize_launch_options;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     create_profile_record_to, exclusive_file_path, is_shared_rel_path, load_library_from,
-    load_manifest, manifest_file, normalize_rel_path, profiles_dir, put_profile_files_to,
+    load_manifest, normalize_rel_path, profiles_dir, put_profile_files_to,
     remove_profile_record_to, CrosshairRecord, FileSource, FileStorage, HudRecord, ProfileError,
     ProfileFile, ProfileLibrary, ProfileManifest, ViewmodelRecord,
 };
 
 pub const ZIP_SCHEMA: u32 = 1;
 pub const ZIP_MANIFEST_NAME: &str = "execs-profile.json";
+
+/// Import ceilings. A profile zip is a mastercomfig layer plus a HUD plus
+/// skins; anything past these is a deflate bomb or a mistake, and reading it
+/// used to OOM-kill the app before a single byte was validated.
+const MAX_TOTAL_UNCOMPRESSED: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_ENTRY_UNCOMPRESSED: u64 = 1024 * 1024 * 1024;
+/// Real game content does not deflate anywhere near this well.
+const MAX_COMPRESSION_RATIO: u64 = 200;
+/// The manifest is the one entry we keep in memory.
+const MAX_MANIFEST_BYTES: u64 = 32 * 1024 * 1024;
+/// Streamed entries land here, next to the library, and are removed on the way
+/// out whether the import succeeded or not.
+const IMPORT_STAGING_DIR: &str = ".import-staging";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,10 +58,33 @@ struct ProfileZipManifest {
     viewmodel: Option<ViewmodelRecord>,
 }
 
+/// Entries are streamed to `staging` rather than held in RAM: a 200 MB profile
+/// (mastercomfig + a HUD + skins is normal) used to need ~400 MB resident, and
+/// a crafted archive needed as much as it liked.
 struct ZipPayload {
     manifest: ProfileZipManifest,
-    exclusive: HashMap<String, Vec<u8>>,
-    blobs: HashMap<String, Vec<u8>>,
+    exclusive: HashMap<String, PathBuf>,
+    blobs: HashMap<String, PathBuf>,
+}
+
+/// Removes the staging tree when the import returns, however it returns.
+struct StagingDir {
+    path: PathBuf,
+}
+
+impl StagingDir {
+    fn create(profiles_dir: &Path) -> Result<Self, ProfileError> {
+        let path = profiles_dir.join(IMPORT_STAGING_DIR);
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).map_err(io_err)?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for StagingDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
 }
 
 enum ZipRole {
@@ -62,13 +98,7 @@ pub fn export_profile(
     profile_id: &str,
     zip_path: &Path,
 ) -> Result<(), ProfileError> {
-    export_profile_to(
-        &profiles_dir(),
-        tf2_root,
-        profile_id,
-        zip_path,
-        live_process_names(),
-    )
+    export_profile_to(&profiles_dir(), tf2_root, profile_id, zip_path)
 }
 
 pub fn import_profile(tf2_root: &Path, zip_path: &Path) -> Result<ProfileLibrary, ProfileError> {
@@ -93,20 +123,14 @@ pub fn safe_zip_file_name(name: &str) -> String {
     }
 }
 
-/// Copy a library profile into a versioned zip. Does not write live TF2.
-/// `running_names` is accepted for API symmetry; export is not a library mutation.
-pub fn export_profile_to<I, S>(
+/// Copy a library profile into a versioned zip. Does not write live TF2, and
+/// does not mutate the library, so it takes no write lock.
+pub fn export_profile_to(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     zip_path: &Path,
-    running_names: I,
-) -> Result<(), ProfileError>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let _running_names = running_names;
+) -> Result<(), ProfileError> {
     let library = require_usable_library(profiles_dir, tf2_root)?;
     if !library
         .profiles
@@ -123,6 +147,24 @@ where
             Err(err)
         }
     }
+}
+
+/// Compatibility shim for the pre-Phase-2 signature. Export never took the
+/// write lock; the list was discarded.
+#[deprecated(note = "export is not a mutation; call export_profile_to without running_names")]
+pub fn export_profile_to_with_lock<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    zip_path: &Path,
+    running_names: I,
+) -> Result<(), ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let _running_names = running_names;
+    export_profile_to(profiles_dir, tf2_root, profile_id, zip_path)
 }
 
 /// Import a versioned zip as a new library profile. Does not set `activeProfileId`
@@ -148,7 +190,8 @@ where
         return Err(root_mismatch(&existing, tf2_root));
     }
 
-    let payload = read_profile_zip(zip_path)?;
+    let staging = StagingDir::create(profiles_dir)?;
+    let payload = read_profile_zip(zip_path, &staging.path)?;
     validate_payload(&payload)?;
 
     let library =
@@ -205,27 +248,21 @@ fn write_profile_zip(
     for entry in &manifest.files {
         match entry.storage {
             FileStorage::Exclusive => {
-                let bytes = read_hashed_file(
-                    &exclusive_file_path(profiles_dir, profile_id, &entry.path),
-                    &entry.sha256,
-                    &entry.path,
-                )?;
+                let source = exclusive_file_path(profiles_dir, profile_id, &entry.path);
+                verify_hash(&source, &entry.sha256, &entry.path)?;
                 zip.start_file(format!("files/{}", entry.path), options)
                     .map_err(zip_io)?;
-                zip.write_all(&bytes).map_err(io_err)?;
+                copy_into_zip(&source, &mut zip)?;
             }
             FileStorage::Shared => {
                 if !written_blobs.insert(entry.sha256.clone()) {
                     continue;
                 }
-                let bytes = read_hashed_file(
-                    &blob_path(profiles_dir, &entry.sha256),
-                    &entry.sha256,
-                    &entry.path,
-                )?;
+                let source = blob_path(profiles_dir, &entry.sha256);
+                verify_hash(&source, &entry.sha256, &entry.path)?;
                 zip.start_file(format!("blobs/{}", entry.sha256), options)
                     .map_err(zip_io)?;
-                zip.write_all(&bytes).map_err(io_err)?;
+                copy_into_zip(&source, &mut zip)?;
             }
         }
     }
@@ -234,13 +271,14 @@ fn write_profile_zip(
     Ok(())
 }
 
-fn read_profile_zip(zip_path: &Path) -> Result<ZipPayload, ProfileError> {
+fn read_profile_zip(zip_path: &Path, staging: &Path) -> Result<ZipPayload, ProfileError> {
     let file = fs::File::open(zip_path).map_err(io_err)?;
     let mut archive = ZipArchive::new(file).map_err(zip_invalid)?;
 
     let mut manifest = None;
     let mut exclusive = HashMap::new();
     let mut blobs = HashMap::new();
+    let mut total: u64 = 0;
 
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(zip_invalid)?;
@@ -252,13 +290,23 @@ fn read_profile_zip(zip_path: &Path) -> Result<ZipPayload, ProfileError> {
         let Some(role) = classify_zip_entry(&raw_name)? else {
             continue;
         };
-        let mut bytes = Vec::new();
-        entry.read_to_end(&mut bytes).map_err(io_err)?;
+        check_entry_budget(entry.size(), entry.compressed_size(), &raw_name, total)?;
+
         match role {
             ZipRole::Manifest => {
                 if manifest.is_some() {
                     return Err(invalid_zip("duplicate execs-profile.json"));
                 }
+                if entry.size() > MAX_MANIFEST_BYTES {
+                    return Err(invalid_zip("execs-profile.json is implausibly large"));
+                }
+                let mut bytes = Vec::new();
+                entry
+                    .by_ref()
+                    .take(MAX_MANIFEST_BYTES + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(io_err)?;
+                total += bytes.len() as u64;
                 let parsed: ProfileZipManifest =
                     serde_json::from_slice(&bytes).map_err(zip_invalid)?;
                 if parsed.schema != ZIP_SCHEMA {
@@ -267,15 +315,21 @@ fn read_profile_zip(zip_path: &Path) -> Result<ZipPayload, ProfileError> {
                 manifest = Some(parsed);
             }
             ZipRole::Exclusive(dest) => {
-                if exclusive.insert(dest.clone(), bytes).is_some() {
+                let staged = staging.join(format!("e{index}"));
+                let written = stream_entry(&mut entry, &staged, &raw_name, total)?;
+                total += written;
+                if exclusive.insert(dest.clone(), staged).is_some() {
                     return Err(invalid_zip(format!("duplicate file: {dest}")));
                 }
             }
             ZipRole::Blob(hash) => {
-                if sha256_hex(&bytes) != hash {
+                let staged = staging.join(format!("b{index}"));
+                let written = stream_entry(&mut entry, &staged, &raw_name, total)?;
+                total += written;
+                if sha256_file(&staged).map_err(io_err)? != hash {
                     return Err(invalid_zip("blob hash mismatch"));
                 }
-                if blobs.insert(hash.clone(), bytes).is_some() {
+                if blobs.insert(hash.clone(), staged).is_some() {
                     return Err(invalid_zip(format!("duplicate blob: {hash}")));
                 }
             }
@@ -288,6 +342,54 @@ fn read_profile_zip(zip_path: &Path) -> Result<ZipPayload, ProfileError> {
         exclusive,
         blobs,
     })
+}
+
+/// Refuse an entry on its declared size and compression ratio, before a byte of
+/// it is decompressed.
+fn check_entry_budget(
+    size: u64,
+    compressed: u64,
+    name: &str,
+    total_so_far: u64,
+) -> Result<(), ProfileError> {
+    if size > MAX_ENTRY_UNCOMPRESSED {
+        return Err(invalid_zip(format!("{name} is larger than 1 GiB")));
+    }
+    if total_so_far.saturating_add(size) > MAX_TOTAL_UNCOMPRESSED {
+        return Err(invalid_zip("this profile zip unpacks to more than 2 GiB"));
+    }
+    if compressed > 0 && size / compressed.max(1) > MAX_COMPRESSION_RATIO {
+        return Err(invalid_zip(format!(
+            "{name} decompresses more than {MAX_COMPRESSION_RATIO}x; refusing to unpack it"
+        )));
+    }
+    Ok(())
+}
+
+/// Copy one entry to `dest`, stopping if the stream turns out to be longer than
+/// its header claimed.
+fn stream_entry(
+    entry: &mut impl Read,
+    dest: &Path,
+    name: &str,
+    total_so_far: u64,
+) -> Result<u64, ProfileError> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(io_err)?;
+    }
+    let remaining = MAX_TOTAL_UNCOMPRESSED
+        .saturating_sub(total_so_far)
+        .min(MAX_ENTRY_UNCOMPRESSED);
+    let mut out = fs::File::create(dest).map_err(io_err)?;
+    let mut limited = entry.take(remaining + 1);
+    let written = std::io::copy(&mut limited, &mut out).map_err(io_err)?;
+    out.flush().map_err(io_err)?;
+    if written > remaining {
+        return Err(invalid_zip(format!(
+            "{name} is bigger than its zip header claims"
+        )));
+    }
+    Ok(written)
 }
 
 fn classify_zip_entry(raw: &str) -> Result<Option<ZipRole>, ProfileError> {
@@ -366,11 +468,11 @@ fn validate_payload(payload: &ZipPayload) -> Result<(), ProfileError> {
             if !is_sha256_hex(&hash) {
                 return Err(invalid_zip("invalid sha256"));
             }
-            let bytes = payload
+            let staged = payload
                 .blobs
                 .get(&hash)
                 .ok_or_else(|| invalid_zip(format!("missing blob for {path}")))?;
-            if sha256_hex(bytes) != hash {
+            if sha256_file(staged).map_err(io_err)? != hash {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
             required_blobs.insert(hash);
@@ -378,11 +480,11 @@ fn validate_payload(payload: &ZipPayload) -> Result<(), ProfileError> {
             if file.storage != FileStorage::Exclusive {
                 return Err(ProfileError::NotShareable(path.clone()));
             }
-            let bytes = payload
+            let staged = payload
                 .exclusive
                 .get(&path)
                 .ok_or_else(|| invalid_zip(format!("missing file: {path}")))?;
-            if sha256_hex(bytes) != file.sha256.to_ascii_lowercase() {
+            if sha256_file(staged).map_err(io_err)? != file.sha256.to_ascii_lowercase() {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
             required_exclusive.insert(path);
@@ -413,50 +515,58 @@ fn apply_payload(
     let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(payload.manifest.files.len());
     for file in &payload.manifest.files {
         let path = normalize_rel_path(&file.path)?;
-        let bytes: &[u8] = match file.storage {
+        let staged: &Path = match file.storage {
             FileStorage::Exclusive => &payload.exclusive[&path],
             FileStorage::Shared => &payload.blobs[&file.sha256.to_ascii_lowercase()],
         };
-        batch.push((path, FileSource::Bytes(bytes)));
+        batch.push((path, FileSource::Path(staged)));
     }
     put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, running)?;
     write_imported_launch_and_hud(
         profiles_dir,
+        tf2_root,
         profile_id,
         &payload.manifest.launch_options,
         payload.manifest.hud.clone(),
         payload.manifest.crosshair.clone(),
         payload.manifest.viewmodel.clone(),
+        running,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_imported_launch_and_hud(
     profiles_dir: &Path,
+    tf2_root: &Path,
     profile_id: &str,
     launch: &str,
     hud: Option<HudRecord>,
     crosshair: Option<CrosshairRecord>,
     viewmodel: Option<ViewmodelRecord>,
+    running: &[String],
 ) -> Result<(), ProfileError> {
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.launch_options = sanitize_launch_options(launch);
     manifest.hud = hud;
     manifest.crosshair = crosshair;
     manifest.viewmodel = viewmodel;
-    let json = serde_json::to_string_pretty(&manifest).map_err(json_err)?;
-    crate::hash::write_atomic(
-        &manifest_file(profiles_dir, profile_id),
-        format!("{json}\n").as_bytes(),
-    )
-    .map_err(io_err)
+    crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)
 }
 
-fn read_hashed_file(path: &Path, expected: &str, label: &str) -> Result<Vec<u8>, ProfileError> {
-    let bytes = fs::read(path).map_err(io_err)?;
-    if sha256_hex(&bytes) != expected.to_ascii_lowercase() {
+/// Confirm the library copy still matches the manifest before it is exported.
+/// Reads in chunks; a shared `mastercomfig-base.vpk` is tens of megabytes and
+/// an imported skin pack can be far larger.
+fn verify_hash(path: &Path, expected: &str, label: &str) -> Result<(), ProfileError> {
+    if sha256_file(path).map_err(io_err)? != expected.to_ascii_lowercase() {
         return Err(ProfileError::Io(format!("hash mismatch for {label}")));
     }
-    Ok(bytes)
+    Ok(())
+}
+
+fn copy_into_zip(source: &Path, zip: &mut ZipWriter<fs::File>) -> Result<(), ProfileError> {
+    let mut file = fs::File::open(source).map_err(io_err)?;
+    std::io::copy(&mut file, zip).map_err(io_err)?;
+    Ok(())
 }
 
 fn require_usable_library(
@@ -520,9 +630,10 @@ fn zip_invalid(err: impl ToString) -> ProfileError {
 mod tests {
     use super::*;
     use crate::blob::{blob_path, blobs_dir};
+    use crate::hash::sha256_hex;
     use crate::profile::{
-        exclusive_file_path, init_library_to, load_library_from, load_manifest, save_current_as_to,
-        FileStorage, ProfileError, SaveCurrentOptions,
+        exclusive_file_path, init_library_to, load_library_from, load_manifest, manifest_file,
+        save_current_as_to, FileStorage, ProfileError, SaveCurrentOptions,
     };
     use std::collections::BTreeMap;
     use std::io::Write;
@@ -612,6 +723,61 @@ mod tests {
         zip.finish().unwrap();
     }
 
+    const RAW_MANIFEST: &[u8] = br#"{
+  "schema": 1,
+  "name": "Bomb",
+  "launchOptions": "",
+  "files": []
+}
+"#;
+
+    /// The importer used to `read_to_end` every entry into RAM before a single
+    /// byte was validated, so a deflate bomb OOM-killed the app.
+    #[test]
+    fn import_refuses_an_absurd_compression_ratio() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        init_library_to(&profiles, &root, unlocked()).unwrap();
+        let zip_path = dir.join("bomb.zip");
+        // 8 MiB of zeros deflates to a few KB: a ratio in the thousands.
+        let zeros = vec![0u8; 8 * 1024 * 1024];
+        write_raw_zip(
+            &zip_path,
+            &[
+                ("execs-profile.json", RAW_MANIFEST),
+                ("files/tf/cfg/bomb.cfg", &zeros),
+            ],
+        );
+
+        let err = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("decompresses more than")),
+            "{err:?}"
+        );
+        // The staging tree is removed however the import returns.
+        assert!(!profiles.join(IMPORT_STAGING_DIR).exists());
+        assert!(load_library_from(&profiles, Some(&root))
+            .unwrap()
+            .profiles
+            .is_empty());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn entry_budget_refuses_oversized_and_over_total() {
+        // Bigger than the per-entry cap.
+        assert!(
+            check_entry_budget(MAX_ENTRY_UNCOMPRESSED + 1, MAX_ENTRY_UNCOMPRESSED, "x", 0).is_err()
+        );
+        // Would push the archive past the total cap.
+        assert!(check_entry_budget(1024, 1024, "x", MAX_TOTAL_UNCOMPRESSED).is_err());
+        // Ordinary, incompressible-ish content is fine.
+        assert!(check_entry_budget(1024 * 1024, 900 * 1024, "x", 0).is_ok());
+        // A stored (uncompressed) entry has a ratio of 1.
+        assert!(check_entry_budget(4096, 4096, "x", 0).is_ok());
+    }
+
     fn seed_live(root: &Path) {
         write_live(
             &root.join("tf/cfg/overrides/autoexec.cfg"),
@@ -652,7 +818,7 @@ mod tests {
         assert_eq!(saved.active_profile_id.as_deref(), Some(src_id.as_str()));
 
         let zip_path = dir.join("main.zip");
-        export_profile_to(&profiles, &root, &src_id, &zip_path, [tf2_name()]).unwrap();
+        export_profile_to(&profiles, &root, &src_id, &zip_path).unwrap();
 
         let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         assert_eq!(imported.profiles.len(), 2);
@@ -734,8 +900,9 @@ mod tests {
         let manifest_before = fs::read(manifest_file(&profiles, &id)).unwrap();
 
         let zip_path = dir.join("main.zip");
-        export_profile_to(&profiles, &root, &id, &zip_path, [tf2_name()]).unwrap();
-        let exported = read_profile_zip(&zip_path).unwrap();
+        export_profile_to(&profiles, &root, &id, &zip_path).unwrap();
+        let staging = StagingDir::create(&profiles).unwrap();
+        let exported = read_profile_zip(&zip_path, &staging.path).unwrap();
         assert_eq!(
             exported.manifest.tf2_root.as_deref(),
             Some(root.to_string_lossy().as_ref())
@@ -767,14 +934,7 @@ mod tests {
         )
         .unwrap();
         let zip_path = dir.join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
 
         import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
@@ -993,14 +1153,7 @@ mod tests {
         .unwrap();
         let active = saved.active_profile_id.clone();
         let zip_path = dir.join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
 
         let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         assert_eq!(imported.active_profile_id, active);
@@ -1025,14 +1178,7 @@ mod tests {
         )
         .unwrap();
         let zip_path = dir.join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
 
         let err = import_profile_from(&profiles, &root, &zip_path, [tf2_name()]).unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
@@ -1070,14 +1216,7 @@ mod tests {
         )
         .unwrap();
         let zip_path = dir.join("out").join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
         import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         assert_eq!(snapshot_tree(&root), before);
         assert!(!root.join("tf/cfg/user").exists());

@@ -9,26 +9,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::profile::{
-    is_forbidden_rel_path, is_shared_file_name, normalize_rel_path, ProfileError, SHARED_VPK_NAME,
+    is_file_safe_rel_path, is_shared_file_name, normalize_rel_path, ProfileError, SHARED_VPK_NAME,
 };
-
-const OVERRIDE_NAMES: &[&str] = &[
-    "autoexec.cfg",
-    "scout.cfg",
-    "soldier.cfg",
-    "pyro.cfg",
-    "demoman.cfg",
-    "heavyweapons.cfg",
-    "engineer.cfg",
-    "medic.cfg",
-    "sniper.cfg",
-    "spy.cfg",
-    "game_overrides.cfg",
-    "modules.cfg",
-    "pre_init.cfg",
-    "setup_hook.cfg",
-    "listenserver.cfg",
-];
 
 const STOCK_CFG: &[&str] = &[
     "config.cfg",
@@ -175,6 +157,7 @@ fn collect_config_cfg(
             dests,
             skipped,
             critical,
+            false,
         );
     }
     if let Some(cloud) = cloud_config {
@@ -186,6 +169,7 @@ fn collect_config_cfg(
                 dests,
                 skipped,
                 critical,
+                false,
             );
         }
     }
@@ -202,7 +186,7 @@ fn collect_overrides(
     if !dir.exists() {
         return Ok(());
     }
-    walk_tree(&dir, tf2_root, dests, skipped, visited, true)
+    walk_tree(&dir, tf2_root, dests, skipped, visited, true, false)
 }
 
 fn collect_root_user_cfgs(
@@ -245,7 +229,7 @@ fn collect_root_user_cfgs(
         if !is_user_cfg(&name) {
             continue;
         }
-        take_file(tf2_root, &path, None, dests, skipped, critical)?;
+        take_file(tf2_root, &path, None, dests, skipped, critical, false)?;
     }
     Ok(())
 }
@@ -296,7 +280,7 @@ fn collect_vanilla_cfgs(
             if !is_user_cfg(&child_name) {
                 continue;
             }
-            take_file(tf2_root, &child_path, None, dests, skipped, critical)?;
+            take_file(tf2_root, &child_path, None, dests, skipped, critical, false)?;
         }
     }
     Ok(())
@@ -312,7 +296,7 @@ fn collect_custom(
     if !dir.exists() {
         return Ok(());
     }
-    walk_tree(&dir, tf2_root, dests, skipped, visited, false)?;
+    walk_tree(&dir, tf2_root, dests, skipped, visited, false, false)?;
     // Not "skipped" — these are deliberately install-wide, not a problem to
     // report, so they leave no trace in the profile surface at all.
     dests.retain(|rel, _| !is_global_custom_file(rel));
@@ -332,14 +316,22 @@ fn collect_migrate(
         return Ok(());
     }
     let mut migrated = BTreeMap::new();
-    walk_tree(&dir, tf2_root, &mut migrated, skipped, visited, false)?;
+    walk_tree(&dir, tf2_root, &mut migrated, skipped, visited, false, true)?;
     for (_, entry) in migrated {
         let Some(inner) = strip_cfg_kind_prefix(&entry.dest_rel, kind) else {
             skipped.push(entry.dest_rel);
             continue;
         };
         let dest = migrate_dest(layer, kind, &inner, |path| dests.contains_key(path));
-        take_file(tf2_root, &entry.source, Some(&dest), dests, skipped, false)?;
+        take_file(
+            tf2_root,
+            &entry.source,
+            Some(&dest),
+            dests,
+            skipped,
+            false,
+            false,
+        )?;
     }
     Ok(())
 }
@@ -377,6 +369,9 @@ fn migrate_dest(
     }
 }
 
+/// `staging` walks a directory whose own layout is not itself file-safe
+/// (`tf/cfg/user/`), collecting entries that `collect_migrate` immediately
+/// re-destines. Every staged entry is re-gated by the second `take_file`.
 fn walk_tree(
     dir: &Path,
     tf2_root: &Path,
@@ -384,6 +379,7 @@ fn walk_tree(
     skipped: &mut Vec<String>,
     visited: &mut HashSet<PathBuf>,
     critical: bool,
+    staging: bool,
 ) -> Result<(), ProfileError> {
     if let Some(canon) = canonicalize_if_within(dir, tf2_root) {
         if !visited.insert(canon) {
@@ -434,11 +430,11 @@ fn walk_tree(
             continue;
         }
         if path.is_dir() {
-            walk_tree(&path, tf2_root, dests, skipped, visited, critical)?;
+            walk_tree(&path, tf2_root, dests, skipped, visited, critical, staging)?;
             continue;
         }
         if path.is_file() {
-            take_file(tf2_root, &path, None, dests, skipped, critical)?;
+            take_file(tf2_root, &path, None, dests, skipped, critical, staging)?;
         }
     }
     Ok(())
@@ -451,6 +447,7 @@ fn take_file(
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
     critical: bool,
+    staging: bool,
 ) -> Result<(), ProfileError> {
     let dest = match dest_rel {
         Some(dest) => normalize_rel_path(dest)?,
@@ -463,7 +460,7 @@ fn take_file(
         },
     };
     let dest = canonicalize_shared_dest(dest);
-    if is_junk_name(file_name(&dest)) || is_forbidden_rel_path(&dest) {
+    if is_junk_name(file_name(&dest)) || (!staging && !is_file_safe_rel_path(&dest)) {
         skipped.push(dest);
         return Ok(());
     }
@@ -526,12 +523,6 @@ fn is_user_cfg(name: &str) -> bool {
     }
     if is_stock_cfg(&lower) {
         return false;
-    }
-    if OVERRIDE_NAMES
-        .iter()
-        .any(|item| item.eq_ignore_ascii_case(name))
-    {
-        return true;
     }
     true
 }

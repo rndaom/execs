@@ -1,7 +1,7 @@
 //! Refuse live-surface / profile-library writes while TF2 is running.
 
 use serde::Serialize;
-use sysinfo::{ProcessesToUpdate, System};
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessOs {
@@ -108,7 +108,10 @@ where
 
 pub fn live_process_names() -> Vec<String> {
     let mut sys = System::new();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
+    // Only `name()` is read. The default refresh pulls cmdline, environment,
+    // cwd and per-process disk/user stats for every process on the machine, and
+    // this runs on the hot path of essentially every command.
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     sys.processes()
         .values()
         .map(|process| process.name().to_string_lossy().into_owned())

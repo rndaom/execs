@@ -19,11 +19,14 @@ pub struct Settings {
 }
 
 /// Windows `%AppData%\execs`, Linux `~/.local/share/execs` (or `$XDG_DATA_HOME/execs`).
+///
+/// On Windows an unset `%APPDATA%` is an error, not a fallback: the old
+/// relative `AppData\execs` silently created a second, invisible profile
+/// library next to whatever the process CWD happened to be.
 pub fn execs_data_dir() -> PathBuf {
     #[cfg(windows)]
     {
-        let appdata = std::env::var_os("APPDATA").unwrap_or_else(|| "AppData".into());
-        PathBuf::from(appdata).join("execs")
+        try_execs_data_dir().expect("APPDATA is not set, so there is no execs data directory")
     }
     #[cfg(not(windows))]
     {
@@ -32,6 +35,29 @@ pub fn execs_data_dir() -> PathBuf {
         }
         let home = std::env::var_os("HOME").unwrap_or_else(|| ".".into());
         PathBuf::from(home).join(".local/share/execs")
+    }
+}
+
+/// Fallible form of [`execs_data_dir`]. Only Windows can fail.
+pub fn try_execs_data_dir() -> Result<PathBuf, String> {
+    #[cfg(windows)]
+    {
+        data_dir_from_appdata(std::env::var_os("APPDATA"))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(execs_data_dir())
+    }
+}
+
+#[cfg(windows)]
+fn data_dir_from_appdata(appdata: Option<std::ffi::OsString>) -> Result<PathBuf, String> {
+    match appdata {
+        Some(value) if !value.is_empty() => Ok(PathBuf::from(value).join("execs")),
+        _ => Err(
+            "%APPDATA% is not set, so execs cannot find its settings and profile library."
+                .to_string(),
+        ),
     }
 }
 
@@ -123,6 +149,19 @@ mod tests {
         fs::create_dir_all(inf.parent().unwrap()).unwrap();
         let mut file = fs::File::create(inf).unwrap();
         file.write_all(b"appID=440\n").unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn data_dir_refuses_an_unset_appdata() {
+        // The old fallback silently built `./AppData/execs` next to whatever
+        // the process CWD happened to be — a second, invisible profile library.
+        assert!(data_dir_from_appdata(None).is_err());
+        assert!(data_dir_from_appdata(Some(std::ffi::OsString::new())).is_err());
+        assert_eq!(
+            data_dir_from_appdata(Some(std::ffi::OsString::from(r"D:\Roaming"))).unwrap(),
+            PathBuf::from(r"D:\Roaming").join("execs")
+        );
     }
 
     #[test]
