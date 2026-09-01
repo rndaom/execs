@@ -33,6 +33,7 @@ fn main() {
         &execs_core::execs_data_dir(),
         &zip,
         &selection,
+        &execs_core::process_lock::live_process_names(),
     )
     .expect("apply");
 
