@@ -1,13 +1,24 @@
 #!/usr/bin/env node
-// CLI harness: node bin/cfglint.mjs <file-or-dir> [...more]
+// CLI harness: node bin/cfglint.mjs [--self] [--flat] <file-or-dir> [...more]
 // Prints a lint report for local cfg files. Dev tool only.
+// Requires Node >= 22.6 (this .mjs imports TypeScript directly).
+//
+//   --self  lint as the player's own config (hostile-config rules advise
+//           instead of blocking)
+//   --flat  also resolve `exec <target>` against a bundle path equal to
+//           <target>; for loose directories with no cfg/ folder
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { lint } from "../src/index.ts";
 
-const args = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const opts = {
+  trust: argv.includes("--self") ? "self" : "provided",
+  bundleRelativeExec: argv.includes("--flat"),
+};
+const args = argv.filter((a) => !a.startsWith("--"));
 if (args.length === 0) {
-  console.error("usage: cfglint <file-or-dir> [...]");
+  console.error("usage: cfglint [--self] [--flat] <file-or-dir> [...]");
   process.exit(2);
 }
 
@@ -32,7 +43,7 @@ for (const arg of args) {
   }
 }
 
-const result = lint(files);
+const result = lint(files, opts);
 const icons = { block: "✖", warn: "▲", info: "·" };
 for (const f of result.findings) {
   const via = f.via ? ` (via ${f.via})` : "";
