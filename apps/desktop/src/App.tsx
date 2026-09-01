@@ -939,7 +939,9 @@ export function App() {
         <div
           className={
             settingsOpen
-              ? "flex min-h-7 shrink-0 items-center justify-between gap-4 border-t border-edge bg-panel px-4 py-1 text-[10px] text-ink-muted"
+              ? // Pinned, not min-height: this bar sits next to a flex-1 sibling
+                // and must never take height from the pane above it.
+                "flex h-7 shrink-0 grow-0 items-center justify-between gap-4 overflow-hidden border-t border-edge bg-panel px-4 py-1 text-[10px] text-ink-muted"
               : "mt-10 flex max-w-md flex-col items-center gap-2 text-center"
           }
         >
@@ -965,7 +967,9 @@ export function App() {
           ) : null}
           <p
             className={
-              settingsOpen ? "truncate text-[10px] text-ink-faint" : "text-sm text-ink-muted"
+              settingsOpen
+                ? "min-w-0 truncate text-[10px] text-ink-faint"
+                : "text-sm text-ink-muted"
             }
           >
             {settingsOpen

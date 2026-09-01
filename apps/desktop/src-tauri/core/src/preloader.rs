@@ -18,10 +18,26 @@ use crate::pcf::{
     check_parents, decode_pcf, encode_pcf, extract_elements, find_root_systems,
     get_parent_elements, remove_duplicate_elements, update_materials, PcfFile,
 };
-use crate::vpk::{map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v1, VpkEntryLocation};
+use crate::vpk::{
+    map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v2, VpkEntryLocation,
+};
 
 pub const PRELOADER_VPK: &str = "execs-preloader.vpk";
 pub const MISC_VPK: &str = "tf2_misc_dir.vpk";
+/// Official archives holding the assets the pure whitelist trusts.
+pub const STOCK_VPKS: [&str; 3] = [
+    "tf2_textures_dir.vpk",
+    "tf2_misc_dir.vpk",
+    "tf2_sound_misc_dir.vpk",
+];
+/// Roots a loose `tf/custom` file cannot serve from.
+///
+/// Materials and models are deliberately absent: the gameinfo `type` bypass
+/// plus the itemtest preload carry those into the cache before Casual's pure
+/// check runs, which is the whole point of the preloader. Particles are here
+/// because they are patched into the official VPK in place instead, and sound
+/// because the soundscript relocation that would make it work is not built.
+const TRUSTED_ROOTS: [&str; 2] = ["particles/", "sound/"];
 
 /// Stock files that carry duplicated copies of systems owned by other files.
 /// When particle mods are installed these get rebuilt from vanilla with the
@@ -425,6 +441,12 @@ pub struct PreloaderReport {
     pub custom_vpk_written: bool,
     pub gameinfo_bypassed: bool,
     pub baseline_reset: bool,
+    /// Materials generated for textures a mod shipped without one.
+    #[serde(default)]
+    pub synthesized_vmts: usize,
+    /// Model materials moved under the console/ root to survive Casual.
+    #[serde(default)]
+    pub relocated_model_materials: usize,
 }
 
 /// The `$ignorez 1` spellings that turn a material into a wallhack; scrubbed
@@ -469,6 +491,232 @@ fn scrub_ignorez(rel: &str, bytes: &mut Vec<u8>) {
 
 /// True for the sound-script text files the original preloader refuses to
 /// copy from addons (they fight the engine's generated sound caches).
+/// Material root TF2 treats as user-writable, so a model material served from
+/// here is not measured against the stock file at its original path.
+const RELOCATE_PREFIX: &str = "console";
+
+/// Move the materials a staged model owns under [`RELOCATE_PREFIX`] and point
+/// the model at the new location, keeping its original path as a fallback so
+/// anything the mod does not ship still resolves to stock.
+///
+/// Only directories the mod actually ships materials for are moved; world and
+/// brush materials are left alone, since those ride the gameinfo bypass.
+/// Returns how many files moved.
+fn relocate_model_materials(custom: &mut BTreeMap<String, Vec<u8>>) -> usize {
+    let models: Vec<String> = custom
+        .iter()
+        .filter(|(rel, bytes)| rel.ends_with(".mdl") && crate::mdl::is_mdl(bytes))
+        .map(|(rel, _)| rel.clone())
+        .collect();
+    if models.is_empty() {
+        return 0;
+    }
+
+    // Which material directories does this mod actually ship files for?
+    let mut relocate: BTreeSet<String> = BTreeSet::new();
+    let mut rewrites: Vec<(String, Vec<String>)> = Vec::new();
+    for model in &models {
+        let Some(dirs) = custom.get(model).and_then(|bytes| crate::mdl::material_dirs(bytes))
+        else {
+            continue;
+        };
+        let mut prefixed = Vec::new();
+        let mut fallback = Vec::new();
+        for dir in &dirs {
+            let normal = crate::mdl::normalize_dir(dir);
+            // An empty entry means "materials/" itself; prefixing it would point
+            // the model at a root we do not populate.
+            if normal.is_empty() || normal.starts_with(&format!("{RELOCATE_PREFIX}/")) {
+                if !fallback.contains(dir) {
+                    fallback.push(dir.clone());
+                }
+                continue;
+            }
+            let ships = custom
+                .keys()
+                .any(|rel| rel.starts_with(&format!("materials/{normal}")));
+            if ships {
+                relocate.insert(normal.clone());
+                prefixed.push(format!("{RELOCATE_PREFIX}/{normal}"));
+            }
+            if !fallback.contains(&normal) {
+                fallback.push(normal);
+            }
+        }
+        if prefixed.is_empty() {
+            continue;
+        }
+        prefixed.extend(fallback);
+        rewrites.push((model.clone(), prefixed));
+    }
+    if relocate.is_empty() {
+        return 0;
+    }
+
+    // Move every material under a relocated directory.
+    let moves: Vec<(String, String)> = custom
+        .keys()
+        .filter_map(|rel| {
+            let inner = rel.strip_prefix("materials/")?;
+            relocate
+                .iter()
+                .any(|dir| inner.starts_with(dir.as_str()))
+                .then(|| (rel.clone(), format!("materials/{RELOCATE_PREFIX}/{inner}")))
+        })
+        .collect();
+    let moved_textures: BTreeSet<String> = moves
+        .iter()
+        .filter(|(from, _)| from.ends_with(".vtf"))
+        .map(|(from, _)| from.clone())
+        .collect();
+
+    let mut moved = 0;
+    for (from, to) in &moves {
+        let Some(bytes) = custom.remove(from) else {
+            continue;
+        };
+        let bytes = if from.ends_with(".vmt") {
+            match String::from_utf8(bytes) {
+                Ok(text) => rewrite_vmt_refs(&text, &moved_textures).into_bytes(),
+                Err(err) => err.into_bytes(),
+            }
+        } else {
+            bytes
+        };
+        custom.insert(to.clone(), bytes);
+        moved += 1;
+    }
+    for (model, dirs) in rewrites {
+        let Some(bytes) = custom.get(&model) else {
+            continue;
+        };
+        if let Some(out) = crate::mdl::rewrite_material_dirs(bytes, &dirs) {
+            custom.insert(model, out);
+        }
+    }
+    moved
+}
+
+/// Repoint a material's texture references at the relocated copies. Only paths
+/// whose texture actually moved are touched, so stock references stay intact.
+fn rewrite_vmt_refs(text: &str, moved_textures: &BTreeSet<String>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open) = rest.find('"') {
+        let (head, tail) = rest.split_at(open + 1);
+        out.push_str(head);
+        let Some(close) = tail.find('"') else {
+            out.push_str(tail);
+            return out;
+        };
+        let value = &tail[..close];
+        let candidate = format!(
+            "materials/{}.vtf",
+            value.replace('\\', "/").to_ascii_lowercase()
+        );
+        if moved_textures.contains(&candidate) {
+            out.push_str(&format!("{RELOCATE_PREFIX}/{value}"));
+        } else {
+            out.push_str(value);
+        }
+        rest = &tail[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Every `_dir.vpk` entry table for the official archives, read once.
+fn stock_entry_tables(tf2_root: &Path) -> Vec<(PathBuf, BTreeMap<String, VpkEntryLocation>)> {
+    let mut tables = Vec::new();
+    for name in STOCK_VPKS {
+        let path = tf2_root.join("tf").join(name);
+        if !path.is_file() {
+            continue;
+        }
+        if let Ok(entries) = map_vpk_entries(&path) {
+            tables.push((path, entries));
+        }
+    }
+    tables
+}
+
+/// A VTF with no VMT beside it renders as the error checkerboard, and mods
+/// routinely ship the texture alone. Give each orphan the stock material it is
+/// replacing where one exists — that keeps the original shader and parameters —
+/// and otherwise a minimal material picked from the path.
+fn synthesize_missing_vmts(tf2_root: &Path, custom: &mut BTreeMap<String, Vec<u8>>) -> usize {
+    let orphans: Vec<String> = custom
+        .keys()
+        .filter(|rel| rel.starts_with("materials/") && rel.ends_with(".vtf"))
+        .map(|rel| format!("{}.vmt", rel.trim_end_matches(".vtf")))
+        .filter(|vmt| !custom.contains_key(vmt))
+        .collect();
+    if orphans.is_empty() {
+        return 0;
+    }
+    let tables = stock_entry_tables(tf2_root);
+    let mut written = 0;
+    for vmt in orphans {
+        let stock = tables.iter().find_map(|(path, entries)| {
+            let entry = entries.get(&vmt)?;
+            read_vpk_entry(path, entry).ok()
+        });
+        let bytes = stock.unwrap_or_else(|| default_vmt(&vmt));
+        custom.insert(vmt, bytes);
+        written += 1;
+    }
+    written
+}
+
+/// Minimal material for a texture with no stock counterpart. Model materials
+/// are lit per-vertex; world surfaces take lightmaps.
+fn default_vmt(vmt: &str) -> Vec<u8> {
+    let texture = vmt
+        .trim_start_matches("materials/")
+        .trim_end_matches(".vmt");
+    let shader = if vmt.starts_with("materials/models/") {
+        "VertexLitGeneric"
+    } else {
+        "LightmappedGeneric"
+    };
+    format!("\"{shader}\"
+{{
+	\"$basetexture\"	\"{texture}\"
+}}
+").into_bytes()
+}
+
+/// Paths in `files` that replace an asset the pure whitelist trusts, and so
+/// cannot be served from `tf/custom`. Paths outside the trusted roots (a mod's
+/// own new materials, scripts) are left alone.
+fn stock_shadowing_paths(tf2_root: &Path, files: &BTreeMap<String, Vec<u8>>) -> Vec<String> {
+    let candidates: BTreeSet<&String> = files
+        .keys()
+        .filter(|rel| TRUSTED_ROOTS.iter().any(|root| rel.starts_with(root)))
+        .collect();
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+    let mut shadowing = Vec::new();
+    for name in STOCK_VPKS {
+        let path = tf2_root.join("tf").join(name);
+        if !path.is_file() {
+            continue;
+        }
+        let Ok(entries) = map_vpk_entries(&path) else {
+            continue;
+        };
+        for rel in &candidates {
+            if entries.contains_key(*rel) {
+                shadowing.push((**rel).clone());
+            }
+        }
+    }
+    shadowing.sort();
+    shadowing.dedup();
+    shadowing
+}
+
 fn is_excluded_addon_file(inner: &str) -> bool {
     if inner == "mod.json" {
         return true;
@@ -918,13 +1166,53 @@ pub fn apply_preloader_selection(
             &|inner| inner.starts_with("materials/") || inner.starts_with("scripts/"),
         )?;
     }
+    let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
     for mod_name in &selection.addons {
+        let before: BTreeSet<String> = custom.keys().cloned().collect();
         copy_zip_tree(
             &mut archive,
             &format!("mods/addons/{mod_name}/"),
             &mut custom,
             &|inner| !is_excluded_addon_file(inner),
         )?;
+        for rel in custom.keys() {
+            if !before.contains(rel) {
+                addon_owner.insert(rel.clone(), mod_name.clone());
+            }
+        }
+    }
+
+    // Files that duplicate an asset handled by another route (particles are
+    // patched in place; sound has no relocation path) would be dead weight or
+    // actively conflict, so drop those and say so. Materials and models stay:
+    // the preloader exists to carry exactly those into Casual.
+    let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
+    let shadowing = stock_shadowing_paths(tf2_root, &custom);
+    for rel in shadowing {
+        custom.remove(&rel);
+        let owner = addon_owner.get(&rel).cloned().unwrap_or_default();
+        *dropped.entry(owner).or_default() += 1;
+    }
+    for (mod_name, count) in dropped {
+        report.skipped.push(SkipNotice {
+            file: format!("{count} file{}", if count == 1 { "" } else { "s" }),
+            mod_name,
+            reason: "duplicates a stock asset execs handles outside tf/custom".into(),
+        });
+    }
+
+    // Model materials cannot serve from their stock paths, so move them under
+    // the console/ root and repoint the models that reference them.
+    let relocated = relocate_model_materials(&mut custom);
+    if relocated > 0 {
+        report.relocated_model_materials = relocated;
+    }
+
+    // A texture with no material beside it is a checkerboard in game, so give
+    // every orphan one before the pack is sealed.
+    let synthesized = synthesize_missing_vmts(tf2_root, &mut custom);
+    if synthesized > 0 {
+        report.synthesized_vmts = synthesized;
     }
 
     let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
@@ -933,7 +1221,7 @@ pub fn apply_preloader_selection(
     } else {
         std::fs::create_dir_all(custom_vpk.parent().expect("custom dir"))
             .map_err(|err| format!("Could not prepare tf/custom: {err}"))?;
-        std::fs::write(&custom_vpk, write_vpk_v1(&custom))
+        std::fs::write(&custom_vpk, write_vpk_v2(&custom))
             .map_err(|err| format!("Could not write {PRELOADER_VPK}: {err}"))?;
         report.custom_vpk_written = true;
     }
@@ -1155,12 +1443,62 @@ mod tests {
             disguise.resize(disguise.len() + 32, b' ');
             disguise
         });
-        std::fs::write(
-            root.join("tf").join(MISC_VPK),
-            crate::vpk::write_vpk_v1(&files),
-        )
-        .unwrap();
+        write_split_vpk(&root.join("tf").join(MISC_VPK), &files);
         (root, data)
+    }
+
+    /// A split VPK like the real tf2_misc: entries in the `_dir.vpk` tree,
+    /// data in a `_000.vpk` sibling — the layout the patcher requires.
+    fn write_split_vpk(dir_path: &Path, files: &BTreeMap<String, Vec<u8>>) {
+        let mut grouped: BTreeMap<String, BTreeMap<String, BTreeMap<String, Vec<u8>>>> =
+            BTreeMap::new();
+        for (rel, bytes) in files {
+            let (path, file) = rel.rsplit_once('/').unwrap_or((" ", rel.as_str()));
+            let (name, ext) = file.rsplit_once('.').unwrap_or((file, " "));
+            grouped
+                .entry(ext.to_string())
+                .or_default()
+                .entry(path.to_string())
+                .or_default()
+                .insert(name.to_string(), bytes.clone());
+        }
+        let mut tree = Vec::new();
+        let mut archive = Vec::new();
+        let mut cstr = |tree: &mut Vec<u8>, s: &str| {
+            tree.extend_from_slice(s.as_bytes());
+            tree.push(0);
+        };
+        for (ext, paths) in &grouped {
+            cstr(&mut tree, ext);
+            for (path, names) in paths {
+                cstr(&mut tree, path);
+                for (name, bytes) in names {
+                    cstr(&mut tree, name);
+                    tree.extend_from_slice(&crate::vpk::crc32(bytes).to_le_bytes());
+                    tree.extend_from_slice(&0u16.to_le_bytes());
+                    tree.extend_from_slice(&0u16.to_le_bytes());
+                    tree.extend_from_slice(&(archive.len() as u32).to_le_bytes());
+                    tree.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                    tree.extend_from_slice(&0xffffu16.to_le_bytes());
+                    archive.extend_from_slice(bytes);
+                }
+                tree.push(0);
+            }
+            tree.push(0);
+        }
+        tree.push(0);
+        let mut dir = Vec::with_capacity(12 + tree.len());
+        dir.extend_from_slice(&0x55aa_1234u32.to_le_bytes());
+        dir.extend_from_slice(&1u32.to_le_bytes());
+        dir.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        dir.extend_from_slice(&tree);
+        std::fs::write(dir_path, dir).unwrap();
+        let name = dir_path.file_name().unwrap().to_str().unwrap();
+        let sibling = dir_path
+            .parent()
+            .unwrap()
+            .join(name.replace("_dir.vpk", "_000.vpk"));
+        std::fs::write(sibling, archive).unwrap();
     }
 
     fn fake_mods_zip(dir: &Path) -> std::path::PathBuf {
@@ -1219,6 +1557,165 @@ mod tests {
     }
 
     #[test]
+    fn addon_materials_that_replace_stock_assets_still_ship_loose() {
+        // The gameinfo bypass plus the itemtest preload are what carry a
+        // replaced material into Casual, so shipping it is the whole point —
+        // dropping it would silently disable every texture mod.
+        let (root, data) = fake_root();
+        let zip_path = fake_mods_zip(root.parent().unwrap());
+        let mut stock = BTreeMap::new();
+        stock.insert(
+            "materials/models/flat.vmt".to_string(),
+            b"\"VertexlitGeneric\"
+{
+}
+".to_vec(),
+        );
+        write_split_vpk(&root.join("tf").join("tf2_textures_dir.vpk"), &stock);
+
+        let selection = PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+        };
+        let report = apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
+        assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+
+        let custom = root.join("tf/custom").join(PRELOADER_VPK);
+        let archive = read_vpk_dir_file(&custom).unwrap();
+        assert!(
+            archive.files.contains_key("materials/models/flat.vmt"),
+            "a material replacing a stock path must still ship for the preload"
+        );
+    }
+
+    #[test]
+    fn orphan_textures_get_a_material_preferring_the_stock_one() {
+        let (root, data) = fake_root();
+        let zip_path = fake_mods_zip(root.parent().unwrap());
+        // The stock archive owns a material for the path the mod replaces.
+        let mut stock = BTreeMap::new();
+        stock.insert(
+            "materials/models/flat.vmt".to_string(),
+            b"\"VertexLitGeneric\"
+{
+	\"$stockmarker\"	\"1\"
+}
+".to_vec(),
+        );
+        write_split_vpk(&root.join("tf").join("tf2_textures_dir.vpk"), &stock);
+
+        let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        custom.insert("materials/models/flat.vtf".into(), b"VTF ".to_vec());
+        custom.insert("materials/world/new_rock.vtf".into(), b"VTF ".to_vec());
+        custom.insert("materials/world/has_one.vtf".into(), b"VTF ".to_vec());
+        custom.insert("materials/world/has_one.vmt".into(), b"mine".to_vec());
+
+        let written = synthesize_missing_vmts(&root, &mut custom);
+
+        assert_eq!(written, 2, "only the two orphans get a material");
+        assert_eq!(
+            custom.get("materials/models/flat.vmt").unwrap(),
+            &b"\"VertexLitGeneric\"
+{
+	\"$stockmarker\"	\"1\"
+}
+".to_vec(),
+            "a replaced texture reuses the stock material verbatim"
+        );
+        let generated = String::from_utf8(custom["materials/world/new_rock.vmt"].clone()).unwrap();
+        assert!(generated.contains("LightmappedGeneric"), "{generated}");
+        assert!(generated.contains("world/new_rock"), "{generated}");
+        assert_eq!(
+            custom.get("materials/world/has_one.vmt").unwrap(),
+            &b"mine".to_vec(),
+            "a material the mod ships is never overwritten"
+        );
+        let _ = (zip_path, data);
+    }
+
+    /// A model header carrying one material directory, matching the layout
+    /// `mdl_probe` verified against the game's own models.
+    fn fake_mdl(dir: &str) -> Vec<u8> {
+        let mut bytes = vec![0u8; 244];
+        bytes[0..4].copy_from_slice(b"IDST");
+        bytes[4..8].copy_from_slice(&49i32.to_le_bytes());
+        let offset = bytes.len() as i32;
+        bytes.extend_from_slice(dir.as_bytes());
+        bytes.push(0);
+        while bytes.len() % 4 != 0 {
+            bytes.push(0);
+        }
+        let table = bytes.len() as i32;
+        bytes.extend_from_slice(&offset.to_le_bytes());
+        bytes[212..216].copy_from_slice(&1i32.to_le_bytes());
+        bytes[216..220].copy_from_slice(&table.to_le_bytes());
+        let length = bytes.len() as i32;
+        bytes[76..80].copy_from_slice(&length.to_le_bytes());
+        bytes
+    }
+
+    #[test]
+    fn model_materials_move_under_console_and_the_model_follows() {
+        let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        custom.insert(
+            "models/props_gameplay/locker.mdl".into(),
+            // Real models spell the dir with backslashes.
+            fake_mdl(r"\models\props_gameplay\"),
+        );
+        custom.insert(
+            "materials/models/props_gameplay/locker.vmt".into(),
+            b"\"VertexLitGeneric\"
+{
+	\"$basetexture\"	\"models/props_gameplay/locker\"
+}
+"
+                .to_vec(),
+        );
+        custom.insert(
+            "materials/models/props_gameplay/locker.vtf".into(),
+            b"VTF ".to_vec(),
+        );
+        // A world material the mod also ships must NOT move: it rides the
+        // gameinfo bypass at its stock path.
+        custom.insert("materials/wood/wall.vtf".into(), b"VTF ".to_vec());
+
+        let moved = relocate_model_materials(&mut custom);
+
+        assert_eq!(moved, 2, "the vmt and vtf move together");
+        assert!(custom.contains_key("materials/console/models/props_gameplay/locker.vtf"));
+        assert!(!custom.contains_key("materials/models/props_gameplay/locker.vtf"));
+        assert!(custom.contains_key("materials/wood/wall.vtf"), "world stays");
+
+        // The material now points at the relocated texture.
+        let vmt = String::from_utf8(
+            custom["materials/console/models/props_gameplay/locker.vmt"].clone(),
+        )
+        .unwrap();
+        assert!(vmt.contains("console/models/props_gameplay/locker"), "{vmt}");
+        assert!(vmt.contains("VertexLitGeneric"), "{vmt}");
+
+        // The model searches the relocated dir first, stock second.
+        let dirs =
+            crate::mdl::material_dirs(&custom["models/props_gameplay/locker.mdl"]).unwrap();
+        assert_eq!(dirs[0], "console/models/props_gameplay/");
+        assert_eq!(dirs[1], "models/props_gameplay/");
+    }
+
+    #[test]
+    fn relocation_is_a_noop_without_models_or_matching_materials() {
+        let mut only_world: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        only_world.insert("materials/wood/wall.vtf".into(), b"VTF ".to_vec());
+        assert_eq!(relocate_model_materials(&mut only_world), 0);
+
+        // A model whose materials the mod does not ship must not be rewritten.
+        let mut unshipped: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        let model = fake_mdl("models/props_gameplay/");
+        unshipped.insert("models/props_gameplay/locker.mdl".into(), model.clone());
+        assert_eq!(relocate_model_materials(&mut unshipped), 0);
+        assert_eq!(unshipped["models/props_gameplay/locker.mdl"], model);
+    }
+
+    #[test]
     fn catalog_lists_addons_and_particles() {
         let dir = test_temp_dir();
         let zip_path = fake_mods_zip(&dir);
@@ -1236,7 +1733,9 @@ mod tests {
         let (root, data) = fake_root();
         let zip_path = fake_mods_zip(root.parent().unwrap());
         let vpk_path = root.join("tf").join(MISC_VPK);
-        let pristine = std::fs::read(&vpk_path).unwrap();
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+        let pristine_dir = std::fs::read(&vpk_path).unwrap();
+        let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
         let selection = PreloaderSelection {
             addons: vec!["Flat Look".into()],
@@ -1263,12 +1762,19 @@ mod tests {
             system.attr(b"radius").unwrap().value,
             PcfValue::Float(4.0f32.to_bits())
         );
+        // The directory file must stay byte-pristine — the stock CRCs (over
+        // the now-modded data) are what the sv_pure check reads.
+        assert_eq!(
+            std::fs::read(&vpk_path).unwrap(),
+            pristine_dir,
+            "patching must never touch the _dir.vpk"
+        );
         let entries = map_vpk_entries(&vpk_path).unwrap();
         let crc_entry = entries.get("particles/water.pcf").unwrap();
-        assert_eq!(
+        assert_ne!(
             crc_entry.crc,
             crate::vpk::crc32(patched),
-            "directory CRC must match the patched bytes"
+            "the stock CRC stays stale over modded data by design"
         );
 
         // Custom VPK carries the addon material with $ignorez scrubbed and
@@ -1295,7 +1801,8 @@ mod tests {
 
         let report = revert_preloader(&root, &data).unwrap();
         assert!(report.gameinfo_restored);
-        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine);
+        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine_dir);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
         assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
         let status = preloader_status(&root, &data).unwrap();
         assert!(!status.gameinfo_bypassed);
@@ -1310,8 +1817,8 @@ mod tests {
     fn interrupted_apply_cannot_clobber_snapshots() {
         let (root, data) = fake_root();
         let zip_path = fake_mods_zip(root.parent().unwrap());
-        let vpk_path = root.join("tf").join(MISC_VPK);
-        let pristine = std::fs::read(&vpk_path).unwrap();
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+        let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
         let selection = PreloaderSelection {
             addons: vec![],
@@ -1331,7 +1838,7 @@ mod tests {
         apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
         let report = revert_preloader(&root, &data).unwrap();
         assert!(report.failures.is_empty(), "{:?}", report.failures);
-        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
     }
 
     /// mtime moves whenever we patch (and when restores half-fail); only a
@@ -1342,7 +1849,8 @@ mod tests {
         let (root, data) = fake_root();
         let zip_path = fake_mods_zip(root.parent().unwrap());
         let vpk_path = root.join("tf").join(MISC_VPK);
-        let pristine = std::fs::read(&vpk_path).unwrap();
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+        let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
         apply_preloader_selection(
             &root,
@@ -1366,7 +1874,7 @@ mod tests {
             "drift must not skip the restore: {:?}",
             report.failures
         );
-        assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
     }
 
     #[test]
@@ -1412,6 +1920,7 @@ mod tests {
         writer.finish().unwrap();
 
         let vpk_before = std::fs::read(root.join("tf").join(MISC_VPK)).unwrap();
+        let sibling_before = std::fs::read(root.join("tf").join("tf2_misc_000.vpk")).unwrap();
         let report = apply_preloader_selection(
             &root,
             &data,
@@ -1428,6 +1937,10 @@ mod tests {
             .iter()
             .any(|notice| notice.file == "water.pcf" && notice.reason.contains("over the stock budget")));
         assert_eq!(std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(), vpk_before);
+        assert_eq!(
+            std::fs::read(root.join("tf").join("tf2_misc_000.vpk")).unwrap(),
+            sibling_before
+        );
     }
 
     #[test]

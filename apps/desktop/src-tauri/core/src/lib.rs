@@ -11,6 +11,7 @@ pub mod hud;
 pub mod hud_apply;
 pub mod ice;
 pub mod launch;
+pub mod mdl;
 pub mod pcf;
 pub mod preloader;
 pub mod process_lock;
@@ -67,7 +68,7 @@ pub use viewmodel::{
     ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
     remove_profile_preload_if_unused, remove_viewmodels, set_viewmodel_preload,
 };
-pub use viewmodel_build::build_viewmodel_pack_vpk;
+pub use viewmodel_build::{build_viewmodel_pack_vpk, ViewmodelHideMode};
 pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use profile::{
     create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,

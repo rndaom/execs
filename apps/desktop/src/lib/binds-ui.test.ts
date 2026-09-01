@@ -100,16 +100,33 @@ describe("managed execs_binds.cfg", () => {
 
 describe("ensureAutoexecExecLine", () => {
   it("appends the exec line once with the managed comment", () => {
-    const first = ensureAutoexecExecLine("fov_desired 90\n", "execs_binds");
+    const first = ensureAutoexecExecLine("fov_desired 90\n", "execs_binds", "vanilla");
     expect(first).toContain("fov_desired 90");
     expect(first).toContain("exec execs_binds // execs:managed");
-    expect(ensureAutoexecExecLine(first, "execs_binds")).toBe(first);
-    expect(autoexecHasExecLine(first, "execs_binds")).toBe(true);
-    expect(autoexecHasExecLine(first, "execs_gameplay")).toBe(false);
+    expect(ensureAutoexecExecLine(first, "execs_binds", "vanilla")).toBe(first);
+    expect(autoexecHasExecLine(first, "execs_binds", "vanilla")).toBe(true);
+    expect(autoexecHasExecLine(first, "execs_gameplay", "vanilla")).toBe(false);
 
-    const withGameplay = ensureAutoexecExecLine(first, "execs_gameplay");
+    const withGameplay = ensureAutoexecExecLine(first, "execs_gameplay", "vanilla");
     expect(withGameplay).toContain("exec execs_gameplay // execs:managed");
-    expect(ensureAutoexecExecLine(withGameplay, "execs_binds")).toBe(withGameplay);
+    expect(ensureAutoexecExecLine(withGameplay, "execs_binds", "vanilla")).toBe(withGameplay);
+  });
+
+  it("prefixes overrides on the comfig layer and migrates bare managed lines", () => {
+    // The engine resolves exec targets from tf/cfg, so the comfig layer must
+    // address overrides/ explicitly.
+    const fresh = ensureAutoexecExecLine("", "execs_binds", "comfig");
+    expect(fresh).toBe("exec overrides/execs_binds // execs:managed\n");
+    expect(autoexecHasExecLine(fresh, "execs_binds", "comfig")).toBe(true);
+    // A bare managed line written before the fix silently failed in game;
+    // it migrates in place instead of duplicating.
+    const legacy =
+      "exec execs_binds // execs:managed\nexec execs_gameplay // execs:managed\nhost_writeconfig\n";
+    const migrated = ensureAutoexecExecLine(legacy, "execs_binds", "comfig");
+    expect(migrated).toContain("exec overrides/execs_binds // execs:managed");
+    expect(migrated).not.toContain("exec execs_binds // execs:managed");
+    expect(migrated).toContain("exec execs_gameplay // execs:managed");
+    expect(migrated.match(/execs_binds/g)?.length).toBe(1);
   });
 });
 

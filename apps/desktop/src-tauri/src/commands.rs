@@ -665,21 +665,29 @@ pub async fn remove_crosshairs(id: Option<String>) -> Result<ProfileDetail, Stri
 pub async fn build_viewmodel_pack(
     hidden: Vec<String>,
     preload: bool,
+    hide_mode: Option<String>,
     id: Option<String>,
 ) -> Result<ProfileDetail, String> {
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
         let hidden_set: std::collections::BTreeSet<String> = hidden.into_iter().collect();
+        let mode = execs_core::ViewmodelHideMode::from_str_or_default(hide_mode.as_deref());
         let zip = crate::viewmodel_fetch::fetch_animations_zip()?;
         let studiomdl = root.join("bin").join("studiomdl.exe");
         let staging = execs_core::execs_data_dir().join("studio").join("staging");
         let vpk =
-            execs_core::build_viewmodel_pack_vpk(&zip, &hidden_set, &studiomdl, &staging)
+            execs_core::build_viewmodel_pack_vpk(&zip, &hidden_set, mode, &studiomdl, &staging)
                 .map_err(|err| err.message())?;
-        let detail =
-            execs_core::install_built_viewmodel_pack(&root, &profile_id, &vpk, &hidden_set, preload)
-                .map_err(|err| err.message())?;
+        let detail = execs_core::install_built_viewmodel_pack(
+            &root,
+            &profile_id,
+            &vpk,
+            &hidden_set,
+            mode,
+            preload,
+        )
+        .map_err(|err| err.message())?;
         let _ = std::fs::remove_dir_all(&staging);
         Ok(detail)
     })
@@ -803,15 +811,22 @@ pub struct PreloaderStatusPayload {
     pub status: execs_core::preloader::PreloaderStatus,
     pub mods_cached: bool,
     pub mods_size_bytes: u64,
+    /// Steam's stored TF2 launch options carry the preload exec. When the
+    /// options could only be saved to the profile (Steam was open), this
+    /// stays false and the pane tells the user how to finish the job.
+    pub preload_launch_in_steam: bool,
 }
 
 fn preloader_status_payload(
     root: &std::path::Path,
 ) -> Result<PreloaderStatusPayload, String> {
+    let steam_options = execs_core::launch::read_launch_options();
     Ok(PreloaderStatusPayload {
         status: execs_core::preloader::preloader_status(root, &execs_core::execs_data_dir())?,
         mods_cached: crate::mods_fetch::is_cached(),
         mods_size_bytes: crate::mods_fetch::MODS_SIZE_BYTES,
+        preload_launch_in_steam: steam_options.contains("+exec execs_preload")
+            || steam_options.contains("+exec overrides/execs_preload"),
     })
 }
 

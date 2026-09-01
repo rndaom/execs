@@ -63,6 +63,15 @@ export function summarizeReport(report: PreloaderReport): string {
   if (parts.length === 0) {
     parts.push("nothing selected — stock files restored");
   }
+  if (report.relocatedModelMaterials > 0) {
+    // Model materials cannot serve from their stock paths on Casual.
+    parts.push(`${report.relocatedModelMaterials} model materials relocated`);
+  }
+  if (report.synthesizedVmts > 0) {
+    parts.push(
+      `${report.synthesizedVmts} missing ${report.synthesizedVmts === 1 ? "material" : "materials"} generated`,
+    );
+  }
   if (report.skipped.length > 0) {
     parts.push(`${report.skipped.length} skipped`);
   }
@@ -95,6 +104,7 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
   },
   modsCached: true,
   modsSizeBytes: 81_529_475,
+  preloadLaunchInSteam: true,
 };
 
 const PREVIEW_ADDONS: CatalogAddon[] = [

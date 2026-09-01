@@ -1,4 +1,4 @@
-import type { ViewmodelRecord, ViewmodelSource } from "./bridge";
+import type { ViewmodelHideMode, ViewmodelRecord, ViewmodelSource } from "./bridge";
 
 export const EXECS_VIEWMODELS_PACK = "execs-viewmodels";
 export const EXECS_VIEWMODELS_VPK = `tf/custom/${EXECS_VIEWMODELS_PACK}.vpk`;
@@ -23,15 +23,32 @@ export const VIEWMODEL_CLASSES = [
 
 export type ViewmodelClass = (typeof VIEWMODEL_CLASSES)[number];
 
-/** What the pane edits: preload plus the Yttrium-style hidden group ids. */
+/** What the pane edits: preload, the hidden group ids, and how much of the
+ * viewmodel a hidden group removes. */
 export type ViewmodelDraft = {
   preload: boolean;
   hidden: string[];
+  hideMode: ViewmodelHideMode;
 };
 
 export function emptyViewmodelDraft(): ViewmodelDraft {
-  return { preload: true, hidden: [] };
+  return { preload: true, hidden: [], hideMode: "full" };
 }
+
+export function parseHideMode(raw: string | undefined | null): ViewmodelHideMode {
+  return raw === "weapon" ? "weapon" : "full";
+}
+
+export const HIDE_MODE_LABELS: Record<ViewmodelHideMode, string> = {
+  full: "Weapon and hands",
+  weapon: "Weapon only, keep hands",
+};
+
+export const HIDE_MODE_NOTES: Record<ViewmodelHideMode, string> = {
+  full: "The whole viewmodel disappears for the weapons you hide — this is what Yttrium's original pack does.",
+  weapon:
+    "Only the weapon is taken away; your arms and hands keep animating normally. Hidden weapons also stay hidden in third person, because TF2 shares one model between both views.",
+};
 
 export function serializeHiddenGroups(hidden: string[]): string {
   return [...new Set(hidden)].sort().join(",");
@@ -57,6 +74,8 @@ export function seedViewmodelDraft(record: ViewmodelRecord | null | undefined): 
     // Legacy compiled-era records stored per-weapon JSON blobs under other
     // keys; only the hidden list matters now and unknown keys are ignored.
     hidden: parseHiddenGroups(record?.options?.hidden),
+    // Packs built before the option existed hid everything.
+    hideMode: parseHideMode(record?.options?.mode),
   };
 }
 
@@ -99,7 +118,7 @@ export function previewViewmodelRecord(source: ViewmodelSource = "compiled"): Vi
     id: EXECS_VIEWMODELS_PACK,
     source,
     preload: true,
-    options: { hidden: "scout/melee,scout/scatterguns", schema: "yttrium-1" },
+    options: { hidden: "scout/melee,scout/scatterguns", mode: "full", schema: "yttrium-1" },
   };
 }
 
@@ -116,9 +135,10 @@ export function serializePreloadCfg(): string {
     // wait counts frames; 10 gives heavier animation packs margin to finish caching.
     "wait 10; disconnect",
     // A beat for the disconnect to settle, then clean the console and restart
-    // the menu music the map load cut off.
+    // the menu music the map load cut off. TF2 has no `playmenumusic` command;
+    // the menu music is a VScript entry point.
     "wait 1; clear",
-    "playmenumusic",
+    "script_execute randommenumusic",
     "",
   ].join("\n");
 }
