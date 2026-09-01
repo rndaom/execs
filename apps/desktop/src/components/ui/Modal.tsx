@@ -115,11 +115,11 @@ export function Modal({
       tabIndex={-1}
       className={`overlay p-4 text-left ${className}`.trim()}
     >
-      <p id={titleId} className="text-sm font-semibold text-ink">
+      <p id={titleId} className="t-section">
         {title}
       </p>
       {description ? (
-        <p id={descriptionId} className="mt-1 text-sm text-ink-muted">
+        <p id={descriptionId} className="t-meta mt-1">
           {description}
         </p>
       ) : null}
