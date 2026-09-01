@@ -3,6 +3,7 @@ mod commands;
 mod crosshair_fetch;
 mod hud_fetch;
 mod mods_fetch;
+mod net;
 mod viewmodel_fetch;
 
 use std::io::Write;
