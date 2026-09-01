@@ -4,9 +4,13 @@
 
 use std::path::PathBuf;
 
+use crate::net::{self, Verify, MIB};
+
 const ANIMATIONS_COMMIT: &str = "b215a5cdfcd809ec3c2d71529e7a1eb22a72a39e";
 const ANIMATIONS_URL: &str = "https://raw.githubusercontent.com/Yttrium-tYcLief/CompVMInstaller";
 const ANIMATIONS_SHA256: &str = "68b14e6537d1ee3b8b2d0cc1e92f12d4a7fd0f68eb5f12d2f0aa3231a60ee9c3";
+
+const ANIMATIONS_MAX_BYTES: u64 = 256 * MIB;
 
 fn cache_path() -> PathBuf {
     execs_core::execs_data_dir()
@@ -14,28 +18,21 @@ fn cache_path() -> PathBuf {
         .join(format!("yttrium-animations-{ANIMATIONS_COMMIT}.zip"))
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
-    execs_core::hash::sha256_hex(bytes)
-}
-
 /// The animation archive, from cache or the pinned upstream URL.
 pub fn fetch_animations_zip() -> Result<Vec<u8>, String> {
-    let cached = cache_path();
-    if let Ok(bytes) = std::fs::read(&cached) {
-        if sha256_hex(&bytes) == ANIMATIONS_SHA256 {
-            return Ok(bytes);
-        }
-    }
     let url = format!(
         "{ANIMATIONS_URL}/{ANIMATIONS_COMMIT}/Project/CompVMInstaller/Resources/animations.zip"
     );
-    let bytes = crate::comfig_fetch::download_bytes(&url)?;
-    if sha256_hex(&bytes) != ANIMATIONS_SHA256 {
-        return Err("The downloaded animation archive failed verification.".into());
-    }
-    if let Some(parent) = cached.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(&cached, &bytes);
-    Ok(bytes)
+    net::download_pinned(
+        &url,
+        &cache_path(),
+        Verify::Sha256(ANIMATIONS_SHA256),
+        ANIMATIONS_MAX_BYTES,
+    )
+    .map_err(|err| {
+        err.replace(
+            "The download failed verification.",
+            "The downloaded animation archive failed verification.",
+        )
+    })
 }
