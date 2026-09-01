@@ -5,6 +5,7 @@ import {
   ensureAutoexecExecLine,
   ownedCfgPath,
 } from "./binds-ui";
+import { canWrite } from "./write-gate";
 
 export { autoexecFilePath, EXECS_GAMEPLAY_STEM, ensureAutoexecExecLine };
 
@@ -184,7 +185,7 @@ export function gameplayDirty(draft: GameplaySettings, saved: GameplaySettings):
 
 /** Pane write-lock: Apply stays off while TF2 is running or a write is in flight. */
 export function canApplyGameplay(running: boolean, busy: boolean): boolean {
-  return !running && !busy;
+  return canWrite(running, busy);
 }
 
 function applyCvars(base: GameplaySettings, values: Record<string, string>): GameplaySettings {
