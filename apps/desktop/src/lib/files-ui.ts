@@ -118,9 +118,7 @@ export function blockingFindingsForFile(findings: CfgFinding[], path: string | n
   const target = normalizeCfgPath(path);
   return findings.filter(
     (finding) =>
-      finding.tier === "block" &&
-      !finding.advisory &&
-      normalizeCfgPath(finding.file) === target,
+      finding.tier === "block" && !finding.advisory && normalizeCfgPath(finding.file) === target,
   );
 }
 
