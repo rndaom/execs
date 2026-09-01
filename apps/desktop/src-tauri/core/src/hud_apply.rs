@@ -315,14 +315,14 @@ fn merge_files(tree: &mut HudTree, files: &serde_json::Value, value: &str) -> Re
     for (path, patch) in map {
         let rel = normalize_hud_rel(path);
         if let Some(base) = patch.get("#base") {
-            write_base_file(tree, &rel, base, value);
+            write_base_file(tree, &rel, base, value)?;
             continue;
         }
-        let existing = tree
-            .get(&rel)
-            .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .unwrap_or("");
-        let (bases, rest) = split_base_lines(existing);
+        let (existing, encoding) = match tree.get(&rel) {
+            Some(bytes) => decode_hud_text(&rel, bytes)?,
+            None => (String::new(), TextEncoding::Utf8),
+        };
+        let (bases, rest) = split_base_lines(&existing);
         let mut vdf = if rest.trim().is_empty() {
             VdfMap::default()
         } else {
@@ -336,17 +336,144 @@ fn merge_files(tree: &mut HudTree, files: &serde_json::Value, value: &str) -> Re
             out.push('\n');
         }
         out.push_str(&serialize_vdf(&vdf));
-        tree.insert(rel, out.into_bytes());
+        tree.insert(rel, encode_hud_text(&out, encoding));
     }
     Ok(())
 }
 
-fn write_base_file(tree: &mut HudTree, path: &str, base: &serde_json::Value, value: &str) {
-    let line = match base {
-        serde_json::Value::String(text) => format!("#base \"{}\"\n", substitute(text, value)),
-        _ => format!("#base \"{}\"\n", substitute(&json_to_string(base), value)),
+/// Which encoding a HUD `.res` file arrived in. Plenty of shipped HUD resource
+/// files are UTF-16 with a BOM; decoding them as UTF-8 and falling back to `""`
+/// silently replaced the whole file with the schema patch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextEncoding {
+    Utf8,
+    Utf8Bom,
+    Utf16Le,
+    Utf16Be,
+}
+
+fn decode_hud_text(rel: &str, bytes: &[u8]) -> Result<(String, TextEncoding), ProfileError> {
+    let decode_utf16 = |chunks: &mut dyn Iterator<Item = u16>| -> Option<String> {
+        char::decode_utf16(chunks.collect::<Vec<_>>())
+            .collect::<Result<String, _>>()
+            .ok()
     };
-    tree.insert(path, line.into_bytes());
+    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        let mut units = rest.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]]));
+        return decode_utf16(&mut units)
+            .map(|text| (text, TextEncoding::Utf16Le))
+            .ok_or_else(|| ProfileError::Io(format!("{rel} is not valid UTF-16LE")));
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        let mut units = rest.chunks_exact(2).map(|p| u16::from_be_bytes([p[0], p[1]]));
+        return decode_utf16(&mut units)
+            .map(|text| (text, TextEncoding::Utf16Be))
+            .ok_or_else(|| ProfileError::Io(format!("{rel} is not valid UTF-16BE")));
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        return std::str::from_utf8(rest)
+            .map(|text| (text.to_string(), TextEncoding::Utf8Bom))
+            .map_err(|err| ProfileError::Io(format!("{rel} is not valid UTF-8: {err}")));
+    }
+    std::str::from_utf8(bytes)
+        .map(|text| (text.to_string(), TextEncoding::Utf8))
+        // Never patch over content we could not read.
+        .map_err(|err| {
+            ProfileError::Io(format!(
+                "{rel} is not text we can edit ({err}). Its HUD options were left alone."
+            ))
+        })
+}
+
+fn encode_hud_text(text: &str, encoding: TextEncoding) -> Vec<u8> {
+    match encoding {
+        TextEncoding::Utf8 => text.as_bytes().to_vec(),
+        TextEncoding::Utf8Bom => {
+            let mut out = vec![0xEF, 0xBB, 0xBF];
+            out.extend_from_slice(text.as_bytes());
+            out
+        }
+        TextEncoding::Utf16Le => {
+            let mut out = vec![0xFF, 0xFE];
+            for unit in text.encode_utf16() {
+                out.extend_from_slice(&unit.to_le_bytes());
+            }
+            out
+        }
+        TextEncoding::Utf16Be => {
+            let mut out = vec![0xFE, 0xFF];
+            for unit in text.encode_utf16() {
+                out.extend_from_slice(&unit.to_be_bytes());
+            }
+            out
+        }
+    }
+}
+
+/// Replace the `#base` line the schema owns, keeping the rest of the file.
+/// Writing the bare line over the target replaced e.g. rayshud's whole
+/// `mainmenuoverride.res` — hundreds of lines of main-menu layout — with one
+/// `#base`, so picking a menu background emptied the main menu.
+fn write_base_file(
+    tree: &mut HudTree,
+    path: &str,
+    base: &serde_json::Value,
+    value: &str,
+) -> Result<(), ProfileError> {
+    let template = match base {
+        serde_json::Value::String(text) => text.clone(),
+        other => json_to_string(other),
+    };
+    let line = format!("#base \"{}\"", substitute(&template, value));
+    let Some(bytes) = tree.get(path) else {
+        tree.insert(path, format!("{line}\n").into_bytes());
+        return Ok(());
+    };
+    let (existing, encoding) = decode_hud_text(path, bytes)?;
+    let (mut bases, rest) = split_base_lines(&existing);
+    match bases
+        .iter_mut()
+        .find(|current| base_line_matches(current, &template))
+    {
+        Some(slot) => *slot = line,
+        None => bases.push(line),
+    }
+    let mut out = String::new();
+    for base_line in &bases {
+        out.push_str(base_line);
+        out.push('\n');
+    }
+    out.push_str(&rest);
+    tree.insert(path, encode_hud_text(&out, encoding));
+    Ok(())
+}
+
+/// Does this existing `#base` line point at something the schema's template
+/// generates? `backgrounds/$value.res` owns `backgrounds/dark.res`.
+fn base_line_matches(line: &str, template: &str) -> bool {
+    let Some(target) = base_line_target(line) else {
+        return false;
+    };
+    match template.split_once("$value") {
+        None => target == template,
+        Some((prefix, suffix)) => {
+            target.len() >= prefix.len() + suffix.len()
+                && target.starts_with(prefix)
+                && target.ends_with(suffix)
+        }
+    }
+}
+
+fn base_line_target(line: &str) -> Option<&str> {
+    let rest = line.trim_start();
+    let rest = rest
+        .strip_prefix("#base")
+        .or_else(|| rest.strip_prefix("#Base"))?
+        .trim();
+    match rest.strip_prefix('"') {
+        Some(quoted) => quoted.split('"').next(),
+        None => Some(rest.trim()),
+    }
 }
 
 fn split_base_lines(text: &str) -> (Vec<String>, String) {
@@ -545,5 +672,158 @@ mod tests {
             std::str::from_utf8(tree.get("resource/ui/mainmenuoverride.res").unwrap()).unwrap(),
             "#base \"backgrounds/dark.res\"\n"
         );
+    }
+
+    fn background_schema() -> HudSchema {
+        parse_hud_schema(
+            r##"{
+  "Controls": {
+    "Menu": [
+      {
+        "Name": "Background",
+        "Type": "ComboBox",
+        "Value": "dark",
+        "Options": [
+          {
+            "Name": "dark",
+            "Value": "dark",
+            "Files": {
+              "resource/ui/mainmenuoverride.res": { "#base": "backgrounds/$value.res" }
+            }
+          },
+          {
+            "Name": "light",
+            "Value": "light",
+            "Files": {
+              "resource/ui/mainmenuoverride.res": { "#base": "backgrounds/$value.res" }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}"##,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn hash_base_combo_keeps_the_body_of_an_existing_file() {
+        // Writing the bare `#base` line over the target replaced rayshud's
+        // whole main-menu layout with a single line: the main menu lost every
+        // element the HUD defines.
+        let schema = background_schema();
+        let mut tree = HudTree::default();
+        let body = "#base \"backgrounds/dark.res\"\n#base \"keepme.res\"\n\"Resource/UI/MainMenuOverride.res\"\n{\n\t\"Background\"\n\t{\n\t\t\"xpos\"\t\t\"0\"\n\t}\n}\n";
+        tree.insert("resource/ui/mainmenuoverride.res", body.as_bytes().to_vec());
+        let mut options = BTreeMap::new();
+        options.insert("Background".into(), "light".into());
+
+        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+
+        let out =
+            std::str::from_utf8(tree.get("resource/ui/mainmenuoverride.res").unwrap()).unwrap();
+        assert!(out.contains("#base \"backgrounds/light.res\""));
+        assert!(!out.contains("backgrounds/dark.res"), "{out}");
+        // Unrelated bases and the whole body survive.
+        assert!(out.contains("#base \"keepme.res\""));
+        assert!(out.contains("\"Resource/UI/MainMenuOverride.res\""));
+        assert!(out.contains("\"xpos\""));
+    }
+
+    #[test]
+    fn hash_base_appends_when_the_file_has_no_matching_base() {
+        let schema = background_schema();
+        let mut tree = HudTree::default();
+        tree.insert(
+            "resource/ui/mainmenuoverride.res",
+            b"\"MainMenu\"\n{\n\t\"a\"\t\t\"1\"\n}\n".to_vec(),
+        );
+        let mut options = BTreeMap::new();
+        options.insert("Background".into(), "dark".into());
+
+        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+
+        let out =
+            std::str::from_utf8(tree.get("resource/ui/mainmenuoverride.res").unwrap()).unwrap();
+        assert!(out.starts_with("#base \"backgrounds/dark.res\"\n"));
+        assert!(out.contains("\"MainMenu\""));
+    }
+
+    #[test]
+    fn utf16le_res_files_round_trip_instead_of_being_wiped() {
+        let schema = schema_fixture();
+        let mut tree = HudTree::default();
+        let text = "\"Scheme\"\n{\n\t\"Colors\"\n\t{\n\t\t\"bh_Health_Buff\"\t\t\"255 0 0 255\"\n\t\t\"Keep\"\t\t\"1 1 1 1\"\n\t}\n}\n";
+        tree.insert(
+            "resource/clientscheme_colors.res",
+            encode_hud_text(text, TextEncoding::Utf16Le),
+        );
+        let mut options = BTreeMap::new();
+        options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
+
+        apply_hud_options(&mut tree, &schema, "budhud", &options).unwrap();
+
+        let bytes = tree.get("resource/clientscheme_colors.res").unwrap();
+        assert_eq!(&bytes[..2], &[0xFF, 0xFE], "the BOM must be preserved");
+        let (decoded, encoding) = decode_hud_text("x.res", bytes).unwrap();
+        assert_eq!(encoding, TextEncoding::Utf16Le);
+        assert!(decoded.contains("0 153 255 255"));
+        // The rest of the scheme is what used to be lost.
+        assert!(decoded.contains("Keep"));
+    }
+
+    #[test]
+    fn a_file_we_cannot_decode_is_an_error_not_an_empty_string() {
+        let schema = schema_fixture();
+        let mut tree = HudTree::default();
+        tree.insert(
+            "resource/clientscheme_colors.res",
+            vec![0x00, 0xFF, 0xFE, 0x80, 0x81],
+        );
+        let mut options = BTreeMap::new();
+        options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
+
+        let err = apply_hud_options(&mut tree, &schema, "budhud", &options).unwrap_err();
+        assert_eq!(err.code(), "Io");
+        // Never patch over content we could not read.
+        assert_eq!(
+            tree.get("resource/clientscheme_colors.res").unwrap(),
+            &[0x00, 0xFF, 0xFE, 0x80, 0x81]
+        );
+    }
+
+    #[test]
+    fn conditionals_survive_a_res_merge() {
+        let schema = parse_hud_schema(
+            r##"{
+  "Controls": {
+    "Menu": [
+      {
+        "Name": "xpos",
+        "Type": "Number",
+        "Value": "9",
+        "Files": { "resource/ui/hudlayout.res": { "Block": { "xpos": "$value" } } }
+      }
+    ]
+  }
+}"##,
+        )
+        .unwrap();
+        let mut tree = HudTree::default();
+        tree.insert(
+            "resource/ui/hudlayout.res",
+            b"\"Block\"\n{\n\t\"xpos\"\t\t\"0\"\n\t\"visible\"\t\t\"1\" [$WIN32]\n\t\"ItemName\"\t\t\"health\"\n}\n".to_vec(),
+        );
+        let mut options = BTreeMap::new();
+        options.insert("xpos".into(), "42".into());
+
+        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+
+        let out = std::str::from_utf8(tree.get("resource/ui/hudlayout.res").unwrap()).unwrap();
+        assert!(out.contains("\"1\" [$WIN32]"), "{out}");
+        assert!(out.contains("\"xpos\"\t\t\"42\""), "{out}");
+        // The key after the conditional must not have been consumed as a value.
+        assert!(out.contains("\"ItemName\"\t\t\"health\""), "{out}");
     }
 }
