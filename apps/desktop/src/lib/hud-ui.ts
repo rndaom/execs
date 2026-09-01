@@ -136,12 +136,9 @@ export function filterHudCatalog(entries: HudCatalogEntry[], query: string): Hud
   });
 }
 
-function normalizeHudSearch(value: string): string {
+/** Fold case and drop punctuation so "m0rehud" matches "m0re HUD". */
+export function normalizeHudSearch(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-}
-
-export function hudUpdateAvailable(state: HudUiState): boolean {
-  return state.updateAvailable;
 }
 
 export const HUD_CATALOG_PAGE_SIZE = 20;

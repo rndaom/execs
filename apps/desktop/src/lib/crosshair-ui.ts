@@ -1,9 +1,7 @@
 import type { CrosshairRecord } from "./bridge";
+import { migrateCommunityName } from "./community-crosshairs";
 
 export const EXECS_CROSSHAIRS_PACK = "execs-crosshairs";
-export const EXECS_CROSSHAIRS_PREFIX = `tf/custom/${EXECS_CROSSHAIRS_PACK}/`;
-export const CROSSHAIR_THUMBNAIL_DIR = "materials/vgui/replay/thumbnails";
-export const CROSSHAIR_SCRIPTS_DIR = "scripts";
 export const CROSSHAIR_CANVAS_SIZE = 64;
 
 export const CROSSHAIR_SHAPES = ["dot", "cross", "plus-gap", "circle", "t"] as const;
@@ -252,10 +250,14 @@ export function emptyCrosshairDraft(): CrosshairDraft {
 }
 
 export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): CrosshairDraft {
+  // A library entry saved before community ids were namespaced can be named
+  // "circle" or "dot" — the same string as a first-party shape. Rename those on
+  // the way in so the chip grid, the selects and the pack all mean one thing.
+  const rename = (name: string) => migrateCommunityName(name, isBuiltinCrosshairShape);
   const library: Record<string, CrosshairLibraryEntry> = {};
   for (const [name, format] of Object.entries(record?.library ?? {})) {
     if (validCrosshairName(name)) {
-      library[name] = { format: format === "rgba" ? "rgba" : "vtf", bytes: null };
+      library[rename(name)] = { format: format === "rgba" ? "rgba" : "vtf", bytes: null };
     }
   }
   const known = (value: string) => isBuiltinCrosshairShape(value) || value in library;
@@ -287,7 +289,7 @@ export function weaponsForClass(classId: Tf2Class): WeaponCatalogEntry[] {
   return WEAPON_CATALOG.filter((weapon) => weapon.classId === classId);
 }
 
-export const WEAPON_SLOTS = ["primary", "secondary", "melee", "pda", "other"] as const;
+const WEAPON_SLOTS = ["primary", "secondary", "melee", "pda", "other"] as const;
 
 export type WeaponSlot = (typeof WEAPON_SLOTS)[number];
 
@@ -350,11 +352,6 @@ export function isBuiltinCrosshairShape(value: string): value is BuiltinCrosshai
     value === CUSTOM_CROSSHAIR_SHAPE ||
     CROSSHAIR_SHAPES.includes(value as (typeof CROSSHAIR_SHAPES)[number])
   );
-}
-
-/** @deprecated builtin check only — kept for older callers/tests. */
-export function isCrosshairShape(value: string): boolean {
-  return isBuiltinCrosshairShape(value);
 }
 
 /**

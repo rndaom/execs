@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   clampDesign,
+  DESIGN_LIMITS,
+  DESIGN_STYLES,
   defaultCrosshairDesign,
   designFillMask,
+  dilate,
+  maxDesignSize,
   parseDesign,
   renderCrosshairDesign,
   serializeDesign,
@@ -24,7 +28,10 @@ describe("crosshair designer", () => {
       gap: 999,
       opacity: 5,
     });
-    expect(wild.size).toBe(30);
+    // Not the raw 30 max: gap 16 + thickness 1 + outline 1 only leaves room
+    // for 14 before the arms would be clipped against the sprite edge.
+    expect(wild.size).toBe(14);
+    expect(wild.size).toBe(maxDesignSize(wild));
     expect(wild.thickness).toBe(1);
     expect(wild.gap).toBe(16);
     expect(wild.opacity).toBe(32);
@@ -131,5 +138,189 @@ describe("crosshair designer", () => {
   it("always emits a 64x64 RGBA buffer", () => {
     const pixels = renderCrosshairDesign(defaultCrosshairDesign(), null);
     expect(pixels.length).toBe(SIZE * SIZE * 4);
+  });
+});
+
+describe("designer fits inside the sprite", () => {
+  it("caps size against gap, thickness and outline so the arms are never clipped", () => {
+    // 32 - 16 - 4 - 3 = 9: past that the old slider just clipped the arms flat
+    // against the sprite edge while the user kept dragging.
+    expect(maxDesignSize({ style: "cross", thickness: 8, gap: 16, outline: 3 })).toBe(9);
+    expect(maxDesignSize({ style: "cross", thickness: 2, gap: 0, outline: 0 })).toBe(30);
+    // Circle and dot ignore the gap, so they get the full reach back.
+    expect(maxDesignSize({ style: "circle", thickness: 2, gap: 16, outline: 0 })).toBe(30);
+    expect(maxDesignSize({ style: "cross", thickness: 2, gap: 16, outline: 0 })).toBe(15);
+    expect(
+      maxDesignSize({ style: "cross", thickness: 8, gap: 16, outline: 3 }),
+    ).toBeGreaterThanOrEqual(DESIGN_LIMITS.size.min);
+  });
+
+  it("clamps a stored design down to what actually fits", () => {
+    const clamped = clampDesign({
+      ...defaultCrosshairDesign(),
+      style: "cross",
+      size: 30,
+      thickness: 8,
+      gap: 16,
+      outline: 3,
+    });
+    expect(clamped.size).toBe(9);
+  });
+
+  it("keeps the top of the size slider live for every style", () => {
+    // B3: past the fitting size the arms just clipped flat against the sprite
+    // edge — the user dragged and the bitmap stopped changing.
+    for (const style of DESIGN_STYLES) {
+      const base = {
+        ...defaultCrosshairDesign(),
+        style,
+        thickness: DESIGN_LIMITS.thickness.max,
+        gap: DESIGN_LIMITS.gap.max,
+        outline: DESIGN_LIMITS.outline.max,
+      };
+      const fitted = maxDesignSize(base);
+      const painted = (size: number) =>
+        designFillMask(clampDesign({ ...base, size })).reduce((sum, on) => sum + on, 0);
+      expect(clampDesign({ ...base, size: DESIGN_LIMITS.size.max }).size, style).toBe(fitted);
+      if (fitted > DESIGN_LIMITS.size.min) {
+        expect(painted(fitted), style).not.toBe(painted(fitted - 1));
+      }
+    }
+  });
+
+  it("never draws past the sprite at the fitting size", () => {
+    for (const style of DESIGN_STYLES) {
+      const design = clampDesign({
+        ...defaultCrosshairDesign(),
+        style,
+        size: DESIGN_LIMITS.size.max,
+        thickness: DESIGN_LIMITS.thickness.max,
+        gap: DESIGN_LIMITS.gap.max,
+        outline: DESIGN_LIMITS.outline.max,
+      });
+      const pixels = renderCrosshairDesign(design, null);
+      // The bounding box of everything painted has to sit inside the sprite,
+      // and the whole ring of the design has to be present on both sides.
+      let left = SIZE;
+      let right = -1;
+      let top = SIZE;
+      let bottom = -1;
+      for (let y = 0; y < SIZE; y += 1) {
+        for (let x = 0; x < SIZE; x += 1) {
+          if (at(pixels, x, y)[3] !== 0) {
+            left = Math.min(left, x);
+            right = Math.max(right, x);
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y);
+          }
+        }
+      }
+      expect(top, style).toBeGreaterThanOrEqual(0);
+      expect(bottom, style).toBeLessThanOrEqual(SIZE - 1);
+      // Horizontally symmetric about the 31/32 centre line — every style is,
+      // "t" included, and a design cut off on one side would not be.
+      expect(SIZE - 1 - right, style).toBe(left);
+    }
+  });
+});
+
+describe("designer centring", () => {
+  it("keeps odd strokes on the sprite's centre line", () => {
+    // The centre line sits on the 31/32 boundary (Valve's sprites use x=31 w=2).
+    for (const thickness of [1, 2, 3, 4, 5]) {
+      const mask = designFillMask(
+        clampDesign({
+          ...defaultCrosshairDesign(),
+          style: "cross",
+          thickness,
+          gap: 2,
+          size: 10,
+          outline: 0,
+        }),
+      );
+      const columns: number[] = [];
+      for (let x = 0; x < SIZE; x += 1) {
+        if (mask[20 * SIZE + x] === 1) {
+          columns.push(x);
+        }
+      }
+      expect(columns, `t=${thickness}`).toHaveLength(thickness);
+      expect(columns.at(-1), `t=${thickness}`).toBe(31 + Math.floor(thickness / 2));
+      expect(columns[0], `t=${thickness}`).toBe(32 - Math.ceil(thickness / 2));
+    }
+  });
+
+  it("keeps the vertical and horizontal arms mirror images of each other", () => {
+    const mask = designFillMask(
+      clampDesign({
+        ...defaultCrosshairDesign(),
+        style: "cross",
+        thickness: 3,
+        gap: 2,
+        size: 10,
+        outline: 0,
+      }),
+    );
+    for (let y = 0; y < SIZE; y += 1) {
+      for (let x = 0; x < SIZE; x += 1) {
+        expect(mask[y * SIZE + x], `${x},${y}`).toBe(mask[x * SIZE + y]);
+      }
+    }
+  });
+});
+
+describe("outline dilation", () => {
+  it("grows a full block, not the 4-neighbour diamond the old kernel made", () => {
+    const mask = new Uint8Array(SIZE * SIZE);
+    mask[32 * SIZE + 32] = 1;
+    const grown = dilate(mask, 3, "square");
+    // A real 3px outline reaches the corners of the 7×7 block.
+    expect(grown[(32 - 3) * SIZE + (32 - 3)]).toBe(1);
+    expect(grown[(32 + 3) * SIZE + (32 + 3)]).toBe(1);
+    expect(grown[(32 - 4) * SIZE + 32]).toBe(0);
+    let painted = 0;
+    for (const value of grown) {
+      painted += value;
+    }
+    expect(painted).toBe(49);
+  });
+
+  it("keeps a round kernel round and leaves a zero-radius mask untouched", () => {
+    const mask = new Uint8Array(SIZE * SIZE);
+    mask[32 * SIZE + 32] = 1;
+    const round = dilate(mask, 3, "round");
+    expect(round[(32 - 3) * SIZE + (32 - 3)]).toBe(0);
+    expect(round[(32 - 3) * SIZE + 32]).toBe(1);
+    expect(dilate(mask, 0)).toBe(mask);
+  });
+});
+
+describe("shadow layer", () => {
+  it("rides the fill opacity instead of a fixed alpha", () => {
+    const faint = renderCrosshairDesign(
+      clampDesign({ ...defaultCrosshairDesign(), shadow: true, outline: 0, opacity: 64 }),
+      null,
+    );
+    let shadowAlpha = 0;
+    for (let i = 0; i < SIZE * SIZE; i += 1) {
+      const alpha = faint[i * 4 + 3];
+      if (alpha > 0 && alpha !== 64) {
+        shadowAlpha = alpha;
+        break;
+      }
+    }
+    expect(shadowAlpha).toBe(Math.round((110 * 64) / 255));
+  });
+
+  it("never paints over the crosshair's own pixels", () => {
+    const design = clampDesign({ ...defaultCrosshairDesign(), shadow: true, outline: 0 });
+    const plain = renderCrosshairDesign({ ...design, shadow: false }, [255, 0, 0]);
+    const shadowed = renderCrosshairDesign(design, [255, 0, 0]);
+    for (let i = 0; i < SIZE * SIZE; i += 1) {
+      if (plain[i * 4 + 3] !== 0) {
+        expect(shadowed[i * 4], `pixel ${i}`).toBe(plain[i * 4]);
+        expect(shadowed[i * 4 + 3], `pixel ${i}`).toBe(plain[i * 4 + 3]);
+      }
+    }
   });
 });

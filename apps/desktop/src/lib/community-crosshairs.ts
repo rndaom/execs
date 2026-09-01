@@ -190,6 +190,36 @@ export const COMMUNITY_CROSSHAIRS: CommunityCrosshairEntry[] = [
   { id: "zeeq_plus", file: "zeeq_plus" },
 ];
 
+/**
+ * Namespace for community entries in a profile's crosshair library.
+ *
+ * Two upstream stems ("circle", "dot") are also first-party shape names. Stored
+ * bare they produced duplicate React keys and duplicate `<option value>`s, the
+ * builtin shape won the preview, and the backend wrote one `circle.vtf` for two
+ * different meanings. An underscore — not a slash — because the name lands in
+ * VPK paths and VMT text and both validators (`validCrosshairName` here,
+ * `valid_crosshair_name` in core) accept `[a-z0-9_-]` only.
+ */
+export const COMMUNITY_CROSSHAIR_PREFIX = "venom_";
+
+/** The library name a community entry is stored under. */
+export function communityLibraryName(id: string): string {
+  return `${COMMUNITY_CROSSHAIR_PREFIX}${id}`;
+}
+
+const COMMUNITY_IDS = new Set(COMMUNITY_CROSSHAIRS.map((entry) => entry.id));
+
+/**
+ * Rename a legacy bare community name that collides with a first-party shape.
+ *
+ * Only collisions are migrated: a non-colliding legacy name (e.g. "bomo1") is
+ * unambiguous and still matches the bytes stored in the installed pack, so
+ * renaming it would strand them.
+ */
+export function migrateCommunityName(name: string, isBuiltin: (value: string) => boolean): string {
+  return COMMUNITY_IDS.has(name) && isBuiltin(name) ? communityLibraryName(name) : name;
+}
+
 export function searchCommunityCrosshairs(query: string): CommunityCrosshairEntry[] {
   const needle = query.trim().toLowerCase();
   if (!needle) {

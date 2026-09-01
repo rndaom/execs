@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useSeededDraft } from "./hooks/useSeededDraft";
 import type { StockCrosshairSprite } from "./lib/bridge";
 import {
   COLOR_MAX,
@@ -7,7 +9,6 @@ import {
   CROSSHAIR_SCALE_MAX,
   CROSSHAIR_SCALE_MIN,
   type CrosshairFile,
-  canApplyGameplay,
   clampGameplay,
   type GameplayLayer,
   type GameplaySettings,
@@ -20,19 +21,16 @@ import {
   STOCK_CROSSHAIR_LABELS,
   type StockShapePrimitive,
   stockCrosshairPrimitives,
+  stockCrosshairRenderedSize,
 } from "./lib/stock-crosshair-shapes";
 
 export function StockCrosshairSettings({
-  running,
-  busy,
   layer,
   effective,
   sprites = null,
   managedText,
   onSave,
 }: {
-  running: boolean;
-  busy: boolean;
   layer: GameplayLayer;
   effective: Record<string, string>;
   /** Real sprites from the user's game files; geometry fallback when null. */
@@ -40,14 +38,14 @@ export function StockCrosshairSettings({
   managedText: string;
   onSave: (gameplayText: string) => void;
 }) {
+  const { running } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
-  const [draft, setDraft] = useState(seeded);
-  const locked = !canApplyGameplay(running, busy);
+  // Applying the crosshair pack rewrites cl_crosshair_red/green/blue in this
+  // same managed file. Reseeding on every incoming change wiped whatever the
+  // user was mid-edit here; `useSeededDraft` keeps a dirty draft instead.
+  const [draft, setDraft] = useSeededDraft(seeded, serializeGameplay);
+  const locked = !useCanWrite();
   const dirty = gameplayDirty(draft, seeded);
-
-  useEffect(() => {
-    setDraft(seeded);
-  }, [seeded]);
 
   function patch(update: Partial<GameplaySettings>) {
     setDraft((current) => ({ ...current, ...update }));
@@ -69,8 +67,7 @@ export function StockCrosshairSettings({
   const primitives = stockCrosshairPrimitives(draft.cl_crosshair_file);
   const sprite =
     draft.cl_crosshair_file === "" ? null : (sprites?.[draft.cl_crosshair_file] ?? null);
-  // Engine rule: rendered size = sprite size × cl_crosshair_scale / 32.
-  const renderedSize = Math.round((64 * draft.cl_crosshair_scale) / 32);
+  const renderedSize = stockCrosshairRenderedSize(draft.cl_crosshair_scale);
 
   return (
     <form
@@ -97,7 +94,7 @@ export function StockCrosshairSettings({
             data-testid="stock-crosshair-preview"
             role="img"
             aria-label={`Preview of ${STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]} at scale ${draft.cl_crosshair_scale}`}
-            className="surface relative grid aspect-square w-full place-items-center bg-black"
+            className="surface relative grid aspect-square w-full place-items-center bg-bg"
           >
             {sprite ? (
               <StockSpriteCanvas
@@ -120,7 +117,7 @@ export function StockCrosshairSettings({
                 Default / none — each weapon draws its own crosshair.
               </p>
             )}
-            <span className="absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+            <span className="eyebrow absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5">
               Live preview
             </span>
           </div>
@@ -188,7 +185,7 @@ export function StockCrosshairSettings({
                 min={COLOR_MIN}
                 max={COLOR_MAX}
                 disabled={locked}
-                accentColor="#b8383b"
+                accentClass="accent-team-red"
                 onChange={(cl_crosshair_red) => patch({ cl_crosshair_red })}
               />
               <StockSliderRow
@@ -198,7 +195,7 @@ export function StockCrosshairSettings({
                 min={COLOR_MIN}
                 max={COLOR_MAX}
                 disabled={locked}
-                accentColor="#729e42"
+                accentClass="accent-health"
                 onChange={(cl_crosshair_green) => patch({ cl_crosshair_green })}
               />
               <StockSliderRow
@@ -208,7 +205,7 @@ export function StockCrosshairSettings({
                 min={COLOR_MIN}
                 max={COLOR_MAX}
                 disabled={locked}
-                accentColor="#5885a2"
+                accentClass="accent-team-blu"
                 onChange={(cl_crosshair_blue) => patch({ cl_crosshair_blue })}
               />
             </div>
@@ -216,6 +213,8 @@ export function StockCrosshairSettings({
         </div>
       </div>
 
+      {/* A plain row, not the sticky `ApplyBar`: this is a sub-section of the
+          Crosshair pane, and the pane's own ApplyBar already owns the bottom. */}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge/60 pt-4">
         <p className="text-xs text-ink-muted" aria-live="polite">
           {dirty ? "Default crosshair has unsaved changes" : "Default crosshair is up to date"}
@@ -366,7 +365,7 @@ function StockSliderRow({
   min,
   max,
   disabled,
-  accentColor,
+  accentClass = "accent-brand",
   note,
   onChange,
 }: {
@@ -376,7 +375,8 @@ function StockSliderRow({
   min: number;
   max: number;
   disabled: boolean;
-  accentColor?: string;
+  /** A `--color-*` token utility, never a raw hex. */
+  accentClass?: string;
   note?: string;
   onChange: (value: number) => void;
 }) {
@@ -400,8 +400,7 @@ function StockSliderRow({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-2 w-full cursor-pointer accent-brand disabled:cursor-not-allowed disabled:opacity-50"
-        style={accentColor ? { accentColor } : undefined}
+        className={`mt-2 w-full cursor-pointer ${accentClass} disabled:cursor-not-allowed disabled:opacity-50`}
       />
       {note ? <p className="mt-1 text-[10px] leading-4 text-ink-faint">{note}</p> : null}
     </div>
