@@ -8,12 +8,14 @@ import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { LaunchPane } from "./LaunchPane";
 import {
-  autoexecExecPatch,
   autoexecFilePath,
   bindsFilePath,
   configBindsFromFiles,
   EXECS_BINDS_STEM,
   EXECS_GAMEPLAY_STEM,
+  ensureAutoexecExecLine,
+  MANAGED_EXEC_STEMS,
+  managedCfgPath,
   shouldSyncTrackedBinds,
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
@@ -232,9 +234,16 @@ export function SettingsHost({
     const cfgPaths = (next?.files ?? []).filter((file) => file.path.toLowerCase().endsWith(".cfg"));
     const loaded: CfgText[] = [];
     for (const file of cfgPaths) {
-      const content = await readProfileFile(file.path);
-      if (content.text !== null) {
-        loaded.push({ path: content.path, text: content.text });
+      // One unreadable cfg must not abort the whole load: `files` would keep
+      // its stale value and every pane would reseed from its defaults, which
+      // reads to the user as "my settings reverted".
+      try {
+        const content = await readProfileFile(file.path);
+        if (content.text !== null) {
+          loaded.push({ path: content.path, text: content.text });
+        }
+      } catch {
+        // Tracked but unreadable (missing blob, path outside the profile).
       }
     }
     let nextFiles = loaded;
@@ -470,9 +479,21 @@ export function SettingsHost({
     await writeOwnedFile(path, text);
     const autoPath = autoexecFilePath(layer);
     const existing = files.find((file) => file.path === autoPath)?.text ?? "";
-    const patch = autoexecExecPatch(layer, existing, stem);
-    if (patch) {
-      await writeOwnedFile(patch.path, patch.text);
+    // autoexec.cfg is written whole, so it has to carry every managed stem we
+    // own. Patching only the stem being written drops the other pane's exec
+    // line — that is how a gameplay apply silently unhooked saved binds.
+    let next = ensureAutoexecExecLine(existing, stem, layer);
+    for (const sibling of MANAGED_EXEC_STEMS) {
+      if (sibling === stem) {
+        continue;
+      }
+      const siblingPath = managedCfgPath(layer, sibling);
+      if (siblingPath === path || files.some((file) => file.path === siblingPath)) {
+        next = ensureAutoexecExecLine(next, sibling, layer);
+      }
+    }
+    if (next !== existing) {
+      await writeOwnedFile(autoPath, next);
     }
   }
 
@@ -749,12 +770,12 @@ export function SettingsHost({
         running={running}
         busy={busy}
         record={detail?.viewmodel ?? previewRecord}
-        onBuild={(hidden, preload) => {
+        onBuild={(hidden, preload, hideMode) => {
           if (!tauri) {
             return;
           }
           void runWrite(async () => {
-            await buildViewmodelPack(hidden, preload);
+            await buildViewmodelPack(hidden, preload, hideMode);
           });
         }}
         onImport={(preload) => {

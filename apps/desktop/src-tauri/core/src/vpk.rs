@@ -307,9 +307,16 @@ pub fn read_vpk_entry(dir_path: &Path, entry: &VpkEntryLocation) -> Result<Vec<u
     Ok(body)
 }
 
-/// Rewrite one entry in place. `data` must exactly match the stored length —
-/// callers pad shrunk files up to size first — and the directory CRC is
-/// updated to match, so the archive stays self-consistent.
+/// Rewrite one entry's DATA in place. `data` must exactly match the stored
+/// length — callers pad shrunk files up to size first.
+///
+/// The `_dir.vpk` file is NEVER touched — not even the entry's CRC. That is
+/// load-bearing, not sloppiness: the directory carries Valve's tree checksum
+/// and signature, and sv_pure validates files against the directory's stock
+/// CRCs. Leaving the directory byte-pristine (stale CRC over modded data) is
+/// exactly what lets patched content pass the pure check; rewriting the CRC
+/// both breaks the tree checksum and advertises the modded hash, and the
+/// engine then rejects the entire archive on pure servers.
 pub fn patch_vpk_entry(
     dir_path: &Path,
     entry: &VpkEntryLocation,
@@ -330,14 +337,17 @@ pub fn patch_vpk_entry(
             entry.length
         )));
     }
-    let (data_path, start) = if entry.archive_index == DIR_ARCHIVE {
-        (dir_path.to_path_buf(), entry.data_base + u64::from(entry.offset))
-    } else {
-        (
-            sibling_archive_path(dir_path, entry.archive_index)?,
-            u64::from(entry.offset),
-        )
-    };
+    if entry.archive_index == DIR_ARCHIVE {
+        // Data stored inside the _dir.vpk itself would force a write to the
+        // directory file; no stock particle uses this layout, and keeping the
+        // directory byte-pristine matters more than supporting it.
+        return Err(VpkError(format!(
+            "{} stores its data in the directory file; not supported.",
+            entry.rel
+        )));
+    }
+    let data_path = sibling_archive_path(dir_path, entry.archive_index)?;
+    let start = u64::from(entry.offset);
     let mut data_file = std::fs::OpenOptions::new()
         .write(true)
         .open(&data_path)
@@ -356,20 +366,6 @@ pub fn patch_vpk_entry(
         .write_all(data)
         .map_err(|err| VpkError(err.to_string()))?;
     data_file
-        .sync_all()
-        .map_err(|err| VpkError(err.to_string()))?;
-
-    let mut dir_file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(dir_path)
-        .map_err(|err| VpkError(err.to_string()))?;
-    dir_file
-        .seek(SeekFrom::Start(entry.crc_pos))
-        .map_err(|err| VpkError(err.to_string()))?;
-    dir_file
-        .write_all(&crc32(data).to_le_bytes())
-        .map_err(|err| VpkError(err.to_string()))?;
-    dir_file
         .sync_all()
         .map_err(|err| VpkError(err.to_string()))?;
     Ok(())

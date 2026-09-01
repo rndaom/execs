@@ -55,8 +55,8 @@ pub fn comfig_preset_from_str(value: &str) -> Option<ComfigPreset> {
         "medium" => Some(ComfigPreset::Medium),
         "medium_low" => Some(ComfigPreset::MediumLow),
         "low" => Some(ComfigPreset::Low),
-        "very_low" => Some(ComfigPreset::VeryLow),
-        "none" => Some(ComfigPreset::None),
+        "very_low" | "destitute" => Some(ComfigPreset::VeryLow),
+        "none" | "custom" => Some(ComfigPreset::None),
         _ => None,
     }
 }
@@ -82,7 +82,7 @@ pub fn serialize_setup_hook(preset: ComfigPreset, existing: Option<&str>) -> Str
         for line in existing.lines() {
             if line.trim().starts_with("preset=") {
                 if !wrote {
-                    out.push(format!("preset={}", preset.as_str()));
+                    out.push(format!("preset={}", preset.alias()));
                     wrote = true;
                 }
                 continue;
@@ -91,7 +91,7 @@ pub fn serialize_setup_hook(preset: ComfigPreset, existing: Option<&str>) -> Str
         }
     }
     if !wrote {
-        out.insert(0, format!("preset={}", preset.as_str()));
+        out.insert(0, format!("preset={}", preset.alias()));
     }
     let mut text = out.join("\n");
     text.push('\n');

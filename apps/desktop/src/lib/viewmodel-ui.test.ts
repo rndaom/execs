@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   EXECS_PRELOAD_LAUNCH,
+  emptyViewmodelDraft,
   hasPreloadLaunch,
   parseHiddenGroups,
+  parseHideMode,
   previewViewmodelRecord,
   seedViewmodelDraft,
   serializeHiddenGroups,
@@ -27,7 +29,7 @@ describe("viewmodel ui", () => {
     expect(cfg).toContain("sv_allow_point_servercommand always");
     expect(cfg).toContain("map itemtest");
     expect(cfg).toContain("disconnect");
-    expect(cfg).toContain("playmenumusic");
+    expect(cfg).toContain("script_execute randommenumusic");
     expect(cfg).not.toContain("+quit");
     expect(cfg).not.toContain("gameinfo");
   });
@@ -63,5 +65,24 @@ describe("viewmodel ui", () => {
     expect(hidden).toEqual(["scout/melee", "soldier/rockets"]);
     hidden = toggleHiddenGroup(hidden, "soldier/rockets");
     expect(hidden).toEqual(["scout/melee"]);
+  });
+});
+
+describe("hide mode", () => {
+  it("defaults to the full-viewmodel hide and round-trips the weapon-only choice", () => {
+    expect(emptyViewmodelDraft().hideMode).toBe("full");
+    expect(parseHideMode(undefined)).toBe("full");
+    expect(parseHideMode("nonsense")).toBe("full");
+    expect(parseHideMode("weapon")).toBe("weapon");
+    // A pack built before the option existed hid everything.
+    expect(seedViewmodelDraft(previewViewmodelRecord()).hideMode).toBe("full");
+    expect(
+      seedViewmodelDraft({
+        id: "execs-viewmodels",
+        source: "compiled",
+        preload: true,
+        options: { hidden: "scout/scatterguns", mode: "weapon", schema: "yttrium-1" },
+      }).hideMode,
+    ).toBe("weapon");
   });
 });

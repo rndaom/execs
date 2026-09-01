@@ -18,20 +18,85 @@ pub fn viewmodel_group(id: &str) -> Option<&'static ViewmodelGroup> {
     VIEWMODEL_GROUPS.iter().find(|group| group.id == id)
 }
 
-/// Rewrite one SMD so every bone sits far off-screen for the whole sequence.
+/// How much of the viewmodel a hidden group removes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewmodelHideMode {
+    /// Move every bone off-screen — the weapon *and* the arms disappear.
+    /// This is what CompVMInstaller does.
+    Full,
+    /// Move only the weapon attachment bones. The weapon disappears while the
+    /// hands keep their normal animation.
+    Weapon,
+}
+
+impl Default for ViewmodelHideMode {
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
+impl ViewmodelHideMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Weapon => "weapon",
+        }
+    }
+
+    pub fn from_str_or_default(value: Option<&str>) -> Self {
+        match value {
+            Some("weapon") => Self::Weapon,
+            _ => Self::Full,
+        }
+    }
+}
+
+/// The weapon model is bone-merged onto these; every class parents them to
+/// `bip_hand_L`/`bip_hand_R`, so moving them alone takes the weapon away and
+/// leaves the arms animating.
+fn is_weapon_bone(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("weapon_bone") || lower.starts_with("vm_weapon_bone")
+}
+
+fn section(lines: &[&str], keyword: &str) -> Option<usize> {
+    lines.iter().position(|line| line.trim() == keyword)
+}
+
+/// `  12 "bip_hand_R" 7` → (12, "bip_hand_R")
+fn parse_node_line(line: &str) -> Option<(usize, &str)> {
+    let trimmed = line.trim();
+    let (index_text, rest) = trimmed.split_once(' ')?;
+    let index = index_text.parse::<usize>().ok()?;
+    let rest = rest.trim_start();
+    let quoted = rest.strip_prefix('"')?;
+    let end = quoted.find('"')?;
+    Some((index, &quoted[..end]))
+}
+
+/// Leading bone index of a skeleton row like `    12 0.5 1.0 ...`.
+fn parse_skeleton_row_index(line: &str) -> Option<usize> {
+    let trimmed = line.trim_start();
+    let (head, _) = trimmed.split_once(' ')?;
+    head.parse::<usize>().ok()
+}
+
+/// Rewrite one SMD so the chosen bones sit far off-screen for the sequence.
+pub fn hide_smd_sequence(text: &str, mode: ViewmodelHideMode) -> Result<String, String> {
+    match mode {
+        ViewmodelHideMode::Full => hide_all_bones(text),
+        ViewmodelHideMode::Weapon => hide_weapon_bones(text),
+    }
+}
+
 /// Faithful to CompVMInstaller's EditFile: keep everything before `skeleton`,
 /// emit frame 0 with all bones at (-100,-100,-100) rot 0, then empty frames so
 /// the original frame count (and therefore timing/anim events) is preserved.
-pub fn hide_smd_sequence(text: &str) -> Result<String, String> {
+fn hide_all_bones(text: &str) -> Result<String, String> {
     let lines: Vec<&str> = text.lines().collect();
-    let nodes = lines
-        .iter()
-        .position(|line| line.trim() == "nodes")
-        .ok_or("SMD has no nodes section.")?;
-    let skeleton = lines
-        .iter()
-        .position(|line| line.trim() == "skeleton")
-        .ok_or("SMD has no skeleton section.")?;
+    let nodes = section(&lines, "nodes").ok_or("SMD has no nodes section.")?;
+    let skeleton = section(&lines, "skeleton").ok_or("SMD has no skeleton section.")?;
     if skeleton < nodes + 2 {
         return Err("SMD nodes section is malformed.".into());
     }
@@ -52,6 +117,41 @@ pub fn hide_smd_sequence(text: &str) -> Result<String, String> {
         out.push_str(&format!("  time {frame}\n"));
     }
     out.push_str("end\n");
+    Ok(out)
+}
+
+/// Keep every frame of arm animation; rewrite only the weapon bones' rows.
+/// Their transforms are parent-local, so -100 on a hand-parented bone parks
+/// the weapon far from the camera without moving the hand.
+fn hide_weapon_bones(text: &str) -> Result<String, String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let nodes = section(&lines, "nodes").ok_or("SMD has no nodes section.")?;
+    let skeleton = section(&lines, "skeleton").ok_or("SMD has no skeleton section.")?;
+    if skeleton < nodes + 2 {
+        return Err("SMD nodes section is malformed.".into());
+    }
+    let weapon_bones: BTreeSet<usize> = lines[nodes + 1..skeleton - 1]
+        .iter()
+        .filter_map(|line| parse_node_line(line))
+        .filter(|(_, name)| is_weapon_bone(name))
+        .map(|(index, _)| index)
+        .collect();
+    if weapon_bones.is_empty() {
+        return Err("SMD has no weapon bones to hide.".into());
+    }
+
+    let mut out = String::with_capacity(text.len());
+    for (position, line) in lines.iter().enumerate() {
+        let rewritten = if position > skeleton {
+            parse_skeleton_row_index(line)
+                .filter(|index| weapon_bones.contains(index))
+                .map(|index| format!("    {index} -100 -100 -100 0 0 0"))
+        } else {
+            None
+        };
+        out.push_str(rewritten.as_deref().unwrap_or(line));
+        out.push('\n');
+    }
     Ok(out)
 }
 
@@ -184,6 +284,7 @@ fn find_smd(anims_dir: &Path, file: &str) -> Option<PathBuf> {
 pub fn build_viewmodel_pack_vpk(
     animations_zip: &[u8],
     hidden_groups: &BTreeSet<String>,
+    mode: ViewmodelHideMode,
     studiomdl: &Path,
     staging: &Path,
 ) -> Result<Vec<u8>, ProfileError> {
@@ -220,7 +321,7 @@ pub fn build_viewmodel_pack_vpk(
             })?;
             let text = std::fs::read_to_string(&smd_path)
                 .map_err(|err| ProfileError::Io(err.to_string()))?;
-            let hidden = hide_smd_sequence(&text)
+            let hidden = hide_smd_sequence(&text, mode)
                 .map_err(|err| ProfileError::Io(format!("{}: {err}", smd_path.display())))?;
             std::fs::write(&smd_path, hidden).map_err(|err| ProfileError::Io(err.to_string()))?;
         }
@@ -272,9 +373,65 @@ mod tests {
 
     const SAMPLE_SMD: &str = "version 1\nnodes\n  0 \"bip_pelvis\" -1\n  1 \"bip_spine\" 0\nend\nskeleton\n  time 0\n    0 1.5 2.5 3.5 0.1 0.2 0.3\n    1 0.5 0.5 0.5 0 0 0\n  time 1\n    0 1.6 2.6 3.6 0.1 0.2 0.3\n  time 2\n    1 0.9 0.9 0.9 0 0 0\nend\n";
 
+    /// Shaped like the real files: hand bones plus weapon bones parented to
+    /// them, and two frames of animation.
+    const HAND_SMD: &str = "version 1\nnodes\n  0 \"root\" -1\n  1 \"bip_hand_R\" 0\n  2 \"weapon_bone\" 1\n  3 \"vm_weapon_bone_1\" 1\nend\nskeleton\n  time 0\n    0 0 0 0 0 0 0\n    1 1.5 2.5 3.5 0.1 0.2 0.3\n    2 5.1 3.5 0.0 0 0 0\n    3 5.4 4.9 -0.1 0 0 0\n  time 1\n    1 1.6 2.6 3.6 0.1 0.2 0.3\n    2 5.2 3.6 0.0 0 0 0\nend\n";
+
+    #[test]
+    fn weapon_mode_hides_only_weapon_bones_and_keeps_hand_frames() {
+        let hidden = hide_smd_sequence(HAND_SMD, ViewmodelHideMode::Weapon).unwrap();
+        // Weapon bones parked, every frame preserved.
+        assert!(hidden.contains("    2 -100 -100 -100 0 0 0"));
+        assert!(hidden.contains("    3 -100 -100 -100 0 0 0"));
+        assert!(!hidden.contains("5.1 3.5"));
+        assert!(!hidden.contains("5.4 4.9"));
+        // Hand and root animation untouched, both frames still there.
+        assert!(hidden.contains("    1 1.5 2.5 3.5 0.1 0.2 0.3"));
+        assert!(hidden.contains("    1 1.6 2.6 3.6 0.1 0.2 0.3"));
+        assert!(hidden.contains("    0 0 0 0 0 0 0"));
+        assert!(hidden.contains("  time 0\n"));
+        assert!(hidden.contains("  time 1\n"));
+        // The nodes section is never rewritten.
+        assert!(hidden.contains("  2 \"weapon_bone\" 1"));
+
+        // Full mode on the same file still flattens everything.
+        let full = hide_smd_sequence(HAND_SMD, ViewmodelHideMode::Full).unwrap();
+        assert!(full.contains("    1 -100 -100 -100 0 0 0"));
+        assert!(!full.contains("1.5 2.5 3.5"));
+    }
+
+    #[test]
+    fn weapon_mode_needs_weapon_bones() {
+        // A skeleton with no weapon attachment bones cannot hide a weapon.
+        assert!(hide_smd_sequence(SAMPLE_SMD, ViewmodelHideMode::Weapon).is_err());
+    }
+
+    #[test]
+    fn hide_mode_round_trips_through_options() {
+        assert_eq!(ViewmodelHideMode::default(), ViewmodelHideMode::Full);
+        assert_eq!(ViewmodelHideMode::Weapon.as_str(), "weapon");
+        assert_eq!(
+            ViewmodelHideMode::from_str_or_default(Some("weapon")),
+            ViewmodelHideMode::Weapon
+        );
+        assert_eq!(
+            ViewmodelHideMode::from_str_or_default(Some("full")),
+            ViewmodelHideMode::Full
+        );
+        // Unknown / missing falls back to the CompVMInstaller behavior.
+        assert_eq!(
+            ViewmodelHideMode::from_str_or_default(None),
+            ViewmodelHideMode::Full
+        );
+        assert_eq!(
+            ViewmodelHideMode::from_str_or_default(Some("nonsense")),
+            ViewmodelHideMode::Full
+        );
+    }
+
     #[test]
     fn hides_all_bones_and_preserves_frame_count() {
-        let hidden = hide_smd_sequence(SAMPLE_SMD).unwrap();
+        let hidden = hide_smd_sequence(SAMPLE_SMD, ViewmodelHideMode::Full).unwrap();
         assert!(hidden.contains("nodes"));
         assert!(hidden.contains("  time 0\n"));
         assert!(hidden.contains("    0 -100 -100 -100 0 0 0"));
@@ -289,7 +446,8 @@ mod tests {
 
     #[test]
     fn rejects_smd_without_skeleton() {
-        assert!(hide_smd_sequence("version 1\nnodes\nend\n").is_err());
+        assert!(hide_smd_sequence("version 1\nnodes\nend\n", ViewmodelHideMode::Full).is_err());
+        assert!(hide_smd_sequence("version 1\nnodes\nend\n", ViewmodelHideMode::Weapon).is_err());
     }
 
     #[test]

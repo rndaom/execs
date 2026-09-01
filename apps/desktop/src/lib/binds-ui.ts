@@ -270,6 +270,13 @@ export function bindsFilePath(layer: BindsLayer): string {
   return ownedCfgPath(layer, `${EXECS_BINDS_STEM}.cfg`);
 }
 
+export const MANAGED_EXEC_STEMS: ManagedExecStem[] = [EXECS_BINDS_STEM, EXECS_GAMEPLAY_STEM];
+
+/** Where a managed cfg lives for the layer, by stem. */
+export function managedCfgPath(layer: BindsLayer, fileStem: ManagedExecStem): string {
+  return ownedCfgPath(layer, `${fileStem}.cfg`);
+}
+
 export function autoexecFilePath(layer: BindsLayer): string {
   return ownedCfgPath(layer, "autoexec.cfg");
 }
@@ -436,9 +443,28 @@ function execStem(target: string): string {
   return base.replace(/\.cfg$/i, "").toLowerCase();
 }
 
-export function autoexecHasExecLine(existingAutoexec: string, fileStem: ManagedExecStem): boolean {
+function execTargetOf(raw: string): string {
+  return raw
+    .replace(/\\/g, "/")
+    .replace(/\.cfg$/i, "")
+    .toLowerCase();
+}
+
+/** The engine resolves `exec` targets relative to tf/cfg no matter which file
+ * issues them, so overrides-layer files must be addressed with the
+ * `overrides/` prefix — a bare stem silently fails in game. */
+export function managedExecTarget(layer: BindsLayer, fileStem: ManagedExecStem): string {
+  return layer === "comfig" ? `overrides/${fileStem}` : fileStem;
+}
+
+export function autoexecHasExecLine(
+  existingAutoexec: string,
+  fileStem: ManagedExecStem,
+  layer: BindsLayer,
+): boolean {
+  const target = managedExecTarget(layer, fileStem);
   for (const command of parseCommands(existingAutoexec, "autoexec.cfg")) {
-    if (command.name === "exec" && command.args[0] && execStem(command.args[0]) === fileStem) {
+    if (command.name === "exec" && command.args[0] && execTargetOf(command.args[0]) === target) {
       return true;
     }
   }
@@ -448,12 +474,39 @@ export function autoexecHasExecLine(existingAutoexec: string, fileStem: ManagedE
 export function ensureAutoexecExecLine(
   existingAutoexec: string,
   fileStem: ManagedExecStem,
+  layer: BindsLayer,
 ): string {
-  if (autoexecHasExecLine(existingAutoexec, fileStem)) {
-    return existingAutoexec;
+  const line = `exec ${managedExecTarget(layer, fileStem)} ${MANAGED_EXEC_COMMENT}`;
+  // Migrate managed lines whose target no longer resolves (a bare stem
+  // written before the layer prefix fix, or a stale prefix after a layer
+  // change) to the correct spelling in place.
+  let migrated = false;
+  const rewritten = existingAutoexec
+    .split("\n")
+    .map((raw) => {
+      if (!raw.trim().endsWith(MANAGED_EXEC_COMMENT)) {
+        return raw;
+      }
+      const commands = [...parseCommands(raw, "autoexec.cfg")];
+      const command = commands[0];
+      if (
+        commands.length === 1 &&
+        command.name === "exec" &&
+        command.args[0] &&
+        execStem(command.args[0]) === fileStem &&
+        raw.trim() !== line
+      ) {
+        migrated = true;
+        return line;
+      }
+      return raw;
+    })
+    .join("\n");
+  const text = migrated ? rewritten : existingAutoexec;
+  if (autoexecHasExecLine(text, fileStem, layer)) {
+    return text;
   }
-  const line = `exec ${fileStem} ${MANAGED_EXEC_COMMENT}`;
-  const trimmed = existingAutoexec.replace(/\s+$/u, "");
+  const trimmed = text.replace(/\s+$/u, "");
   return trimmed.length > 0 ? `${trimmed}\n${line}\n` : `${line}\n`;
 }
 
@@ -462,7 +515,7 @@ export function autoexecExecPatch(
   existingAutoexec: string,
   fileStem: ManagedExecStem = EXECS_BINDS_STEM,
 ): AutoexecPatch | undefined {
-  const text = ensureAutoexecExecLine(existingAutoexec, fileStem);
+  const text = ensureAutoexecExecLine(existingAutoexec, fileStem, layer);
   if (text === existingAutoexec) {
     return undefined;
   }

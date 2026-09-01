@@ -179,7 +179,7 @@ where
             continue;
         }
         let resolved = if SHAPES.contains(name) {
-            ResolvedAsset::Rgba(shape_pixels(name, custom_source, color)?)
+            ResolvedAsset::Rgba(shape_pixels(name, custom_source)?)
         } else if let Some(asset) = library.get(*name) {
             resolve_library_asset(name, asset)?
         } else if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, name) {
@@ -285,7 +285,7 @@ where
         design: design.map(|value| value.to_string()),
     });
     save_manifest(profiles_dir, tf2_root, &manifest)?;
-    force_empty_stock_crosshair(profiles_dir, tf2_root, profile_id, &running)?;
+    force_empty_stock_crosshair(profiles_dir, tf2_root, profile_id, color, &running)?;
     Ok(detail_from_manifest(&load_manifest(
         profiles_dir,
         profile_id,
@@ -634,11 +634,7 @@ pub fn decode_vtf_bgra8888(bytes: &[u8], width: u32, height: u32) -> Option<Vec<
     Some(rgba)
 }
 
-fn shape_pixels(
-    shape: &str,
-    custom_rgba: Option<&[u8]>,
-    color: Option<[u8; 3]>,
-) -> Result<Vec<u8>, ProfileError> {
+fn shape_pixels(shape: &str, custom_rgba: Option<&[u8]>) -> Result<Vec<u8>, ProfileError> {
     if shape == "custom" {
         let pixels = custom_rgba.ok_or_else(|| {
             ProfileError::Io("Import a PNG before applying a custom crosshair.".into())
@@ -649,18 +645,11 @@ fn shape_pixels(
                 "Custom crosshair must be a 64×64 RGBA buffer.".into(),
             ));
         }
-        // Imported PNGs keep their own colors; the tint applies to shapes only.
         return Ok(pixels.to_vec());
     }
-    let mut pixels = render_shape_rgba(shape);
-    if let Some([r, g, b]) = color {
-        for chunk in pixels.chunks_exact_mut(4) {
-            chunk[0] = ((u16::from(chunk[0]) * u16::from(r)) / 255) as u8;
-            chunk[1] = ((u16::from(chunk[1]) * u16::from(g)) / 255) as u8;
-            chunk[2] = ((u16::from(chunk[2]) * u16::from(b)) / 255) as u8;
-        }
-    }
-    Ok(pixels)
+    // Textures stay white; the tint rides on cl_crosshair_red/green/blue so it
+    // reaches community VTFs too (see force_empty_crosshair_file).
+    Ok(render_shape_rgba(shape))
 }
 
 pub fn render_shape_rgba(shape: &str) -> Vec<u8> {
@@ -758,6 +747,7 @@ fn force_empty_stock_crosshair(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
+    color: Option<[u8; 3]>,
     running: &[String],
 ) -> Result<(), ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
@@ -777,24 +767,35 @@ fn force_empty_stock_crosshair(
         tf2_root,
         profile_id,
         path,
-        force_empty_crosshair_file(&text).as_bytes(),
+        force_empty_crosshair_file(&text, color).as_bytes(),
         running.iter().cloned(),
         WriteOwnedOptions::default(),
     )?;
     Ok(())
 }
 
-pub fn force_empty_crosshair_file(text: &str) -> String {
-    // The engine multiplies every crosshair texture (stock file or the pack's
-    // VTFs) by cl_crosshair_red/green/blue. Pack colors are baked into the VTF,
-    // so normalize the tint cvars to 255 for a faithful render.
-    let forced: [(&str, &str); 4] = [
-        ("cl_crosshair_file", "cl_crosshair_file \"\""),
-        ("cl_crosshair_red", "cl_crosshair_red 255"),
-        ("cl_crosshair_green", "cl_crosshair_green 255"),
-        ("cl_crosshair_blue", "cl_crosshair_blue 255"),
-    ];
-    let mut found = [false; 4];
+pub fn force_empty_crosshair_file(text: &str, color: Option<[u8; 3]>) -> String {
+    // The engine multiplies the weapon-script crosshair sprite by
+    // cl_crosshair_red/green/blue (the pack's VMTs enable $vertexcolor for
+    // exactly this), so the tint rides on the cvars. That colors every source
+    // uniformly — first-party shapes, community VTFs and designed crosshairs
+    // alike. With no pack color set we leave the cvars alone so the stock
+    // crosshair panel keeps ownership of them.
+    let tint = color.map(|[red, green, blue]| {
+        [
+            format!("cl_crosshair_red {red}"),
+            format!("cl_crosshair_green {green}"),
+            format!("cl_crosshair_blue {blue}"),
+        ]
+    });
+    let mut forced: Vec<(&str, String)> =
+        vec![("cl_crosshair_file", "cl_crosshair_file \"\"".to_string())];
+    if let Some([red, green, blue]) = tint {
+        forced.push(("cl_crosshair_red", red));
+        forced.push(("cl_crosshair_green", green));
+        forced.push(("cl_crosshair_blue", blue));
+    }
+    let mut found = vec![false; forced.len()];
     let mut lines: Vec<String> = text
         .lines()
         .map(|line| {
@@ -805,7 +806,7 @@ pub fn force_empty_crosshair_file(text: &str) -> String {
                     .is_some_and(|rest| !rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'));
                 if matches_cvar {
                     found[index] = true;
-                    return (*replacement).to_string();
+                    return replacement.clone();
                 }
             }
             line.to_string()
@@ -816,7 +817,7 @@ pub fn force_empty_crosshair_file(text: &str) -> String {
     }
     for (index, (_, replacement)) in forced.iter().enumerate() {
         if !found[index] {
-            lines.push((*replacement).to_string());
+            lines.push(replacement.clone());
         }
     }
     let mut out = lines.join("\n");
@@ -982,11 +983,40 @@ mod tests {
         let gameplay = std::fs::read_to_string(tf2.join("tf/cfg/execs_gameplay.cfg")).unwrap();
         assert!(gameplay.contains("cl_crosshair_file \"\""));
         assert!(gameplay.contains("cl_crosshair_red 255"));
-        assert!(gameplay.contains("cl_crosshair_green 255"));
-        assert!(gameplay.contains("cl_crosshair_blue 255"));
+        assert!(gameplay.contains("cl_crosshair_green 64"));
+        assert!(gameplay.contains("cl_crosshair_blue 0"));
         remove_crosshairs_to(&root.join("profiles"), &tf2, &id, unlocked()).unwrap();
         assert!(!tf2.join("tf/custom/execs-crosshairs").exists());
         cleanup(&root);
+    }
+
+    #[test]
+    fn tint_rides_on_the_cvars_and_textures_stay_white() {
+        // A community VTF can only be colored by the engine, so the tint must
+        // live in the cfg rather than being baked into first-party pixels.
+        let cfg = force_empty_crosshair_file("", Some([255, 64, 0]));
+        assert!(cfg.contains("cl_crosshair_red 255"));
+        assert!(cfg.contains("cl_crosshair_green 64"));
+        assert!(cfg.contains("cl_crosshair_blue 0"));
+        let pixels = shape_pixels("cross", None).unwrap();
+        let lit = pixels
+            .chunks_exact(4)
+            .find(|chunk| chunk[3] == 255)
+            .expect("shape draws at least one pixel");
+        assert_eq!(&lit[0..3], &[255, 255, 255]);
+    }
+
+    #[test]
+    fn no_pack_color_leaves_the_stock_crosshair_cvars_alone() {
+        let existing = "cl_crosshair_red 12
+cl_crosshair_green 34
+cl_crosshair_blue 56
+";
+        let cfg = force_empty_crosshair_file(existing, None);
+        assert!(cfg.contains("cl_crosshair_file \"\""));
+        assert!(cfg.contains("cl_crosshair_red 12"));
+        assert!(cfg.contains("cl_crosshair_green 34"));
+        assert!(cfg.contains("cl_crosshair_blue 56"));
     }
 
     #[test]
