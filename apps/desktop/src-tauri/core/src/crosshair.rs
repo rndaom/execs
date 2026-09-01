@@ -8,7 +8,7 @@ use crate::apply::{
     WriteOwnedOptions,
 };
 use crate::ice::{decrypt_weapon_ctx, encrypt_weapon_ctx};
-use crate::process_lock::live_process_names;
+use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, load_manifest, profiles_dir, remove_manifest_files_to, save_manifest,
     CrosshairRecord, ProfileError,
@@ -368,6 +368,11 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
+    // `remove_live_pack` below is unconditional, so the guard cannot live
+    // inside the `previous` branch: a manifest with no pack files (re-imported
+    // profile, partially-failed apply) would otherwise `remove_dir_all` the
+    // live folder while TF2 is running.
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let previous = pack_paths(profiles_dir, profile_id)?;
     if !previous.is_empty() {
         remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &previous, &running)?;
@@ -1242,6 +1247,29 @@ cl_crosshair_blue 56
         )
         .unwrap_err();
         assert!(matches!(err, ProfileError::GameRunning));
+        cleanup(&root);
+    }
+
+    /// The live pack removal is unconditional, so an empty manifest must not
+    /// be a way past the write lock.
+    #[test]
+    fn remove_refuses_while_tf2_is_running_even_with_no_tracked_pack_files() {
+        let (root, tf2, id) = setup();
+        let live = tf2.join("tf/custom").join(EXECS_CROSSHAIRS_PACK);
+        std::fs::create_dir_all(&live).unwrap();
+        std::fs::write(live.join("stray.vmt"), b"vmt").unwrap();
+
+        // Nothing tracked on the manifest: the old guard would be skipped.
+        assert!(pack_paths(&root.join("profiles"), &id).unwrap().is_empty());
+
+        let err = remove_crosshairs_to(&root.join("profiles"), &tf2, &id, [tf2_name()])
+            .unwrap_err();
+        assert!(matches!(err, ProfileError::GameRunning));
+        assert!(live.join("stray.vmt").is_file(), "live pack must survive");
+
+        // With the game closed it still removes the folder.
+        remove_crosshairs_to(&root.join("profiles"), &tf2, &id, unlocked()).unwrap();
+        assert!(!live.exists());
         cleanup(&root);
     }
 
