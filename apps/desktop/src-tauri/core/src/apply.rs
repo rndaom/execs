@@ -10,9 +10,9 @@ use crate::blob::blob_path;
 use crate::finder::discover_steam_roots;
 use crate::process_lock::live_process_names;
 use crate::profile::{
-    exclusive_file_path, is_forbidden_rel_path, is_shared_rel_path, load_library_from,
-    load_manifest, normalize_rel_path, profiles_dir, put_exclusive_file_to, put_shared_blob_to,
-    CrosshairRecord, FileStorage, HudRecord, ProfileError, ProfileFile, ViewmodelRecord,
+    exclusive_file_path, is_shared_rel_path, load_library_from, load_manifest, normalize_rel_path,
+    profiles_dir, put_exclusive_file_to, put_shared_blob_to, CrosshairRecord, FileStorage,
+    HudRecord, ProfileError, ProfileFile, ViewmodelRecord,
 };
 use crate::surface::CfgLayer;
 
@@ -48,19 +48,7 @@ pub struct WriteOwnedOptions<'a> {
     pub steam_roots: Option<&'a [PathBuf]>,
 }
 
-pub fn is_file_safe_rel_path(path: &str) -> bool {
-    let Ok(normalized) = normalize_rel_path(path) else {
-        return false;
-    };
-    if is_forbidden_rel_path(&normalized) {
-        return false;
-    }
-    let lower = normalized.to_ascii_lowercase();
-    if lower.starts_with("tf/cfg/user/") || lower == "tf/cfg/user" {
-        return false;
-    }
-    lower.starts_with("tf/cfg/") || lower.starts_with("tf/custom/")
-}
+pub use crate::profile::is_file_safe_rel_path;
 
 pub fn detail_from_manifest(manifest: &crate::profile::ProfileManifest) -> ProfileDetail {
     ProfileDetail {
