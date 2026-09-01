@@ -176,7 +176,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         draftName={draftName}
         settings={
           showSettingsChrome(profiles.library) ? (
-            <SettingsLayout tab={settingsTab} running={lock.running} onTab={setSettingsTab}>
+            <SettingsLayout tab={settingsTab} onTab={setSettingsTab}>
               <SettingsHost
                 api={api}
                 tab={settingsTab}

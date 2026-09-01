@@ -16,7 +16,7 @@ export function UpdateBanner({ update }: { update: AppUpdateState }) {
     <div
       role="status"
       data-testid="app-update-banner"
-      className="flex flex-wrap items-center justify-center gap-3 border-b border-brand bg-brand/20 px-4 py-2 text-sm text-ink"
+      className="t-body flex flex-wrap items-center justify-center gap-3 border-b border-edge bg-panel-raised px-4 py-2 text-ink"
     >
       <p>{updateBannerCopy(update.available.version)}</p>
       {update.progress ? (
@@ -27,7 +27,7 @@ export function UpdateBanner({ update }: { update: AppUpdateState }) {
             type="button"
             data-testid="app-update-install"
             onClick={() => void update.install()}
-            className="btn btn-primary px-4 py-1"
+            className="btn btn-primary"
           >
             {INSTALL_LABEL}
           </button>
@@ -35,7 +35,7 @@ export function UpdateBanner({ update }: { update: AppUpdateState }) {
             type="button"
             data-testid="app-update-later"
             onClick={update.dismiss}
-            className="btn btn-ghost px-4 py-1"
+            className="btn btn-ghost"
           >
             {LATER_LABEL}
           </button>
