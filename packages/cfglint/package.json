@@ -8,6 +8,10 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "//engines": "bin/cfglint.mjs imports ../src/index.ts directly, which needs Node's type stripping (>= 22.6).",
+  "engines": {
+    "node": ">=22.6"
+  },
   "scripts": {
     "test": "vitest run",
     "build-corpus": "node tools/build-corpus.mjs"
