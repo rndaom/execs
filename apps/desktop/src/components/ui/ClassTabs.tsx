@@ -70,15 +70,13 @@ export function ClassTabs<Id extends string>({
                 event.preventDefault();
               }
             }}
-            className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              active
-                ? "border-brand text-brand"
-                : "border-transparent text-ink-muted hover:text-ink"
+            className={`border-b-2 px-3 py-2 text-[13.5px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+              active ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"
             }`}
           >
             {tab.label}
             {tab.meta !== undefined ? (
-              <span className="ml-1.5 text-[10px] text-ink-faint">{tab.meta}</span>
+              <span className="tnum ml-1.5 text-[11px] text-ink-faint">{tab.meta}</span>
             ) : null}
           </button>
         );
