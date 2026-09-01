@@ -58,8 +58,9 @@ pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
     extract_hud_zip, hud_ui_state, hud_zip_url, install_hud_pack, load_catalog_cache_from,
     load_hud_tree_from_profile, match_hud_catalog, resolve_hud, save_catalog_cache_to,
-    schema_file_name, schema_supported, set_hud_options, write_hud_tree_files, HudCatalogCache,
-    HudCatalogEntry, HudStatus, HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
+    schema_file_name, schema_supported, set_hud_options, sync_hud_exec_lines,
+    sync_hud_exec_lines_to, write_hud_tree_files, HudCatalogCache, HudCatalogEntry, HudStatus,
+    HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
 };
 pub use hud_apply::{
     apply_hud_options, apply_hud_options_for_layer, hud_cfg_path, hud_cfg_stem, parse_hud_schema,
