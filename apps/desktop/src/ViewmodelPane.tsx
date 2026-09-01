@@ -1,6 +1,12 @@
 import { ArrowSquareOut, DownloadSimple, Hammer, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
-import { openExternal, type ViewmodelHideMode, type ViewmodelRecord } from "./lib/bridge";
+import {
+  isTauri,
+  openExternal,
+  type ViewmodelHideMode,
+  type ViewmodelRecord,
+  viewmodelBuildAvailable,
+} from "./lib/bridge";
 import { canWriteSettings } from "./lib/settings-ui";
 import { viewmodelGroupsForClass } from "./lib/viewmodel-groups";
 import {
@@ -46,10 +52,33 @@ export function ViewmodelPane({
   const [draft, setDraft] = useState(seeded);
   const [classId, setClassId] = useState<ViewmodelClass>("scout");
   const [slot, setSlot] = useState<ViewmodelPreviewSlot>("primary");
+  // Building needs TF2's own studiomdl, which only the Windows depot ships.
+  // Assume yes until the probe says otherwise, so the button never flickers
+  // disabled on a machine that can build.
+  const [canBuild, setCanBuild] = useState(true);
 
   useEffect(() => {
     setDraft(seeded);
   }, [seeded]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    let cancelled = false;
+    viewmodelBuildAvailable()
+      .then((available) => {
+        if (!cancelled) {
+          setCanBuild(available);
+        }
+      })
+      .catch(() => {
+        // A failed probe is not evidence the machine cannot build.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const slotsForClass = VIEWMODEL_PREVIEW_SLOTS.filter(
     (item) => VIEWMODEL_PREVIEW_WEAPONS[classId][item] !== undefined,
@@ -317,20 +346,25 @@ export function ViewmodelPane({
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-edge/60 pt-4">
           <p className="min-w-0 flex-1 text-xs text-ink-muted" aria-live="polite">
-            {running
-              ? "Close TF2 to build."
-              : draft.hidden.length === 0 && record
-                ? "Nothing ticked — use Remove pack below to restore stock viewmodels."
-                : draft.hidden.length === 0
-                  ? "Nothing hidden yet — tick groups above, then build."
-                  : dirty || !builtPack
-                    ? "Build compiles with TF2's own studiomdl in an isolated staging folder (Windows)."
-                    : "The installed pack matches these choices."}
+            {!canBuild
+              ? "Building packs needs TF2's studiomdl (Windows only for now)."
+              : running
+                ? "Close TF2 to build."
+                : draft.hidden.length === 0 && record
+                  ? "Nothing ticked — use Remove pack below to restore stock viewmodels."
+                  : draft.hidden.length === 0
+                    ? "Nothing hidden yet — tick groups above, then build."
+                    : dirty || !builtPack
+                      ? "Build compiles with TF2's own studiomdl in an isolated staging folder (Windows)."
+                      : "The installed pack matches these choices."}
           </p>
           <button
             type="button"
             data-testid="viewmodel-build"
-            disabled={locked || draft.hidden.length === 0 || (!dirty && builtPack)}
+            title={
+              canBuild ? undefined : "Building packs needs TF2's studiomdl (Windows only for now)."
+            }
+            disabled={!canBuild || locked || draft.hidden.length === 0 || (!dirty && builtPack)}
             onClick={() => onBuild(draft.hidden, draft.preload, draft.hideMode)}
             className="btn btn-primary"
           >
