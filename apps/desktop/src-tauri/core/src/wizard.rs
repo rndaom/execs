@@ -7,13 +7,12 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::cfg_script::overlay_binds;
+use crate::apply::profile_file_bytes_from;
 use crate::launch::{recommended_launch_options, sanitize_launch_options};
 use crate::process_lock::live_process_names;
 use crate::profile::{
-    create_profile_record_to, exclusive_file_path, is_shared_rel_path, load_library_from,
-    load_manifest, profiles_dir, put_exclusive_file_to, put_shared_blob_to, FileStorage,
-    ProfileError, ProfileLibrary,
+    create_profile_record_to, is_shared_rel_path, load_library_from, load_manifest, profiles_dir,
+    put_exclusive_file_to, put_shared_blob_to, FileStorage, ProfileError, ProfileLibrary,
 };
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
@@ -120,11 +119,17 @@ pub struct WizardSpec {
     pub addons: Vec<OfficialAddon>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
-pub enum BindSource {
-    Stock,
-    Inherit { from_profile_id: String },
+/// What a new profile's `tf/cfg/config.cfg` starts from (user decision,
+/// 2026-09-01). `Current` copies the ACTIVE profile's `config.cfg` verbatim, so
+/// binds, audio, `con_enable`, advanced options and the
+/// `tf_training_has_prompted_*` / `tf_explanations_*` "already shown" flags all
+/// carry over. `Fresh` is Valve's `config_default.cfg`, i.e. a newly installed
+/// TF2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StartFrom {
+    Current,
+    Fresh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -199,14 +204,14 @@ pub fn download_urls_for_spec(
 pub fn materialize_wizard_profile(
     tf2_root: &Path,
     spec: &WizardSpec,
-    binds: &BindSource,
+    start_from: StartFrom,
     assets: &[WizardAsset<'_>],
 ) -> Result<WizardResult, ProfileError> {
     materialize_wizard_profile_to(
         &profiles_dir(),
         tf2_root,
         spec,
-        binds,
+        start_from,
         assets,
         live_process_names(),
         WizardOptions::default(),
@@ -217,7 +222,7 @@ pub fn materialize_wizard_profile_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
     spec: &WizardSpec,
-    binds: &BindSource,
+    start_from: StartFrom,
     assets: &[WizardAsset<'_>],
     running_names: I,
     options: WizardOptions<'_>,
@@ -230,6 +235,9 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
+    // Read the source config before the new record exists: `current` means the
+    // profile that is active now, never the one we are about to create.
+    let config = build_config_cfg(profiles_dir, tf2_root, start_from)?;
     let library = create_profile_record_to(profiles_dir, tf2_root, &spec.name, &running)?;
     let profile_id = library
         .profiles
@@ -239,13 +247,12 @@ where
         .map(|profile| profile.id.clone())
         .ok_or(ProfileError::UnknownProfile)?;
 
-    let config = build_config_cfg(profiles_dir, tf2_root, binds)?;
     put_exclusive_file_to(
         profiles_dir,
         tf2_root,
         &profile_id,
         CONFIG_CFG,
-        config.as_bytes(),
+        &config,
         &running,
     )?;
 
@@ -326,28 +333,28 @@ where
 fn build_config_cfg(
     profiles_dir: &Path,
     tf2_root: &Path,
-    binds: &BindSource,
-) -> Result<String, ProfileError> {
-    let default_path = tf2_root.join("tf").join("cfg").join("config_default.cfg");
-    if !default_path.is_file() {
-        return Err(ProfileError::Io(
-            "Valve config_default.cfg is missing from this TF2 install.".into(),
-        ));
-    }
-    let stock =
-        fs::read_to_string(&default_path).map_err(|err| ProfileError::Io(err.to_string()))?;
-    match binds {
-        BindSource::Stock => Ok(stock),
-        BindSource::Inherit { from_profile_id } => {
-            let inherited_path = exclusive_file_path(profiles_dir, from_profile_id, CONFIG_CFG);
-            if !inherited_path.is_file() {
+    start_from: StartFrom,
+) -> Result<Vec<u8>, ProfileError> {
+    match start_from {
+        StartFrom::Fresh => {
+            let default_path = tf2_root.join("tf").join("cfg").join("config_default.cfg");
+            if !default_path.is_file() {
                 return Err(ProfileError::Io(
-                    "Active profile has no config.cfg to inherit.".into(),
+                    "Valve config_default.cfg is missing from this TF2 install.".into(),
                 ));
             }
-            let inherited = fs::read_to_string(&inherited_path)
-                .map_err(|err| ProfileError::Io(err.to_string()))?;
-            Ok(overlay_binds(&stock, &inherited))
+            fs::read(&default_path).map_err(|err| ProfileError::Io(err.to_string()))
+        }
+        StartFrom::Current => {
+            let library = load_library_from(profiles_dir, Some(tf2_root))?;
+            let Some(active) = library.active_profile_id else {
+                return Err(ProfileError::Io(
+                    "Save or switch to a profile before starting from your current setup.".into(),
+                ));
+            };
+            profile_file_bytes_from(profiles_dir, &active, CONFIG_CFG).map_err(|_| {
+                ProfileError::Io("The active profile has no config.cfg to copy.".into())
+            })
         }
     }
 }
@@ -378,7 +385,9 @@ pub fn wizard_file_storage(
 mod tests {
     use super::*;
     use crate::absorb::AbsorbOptions;
-    use crate::profile::{init_library_to, save_current_as_to, SaveCurrentOptions};
+    use crate::profile::{
+        exclusive_file_path, init_library_to, save_current_as_to, SaveCurrentOptions,
+    };
     use crate::switch::switch_profile_to;
     use std::fs::{self, File};
     use std::io::Write;
@@ -496,7 +505,7 @@ mod tests {
             &profiles,
             &root,
             &spec("Fresh"),
-            &BindSource::Stock,
+            StartFrom::Fresh,
             &assets(base, addon),
             None::<&str>,
             WizardOptions {
@@ -550,16 +559,24 @@ mod tests {
         cleanup(&dir);
     }
 
-    #[test]
-    fn inherit_overlays_binds() {
-        let dir = crate::test_temp_dir();
-        let root = tf2_root(&dir);
-        write_file(&root.join("tf/cfg/config.cfg"), "unbindall\nbind w +back\n");
-        let profiles = dir.join("profiles");
-        init_library_to(&profiles, &root, None::<&str>).unwrap();
-        let saved = save_current_as_to(
-            &profiles,
-            &root,
+    /// A real live `config.cfg`: a custom bind, an archived audio cvar, the
+    /// console toggle and one of the "tutorial already shown" flags.
+    const LIVE_CONFIG: &str = concat!(
+        "unbindall\n",
+        "bind \"mouse4\" \"+voicerecord\"\n",
+        "volume \"0.35\"\n",
+        "con_enable \"1\"\n",
+        "hud_fastswitch \"1\"\n",
+        "tf_training_has_prompted_for_training \"1\"\n",
+        "tf_explanations_charinfopanel \"1\"\n"
+    );
+
+    fn library_with_active_profile(profiles: &Path, root: &Path, config: &str) {
+        write_file(&root.join("tf/cfg/config.cfg"), config);
+        init_library_to(profiles, root, None::<&str>).unwrap();
+        save_current_as_to(
+            profiles,
+            root,
             "Main",
             None::<&str>,
             SaveCurrentOptions {
@@ -568,15 +585,47 @@ mod tests {
             },
         )
         .unwrap();
-        let from = saved.active_profile_id.clone().unwrap();
+    }
+
+    #[test]
+    fn start_from_current_copies_the_active_config_verbatim() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let profiles = dir.join("profiles");
+        library_with_active_profile(&profiles, &root, LIVE_CONFIG);
 
         let result = materialize_wizard_profile_to(
             &profiles,
             &root,
             &spec("Alt"),
-            &BindSource::Inherit {
-                from_profile_id: from,
-            },
+            StartFrom::Current,
+            &assets(b"base", b"addon"),
+            None::<&str>,
+            WizardOptions::default(),
+        )
+        .unwrap();
+        let config = fs::read(exclusive_file_path(
+            &profiles,
+            &result.profile_id,
+            CONFIG_CFG,
+        ))
+        .unwrap();
+        assert_eq!(config, LIVE_CONFIG.as_bytes());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn start_from_fresh_still_uses_stock_binds() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let profiles = dir.join("profiles");
+        library_with_active_profile(&profiles, &root, LIVE_CONFIG);
+
+        let result = materialize_wizard_profile_to(
+            &profiles,
+            &root,
+            &spec("Alt"),
+            StartFrom::Fresh,
             &assets(b"base", b"addon"),
             None::<&str>,
             WizardOptions::default(),
@@ -588,8 +637,32 @@ mod tests {
             CONFIG_CFG,
         ))
         .unwrap();
-        assert!(config.contains("bind w +back"));
-        assert!(!config.contains("bind s +back"));
+        assert_eq!(config, STOCK);
+        assert!(!config.contains("tf_training_has_prompted_for_training"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn start_from_current_without_an_active_profile_errors() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let profiles = dir.join("profiles");
+        init_library_to(&profiles, &root, None::<&str>).unwrap();
+
+        let err = materialize_wizard_profile_to(
+            &profiles,
+            &root,
+            &spec("Alt"),
+            StartFrom::Current,
+            &assets(b"base", b"addon"),
+            None::<&str>,
+            WizardOptions::default(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(&err, ProfileError::Io(message) if message.contains("current setup")),
+            "unexpected error: {err:?}"
+        );
         cleanup(&dir);
     }
 
@@ -601,7 +674,7 @@ mod tests {
             &dir.join("profiles"),
             &root,
             &spec("Fresh"),
-            &BindSource::Stock,
+            StartFrom::Fresh,
             &assets(b"base", b"addon"),
             [tf2_name()],
             WizardOptions::default(),
@@ -619,7 +692,7 @@ mod tests {
             &dir.join("profiles"),
             &root,
             &spec("Fresh"),
-            &BindSource::Stock,
+            StartFrom::Fresh,
             &[],
             None::<&str>,
             WizardOptions::default(),
@@ -653,7 +726,7 @@ mod tests {
             &profiles,
             &root,
             &spec("Fresh"),
-            &BindSource::Stock,
+            StartFrom::Fresh,
             &assets(b"base-vpk", b"addon-vpk"),
             None::<&str>,
             WizardOptions {
