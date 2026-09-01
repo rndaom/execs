@@ -8,6 +8,9 @@ import presetMediumLow from "./assets/presets/medium_low.webp";
 import presetUltra from "./assets/presets/ultra.webp";
 import presetVeryLow from "./assets/presets/very_low.webp";
 import { ClassTabs } from "./components/ui/ClassTabs";
+import { Disclosure } from "./components/ui/Disclosure";
+import { OptionTile } from "./components/ui/OptionTile";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
@@ -76,12 +79,12 @@ function ModuleControl({
   const options = ["", ...module.levels];
 
   return (
-    <article className="min-w-0 px-4 py-3">
+    <article className="min-w-0 py-3">
       <div className="flex items-start justify-between gap-3">
-        <p id={labelId} className="text-[13px] font-medium text-ink">
+        <p id={labelId} className="t-row">
           {module.label}
         </p>
-        <p className="shrink-0 text-[11px] text-ink-faint">
+        <p className="shrink-0 text-[12px] text-ink-faint">
           {value ? readableLevel(value) : "Preset default"}
         </p>
       </div>
@@ -94,11 +97,12 @@ function ModuleControl({
         <legend className="sr-only">{module.label} options</legend>
         {options.map((option) => {
           const selected = option === value;
-          // Only real overrides glow — a page of preset defaults stays calm.
+          // Only real overrides carry the accent ring — a page of preset
+          // defaults stays calm.
           const selectedClass =
             option === ""
               ? "bg-panel-raised font-medium text-ink"
-              : "bg-brand font-medium text-on-brand";
+              : "bg-panel-raised font-medium text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]";
           return (
             <button
               key={option || "preset-default"}
@@ -106,7 +110,7 @@ function ModuleControl({
               aria-pressed={selected}
               disabled={locked}
               onClick={() => onChange(option)}
-              className={`min-w-fit flex-1 rounded-md px-2 py-1.5 text-[11px] leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`min-w-fit flex-1 rounded-md px-2 py-1.5 text-[12px] leading-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-40 ${
                 selected ? selectedClass : "text-ink-muted hover:bg-panel-raised hover:text-ink"
               }`}
             >
@@ -182,10 +186,10 @@ export function ComfigPane({
     onApplyModules(modules);
   }
 
-  const statusLabel = running
-    ? "Read-only while TF2 is running"
+  const statusProblem = running
+    ? null
     : busy
-      ? "Saving changes…"
+      ? "Saving…"
       : detail === null
         ? "Loading active profile…"
         : !packagesInstalled
@@ -194,51 +198,66 @@ export function ComfigPane({
 
   return (
     <section data-testid="settings-comfig" className="min-w-0 text-left">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Comfig</h1>
-          <p className="text-xs text-ink-muted">
-            Powered by{" "}
+      <PaneHeader
+        title="Comfig"
+        lede={
+          <>
+            Performance, visuals and networking, powered by{" "}
             <button
               type="button"
               onClick={() => void openExternal("https://comfig.app")}
-              className="font-medium text-brand underline decoration-brand/40 underline-offset-4 hover:text-brand-hover"
+              className="text-ink underline decoration-edge-strong underline-offset-4 hover:text-ink"
             >
               mastercomfig
             </button>
-          </p>
-        </div>
-
-        {statusLabel ? (
-          <div
-            aria-live="polite"
-            className={`w-fit rounded-pill border px-3 py-1 text-xs ${
-              running
-                ? "border-q-strange/50 text-q-strange"
-                : busy
-                  ? "border-brand/50 text-brand"
-                  : "border-edge-strong text-ink-muted"
-            }`}
-          >
-            {statusLabel}
-          </div>
-        ) : null}
-      </header>
-
-      <div className="mt-6">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">Choose a preset</h2>
-            <p className="mt-0.5 text-xs text-ink-muted">
-              Your preset supplies the default for every module.
+            .
+          </>
+        }
+        actions={
+          statusProblem ? (
+            <p aria-live="polite" className="badge">
+              {statusProblem}
             </p>
+          ) : null
+        }
+      />
+
+      {/* Lead with the one decision: the preset. The screenshot stays a fixed
+          360px preview beside it and never becomes a full-width banner. */}
+      <div className="hero-row">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <div className="min-w-0">
+              <h2 className="t-section">Choose a preset</h2>
+              <p className="t-meta mt-1">Your preset supplies the default for every module.</p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div data-testid="comfig-preset" className="mt-4 grid content-start gap-3 sm:grid-cols-2">
+            {visiblePresets.map((item) => (
+              <OptionTile
+                key={item.id}
+                id={`comfig-preset-${item.id}`}
+                name="comfig-preset"
+                value={item.id}
+                title={item.label}
+                description={item.description}
+                selected={draft.preset === item.id}
+                disabled={locked}
+                onSelect={() => {
+                  setDraft({ ...draft, preset: item.id });
+                  onApplyPreset(item.id);
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
             {FEATURED_PRESETS.has(draft.preset) ? (
               <button
                 type="button"
                 onClick={() => setShowAllPresets((current) => !current)}
-                className="btn btn-ghost text-xs"
+                className="btn btn-ghost"
               >
                 {presetsExpanded ? "Show core presets" : "Show all presets"}
               </button>
@@ -247,216 +266,158 @@ export function ComfigPane({
               type="button"
               data-testid="comfig-preset-guide"
               onClick={() => void openEmbeddedPage("comfig-docs")}
-              className="btn btn-ghost text-xs"
+              className="btn btn-ghost"
             >
               Preset guide
-              <ArrowSquareOut size={12} />
+              <ArrowSquareOut size={13} />
             </button>
           </div>
         </div>
 
-        <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
-          <div data-testid="comfig-preset" className="grid content-start gap-2 sm:grid-cols-2">
-            {visiblePresets.map((item) => {
-              const selected = draft.preset === item.id;
-
-              return (
-                <label key={item.id} className="group relative min-w-0 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="comfig-preset"
-                    value={item.id}
-                    checked={selected}
-                    disabled={locked}
-                    onChange={() => {
-                      setDraft({ ...draft, preset: item.id });
-                      onApplyPreset(item.id);
-                    }}
-                    className="peer sr-only"
-                  />
-                  <span className="flex h-full min-h-[5.5rem] flex-col rounded-xl border border-edge bg-panel/60 p-3.5 transition-colors hover:border-edge-strong peer-checked:border-brand/70 peer-checked:bg-brand/5 peer-focus-visible:ring-2 peer-focus-visible:ring-brand peer-disabled:cursor-not-allowed peer-disabled:opacity-40">
-                    <span className="flex items-start justify-between gap-3">
-                      <span
-                        className={`text-sm font-semibold leading-none ${selected ? "text-brand" : "text-ink"}`}
-                      >
-                        {item.label}
-                      </span>
-                      <span
-                        className={`badge ${
-                          selected
-                            ? "bg-brand text-on-brand"
-                            : "border border-edge-strong text-ink-faint"
-                        }`}
-                      >
-                        {selected ? "Selected" : item.balance}
-                      </span>
-                    </span>
-                    <span className="mt-2 text-xs leading-5 text-ink-muted">
-                      {item.description}
-                    </span>
-                  </span>
-                </label>
-              );
-            })}
+        {presetImage ? (
+          <figure className="surface hero-preview relative m-0 self-start">
+            <img
+              src={presetImage}
+              alt={`In-game screenshot of the ${selectedPresetLabel} preset on koth_sawmill`}
+              className="aspect-video w-full object-cover"
+            />
+            <figcaption className="t-meta absolute right-2.5 bottom-2.5 rounded-md bg-bg/85 px-2.5 py-1 text-[12px] text-ink backdrop-blur-sm">
+              {selectedPresetLabel}
+            </figcaption>
+          </figure>
+        ) : (
+          <div className="surface hero-preview grid aspect-video place-items-center self-start p-6 text-center">
+            <p className="t-meta">Custom preset — the modules below decide every setting.</p>
           </div>
-
-          {presetImage ? (
-            <figure className="surface relative self-start">
-              <img
-                src={presetImage}
-                alt={`Actual in-game screenshot of the ${selectedPresetLabel} preset on koth_sawmill`}
-                className="aspect-video w-full object-cover"
-              />
-              <figcaption className="absolute right-2.5 bottom-2.5 rounded-md bg-bg/85 px-2.5 py-1 text-[11px] text-ink backdrop-blur-sm">
-                {selectedPresetLabel} · in-game screenshot
-              </figcaption>
-            </figure>
-          ) : (
-            <div className="surface grid min-h-40 place-items-center self-start p-6 text-center text-xs text-ink-muted">
-              Custom preset — modules below decide every setting.
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       <section className="section" aria-labelledby="comfig-modules-heading">
-        <div className="flex flex-col gap-3 border-b border-edge sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="comfig-modules-heading" className="text-sm font-semibold text-ink">
-              Fine-tune modules
-            </h2>
-            <div className="mt-2">
-              <ClassTabs
-                tabs={COMFIG_MODULE_GROUPS.map((group) => ({
-                  id: group.id,
-                  label: group.label,
-                  meta: group.modules.length,
-                }))}
-                selected={activeGroupId}
-                label="Module categories"
-                idPrefix="comfig-module-tab"
-                panelId="comfig-module-panel"
-                onSelect={(id) => {
-                  setActiveGroupId(id);
-                  setModuleSearch("");
+        <Disclosure storageKey="comfig-modules" summary="Fine-tune modules" testId="comfig-modules">
+          <div className="mt-2 flex flex-col gap-3 border-b border-edge sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="comfig-modules-heading" className="sr-only">
+                Fine-tune modules
+              </h2>
+              <div>
+                <ClassTabs
+                  tabs={COMFIG_MODULE_GROUPS.map((group) => ({
+                    id: group.id,
+                    label: group.label,
+                    meta: group.modules.length,
+                  }))}
+                  selected={activeGroupId}
+                  label="Module categories"
+                  idPrefix="comfig-module-tab"
+                  panelId="comfig-module-panel"
+                  onSelect={(id) => {
+                    setActiveGroupId(id);
+                    setModuleSearch("");
+                    setShowAllModules(false);
+                  }}
+                />
+              </div>
+            </div>
+
+            <label className="mb-2 block w-full sm:w-64">
+              <span className="sr-only">Search {activeGroup.label} modules</span>
+              <input
+                type="search"
+                value={moduleSearch}
+                onChange={(event) => {
+                  setModuleSearch(event.target.value);
                   setShowAllModules(false);
                 }}
+                placeholder={`Search ${activeGroup.label.toLowerCase()}…`}
+                className="field w-full px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
               />
-            </div>
+            </label>
           </div>
 
-          <label className="mb-2 block w-full sm:w-64">
-            <span className="sr-only">Search {activeGroup.label} modules</span>
-            <input
-              type="search"
-              value={moduleSearch}
-              onChange={(event) => {
-                setModuleSearch(event.target.value);
-                setShowAllModules(false);
-              }}
-              placeholder={`Search ${activeGroup.label.toLowerCase()}…`}
-              className="field w-full px-3 py-2 text-xs text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
-            />
-          </label>
-        </div>
-
-        <div
-          id="comfig-module-panel"
-          role="tabpanel"
-          aria-labelledby={`comfig-module-tab-${activeGroup.id}`}
-          className="mt-1"
-        >
-          {displayedModules.length > 0 ? (
-            <div className="grid md:grid-cols-2 md:gap-x-8">
-              {displayedModules.map((module) => (
-                <div key={module.id} className="border-b border-edge/60">
-                  <ModuleControl
-                    module={module}
-                    value={draft.modules[module.id] ?? ""}
-                    locked={locked}
-                    onChange={(value) => updateModule(module.id, value)}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="px-5 py-10 text-center">
-              <p className="text-sm text-ink">
-                No matching {activeGroup.label.toLowerCase()} modules.
-              </p>
-              <button
-                type="button"
-                onClick={() => setModuleSearch("")}
-                className="mt-2 text-xs text-brand hover:text-brand-hover"
-              >
-                Clear search
-              </button>
-            </div>
-          )}
-        </div>
-
-        {hiddenModuleCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => setShowAllModules(true)}
-            className="mt-3 w-full rounded-lg py-2.5 text-xs text-ink-muted hover:bg-panel hover:text-ink"
+          <div
+            id="comfig-module-panel"
+            role="tabpanel"
+            aria-labelledby={`comfig-module-tab-${activeGroup.id}`}
+            className="mt-1"
           >
-            Show {hiddenModuleCount} more {activeGroup.label.toLowerCase()} modules
-          </button>
-        ) : showAllModules &&
-          !normalizedSearch &&
-          matchingModules.length > DEFAULT_VISIBLE_MODULES ? (
-          <button
-            type="button"
-            onClick={() => setShowAllModules(false)}
-            className="mt-3 w-full rounded-lg py-2.5 text-xs text-ink-muted hover:bg-panel hover:text-ink"
-          >
-            Show fewer modules
-          </button>
-        ) : null}
+            {displayedModules.length > 0 ? (
+              <div className="grid md:grid-cols-2 md:gap-x-8">
+                {displayedModules.map((module) => (
+                  <div key={module.id} className="border-b border-edge">
+                    <ModuleControl
+                      module={module}
+                      value={draft.modules[module.id] ?? ""}
+                      locked={locked}
+                      onChange={(value) => updateModule(module.id, value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-5 py-10 text-center">
+                <p className="t-body text-ink">
+                  No matching {activeGroup.label.toLowerCase()} modules.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setModuleSearch("")}
+                  className="btn btn-ghost mt-3"
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+          </div>
+
+          {hiddenModuleCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllModules(true)}
+              className="mt-3 w-full rounded-lg py-2.5 text-[13px] text-ink-muted transition-colors duration-150 hover:bg-panel hover:text-ink"
+            >
+              Show {hiddenModuleCount} more {activeGroup.label.toLowerCase()} modules
+            </button>
+          ) : showAllModules &&
+            !normalizedSearch &&
+            matchingModules.length > DEFAULT_VISIBLE_MODULES ? (
+            <button
+              type="button"
+              onClick={() => setShowAllModules(false)}
+              className="mt-3 w-full rounded-lg py-2.5 text-[13px] text-ink-muted transition-colors duration-150 hover:bg-panel hover:text-ink"
+            >
+              Show fewer modules
+            </button>
+          ) : null}
+        </Disclosure>
       </section>
 
       <PaneSection
         id="comfig-addons"
         title="Official addons"
-        description="Optional mastercomfig packages. Each addon can be removed again at any time."
-        meta={`${draft.addons.length} selected`}
+        description="Optional mastercomfig packages. Each one can be removed again at any time."
+        meta={<span className="tnum">{draft.addons.length} selected</span>}
       >
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {OFFICIAL_ADDONS.map((item) => {
             const selected = draft.addons.includes(item.id);
             return (
-              <label key={item.id} className="group relative cursor-pointer">
-                <input
-                  type="checkbox"
-                  data-testid={`comfig-addon-${item.id}`}
-                  checked={selected}
-                  disabled={locked}
-                  onChange={() => {
-                    const addons = selected
-                      ? draft.addons.filter((addon) => addon !== item.id)
-                      : [...draft.addons, item.id];
-                    setDraft({ ...draft, addons });
-                    onToggleAddon(item.id);
-                  }}
-                  className="peer sr-only"
-                />
-                <span className="flex min-h-[5.25rem] flex-col rounded-xl border border-edge bg-panel/60 p-3 transition-colors hover:border-edge-strong peer-checked:border-brand/70 peer-checked:bg-brand/5 peer-focus-visible:ring-2 peer-focus-visible:ring-brand peer-disabled:cursor-not-allowed peer-disabled:opacity-40">
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="text-[13px] font-medium text-ink">{item.label}</span>
-                    <span
-                      className={`badge shrink-0 ${
-                        selected ? "bg-brand text-on-brand" : "border border-edge text-ink-faint"
-                      }`}
-                    >
-                      {selected ? "On" : "Off"}
-                    </span>
-                  </span>
-                  <span className="mt-1.5 text-[11px] leading-4 text-ink-muted">
-                    {ADDON_DETAILS[item.id]}
-                  </span>
-                </span>
-              </label>
+              <OptionTile
+                key={item.id}
+                id={`comfig-addon-input-${item.id}`}
+                type="checkbox"
+                testId={`comfig-addon-${item.id}`}
+                title={item.label}
+                description={ADDON_DETAILS[item.id]}
+                selected={selected}
+                disabled={locked}
+                onSelect={() => {
+                  const addons = selected
+                    ? draft.addons.filter((addon) => addon !== item.id)
+                    : [...draft.addons, item.id];
+                  setDraft({ ...draft, addons });
+                  onToggleAddon(item.id);
+                }}
+              />
             );
           })}
         </div>
@@ -465,8 +426,8 @@ export function ComfigPane({
       <section className="section" aria-label="Comfig packages">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-ink">Packages and extras</h2>
-            <p className="mt-0.5 text-xs leading-5 text-ink-muted">
+            <h2 className="t-section">Packages and extras</h2>
+            <p className="t-meta mt-1">
               {busy
                 ? "Saving your latest comfig change."
                 : !packagesInstalled
@@ -507,13 +468,13 @@ export function ComfigPane({
         </div>
       </section>
 
-      <p className="mt-6 text-xs leading-5 text-ink-faint">
+      <p className="t-meta mt-12 text-ink-faint">
         Uses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is
         not affiliated with mastercomfig or{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app")}
-          className="text-brand underline decoration-brand/40 underline-offset-2"
+          className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
           comfig.app
         </button>
@@ -521,7 +482,7 @@ export function ComfigPane({
         <button
           type="button"
           onClick={() => void openExternal("https://docs.comfig.app/latest/support_me/")}
-          className="text-brand underline decoration-brand/40 underline-offset-2"
+          className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
           donate page
         </button>

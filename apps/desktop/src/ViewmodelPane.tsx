@@ -2,6 +2,7 @@ import { ArrowSquareOut, DownloadSimple, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { ApplyBar } from "./components/ui/ApplyBar";
 import { ClassTabs } from "./components/ui/ClassTabs";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
@@ -122,29 +123,26 @@ export function ViewmodelPane({
 
   return (
     <section data-testid="settings-viewmodels" className="min-w-0 text-left">
-      <PaneSection
-        first
-        title="Hide viewmodels"
-        description="Pick a class, tick the animation groups to hide, then build. Hiding uses Yttrium's competitive-viewmodels animations, fetched from the original project. Hide-all, min viewmodels and viewmodel FOV are simple cvars and live on the Gameplay pane."
-        meta={
-          <span className="flex items-center gap-3">
-            <span className="tabular-nums">
+      <PaneHeader
+        title="Viewmodels"
+        lede="Pick a class, tick the animation groups to hide, then build. Field of view and min viewmodels live on the Gameplay pane."
+        actions={
+          <>
+            <span className="tnum t-meta text-ink-faint">
               {draft.hidden.length} hidden {draft.hidden.length === 1 ? "group" : "groups"}
             </span>
             <span
               data-testid="viewmodel-pack-status"
-              className={`badge ${
-                record
-                  ? "border border-health/50 bg-health/10 text-health"
-                  : "border border-edge text-ink-faint"
-              }`}
+              className={`badge ${record ? "badge-ok" : ""}`}
             >
               {record ? (builtPack ? "Built pack" : "Imported pack") : "No pack installed"}
             </span>
-          </span>
+          </>
         }
-      >
-        <div className="mt-3">
+      />
+
+      <section aria-label="Hide viewmodels">
+        <div>
           <ClassTabs
             tabs={VIEWMODEL_CLASSES.map((id) => {
               const count = hiddenCountFor(id);
@@ -166,10 +164,10 @@ export function ViewmodelPane({
           id={GROUPS_PANEL_ID}
           role="tabpanel"
           aria-labelledby={`${CLASS_TAB_PREFIX}-${classId}`}
-          className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]"
+          className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]"
         >
           <div>
-            <figure className="surface relative aspect-video w-full bg-[radial-gradient(125%_120%_at_50%_0%,#4a4740_0%,#26241f_45%,#111010_100%)]">
+            <figure className="surface vm-stage relative aspect-video w-full">
               {previewSrc ? (
                 <img
                   data-testid="viewmodel-preview-image"
@@ -181,21 +179,21 @@ export function ViewmodelPane({
                   }`}
                 />
               ) : (
-                <p className="absolute inset-0 grid place-items-center text-xs text-ink-muted">
+                <p className="t-meta absolute inset-0 grid place-items-center">
                   No reference image for this slot.
                 </p>
               )}
               {previewHidden ? (
                 <p
                   data-testid="viewmodel-preview-hidden"
-                  className="absolute inset-0 grid place-items-center px-6 text-center text-xs text-ink-muted"
+                  className="t-meta absolute inset-0 grid place-items-center px-6 text-center"
                 >
                   {draft.hideMode === "weapon"
                     ? "Weapon hidden — your hands keep animating."
                     : "Weapon and hands hidden."}
                 </p>
               ) : null}
-              <figcaption className="absolute bottom-2.5 left-3 text-[11px] text-ink-muted">
+              <figcaption className="absolute bottom-2.5 left-3 text-[12px] text-ink-muted">
                 <span className="capitalize">{classId}</span> · {previewWeapon ?? activeSlot}
               </figcaption>
             </figure>
@@ -207,7 +205,7 @@ export function ViewmodelPane({
                   data-testid={`viewmodel-slot-${item}`}
                   data-active={activeSlot === item ? "true" : "false"}
                   onClick={() => setSlot(item)}
-                  className={`rounded-lg px-3 py-1.5 text-xs capitalize transition-colors ${
+                  className={`rounded-lg px-3 py-1.5 text-[13px] capitalize transition-colors duration-150 ${
                     activeSlot === item
                       ? "bg-panel-raised text-ink"
                       : "text-ink-muted hover:bg-panel hover:text-ink"
@@ -217,15 +215,14 @@ export function ViewmodelPane({
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-[11px] leading-4 text-ink-faint">
-              Reference imagery only — groups on the right map to animation sets, not single
-              weapons.
+            <p className="mt-3 text-[12px] leading-5 text-ink-faint">
+              Reference imagery only — groups map to animation sets, not single weapons.
             </p>
           </div>
 
           <div className="min-w-0">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-[13px] font-medium capitalize text-ink">{classId} groups</p>
+              <p className="t-row capitalize">{classId} groups</p>
               <button
                 type="button"
                 data-testid="viewmodel-hide-all-class"
@@ -242,7 +239,7 @@ export function ViewmodelPane({
                     return { ...current, hidden };
                   });
                 }}
-                className="text-[11px] text-ink-muted underline decoration-edge underline-offset-2 hover:text-ink disabled:opacity-40"
+                className="text-[12.5px] text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink disabled:opacity-40"
               >
                 {allClassHidden ? "Show all" : "Hide all"}
               </button>
@@ -251,9 +248,9 @@ export function ViewmodelPane({
               {groups.map((group) => {
                 const hidden = hiddenSet.has(group.id);
                 return (
-                  <li key={group.id} className="border-b border-edge/60">
+                  <li key={group.id} className="border-b border-edge">
                     <label
-                      className="flex cursor-pointer items-center gap-3 py-2.5"
+                      className="flex min-h-11 cursor-pointer items-center gap-3 py-2.5"
                       htmlFor={`viewmodel-group-${group.id}`}
                     >
                       <input
@@ -271,11 +268,11 @@ export function ViewmodelPane({
                         }
                         className="size-4 shrink-0 accent-brand disabled:opacity-40"
                       />
-                      <span className="min-w-0 flex-1 text-[13px] text-ink">{group.label}</span>
+                      <span className="min-w-0 flex-1 text-[14px] text-ink">{group.label}</span>
                       {isSoldier ? (
                         <span
                           data-testid={`viewmodel-group-original-${group.id}`}
-                          className="badge shrink-0 border border-edge text-ink-faint"
+                          className="badge shrink-0"
                         >
                           + Original
                         </span>
@@ -286,16 +283,16 @@ export function ViewmodelPane({
               })}
             </ul>
             {isSoldier ? (
-              <p id={SOLDIER_NOTE_ID} className="mt-2 text-[11px] leading-4 text-ink-faint">
+              <p id={SOLDIER_NOTE_ID} className="mt-3 text-[12px] leading-5 text-ink-faint">
                 {SOLDIER_ORIGINAL_NOTE}
               </p>
             ) : null}
           </div>
         </div>
 
-        <div className="mt-4 border-t border-edge/60 pt-4">
-          <h3 className="eyebrow">What a hidden group removes</h3>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-8 border-t border-edge pt-5">
+          <h3 className="t-row">What a hidden group removes</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
             {(["full", "weapon"] as const).map((mode) => (
               <button
                 key={mode}
@@ -304,23 +301,27 @@ export function ViewmodelPane({
                 aria-pressed={draft.hideMode === mode}
                 disabled={locked}
                 onClick={() => setDraft((current) => ({ ...current, hideMode: mode }))}
-                className={`btn ${draft.hideMode === mode ? "btn-primary" : ""}`}
+                className={`btn ${
+                  draft.hideMode === mode
+                    ? "btn-ghost border-transparent text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
+                    : "btn-ghost"
+                }`}
               >
                 {HIDE_MODE_LABELS[mode]}
               </button>
             ))}
           </div>
-          <p className="mt-2 min-h-8 max-w-2xl text-[11px] leading-4 text-ink-faint">
+          <p className="mt-3 min-h-10 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
             {HIDE_MODE_NOTES[draft.hideMode]}
           </p>
         </div>
-      </PaneSection>
+      </section>
 
       <PaneSection
-        title="Pack & preload"
+        title="Pack and preload"
         description="Prefer a ready-made pack? Import any prebuilt viewmodel VPK instead of building."
       >
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
             data-testid="viewmodel-import"
@@ -369,12 +370,12 @@ export function ViewmodelPane({
         </div>
       </PaneSection>
 
-      <p className="mt-6 text-[11px] leading-relaxed text-ink-faint">
+      <p className="t-meta mt-12 text-ink-faint">
         {VIEWMODEL_CASUAL_COPY} Hidden-viewmodel animations from{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://github.com/Yttrium-tYcLief/CompVMInstaller")}
-          className="inline-flex items-center gap-0.5 text-brand underline decoration-brand/40 underline-offset-2"
+          className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
           Yttrium's Competitive Viewmodels
           <ArrowSquareOut size={11} />
@@ -385,7 +386,7 @@ export function ViewmodelPane({
 
       <ApplyBar
         status={buildStatus}
-        actionLabel={builtPack ? "Rebuild pack" : "Build & install pack"}
+        actionLabel={builtPack ? "Rebuild pack" : "Build and install pack"}
         lockedLabel="Close TF2 to build"
         running={running}
         locked={!canBuild || locked}

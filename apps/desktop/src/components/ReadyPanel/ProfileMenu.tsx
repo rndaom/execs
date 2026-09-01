@@ -83,19 +83,13 @@ export function ProfileMenu({
         ref={summaryRef}
         className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink hover:bg-panel [&::-webkit-details-marker]:hidden"
       >
-        <span className="hidden text-ink-muted sm:inline">Profile</span>
-        <strong className="max-w-36 truncate font-medium text-brand">
+        <span className="hidden text-ink-faint sm:inline">Profile</span>
+        <strong className="max-w-40 truncate font-medium text-ink">
           {activeProfile?.name ?? "Profiles"}
         </strong>
-        <CaretDown
-          size={14}
-          className="text-ink-muted transition-transform group-open:rotate-180"
-        />
+        <CaretDown size={13} className="text-ink-faint" />
         {activeProfile ? (
-          <span
-            data-testid="profile-active"
-            className="hidden rounded-pill border border-brand/60 px-2 py-0.5 text-[11px] text-brand md:inline"
-          >
+          <span data-testid="profile-active" className="badge hidden md:inline-flex">
             Active
           </span>
         ) : null}
@@ -104,8 +98,8 @@ export function ProfileMenu({
       <div className="overlay absolute top-[calc(100%+10px)] left-0 z-50 w-[min(430px,calc(100vw-2rem))] p-4 text-left">
         <div className="flex items-start justify-between gap-4 border-b border-edge pb-3">
           <div>
-            <p className="text-sm font-semibold text-ink">Profiles</p>
-            <p data-testid="profile-library-status" className="mt-1 text-xs text-ink-muted">
+            <p className="t-row">Profiles</p>
+            <p data-testid="profile-library-status" className="t-meta mt-1">
               {library ? libraryStatusCopy(library) : "Loading profiles…"}
             </p>
           </div>
@@ -118,7 +112,7 @@ export function ProfileMenu({
               onClick={onCreateNew}
               disabled={controlsBusy || running}
               title={running ? "Close TF2 to create a profile." : undefined}
-              className="btn btn-primary px-3 py-1.5 text-xs"
+              className="btn btn-primary"
             >
               <Plus size={14} weight="bold" />
               New profile
@@ -126,7 +120,7 @@ export function ProfileMenu({
           ) : null}
         </div>
         {showCreate && running ? (
-          <p data-testid="create-new-locked" className="mt-2 text-[11px] text-ink-faint">
+          <p data-testid="create-new-locked" className="mt-2 text-[12px] text-ink-faint">
             Close TF2 to create a profile — it writes the live game folder.
           </p>
         ) : null}
@@ -139,8 +133,8 @@ export function ProfileMenu({
               return (
                 <li
                   key={profile.id}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                    active ? "bg-brand/10" : "hover:bg-panel/70"
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13.5px] transition-colors duration-150 ${
+                    active ? "" : "hover:bg-panel"
                   }`}
                 >
                   <button
@@ -151,10 +145,12 @@ export function ProfileMenu({
                     className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
                   >
                     <span
-                      className={`size-2 shrink-0 rounded-full ${active ? "bg-brand" : "bg-edge"}`}
+                      className={`size-2 shrink-0 rounded-full ${
+                        active ? "bg-brand" : "bg-edge-strong"
+                      }`}
                     />
                     <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
-                    <span className="text-[11px] text-ink-muted">
+                    <span className="text-[12px] text-ink-faint">
                       {active ? "Current" : "Switch"}
                     </span>
                   </button>
@@ -194,9 +190,9 @@ export function ProfileMenu({
               onChange={(event) => onDraftName(event.target.value)}
               placeholder="Save current as…"
               disabled={controlsBusy}
-              className="field min-w-0 flex-1 px-3 py-2 text-xs text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
+              className="field min-w-0 flex-1 px-3 py-2 text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
             />
-            <button type="submit" disabled={!canSave} className="btn btn-ghost text-xs">
+            <button type="submit" disabled={!canSave} className="btn btn-ghost">
               Save
             </button>
           </form>
@@ -208,7 +204,7 @@ export function ProfileMenu({
             data-testid="profile-import"
             onClick={onImport}
             disabled={!canImport}
-            className="btn btn-ghost text-xs"
+            className="btn btn-ghost"
           >
             <UploadSimple size={15} />
             Import
@@ -217,17 +213,12 @@ export function ProfileMenu({
             type="button"
             onClick={onChangeInstall}
             disabled={controlsBusy}
-            className="btn btn-ghost text-xs"
+            className="btn btn-ghost"
           >
             <FolderOpen size={15} />
             Change install
           </button>
         </div>
-        {library && running ? (
-          <p className="mt-3 text-xs text-ink-muted">
-            Read-only while TF2 is running. Export remains available.
-          </p>
-        ) : null}
       </div>
     </details>
   );

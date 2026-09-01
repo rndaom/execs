@@ -10,10 +10,8 @@ import {
   CROSSHAIR_SCALE_MIN,
   type CrosshairFile,
   clampGameplay,
-  type GameplayLayer,
   type GameplaySettings,
   gameplayDirty,
-  gameplayPath,
   seedGameplay,
   serializeGameplay,
 } from "./lib/gameplay-ui";
@@ -25,13 +23,11 @@ import {
 } from "./lib/stock-crosshair-shapes";
 
 export function StockCrosshairSettings({
-  layer,
   effective,
   sprites = null,
   managedText,
   onSave,
 }: {
-  layer: GameplayLayer;
   effective: Record<string, string>;
   /** Real sprites from the user's game files; geometry fallback when null. */
   sprites?: Record<string, StockCrosshairSprite> | null;
@@ -78,23 +74,97 @@ export function StockCrosshairSettings({
         apply();
       }}
     >
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Default in-game crosshair</h2>
-          <p className="mt-0.5 max-w-2xl text-xs leading-5 text-ink-muted">
+      {/* Lead with the decision: file, scale and colour on the left, the live
+          preview pinned at 360px on the right. */}
+      <div className="hero-row">
+        <div className="min-w-0">
+          <h2 className="t-section">Default in-game crosshair</h2>
+          <p className="t-meta mt-1">
             TF2's built-in crosshair is the lightweight choice that works everywhere.
           </p>
-        </div>
-        <span className="font-mono text-[11px] text-ink-faint">{gameplayPath(layer)}</span>
-      </div>
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-[15rem_1fr]">
-        <div>
+          <div className="mt-5 flex min-w-0 flex-col gap-6">
+            <label className="t-row flex flex-col gap-2" htmlFor="stock-crosshair-file">
+              Crosshair file
+              <select
+                id="stock-crosshair-file"
+                data-testid="stock-crosshair-file"
+                value={draft.cl_crosshair_file}
+                disabled={locked}
+                onChange={(event) =>
+                  patch({ cl_crosshair_file: event.target.value as CrosshairFile })
+                }
+                className="field px-3 py-2.5 text-[14px] font-normal text-ink outline-none disabled:opacity-50"
+              >
+                {CROSSHAIR_FILES.map((file) => (
+                  <option key={file || "default"} value={file}>
+                    {file === "" ? "Default / none" : `${file} — ${STOCK_CROSSHAIR_LABELS[file]}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <StockSliderRow
+              id="stock-crosshair-scale"
+              label="Scale"
+              value={draft.cl_crosshair_scale}
+              min={CROSSHAIR_SCALE_MIN}
+              max={CROSSHAIR_SCALE_MAX}
+              disabled={locked}
+              onChange={(cl_crosshair_scale) => patch({ cl_crosshair_scale })}
+            />
+
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="t-row">Colour</h3>
+                <span
+                  aria-hidden="true"
+                  className="size-6 rounded-md border border-edge-strong"
+                  style={{ backgroundColor: color }}
+                />
+              </div>
+              <div className="grid gap-x-6 gap-y-4 sm:grid-cols-3">
+                <StockSliderRow
+                  id="stock-crosshair-red"
+                  label="Red"
+                  value={draft.cl_crosshair_red}
+                  min={COLOR_MIN}
+                  max={COLOR_MAX}
+                  disabled={locked}
+                  accentClass="accent-team-red"
+                  onChange={(cl_crosshair_red) => patch({ cl_crosshair_red })}
+                />
+                <StockSliderRow
+                  id="stock-crosshair-green"
+                  label="Green"
+                  value={draft.cl_crosshair_green}
+                  min={COLOR_MIN}
+                  max={COLOR_MAX}
+                  disabled={locked}
+                  accentClass="accent-health"
+                  onChange={(cl_crosshair_green) => patch({ cl_crosshair_green })}
+                />
+                <StockSliderRow
+                  id="stock-crosshair-blue"
+                  label="Blue"
+                  value={draft.cl_crosshair_blue}
+                  min={COLOR_MIN}
+                  max={COLOR_MAX}
+                  disabled={locked}
+                  accentClass="accent-team-blu"
+                  onChange={(cl_crosshair_blue) => patch({ cl_crosshair_blue })}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="hero-preview self-start">
           <div
             data-testid="stock-crosshair-preview"
             role="img"
             aria-label={`Preview of ${STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]} at scale ${draft.cl_crosshair_scale}`}
-            className="surface relative grid aspect-square w-full place-items-center bg-bg"
+            className="surface relative grid aspect-video w-full place-items-center bg-bg"
           >
             {sprite ? (
               <StockSpriteCanvas
@@ -113,7 +183,7 @@ export function StockCrosshairSettings({
                 size={renderedSize}
               />
             ) : (
-              <p className="max-w-40 px-3 text-center text-xs leading-5 text-ink-muted">
+              <p className="t-meta max-w-48 px-3 text-center">
                 Default / none — each weapon draws its own crosshair.
               </p>
             )}
@@ -121,103 +191,23 @@ export function StockCrosshairSettings({
               Live preview
             </span>
           </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-ink-faint">
+          <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-ink-faint">
             <span>{STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}</span>
-            <span className="font-mono">
+            <span className="tnum">
               {draft.cl_crosshair_red}, {draft.cl_crosshair_green}, {draft.cl_crosshair_blue}
             </span>
           </div>
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label
-              className="flex flex-col gap-2 text-[13px] font-medium text-ink"
-              htmlFor="stock-crosshair-file"
-            >
-              Crosshair file
-              <select
-                id="stock-crosshair-file"
-                data-testid="stock-crosshair-file"
-                value={draft.cl_crosshair_file}
-                disabled={locked}
-                onChange={(event) =>
-                  patch({ cl_crosshair_file: event.target.value as CrosshairFile })
-                }
-                className="field px-3 py-2.5 text-sm font-normal text-ink outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
-              >
-                {CROSSHAIR_FILES.map((file) => (
-                  <option key={file || "default"} value={file}>
-                    {file === "" ? "Default / none" : `${file} — ${STOCK_CROSSHAIR_LABELS[file]}`}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs font-normal leading-5 text-ink-muted">
-                Choose Default / none before using the custom crosshair builder below.
-              </span>
-            </label>
-
-            <StockSliderRow
-              id="stock-crosshair-scale"
-              label="Scale"
-              value={draft.cl_crosshair_scale}
-              min={CROSSHAIR_SCALE_MIN}
-              max={CROSSHAIR_SCALE_MAX}
-              disabled={locked}
-              onChange={(cl_crosshair_scale) => patch({ cl_crosshair_scale })}
-            />
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-[13px] font-medium text-ink">Color</h3>
-              <span
-                aria-hidden="true"
-                className="size-6 rounded-md border border-edge-strong"
-                style={{ backgroundColor: color }}
-              />
-            </div>
-            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <StockSliderRow
-                id="stock-crosshair-red"
-                label="Red"
-                value={draft.cl_crosshair_red}
-                min={COLOR_MIN}
-                max={COLOR_MAX}
-                disabled={locked}
-                accentClass="accent-team-red"
-                onChange={(cl_crosshair_red) => patch({ cl_crosshair_red })}
-              />
-              <StockSliderRow
-                id="stock-crosshair-green"
-                label="Green"
-                value={draft.cl_crosshair_green}
-                min={COLOR_MIN}
-                max={COLOR_MAX}
-                disabled={locked}
-                accentClass="accent-health"
-                onChange={(cl_crosshair_green) => patch({ cl_crosshair_green })}
-              />
-              <StockSliderRow
-                id="stock-crosshair-blue"
-                label="Blue"
-                value={draft.cl_crosshair_blue}
-                min={COLOR_MIN}
-                max={COLOR_MAX}
-                disabled={locked}
-                accentClass="accent-team-blu"
-                onChange={(cl_crosshair_blue) => patch({ cl_crosshair_blue })}
-              />
-            </div>
-          </div>
+          <p className="t-meta mt-2 text-ink-faint">
+            Pick Default / none before using the custom crosshair builder below.
+          </p>
         </div>
       </div>
 
       {/* A plain row, not the sticky `ApplyBar`: this is a sub-section of the
           Crosshair pane, and the pane's own ApplyBar already owns the bottom. */}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge/60 pt-4">
-        <p className="text-xs text-ink-muted" aria-live="polite">
-          {dirty ? "Default crosshair has unsaved changes" : "Default crosshair is up to date"}
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4">
+        <p className="t-meta" aria-live="polite">
+          {dirty ? "Unsaved changes" : "Saved"}
         </p>
         <button
           type="submit"
@@ -225,7 +215,7 @@ export function StockCrosshairSettings({
           disabled={locked || !dirty}
           className="btn btn-primary"
         >
-          {running ? "Close TF2 to apply" : "Apply default crosshair"}
+          {running ? "Close TF2 to save" : "Save crosshair"}
         </button>
       </div>
     </form>
@@ -383,10 +373,10 @@ function StockSliderRow({
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-xs font-medium text-ink">
+        <label htmlFor={id} className="t-row">
           {label}
         </label>
-        <output htmlFor={id} className="font-mono text-xs text-ink-muted">
+        <output htmlFor={id} className="tnum text-[14px] text-ink-muted">
           {value}
         </output>
       </div>
@@ -400,9 +390,9 @@ function StockSliderRow({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
-        className={`mt-2 w-full cursor-pointer ${accentClass} disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`mt-3 w-full cursor-pointer ${accentClass} disabled:cursor-not-allowed disabled:opacity-50`}
       />
-      {note ? <p className="mt-1 text-[10px] leading-4 text-ink-faint">{note}</p> : null}
+      {note ? <p className="mt-1 text-[12px] leading-5 text-ink-faint">{note}</p> : null}
     </div>
   );
 }
