@@ -282,7 +282,7 @@ where
         library: library_record,
         design: design.map(|value| value.to_string()),
     });
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     force_empty_stock_crosshair(profiles_dir, tf2_root, profile_id, color, &running)?;
     Ok(detail_from_manifest(&load_manifest(
         profiles_dir,
@@ -381,7 +381,7 @@ where
     remove_live_pack(tf2_root, EXECS_CROSSHAIRS_PACK)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.crosshair = None;
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     Ok(detail_from_manifest(&load_manifest(
         profiles_dir,
         profile_id,
@@ -745,7 +745,6 @@ fn write_pack_file(
         running.iter().cloned(),
         WriteOwnedOptions::default(),
     )?;
-    let _ = exclusive_file_path(profiles_dir, profile_id, rel);
     Ok(())
 }
 

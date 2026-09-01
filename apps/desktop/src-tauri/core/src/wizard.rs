@@ -265,16 +265,13 @@ where
         Some(raw) => sanitize_launch_options(raw),
         None => recommended_launch_options(),
     };
-    let mut manifest = load_manifest(profiles_dir, &profile_id)?;
-    manifest.launch_options = launch;
-    let manifest_path = crate::profile::manifest_file(profiles_dir, &profile_id);
-    let json =
-        serde_json::to_string_pretty(&manifest).map_err(|err| ProfileError::Io(err.to_string()))?;
-    if let Some(parent) = manifest_path.parent() {
-        fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    fs::write(&manifest_path, format!("{json}\n"))
-        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    crate::profile::set_manifest_launch_options(
+        profiles_dir,
+        tf2_root,
+        &profile_id,
+        launch,
+        &running,
+    )?;
 
     Ok(WizardResult {
         library: load_library_from(profiles_dir, Some(tf2_root))?,
@@ -300,7 +297,7 @@ where
                 "Missing official mastercomfig file: {required}"
             )));
         };
-        if is_forbidden_wizard_path(&required) {
+        if !crate::profile::is_file_safe_rel_path(&required) {
             return Err(ProfileError::ForbiddenPath(required));
         }
         if is_shared_rel_path(&required) {
@@ -324,15 +321,6 @@ where
         }
     }
     Ok(())
-}
-
-fn is_forbidden_wizard_path(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    lower.starts_with("tf/cfg/user/")
-        || lower.ends_with("/steam.inf")
-        || lower.ends_with("/gameinfo.txt")
-        || lower.ends_with("/video.txt")
-        || (lower.contains("tf2_") && lower.ends_with(".vpk") && !lower.starts_with("tf/custom/"))
 }
 
 fn build_config_cfg(

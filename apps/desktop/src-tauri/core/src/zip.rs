@@ -17,7 +17,7 @@ use crate::launch::sanitize_launch_options;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     create_profile_record_to, exclusive_file_path, is_shared_rel_path, load_library_from,
-    load_manifest, manifest_file, normalize_rel_path, profiles_dir, put_profile_files_to,
+    load_manifest, normalize_rel_path, profiles_dir, put_profile_files_to,
     remove_profile_record_to, CrosshairRecord, FileSource, FileStorage, HudRecord, ProfileError,
     ProfileFile, ProfileLibrary, ProfileManifest, ViewmodelRecord,
 };
@@ -62,13 +62,7 @@ pub fn export_profile(
     profile_id: &str,
     zip_path: &Path,
 ) -> Result<(), ProfileError> {
-    export_profile_to(
-        &profiles_dir(),
-        tf2_root,
-        profile_id,
-        zip_path,
-        live_process_names(),
-    )
+    export_profile_to(&profiles_dir(), tf2_root, profile_id, zip_path)
 }
 
 pub fn import_profile(tf2_root: &Path, zip_path: &Path) -> Result<ProfileLibrary, ProfileError> {
@@ -93,20 +87,14 @@ pub fn safe_zip_file_name(name: &str) -> String {
     }
 }
 
-/// Copy a library profile into a versioned zip. Does not write live TF2.
-/// `running_names` is accepted for API symmetry; export is not a library mutation.
-pub fn export_profile_to<I, S>(
+/// Copy a library profile into a versioned zip. Does not write live TF2, and
+/// does not mutate the library, so it takes no write lock.
+pub fn export_profile_to(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     zip_path: &Path,
-    running_names: I,
-) -> Result<(), ProfileError>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let _running_names = running_names;
+) -> Result<(), ProfileError> {
     let library = require_usable_library(profiles_dir, tf2_root)?;
     if !library
         .profiles
@@ -123,6 +111,24 @@ where
             Err(err)
         }
     }
+}
+
+/// Compatibility shim for the pre-Phase-2 signature. Export never took the
+/// write lock; the list was discarded.
+#[deprecated(note = "export is not a mutation; call export_profile_to without running_names")]
+pub fn export_profile_to_with_lock<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    zip_path: &Path,
+    running_names: I,
+) -> Result<(), ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let _running_names = running_names;
+    export_profile_to(profiles_dir, tf2_root, profile_id, zip_path)
 }
 
 /// Import a versioned zip as a new library profile. Does not set `activeProfileId`
@@ -422,33 +428,33 @@ fn apply_payload(
     put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, running)?;
     write_imported_launch_and_hud(
         profiles_dir,
+        tf2_root,
         profile_id,
         &payload.manifest.launch_options,
         payload.manifest.hud.clone(),
         payload.manifest.crosshair.clone(),
         payload.manifest.viewmodel.clone(),
+        running,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_imported_launch_and_hud(
     profiles_dir: &Path,
+    tf2_root: &Path,
     profile_id: &str,
     launch: &str,
     hud: Option<HudRecord>,
     crosshair: Option<CrosshairRecord>,
     viewmodel: Option<ViewmodelRecord>,
+    running: &[String],
 ) -> Result<(), ProfileError> {
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.launch_options = sanitize_launch_options(launch);
     manifest.hud = hud;
     manifest.crosshair = crosshair;
     manifest.viewmodel = viewmodel;
-    let json = serde_json::to_string_pretty(&manifest).map_err(json_err)?;
-    crate::hash::write_atomic(
-        &manifest_file(profiles_dir, profile_id),
-        format!("{json}\n").as_bytes(),
-    )
-    .map_err(io_err)
+    crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)
 }
 
 fn read_hashed_file(path: &Path, expected: &str, label: &str) -> Result<Vec<u8>, ProfileError> {
@@ -521,8 +527,8 @@ mod tests {
     use super::*;
     use crate::blob::{blob_path, blobs_dir};
     use crate::profile::{
-        exclusive_file_path, init_library_to, load_library_from, load_manifest, save_current_as_to,
-        FileStorage, ProfileError, SaveCurrentOptions,
+        exclusive_file_path, init_library_to, load_library_from, load_manifest, manifest_file,
+        save_current_as_to, FileStorage, ProfileError, SaveCurrentOptions,
     };
     use std::collections::BTreeMap;
     use std::io::Write;
@@ -652,7 +658,7 @@ mod tests {
         assert_eq!(saved.active_profile_id.as_deref(), Some(src_id.as_str()));
 
         let zip_path = dir.join("main.zip");
-        export_profile_to(&profiles, &root, &src_id, &zip_path, [tf2_name()]).unwrap();
+        export_profile_to(&profiles, &root, &src_id, &zip_path).unwrap();
 
         let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         assert_eq!(imported.profiles.len(), 2);
@@ -734,7 +740,7 @@ mod tests {
         let manifest_before = fs::read(manifest_file(&profiles, &id)).unwrap();
 
         let zip_path = dir.join("main.zip");
-        export_profile_to(&profiles, &root, &id, &zip_path, [tf2_name()]).unwrap();
+        export_profile_to(&profiles, &root, &id, &zip_path).unwrap();
         let exported = read_profile_zip(&zip_path).unwrap();
         assert_eq!(
             exported.manifest.tf2_root.as_deref(),
@@ -767,14 +773,7 @@ mod tests {
         )
         .unwrap();
         let zip_path = dir.join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
 
         import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
@@ -993,14 +992,7 @@ mod tests {
         .unwrap();
         let active = saved.active_profile_id.clone();
         let zip_path = dir.join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
 
         let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         assert_eq!(imported.active_profile_id, active);
@@ -1025,14 +1017,7 @@ mod tests {
         )
         .unwrap();
         let zip_path = dir.join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
 
         let err = import_profile_from(&profiles, &root, &zip_path, [tf2_name()]).unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
@@ -1070,14 +1055,7 @@ mod tests {
         )
         .unwrap();
         let zip_path = dir.join("out").join("main.zip");
-        export_profile_to(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-            &zip_path,
-            unlocked(),
-        )
-        .unwrap();
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &zip_path).unwrap();
         import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
         assert_eq!(snapshot_tree(&root), before);
         assert!(!root.join("tf/cfg/user").exists());
