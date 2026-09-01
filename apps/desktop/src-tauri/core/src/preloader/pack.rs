@@ -207,7 +207,7 @@ pub(crate) fn stock_entry_tables(
 /// replacing where one exists — that keeps the original shader and parameters —
 /// and otherwise a minimal material picked from the path.
 pub(crate) fn synthesize_missing_vmts(
-    tf2_root: &Path,
+    tables: &[(PathBuf, BTreeMap<String, VpkEntryLocation>)],
     custom: &mut BTreeMap<String, Vec<u8>>,
 ) -> usize {
     let orphans: Vec<String> = custom
@@ -219,7 +219,7 @@ pub(crate) fn synthesize_missing_vmts(
     if orphans.is_empty() {
         return 0;
     }
-    let tables = stock_entry_tables(tf2_root);
+
     let mut written = 0;
     for vmt in orphans {
         let stock = tables.iter().find_map(|(path, entries)| {
@@ -258,7 +258,7 @@ pub(crate) fn default_vmt(vmt: &str) -> Vec<u8> {
 /// cannot be served from `tf/custom`. Paths outside the trusted roots (a mod's
 /// own new materials, scripts) are left alone.
 pub(crate) fn stock_shadowing_paths(
-    tf2_root: &Path,
+    tables: &[(PathBuf, BTreeMap<String, VpkEntryLocation>)],
     files: &BTreeMap<String, Vec<u8>>,
 ) -> Vec<String> {
     let candidates: BTreeSet<&String> = files
@@ -269,14 +269,7 @@ pub(crate) fn stock_shadowing_paths(
         return Vec::new();
     }
     let mut shadowing = Vec::new();
-    for name in STOCK_VPKS {
-        let path = tf2_root.join("tf").join(name);
-        if !path.is_file() {
-            continue;
-        }
-        let Ok(entries) = map_vpk_entries(&path) else {
-            continue;
-        };
+    for (_, entries) in tables {
         for rel in &candidates {
             if entries.contains_key(*rel) {
                 shadowing.push((**rel).clone());

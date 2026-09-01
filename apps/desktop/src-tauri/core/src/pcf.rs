@@ -309,7 +309,11 @@ pub fn decode_pcf(bytes: &[u8]) -> Result<PcfFile, PcfError> {
     if element_count > bytes.len() {
         return Err(PcfError("Particle file is truncated.".into()));
     }
-    let mut elements = Vec::with_capacity(element_count);
+    // Each element is at least a u16 type index, a 1-byte empty name and a
+    // 16-byte signature. Reserving `element_count` slots of ~72 bytes each let
+    // a 10 MB file ask for ~700 MB; cap by what the bytes could actually hold.
+    const MIN_ELEMENT_BYTES: usize = 19;
+    let mut elements = Vec::with_capacity(element_count.min(bytes.len() / MIN_ELEMENT_BYTES));
     for _ in 0..element_count {
         let type_name_index = reader.u16()?;
         let name = reader.cstring()?;
@@ -825,7 +829,7 @@ fn reorder_elements(pcf: &mut PcfFile, duplicates: &[Vec<u32>]) {
     pcf.elements = new_elements;
 }
 
-fn optimize_string_dictionary(pcf: &mut PcfFile) {
+fn optimize_string_dictionary(pcf: &mut PcfFile) -> Result<(), PcfError> {
     let mut used: BTreeSet<Vec<u8>> = BTreeSet::new();
     for element in &pcf.elements {
         used.insert(pcf.type_name(element).to_vec());
@@ -834,6 +838,13 @@ fn optimize_string_dictionary(pcf: &mut PcfFile) {
         }
     }
     let new_dictionary: Vec<Vec<u8>> = used.into_iter().collect();
+    // Indices are u16 on the wire. `index as u16` used to truncate silently and
+    // hand `encode_pcf` a file whose indices were already wrong.
+    if new_dictionary.len() > u16::MAX as usize {
+        return Err(PcfError(
+            "Particle file needs more than 65535 dictionary entries.".into(),
+        ));
+    }
     let positions: HashMap<&[u8], u16> = new_dictionary
         .iter()
         .enumerate()
@@ -848,18 +859,19 @@ fn optimize_string_dictionary(pcf: &mut PcfFile) {
         element.type_name_index = positions.get(old).copied().unwrap_or(0);
     }
     pcf.string_dictionary = new_dictionary;
+    Ok(())
 }
 
 /// The full shrink pipeline: cleanup, dedup of array-referenced elements, and
 /// string dictionary minimization.
-pub fn remove_duplicate_elements(pcf: &mut PcfFile) {
+pub fn remove_duplicate_elements(pcf: &mut PcfFile) -> Result<(), PcfError> {
     cleanup_pass(pcf);
     let duplicates = find_duplicate_array_elements(pcf);
     if !duplicates.is_empty() {
         update_array_indices(pcf, &duplicates);
         reorder_elements(pcf, &duplicates);
     }
-    optimize_string_dictionary(pcf);
+    optimize_string_dictionary(pcf)
 }
 
 // ---------------------------------------------------------------------------
@@ -1149,6 +1161,48 @@ mod tests {
         names.iter().map(|name| name.as_bytes().to_vec()).collect()
     }
 
+    /// `element_count` is bounded by `bytes.len()`, but a `PcfElement` is ~72
+    /// bytes, so a 10 MB crafted file used to reserve ~700 MB up front.
+    #[test]
+    fn a_crafted_element_count_does_not_reserve_the_world() {
+        let mut bytes = PCF_HEADERS[1].as_bytes().to_vec();
+        bytes.push(0);
+        bytes.extend(&0u16.to_le_bytes()); // empty string dictionary
+        bytes.extend(&u32::MAX.to_le_bytes()); // element_count
+                                               // The file is far too short for that many elements, so decoding fails —
+                                               // the point is that it fails instead of trying to allocate first.
+        assert!(decode_pcf(&bytes).is_err());
+    }
+
+    /// Dictionary indices are u16 on the wire. `index as u16` truncated
+    /// silently and handed `encode_pcf` a file whose indices were wrong.
+    #[test]
+    fn a_dictionary_past_u16_is_an_error_not_a_truncation() {
+        let mut file = PcfFile {
+            version: PCF_HEADERS[1].to_string(),
+            string_dictionary: dict(&["DmeElement"]),
+            elements: Vec::new(),
+        };
+        // Every element carries a distinct attribute name, so the rebuilt
+        // dictionary is one entry per element.
+        for index in 0..=(u16::MAX as usize + 1) {
+            file.elements.push(PcfElement {
+                type_name_index: 0,
+                name: format!("e{index}").into_bytes(),
+                signature: [0; 16],
+                attributes: vec![(
+                    format!("attr{index}").into_bytes(),
+                    PcfAttr {
+                        type_code: 3,
+                        value: PcfValue::Float(0),
+                    },
+                )],
+            });
+        }
+        let err = remove_duplicate_elements(&mut file).unwrap_err();
+        assert!(err.0.contains("65535"), "{}", err.0);
+    }
+
     fn element(type_index: u16, name: &str, attrs: Vec<(&str, PcfAttr)>) -> PcfElement {
         PcfElement {
             type_name_index: type_index,
@@ -1245,7 +1299,7 @@ mod tests {
     #[test]
     fn shrink_pipeline_dedupes_and_fixes_children() {
         let mut file = sample_file();
-        remove_duplicate_elements(&mut file);
+        remove_duplicate_elements(&mut file).unwrap();
 
         // The duplicate operator collapsed; the broken child ref now points at
         // effect_b's system definition; default radius 5.0 dropped.
@@ -1409,7 +1463,7 @@ mod tests {
             } else {
                 file
             };
-            remove_duplicate_elements(&mut processed);
+            remove_duplicate_elements(&mut processed).unwrap();
             let encoded = encode_pcf(&processed).unwrap();
             let expected = std::fs::read(root.join(format!("refcorpus/{tag}.out.pcf"))).unwrap();
 
@@ -1511,7 +1565,7 @@ mod tests {
             let raw = std::fs::read(root.join("vanilla_all").join(name)).unwrap();
             let vanilla = decode_pcf(&raw).unwrap();
             let mut rebuilt = extract_elements(&vanilla, &keep).unwrap();
-            remove_duplicate_elements(&mut rebuilt);
+            remove_duplicate_elements(&mut rebuilt).unwrap();
             let encoded = encode_pcf(&rebuilt).unwrap();
             assert!(
                 encoded.len() <= raw.len(),
