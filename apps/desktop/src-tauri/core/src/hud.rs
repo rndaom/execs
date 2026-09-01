@@ -140,12 +140,24 @@ pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
     packs
 }
 
-pub fn live_hud_names(tf2_root: &Path) -> Vec<String> {
+/// A HUD folder found in `tf/custom/`. `name` is the folder as it is spelled
+/// on disk — the lowercased `key` alone is not enough to open it on a
+/// case-sensitive filesystem, which is how a stray `RaysHUD` stayed mounted
+/// next to a newly installed HUD on Linux.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveHud {
+    /// Folder name exactly as it appears in `tf/custom/`, disable prefix and all.
+    pub name: String,
+    /// Lowercased, `-`-stripped identity used to compare against a manifest.
+    pub key: String,
+}
+
+pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
     let custom = tf2_root.join("tf").join("custom");
     let Ok(entries) = fs::read_dir(&custom) else {
         return Vec::new();
     };
-    let mut names = Vec::new();
+    let mut huds: Vec<LiveHud> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_dir() || !is_hud_dir(&path) {
@@ -156,11 +168,20 @@ pub fn live_hud_names(tf2_root: &Path) -> Vec<String> {
             .strip_prefix('-')
             .unwrap_or(name.as_str())
             .to_ascii_lowercase();
-        if !key.is_empty() && !names.contains(&key) {
-            names.push(key);
+        if key.is_empty() || huds.iter().any(|hud| hud.key == key) {
+            continue;
         }
+        huds.push(LiveHud { name, key });
     }
-    names
+    huds
+}
+
+/// Just the identities, for callers comparing against a manifest.
+pub fn live_hud_keys(tf2_root: &Path) -> Vec<String> {
+    live_hud_names(tf2_root)
+        .into_iter()
+        .map(|hud| hud.key)
+        .collect()
 }
 
 pub fn schema_supported(id: &str) -> bool {
@@ -253,10 +274,13 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
     let id = sanitize_hud_id(id)?;
     // `resources` mixes image names with full video URLs — only names are
     // hud-db-hosted webp screenshots.
+    // The name is interpolated straight into a URL the frontend loads as an
+    // <img>, so it is an allowlist, not a `://` filter: `../` or a `?`/`#`
+    // would point the request somewhere else entirely.
     let screenshots: Vec<String> = parsed
         .resources
         .iter()
-        .filter(|name| !name.contains("://"))
+        .filter(|name| is_safe_screenshot_name(name))
         .map(|name| format!("{RAW_HUD_DB}/hud-resources/{id}/{name}.webp"))
         .collect();
     let banner = screenshots.first().cloned();
@@ -302,10 +326,24 @@ pub fn save_catalog_cache_to(dir: &Path, cache: &HudCatalogCache) -> Result<(), 
         .map_err(|err| ProfileError::Io(err.to_string()))
 }
 
+/// Ceilings on a HUD zip. The bytes come from a `codeload.github.com` URL
+/// whose owner/repo/commit all come from hud-db JSON, and the whole archive is
+/// held in memory while it is extracted, so a zip bomb or a merely enormous
+/// repo used to take the app down.
+const MAX_HUD_ENTRIES: usize = 20_000;
+const MAX_HUD_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_HUD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+
 pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
     let mut archive =
         ZipArchive::new(Cursor::new(bytes)).map_err(|err| ProfileError::Io(err.to_string()))?;
+    if archive.len() > MAX_HUD_ENTRIES {
+        return Err(ProfileError::Io(format!(
+            "That HUD zip has more than {MAX_HUD_ENTRIES} files; refusing to unpack it."
+        )));
+    }
     let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut total: u64 = 0;
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
@@ -314,10 +352,25 @@ pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
             continue;
         }
         let rel = sanitize_zip_entry(entry.name())?;
+        if entry.size() > MAX_HUD_ENTRY_BYTES {
+            return Err(ProfileError::Io(format!(
+                "{rel} is larger than 64 MiB; refusing to unpack this HUD."
+            )));
+        }
+        let budget = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
         let mut data = Vec::new();
+        // `take` also catches an entry whose header understates its real size.
         entry
+            .by_ref()
+            .take(budget.min(MAX_HUD_ENTRY_BYTES) + 1)
             .read_to_end(&mut data)
             .map_err(|err| ProfileError::Io(err.to_string()))?;
+        total += data.len() as u64;
+        if total > MAX_HUD_TOTAL_BYTES {
+            return Err(ProfileError::Io(
+                "That HUD zip unpacks to more than 512 MiB; refusing to unpack it.".into(),
+            ));
+        }
         raw.push((rel, data));
     }
     let stripped = strip_wrapper_folder(raw);
@@ -635,8 +688,23 @@ where
     let status = resolve_hud(&manifest)
         .ok_or_else(|| ProfileError::Io("Install a HUD before saving options.".into()))?;
     let mut tree = load_hud_tree_from_profile(profiles_dir, profile_id, &status.record.id)?;
-    let applied =
-        crate::hud_apply::apply_hud_options(&mut tree, schema, &status.record.id, &options)?;
+    let layer = crate::apply::cfg_layer_from_files(&manifest.files);
+    let applied = crate::hud_apply::apply_hud_options_for_layer(
+        &mut tree,
+        schema,
+        &status.record.id,
+        &options,
+        layer,
+    )?;
+    // A HUD's option cfgs are only meaningful for that HUD; a leftover
+    // `execs_hud_*.cfg` from a previous option set would keep executing.
+    remove_stale_hud_cfgs(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &applied.cfg_writes,
+        &running,
+    )?;
     write_hud_tree_files_to(
         profiles_dir,
         tf2_root,
@@ -710,7 +778,7 @@ fn apply_hud_replace_live(
         remove_live_pack(tf2_root, pack)?;
     }
     for live in live_hud_names(tf2_root) {
-        if live != new_id {
+        if live.key != new_id.to_ascii_lowercase() {
             dash_live_hud(tf2_root, &live)?;
         }
     }
@@ -730,6 +798,53 @@ fn apply_hud_replace_live(
     Ok(())
 }
 
+/// Drop every managed `execs_hud_*.cfg` the profile still carries that the new
+/// option set does not produce. They used to live under `tf/cfg/<hudid>/` and
+/// were never cleaned up at all, so a switched-away HUD left its folder in the
+/// profile forever.
+fn remove_stale_hud_cfgs(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    keep: &[(String, Vec<u8>)],
+    running: &[String],
+) -> Result<(), ProfileError> {
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let stale: Vec<String> = manifest
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .filter(|path| is_managed_hud_cfg(path))
+        .filter(|path| !keep.iter().any(|(kept, _)| kept == path))
+        .collect();
+    if stale.is_empty() {
+        return Ok(());
+    }
+    remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &stale, running)?;
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() == Some(profile_id) {
+        for path in &stale {
+            let dest = live_path(tf2_root, path);
+            if dest.is_file() {
+                fs::remove_file(&dest).map_err(|err| ProfileError::Io(err.to_string()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_managed_hud_cfg(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    if !lower.ends_with(".cfg") {
+        return false;
+    }
+    matches!(lower.as_str(), _ if lower.starts_with("tf/cfg/"))
+        && lower
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.starts_with(crate::hud_apply::HUD_CFG_PREFIX))
+}
+
 fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
     for name in [pack.to_string(), format!("-{pack}")] {
         let dir = tf2_root.join("tf").join("custom").join(name);
@@ -740,14 +855,25 @@ fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
     Ok(())
 }
 
-fn dash_live_hud(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
+/// Disable a live HUD folder by renaming it to Source's `-name` disable form.
+///
+/// Uses the folder's real on-disk spelling — a lowercased key never matched a
+/// `RaysHUD` folder on Linux, so the stray HUD stayed mounted. When the folder
+/// is already dashed there is nothing to do; when a `-name` twin already exists
+/// the enabled copy is removed rather than left mounted beside it.
+fn dash_live_hud(tf2_root: &Path, hud: &LiveHud) -> Result<(), ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
-    let enabled = custom.join(pack);
-    let disabled = custom.join(format!("-{pack}"));
-    if enabled.is_dir() && !disabled.exists() {
-        fs::rename(&enabled, &disabled).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let enabled = custom.join(&hud.name);
+    if hud.name.starts_with('-') || !enabled.is_dir() {
+        return Ok(());
     }
-    Ok(())
+    let disabled = custom.join(format!("-{}", hud.name));
+    if disabled.exists() {
+        // Both copies on disk means the enabled one is what the game mounts.
+        // "At most one HUD folder is mounted" wins over keeping a duplicate.
+        return fs::remove_dir_all(&enabled).map_err(|err| ProfileError::Io(err.to_string()));
+    }
+    fs::rename(&enabled, &disabled).map_err(|err| ProfileError::Io(err.to_string()))
 }
 
 fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
@@ -803,14 +929,35 @@ fn strip_wrapper_folder(entries: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>
     }
     let prefix = format!("{wrapper}/");
     let mut stripped = Vec::new();
-    for (path, bytes) in entries {
+    for (path, bytes) in &entries {
         if let Some(rest) = path.strip_prefix(&prefix) {
             if !rest.is_empty() {
-                stripped.push((rest.to_string(), bytes));
+                stripped.push((rest.to_string(), bytes.clone()));
             }
         }
     }
-    stripped
+    // Only a wrapper if what is left is itself a HUD. A zip whose entries all
+    // live under one real content folder (`resource/`, say) would otherwise
+    // have that folder stripped off.
+    if stripped
+        .iter()
+        .any(|(path, _)| path.eq_ignore_ascii_case("info.vdf"))
+    {
+        stripped
+    } else {
+        entries
+    }
+}
+
+/// hud-db screenshot names are plain file stems. Anything else is refused
+/// rather than escaped, because there is no legitimate case for it.
+fn is_safe_screenshot_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+        && !name.contains("..")
 }
 
 fn parse_ui_version(text: &str) -> Option<u32> {
@@ -870,6 +1017,58 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// AGENTS.md: "At most one HUD folder is mounted." A lowercased key never
+    /// matched a mixed-case folder on a case-sensitive filesystem, so the stray
+    /// HUD stayed mounted next to the new one.
+    #[test]
+    fn live_hud_names_keep_the_real_folder_spelling() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let custom = root.join("tf").join("custom");
+        fs::create_dir_all(custom.join("RaysHUD").join("resource")).unwrap();
+        fs::write(custom.join("RaysHUD").join("info.vdf"), info_vdf()).unwrap();
+
+        let huds = live_hud_names(&root);
+        assert_eq!(huds.len(), 1);
+        assert_eq!(huds[0].name, "RaysHUD");
+        assert_eq!(huds[0].key, "rayshud");
+
+        dash_live_hud(&root, &huds[0]).unwrap();
+        assert!(!custom.join("RaysHUD").exists());
+        assert!(custom.join("-RaysHUD").is_dir());
+        cleanup(&dir);
+    }
+
+    /// With both `foo` and `-foo` on disk the game mounts `foo`, so dashing
+    /// must not silently no-op and leave it mounted.
+    #[test]
+    fn dashing_removes_the_enabled_copy_when_a_dashed_twin_exists() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let custom = root.join("tf").join("custom");
+        for name in ["foo", "-foo"] {
+            fs::create_dir_all(custom.join(name)).unwrap();
+            fs::write(custom.join(name).join("info.vdf"), info_vdf()).unwrap();
+        }
+
+        let hud = LiveHud {
+            name: "foo".into(),
+            key: "foo".into(),
+        };
+        dash_live_hud(&root, &hud).unwrap();
+        assert!(!custom.join("foo").exists());
+        assert!(custom.join("-foo").is_dir());
+
+        // A folder that is already dashed is left exactly as it is.
+        let dashed = LiveHud {
+            name: "-foo".into(),
+            key: "foo".into(),
+        };
+        dash_live_hud(&root, &dashed).unwrap();
+        assert!(custom.join("-foo").is_dir());
+        cleanup(&dir);
+    }
+
     fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut cursor = Cursor::new(Vec::new());
         {
@@ -906,6 +1105,90 @@ mod tests {
             extracted.tree.get("resource/ui/hudlayout.res"),
             Some(b"hud\n".as_slice())
         );
+    }
+
+    /// The only guard used to be "the wrapper is not named info.vdf", so a zip
+    /// whose entries all sat under one real content folder had that folder
+    /// stripped off.
+    #[test]
+    fn extract_only_strips_a_wrapper_that_actually_wraps_a_hud() {
+        let bytes = zip_bytes(&[
+            ("info.vdf", info_vdf()),
+            ("resource/ui/hudlayout.res", b"hud\n"),
+            ("resource/ui/hudplayerhealth.res", b"health\n"),
+        ]);
+        let extracted = extract_hud_zip(&bytes).unwrap();
+        assert_eq!(extracted.tree.get("info.vdf"), Some(info_vdf()));
+        assert_eq!(
+            extracted.tree.get("resource/ui/hudlayout.res"),
+            Some(b"hud\n".as_slice())
+        );
+
+        // Every entry under one real content folder. Stripping it would not
+        // leave an info.vdf behind, so the folder is content, not a wrapper,
+        // and the entries come back untouched.
+        let entries = vec![
+            ("resource/ui/hudlayout.res".to_string(), b"hud\n".to_vec()),
+            (
+                "resource/ui/hudplayerhealth.res".to_string(),
+                b"hp\n".to_vec(),
+            ),
+        ];
+        assert_eq!(strip_wrapper_folder(entries.clone()), entries);
+
+        // A genuine wrapper leaves info.vdf at the root once stripped.
+        let wrapped = vec![
+            ("rayshud-abc/info.vdf".to_string(), info_vdf().to_vec()),
+            ("rayshud-abc/resource/x.res".to_string(), b"x\n".to_vec()),
+        ];
+        assert_eq!(
+            strip_wrapper_folder(wrapped),
+            vec![
+                ("info.vdf".to_string(), info_vdf().to_vec()),
+                ("resource/x.res".to_string(), b"x\n".to_vec()),
+            ]
+        );
+    }
+
+    #[test]
+    fn extract_refuses_too_many_entries() {
+        let payload = b"x\n".to_vec();
+        let entries: Vec<(String, Vec<u8>)> = (0..(MAX_HUD_ENTRIES + 1))
+            .map(|index| (format!("resource/f{index}.res"), payload.clone()))
+            .collect();
+        let borrowed: Vec<(&str, &[u8])> = entries
+            .iter()
+            .map(|(name, bytes)| (name.as_str(), bytes.as_slice()))
+            .collect();
+        let bytes = zip_bytes(&borrowed);
+        let err = extract_hud_zip(&bytes).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("more than")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_refuses_an_oversized_entry() {
+        // Declared size is what is checked, before anything is decompressed.
+        let big = vec![0u8; (MAX_HUD_ENTRY_BYTES + 1) as usize];
+        let bytes = zip_bytes(&[("info.vdf", info_vdf()), ("resource/huge.res", &big)]);
+        let err = extract_hud_zip(&bytes).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("64 MiB")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn screenshot_names_are_allowlisted() {
+        assert!(is_safe_screenshot_name("preview1"));
+        assert!(is_safe_screenshot_name("main-menu_2"));
+        assert!(!is_safe_screenshot_name("../../../etc/passwd"));
+        assert!(!is_safe_screenshot_name("a?b"));
+        assert!(!is_safe_screenshot_name("a#b"));
+        assert!(!is_safe_screenshot_name("a/b"));
+        assert!(!is_safe_screenshot_name(""));
     }
 
     #[test]
@@ -1191,7 +1474,14 @@ mod tests {
                 .to_vec(),
         );
         fresh.insert("#customization/minmode.res", b"off\n".to_vec());
-        crate::hud_apply::apply_hud_options(&mut fresh, &schema, "budhud", &options).unwrap();
+        crate::hud_apply::apply_hud_options_for_layer(
+            &mut fresh,
+            &schema,
+            "budhud",
+            &options,
+            crate::surface::CfgLayer::Vanilla,
+        )
+        .unwrap();
         install_hud_pack_to(
             &profiles,
             &root,
@@ -1213,7 +1503,7 @@ mod tests {
                 .unwrap();
         assert!(colors.contains("0 153 255 255"));
         assert_eq!(
-            fs::read(root.join("tf/cfg/budhud/hud_minmode.cfg")).unwrap(),
+            fs::read(root.join("tf/cfg/execs_hud_hud_minmode.cfg")).unwrap(),
             b"cl_hud_minmode 1\n"
         );
         let manifest = load_manifest(&profiles, &id).unwrap();

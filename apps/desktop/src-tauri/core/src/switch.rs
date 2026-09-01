@@ -11,7 +11,7 @@ use crate::absorb::{
 use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
 use crate::hash::{copy_and_sha256, sha256_file};
-use crate::hud::{hud_packs, live_hud_names};
+use crate::hud::{hud_packs, live_hud_keys};
 use crate::launch::LaunchWriteReason;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -179,7 +179,7 @@ where
     // deleted and the new ones half-written.
     preflight_target(profiles_dir, &target)?;
 
-    let live_huds = live_hud_names(tf2_root);
+    let live_huds = live_hud_keys(tf2_root);
     let previous = library.active_profile_id.clone();
     progress(SwitchProgress::new(SwitchStep::Pack));
     if previous.is_some() {
