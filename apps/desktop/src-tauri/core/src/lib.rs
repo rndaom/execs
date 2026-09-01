@@ -34,8 +34,8 @@ pub use absorb::{
     AbsorbOwnedResult, PackChoice,
 };
 pub use apply::{
-    get_active_profile_detail, list_profile_files, read_profile_file, write_owned_file,
-    ProfileDetail, ProfileFileContent,
+    get_active_profile_detail, list_profile_files, profile_file_bytes_from, read_profile_file,
+    write_owned_file, ProfileDetail, ProfileFileContent,
 };
 pub use comfig::{
     apply_official_vpk_bytes, apply_official_vpk_bytes_to, import_comfig_custom,
@@ -80,9 +80,8 @@ pub use profile::{
     ProfileLibrary, ProfileSummary, ViewmodelRecord, ViewmodelSource,
 };
 pub use settings::{
-    execs_data_dir, inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to,
-    remembered_tf2_root, remembered_tf2_root_from, set_inherit_binds, set_inherit_binds_to,
-    settings_file, Settings,
+    execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
+    remembered_tf2_root_from, settings_file, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
@@ -93,8 +92,8 @@ pub use viewmodel::{
 pub use viewmodel_build::{build_viewmodel_pack_vpk, studiomdl_file_name, ViewmodelHideMode};
 pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use wizard::{
-    download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, BindSource,
-    ComfigPreset, GitHubAsset, GitHubRelease, OfficialAddon, WizardAsset, WizardResult, WizardSpec,
+    download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, ComfigPreset,
+    GitHubAsset, GitHubRelease, OfficialAddon, StartFrom, WizardAsset, WizardResult, WizardSpec,
 };
 pub use zip::{
     export_profile, export_profile_to, import_profile, import_profile_from, safe_zip_file_name,

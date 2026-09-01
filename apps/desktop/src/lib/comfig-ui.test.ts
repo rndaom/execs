@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { COMFIG_MODULES, comfigModuleById } from "./comfig-catalog";
+import {
+  COMFIG_MODULES,
+  COMFIG_PRESETS,
+  comfigModuleById,
+  visibleComfigPresets,
+} from "./comfig-catalog";
 import {
   addonsFromFilePaths,
   defaultComfigState,
@@ -63,5 +68,21 @@ describe("comfig catalog", () => {
     expect(ids).toContain("texture_quality");
     expect(comfigModuleById("snapshot_buffer")?.levels).toContain("auto");
     expect(comfigModuleById("texture_quality")?.levels).toContain("high");
+  });
+});
+
+describe("comfig preset catalog", () => {
+  it("shows the four canonical presets until the rest are disclosed", () => {
+    expect(visibleComfigPresets("medium", false).map((preset) => preset.id)).toEqual([
+      "ultra",
+      "high",
+      "medium",
+      "low",
+    ]);
+    expect(visibleComfigPresets("medium", true)).toEqual(COMFIG_PRESETS);
+  });
+
+  it("keeps the list open when the selection is not one of the four", () => {
+    expect(visibleComfigPresets("very_low", false)).toEqual(COMFIG_PRESETS);
   });
 });

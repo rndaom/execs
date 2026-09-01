@@ -1,62 +1,18 @@
 import { Check, Plus, SlidersHorizontal } from "@phosphor-icons/react";
+import { useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
-import type { WizardSpec } from "./lib/bridge";
+import type { StartFrom, WizardSpec } from "./lib/bridge";
+import { presetListExpanded, visibleComfigPresets } from "./lib/comfig-catalog";
 import {
-  COMFIG_PRESETS,
   type ComfigPresetId,
   canApplyWizard,
   OFFICIAL_ADDONS,
   type OfficialAddonId,
+  START_FROM_OPTIONS,
   wizardApplyCopy,
 } from "./lib/first-run-ui";
-
-const PRESET_DETAILS: Record<
-  ComfigPresetId,
-  { summary: string; performance: string; fidelity: string }
-> = {
-  ultra: {
-    summary: "Maximum visual fidelity for powerful systems.",
-    performance: "Lowest",
-    fidelity: "Maximum",
-  },
-  high: {
-    summary: "Rich effects and detail with lighter overhead.",
-    performance: "Moderate",
-    fidelity: "High",
-  },
-  medium_high: {
-    summary: "High-quality visuals with sensible tuning.",
-    performance: "Good",
-    fidelity: "High",
-  },
-  medium: {
-    summary: "A balanced mix of clear visuals and speed.",
-    performance: "Great",
-    fidelity: "Balanced",
-  },
-  medium_low: {
-    summary: "More frames without a bare-bones look.",
-    performance: "High",
-    fidelity: "Moderate",
-  },
-  low: {
-    summary: "Performance-first settings for older hardware.",
-    performance: "Very high",
-    fidelity: "Low",
-  },
-  very_low: {
-    summary: "Minimum overhead for the most consistent frames.",
-    performance: "Maximum",
-    fidelity: "Minimal",
-  },
-  none: {
-    summary: "Create the profile without preset tuning.",
-    performance: "Stock",
-    fidelity: "Stock",
-  },
-};
 
 const ADDON_DETAILS: Record<OfficialAddonId, string> = {
   "no-footsteps": "Disable footstep sound effects.",
@@ -75,9 +31,11 @@ export function SetupWizard({
   preset,
   addons,
   creating = false,
+  startFrom = null,
   onDraftName,
   onPreset,
   onToggleAddon,
+  onStartFrom,
   onApply,
   onCancel,
 }: {
@@ -86,14 +44,23 @@ export function SetupWizard({
   preset: ComfigPresetId;
   addons: OfficialAddonId[];
   creating?: boolean;
+  /** `null` on first run: there is no active profile to start from. */
+  startFrom?: StartFrom | null;
   onDraftName: (name: string) => void;
   onPreset: (preset: ComfigPresetId) => void;
   onToggleAddon: (id: OfficialAddonId) => void;
+  onStartFrom?: (next: StartFrom) => void;
   onApply: () => void;
   onCancel?: () => void;
 }) {
   const { running, busy, error } = useAppStatus();
+  const [showAllPresets, setShowAllPresets] = useState(false);
   const canApply = canApplyWizard(draftName, running, busy);
+  const presets = visibleComfigPresets(preset, showAllPresets);
+  const expanded = presetListExpanded(preset, showAllPresets);
+  // A preset outside the featured four forces the list open, so there is
+  // nothing to collapse back to.
+  const canCollapsePresets = !presetListExpanded(preset, false);
 
   return (
     <section className="flex w-full max-w-6xl flex-col items-center py-2 text-center sm:py-4">
@@ -122,9 +89,64 @@ export function SetupWizard({
         }}
       >
         <div className="space-y-4 p-5 sm:p-7">
+          {startFrom && onStartFrom ? (
+            <PaneSection
+              id="wizard-start-from"
+              first
+              title="Start from"
+              description="Your in-game options come from here. Everything else below is set by this wizard."
+            >
+              <div data-testid="wizard-start-from" className="mt-4 grid gap-3 sm:grid-cols-2">
+                {START_FROM_OPTIONS.map((option) => {
+                  const selected = startFrom === option.id;
+                  return (
+                    <div key={option.id} className="relative min-w-0">
+                      <input
+                        id={`wizard-start-from-${option.id}`}
+                        type="radio"
+                        name="wizard-start-from"
+                        value={option.id}
+                        checked={selected}
+                        onChange={() => onStartFrom(option.id)}
+                        disabled={busy}
+                        className="peer sr-only"
+                      />
+                      <label
+                        htmlFor={`wizard-start-from-${option.id}`}
+                        className={`flex cursor-pointer items-start justify-between gap-3 rounded-xl border p-4 transition-colors peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-brand/70 ${
+                          selected
+                            ? "border-brand bg-brand/10"
+                            : "border-edge bg-bg/45 hover:border-ink-faint hover:bg-panel-raised/35"
+                        } ${busy ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <span className="min-w-0">
+                          <span
+                            className={`block text-sm font-medium ${
+                              selected ? "text-brand" : "text-ink"
+                            }`}
+                          >
+                            {option.label}
+                          </span>
+                          <span className="mt-1.5 block text-xs leading-5 text-ink-muted">
+                            {option.description}
+                          </span>
+                        </span>
+                        {selected ? (
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-pill bg-brand text-on-brand">
+                            <Check aria-hidden="true" size={15} weight="bold" />
+                          </span>
+                        ) : null}
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </PaneSection>
+          ) : null}
+
           <PaneSection
             id="wizard-details"
-            first
+            first={!(startFrom && onStartFrom)}
             title="Profile details"
             description="This name appears in your profile switcher."
             meta="Required"
@@ -151,9 +173,8 @@ export function SetupWizard({
             meta="Powered by mastercomfig"
           >
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {COMFIG_PRESETS.map((item) => {
+              {presets.map((item) => {
                 const selected = preset === item.id;
-                const detail = PRESET_DETAILS[item.id];
                 return (
                   <div key={item.id} className="relative min-w-0">
                     <input
@@ -189,16 +210,16 @@ export function SetupWizard({
                         ) : null}
                       </span>
                       <span className="mt-3 text-xs leading-5 text-ink-muted">
-                        {detail.summary}
+                        {item.description}
                       </span>
                       <span className="mt-auto grid grid-cols-2 gap-2 border-t border-edge/70 pt-3 text-[11px]">
                         <span>
                           <span className="block text-ink-faint">Performance</span>
-                          <span className="mt-0.5 block text-ink">{detail.performance}</span>
+                          <span className="mt-0.5 block text-ink">{item.performance}</span>
                         </span>
                         <span>
                           <span className="block text-ink-faint">Fidelity</span>
-                          <span className="mt-0.5 block text-ink">{detail.fidelity}</span>
+                          <span className="mt-0.5 block text-ink">{item.fidelity}</span>
                         </span>
                       </span>
                     </label>
@@ -206,6 +227,17 @@ export function SetupWizard({
                 );
               })}
             </div>
+            {canCollapsePresets ? (
+              <button
+                type="button"
+                data-testid="wizard-show-all-presets"
+                onClick={() => setShowAllPresets((current) => !current)}
+                disabled={busy}
+                className="btn btn-ghost mt-3 text-xs"
+              >
+                {expanded ? "Show core presets" : "Show all presets"}
+              </button>
+            ) : null}
           </PaneSection>
 
           <PaneSection

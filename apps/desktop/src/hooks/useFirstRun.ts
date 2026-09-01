@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Api } from "../lib/api";
-import type { FirstRunKind, ProfileLibrary, Tf2Install } from "../lib/bridge";
+import type { FirstRunKind, ProfileLibrary, StartFrom, Tf2Install } from "../lib/bridge";
 import {
   type ComfigPresetId,
   canApplyWizard,
+  defaultStartFrom,
   type OfficialAddonId,
   toggleAddon,
 } from "../lib/first-run-ui";
@@ -17,8 +18,11 @@ export type FirstRunState = {
   addons: OfficialAddonId[];
   /** The Create-new wizard is open over an existing library. */
   creating: boolean;
+  /** Where the new profile's `config.cfg` comes from (RND-187). */
+  startFrom: StartFrom;
   setPreset: (preset: ComfigPresetId) => void;
   toggleAddon: (id: OfficialAddonId) => void;
+  setStartFrom: (next: StartFrom) => void;
   openCreate: () => void;
   cancelCreate: () => void;
   applyWizard: (name: string) => Promise<boolean>;
@@ -57,6 +61,11 @@ export function useFirstRun(
   const [preset, setPreset] = useState<ComfigPresetId>("medium");
   const [addons, setAddons] = useState<OfficialAddonId[]>([]);
   const [creating, setCreating] = useState(seedCreating);
+  // `null` = the user has not picked, so the default tracks the library: the
+  // library often arrives after this hook first runs (and `?preview=create`
+  // seeds the wizard open before it loads at all).
+  const [chosenStartFrom, setChosenStartFrom] = useState<StartFrom | null>(null);
+  const startFrom = chosenStartFrom ?? defaultStartFrom(library);
 
   useEffect(() => {
     if (!confirmed || !library) {
@@ -96,6 +105,7 @@ export function useFirstRun(
     setError(null);
     setPreset("medium");
     setAddons([]);
+    setChosenStartFrom(null);
     progress.cancel();
   }, [progress, setError]);
 
@@ -115,8 +125,12 @@ export function useFirstRun(
       setBusy(true);
       try {
         const spec = wizardSpec(name, preset, addons);
+        // With no active profile there is nothing to copy, so the wizard shows
+        // no tiles and this stays "fresh".
         setLibrary(
-          creating ? await api.createFreshProfile(spec) : await api.applyUnusedWizard(spec),
+          creating
+            ? await api.createFreshProfile(spec, startFrom)
+            : await api.applyUnusedWizard(spec),
         );
         progress.complete();
         setCreating(false);
@@ -130,7 +144,20 @@ export function useFirstRun(
         setBusy(false);
       }
     },
-    [api, addons, busy, clear, creating, preset, progress, running, setBusy, setError, setLibrary],
+    [
+      api,
+      addons,
+      busy,
+      clear,
+      creating,
+      preset,
+      progress,
+      running,
+      setBusy,
+      setError,
+      setLibrary,
+      startFrom,
+    ],
   );
 
   const reset = useCallback(() => {
@@ -139,6 +166,7 @@ export function useFirstRun(
     setCreating(false);
     setPreset("medium");
     setAddons([]);
+    setChosenStartFrom(null);
   }, []);
 
   return {
@@ -147,8 +175,10 @@ export function useFirstRun(
     preset,
     addons,
     creating,
+    startFrom,
     setPreset,
     toggleAddon: (id) => setAddons((current) => toggleAddon(current, id)),
+    setStartFrom: setChosenStartFrom,
     openCreate,
     cancelCreate,
     applyWizard,
