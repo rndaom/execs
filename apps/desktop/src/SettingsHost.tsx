@@ -338,10 +338,17 @@ export function SettingsHost({
     };
   }, [api, tab]);
 
-  // Previews for library crosshairs stored in the installed pack.
-  const crosshairLibraryKey = JSON.stringify(detail?.crosshair?.library ?? null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by library content.
+  // Previews for library crosshairs stored in the installed pack. Keyed by the
+  // profile too: two profiles can hold the same library name with different
+  // bytes, and the stale pixels would otherwise sit on the chip until the new
+  // fetch resolved.
+  const crosshairLibraryKey = JSON.stringify([
+    detail?.id ?? null,
+    detail?.crosshair?.library ?? null,
+  ]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by profile + library content.
   useEffect(() => {
+    setPackPreviews(null);
     if (tab !== "crosshair" || !detail?.crosshair?.library) {
       return;
     }
@@ -538,8 +545,6 @@ export function SettingsHost({
     if (tab === "hud") {
       return (
         <HudPane
-          running={running}
-          busy={busy}
           catalogLoading={hudCatalogLoading}
           catalogError={hudCatalogError}
           catalog={hudCatalog}
@@ -584,8 +589,6 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <CrosshairPane
-          running={running}
-          busy={busy}
           record={detail?.crosshair ?? null}
           layer={layer}
           effective={maps.effective}
@@ -614,8 +617,6 @@ export function SettingsHost({
     if (tab === "viewmodels") {
       return (
         <ViewmodelPane
-          running={running}
-          busy={busy}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
             void runWrite(async () => {
@@ -644,8 +645,6 @@ export function SettingsHost({
     if (tab === "mods") {
       return (
         <ModsPane
-          running={running}
-          busy={busy}
           payload={modsPayload}
           catalog={modsCatalog}
           loading={modsLoading}

@@ -2,26 +2,29 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { HudPane } from "./HudPane";
+import { AppStatusProvider } from "./hooks/useAppStatus";
 import { emptyHudState, PREVIEW_HUD_CATALOG } from "./lib/hud-ui";
 
 const noop = () => undefined;
 
 function renderHudPane(catalogLoading: boolean, catalogError: string | null): string {
   return renderToStaticMarkup(
-    createElement(HudPane, {
-      running: false,
-      busy: false,
-      catalogLoading,
-      catalogError,
-      catalog: PREVIEW_HUD_CATALOG,
-      state: emptyHudState(),
-      schema: null,
-      onRefresh: noop,
-      onInstall: noop,
-      onUpdate: noop,
-      onMatch: noop,
-      onApplyOptions: noop,
-    }),
+    createElement(
+      AppStatusProvider,
+      { value: { error: null, setError: () => undefined, busy: false, running: false } },
+      createElement(HudPane, {
+        catalogLoading,
+        catalogError,
+        catalog: PREVIEW_HUD_CATALOG,
+        state: emptyHudState(),
+        schema: null,
+        onRefresh: noop,
+        onInstall: noop,
+        onUpdate: noop,
+        onMatch: noop,
+        onApplyOptions: noop,
+      }),
+    ),
   );
 }
 

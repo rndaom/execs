@@ -5,8 +5,9 @@ import {
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
   hudOptionsDirty,
-  hudUpdateAvailable,
   installedHudLabel,
+  isHudCheckboxOn,
+  normalizeHudSearch,
   optionValue,
   PREVIEW_HUD_CATALOG,
   PREVIEW_HUD_SCHEMA,
@@ -28,7 +29,7 @@ describe("hud catalog helpers", () => {
   });
 
   it("marks an update when the installed hash is behind hud-db", () => {
-    expect(hudUpdateAvailable(previewInstalledState())).toBe(true);
+    expect(previewInstalledState().updateAvailable).toBe(true);
     expect(optionValue(previewInstalledState().installed, "HealthBuff", "255 255 255 255")).toBe(
       "0 153 255 255",
     );
@@ -90,5 +91,23 @@ describe("hud catalog pagination", () => {
     expect(stepHudScreenshot(2, 1, 3)).toBe(0);
     expect(stepHudScreenshot(0, -1, 3)).toBe(2);
     expect(stepHudScreenshot(0, 1, 0)).toBe(0);
+  });
+});
+
+describe("hud option and search edges", () => {
+  it("reads every truthy spelling hud-db schemas use", () => {
+    for (const on of ["1", "true", "yes", "on", " TRUE ", "Yes"]) {
+      expect(isHudCheckboxOn(on), on).toBe(true);
+    }
+    for (const off of ["0", "false", "no", "off", "", "   ", "2", "enabled"]) {
+      expect(isHudCheckboxOn(off), off).toBe(false);
+    }
+  });
+
+  it("folds case and punctuation so styled HUD names still match", () => {
+    expect(normalizeHudSearch("m0re HUD")).toBe("m0rehud");
+    expect(normalizeHudSearch("  Rays' HUD!  ")).toBe("rayshud");
+    expect(normalizeHudSearch("budhud-remastered")).toBe("budhudremastered");
+    expect(normalizeHudSearch("-_-")).toBe("");
   });
 });

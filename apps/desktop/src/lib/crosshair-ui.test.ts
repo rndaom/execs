@@ -3,14 +3,16 @@ import {
   assignmentFor,
   assignSlotForAllClasses,
   CROSSHAIR_CANVAS_SIZE,
+  catalogSlots,
   copyClassToAllClasses,
   emptyCrosshairDraft,
-  isCrosshairShape,
+  isBuiltinCrosshairShape,
   previewCrosshairRecord,
   renderCrosshairRgba,
   seedCrosshairDraft,
   slotAssignment,
   tintCrosshairRgba,
+  validCrosshairName,
   WEAPON_CATALOG,
   weaponsForClass,
 } from "./crosshair-ui";
@@ -26,9 +28,9 @@ describe("crosshair ui", () => {
     expect(draft.shape).toBe("cross");
     expect(assignmentFor(draft, "tf_weapon_scattergun")).toBe("dot");
     expect(assignmentFor(draft, "tf_weapon_minigun")).toBe("cross");
-    expect(isCrosshairShape("circle")).toBe(true);
-    expect(isCrosshairShape("custom")).toBe(true);
-    expect(isCrosshairShape("valve")).toBe(false);
+    expect(isBuiltinCrosshairShape("circle")).toBe(true);
+    expect(isBuiltinCrosshairShape("custom")).toBe(true);
+    expect(isBuiltinCrosshairShape("valve")).toBe(false);
     expect(emptyCrosshairDraft().shape).toBe("cross");
   });
 
@@ -82,4 +84,56 @@ test("tintCrosshairRgba multiplies color and leaves alpha and null tints alone",
   expect(Array.from(red.slice(0, 4))).toEqual([255, 0, 0, 255]);
   expect(Array.from(red.slice(4))).toEqual([128, 0, 0, 64]);
   expect(Array.from(tintCrosshairRgba(source, null))).toEqual(Array.from(source));
+});
+
+describe("crosshair names and slots", () => {
+  it("accepts only names that survive VPK paths and VMT text", () => {
+    expect(validCrosshairName("venom_circle")).toBe(true);
+    expect(validCrosshairName("plus-gap")).toBe(true);
+    expect(validCrosshairName("")).toBe(false);
+    expect(validCrosshairName("Circle")).toBe(false);
+    expect(validCrosshairName("my crosshair")).toBe(false);
+    expect(validCrosshairName("../escape")).toBe(false);
+    expect(validCrosshairName("a".repeat(64))).toBe(true);
+    expect(validCrosshairName("a".repeat(65))).toBe(false);
+  });
+
+  it("lists only slots the catalog actually fills, in display order", () => {
+    const slots = catalogSlots();
+    expect(slots[0]).toBe("primary");
+    expect(new Set(slots).size).toBe(slots.length);
+    for (const slot of slots) {
+      expect(
+        WEAPON_CATALOG.some((weapon) => weapon.slot === slot),
+        slot,
+      ).toBe(true);
+    }
+  });
+
+  it("drops shapes and library names it cannot resolve when seeding", () => {
+    const seeded = seedCrosshairDraft({
+      id: "execs-crosshairs",
+      shape: "not_a_shape",
+      assignments: { tf_weapon_scattergun: "also_missing", tf_weapon_rocketlauncher: "dot" },
+      library: { "Bad Name": "vtf", good_name: "rgba" },
+      color: null,
+      design: null,
+    });
+    expect(seeded.shape).toBe("cross");
+    expect(seeded.assignments.tf_weapon_scattergun).toBeUndefined();
+    expect(seeded.assignments.tf_weapon_rocketlauncher).toBe("dot");
+    expect(Object.keys(seeded.library)).toEqual(["good_name"]);
+  });
+
+  it("namespaces a legacy library entry that collides with a first-party shape", () => {
+    const seeded = seedCrosshairDraft({
+      id: "execs-crosshairs",
+      shape: "cross",
+      assignments: {},
+      library: { circle: "vtf", bomo1: "vtf" },
+      color: null,
+      design: null,
+    });
+    expect(Object.keys(seeded.library).sort()).toEqual(["bomo1", "venom_circle"]);
+  });
 });
