@@ -17,9 +17,8 @@ use crate::launch::{
 };
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    is_shared_rel_path, load_library_from, load_manifest, profiles_dir,
-    put_exclusive_file_from_path_to, put_shared_blob_from_path_to, remove_manifest_files_to,
-    ProfileError, ProfileFile, ProfileLibrary,
+    load_library_from, load_manifest, profiles_dir, put_exclusive_files_from_paths_to,
+    remove_manifest_files_to, ProfileError, ProfileFile, ProfileLibrary,
 };
 use crate::surface::inventory_live_surface_with;
 
@@ -158,16 +157,14 @@ where
 
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     let config_cfg_absorbed = classified.delta.config_cfg;
-    for path in &classified.delta.owned_changed {
-        put_live_file(
-            profiles_dir,
-            tf2_root,
-            &profile_id,
-            path,
-            &classified.live,
-            &running,
-        )?;
-    }
+    put_live_files(
+        profiles_dir,
+        tf2_root,
+        &profile_id,
+        &classified.delta.owned_changed,
+        &classified.live,
+        &running,
+    )?;
     if !classified.delta.owned_missing.is_empty() {
         remove_manifest_files_to(
             profiles_dir,
@@ -178,7 +175,11 @@ where
         )?;
     }
 
-    dual_write_config(tf2_root, &classified, &options)?;
+    // Only when config.cfg actually drifted. Unconditionally rewriting it put a
+    // fresh mtime on a Steam Cloud file on every single boot.
+    if config_cfg_absorbed {
+        dual_write_config(tf2_root, &classified, &options)?;
+    }
 
     let mut remaining = classified.delta;
     remaining.owned_changed.clear();
@@ -228,18 +229,21 @@ where
     }
 
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
-    for pack in &classified.delta.packs_added {
-        for path in classified.pack_live_files.get(pack).into_iter().flatten() {
-            put_live_file(
-                profiles_dir,
-                tf2_root,
-                &profile_id,
-                path,
-                &classified.live,
-                &running,
-            )?;
-        }
-    }
+    let added: Vec<String> = classified
+        .delta
+        .packs_added
+        .iter()
+        .flat_map(|pack| classified.pack_live_files.get(pack).into_iter().flatten())
+        .cloned()
+        .collect();
+    put_live_files(
+        profiles_dir,
+        tf2_root,
+        &profile_id,
+        &added,
+        &classified.live,
+        &running,
+    )?;
     let mut remove = Vec::new();
     for pack in &classified.delta.packs_removed {
         if let Some(paths) = classified.pack_manifest_files.get(pack) {
@@ -291,6 +295,10 @@ fn classify(
     }
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let manifest_paths: BTreeSet<String> = manifest.files.iter().map(|file| file.path.clone()).collect();
+    // Hoisted: rebuilding these inside the per-file loops is O(live × manifest)
+    // string clones, and absorb runs on boot and after every TF2 quit.
+    let manifest_packs_present = manifest_pack_keys(&manifest.files);
+    let live_pack_keys: BTreeSet<String> = live.keys().filter_map(|path| pack_key(path)).collect();
 
     let mut owned_changed = Vec::new();
     let mut owned_missing = Vec::new();
@@ -307,33 +315,42 @@ fn classify(
                     }
                 }
             }
-            None if pack_key(&file.path).is_none() => {
-                owned_missing.push(file.path.clone());
-                if file.path == CONFIG_CFG {
+            None => match pack_key(&file.path) {
+                // A file deleted from inside a pack that is still live is a real
+                // deletion. Left in the manifest it never gets removed, and the
+                // next switch back rewrites the file the user deleted.
+                // `packs_removed` only fires when the whole pack key is gone.
+                Some(pack) if live_pack_keys.contains(&pack) => {
+                    owned_missing.push(file.path.clone());
+                }
+                Some(_) => {}
+                None => {
+                    owned_missing.push(file.path.clone());
+                    if file.path == CONFIG_CFG {
+                        config_cfg = true;
+                    }
+                }
+            },
+        }
+    }
+
+    for path in live.keys() {
+        if manifest_paths.contains(path) {
+            continue;
+        }
+        match pack_key(path) {
+            None => {
+                owned_changed.push(path.clone());
+                if path == CONFIG_CFG {
                     config_cfg = true;
                 }
             }
-            None => {}
-        }
-    }
-
-    for path in live.keys() {
-        if manifest_paths.contains(path) || pack_key(path).is_some() {
-            continue;
-        }
-        owned_changed.push(path.clone());
-        if path == CONFIG_CFG {
-            config_cfg = true;
-        }
-    }
-
-    for path in live.keys() {
-        if pack_key(path).is_some() && !manifest_paths.contains(path) {
-            if let Some(pack) = pack_key(path) {
-                if manifest_pack_keys(&manifest.files).contains(&pack) {
-                    owned_changed.push(path.clone());
-                }
+            // A new file inside a pack the profile already owns absorbs
+            // automatically; a brand-new pack is a prompt, not an absorb.
+            Some(pack) if manifest_packs_present.contains(&pack) => {
+                owned_changed.push(path.clone());
             }
+            Some(_) => {}
         }
     }
 
@@ -393,11 +410,13 @@ fn resolve_inventory_cloud(options: &AbsorbOptions<'_>) -> Option<PathBuf> {
     None
 }
 
-fn put_live_file<I, S>(
+/// Absorb a set of live files into the profile with a single manifest + index
+/// write, rather than one full rewrite of both per file.
+fn put_live_files<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
-    path: &str,
+    paths: &[String],
     live: &HashMap<String, PathBuf>,
     running: I,
 ) -> Result<(), ProfileError>
@@ -405,14 +424,14 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let Some(source) = live.get(path) else {
+    let batch: Vec<(String, PathBuf)> = paths
+        .iter()
+        .filter_map(|path| live.get(path).map(|source| (path.clone(), source.clone())))
+        .collect();
+    if batch.is_empty() {
         return Ok(());
-    };
-    if is_shared_rel_path(path) {
-        put_shared_blob_from_path_to(profiles_dir, tf2_root, profile_id, path, source, running)?;
-    } else {
-        put_exclusive_file_from_path_to(profiles_dir, tf2_root, profile_id, path, source, running)?;
     }
+    put_exclusive_files_from_paths_to(profiles_dir, tf2_root, profile_id, &batch, running)?;
     Ok(())
 }
 
@@ -816,6 +835,82 @@ mod tests {
             .files
             .iter()
             .any(|file| file.path == "tf/custom/hud/extra.txt"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn deleted_file_in_a_still_live_pack_absorbs_and_is_not_resurrected() {
+        // The mirror of the test above. Left in the manifest, a file the user
+        // deleted from inside their HUD comes back on the next switch.
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/hud/info.vdf"), "hud\n");
+        write_live(&root.join("tf/custom/hud/extra.txt"), "extra\n");
+        let id = save_main(&profiles, &root);
+
+        std::fs::remove_file(root.join("tf/custom/hud/extra.txt")).unwrap();
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        // The pack itself is still there, so this is a file deletion, not a
+        // pack removal — no prompt.
+        assert!(!result.delta.has_pack_changes());
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(
+            !manifest
+                .files
+                .iter()
+                .any(|file| file.path == "tf/custom/hud/extra.txt"),
+            "a deleted pack file must leave the manifest"
+        );
+        assert!(manifest
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/hud/info.vdf"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_whole_pack_disappearing_still_prompts_rather_than_absorbing() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/hud/info.vdf"), "hud\n");
+        let id = save_main(&profiles, &root);
+
+        std::fs::remove_dir_all(root.join("tf/custom/hud")).unwrap();
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert_eq!(result.delta.packs_removed, vec!["hud".to_string()]);
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/hud/info.vdf"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn absorb_with_no_drift_leaves_config_cfg_untouched() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        save_main(&profiles, &root);
+        let live_config = root.join("tf/cfg/config.cfg");
+        let before = std::fs::metadata(&live_config).unwrap().modified().unwrap();
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert!(!result.config_cfg_absorbed);
+        // Steam Cloud syncs this file; rewriting identical bytes on every boot
+        // gave it a fresh mtime for nothing.
+        assert_eq!(
+            std::fs::metadata(&live_config).unwrap().modified().unwrap(),
+            before
+        );
         cleanup(&dir);
     }
 }

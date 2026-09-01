@@ -398,27 +398,13 @@ where
     };
 
     let inventory = inventory_live_surface_with(tf2_root, options.cloud_config)?;
-    for entry in inventory.entries {
-        if is_shared_rel_path(&entry.dest_rel) {
-            put_shared_blob_from_path_to(
-                profiles_dir,
-                tf2_root,
-                &profile_id,
-                &entry.dest_rel,
-                &entry.source,
-                &running,
-            )?;
-        } else {
-            put_exclusive_file_from_path_to(
-                profiles_dir,
-                tf2_root,
-                &profile_id,
-                &entry.dest_rel,
-                &entry.source,
-                &running,
-            )?;
-        }
-    }
+    // One manifest + index write for the whole surface, not one per file.
+    let batch: Vec<(String, PathBuf)> = inventory
+        .entries
+        .into_iter()
+        .map(|entry| (entry.dest_rel, entry.source))
+        .collect();
+    put_exclusive_files_from_paths_to(profiles_dir, tf2_root, &profile_id, &batch, &running)?;
 
     let launch = match options.launch_options {
         Some(raw) => sanitize_launch_options(raw),
@@ -505,6 +491,106 @@ where
     touch_profile(&mut index, profile_id);
     write_json(&index_file(profiles_dir), &index)?;
     Ok(hash)
+}
+
+/// Where a batched profile file's bytes come from.
+#[derive(Debug, Clone, Copy)]
+pub enum FileSource<'a> {
+    Path(&'a Path),
+    Bytes(&'a [u8]),
+}
+
+/// Copy many files into a profile, writing `manifest.json` and `index.json`
+/// **exactly once**. The single-file helpers rewrite both JSON files per file,
+/// which is O(n) full rewrites (and O(n) crash windows) over a 3,000-file HUD.
+/// Storage is decided per path the same way the single-file callers decide it:
+/// `mastercomfig-base.vpk` is shared by hash, everything else is exclusive.
+pub fn put_profile_files_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[(String, FileSource<'_>)],
+    running_names: I,
+) -> Result<Vec<String>, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    refuse_writes(running_names)?;
+    if files.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    // A linear `upsert_file` per file is O(n²) over the manifest.
+    let mut positions: std::collections::HashMap<String, usize> = manifest
+        .files
+        .iter()
+        .enumerate()
+        .map(|(idx, file)| (file.path.clone(), idx))
+        .collect();
+
+    let mut hashes = Vec::with_capacity(files.len());
+    for (rel, source) in files {
+        let path = checked_rel_path(rel)?;
+        let (hash, storage) = if is_shared_rel_path(&path) {
+            let hash = match source {
+                FileSource::Path(from) => put_blob_from_path(profiles_dir, from)?,
+                FileSource::Bytes(bytes) => put_blob(profiles_dir, bytes)?,
+            };
+            (hash, FileStorage::Shared)
+        } else {
+            let dest = exclusive_file_path(profiles_dir, profile_id, &path);
+            let hash = match source {
+                FileSource::Path(from) => {
+                    copy_and_sha256(from, &dest).map_err(|e| ProfileError::Io(e.to_string()))?
+                }
+                FileSource::Bytes(bytes) => {
+                    crate::hash::write_atomic(&dest, bytes)
+                        .map_err(|e| ProfileError::Io(e.to_string()))?;
+                    sha256_hex(bytes)
+                }
+            };
+            (hash, FileStorage::Exclusive)
+        };
+        let entry = ProfileFile {
+            path: path.clone(),
+            sha256: hash.clone(),
+            storage,
+        };
+        match positions.get(&path) {
+            Some(&idx) => manifest.files[idx] = entry,
+            None => {
+                positions.insert(path, manifest.files.len());
+                manifest.files.push(entry);
+            }
+        }
+        hashes.push(hash);
+    }
+
+    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
+    touch_profile(&mut index, profile_id);
+    write_json(&index_file(profiles_dir), &index)?;
+    Ok(hashes)
+}
+
+/// `put_profile_files_to` for files that already live on disk.
+pub fn put_exclusive_files_from_paths_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[(String, PathBuf)],
+    running_names: I,
+) -> Result<Vec<String>, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let batch: Vec<(String, FileSource<'_>)> = files
+        .iter()
+        .map(|(rel, source)| (rel.clone(), FileSource::Path(source.as_path())))
+        .collect();
+    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, running_names)
 }
 
 pub fn put_shared_blob_to<I, S>(
@@ -624,6 +710,26 @@ where
         return Err(ProfileError::UnknownProfile);
     }
     index.active_profile_id = Some(profile_id.to_string());
+    write_json(&index_file(profiles_dir), &index)?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
+/// Point the index at no profile at all. Used when a switch fails after the
+/// live tree has already been part-emptied: leaving `activeProfileId` on the
+/// old profile makes the next auto-absorb swallow the half-replaced tree into
+/// it and destroy it.
+pub fn clear_active_profile_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    running_names: I,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    refuse_writes(running_names)?;
+    let mut index = usable_index(profiles_dir, tf2_root)?;
+    index.active_profile_id = None;
     write_json(&index_file(profiles_dir), &index)?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
@@ -876,9 +982,13 @@ fn roots_match(stored: &str, confirmed: &Path) -> bool {
     }
 }
 
+/// The one gate on what may enter a profile manifest. This is the allowlist
+/// (`tf/cfg/`, `tf/custom/`, never `tf/cfg/user/`), not the old four-name
+/// denylist — anything that reaches a manifest is something a later switch will
+/// happily copy into the live game folder.
 fn checked_rel_path(path: &str) -> Result<String, ProfileError> {
     let path = normalize_rel_path(path)?;
-    if is_forbidden_rel_path(&path) {
+    if !crate::apply::is_file_safe_rel_path(&path) {
         return Err(ProfileError::ForbiddenPath(path));
     }
     Ok(path)
@@ -932,12 +1042,44 @@ fn referenced_shared_hashes(
     Ok(hashes)
 }
 
+/// Atomic: `<file>.execs-part`, fsync, rename. A truncated `index.json` makes
+/// the whole profile library unloadable, so this must never be a bare
+/// `fs::write`.
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), ProfileError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| ProfileError::Io(e.to_string()))?;
-    }
     let json = serde_json::to_string_pretty(value).map_err(|e| ProfileError::Io(e.to_string()))?;
-    fs::write(path, format!("{json}\n")).map_err(|e| ProfileError::Io(e.to_string()))
+    crate::hash::write_atomic(path, format!("{json}\n").as_bytes())
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
+    #[cfg(test)]
+    write_counts::record(path);
+    Ok(())
+}
+
+/// Per-path write counter so a test can assert a batch write is O(1), not O(n).
+/// Keyed by path so it stays correct with tests running in parallel.
+#[cfg(test)]
+pub(crate) mod write_counts {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Mutex, OnceLock};
+
+    fn counts() -> &'static Mutex<HashMap<PathBuf, usize>> {
+        static COUNTS: OnceLock<Mutex<HashMap<PathBuf, usize>>> = OnceLock::new();
+        COUNTS.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub(crate) fn record(path: &Path) {
+        if let Ok(mut map) = counts().lock() {
+            *map.entry(path.to_path_buf()).or_insert(0) += 1;
+        }
+    }
+
+    pub(crate) fn count(path: &Path) -> usize {
+        counts()
+            .lock()
+            .ok()
+            .and_then(|map| map.get(path).copied())
+            .unwrap_or(0)
+    }
 }
 
 fn utc_rfc3339() -> String {
@@ -1247,6 +1389,80 @@ mod tests {
         .unwrap();
         assert_eq!(hash, sha256_hex(b"custom"));
         cleanup(&dir);
+    }
+
+    #[test]
+    fn manifest_paths_outside_the_file_safe_surface_are_refused() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let library = create_profile_record_to(&profiles, &root, "Safe", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+
+        // The old denylist let every one of these into a manifest, and a later
+        // switch copies a manifest file straight into the live game folder.
+        for path in [
+            "bin/x64/client.dll",
+            "hl2.exe",
+            "tf/bin/client.dll",
+            "tf/cfg/user/autoexec.cfg",
+            "tf/cfg/user",
+            "tf/materials/console/background.vtf",
+            "tf/addons/thing.vpk",
+        ] {
+            let err =
+                put_exclusive_file_to(&profiles, &root, id, path, b"x", unlocked()).unwrap_err();
+            assert!(
+                matches!(err, ProfileError::ForbiddenPath(_)),
+                "{path} => {err:?}"
+            );
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn save_current_manifest_writes_do_not_grow_with_file_count() {
+        // Saving n files must cost the same number of manifest rewrites as
+        // saving one. The per-file API was O(n) full JSON rewrites — 3,000 of
+        // them for a normal HUD, each one a window where a crash truncates the
+        // library.
+        let save_with = |files: usize| -> (usize, usize) {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("execs").join("profiles");
+            let root = dir.join("Team Fortress 2");
+            write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+            for i in 0..files {
+                write_live(
+                    &root.join(format!("tf/custom/pack/resource/f{i}.res")),
+                    &format!("file {i}\n"),
+                );
+            }
+            let library = save_current_as_to(
+                &profiles,
+                &root,
+                "Save",
+                unlocked(),
+                SaveCurrentOptions {
+                    launch_options: Some(""),
+                    cloud_config: None,
+                },
+            )
+            .unwrap();
+            let id = library.profiles[0].id.clone();
+            let manifest = load_manifest(&profiles, &id).unwrap();
+            let writes = write_counts::count(&manifest_file(&profiles, &id));
+            cleanup(&dir);
+            (manifest.files.len(), writes)
+        };
+
+        let (one_files, one_writes) = save_with(1);
+        let (many_files, many_writes) = save_with(50);
+        assert_eq!(one_files, 2);
+        assert_eq!(many_files, 51);
+        assert_eq!(
+            many_writes, one_writes,
+            "manifest writes must be O(1) in the number of files saved"
+        );
     }
 
     #[test]

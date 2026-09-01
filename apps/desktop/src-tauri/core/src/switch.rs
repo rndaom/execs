@@ -12,8 +12,9 @@ use crate::hud::{hud_packs, live_hud_names};
 use crate::blob::blob_path;
 use crate::hash::{copy_and_sha256, sha256_file};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
+use crate::apply::is_file_safe_rel_path;
 use crate::profile::{
-    exclusive_file_path, is_forbidden_rel_path, load_library_from, load_manifest, profiles_dir,
+    clear_active_profile_to, exclusive_file_path, load_library_from, load_manifest, profiles_dir,
     set_active_profile_to, FileStorage, ProfileError, ProfileFile, ProfileLibrary, ProfileManifest,
 };
 
@@ -97,10 +98,16 @@ where
         return Ok(library);
     }
 
+    let target = load_manifest(profiles_dir, profile_id)?;
+    // Everything the target needs is checked before a single live file is
+    // removed. A failure discovered mid-write leaves the old profile's files
+    // deleted and the new ones half-written.
+    preflight_target(profiles_dir, &target)?;
+
     let live_huds = live_hud_names(tf2_root);
     let previous = library.active_profile_id.clone();
-    if let Some(active) = previous.as_deref() {
-        progress(SwitchProgress::new(SwitchStep::Pack));
+    progress(SwitchProgress::new(SwitchStep::Pack));
+    if previous.is_some() {
         absorb_owned_to(profiles_dir, tf2_root, &running, clone_options(&options))?;
         absorb_packs_to(
             profiles_dir,
@@ -109,19 +116,32 @@ where
             &running,
             clone_options(&options),
         )?;
-        progress(SwitchProgress::new(SwitchStep::Remove));
-        remove_unmodified_live(profiles_dir, tf2_root, active)?;
-    } else {
-        progress(SwitchProgress::new(SwitchStep::Pack));
-        progress(SwitchProgress::new(SwitchStep::Remove));
     }
 
-    let target = load_manifest(profiles_dir, profile_id)?;
-    progress(SwitchProgress::new(SwitchStep::Write));
-    write_target_live(profiles_dir, tf2_root, &target, &live_huds)?;
+    progress(SwitchProgress::new(SwitchStep::Remove));
+    // From here on the live tree is mid-rebuild: the index must not be left
+    // pointing at a profile whose files are gone, or the next auto-absorb
+    // swallows the half-replaced tree into it and destroys it.
+    let mut result = match previous.as_deref() {
+        Some(active) => remove_unmodified_live(profiles_dir, tf2_root, active),
+        None => Ok(()),
+    };
+    if result.is_ok() {
+        progress(SwitchProgress::new(SwitchStep::Write));
+        result = write_target_live(profiles_dir, tf2_root, &target, &live_huds);
+    }
+    if result.is_ok() {
+        progress(SwitchProgress::new(SwitchStep::Cloud));
+        result = dual_write_target_config(tf2_root, profiles_dir, &target, &options);
+    }
+    if let Err(err) = result {
+        if previous.is_some() {
+            let _ = clear_active_profile_to(profiles_dir, tf2_root, &running);
+            return Err(mid_switch_error(&err));
+        }
+        return Err(err);
+    }
 
-    progress(SwitchProgress::new(SwitchStep::Cloud));
-    dual_write_target_config(tf2_root, profiles_dir, &target, &options)?;
     let steam_roots = match options.steam_roots {
         Some(roots) => roots.to_vec(),
         None => crate::finder::discover_steam_roots(),
@@ -134,6 +154,37 @@ where
 
     progress(SwitchProgress::new(SwitchStep::Done));
     set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)
+}
+
+fn mid_switch_error(err: &ProfileError) -> ProfileError {
+    ProfileError::Io(format!(
+        "{} The live folder is mid-switch and no profile is active — re-apply a profile to finish.",
+        err.message()
+    ))
+}
+
+/// Validate the entire target manifest before the live tree is touched: every
+/// path inside the file-safe surface, every source file present.
+fn preflight_target(profiles_dir: &Path, target: &ProfileManifest) -> Result<(), ProfileError> {
+    for file in &target.files {
+        if !is_file_safe_rel_path(&file.path) {
+            return Err(ProfileError::ForbiddenPath(file.path.clone()));
+        }
+        if !target_source(profiles_dir, target, file).is_file() {
+            return Err(ProfileError::Io(format!(
+                "Profile file missing: {}",
+                file.path
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn target_source(profiles_dir: &Path, target: &ProfileManifest, file: &ProfileFile) -> PathBuf {
+    match file.storage {
+        FileStorage::Shared => blob_path(profiles_dir, &file.sha256),
+        FileStorage::Exclusive => exclusive_file_path(profiles_dir, &target.id, &file.path),
+    }
 }
 
 fn clone_options<'a>(options: &'a AbsorbOptions<'a>) -> AbsorbOptions<'a> {
@@ -173,14 +224,11 @@ fn write_target_live(
     let preferred_hud = preferred_hud(target, live_huds);
     let extra_huds = extra_hud_packs(&target.files, preferred_hud.as_deref());
     for file in &target.files {
-        if is_forbidden_rel_path(&file.path) {
+        if !is_file_safe_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
         }
         let dest_rel = rewrite_extra_hud_path(&file.path, &extra_huds);
-        let source = match file.storage {
-            FileStorage::Shared => blob_path(profiles_dir, &file.sha256),
-            FileStorage::Exclusive => exclusive_file_path(profiles_dir, &target.id, &file.path),
-        };
+        let source = target_source(profiles_dir, target, file);
         if !source.is_file() {
             return Err(ProfileError::Io(format!(
                 "Profile file missing: {}",
@@ -749,6 +797,151 @@ mod tests {
             steps_of(&steps),
             vec![SwitchStep::Closed, SwitchStep::Done]
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_missing_source_file_fails_before_any_live_file_is_removed() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        write_live(&root.join("tf/cfg/overrides/autoexec.cfg"), "fov 90\n");
+        write_live(&root.join("tf/custom/hud/info.vdf"), "hud-a\n");
+        let a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[
+                ("tf/cfg/config.cfg", b"binds-b\n"),
+                ("tf/custom/alt/note.txt", b"alt\n"),
+            ],
+        );
+        // The library lost one of B's files (deleted app data, failed import).
+        fs::remove_file(exclusive_file_path(&profiles, &b, "tf/custom/alt/note.txt")).unwrap();
+        let before = (
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            fs::read(root.join("tf/cfg/overrides/autoexec.cfg")).unwrap(),
+            fs::read(root.join("tf/custom/hud/info.vdf")).unwrap(),
+        );
+
+        let mut steps = Vec::new();
+        let err = switch_profile_to(
+            &profiles,
+            &root,
+            &b,
+            unlocked(),
+            AbsorbOptions::default(),
+            |step| steps.push(step),
+        )
+        .unwrap_err();
+
+        assert!(err.message().contains("tf/custom/alt/note.txt"), "{err:?}");
+        // Pre-flight, so nothing was removed and the pointer is intact.
+        assert!(!steps.contains(&SwitchProgress::new(SwitchStep::Remove)));
+        assert_eq!(
+            (
+                fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+                fs::read(root.join("tf/cfg/overrides/autoexec.cfg")).unwrap(),
+                fs::read(root.join("tf/custom/hud/info.vdf")).unwrap(),
+            ),
+            before
+        );
+        assert_eq!(
+            load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id
+                .as_deref(),
+            Some(a.as_str())
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_failure_after_the_remove_step_clears_the_active_profile() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        write_live(&root.join("tf/cfg/overrides/autoexec.cfg"), "fov 90\n");
+        let a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[
+                ("tf/cfg/config.cfg", b"binds-b\n"),
+                ("tf/custom/alt/note.txt", b"alt\n"),
+            ],
+        );
+        assert_eq!(
+            load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id
+                .as_deref(),
+            Some(a.as_str())
+        );
+        // A directory sitting where one of B's files must land: the write fails
+        // after the remove step, exactly like an AV lock or a full disk.
+        fs::create_dir_all(root.join("tf/custom/alt/note.txt/blocker")).unwrap();
+
+        let err = switch_profile_to(
+            &profiles,
+            &root,
+            &b,
+            unlocked(),
+            AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap_err();
+
+        assert!(err.message().contains("mid-switch"), "{err:?}");
+        // A's files are gone from the live tree. If the index still named A,
+        // the next auto-absorb would absorb their absence into A and destroy it.
+        assert!(!root.join("tf/cfg/overrides/autoexec.cfg").exists());
+        let library = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(
+            library.active_profile_id, None,
+            "a half-replaced live tree must not stay pointed at the old profile"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_manifest_path_outside_the_file_safe_surface_is_refused() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        let _a = save(&profiles, &root, "A");
+        let b = library_profile(&profiles, &root, "B", &[("tf/cfg/config.cfg", b"binds-b\n")]);
+
+        // Hand-edited / legacy manifest naming a game binary.
+        let mut manifest = load_manifest(&profiles, &b).unwrap();
+        manifest.files.push(ProfileFile {
+            path: "bin/x64/client.dll".into(),
+            sha256: crate::hash::sha256_hex(b"x"),
+            storage: FileStorage::Exclusive,
+        });
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        fs::write(
+            crate::profile::manifest_file(&profiles, &b),
+            format!("{json}\n"),
+        )
+        .unwrap();
+
+        let err = switch_profile_to(
+            &profiles,
+            &root,
+            &b,
+            unlocked(),
+            AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(err, ProfileError::ForbiddenPath("bin/x64/client.dll".into()));
+        assert!(!root.join("bin/x64/client.dll").exists());
         cleanup(&dir);
     }
 
