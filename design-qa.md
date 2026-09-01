@@ -1,5 +1,45 @@
 # design-qa log
 
+## 2026-09-01 — visual pass (RND-188)
+Method: before/after headless captures at 1200×800 of every `?preview=` state against a Vite server in the worktree (port 1431), then a full 27-state walk reading each page's console. Screenshots live in `.artifacts/design-2026-09-01/{before,after}/` (gitignored) and are mirrored into the repo root's `.artifacts/`. Brief: the UI read as generic; the ask was a calm, seamless surface with few visible options and the best defaults already chosen — Apple-like restraint, for TF2, without going TF2-themed.
+
+### The system
+
+| Layer | Decision |
+| --- | --- |
+| Surfaces | `--color-bg` `#121212` → `--color-panel` `#181818` → `--color-panel-raised` `#1F1F1F`. Three steps, no more. |
+| Hairlines | `--color-edge` = ink at 8%, `--color-edge-strong` = 14%. Expressed as ink alpha so one value reads correctly on all three surfaces. |
+| Ink | `--color-ink` `#ECE7DA`, `--color-ink-muted` `#A49C8E`, `--color-ink-faint` `#6F695C`. |
+| Accent | `--color-brand` `#CF6A32`, spent on exactly four things: the primary button, the selected option ring, the active nav marker, the wordmark dot. Nothing else. |
+| Semantics | `--color-ok` / `--color-warn` / `--color-error` — meaning only, never decoration. Team colours survive only where they name a TF2 team (the RGB crosshair sliders). |
+| Type | Inter only. `.t-pane` 28/600 (-0.01em) · `.t-section` 17/600 · `.t-row` 15/500 · body 14/400 (1.55) · `.t-meta` 12.5/400 muted · `.eyebrow` 11/500 uppercase 0.12em — the only uppercase. `.tnum` on every numeric readout. |
+| Spacing | 4px base. 880px content column, 40px gutters, 48px between hairline-divided sections, 44px minimum row with 12px padding. |
+| Boxes | `.surface` previews/editors/media · `.overlay` popovers/prompts/modals · `.tile` selectable options. Rows are never boxed. |
+| Tiles | Flat, hairline body. Selected = 1.5px accent ring + a small check. No fill. |
+| Badges | Sentence case, 12px, hairline ring, no fill unless semantic (`.badge-ok` / `.badge-warn` / `.badge-error`). |
+| Motion | 150ms ease on colour, opacity and ring only; everything disabled under `prefers-reduced-motion`. |
+
+### Per screen
+- **Shell** — sidebar grouped Setup / Look / More behind eyebrows at 224px; active item is a 2px accent bar plus ink text. The shell no longer owns per-tab titles: each pane renders its own `PaneHeader`. Header collapses the install path to its folder name (full path in `title` and on the copy button) and the profile switcher drops its accent name for ink.
+- **Lock state** — one indicator. The top banner stays; the "Read-only while TF2 is running" pane pill, the sidebar box and the profile popover's read-only line are gone. Disabled controls carry the rest.
+- **Onboarding** — `OnboardingFrame` (wordmark, eyebrow, balanced title, ≤62ch lede, 640px column / 880px for the wizard) is now shared by FinderPanel, FirstRunExisting and SetupWizard, so the three read as one family. The wizard loses its card-in-card `.surface` shell. The "many installs" screen gains the frame it was missing (audit gap).
+- **Comfig** — the preset screenshot no longer grows to a 1200px banner: 2×2 tiles left, a fixed 360px 16:9 `object-fit: cover` preview right, stacking under the tiles below 1100px. Modules move behind a closed "Fine-tune modules" disclosure. Addons become `OptionTile`s.
+- **Gameplay** — opens with the two FOV sliders plus Draw viewmodel and Min viewmodels; left-handed, transparent viewmodels and both tracer toggles fold under Advanced.
+- **Crosshair** — file, scale and colour become the hero with the live preview at 360px beside them; the custom-crosshair builder follows as one section with its own preview.
+- **HUD** — active-HUD hero (name, state, its own catalog art, Update/Match) then the catalog; schema options fold under the hero. Raw 0–255 opacity line dropped; the percentage stays.
+- **Viewmodels** — class tabs, preview and slot picker left, checkbox list right; the hide-mode buttons stop being a filled primary pair and become ring-selected.
+- **Mods** — status hero: the three facts in a `.surface` on the right, Enable bypass / Restore stock files on the left, library below.
+- **Binds / Files / Launch** — structure kept, system applied. Files' lint tiers move onto the semantic badge variants.
+
+### Verification
+`tsc --noEmit`, desktop tests 28 files / 197 passing, `pnpm check`, `pnpm build` — all clean. All 27 `?preview=` states walked in a fresh headless tab each: zero page console errors or warnings (only Vite's connect line and React's DevTools notice).
+
+### Open items
+- The disclosure state lives in `localStorage` per pane, so it does not follow a profile or sync between machines. That is deliberate for now.
+- `Modal`'s HUD lightbox still uses `border-brand` for the selected thumbnail. It is a selected-option marker, so it is inside the accent budget, but it is the one place the ring is a border rather than an inset ring.
+- The window still has no `minWidth`/`minHeight` (audit gap, Rust-side — out of scope for this pass). Below roughly 900px the hero rows stack correctly, but the shell has never been tested at a genuinely small size.
+- Preset tiles are content-height, so a 2×2 grid with uneven descriptions leaves a ragged bottom edge. Equalising them would mean a fixed min-height that hurts the longer strings.
+
 ## 2026-08-31 — viewmodel diagnosis + "keep hands" hide mode
 Method: in-game isolation on the user's real install (they drove the game; I read `console.log` passively after learning the hard way not to inject keystrokes), plus offline model forensics against stock TF2 models.
 
