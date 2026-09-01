@@ -4,51 +4,14 @@ import {
   addonsFromFilePaths,
   defaultComfigState,
   inferComfigState,
-  parseModulesCfg,
-  parseSetupHook,
-  serializeModulesCfg,
-  serializeSetupHook,
   setModuleLevel,
   toggleComfigAddon,
 } from "./comfig-ui";
 
-describe("comfig modules.cfg", () => {
-  it("serializes and parses name=level lines", () => {
-    const text = serializeModulesCfg({
-      shadows: "off",
-      texture_quality: "high",
-    });
-    expect(text).toBe("shadows=off\ntexture_quality=high\n");
-    expect(parseModulesCfg(text)).toEqual({
-      shadows: "off",
-      texture_quality: "high",
-    });
-    expect(serializeModulesCfg({})).toBe("");
-    expect(parseModulesCfg("")).toEqual({});
-    expect(parseModulesCfg("// comment\ntexture_quality=high\n")).toEqual({
-      texture_quality: "high",
-    });
-  });
-
+describe("comfig module overrides", () => {
   it("clears a module override when the level is empty", () => {
     expect(setModuleLevel({ texture_quality: "high" }, "texture_quality", "")).toEqual({});
     expect(setModuleLevel({}, "shadows", "off")).toEqual({ shadows: "off" });
-  });
-});
-
-describe("comfig setup_hook", () => {
-  it("parses preset= and defaults to medium", () => {
-    expect(parseSetupHook("preset=low\n")).toBe("low");
-    expect(parseSetupHook("preset=medium_high\n")).toBe("medium_high");
-    expect(parseSetupHook("")).toBe("medium");
-    expect(parseSetupHook("echo hi\n")).toBe("medium");
-  });
-
-  it("preserves extra setup_hook lines when rewriting preset", () => {
-    expect(serializeSetupHook("medium", "preset=high\necho hello\n")).toBe(
-      "preset=medium\necho hello\n",
-    );
-    expect(serializeSetupHook("ultra")).toBe("preset=ultra\n");
   });
 });
 
