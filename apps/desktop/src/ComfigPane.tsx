@@ -1,5 +1,5 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import presetHigh from "./assets/presets/high.webp";
 import presetLow from "./assets/presets/low.webp";
 import presetMedium from "./assets/presets/medium.webp";
@@ -7,6 +7,10 @@ import presetMediumHigh from "./assets/presets/medium_high.webp";
 import presetMediumLow from "./assets/presets/medium_low.webp";
 import presetUltra from "./assets/presets/ultra.webp";
 import presetVeryLow from "./assets/presets/very_low.webp";
+import { ClassTabs } from "./components/ui/ClassTabs";
+import { PaneSection } from "./components/ui/PaneSection";
+import { useAppStatus } from "./hooks/useAppStatus";
+import { useSeededDraft } from "./hooks/useSeededDraft";
 import {
   type ComfigPreset,
   type OfficialAddon,
@@ -19,14 +23,7 @@ import {
   type ComfigModule,
   type ComfigModuleGroupId,
 } from "./lib/comfig-catalog";
-import {
-  hasBaseVpk,
-  hasComfigCustom,
-  type PreviewComfigState,
-  resolveComfigState,
-  setModuleLevel,
-} from "./lib/comfig-ui";
-import { shouldReseedDraft } from "./lib/files-ui";
+import { type ComfigUiState, hasBaseVpk, hasComfigCustom, setModuleLevel } from "./lib/comfig-ui";
 import { COMFIG_PRESETS, OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { canWriteSettings } from "./lib/settings-ui";
 
@@ -121,26 +118,11 @@ function ModuleControl({
         </p>
       </div>
 
-      {/* Compatibility control for tests and automation. The visible segmented
-          buttons below are the primary accessible interaction. */}
-      <select
+      <fieldset
         data-testid={`comfig-module-${module.id}`}
-        value={value}
-        disabled={locked}
-        onChange={(event) => onChange(event.target.value)}
-        aria-hidden="true"
-        tabIndex={-1}
-        className="sr-only"
+        data-value={value}
+        className="mt-2 flex min-w-0 flex-wrap gap-0.5 rounded-lg bg-bg p-0.5"
       >
-        <option value="">Preset default</option>
-        {module.levels.map((level) => (
-          <option key={level} value={level}>
-            {level}
-          </option>
-        ))}
-      </select>
-
-      <fieldset className="mt-2 flex min-w-0 flex-wrap gap-0.5 rounded-lg bg-bg p-0.5">
         <legend className="sr-only">{module.label} options</legend>
         {options.map((option) => {
           const selected = option === value;
@@ -170,56 +152,39 @@ function ModuleControl({
 }
 
 export function ComfigPane({
-  running,
-  busy,
   detail,
-  preview = false,
-  previewState,
+  state,
   onApplyPreset,
   onApplyModules,
   onToggleAddon,
   onUpdatePackages,
   onImportCustom,
 }: {
-  running: boolean;
-  busy: boolean;
   detail: ProfileDetail | null;
-  preview?: boolean;
-  previewState?: PreviewComfigState;
+  state: ComfigUiState;
   onApplyPreset: (preset: ComfigPreset) => void;
   onApplyModules: (modules: Record<string, string>) => void;
   onToggleAddon: (id: OfficialAddon) => void;
   onUpdatePackages: () => void;
   onImportCustom: () => void;
 }) {
+  const { running, busy } = useAppStatus();
   const incoming = useMemo(
-    () => resolveComfigState(preview, previewState, detail),
-    [preview, previewState, detail],
+    () => ({ preset: state.preset, modules: state.modules, addons: state.addons }),
+    [state],
   );
-  const [draft, setDraft] = useState<PreviewComfigState>(incoming);
+  // This pane is instant-apply and holds no user-typed draft, so the shared
+  // seed guard only has to answer "did the incoming bytes change".
+  const [draft, setDraft] = useSeededDraft(incoming, (value) => JSON.stringify(value));
   const [activeGroupId, setActiveGroupId] = useState<ComfigModuleGroupId>("graphics");
   const [moduleSearch, setModuleSearch] = useState("");
   const [showAllModules, setShowAllModules] = useState(false);
   const [showAllPresets, setShowAllPresets] = useState(false);
 
-  const lastSeededRef = useRef<string | null>(null);
-
-  // `incoming` is a fresh object on every reload, so reseeding on identity
-  // discards the control the user just clicked. This pane is instant-apply and
-  // holds no user-typed draft, so the guard is purely "did the bytes change".
-  useEffect(() => {
-    const next = JSON.stringify(incoming);
-    if (!shouldReseedDraft(lastSeededRef.current, next, false)) {
-      return;
-    }
-    lastSeededRef.current = next;
-    setDraft(incoming);
-  }, [incoming]);
-
   const locked = !canWriteSettings(running, busy);
   const paths = detail?.files.map((file) => file.path) ?? [];
-  const packagesInstalled = preview ? true : hasBaseVpk(paths);
-  const customImported = preview ? false : hasComfigCustom(paths);
+  const packagesInstalled = hasBaseVpk(paths);
+  const customImported = hasComfigCustom(paths);
   const presetListExpanded = showAllPresets || !FEATURED_PRESETS.has(draft.preset);
   const visiblePresets = presetListExpanded
     ? COMFIG_PRESETS
@@ -256,7 +221,7 @@ export function ComfigPane({
     ? "Read-only while TF2 is running"
     : busy
       ? "Saving changes…"
-      : !preview && detail === null
+      : detail === null
         ? "Loading active profile…"
         : !packagesInstalled
           ? "Packages not installed"
@@ -308,7 +273,7 @@ export function ComfigPane({
               <button
                 type="button"
                 onClick={() => setShowAllPresets((current) => !current)}
-                className="rounded-lg border border-edge-strong px-3 py-1.5 text-xs text-ink-muted hover:bg-panel-raised hover:text-ink"
+                className="btn btn-ghost text-xs"
               >
                 {showAllPresets ? "Show core presets" : "Show all presets"}
               </button>
@@ -317,7 +282,7 @@ export function ComfigPane({
               type="button"
               data-testid="comfig-preset-guide"
               onClick={() => void openEmbeddedPage("comfig-docs")}
-              className="flex items-center gap-1.5 rounded-lg border border-edge-strong px-3 py-1.5 text-xs text-ink-muted hover:bg-panel-raised hover:text-ink"
+              className="btn btn-ghost text-xs"
             >
               Preset guide
               <ArrowSquareOut size={12} />
@@ -326,10 +291,7 @@ export function ComfigPane({
         </div>
 
         <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
-          <div
-            data-testid="comfig-preset"
-            className={`grid content-start gap-2 sm:grid-cols-2 ${presetListExpanded ? "" : ""}`}
-          >
+          <div data-testid="comfig-preset" className="grid content-start gap-2 sm:grid-cols-2">
             {visiblePresets.map((item) => {
               const selected = draft.preset === item.id;
               const details = PRESET_DETAILS[item.id];
@@ -398,61 +360,23 @@ export function ComfigPane({
             <h2 id="comfig-modules-heading" className="text-sm font-semibold text-ink">
               Fine-tune modules
             </h2>
-            <div className="mt-2 flex flex-wrap" role="tablist" aria-label="Module categories">
-              {COMFIG_MODULE_GROUPS.map((group, groupIndex) => {
-                const active = group.id === activeGroupId;
-                return (
-                  <button
-                    key={group.id}
-                    id={`comfig-module-tab-${group.id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    aria-controls="comfig-module-panel"
-                    tabIndex={active ? 0 : -1}
-                    onClick={() => {
-                      setActiveGroupId(group.id);
-                      setModuleSearch("");
-                      setShowAllModules(false);
-                    }}
-                    onKeyDown={(event) => {
-                      let nextIndex: number | null = null;
-                      if (event.key === "ArrowRight") {
-                        nextIndex = (groupIndex + 1) % COMFIG_MODULE_GROUPS.length;
-                      } else if (event.key === "ArrowLeft") {
-                        nextIndex =
-                          (groupIndex - 1 + COMFIG_MODULE_GROUPS.length) %
-                          COMFIG_MODULE_GROUPS.length;
-                      } else if (event.key === "Home") {
-                        nextIndex = 0;
-                      } else if (event.key === "End") {
-                        nextIndex = COMFIG_MODULE_GROUPS.length - 1;
-                      }
-                      if (nextIndex === null) {
-                        return;
-                      }
-                      event.preventDefault();
-                      const nextGroup = COMFIG_MODULE_GROUPS[nextIndex];
-                      setActiveGroupId(nextGroup.id);
-                      setModuleSearch("");
-                      setShowAllModules(false);
-                      requestAnimationFrame(() => {
-                        document.getElementById(`comfig-module-tab-${nextGroup.id}`)?.focus();
-                      });
-                    }}
-                    className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                      active
-                        ? "border-brand text-brand"
-                        : "border-transparent text-ink-muted hover:text-ink"
-                    }`}
-                  >
-                    {group.label}
-                    <span className="ml-1.5 text-[10px] text-ink-faint">
-                      {group.modules.length}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="mt-2">
+              <ClassTabs
+                tabs={COMFIG_MODULE_GROUPS.map((group) => ({
+                  id: group.id,
+                  label: group.label,
+                  meta: group.modules.length,
+                }))}
+                selected={activeGroupId}
+                label="Module categories"
+                idPrefix="comfig-module-tab"
+                panelId="comfig-module-panel"
+                onSelect={(id) => {
+                  setActiveGroupId(id);
+                  setModuleSearch("");
+                  setShowAllModules(false);
+                }}
+              />
             </div>
           </div>
 
@@ -527,16 +451,12 @@ export function ComfigPane({
         ) : null}
       </section>
 
-      <section className="section" aria-labelledby="comfig-addons-heading">
-        <div>
-          <h2 id="comfig-addons-heading" className="text-sm font-semibold text-ink">
-            Official addons
-          </h2>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            Optional mastercomfig packages. Each addon can be removed again at any time.
-          </p>
-        </div>
-
+      <PaneSection
+        id="comfig-addons"
+        title="Official addons"
+        description="Optional mastercomfig packages. Each addon can be removed again at any time."
+        meta={`${draft.addons.length} selected`}
+      >
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {OFFICIAL_ADDONS.map((item) => {
             const selected = draft.addons.includes(item.id);
@@ -575,7 +495,7 @@ export function ComfigPane({
             );
           })}
         </div>
-      </section>
+      </PaneSection>
 
       <section className="section" aria-label="Comfig packages">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SwitchProgressList } from "./App";
+import { SwitchProgressList } from "./SwitchProgressList";
 
 describe("profile switch progress chrome", () => {
   it("shows the current real stage with a step-driven bar and no invented percent label", () => {

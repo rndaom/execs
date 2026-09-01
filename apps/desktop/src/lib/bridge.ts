@@ -30,53 +30,79 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-function invokeErrorMessage(error: unknown): string {
-  if (typeof error === "string") {
-    return error;
+/** Fallback code for a backend that still rejects with a bare string. */
+export const UNKNOWN_ERROR_CODE = "Unknown";
+
+/**
+ * A rejected command. The Rust side returns `{code, message}`; older commands
+ * (and the Tauri plugins) still reject with a bare string, so both shapes are
+ * accepted and `code` falls back to `Unknown`.
+ */
+export class BridgeError extends Error {
+  readonly code: string;
+
+  constructor(message: string, code: string = UNKNOWN_ERROR_CODE) {
+    super(message);
+    this.name = "BridgeError";
+    this.code = code;
   }
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message: unknown }).message;
-    if (typeof message === "string") {
-      return message;
+}
+
+/** Structured parse of whatever a rejected `invoke` handed back. */
+export function parseInvokeError(error: unknown): { code: string; message: string } {
+  if (error instanceof BridgeError) {
+    return { code: error.code, message: error.message };
+  }
+  if (typeof error === "string") {
+    return { code: UNKNOWN_ERROR_CODE, message: error };
+  }
+  if (error && typeof error === "object") {
+    const record = error as { code?: unknown; message?: unknown };
+    const message = typeof record.message === "string" ? record.message : null;
+    const code = typeof record.code === "string" ? record.code : UNKNOWN_ERROR_CODE;
+    if (message !== null) {
+      return { code, message };
     }
   }
-  return "Something went wrong.";
+  return { code: UNKNOWN_ERROR_CODE, message: "Something went wrong." };
+}
+
+export function invokeErrorMessage(error: unknown): string {
+  return parseInvokeError(error).message;
+}
+
+/**
+ * The one command wrapper. Every exported function below goes through this, so
+ * no command can ship an unwrapped raw-string rejection, and there is exactly
+ * one place where a structured backend error becomes a `BridgeError`.
+ */
+async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(cmd, args);
+  } catch (error) {
+    const { code, message } = parseInvokeError(error);
+    throw new BridgeError(message, code);
+  }
 }
 
 export async function scanTf2Installs(): Promise<Tf2Install[]> {
-  return invoke<Tf2Install[]>("scan_tf2_installs");
-}
-
-export async function validateTf2Root(path: string): Promise<Tf2Install> {
-  try {
-    return await invoke<Tf2Install>("validate_tf2_root", { path });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<Tf2Install[]>("scan_tf2_installs");
 }
 
 export async function browseTf2Root(): Promise<Tf2Install | null> {
-  try {
-    return await invoke<Tf2Install | null>("browse_tf2_root");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<Tf2Install | null>("browse_tf2_root");
 }
 
 export async function confirmTf2Root(path: string): Promise<Tf2Install> {
-  try {
-    return await invoke<Tf2Install>("confirm_tf2_root", { path });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<Tf2Install>("confirm_tf2_root", { path });
 }
 
 export async function getTf2Root(): Promise<Tf2Install | null> {
-  return invoke<Tf2Install | null>("get_tf2_root");
+  return call<Tf2Install | null>("get_tf2_root");
 }
 
 export async function getTf2WriteLock(): Promise<WriteLock> {
-  return invoke<WriteLock>("tf2_write_lock");
+  return call<WriteLock>("tf2_write_lock");
 }
 
 export async function onTf2Running(handler: (running: boolean) => void): Promise<UnlistenFn> {
@@ -86,35 +112,15 @@ export async function onTf2Running(handler: (running: boolean) => void): Promise
 }
 
 export async function getProfileLibrary(): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("get_profile_library");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("get_profile_library");
 }
 
 export async function initProfileLibrary(): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("init_profile_library");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
-}
-
-export async function createProfileRecord(name: string): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("create_profile_record", { name });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("init_profile_library");
 }
 
 export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("save_current_as", { name });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("save_current_as", { name });
 }
 
 export type AbsorbDelta = {
@@ -133,28 +139,12 @@ export type AbsorbOwnedResult = {
 
 export type PackChoice = "update" | "keep";
 
-export async function scanAbsorbDelta(): Promise<AbsorbDelta> {
-  try {
-    return await invoke<AbsorbDelta>("scan_absorb_delta");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
-}
-
 export async function absorbOwned(): Promise<AbsorbOwnedResult> {
-  try {
-    return await invoke<AbsorbOwnedResult>("absorb_owned");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<AbsorbOwnedResult>("absorb_owned");
 }
 
 export async function absorbPacks(choice: PackChoice): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("absorb_packs", { choice });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("absorb_packs", { choice });
 }
 
 export type SwitchStep = "closed" | "pack" | "remove" | "write" | "cloud" | "done";
@@ -165,11 +155,7 @@ export type SwitchProgress = {
 };
 
 export async function switchProfile(id: string): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("switch_profile", { id });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("switch_profile", { id });
 }
 
 export async function onSwitchProgress(
@@ -181,19 +167,11 @@ export async function onSwitchProgress(
 }
 
 export async function exportProfile(id: string): Promise<string | null> {
-  try {
-    return await invoke<string | null>("export_profile", { id });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<string | null>("export_profile", { id });
 }
 
 export async function importProfile(): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("import_profile");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("import_profile");
 }
 
 export type FirstRunKind = "unused" | "existing";
@@ -230,39 +208,23 @@ export type WizardSpec = {
 };
 
 export async function classifyFirstRun(): Promise<FirstRunClass> {
-  try {
-    return await invoke<FirstRunClass>("classify_first_run");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<FirstRunClass>("classify_first_run");
 }
 
 export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("apply_unused_wizard", { spec });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("apply_unused_wizard", { spec });
 }
 
 export async function getInheritBinds(): Promise<boolean> {
-  return invoke<boolean>("get_inherit_binds");
+  return call<boolean>("get_inherit_binds");
 }
 
 export async function setInheritBinds(inherit: boolean): Promise<boolean> {
-  try {
-    return await invoke<boolean>("set_inherit_binds", { inherit });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<boolean>("set_inherit_binds", { inherit });
 }
 
 export async function createFreshProfile(spec: WizardSpec): Promise<ProfileLibrary> {
-  try {
-    return await invoke<ProfileLibrary>("create_fresh_profile", { spec });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileLibrary>("create_fresh_profile", { spec });
 }
 
 export type CfgLayer = "comfig" | "vanilla";
@@ -373,27 +335,11 @@ export type ProfileFileContent = {
 };
 
 export async function getActiveProfileDetail(): Promise<ProfileDetail | null> {
-  try {
-    return await invoke<ProfileDetail | null>("get_active_profile_detail");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
-}
-
-export async function listProfileFiles(id?: string): Promise<ProfileFile[]> {
-  try {
-    return await invoke<ProfileFile[]>("list_profile_files", { id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail | null>("get_active_profile_detail");
 }
 
 export async function readProfileFile(path: string, id?: string): Promise<ProfileFileContent> {
-  try {
-    return await invoke<ProfileFileContent>("read_profile_file", { path, id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileFileContent>("read_profile_file", { path, id: id ?? null });
 }
 
 export async function writeOwnedFile(
@@ -401,11 +347,7 @@ export async function writeOwnedFile(
   text: string,
   id?: string,
 ): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
 }
 
 export type ComfigState = {
@@ -417,57 +359,33 @@ export type ComfigState = {
 };
 
 export async function getComfigState(id?: string): Promise<ComfigState | null> {
-  try {
-    return await invoke<ComfigState | null>("get_comfig_state", { id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ComfigState | null>("get_comfig_state", { id: id ?? null });
 }
 
 export async function setComfigPreset(preset: ComfigPreset, id?: string): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("set_comfig_preset", { preset, id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("set_comfig_preset", { preset, id: id ?? null });
 }
 
 export async function setComfigModules(
   modules: Record<string, string>,
   id?: string,
 ): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("set_comfig_modules", { modules, id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("set_comfig_modules", { modules, id: id ?? null });
 }
 
 export async function setComfigAddons(
   addons: OfficialAddon[],
   id?: string,
 ): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("set_comfig_addons", { addons, id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("set_comfig_addons", { addons, id: id ?? null });
 }
 
 export async function updateComfigVpks(id?: string): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("update_comfig_vpks", { id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("update_comfig_vpks", { id: id ?? null });
 }
 
 export async function importComfigCustom(id?: string): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("import_comfig_custom", { id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("import_comfig_custom", { id: id ?? null });
 }
 
 export type SteamWriteStatus = "written" | "steam_open" | "no_account";
@@ -478,85 +396,46 @@ export type SetLaunchResult = {
 };
 
 export async function recommendedLaunchOptions(): Promise<string> {
-  return invoke<string>("recommended_launch_options");
+  return call<string>("recommended_launch_options");
 }
 
 export async function getProfileLaunchOptions(id?: string): Promise<string> {
-  try {
-    return await invoke<string>("get_profile_launch_options", { id: id ?? null });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<string>("get_profile_launch_options", { id: id ?? null });
 }
 
 export async function setProfileLaunchOptions(
   options: string,
   id?: string,
 ): Promise<SetLaunchResult> {
-  try {
-    return await invoke<SetLaunchResult>("set_profile_launch_options", {
-      options,
-      id: id ?? null,
-    });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<SetLaunchResult>("set_profile_launch_options", { options, id: id ?? null });
 }
 
 export async function getHudCatalog(refresh = false): Promise<HudCatalogEntry[]> {
-  try {
-    return await invoke<HudCatalogEntry[]>("get_hud_catalog", { refresh });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<HudCatalogEntry[]>("get_hud_catalog", { refresh });
 }
 
 export async function getHudState(): Promise<HudUiState> {
-  try {
-    return await invoke<HudUiState>("get_hud_state");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<HudUiState>("get_hud_state");
 }
 
 export async function installHud(id: string): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("install_hud", { id });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("install_hud", { id });
 }
 
 export async function matchHudCatalog(id: string): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("match_hud_catalog", { id });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("match_hud_catalog", { id });
 }
 
 export async function updateHud(): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("update_hud");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("update_hud");
 }
 
 export async function getHudSchema(): Promise<HudSchemaView | null> {
-  try {
-    return await invoke<HudSchemaView | null>("get_hud_schema");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<HudSchemaView | null>("get_hud_schema");
 }
 
 export async function applyHudOptions(options: Record<string, string>): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("apply_hud_options", { options });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("apply_hud_options", { options });
 }
 
 export type CrosshairAssetPayload = {
@@ -572,20 +451,16 @@ export async function applyCrosshairs(
   library?: Record<string, CrosshairAssetPayload>,
   design?: string | null,
 ): Promise<ProfileDetail> {
-  try {
-    // Tauri v2 matches invoke keys in camelCase only — a snake_case key here
-    // deserializes the Option as permanently-None.
-    return await invoke<ProfileDetail>("apply_crosshairs", {
-      shape,
-      assignments,
-      customRgba: customRgba ?? null,
-      color: color ?? null,
-      library: library ?? null,
-      design: design ?? null,
-    });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  // Tauri v2 matches invoke keys in camelCase only — a snake_case key here
+  // deserializes the Option as permanently-None.
+  return call<ProfileDetail>("apply_crosshairs", {
+    shape,
+    assignments,
+    customRgba: customRgba ?? null,
+    color: color ?? null,
+    library: library ?? null,
+    design: design ?? null,
+  });
 }
 
 export type CommunityCrosshair = {
@@ -598,20 +473,12 @@ export type CommunityCrosshair = {
 
 /** Download (with cache) one community crosshair and its decoded preview. */
 export async function fetchCommunityCrosshair(file: string): Promise<CommunityCrosshair> {
-  try {
-    return await invoke<CommunityCrosshair>("fetch_community_crosshair", { file });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<CommunityCrosshair>("fetch_community_crosshair", { file });
 }
 
 /** Decoded previews of the installed pack's library crosshairs. */
 export async function getPackCrosshairPreviews(): Promise<Record<string, StockCrosshairSprite>> {
-  try {
-    return await invoke<Record<string, StockCrosshairSprite>>("get_pack_crosshair_previews");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<Record<string, StockCrosshairSprite>>("get_pack_crosshair_previews");
 }
 
 export type StockCrosshairSprite = {
@@ -623,19 +490,11 @@ export type StockCrosshairSprite = {
 
 /** Valve's stock crosshair sprites decoded from the user's own game files. */
 export async function getStockCrosshairSprites(): Promise<Record<string, StockCrosshairSprite>> {
-  try {
-    return await invoke<Record<string, StockCrosshairSprite>>("get_stock_crosshair_sprites");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<Record<string, StockCrosshairSprite>>("get_stock_crosshair_sprites");
 }
 
 export async function removeCrosshairs(): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("remove_crosshairs");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("remove_crosshairs");
 }
 
 /** Build a Yttrium-style pack from hidden animation groups and install it. */
@@ -647,29 +506,17 @@ export async function buildViewmodelPack(
   preload: boolean,
   hideMode: ViewmodelHideMode = "full",
 ): Promise<ProfileDetail> {
-  try {
-    // camelCase: Tauri v2 lower-camels command args, and a snake_case key
-    // would silently arrive as None.
-    return await invoke<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  // camelCase: Tauri v2 lower-camels command args, and a snake_case key
+  // would silently arrive as None.
+  return call<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
 }
 
 export async function importViewmodels(preload: boolean): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("import_viewmodels", { preload });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("import_viewmodels", { preload });
 }
 
 export async function removeViewmodels(): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("remove_viewmodels");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("remove_viewmodels");
 }
 
 /**
@@ -678,19 +525,11 @@ export async function removeViewmodels(): Promise<ProfileDetail> {
  * user into a dead end with a `.exe` in the error.
  */
 export async function viewmodelBuildAvailable(): Promise<boolean> {
-  try {
-    return await invoke<boolean>("viewmodel_build_available");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<boolean>("viewmodel_build_available");
 }
 
 export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
-  try {
-    return await invoke<ProfileDetail>("set_viewmodel_preload", { enabled });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<ProfileDetail>("set_viewmodel_preload", { enabled });
 }
 
 /** Open an external link in the system browser (plain anchors are inert in the packaged webview). */
@@ -703,7 +542,8 @@ export async function openExternal(url: string): Promise<void> {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
     await openUrl(url);
   } catch (error) {
-    throw new Error(invokeErrorMessage(error));
+    const { code, message } = parseInvokeError(error);
+    throw new BridgeError(message, code);
   }
 }
 
@@ -720,11 +560,7 @@ export async function openEmbeddedPage(page: EmbeddedPage): Promise<void> {
     window.open(EMBEDDED_PAGE_URLS[page], "_blank", "noreferrer");
     return;
   }
-  try {
-    await invoke("open_embedded_page", { page });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  await call<void>("open_embedded_page", { page });
 }
 
 // ---------------------------------------------------------------------------
@@ -805,55 +641,45 @@ export type PreloaderRevertReport = {
 };
 
 export async function getPreloaderStatus(): Promise<PreloaderStatusPayload> {
-  try {
-    return await invoke<PreloaderStatusPayload>("get_preloader_status");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<PreloaderStatusPayload>("get_preloader_status");
 }
 
 export async function getDefaultMods(): Promise<DefaultModsPayload> {
-  try {
-    return await invoke<DefaultModsPayload>("get_default_mods");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<DefaultModsPayload>("get_default_mods");
 }
 
 export async function downloadDefaultMods(): Promise<DefaultModsPayload> {
-  try {
-    return await invoke<DefaultModsPayload>("download_default_mods");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<DefaultModsPayload>("download_default_mods");
 }
 
 export async function applyPreloaderMods(
   addons: string[],
   particleMods: string[],
 ): Promise<PreloaderReport> {
-  try {
-    return await invoke<PreloaderReport>("apply_preloader_mods", { addons, particleMods });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<PreloaderReport>("apply_preloader_mods", { addons, particleMods });
 }
 
 export async function setGameinfoBypass(enabled: boolean): Promise<PreloaderStatusPayload> {
-  try {
-    return await invoke<PreloaderStatusPayload>("set_gameinfo_bypass", { enabled });
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<PreloaderStatusPayload>("set_gameinfo_bypass", { enabled });
 }
 
 export async function revertPreloader(): Promise<PreloaderRevertReport> {
-  try {
-    return await invoke<PreloaderRevertReport>("revert_preloader");
-  } catch (error) {
-    throw new Error(invokeErrorMessage(error));
-  }
+  return call<PreloaderRevertReport>("revert_preloader");
 }
+
+// ---------------------------------------------------------------------------
+// App updater
+// ---------------------------------------------------------------------------
+
+export type AppUpdateStep = "downloading" | "installing" | "restarting";
+
+/**
+ * The handle `checkAppUpdate` found, kept so `installAppUpdate` installs the
+ * exact release the banner advertised instead of re-checking and installing
+ * whatever the feed says a moment later.
+ */
+let pendingUpdate: Awaited<ReturnType<typeof import("@tauri-apps/plugin-updater").check>> | null =
+  null;
 
 export async function getAppVersion(): Promise<string> {
   const { getVersion } = await import("@tauri-apps/api/app");
@@ -863,20 +689,17 @@ export async function getAppVersion(): Promise<string> {
 export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {
   const { check } = await import("@tauri-apps/plugin-updater");
   const update = await check();
+  pendingUpdate = update;
   if (!update) {
     return null;
   }
   return { version: update.version, notes: update.body ?? null };
 }
 
-export async function installAppUpdate(
-  onProgress: (step: "downloading" | "installing" | "restarting") => void,
-): Promise<void> {
-  const { check } = await import("@tauri-apps/plugin-updater");
-  const { relaunch } = await import("@tauri-apps/plugin-process");
-  const update = await check();
+export async function installAppUpdate(onProgress: (step: AppUpdateStep) => void): Promise<void> {
+  const update = pendingUpdate;
   if (!update) {
-    throw new Error("No update available.");
+    throw new BridgeError("No update available.", "NoUpdate");
   }
   onProgress("downloading");
   await update.downloadAndInstall((event) => {
@@ -887,5 +710,11 @@ export async function installAppUpdate(
     }
   });
   onProgress("restarting");
-  await relaunch();
+  // Windows (NSIS `installMode: passive`) hands off to the installer, which
+  // terminates and restarts the app itself — calling relaunch() here races it.
+  // The AppImage path on Linux does need the explicit restart.
+  if (typeof navigator !== "undefined" && navigator.userAgent.includes("Linux")) {
+    const { relaunch } = await import("@tauri-apps/plugin-process");
+    await relaunch();
+  }
 }

@@ -1,52 +1,41 @@
-import { Check, CheckCircle, Copy, FloppyDisk } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { Check, CheckCircle, Copy, FloppyDisk, WarningCircle } from "@phosphor-icons/react";
+import { Alert } from "./components/ui/Alert";
+import { useAppStatus } from "./hooks/useAppStatus";
+import { useCopyFeedback } from "./hooks/useCopyFeedback";
+import { copyButtonLabel } from "./lib/copy-ui";
 import {
-  COPY_FEEDBACK_MS,
-  type CopyFeedback,
-  copyButtonLabel,
-  copyToClipboard,
-} from "./lib/copy-ui";
-import { canEditLaunch, type SteamWriteStatus, steamWriteCopy } from "./lib/launch-ui";
+  canEditLaunch,
+  forbiddenLaunchNotice,
+  forbiddenLaunchTokens,
+  type SteamWriteStatus,
+  steamWriteCopy,
+  strippedLaunchNotice,
+  strippedLaunchTokens,
+} from "./lib/launch-ui";
 
 export function LaunchPane({
-  running,
-  busy,
   value,
   steamWrite,
+  lastSave,
   onChange,
   onSave,
 }: {
-  running: boolean;
-  busy: boolean;
   value: string;
   steamWrite?: SteamWriteStatus | null;
+  /** What was sent to the backend last save and what came back. */
+  lastSave?: { sent: string; saved: string } | null;
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
+  const { running, busy } = useAppStatus();
   const canEdit = canEditLaunch(running, busy);
   const status = steamWrite ? steamWriteCopy(steamWrite) : "";
-  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>("idle");
-  const copyTimer = useRef<number | null>(null);
+  const { feedback, copy } = useCopyFeedback();
 
-  useEffect(() => {
-    return () => {
-      if (copyTimer.current !== null) {
-        window.clearTimeout(copyTimer.current);
-      }
-    };
-  }, []);
-
-  async function onCopy() {
-    const feedback = await copyToClipboard(value);
-    setCopyFeedback(feedback);
-    if (copyTimer.current !== null) {
-      window.clearTimeout(copyTimer.current);
-    }
-    copyTimer.current = window.setTimeout(() => {
-      setCopyFeedback("idle");
-      copyTimer.current = null;
-    }, COPY_FEEDBACK_MS);
-  }
+  // The backend strips these on save (RND-158). Flagging them as you type means
+  // the textarea never silently changes under the user.
+  const forbidden = forbiddenLaunchTokens(value);
+  const stripped = lastSave ? strippedLaunchTokens(lastSave.sent, lastSave.saved) : [];
 
   return (
     <div data-testid="settings-launch" className="min-w-0 text-left">
@@ -64,10 +53,34 @@ export function LaunchPane({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             disabled={!canEdit}
+            aria-describedby={forbidden.length > 0 ? "launch-forbidden" : undefined}
             rows={8}
             spellCheck={false}
-            className="surface mt-3 min-h-48 w-full resize-y bg-bg px-5 py-4 font-mono text-sm leading-7 text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none disabled:opacity-40"
+            className={`surface mt-3 min-h-48 w-full resize-y bg-bg px-5 py-4 font-mono text-sm leading-7 text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-40 ${
+              forbidden.length > 0 ? "border-q-strange/70" : "focus:border-brand"
+            }`}
           />
+
+          {forbidden.length > 0 ? (
+            <Alert tone="warn" testId="launch-forbidden" className="mt-3">
+              <span className="flex items-start gap-2">
+                <WarningCircle
+                  aria-hidden="true"
+                  size={16}
+                  weight="fill"
+                  className="mt-0.5 shrink-0"
+                />
+                <span id="launch-forbidden">{forbiddenLaunchNotice(forbidden)}</span>
+              </span>
+            </Alert>
+          ) : null}
+
+          {stripped.length > 0 ? (
+            <Alert tone="info" testId="launch-stripped" className="mt-3">
+              {strippedLaunchNotice(stripped)}
+            </Alert>
+          ) : null}
+
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <p
               data-testid="launch-steam-status"
@@ -81,11 +94,11 @@ export function LaunchPane({
               <button
                 type="button"
                 data-testid="launch-copy"
-                onClick={() => void onCopy()}
-                className={`btn btn-ghost ${copyFeedback === "copied" ? "border-health/60 text-health" : ""}`}
+                onClick={() => void copy(value)}
+                className={`btn btn-ghost ${feedback === "copied" ? "border-health/60 text-health" : ""}`}
               >
-                {copyFeedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
-                <span aria-live="polite">{copyButtonLabel(copyFeedback)}</span>
+                {feedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+                <span aria-live="polite">{copyButtonLabel(feedback)}</span>
               </button>
               <button
                 type="button"
@@ -108,9 +121,12 @@ export function LaunchPane({
             already closed; otherwise the string stays ready to copy.
           </p>
           <p className="mt-3 text-xs leading-5 text-ink-faint">
-            Temporary reset flags such as <code className="text-ink-muted">-autoconfig</code>,{" "}
-            <code className="text-ink-muted">-default</code>, and{" "}
-            <code className="text-ink-muted">+quit</code> are never stored on a profile.
+            Reset and wrapper flags — <code className="text-ink-muted">-autoconfig</code>,{" "}
+            <code className="text-ink-muted">-default</code>,{" "}
+            <code className="text-ink-muted">-dxlevel</code>,{" "}
+            <code className="text-ink-muted">+quit</code>,{" "}
+            <code className="text-ink-muted">gamemoderun %command%</code> — are never stored on a
+            profile.
           </p>
         </aside>
       </div>
