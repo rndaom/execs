@@ -2,7 +2,7 @@
 
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
@@ -87,25 +87,93 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
     sha256_reader(File::open(path)?)
 }
 
+/// Suffix for the side file every atomic write goes through. A crash leaves at
+/// most one of these next to the destination; it is never a live game file.
+pub const PART_SUFFIX: &str = ".execs-part";
+
+/// `<dest>.execs-part`, alongside `dest` so the rename stays on one volume.
+pub fn part_path(dest: &Path) -> PathBuf {
+    let mut name = dest.file_name().unwrap_or_default().to_os_string();
+    name.push(PART_SUFFIX);
+    dest.with_file_name(name)
+}
+
+/// Rename `from` over `to`. Windows refuses a rename onto an existing file, so
+/// fall back to removing the destination first.
+pub fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
+    match fs::rename(from, to) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            if to.exists() {
+                fs::remove_file(to)?;
+                fs::rename(from, to)
+            } else {
+                Err(err)
+            }
+        }
+    }
+}
+
+/// Write `bytes` to `dest` via `<dest>.execs-part` + rename, so a crash can
+/// never leave a truncated file where the game (or we) will read one.
+pub fn write_atomic(dest: &Path, bytes: &[u8]) -> io::Result<()> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let part = part_path(dest);
+    let write = (|| -> io::Result<()> {
+        let mut output = File::create(&part)?;
+        output.write_all(bytes)?;
+        output.flush()?;
+        output.sync_all()
+    })();
+    if let Err(err) = write {
+        let _ = fs::remove_file(&part);
+        return Err(err);
+    }
+    if let Err(err) = replace_file(&part, dest) {
+        let _ = fs::remove_file(&part);
+        return Err(err);
+    }
+    Ok(())
+}
+
 /// Copy `src` to `dest` while hashing. Does not load the whole file into memory.
+/// Writes through `<dest>.execs-part` and renames, so `dest` is never observed
+/// half-written — a truncated `.vpk`/`.cfg` is one the game would still mount.
 pub fn copy_and_sha256(src: &Path, dest: &Path) -> io::Result<String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut input = File::open(src)?;
-    let mut output = File::create(dest)?;
-    let mut hasher = Sha256::new();
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        let n = input.read(&mut buf)?;
-        if n == 0 {
-            break;
+    let part = part_path(dest);
+    let hashed = (|| -> io::Result<String> {
+        let mut input = File::open(src)?;
+        let mut output = File::create(&part)?;
+        let mut hasher = Sha256::new();
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            let n = input.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+            output.write_all(&buf[..n])?;
         }
-        hasher.update(&buf[..n]);
-        output.write_all(&buf[..n])?;
+        output.flush()?;
+        Ok(format!("{:x}", hasher.finalize()))
+    })();
+    let hash = match hashed {
+        Ok(hash) => hash,
+        Err(err) => {
+            let _ = fs::remove_file(&part);
+            return Err(err);
+        }
+    };
+    if let Err(err) = replace_file(&part, dest) {
+        let _ = fs::remove_file(&part);
+        return Err(err);
     }
-    output.flush()?;
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hash)
 }
 
 #[cfg(test)]
@@ -151,6 +219,35 @@ mod tests {
         assert_eq!(hash, sha256_hex(b"hello"));
         assert_eq!(std::fs::read(&dest).unwrap(), b"hello");
         assert_eq!(sha256_file(&src).unwrap(), hash);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_leaves_no_part_file_and_replaces_an_existing_dest() {
+        let dir = crate::test_temp_dir();
+        let src = dir.join("src.bin");
+        let dest = dir.join("dest.bin");
+        std::fs::write(&src, b"new").unwrap();
+        std::fs::write(&dest, b"stale-and-longer").unwrap();
+
+        copy_and_sha256(&src, &dest).unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), b"new");
+        assert!(
+            !part_path(&dest).exists(),
+            "the .execs-part side file must not survive a successful copy"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_atomic_replaces_and_cleans_up() {
+        let dir = crate::test_temp_dir();
+        let dest = dir.join("nested").join("out.json");
+        write_atomic(&dest, b"{\"a\":1}").unwrap();
+        write_atomic(&dest, b"{}").unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"{}");
+        assert!(!part_path(&dest).exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
