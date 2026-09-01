@@ -40,6 +40,7 @@ import {
   seedCrosshairDraft,
   slotAssignment,
   TF2_CLASSES,
+  tintCrosshairRgba,
   weaponsForClass,
 } from "./lib/crosshair-ui";
 import type { GameplayLayer } from "./lib/gameplay-ui";
@@ -128,22 +129,24 @@ export function CrosshairPane({
       return;
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Every source draws white and takes the tint here, mirroring the engine:
+    // textures ship untinted and cl_crosshair_red/green/blue color them.
     if (draft.shape === CUSTOM_CROSSHAIR_SHAPE && draft.customRgba) {
       const image = ctx.createImageData(CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE);
-      image.data.set(draft.customRgba);
+      image.data.set(tintCrosshairRgba(draft.customRgba, draft.color));
       ctx.putImageData(image, 0, 0);
       return;
     }
     if (isBuiltinCrosshairShape(draft.shape)) {
       const image = ctx.createImageData(CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE);
-      image.data.set(renderCrosshairRgba(draft.shape, draft.color));
+      image.data.set(tintCrosshairRgba(renderCrosshairRgba(draft.shape), draft.color));
       ctx.putImageData(image, 0, 0);
       return;
     }
     const preview = previewFor(draft.shape);
     if (preview && preview.width === CROSSHAIR_CANVAS_SIZE) {
       const image = ctx.createImageData(preview.width, preview.height);
-      image.data.set(preview.rgba);
+      image.data.set(tintCrosshairRgba(preview.rgba, draft.color));
       ctx.putImageData(image, 0, 0);
     }
   }, [draft.shape, draft.customRgba, draft.color, fetchedPreviews, packPreviews]);
@@ -225,7 +228,8 @@ export function CrosshairPane({
   }
 
   function saveDesign(design: CrosshairDesign) {
-    const rgba = Array.from(renderCrosshairDesign(design, draft.color));
+    // Stored untinted; the tint is applied by the engine cvars at apply time.
+    const rgba = Array.from(renderCrosshairDesign(design, null));
     const serialized = serializeDesign(design);
     setFetchedPreviews((current) => ({
       ...current,
@@ -353,8 +357,8 @@ export function CrosshairPane({
                 </span>
               </label>
               <p className="mt-1 text-[10px] leading-4 text-ink-faint">
-                Tints the built-in shapes and your designs. Community VTFs and imported PNGs keep
-                their own colors.
+                Tints every crosshair in the pack — built-in shapes, your designs, community VTFs
+                and imported PNGs alike.
               </p>
             </div>
 

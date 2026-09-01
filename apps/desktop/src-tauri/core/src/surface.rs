@@ -60,6 +60,20 @@ const JUNK_NAMES: &[&str] = &[
 
 const SKIP_CFG_DIRS: &[&str] = &["user", "app", "overrides"];
 
+/// Files under `tf/custom/` the app owns for the whole install rather than
+/// per profile. The preloader's addon pack pairs with particle patches inside
+/// the official VPKs, which are global too — letting a profile claim it would
+/// mean a switch deletes the pack while the patches stay, leaving particles
+/// pointing at materials that no longer exist. Keeping it out of the surface
+/// also stops absorb from prompting to adopt it after every install.
+pub const GLOBAL_CUSTOM_FILES: &[&str] = &["tf/custom/execs-preloader.vpk"];
+
+pub fn is_global_custom_file(rel: &str) -> bool {
+    GLOBAL_CUSTOM_FILES
+        .iter()
+        .any(|path| path.eq_ignore_ascii_case(rel))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CfgLayer {
@@ -298,7 +312,11 @@ fn collect_custom(
     if !dir.exists() {
         return Ok(());
     }
-    walk_tree(&dir, tf2_root, dests, skipped, visited, false)
+    walk_tree(&dir, tf2_root, dests, skipped, visited, false)?;
+    // Not "skipped" — these are deliberately install-wide, not a problem to
+    // report, so they leave no trace in the profile surface at all.
+    dests.retain(|rel, _| !is_global_custom_file(rel));
+    Ok(())
 }
 
 fn collect_migrate(
@@ -592,6 +610,45 @@ mod tests {
 
     fn cleanup(dir: &Path) {
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The preloader pack is install-wide: profiles must not see it, so
+    /// absorb never offers to adopt it and a switch never deletes it out
+    /// from under the particle patches it pairs with.
+    #[test]
+    fn preloader_pack_stays_out_of_the_profile_surface() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        write_file(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_file(&root.join("tf/custom/execs-preloader.vpk"), "global\n");
+        write_file(&root.join("tf/custom/execs-preloader.vpk.sound.cache"), "x\n");
+        // Profile-owned packs must still be collected.
+        write_file(&root.join("tf/custom/execs-viewmodels.vpk"), "owned\n");
+        write_file(&root.join("tf/custom/myhud/info.vdf"), "hud\n");
+
+        let inventory = inventory_live_surface(&root).unwrap();
+        let taken = dests(&inventory);
+        assert!(!taken.contains(&"tf/custom/execs-preloader.vpk"));
+        assert!(taken.contains(&"tf/custom/execs-viewmodels.vpk"));
+        assert!(taken.contains(&"tf/custom/myhud/info.vdf"));
+        // Deliberate, not a reported problem. (Its `.sound.cache` sibling is
+        // listed as junk like every other one — that part is expected.)
+        assert!(!inventory
+            .skipped
+            .iter()
+            .any(|rel| rel.starts_with("tf/custom/execs-preloader.vpk")
+                && !rel.ends_with(".cache")));
+        cleanup(&dir);
+    }
+
+    /// Drift guard: the surface exclusion and the writer must name the same
+    /// file, or the pack silently becomes profile-owned again.
+    #[test]
+    fn global_custom_list_matches_the_preloader_writer() {
+        assert!(is_global_custom_file(&format!(
+            "tf/custom/{}",
+            crate::preloader::PRELOADER_VPK
+        )));
     }
 
     #[test]

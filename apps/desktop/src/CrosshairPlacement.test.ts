@@ -35,7 +35,6 @@ function renderCrosshair(running = false) {
         "cl_crosshair_red 10",
         "cl_crosshair_green 20",
         "cl_crosshair_blue 30",
-        "cl_crosshair_alpha 200",
       ].join("\n"),
       record: null,
       onSaveStock: () => undefined,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ALL_TRACERS_NOTE,
   canApplyGameplay,
   clampGameplay,
   FLIP_VIEWMODELS_NOTE,
@@ -158,6 +159,7 @@ export function GameplayPane({
             description="Render tracer effects in the world."
             value={draft.r_drawtracers}
             disabled={locked}
+            note={ALL_TRACERS_NOTE}
             onChange={(r_drawtracers) => patch({ r_drawtracers })}
           />
           <ToggleRow
