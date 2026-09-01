@@ -16,11 +16,14 @@
         "title": "execs",
         "width": 1200,
         "height": 800,
+        "minWidth": 960,
+        "minHeight": 640,
         "backgroundColor": { "red": 18, "green": 18, "blue": 18, "alpha": 255 }
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://raw.githubusercontent.com https://i.imgur.com https://*.imgur.com https://github.com https://*.githubusercontent.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost",
+      "devCsp": null
     }
   },
   "bundle": {

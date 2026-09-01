@@ -1,0 +1,194 @@
+//! The HUD pane: hud-db catalog, pinned zip installs, schema options.
+
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use execs_core::{HudCatalogEntry, HudSchemaView, HudUiState, ProfileDetail};
+use serde::Serialize;
+
+use super::shared::{active_manifest, blocking, with_profile};
+use crate::error::CommandError;
+use crate::WriteGate;
+
+#[tauri::command]
+pub async fn get_hud_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, CommandError> {
+    blocking(move || Ok(crate::hud_fetch::load_or_fetch_catalog(refresh)?)).await
+}
+
+/// `HudUiState` plus one honest bit. When the catalog cannot be read (offline
+/// with a cold cache), the state used to be computed against an empty catalog
+/// and the pane said "up to date" while actually knowing nothing.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HudStatePayload {
+    #[serde(flatten)]
+    pub state: HudUiState,
+    pub catalog_unavailable: bool,
+}
+
+#[tauri::command]
+pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
+    with_profile(|_root, profile_id| {
+        let catalog = crate::hud_fetch::load_or_fetch_catalog(false);
+        let catalog_unavailable = catalog.is_err();
+        let catalog = catalog.unwrap_or_default();
+        let manifest = active_manifest(&profile_id)?;
+        Ok(HudStatePayload {
+            state: execs_core::hud_ui_state(&manifest, &catalog),
+            catalog_unavailable,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn install_hud(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.0.lock().await;
+    with_profile(move |root, profile_id| install_hud_from_catalog(&root, &profile_id, &id, false))
+        .await
+}
+
+#[tauri::command]
+pub async fn match_hud_catalog(id: String) -> Result<ProfileDetail, CommandError> {
+    with_profile(move |root, profile_id| {
+        let entry = crate::hud_fetch::catalog_entry(&id)?;
+        Ok(execs_core::match_hud_catalog(
+            &root,
+            &profile_id,
+            &entry.id,
+            Some(entry.hash),
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.0.lock().await;
+    with_profile(|root, profile_id| {
+        let manifest = active_manifest(&profile_id)?;
+        let status = execs_core::resolve_hud(&manifest)
+            .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
+        install_hud_from_catalog(&root, &profile_id, &status.record.id, true)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_hud_schema() -> Result<Option<HudSchemaView>, CommandError> {
+    with_profile(|_root, profile_id| {
+        let manifest = active_manifest(&profile_id)?;
+        let Some(status) = execs_core::resolve_hud(&manifest) else {
+            return Ok(None);
+        };
+        if !execs_core::schema_supported(&status.record.id) {
+            return Ok(None);
+        }
+        let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
+        let schema = execs_core::parse_hud_schema(&raw)?;
+        Ok(Some(execs_core::schema_view(&schema)))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn apply_hud_options(
+    gate: tauri::State<'_, WriteGate>,
+    options: BTreeMap<String, String>,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.0.lock().await;
+    with_profile(move |root, profile_id| {
+        let manifest = active_manifest(&profile_id)?;
+        let status = execs_core::resolve_hud(&manifest)
+            .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
+        if !execs_core::schema_supported(&status.record.id) {
+            return Err(CommandError::unknown("This HUD has no in-app options."));
+        }
+        let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
+        let schema = execs_core::parse_hud_schema(&raw)?;
+        Ok(execs_core::apply_schema_options(
+            &root,
+            &profile_id,
+            &schema,
+            options,
+        )?)
+    })
+    .await
+}
+
+fn install_hud_from_catalog(
+    root: &Path,
+    profile_id: &str,
+    id: &str,
+    preserve_options: bool,
+) -> Result<ProfileDetail, CommandError> {
+    let entry = crate::hud_fetch::catalog_entry(id)?;
+    if !entry.github {
+        return Err(CommandError::unknown(
+            "Open the author’s page for that HUD — it is not a GitHub zip.",
+        ));
+    }
+    let bytes = crate::hud_fetch::fetch_hud_zip(&entry.repo, &entry.hash)?;
+    let extracted = execs_core::extract_hud_zip(&bytes)?;
+    let mut tree = extracted.tree;
+    let mut options = BTreeMap::new();
+    if preserve_options {
+        if let Ok(manifest) = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id) {
+            if let Some(hud) = manifest.hud {
+                options = hud.options;
+            }
+        }
+    }
+    let mut cfg_writes = Vec::new();
+    if execs_core::schema_supported(&entry.id) && !options.is_empty() {
+        let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
+        let schema = execs_core::parse_hud_schema(&raw)?;
+        let applied = execs_core::apply_hud_options(&mut tree, &schema, &entry.id, &options)?;
+        cfg_writes = applied.cfg_writes;
+    }
+    let detail = execs_core::install_hud_pack(
+        root,
+        profile_id,
+        &tree,
+        execs_core::HudRecord {
+            id: entry.id.clone(),
+            hash: Some(entry.hash),
+            source: execs_core::HudSource::HudDb,
+            options,
+        },
+    )?;
+    for (path, bytes) in cfg_writes {
+        execs_core::write_owned_file(root, profile_id, &path, &bytes)?;
+    }
+    Ok(detail)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The frontend's `HudUiState` shape must survive the added field: the
+    /// original keys stay flat and top-level, `catalogUnavailable` rides
+    /// alongside them.
+    #[test]
+    fn the_payload_is_hud_ui_state_plus_one_camel_case_flag() {
+        let payload = HudStatePayload {
+            state: HudUiState {
+                installed: None,
+                inferred: false,
+                schema_supported: true,
+                catalog_hash: None,
+                update_available: false,
+            },
+            catalog_unavailable: true,
+        };
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["catalogUnavailable"], true);
+        assert_eq!(json["schemaSupported"], true);
+        assert_eq!(json["updateAvailable"], false);
+        assert!(json.get("state").is_none(), "the state must stay flat");
+    }
+}

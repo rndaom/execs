@@ -1,8 +1,10 @@
 mod comfig_fetch;
 mod commands;
 mod crosshair_fetch;
+mod error;
 mod hud_fetch;
 mod mods_fetch;
+mod net;
 mod viewmodel_fetch;
 
 use std::io::Write;
@@ -18,6 +20,10 @@ use tauri::{AppHandle, Emitter, Manager};
 /// `tokio::sync::Mutex`, not `std`: the guard is held across `.await`.
 pub struct WriteGate(pub tokio::sync::Mutex<()>);
 
+/// Past this, `panic.log` is rotated to `panic.log.1`. A panic that repeats
+/// on a timer (see the lock poller) would otherwise grow it without bound.
+const PANIC_LOG_MAX_BYTES: u64 = 1024 * 1024;
+
 /// Log panics to %AppData%\execs\logs\panic.log (or the Linux data dir) so a
 /// crash leaves a trace even when no console is attached.
 fn install_panic_logger() {
@@ -27,10 +33,12 @@ fn install_panic_logger() {
         if let Some(dir) = settings.parent() {
             let logs = dir.join("logs");
             let _ = std::fs::create_dir_all(&logs);
+            let path = logs.join("panic.log");
+            rotate_if_large(&path);
             if let Ok(mut file) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(logs.join("panic.log"))
+                .open(&path)
             {
                 let location = info
                     .location()
@@ -41,6 +49,17 @@ fn install_panic_logger() {
         }
         previous(info);
     }));
+}
+
+fn rotate_if_large(path: &std::path::Path) {
+    let Ok(meta) = path.metadata() else {
+        return;
+    };
+    if meta.len() < PANIC_LOG_MAX_BYTES {
+        return;
+    }
+    // One generation is enough: the newest panics are the ones worth reading.
+    let _ = std::fs::rename(path, path.with_extension("log.1"));
 }
 
 fn timestamp() -> String {
@@ -59,64 +78,60 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            commands::scan_tf2_installs,
-            commands::validate_tf2_root,
-            commands::browse_tf2_root,
-            commands::confirm_tf2_root,
-            commands::get_tf2_root,
-            commands::tf2_write_lock,
-            commands::get_profile_library,
-            commands::init_profile_library,
-            commands::create_profile_record,
-            commands::save_current_as,
-            commands::scan_absorb_delta,
-            commands::absorb_owned,
-            commands::absorb_packs,
-            commands::switch_profile,
-            commands::export_profile,
-            commands::import_profile,
-            commands::classify_first_run,
-            commands::apply_unused_wizard,
-            commands::get_inherit_binds,
-            commands::set_inherit_binds,
-            commands::create_fresh_profile,
-            commands::get_active_profile_detail,
-            commands::list_profile_files,
-            commands::read_profile_file,
-            commands::write_owned_file,
-            commands::get_comfig_state,
-            commands::set_comfig_preset,
-            commands::set_comfig_modules,
-            commands::set_comfig_addons,
-            commands::update_comfig_vpks,
-            commands::import_comfig_custom,
-            commands::recommended_launch_options,
-            commands::get_profile_launch_options,
-            commands::set_profile_launch_options,
-            commands::get_hud_catalog,
-            commands::get_hud_state,
-            commands::install_hud,
-            commands::match_hud_catalog,
-            commands::update_hud,
-            commands::get_hud_schema,
-            commands::apply_hud_options,
-            commands::apply_crosshairs,
-            commands::fetch_community_crosshair,
-            commands::get_pack_crosshair_previews,
-            commands::get_stock_crosshair_sprites,
-            commands::remove_crosshairs,
-            commands::build_viewmodel_pack,
-            commands::import_viewmodels,
-            commands::remove_viewmodels,
-            commands::set_viewmodel_preload,
-            commands::viewmodel_build_available,
+            commands::finder::scan_tf2_installs,
+            commands::finder::browse_tf2_root,
+            commands::finder::confirm_tf2_root,
+            commands::finder::get_tf2_root,
+            commands::finder::tf2_write_lock,
+            commands::library::get_profile_library,
+            commands::library::init_profile_library,
+            commands::library::save_current_as,
+            commands::library::switch_profile,
+            commands::library::export_profile,
+            commands::library::import_profile,
+            commands::absorb::absorb_owned,
+            commands::absorb::absorb_packs,
+            commands::first_run::classify_first_run,
+            commands::first_run::apply_unused_wizard,
+            commands::first_run::get_inherit_binds,
+            commands::first_run::set_inherit_binds,
+            commands::first_run::create_fresh_profile,
+            commands::files::get_active_profile_detail,
+            commands::files::read_profile_file,
+            commands::files::write_owned_file,
+            commands::comfig::get_comfig_state,
+            commands::comfig::set_comfig_preset,
+            commands::comfig::set_comfig_modules,
+            commands::comfig::set_comfig_addons,
+            commands::comfig::update_comfig_vpks,
+            commands::comfig::import_comfig_custom,
+            commands::launch::recommended_launch_options,
+            commands::launch::get_profile_launch_options,
+            commands::launch::set_profile_launch_options,
+            commands::hud::get_hud_catalog,
+            commands::hud::get_hud_state,
+            commands::hud::install_hud,
+            commands::hud::match_hud_catalog,
+            commands::hud::update_hud,
+            commands::hud::get_hud_schema,
+            commands::hud::apply_hud_options,
+            commands::crosshair::apply_crosshairs,
+            commands::crosshair::fetch_community_crosshair,
+            commands::crosshair::get_pack_crosshair_previews,
+            commands::crosshair::get_stock_crosshair_sprites,
+            commands::crosshair::remove_crosshairs,
+            commands::viewmodel::build_viewmodel_pack,
+            commands::viewmodel::import_viewmodels,
+            commands::viewmodel::remove_viewmodels,
+            commands::viewmodel::set_viewmodel_preload,
+            commands::viewmodel::viewmodel_build_available,
             commands::open_embedded_page,
-            commands::get_preloader_status,
-            commands::get_default_mods,
-            commands::download_default_mods,
-            commands::apply_preloader_mods,
-            commands::set_gameinfo_bypass,
-            commands::revert_preloader,
+            commands::preloader::get_preloader_status,
+            commands::preloader::get_default_mods,
+            commands::preloader::download_default_mods,
+            commands::preloader::apply_preloader_mods,
+            commands::preloader::set_gameinfo_bypass,
+            commands::preloader::revert_preloader,
         ])
         .setup(|app| {
             app.manage(WriteGate(tokio::sync::Mutex::new(())));
@@ -127,16 +142,43 @@ pub fn run() {
         .expect("error while running execs");
 }
 
+/// How many ticks in a row may panic before the poller gives up. A sysinfo
+/// bug that panics deterministically would otherwise panic once a second
+/// forever, filling the panic log and never telling the UI anything.
+const MAX_CONSECUTIVE_PANICS: u32 = 10;
+
 fn spawn_lock_poller(app: AppHandle) {
     std::thread::spawn(move || {
         let mut last = None;
+        let mut panics = 0u32;
         loop {
-            // A failed poll must never take the app down; skip the tick instead.
-            let running = std::panic::catch_unwind(execs_core::is_tf2_running);
-            if let Ok(running) = running {
+            // The whole tick, emit included: an emit panic used to kill the
+            // poller thread silently and freeze the write-lock UI at its last
+            // value forever.
+            let app = app.clone();
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let running = execs_core::is_tf2_running();
+                // Unconditionally on the first tick: the webview subscribes
+                // after `setup` runs, and a change-only emit would drop the
+                // opening state.
                 if last != Some(running) {
                     let _ = app.emit("tf2-running", running);
+                }
+                running
+            }));
+            match outcome {
+                Ok(running) => {
                     last = Some(running);
+                    panics = 0;
+                }
+                Err(_) => {
+                    panics += 1;
+                    if panics >= MAX_CONSECUTIVE_PANICS {
+                        // Say so once, then stop. A stuck lock indicator the
+                        // UI knows about beats one it does not.
+                        let _ = app.emit("tf2-lock-unavailable", true);
+                        return;
+                    }
                 }
             }
             std::thread::sleep(Duration::from_secs(1));
