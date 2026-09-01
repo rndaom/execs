@@ -1,6 +1,7 @@
 //! Minimal VTF reader: frame 0 of the largest mip, decoded to RGBA. Covers the
 //! formats TF2 uses for crosshair sprites and community crosshair packs
-//! (BGRA8888, RGBA8888, DXT1, DXT5). Read-only; never writes game files.
+//! (BGRA8888, RGBA8888, I8, IA88, A8, DXT1, DXT3, DXT5). Read-only; never
+//! writes game files.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodedVtf {
@@ -13,10 +14,23 @@ pub struct DecodedVtf {
 
 const FORMAT_RGBA8888: i32 = 0;
 const FORMAT_ABGR8888: i32 = 1;
+const FORMAT_I8: i32 = 5;
+const FORMAT_IA88: i32 = 6;
 const FORMAT_BGRA8888: i32 = 12;
 const FORMAT_DXT1: i32 = 13;
+const FORMAT_DXT3: i32 = 14;
 const FORMAT_DXT5: i32 = 15;
+const FORMAT_A8: i32 = 18;
 const FORMAT_NONE: i32 = -1;
+
+/// DXT1 has colour only; DXT3 carries explicit 4-bit alpha; DXT5 interpolates
+/// alpha from two endpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DxtMode {
+    Dxt1,
+    Dxt3,
+    Dxt5,
+}
 
 fn read_u16(bytes: &[u8], at: usize) -> Option<u16> {
     Some(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?))
@@ -33,8 +47,10 @@ fn read_i32(bytes: &[u8], at: usize) -> Option<i32> {
 fn format_data_size(format: i32, width: u32, height: u32) -> Option<usize> {
     match format {
         FORMAT_RGBA8888 | FORMAT_ABGR8888 | FORMAT_BGRA8888 => Some((width * height * 4) as usize),
+        FORMAT_IA88 => Some((width * height * 2) as usize),
+        FORMAT_I8 | FORMAT_A8 => Some((width * height) as usize),
         FORMAT_DXT1 => Some((width.div_ceil(4) * height.div_ceil(4) * 8) as usize),
-        FORMAT_DXT5 => Some((width.div_ceil(4) * height.div_ceil(4) * 16) as usize),
+        FORMAT_DXT3 | FORMAT_DXT5 => Some((width.div_ceil(4) * height.div_ceil(4) * 16) as usize),
         FORMAT_NONE => Some(0),
         _ => None,
     }
@@ -129,8 +145,18 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
             }
             out
         }
-        FORMAT_DXT1 => decode_dxt(data, width, height, false)?,
-        FORMAT_DXT5 => decode_dxt(data, width, height, true)?,
+        // Greyscale/alpha-only formats used by several community crosshairs.
+        FORMAT_I8 => data.iter().flat_map(|&i| [i, i, i, 255]).collect(),
+        FORMAT_A8 => data.iter().flat_map(|&a| [255, 255, 255, a]).collect(),
+        FORMAT_IA88 => data
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|px| [px[0], px[0], px[0], px[1]])
+            .collect(),
+        FORMAT_DXT1 => decode_dxt(data, width, height, DxtMode::Dxt1)?,
+        FORMAT_DXT3 => decode_dxt(data, width, height, DxtMode::Dxt3)?,
+        FORMAT_DXT5 => decode_dxt(data, width, height, DxtMode::Dxt5)?,
         other => return Err(format!("Unsupported VTF format {other}.")),
     };
 
@@ -153,8 +179,8 @@ fn rgb565(value: u16) -> [u8; 3] {
     ]
 }
 
-fn decode_dxt(data: &[u8], width: u32, height: u32, dxt5: bool) -> Result<Vec<u8>, String> {
-    let block_bytes = if dxt5 { 16 } else { 8 };
+fn decode_dxt(data: &[u8], width: u32, height: u32, mode: DxtMode) -> Result<Vec<u8>, String> {
+    let block_bytes = if mode == DxtMode::Dxt1 { 8 } else { 16 };
     let blocks_x = width.div_ceil(4) as usize;
     let blocks_y = height.div_ceil(4) as usize;
     if data.len() < blocks_x * blocks_y * block_bytes {
@@ -165,10 +191,10 @@ fn decode_dxt(data: &[u8], width: u32, height: u32, dxt5: bool) -> Result<Vec<u8
     for by in 0..blocks_y {
         for bx in 0..blocks_x {
             let block = &data[(by * blocks_x + bx) * block_bytes..][..block_bytes];
-            let (alpha, color_block): ([u8; 16], &[u8]) = if dxt5 {
-                (decode_dxt5_alpha(&block[0..8]), &block[8..16])
-            } else {
-                ([255; 16], block)
+            let (alpha, color_block): ([u8; 16], &[u8]) = match mode {
+                DxtMode::Dxt1 => ([255; 16], block),
+                DxtMode::Dxt3 => (decode_dxt3_alpha(&block[0..8]), &block[8..16]),
+                DxtMode::Dxt5 => (decode_dxt5_alpha(&block[0..8]), &block[8..16]),
             };
 
             let c0 = u16::from_le_bytes([color_block[0], color_block[1]]);
@@ -178,8 +204,9 @@ fn decode_dxt(data: &[u8], width: u32, height: u32, dxt5: bool) -> Result<Vec<u8
             let mut palette = [[0u8; 4]; 4];
             palette[0] = [rgb0[0], rgb0[1], rgb0[2], 255];
             palette[1] = [rgb1[0], rgb1[1], rgb1[2], 255];
-            // DXT5 color blocks always use 4-color mode; DXT1 switches on c0<=c1.
-            if dxt5 || c0 > c1 {
+            // DXT3/DXT5 color blocks always use 4-color mode; DXT1 switches
+            // on c0<=c1, where index 3 is fully transparent black.
+            if mode != DxtMode::Dxt1 || c0 > c1 {
                 for channel in 0..3 {
                     palette[2][channel] =
                         ((2 * u16::from(rgb0[channel]) + u16::from(rgb1[channel])) / 3) as u8;
@@ -213,7 +240,7 @@ fn decode_dxt(data: &[u8], width: u32, height: u32, dxt5: bool) -> Result<Vec<u8
                     let texel = py * 4 + px;
                     let index = ((indices >> (texel * 2)) & 0b11) as usize;
                     let mut pixel = palette[index];
-                    if dxt5 {
+                    if mode != DxtMode::Dxt1 {
                         pixel[3] = alpha[texel];
                     }
                     let at = (y * width as usize + x) * 4;
@@ -223,6 +250,22 @@ fn decode_dxt(data: &[u8], width: u32, height: u32, dxt5: bool) -> Result<Vec<u8
         }
     }
     Ok(out)
+}
+
+/// DXT3 stores one explicit 4-bit alpha per texel, low nibble first.
+fn decode_dxt3_alpha(block: &[u8]) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    for (index, slot) in out.iter_mut().enumerate() {
+        let byte = block[index / 2];
+        let nibble = if index % 2 == 0 {
+            byte & 0x0f
+        } else {
+            byte >> 4
+        };
+        // 0x0..0xf -> 0x00..0xff without a divide.
+        *slot = nibble * 17;
+    }
+    out
 }
 
 fn decode_dxt5_alpha(block: &[u8]) -> [u8; 16] {
@@ -325,6 +368,44 @@ mod tests {
         bytes.extend(&0u32.to_le_bytes());
         let decoded = decode_vtf_frame0(&bytes).unwrap();
         assert_eq!(&decoded.rgba[0..4], &[255, 255, 255, 200]);
+    }
+
+    /// Community crosshair packs ship these; they used to fall through to
+    /// "Unsupported VTF format" and the preview silently dropped to the SVG.
+    #[test]
+    fn decodes_i8_ia88_and_a8() {
+        let mut bytes = header(2, 2, 2, 1, FORMAT_I8, 1, 80);
+        bytes.extend([40u8, 40, 40, 40]);
+        let decoded = decode_vtf_frame0(&bytes).unwrap();
+        assert_eq!(&decoded.rgba[0..4], &[40, 40, 40, 255]);
+
+        let mut bytes = header(2, 2, 2, 1, FORMAT_IA88, 1, 80);
+        bytes.extend([200u8, 128, 200, 128, 200, 128, 200, 128]);
+        let decoded = decode_vtf_frame0(&bytes).unwrap();
+        assert_eq!(&decoded.rgba[0..4], &[200, 200, 200, 128]);
+
+        let mut bytes = header(2, 2, 2, 1, FORMAT_A8, 1, 80);
+        bytes.extend([77u8, 77, 77, 77]);
+        let decoded = decode_vtf_frame0(&bytes).unwrap();
+        assert_eq!(&decoded.rgba[0..4], &[255, 255, 255, 77]);
+    }
+
+    #[test]
+    fn decodes_dxt3_explicit_alpha() {
+        // One 4x4 DXT3 block: texel 0 alpha nibble 0x8, texel 1 nibble 0xf,
+        // white colour endpoints, all colour indices 0.
+        let mut bytes = header(2, 4, 4, 1, FORMAT_DXT3, 1, 80);
+        bytes.push(0xf8); // texel0 = 0x8 (low nibble), texel1 = 0xf (high)
+        bytes.extend([0x00u8; 7]);
+        let white = 0xffffu16;
+        bytes.extend(&white.to_le_bytes());
+        bytes.extend(&white.to_le_bytes());
+        bytes.extend(&0u32.to_le_bytes());
+        let decoded = decode_vtf_frame0(&bytes).unwrap();
+        assert_eq!(&decoded.rgba[0..4], &[255, 255, 255, 0x8 * 17]);
+        assert_eq!(&decoded.rgba[4..8], &[255, 255, 255, 255]);
+        // Texel 2 has no alpha bits set: fully transparent.
+        assert_eq!(decoded.rgba[11], 0);
     }
 
     #[test]

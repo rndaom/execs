@@ -196,6 +196,23 @@ where
             needed.insert(name.clone(), resolve_library_asset(name, asset)?);
         }
     }
+    // The caller only sends bytes for entries it still holds: anything recovered
+    // from the installed pack after a reload arrives with no bytes and is not
+    // sent at all. Those entries are neither referenced nor in `library`, so
+    // without this their VTFs were removed below and never rewritten — save five
+    // community crosshairs, restart, assign one, Apply, and the other four were
+    // gone. Recover them from the pack before it is torn down.
+    let existing_manifest = load_manifest(profiles_dir, profile_id)?;
+    if let Some(record) = &existing_manifest.crosshair {
+        for name in record.library.keys() {
+            if needed.contains_key(name) || SHAPES.contains(&name.as_str()) {
+                continue;
+            }
+            if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, name) {
+                needed.insert(name.clone(), ResolvedAsset::VtfVerbatim(bytes));
+            }
+        }
+    }
 
     let previous = pack_paths(profiles_dir, profile_id)?;
     if !previous.is_empty() {
@@ -235,13 +252,17 @@ where
         )?;
     }
 
+    // One weapon script our minimal VDF parser chokes on used to fail the whole
+    // apply and leave the user with no crosshairs at all. Skip it and carry on;
+    // only a run where nothing patched is a real failure.
+    let mut patched_count = 0usize;
+    let mut skipped_scripts: Vec<String> = Vec::new();
     for (script, body) in scripts {
-        let stem = script
-            .trim_end_matches(".txt")
-            .trim_end_matches(".ctx")
-            .rsplit('/')
-            .next()
-            .unwrap_or(script);
+        let base = script.rsplit('/').next().unwrap_or(script);
+        let stem = base
+            .strip_suffix(".txt")
+            .or_else(|| base.strip_suffix(".ctx"))
+            .unwrap_or(base);
         let used = assignments
             .get(stem)
             .cloned()
@@ -250,8 +271,13 @@ where
             .get(&used)
             .copied()
             .unwrap_or((CROSSHAIR_SIZE, CROSSHAIR_SIZE));
-        let patched = patch_crosshair_script(body, &used, width, height)
-            .map_err(|err| ProfileError::Io(format!("{script}: {err}")))?;
+        let patched = match patch_crosshair_script(body, &used, width, height) {
+            Ok(patched) => patched,
+            Err(_) => {
+                skipped_scripts.push(script.clone());
+                continue;
+            }
+        };
         write_pack_file(
             profiles_dir,
             tf2_root,
@@ -260,6 +286,13 @@ where
             patched.as_bytes(),
             &running,
         )?;
+        patched_count += 1;
+    }
+    if patched_count == 0 && !skipped_scripts.is_empty() {
+        return Err(ProfileError::Io(format!(
+            "None of the {} weapon scripts could be read. Crosshairs were not applied.",
+            skipped_scripts.len()
+        )));
     }
 
     let library_record: BTreeMap<String, String> = needed
@@ -583,8 +616,18 @@ fn ensure_crosshair_block(map: &mut VdfMap, material: &str, width: u32, height: 
     map.entries.push(("crosshair".into(), VdfValue::Obj(block)));
 }
 
+/// Byte count of a `width x height` RGBA/BGRA buffer, or `None` if it does not
+/// fit. `(width * height * 4) as usize` overflowed `u32` for large dimensions.
+pub fn rgba_buffer_len(width: u32, height: u32) -> Option<usize> {
+    u64::from(width)
+        .checked_mul(u64::from(height))?
+        .checked_mul(4)
+        .and_then(|total| usize::try_from(total).ok())
+}
+
 pub fn encode_vtf_bgra8888(bgra: &[u8], width: u32, height: u32) -> Result<Vec<u8>, ProfileError> {
-    let expected = (width * height * 4) as usize;
+    let expected = rgba_buffer_len(width, height)
+        .ok_or_else(|| ProfileError::Io("Those crosshair dimensions are too large.".into()))?;
     if bgra.len() != expected {
         return Err(ProfileError::Io(
             "VTF pixel buffer is the wrong size.".into(),
@@ -817,9 +860,6 @@ pub fn force_empty_crosshair_file(text: &str, color: Option<[u8; 3]>) -> String 
             line.to_string()
         })
         .collect();
-    if found.iter().any(|seen| !seen) && !text.is_empty() && !text.ends_with('\n') {
-        lines.push(String::new());
-    }
     for (index, (_, replacement)) in forced.iter().enumerate() {
         if !found[index] {
             lines.push(replacement.clone());
@@ -1198,6 +1238,171 @@ cl_crosshair_blue 56
         )
         .unwrap();
         assert_eq!(rewritten, vtf);
+        cleanup(&root);
+    }
+
+    /// The frontend only sends bytes for entries it still holds; anything
+    /// recovered from the installed pack after a reload arrives with none, so
+    /// it was neither referenced nor in the payload and its VTF was deleted.
+    /// Save five community crosshairs, restart, assign one, Apply — and the
+    /// other four were gone from the library.
+    #[test]
+    fn unreferenced_library_entries_survive_a_reapply_with_no_bytes() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+
+        let mut library = BTreeMap::new();
+        for name in ["alpha", "bravo", "charlie"] {
+            let rgba = vec![7u8; 64 * 64 * 4];
+            library.insert(
+                name.to_string(),
+                CrosshairAsset {
+                    format: CrosshairAssetFormat::Vtf,
+                    bytes: encode_vtf_bgra8888(&rgba_to_bgra(&rgba), 64, 64).unwrap(),
+                },
+            );
+        }
+        apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &library,
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+
+        // Reload: the payload carries only the entry being assigned.
+        let mut assignments = BTreeMap::new();
+        assignments.insert("tf_weapon_scattergun".to_string(), "alpha".to_string());
+        let detail = apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "cross",
+            &assignments,
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+
+        let record = detail.crosshair.as_ref().unwrap();
+        for name in ["alpha", "bravo", "charlie"] {
+            assert!(
+                record.library.contains_key(name),
+                "{name} dropped out of the library record"
+            );
+            assert!(
+                tf2.join(format!(
+                    "tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/{name}.vtf"
+                ))
+                .is_file(),
+                "{name}.vtf was deleted from the pack"
+            );
+        }
+        cleanup(&root);
+    }
+
+    /// One weapon script our minimal VDF parser chokes on used to fail the whole
+    /// apply, leaving the user with no crosshairs at all.
+    #[test]
+    fn an_unparseable_weapon_script_is_skipped_not_fatal() {
+        let (root, tf2, id) = setup();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        scripts.insert("scripts/tf_weapon_rocket.ctx".into(), "{{{ broken".into());
+
+        let detail = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(detail.crosshair.is_some());
+        assert!(tf2
+            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt")
+            .is_file());
+        assert!(!tf2
+            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_rocket.txt")
+            .is_file());
+
+        // Nothing patched at all is still an error.
+        let mut all_broken = BTreeMap::new();
+        all_broken.insert(
+            "scripts/tf_weapon_rocket.ctx".to_string(),
+            "{{{".to_string(),
+        );
+        let err = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &all_broken,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("None of the")),
+            "{err:?}"
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn rgba_buffer_len_refuses_dimensions_that_overflow() {
+        assert_eq!(rgba_buffer_len(64, 64), Some(64 * 64 * 4));
+        // `(width * height * 4) as u32` used to wrap here.
+        assert_eq!(rgba_buffer_len(u32::MAX, u32::MAX), None);
+        assert!(encode_vtf_bgra8888(&[], u32::MAX, u32::MAX).is_err());
+    }
+
+    /// `trim_end_matches` strips a suffix repeatedly, so `a.txt.txt` became `a`.
+    #[test]
+    fn script_stems_strip_one_suffix_only() {
+        let (root, tf2, id) = setup();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_odd.txt.txt".to_string(), sample_script());
+        apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(tf2
+            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_odd.txt.txt")
+            .is_file());
         cleanup(&root);
     }
 
