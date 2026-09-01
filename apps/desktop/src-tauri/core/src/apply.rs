@@ -232,7 +232,9 @@ fn apply_owned_file_to_live(
         fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
     }
     let bytes = fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))?;
-    fs::write(&dest, &bytes).map_err(|err| ProfileError::Io(err.to_string()))?;
+    // Temp + rename: a crash mid-write would otherwise leave a truncated
+    // .cfg/.vpk in the live tree, which the game happily mounts.
+    crate::hash::write_atomic(&dest, &bytes).map_err(|err| ProfileError::Io(err.to_string()))?;
     if rel_path == CONFIG_CFG {
         let roots = match options.steam_roots {
             Some(roots) => roots.to_vec(),
