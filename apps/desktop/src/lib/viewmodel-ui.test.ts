@@ -1,39 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  EXECS_PRELOAD_LAUNCH,
   emptyViewmodelDraft,
-  hasPreloadLaunch,
   parseHiddenGroups,
   parseHideMode,
   previewViewmodelRecord,
   seedViewmodelDraft,
   serializeHiddenGroups,
-  serializePreloadCfg,
   toggleHiddenGroup,
-  withPreloadLaunch,
 } from "./viewmodel-ui";
 
 describe("viewmodel ui", () => {
-  it("adds and removes the preload launch token without disturbing other options", () => {
-    const base = "-novid -nojoy";
-    const withPreload = withPreloadLaunch(base, true);
-    expect(withPreload).toBe(`-novid -nojoy ${EXECS_PRELOAD_LAUNCH}`);
-    expect(hasPreloadLaunch(withPreload)).toBe(true);
-    expect(withPreloadLaunch(withPreload, false)).toBe(base);
-    expect(hasPreloadLaunch(withPreloadLaunch("+exec overrides/execs_preload", false))).toBe(false);
-  });
-
-  it("keeps the preload cfg an itemtest listen precache", () => {
-    const cfg = serializePreloadCfg();
-    expect(cfg).toContain("sv_pure -1");
-    expect(cfg).toContain("sv_allow_point_servercommand always");
-    expect(cfg).toContain("map itemtest");
-    expect(cfg).toContain("disconnect");
-    expect(cfg).toContain("script_execute randommenumusic");
-    expect(cfg).not.toContain("+quit");
-    expect(cfg).not.toContain("gameinfo");
-  });
-
   it("round-trips hidden groups through the record options", () => {
     const hidden = ["scout/scatterguns", "soldier/rockets", "scout/scatterguns"];
     const raw = serializeHiddenGroups(hidden);
