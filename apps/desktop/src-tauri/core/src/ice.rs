@@ -100,6 +100,8 @@ fn sboxes() -> &'static [[u32; 1024]; 4] {
     static BOXES: OnceLock<[[u32; 1024]; 4]> = OnceLock::new();
     BOXES.get_or_init(|| {
         let mut boxes = [[0u32; 1024]; 4];
+        // Faithful port of Kwan's IceKey table build; indices mirror the reference.
+        #[allow(clippy::needless_range_loop)]
         for i in 0..1024 {
             let col = (i >> 1) & 0xff;
             let row = (i & 0x1) | ((i & 0x200) >> 8);
@@ -140,6 +142,7 @@ impl IceKey {
         self.schedule_build(&mut kb, 0, &ICE_KEYROT);
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn schedule_build(&mut self, kb: &mut [u16; 4], n: usize, keyrot: &[usize]) {
         for i in 0..8 {
             let kr = keyrot[i];
@@ -158,7 +161,7 @@ impl IceKey {
 
     fn f(&self, p: u32, sk: &[u32; 3]) -> u32 {
         let boxes = sboxes();
-        let tl = ((p >> 16) & 0x3ff) | (((p >> 14) | (p << 18)) & 0xffc00);
+        let tl = ((p >> 16) & 0x3ff) | (p.rotate_right(14) & 0xffc00);
         let tr = (p & 0x3ff) | ((p << 2) & 0xffc00);
         let mut al = sk[2] & (tl ^ tr);
         let mut ar = al ^ tr;
@@ -253,7 +256,7 @@ pub fn decrypt_weapon_ctx(bytes: &[u8]) -> Vec<u8> {
 
 pub fn encrypt_weapon_ctx(bytes: &[u8]) -> Vec<u8> {
     let mut padded = bytes.to_vec();
-    if padded.len() % 8 != 0 {
+    if !padded.len().is_multiple_of(8) {
         padded.resize(padded.len().div_ceil(8) * 8, 0);
     }
     IceKey::new(&TF2_WEAPON_KEY).encrypt(&padded)

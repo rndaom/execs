@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 use crate::absorb::{
     absorb_owned_to, absorb_packs_to, pack_key, write_config_cfg_dual_to, AbsorbOptions, PackChoice,
 };
-use crate::hud::{hud_packs, live_hud_names};
+use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
 use crate::hash::{copy_and_sha256, sha256_file};
+use crate::hud::{hud_packs, live_hud_names};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
-use crate::apply::is_file_safe_rel_path;
 use crate::profile::{
     clear_active_profile_to, exclusive_file_path, load_library_from, load_manifest, profiles_dir,
     set_active_profile_to, FileStorage, ProfileError, ProfileFile, ProfileLibrary, ProfileManifest,
@@ -90,7 +90,11 @@ where
     if !library.usable {
         return Err(ProfileError::NotInitialized);
     }
-    if !library.profiles.iter().any(|profile| profile.id == profile_id) {
+    if !library
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id)
+    {
         return Err(ProfileError::UnknownProfile);
     }
     if library.active_profile_id.as_deref() == Some(profile_id) {
@@ -420,7 +424,10 @@ mod tests {
 
         prune_empty_parents(&removed, &tf2);
 
-        assert!(!pack.exists(), "the husk must not survive as a fake install");
+        assert!(
+            !pack.exists(),
+            "the husk must not survive as a fake install"
+        );
         assert!(tf2.join("tf/custom").is_dir(), "tf/custom itself stays");
     }
 
@@ -515,7 +522,12 @@ mod tests {
         .clone()
     }
 
-    fn library_profile(profiles: &Path, root: &Path, name: &str, files: &[(&str, &[u8])]) -> String {
+    fn library_profile(
+        profiles: &Path,
+        root: &Path,
+        name: &str,
+        files: &[(&str, &[u8])],
+    ) -> String {
         let library = create_profile_record_to(profiles, root, name, unlocked()).unwrap();
         let id = library.profiles.last().unwrap().id.clone();
         for (path, bytes) in files {
@@ -536,8 +548,14 @@ mod tests {
         write_live(&root.join("tf/steam.inf"), "appID=440\n");
         write_live(&root.join("tf/tf2_misc_dir.vpk"), "official\n");
         write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
-        write_live(&root.join("tf/cfg/overrides/autoexec.cfg"), "fov_desired 90\n");
-        write_live(&root.join("tf/custom/hud/resource/ui/hudlayout.res"), "hud-a\n");
+        write_live(
+            &root.join("tf/cfg/overrides/autoexec.cfg"),
+            "fov_desired 90\n",
+        );
+        write_live(
+            &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
+            "hud-a\n",
+        );
         let _a = save(&profiles, &root, "A");
         let b = library_profile(
             &profiles,
@@ -576,9 +594,17 @@ mod tests {
             fs::read(root.join("tf/cfg/overrides/autoexec.cfg")).unwrap(),
             b"fov_desired 110\n"
         );
-        assert_eq!(fs::read(root.join("tf/cfg/config.cfg")).unwrap(), b"binds-b\n");
-        assert_eq!(fs::read(root.join("tf/custom/alt/note.txt")).unwrap(), b"alt\n");
-        assert!(!root.join("tf/custom/hud/resource/ui/hudlayout.res").exists());
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"binds-b\n"
+        );
+        assert_eq!(
+            fs::read(root.join("tf/custom/alt/note.txt")).unwrap(),
+            b"alt\n"
+        );
+        assert!(!root
+            .join("tf/custom/hud/resource/ui/hudlayout.res")
+            .exists());
         assert_eq!(fs::read(root.join("tf/steam.inf")).unwrap(), b"appID=440\n");
         assert_eq!(
             fs::read(root.join("tf/tf2_misc_dir.vpk")).unwrap(),
@@ -714,7 +740,12 @@ mod tests {
         fs::create_dir_all(steam.join("userdata").join("111").join("440")).unwrap();
         write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
         let _a = save(&profiles, &root, "A");
-        let b = library_profile(&profiles, &root, "B", &[("tf/cfg/config.cfg", b"binds-b\n")]);
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
 
         switch_profile_to(
             &profiles,
@@ -728,7 +759,10 @@ mod tests {
             |_| {},
         )
         .unwrap();
-        assert_eq!(fs::read(root.join("tf/cfg/config.cfg")).unwrap(), b"binds-b\n");
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"binds-b\n"
+        );
         assert_eq!(
             fs::read(
                 steam
@@ -793,10 +827,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(library.active_profile_id.as_deref(), Some(a.as_str()));
-        assert_eq!(
-            steps_of(&steps),
-            vec![SwitchStep::Closed, SwitchStep::Done]
-        );
+        assert_eq!(steps_of(&steps), vec![SwitchStep::Closed, SwitchStep::Done]);
         cleanup(&dir);
     }
 
@@ -915,7 +946,12 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
         let _a = save(&profiles, &root, "A");
-        let b = library_profile(&profiles, &root, "B", &[("tf/cfg/config.cfg", b"binds-b\n")]);
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
 
         // Hand-edited / legacy manifest naming a game binary.
         let mut manifest = load_manifest(&profiles, &b).unwrap();
@@ -940,7 +976,10 @@ mod tests {
             |_| {},
         )
         .unwrap_err();
-        assert_eq!(err, ProfileError::ForbiddenPath("bin/x64/client.dll".into()));
+        assert_eq!(
+            err,
+            ProfileError::ForbiddenPath("bin/x64/client.dll".into())
+        );
         assert!(!root.join("bin/x64/client.dll").exists());
         cleanup(&dir);
     }

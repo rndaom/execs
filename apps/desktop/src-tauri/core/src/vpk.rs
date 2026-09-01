@@ -139,11 +139,13 @@ fn read_vpk(
                                 "Refusing an in-memory split VPK (need the *_dir.vpk path).".into(),
                             ));
                         };
-                        if !archives.contains_key(&archive_index) {
+                        if let std::collections::btree_map::Entry::Vacant(e) =
+                            archives.entry(archive_index)
+                        {
                             let sibling = sibling_archive_path(dir_path, archive_index)?;
                             let opened = std::fs::File::open(&sibling)
                                 .map_err(|err| VpkError(err.to_string()))?;
-                            archives.insert(archive_index, opened);
+                            e.insert(opened);
                         }
                         let archive = archives.get_mut(&archive_index).expect("archive opened");
                         let end = (offset as u64).saturating_add(length as u64);
@@ -291,7 +293,10 @@ pub fn read_vpk_entry(dir_path: &Path, entry: &VpkEntryLocation) -> Result<Vec<u
         )));
     }
     let (path, start) = if entry.archive_index == DIR_ARCHIVE {
-        (dir_path.to_path_buf(), entry.data_base + u64::from(entry.offset))
+        (
+            dir_path.to_path_buf(),
+            entry.data_base + u64::from(entry.offset),
+        )
     } else {
         (
             sibling_archive_path(dir_path, entry.archive_index)?,
@@ -357,7 +362,10 @@ pub fn patch_vpk_entry(
         .map_err(|err| VpkError(err.to_string()))?
         .len();
     if start.saturating_add(data.len() as u64) > available {
-        return Err(VpkError(format!("{}: entry runs past the archive.", entry.rel)));
+        return Err(VpkError(format!(
+            "{}: entry runs past the archive.",
+            entry.rel
+        )));
     }
     data_file
         .seek(SeekFrom::Start(start))
@@ -539,16 +547,18 @@ mod tests {
     #[test]
     fn v2_header_matches_the_layout_the_game_ships() {
         let mut files = BTreeMap::new();
-        files.insert("materials/a/b.vmt".to_string(), b"\"UnlitGeneric\"
+        files.insert(
+            "materials/a/b.vmt".to_string(),
+            b"\"UnlitGeneric\"
 {
 }
-".to_vec());
+"
+            .to_vec(),
+        );
         files.insert("root.txt".to_string(), b"hello".to_vec());
         let bytes = write_vpk_v2(&files);
 
-        let u32_at = |at: usize| {
-            u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize
-        };
+        let u32_at = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
         assert_eq!(u32_at(0), SIGNATURE as usize);
         assert_eq!(u32_at(4), 2, "version");
         let (tree, data) = (u32_at(8), u32_at(12));
@@ -556,11 +566,17 @@ mod tests {
         assert_eq!((archive_md5, other_md5, signature), (0, 48, 0));
         // The section sizes must account for every byte, as they do in the
         // game's own directory files.
-        assert_eq!(28 + tree + data + archive_md5 + other_md5 + signature, bytes.len());
+        assert_eq!(
+            28 + tree + data + archive_md5 + other_md5 + signature,
+            bytes.len()
+        );
 
         // The checksum block: tree, archive-md5 section, whole file.
         let block = bytes.len() - 48;
-        assert_eq!(bytes[block..block + 16], crate::hash::md5(&bytes[28..28 + tree]));
+        assert_eq!(
+            bytes[block..block + 16],
+            crate::hash::md5(&bytes[28..28 + tree])
+        );
         assert_eq!(bytes[block + 16..block + 32], crate::hash::md5(&[]));
         assert_eq!(bytes[block + 32..], crate::hash::md5(&bytes[..block + 32]));
     }

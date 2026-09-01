@@ -124,7 +124,7 @@ fn fetch_catalog_entries(
         return Ok(Vec::new());
     }
     let worker_count = CATALOG_WORKERS.min(documents.len());
-    let chunk_size = (documents.len() + worker_count - 1) / worker_count;
+    let chunk_size = documents.len().div_ceil(worker_count);
 
     std::thread::scope(|scope| {
         let handles = documents

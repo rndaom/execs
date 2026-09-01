@@ -6,8 +6,7 @@ use execs_core::{
     materialize_wizard_profile, AbsorbDelta, AbsorbOwnedResult, BindSource, ComfigPreset,
     ComfigState, FirstRunClass, HudCatalogEntry, HudSchemaView, HudUiState, OfficialAddon,
     PackChoice, ProfileDetail, ProfileError, ProfileFile, ProfileFileContent, ProfileLibrary,
-    SetLaunchResult, SwitchProgress, Tf2Install, WizardAsset,
-    WizardSpec, WriteLock,
+    SetLaunchResult, SwitchProgress, Tf2Install, WizardAsset, WizardSpec, WriteLock,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
@@ -121,10 +120,8 @@ pub async fn create_profile_record(
 ) -> Result<ProfileLibrary, String> {
     let _guard = gate.0.lock().await;
     let root = confirmed_root()?;
-    blocking(move || {
-        execs_core::create_profile_record(&root, &name).map_err(|err| err.message())
-    })
-    .await
+    blocking(move || execs_core::create_profile_record(&root, &name).map_err(|err| err.message()))
+        .await
 }
 
 #[tauri::command]
@@ -238,8 +235,10 @@ pub async fn import_profile(
     // dialog must not block the absorb path behind it.
     let _guard = gate.0.lock().await;
     let Some(picked) = picked else {
-        return blocking(move || execs_core::load_library(Some(&root)).map_err(|err| err.message()))
-            .await;
+        return blocking(move || {
+            execs_core::load_library(Some(&root)).map_err(|err| err.message())
+        })
+        .await;
     };
     let path = picked.into_path().map_err(|err| err.to_string())?;
     blocking(move || execs_core::import_profile(&root, &path).map_err(|err| err.message())).await
@@ -403,7 +402,8 @@ pub async fn set_comfig_addons(
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
-        let state = execs_core::read_comfig_state(&root, &profile_id).map_err(|err| err.message())?;
+        let state =
+            execs_core::read_comfig_state(&root, &profile_id).map_err(|err| err.message())?;
         let needed: Vec<String> = addons
             .iter()
             .filter(|addon| !state.addons.contains(addon))
@@ -418,7 +418,8 @@ pub async fn set_comfig_addons(
             .iter()
             .map(|(path, bytes)| WizardAsset { path, bytes })
             .collect();
-        execs_core::set_comfig_addons(&root, &profile_id, &addons, &assets).map_err(|err| err.message())
+        execs_core::set_comfig_addons(&root, &profile_id, &addons, &assets)
+            .map_err(|err| err.message())
     })
     .await
     .map_err(|err| err.to_string())?
@@ -433,7 +434,8 @@ pub async fn update_comfig_vpks(
     let root = confirmed_root()?;
     tauri::async_runtime::spawn_blocking(move || {
         let profile_id = resolve_profile_id(&root, id)?;
-        let state = execs_core::read_comfig_state(&root, &profile_id).map_err(|err| err.message())?;
+        let state =
+            execs_core::read_comfig_state(&root, &profile_id).map_err(|err| err.message())?;
         let rels = execs_core::official_package_rel_paths(&state.addons);
         let owned = crate::comfig_fetch::fetch_official_assets(&rels)?;
         let mut last = None;
@@ -571,8 +573,8 @@ pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDeta
         let profile_id = resolve_profile_id(&root, None)?;
         let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
             .map_err(|err| err.message())?;
-        let status = execs_core::resolve_hud(&manifest)
-            .ok_or_else(|| "Install a HUD first.".to_string())?;
+        let status =
+            execs_core::resolve_hud(&manifest).ok_or_else(|| "Install a HUD first.".to_string())?;
         install_hud_from_catalog(&root, &profile_id, &status.record.id, true)
     })
     .await
@@ -611,8 +613,8 @@ pub async fn apply_hud_options(
         let profile_id = resolve_profile_id(&root, None)?;
         let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)
             .map_err(|err| err.message())?;
-        let status = execs_core::resolve_hud(&manifest)
-            .ok_or_else(|| "Install a HUD first.".to_string())?;
+        let status =
+            execs_core::resolve_hud(&manifest).ok_or_else(|| "Install a HUD first.".to_string())?;
         if !execs_core::schema_supported(&status.record.id) {
             return Err("This HUD has no in-app options.".into());
         }
@@ -667,12 +669,14 @@ fn install_hud_from_catalog(
     )
     .map_err(|err| err.message())?;
     for (path, bytes) in cfg_writes {
-        execs_core::write_owned_file(root, profile_id, &path, &bytes).map_err(|err| err.message())?;
+        execs_core::write_owned_file(root, profile_id, &path, &bytes)
+            .map_err(|err| err.message())?;
     }
     Ok(detail)
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn apply_crosshairs(
     gate: tauri::State<'_, WriteGate>,
     shape: String,
@@ -748,9 +752,11 @@ pub async fn get_pack_crosshair_previews(
         let mut out = BTreeMap::new();
         if let Some(record) = manifest.crosshair {
             for name in record.library.keys() {
-                let Some(bytes) =
-                    execs_core::stored_pack_crosshair(&execs_core::profiles_dir(), &profile_id, name)
-                else {
+                let Some(bytes) = execs_core::stored_pack_crosshair(
+                    &execs_core::profiles_dir(),
+                    &profile_id,
+                    name,
+                ) else {
                     continue;
                 };
                 if let Ok(decoded) = execs_core::vtf_read::decode_vtf_frame0(&bytes) {
@@ -975,15 +981,17 @@ pub(crate) fn apply_wizard_and_switch(
     let owned = crate::comfig_fetch::fetch_wizard_assets(&spec)?;
     let assets: Vec<WizardAsset<'_>> = owned
         .iter()
-        .map(|(path, bytes)| WizardAsset {
-            path,
-            bytes,
-        })
+        .map(|(path, bytes)| WizardAsset { path, bytes })
         .collect();
-    let result = materialize_wizard_profile(root, &spec, &binds, &assets).map_err(|err| err.message())?;
-    execs_core::switch_profile_with_progress(root, &result.profile_id, |progress: SwitchProgress| {
-        let _ = app.emit("profile-switch-progress", progress);
-    })
+    let result =
+        materialize_wizard_profile(root, &spec, &binds, &assets).map_err(|err| err.message())?;
+    execs_core::switch_profile_with_progress(
+        root,
+        &result.profile_id,
+        |progress: SwitchProgress| {
+            let _ = app.emit("profile-switch-progress", progress);
+        },
+    )
     .map_err(|err| err.message())
 }
 
@@ -1003,9 +1011,7 @@ pub struct PreloaderStatusPayload {
     pub preload_launch_in_steam: bool,
 }
 
-fn preloader_status_payload(
-    root: &std::path::Path,
-) -> Result<PreloaderStatusPayload, String> {
+fn preloader_status_payload(root: &std::path::Path) -> Result<PreloaderStatusPayload, String> {
     let steam_options = execs_core::launch::read_launch_options();
     Ok(PreloaderStatusPayload {
         status: execs_core::preloader::preloader_status(root, &execs_core::execs_data_dir())?,

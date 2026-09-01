@@ -39,16 +39,21 @@ pub use apply::{
 };
 pub use comfig::{
     apply_official_vpk_bytes, apply_official_vpk_bytes_to, import_comfig_custom,
-    import_comfig_custom_to, official_download_urls, official_package_rel_paths,
-    parse_modules_cfg, parse_setup_hook, read_active_comfig_state, read_active_comfig_state_from,
-    read_comfig_state, read_comfig_state_from, serialize_modules_cfg, serialize_setup_hook,
-    set_comfig_addons, set_comfig_addons_to, write_comfig_modules, write_comfig_modules_to,
-    write_comfig_preset, write_comfig_preset_to, ComfigState,
+    import_comfig_custom_to, official_download_urls, official_package_rel_paths, parse_modules_cfg,
+    parse_setup_hook, read_active_comfig_state, read_active_comfig_state_from, read_comfig_state,
+    read_comfig_state_from, serialize_modules_cfg, serialize_setup_hook, set_comfig_addons,
+    set_comfig_addons_to, write_comfig_modules, write_comfig_modules_to, write_comfig_preset,
+    write_comfig_preset_to, ComfigState,
 };
-pub use launch::{
-    get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
-    LaunchWriteReason, SetLaunchResult,
+pub use crosshair::{
+    apply_crosshairs, extract_stock_crosshair_sprites, remove_crosshairs, stored_pack_crosshair,
+    CrosshairAsset, CrosshairAssetFormat, StockCrosshairSprite,
 };
+pub use finder::{
+    discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
+    Tf2RootError,
+};
+pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
     extract_hud_zip, hud_ui_state, hud_zip_url, install_hud_pack, load_catalog_cache_from,
@@ -56,32 +61,19 @@ pub use hud::{
     schema_file_name, schema_supported, set_hud_options, write_hud_tree_files, HudCatalogCache,
     HudCatalogEntry, HudStatus, HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
 };
-pub use hud_apply::{
-    apply_hud_options, parse_hud_schema, schema_view, HudSchema, HudSchemaView,
-};
-pub use crosshair::{
-    apply_crosshairs, extract_stock_crosshair_sprites, remove_crosshairs, stored_pack_crosshair,
-    CrosshairAsset, CrosshairAssetFormat, StockCrosshairSprite,
-};
-pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
-pub use viewmodel::{
-    ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
-    remove_profile_preload_if_unused, remove_viewmodels, set_viewmodel_preload,
-};
-pub use viewmodel_build::{build_viewmodel_pack_vpk, studiomdl_file_name, ViewmodelHideMode};
-pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
-pub use profile::{
-    create_profile_record, init_library, load_library, load_manifest, profiles_dir, save_current_as,
-    CrosshairRecord, HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary,
-    ProfileSummary, ViewmodelRecord, ViewmodelSource,
-};
-pub use finder::{
-    discover_steam_roots, normalize_tf2_root, scan_tf2_installs, scan_tf2_installs_in, Tf2Install,
-    Tf2RootError,
+pub use hud_apply::{apply_hud_options, parse_hud_schema, schema_view, HudSchema, HudSchemaView};
+pub use launch::{
+    get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
+    LaunchWriteReason, SetLaunchResult,
 };
 pub use process_lock::{
-    is_steam_running, is_tf2_running, refuse_if_running, refuse_if_running_among, write_lock_status,
-    WriteLock, WriteLockError,
+    is_steam_running, is_tf2_running, refuse_if_running, refuse_if_running_among,
+    write_lock_status, WriteLock, WriteLockError,
+};
+pub use profile::{
+    create_profile_record, init_library, load_library, load_manifest, profiles_dir,
+    save_current_as, CrosshairRecord, HudRecord, HudSource, ProfileError, ProfileFile,
+    ProfileLibrary, ProfileSummary, ViewmodelRecord, ViewmodelSource,
 };
 pub use settings::{
     execs_data_dir, inherit_binds, inherit_binds_from, remember_tf2_root, remember_tf2_root_to,
@@ -90,6 +82,12 @@ pub use settings::{
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
+pub use viewmodel::{
+    ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
+    remove_profile_preload_if_unused, remove_viewmodels, set_viewmodel_preload,
+};
+pub use viewmodel_build::{build_viewmodel_pack_vpk, studiomdl_file_name, ViewmodelHideMode};
+pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use wizard::{
     download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, BindSource,
     ComfigPreset, GitHubAsset, GitHubRelease, OfficialAddon, WizardAsset, WizardResult, WizardSpec,
