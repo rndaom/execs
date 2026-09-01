@@ -103,14 +103,55 @@ export function cfgFiles(files: { path: string }[], hudId?: string | null): CfgF
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/**
+ * Block-tier findings that belong to `path` itself.
+ *
+ * Advisory findings never block, and findings in *other* files are the
+ * business of those files — a stray `unbindall` in an unrelated cfg must not
+ * make the file the user is editing unsavable (RND-157 scopes the refusal to
+ * the file being saved).
+ */
+export function blockingFindingsForFile(findings: CfgFinding[], path: string | null): CfgFinding[] {
+  if (path === null) {
+    return [];
+  }
+  const target = normalizeCfgPath(path);
+  return findings.filter(
+    (finding) =>
+      finding.tier === "block" &&
+      !finding.advisory &&
+      normalizeCfgPath(finding.file) === target,
+  );
+}
+
 export function canSaveCfg(
-  ok: boolean,
+  blockingFindings: CfgFinding[],
   running: boolean,
   busy: boolean,
   dirty: boolean,
   editable = true,
 ): boolean {
-  return ok && editable && !running && !busy && dirty;
+  return blockingFindings.length === 0 && editable && !running && !busy && dirty;
+}
+
+/**
+ * Reseed a pane draft only when the incoming content actually changed, and
+ * never over unsaved edits: `reload()` hands every pane brand-new object
+ * identities even when the bytes are identical, which otherwise silently
+ * discards whatever the user was typing.
+ */
+export function shouldReseedDraft(
+  prevSerialized: string | null,
+  nextSerialized: string,
+  dirty: boolean,
+): boolean {
+  if (prevSerialized === null) {
+    return true;
+  }
+  if (prevSerialized === nextSerialized) {
+    return false;
+  }
+  return !dirty;
 }
 
 export function findingTierClass(tier: "block" | "warn" | "info"): string {
