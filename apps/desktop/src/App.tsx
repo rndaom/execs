@@ -62,6 +62,7 @@ import {
   previewSavedProfile,
   previewSwitchStep,
   SWITCH_STEPS,
+  shouldAbsorbOnLockChange,
   switchStepIndex,
 } from "./lib/library-ui";
 import {
@@ -138,6 +139,10 @@ export function App() {
   );
   const [draftName, setDraftName] = useState("");
   const [running, setRunning] = useState(() => !tauri && previewLocked(preview));
+  // Last write-lock state we actually observed, `null` until boot or the first
+  // event tells us. The Rust poller emits its first tick before the listener is
+  // registered, so this has to be reconciled from the boot lock read too.
+  const lastRunning = useRef<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
@@ -228,6 +233,7 @@ export function App() {
           return;
         }
         setRunning(lock.running);
+        lastRunning.current = lock.running;
         setInheritBindsState(inherit);
         if (stored) {
           setConfirmed(stored);
@@ -261,13 +267,12 @@ export function App() {
     }
 
     boot();
-    let lastRunning = false;
     const stops: Array<() => void> = [];
     onTf2Running((next) => {
-      if (lastRunning && !next) {
+      if (shouldAbsorbOnLockChange(lastRunning.current, next)) {
         setAbsorbNonce((value) => value + 1);
       }
-      lastRunning = next;
+      lastRunning.current = next;
       setRunning(next);
     })
       .then((stop) => {
@@ -600,6 +605,7 @@ export function App() {
   }
 
   async function onToggleInherit(next: boolean) {
+    const previous = inheritBinds;
     setInheritBindsState(next);
     if (!tauri) {
       return;
@@ -607,6 +613,9 @@ export function App() {
     try {
       setInheritBindsState(await setInheritBinds(next));
     } catch (err) {
+      // settings.json still holds the old value — the switch must not claim
+      // otherwise.
+      setInheritBindsState(previous);
       setError(err instanceof Error ? err.message : "Could not save that setting.");
     }
   }
@@ -945,21 +954,25 @@ export function App() {
               : "mt-10 flex max-w-md flex-col items-center gap-2 text-center"
           }
         >
-          {appVersion ? (
-            <p className={settingsOpen ? "text-[10px] text-ink-muted" : "text-sm text-ink-muted"}>
-              <span data-testid="app-version">{appVersionCopy(appVersion)}</span>
-              {" · "}
-              <button
-                type="button"
-                data-testid="app-update-check"
-                onClick={() => void onCheckUpdate()}
-                disabled={updateProgress !== null}
-                className="text-ink underline decoration-edge underline-offset-2 hover:text-ink disabled:opacity-40"
-              >
-                {CHECK_LABEL}
-              </button>
-            </p>
-          ) : null}
+          {/* A failed get_app_version must not cost the user their only way to
+              check for updates (RND-159) — only the version string is optional. */}
+          <p className={settingsOpen ? "text-[10px] text-ink-muted" : "text-sm text-ink-muted"}>
+            {appVersion ? (
+              <>
+                <span data-testid="app-version">{appVersionCopy(appVersion)}</span>
+                {" · "}
+              </>
+            ) : null}
+            <button
+              type="button"
+              data-testid="app-update-check"
+              onClick={() => void onCheckUpdate()}
+              disabled={updateProgress !== null}
+              className="text-ink underline decoration-edge underline-offset-2 hover:text-ink disabled:opacity-40"
+            >
+              {CHECK_LABEL}
+            </button>
+          </p>
           {updateCheckMessage ? (
             <p data-testid="app-update-check-message" className="text-sm text-ink-muted">
               {updateCheckMessage}
