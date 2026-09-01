@@ -28,13 +28,13 @@ export function Switch({
       aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 rounded-pill border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`relative h-6 w-11 shrink-0 rounded-pill border transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
         checked ? "border-brand bg-brand" : "border-edge-strong bg-bg"
       }`}
     >
       <span
         aria-hidden="true"
-        className={`absolute top-0.5 size-4 rounded-full transition-all ${
+        className={`absolute top-0.5 size-4 rounded-full transition-[left,background-color] duration-150 ${
           checked ? "left-[22px] bg-on-brand" : "left-1 bg-ink-muted"
         }`}
       />
@@ -65,13 +65,11 @@ export function SwitchRow({
 }) {
   const noteId = note ? `${id}-note` : undefined;
   return (
-    <div className="border-b border-edge/60 py-3.5">
+    <div className="min-h-11 border-b border-edge py-3 last:border-b-0">
       <div className="flex items-start justify-between gap-4">
         <span className="min-w-0">
-          <span className="block text-[13px] font-medium text-ink">{label}</span>
-          {description ? (
-            <span className="mt-0.5 block text-xs leading-5 text-ink-muted">{description}</span>
-          ) : null}
+          <span className="t-row block">{label}</span>
+          {description ? <span className="t-meta mt-0.5 block">{description}</span> : null}
         </span>
         <Switch
           checked={checked}
@@ -83,7 +81,7 @@ export function SwitchRow({
         />
       </div>
       {note ? (
-        <p id={noteId} className="mt-2 text-[11px] leading-4 text-ink-faint">
+        <p id={noteId} className="mt-2 text-[12px] leading-5 text-ink-faint">
           {note}
         </p>
       ) : null}

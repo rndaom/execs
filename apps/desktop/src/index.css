@@ -5,17 +5,31 @@
 @import "tailwindcss";
 
 /*
- * execs design tokens — calm dark product surface with a single warm accent.
- * The TF2 identity lives in the orange accent and the warm ink, not in a
- * display face or card chrome. One typeface (Inter), flat sections divided by
- * hairlines, boxes reserved for real surfaces (editors, previews, overlays).
+ * execs design system (RND-188, 2026-09-01).
+ *
+ * A calm dark product surface with a single warm accent. The TF2 identity lives
+ * in the accent and the warm ink — never in a display face, card chrome or
+ * shouty labels.
+ *
+ * Accent is spent on exactly four things: the primary button, the selected
+ * option ring, the active nav marker and the wordmark dot. Everything else is
+ * ink / ink-muted / ink-faint. Semantic colour (ok / warn / error) is the only
+ * other colour allowed, and only when it carries meaning.
+ *
+ * Three surfaces (bg → panel → panel-raised), two hairlines (edge, edge-strong)
+ * and one type scale. Boxes are reserved for real surfaces (`.surface`:
+ * previews, editors, media), overlays (`.overlay`) and option tiles (`.tile`).
+ * Rows are hairline-divided, never boxed.
  */
 @theme {
+  /* Three-step surface scale. */
   --color-bg: #121212;
-  --color-panel: #181716;
-  --color-panel-raised: #22201e;
-  --color-edge: #2b2926;
-  --color-edge-strong: #3f3a35;
+  --color-panel: #181818;
+  --color-panel-raised: #1f1f1f;
+
+  /* Hairlines are ink at low alpha so they read the same on every surface. */
+  --color-edge: rgb(236 231 218 / 0.08);
+  --color-edge-strong: rgb(236 231 218 / 0.14);
 
   --color-ink: #ece7da;
   --color-ink-muted: #a49c8e;
@@ -25,16 +39,31 @@
   --color-brand-hover: #e8823f;
   --color-on-brand: #121212;
 
+  /* Semantic states — meaning only, never decoration. */
+  --color-ok: #729e42;
+  --color-warn: #cf6a32;
+  --color-error: #b8383b;
+
+  /* Team colours survive only where they name a TF2 team. */
   --color-team-red: #b8383b;
   --color-team-blu: #5885a2;
   --color-health: #729e42;
 
-  /* The only item-quality colour still in use: the "advisory / careful" badge. */
+  /* The one item-quality colour still in use: the "careful" badge. */
   --color-q-strange: #cf6a32;
 
   --font-body: "Inter", ui-sans-serif, sans-serif;
 
   --radius-pill: 9999px;
+
+  /* Layout constants (4px base). */
+  --content-max: 880px;
+  --content-pad: 40px;
+  --section-gap: 48px;
+  --hero-preview: 360px;
+  --sidebar-width: 224px;
+
+  --motion: 150ms;
 }
 
 html,
@@ -49,6 +78,8 @@ body {
   background-color: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -71,7 +102,8 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 summary:focus-visible,
-a:focus-visible {
+a:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-brand) 80%, transparent);
   outline-offset: 2px;
 }
@@ -101,31 +133,132 @@ a:focus-visible {
   color: var(--color-ink);
 }
 
-h1,
-h2,
-h3 {
-  font-weight: 600;
-  letter-spacing: -0.01em;
+/* Motion budget: colour, opacity and ring only, 150ms, and nothing at all for
+   people who asked for less. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore-start lint/complexity/noImportantStyles: honouring the OS
+       setting has to beat every utility class, including inline ones. */
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
+  }
 }
 
 @layer components {
-  /* Tiny uppercase section label — the only uppercase voice left. */
+  /* ---- Type scale -------------------------------------------------------
+     Six steps, Inter throughout. `.eyebrow` is the only uppercase voice. */
+
+  .t-pane {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+
+  .t-section {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.005em;
+    color: var(--color-ink);
+  }
+
+  .t-row {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--color-ink);
+  }
+
+  .t-body {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.55;
+  }
+
+  .t-meta {
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-ink-muted);
+  }
+
   .eyebrow {
     font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+    font-weight: 500;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-ink-faint);
   }
 
-  /* Flat content section separated by a hairline, the default page rhythm. */
-  .section {
-    border-top: 1px solid color-mix(in srgb, var(--color-edge) 70%, transparent);
-    margin-top: 2rem;
-    padding-top: 1.5rem;
+  /* Numeric readouts line up under each other. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
   }
 
-  /* A real surface: editors, previews, media. Not a layout device. */
+  /* ---- Layout ----------------------------------------------------------- */
+
+  /* The single content column every pane and onboarding screen sits in. */
+  .content-col {
+    width: 100%;
+    max-width: var(--content-max);
+    margin-inline: auto;
+    padding-inline: var(--content-pad);
+  }
+
+  /* Flat content section separated by a hairline — the default page rhythm. */
+  .section {
+    border-top: 1px solid var(--color-edge);
+    margin-top: var(--section-gap);
+    padding-top: 24px;
+  }
+
+  /* Lead with the decision: choice on the left, fixed-width preview on the
+     right. The preview never becomes a full-width banner. */
+  .hero-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--hero-preview);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .hero-preview {
+    width: 100%;
+  }
+
+  @media (max-width: 1100px) {
+    .hero-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hero-preview {
+      max-width: 480px;
+    }
+  }
+
+  /* A hairline-divided list row, 44px minimum, 12px vertical padding. */
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 44px;
+    padding-block: 12px;
+    border-bottom: 1px solid var(--color-edge);
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  /* ---- Boxes ------------------------------------------------------------ */
+
+  /* A real surface: previews, editors, media. Not a layout device. */
   .surface {
     border: 1px solid var(--color-edge);
     border-radius: 0.75rem;
@@ -133,19 +266,93 @@ h3 {
     overflow: hidden;
   }
 
-  /* Elevated overlay: popovers, progress, prompts. */
+  /* The viewmodel reference stage — a lit backdrop so a first-person render
+     reads as a scene rather than a floating cut-out. Lives here because no
+     hex belongs in a component (AGENTS.md, Design decisions). */
+  .vm-stage {
+    background: radial-gradient(
+      125% 120% at 50% 0%,
+      color-mix(in srgb, var(--color-ink) 22%, var(--color-bg)) 0%,
+      var(--color-panel-raised) 45%,
+      var(--color-bg) 100%
+    );
+  }
+
+  /* Elevated overlay: popovers, progress, prompts, modals. */
   .overlay {
     border: 1px solid var(--color-edge-strong);
     border-radius: 0.75rem;
     background: var(--color-panel-raised);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
   }
 
   .field {
     border: 1px solid var(--color-edge-strong);
     border-radius: 0.5rem;
     background: var(--color-bg);
+    transition: border-color var(--motion) ease;
   }
+
+  .field:focus,
+  .field:focus-within {
+    border-color: color-mix(in srgb, var(--color-brand) 70%, transparent);
+  }
+
+  /* ---- Option tile ------------------------------------------------------
+     Flat, hairline-bordered. Selected = a 1.5px accent ring and a small check.
+     No fill, ever — the ring carries the state. */
+
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    border: 1px solid var(--color-edge);
+    border-radius: 0.75rem;
+    background: transparent;
+    padding: 16px;
+    text-align: left;
+    transition:
+      border-color var(--motion) ease,
+      background-color var(--motion) ease,
+      box-shadow var(--motion) ease;
+  }
+
+  .tile:not(.tile-disabled):hover {
+    border-color: var(--color-edge-strong);
+    background: var(--color-panel);
+  }
+
+  .tile-selected {
+    border-color: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--color-brand);
+  }
+
+  .tile-selected:not(.tile-disabled):hover {
+    border-color: transparent;
+    background: var(--color-panel);
+  }
+
+  .tile-disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  /* The small check that marks a selected tile. */
+  .tile-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-pill);
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+  }
+
+  /* ---- Controls --------------------------------------------------------- */
 
   .btn {
     display: inline-flex;
@@ -153,13 +360,13 @@ h3 {
     justify-content: center;
     gap: 0.375rem;
     border-radius: 0.5rem;
-    font-size: 0.8125rem;
+    font-size: 13.5px;
     font-weight: 500;
     padding: 0.5rem 0.875rem;
     transition:
-      background-color 120ms ease,
-      border-color 120ms ease,
-      color 120ms ease;
+      background-color var(--motion) ease,
+      border-color var(--motion) ease,
+      color var(--motion) ease;
   }
 
   .btn:disabled {
@@ -185,14 +392,77 @@ h3 {
     background: var(--color-panel-raised);
   }
 
+  /* A quiet text-only action for inline links inside body copy. */
+  .btn-quiet {
+    color: var(--color-ink-muted);
+    padding: 0.5rem 0.5rem;
+  }
+
+  .btn-quiet:not(:disabled):hover {
+    color: var(--color-ink);
+  }
+
+  /* ---- Badge ------------------------------------------------------------
+     Sentence case, hairline ring, no fill unless it carries a semantic state. */
+
   .badge {
     display: inline-flex;
     align-items: center;
+    gap: 0.25rem;
     border-radius: var(--radius-pill);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    border: 1px solid var(--color-edge-strong);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
     padding: 0.125rem 0.5rem;
+    color: var(--color-ink-muted);
+  }
+
+  .badge-ok {
+    border-color: color-mix(in srgb, var(--color-ok) 45%, transparent);
+    color: var(--color-ok);
+  }
+
+  .badge-warn {
+    border-color: color-mix(in srgb, var(--color-warn) 45%, transparent);
+    color: var(--color-warn);
+  }
+
+  .badge-error {
+    border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+    color: var(--color-error);
+  }
+
+  /* ---- Disclosure -------------------------------------------------------
+     "Fine-tune…" / "Advanced" sections fold away by default. */
+
+  .disclosure > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    padding-block: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-ink-muted);
+    transition: color var(--motion) ease;
+  }
+
+  .disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .disclosure > summary:hover {
+    color: var(--color-ink);
+  }
+
+  .disclosure-caret {
+    display: inline-block;
+    color: var(--color-ink-faint);
+    transition: transform var(--motion) ease;
+  }
+
+  .disclosure[open] > summary .disclosure-caret {
+    transform: rotate(90deg);
   }
 }

@@ -31,10 +31,8 @@ export function CrosshairLibraryChips({
     <fieldset>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <legend className="text-[13px] font-medium text-ink">Base crosshair</legend>
-          <p className="mt-0.5 text-xs leading-5 text-ink-muted">
-            Used unless a weapon has an override.
-          </p>
+          <legend className="t-row">Base crosshair</legend>
+          <p className="t-meta mt-0.5">Used unless a weapon has an override.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -42,7 +40,7 @@ export function CrosshairLibraryChips({
             data-testid="crosshair-open-designer"
             disabled={locked}
             onClick={onOpenDesigner}
-            className="btn btn-ghost px-3 py-1.5 text-[11px]"
+            className="btn btn-ghost"
           >
             <PencilSimple size={13} />
             {hasDesign ? "Edit your design" : "Design your own"}
@@ -52,7 +50,7 @@ export function CrosshairLibraryChips({
             data-testid="crosshair-open-community"
             disabled={locked || !canBrowseCommunity}
             onClick={onOpenCommunity}
-            className="btn btn-ghost px-3 py-1.5 text-[11px]"
+            className="btn btn-ghost"
           >
             <Plus size={13} />
             Community crosshairs
@@ -66,10 +64,10 @@ export function CrosshairLibraryChips({
           return (
             <label
               key={shape}
-              className={`group/chip relative cursor-pointer rounded-lg border px-3 py-2.5 text-center text-xs font-medium outline-none transition-colors focus-within:ring-2 focus-within:ring-brand ${
+              className={`group/chip relative cursor-pointer rounded-lg border px-3 py-2.5 text-center text-[13px] font-medium outline-none transition-colors duration-150 focus-within:ring-2 focus-within:ring-brand ${
                 isSelected
-                  ? "border-brand/70 bg-brand/10 text-brand"
-                  : "border-edge bg-panel/60 text-ink-muted hover:border-edge-strong hover:text-ink"
+                  ? "border-transparent text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
+                  : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
               }`}
             >
               <input

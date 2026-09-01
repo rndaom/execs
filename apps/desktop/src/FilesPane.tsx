@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
 import {
@@ -107,21 +108,20 @@ export function FilesPane({
 
   return (
     <section data-testid="settings-files" className="flex min-w-0 flex-col gap-4 text-left">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <p className="max-w-2xl text-[13px] leading-6 text-ink-muted">
-          Edit the <code className="text-ink">.cfg</code> files you own. Files shipped by TF2, your
-          HUD, or other packs are shown read-only — their contents never block your saves.
-        </p>
-        <span className="text-xs text-ink-faint">
-          {listed.length} {listed.length === 1 ? "file" : "files"}
-        </span>
-      </div>
+      <PaneHeader
+        title="Files"
+        lede="Edit the cfg files you own. Files shipped by TF2, your HUD or other packs are read-only, and their contents never block your saves."
+        actions={
+          <span className="tnum t-meta text-ink-faint">
+            {listed.length} {listed.length === 1 ? "file" : "files"}
+          </span>
+        }
+      />
 
       <div className="grid min-w-0 items-stretch gap-3 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[14rem_minmax(0,1fr)_19rem]">
         <aside className="surface min-w-0 lg:min-h-[31rem]">
           <div className="flex items-center justify-between border-b border-edge px-3 py-2.5">
-            <h3 className="text-[13px] font-medium text-ink">Profile files</h3>
-            <span className="font-mono text-[10px] text-ink-faint">CFG</span>
+            <h3 className="t-row">Profile files</h3>
           </div>
           <ul
             data-testid="files-list"
@@ -146,7 +146,7 @@ export function FilesPane({
                       onClick={() => requestPick(file.path)}
                       className={`flex w-full items-center justify-between gap-2 overflow-hidden rounded-md px-2.5 py-2 text-left font-mono text-[11px] leading-4 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand ${
                         active
-                          ? "bg-brand/10 text-ink"
+                          ? "bg-panel-raised text-ink"
                           : "text-ink-muted hover:bg-panel-raised/50 hover:text-ink"
                       }`}
                     >
@@ -154,9 +154,7 @@ export function FilesPane({
                         {file.path}
                       </span>
                       {file.badge ? (
-                        <span className="badge shrink-0 border border-edge font-sans text-ink-faint">
-                          {file.badge}
-                        </span>
+                        <span className="badge shrink-0 font-sans">{file.badge}</span>
                       ) : null}
                     </button>
                   </li>
@@ -167,7 +165,7 @@ export function FilesPane({
           {pendingPath !== null ? (
             <div
               data-testid="files-switch-guard"
-              className="border-t border-edge px-3 py-2.5 text-[11px] leading-4 text-ink"
+              className="border-t border-edge px-3 py-2.5 text-[12.5px] leading-5 text-ink"
             >
               <p>
                 Unsaved changes — Save or Discard before opening{" "}
@@ -179,7 +177,7 @@ export function FilesPane({
                   data-testid="files-switch-save"
                   disabled={!canSave}
                   onClick={saveAndSwitch}
-                  className="btn btn-primary px-3 py-1 text-[11px]"
+                  className="btn btn-primary"
                 >
                   Save
                 </button>
@@ -187,7 +185,7 @@ export function FilesPane({
                   type="button"
                   data-testid="files-switch-discard"
                   onClick={discardAndSwitch}
-                  className="btn btn-ghost px-3 py-1 text-[11px]"
+                  className="btn btn-ghost"
                 >
                   Discard
                 </button>
@@ -195,7 +193,7 @@ export function FilesPane({
                   type="button"
                   data-testid="files-switch-cancel"
                   onClick={() => setPendingPath(null)}
-                  className="btn btn-ghost px-3 py-1 text-[11px]"
+                  className="btn btn-ghost"
                 >
                   Keep editing
                 </button>
@@ -207,22 +205,19 @@ export function FilesPane({
         <div className="surface flex min-w-0 flex-col lg:min-h-[31rem]">
           <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-edge px-3 py-2">
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-ink">Editor</p>
+              <p className="t-row">Editor</p>
               {selected ? (
-                <p className="truncate font-mono text-[10px] text-ink-muted">{selected}</p>
+                <p className="truncate font-mono text-[12px] text-ink-muted">{selected}</p>
               ) : (
-                <p className="text-[11px] text-ink-faint">No file selected</p>
+                <p className="text-[12px] text-ink-faint">No file selected</p>
               )}
             </div>
             {selected && !editable ? (
-              <span
-                data-testid="files-read-only"
-                className="badge border border-edge text-ink-faint"
-              >
+              <span data-testid="files-read-only" className="badge">
                 Read-only
               </span>
             ) : dirty ? (
-              <span className="badge border border-brand/50 bg-brand/10 text-brand">Unsaved</span>
+              <span className="badge badge-warn">Unsaved</span>
             ) : null}
           </div>
 
@@ -238,10 +233,10 @@ export function FilesPane({
                 readOnly={running || !editable}
                 onChange={(event) => setDraft(event.target.value)}
                 spellCheck={false}
-                className="min-h-72 flex-1 resize-y border-0 bg-bg px-4 py-3 font-mono text-xs leading-5 text-ink outline-none transition-shadow focus:shadow-[inset_2px_0_0_var(--color-brand)] read-only:cursor-not-allowed read-only:text-ink-muted xl:min-h-[25rem]"
+                className="min-h-72 flex-1 resize-y border-0 bg-bg px-4 py-3 font-mono text-[13px] leading-6 text-ink outline-none transition-shadow focus:shadow-[inset_2px_0_0_var(--color-brand)] read-only:cursor-not-allowed read-only:text-ink-muted xl:min-h-[25rem]"
               />
               <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-edge px-3 py-2.5">
-                <p className="text-[11px] text-ink-muted">
+                <p className="t-meta">
                   {running
                     ? "Read-only while TF2 is running."
                     : !editable
@@ -256,7 +251,7 @@ export function FilesPane({
                     data-testid="files-save"
                     disabled={!canSave}
                     onClick={handleSave}
-                    className="btn btn-primary px-4 py-1.5 text-xs"
+                    className="btn btn-primary"
                   >
                     Save file
                   </button>
@@ -264,7 +259,7 @@ export function FilesPane({
               </div>
             </>
           ) : (
-            <div className="grid min-h-72 flex-1 place-items-center bg-bg px-6 text-center text-xs text-ink-muted">
+            <div className="t-meta grid min-h-72 flex-1 place-items-center bg-bg px-6 text-center">
               Choose a cfg file to begin editing.
             </div>
           )}
@@ -273,16 +268,12 @@ export function FilesPane({
         <aside className="surface min-w-0 md:min-h-56 lg:col-span-2 xl:col-span-1 xl:min-h-[31rem]">
           <div className="flex min-h-12 items-center justify-between gap-3 border-b border-edge px-3 py-2">
             <div>
-              <h3 className="text-[13px] font-medium text-ink">Validation</h3>
-              <p className="text-[10px] text-ink-faint">Live cfg lint</p>
+              <h3 className="t-row">Validation</h3>
+              <p className="text-[12px] text-ink-faint">Live cfg lint</p>
             </div>
             <span
               data-testid="files-lint-badge"
-              className={`badge border ${
-                blockingHere.length === 0
-                  ? "border-health/50 bg-health/10 text-health"
-                  : "border-team-red/50 bg-team-red/10 text-team-red"
-              }`}
+              className={`badge ${blockingHere.length === 0 ? "badge-ok" : "badge-error"}`}
             >
               {blockingHere.length === 0 ? "Ready" : "Blocked"}
             </span>
@@ -292,7 +283,7 @@ export function FilesPane({
             {blockingHere.length > 0 ? (
               <p
                 data-testid="files-blocked"
-                className="rounded-lg border border-team-red/40 bg-team-red/10 px-3 py-2 text-xs leading-5 text-ink"
+                className="t-meta rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-ink"
               >
                 Block-tier findings must be fixed before this file can be saved. Commands are not
                 stripped.
@@ -302,7 +293,7 @@ export function FilesPane({
             {blockingElsewhere > 0 ? (
               <p
                 data-testid="files-blocked-elsewhere"
-                className="rounded-lg border border-edge px-3 py-2 text-xs leading-5 text-ink-muted"
+                className="t-meta rounded-lg border border-edge px-3 py-2"
               >
                 {blockingElsewhere} block-tier {blockingElsewhere === 1 ? "issue" : "issues"} in
                 other files. They do not block this file&apos;s save — open those files to fix them.
@@ -317,8 +308,8 @@ export function FilesPane({
               </ul>
             ) : (
               <div className="px-1 py-2">
-                <p className="text-[13px] font-medium text-health">No findings in your files</p>
-                <p className="mt-1 text-[11px] leading-5 text-ink-muted">
+                <p className="t-row text-ok">No findings in your files</p>
+                <p className="t-meta mt-1">
                   Everything you can edit passes the current safety checks.
                 </p>
               </div>
@@ -326,13 +317,13 @@ export function FilesPane({
 
             {advisoryFindings.length > 0 ? (
               <details data-testid="files-advisory" className="group">
-                <summary className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-1 py-2 text-[11px] font-medium text-ink-muted hover:text-ink">
+                <summary className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-1 py-2 text-[13px] font-medium text-ink-muted hover:text-ink">
                   <span>Advisory — provided files ({advisoryFindings.length})</span>
                   <span className="text-ink-faint transition-transform group-open:rotate-90">
                     ›
                   </span>
                 </summary>
-                <p className="px-1 pb-2 text-[11px] leading-4 text-ink-faint">
+                <p className="px-1 pb-2 text-[12px] leading-5 text-ink-faint">
                   Findings in TF2-, HUD-, or pack-provided cfg. They are how those files work and
                   never block your saves.
                 </p>
@@ -375,14 +366,14 @@ function FindingRow({ finding, advisory = false }: { finding: CfgFinding; adviso
       data-testid="files-finding"
       data-tier={finding.tier}
       data-advisory={advisory ? "true" : "false"}
-      className={`rounded-lg border border-edge p-2.5 text-xs text-ink ${advisory ? "opacity-80" : "bg-bg/60"}`}
+      className={`rounded-lg border border-edge p-2.5 text-[13px] text-ink ${advisory ? "opacity-70" : ""}`}
     >
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
         <span className={`badge ${findingTierClass(finding.tier)}`}>{finding.tier}</span>
-        <code className="text-[10px] text-ink-faint">{finding.ruleId}</code>
+        <code className="text-[12px] text-ink-faint">{finding.ruleId}</code>
       </div>
-      <p className="leading-5 text-ink-muted">{finding.message}</p>
-      <code className="mt-1.5 block break-all text-[10px] leading-4 text-ink-faint">
+      <p className="leading-6 text-ink-muted">{finding.message}</p>
+      <code className="mt-1.5 block break-all text-[12px] leading-5 text-ink-faint">
         {finding.file}:{finding.line}
       </code>
     </li>

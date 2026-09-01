@@ -51,11 +51,11 @@ export function WeaponOverrideTable({
   }));
 
   return (
-    <div className="mt-6 border-t border-edge/60 pt-5">
+    <div className="mt-8 border-t border-edge pt-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-[13px] font-medium text-ink">Weapon overrides</h3>
-          <p className="mt-0.5 text-xs leading-5 text-ink-muted">
+          <h3 className="t-row">Weapon overrides</h3>
+          <p className="t-meta mt-0.5">
             Set whole slots for every class at once, or pick a class to fine-tune single weapons.
           </p>
         </div>
@@ -65,12 +65,12 @@ export function WeaponOverrideTable({
             data-testid="crosshair-copy-class"
             disabled={locked}
             onClick={() => onChange(copyClassToAllClasses(draft, classTab))}
-            className="btn btn-ghost px-3 py-1.5 text-[11px]"
+            className="btn btn-ghost"
           >
             Apply {classTab}'s shapes to all classes
           </button>
         ) : (
-          <span className="text-xs text-ink-faint">{slots.length} weapon slots</span>
+          <span className="tnum text-[12.5px] text-ink-faint">{slots.length} weapon slots</span>
         )}
       </div>
 
@@ -97,10 +97,7 @@ export function WeaponOverrideTable({
             {slots.map((slot) => {
               const shared = slotAssignment(draft, slot);
               return (
-                <label
-                  key={slot}
-                  className="flex min-w-0 items-center justify-between gap-3 border-b border-edge/60 py-2.5 text-sm text-ink"
-                >
+                <label key={slot} className="row min-h-11 text-[14px] text-ink">
                   <span className="min-w-0">
                     <span className="block">{slotLabel(slot)}</span>
                     <span className="eyebrow mt-0.5 block">
@@ -119,7 +116,7 @@ export function WeaponOverrideTable({
                       }
                       onChange(assignSlotForAllClasses(draft, slot, value as CrosshairShape));
                     }}
-                    className="field max-w-36 shrink-0 px-2 py-1.5 text-xs capitalize text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
+                    className="field max-w-40 shrink-0 px-2 py-1.5 text-[13px] capitalize text-ink outline-none disabled:opacity-50"
                   >
                     {shared === null ? (
                       <option value="mixed" disabled>
@@ -136,7 +133,7 @@ export function WeaponOverrideTable({
               );
             })}
           </div>
-          <p className="mt-2 text-[11px] leading-4 text-ink-faint">
+          <p className="mt-3 text-[12px] leading-5 text-ink-faint">
             Slot picks apply to every weapon in that slot across all nine classes.
           </p>
         </div>
@@ -149,12 +146,9 @@ export function WeaponOverrideTable({
           aria-labelledby={`${TAB_PREFIX}-${classTab}`}
         >
           {weaponsForClass(classTab).map((weapon) => (
-            <label
-              key={weapon.script}
-              className="flex min-w-0 items-center justify-between gap-3 border-b border-edge/60 py-2.5 text-sm text-ink"
-            >
+            <label key={weapon.script} className="row min-h-11 text-[14px] text-ink">
               <span className="min-w-0">
-                <span className="block truncate text-[13px]">{weapon.label}</span>
+                <span className="block truncate text-[14px]">{weapon.label}</span>
                 <span className="eyebrow mt-0.5 block">{weapon.slot}</span>
               </span>
               <select
@@ -171,7 +165,7 @@ export function WeaponOverrideTable({
                     },
                   })
                 }
-                className="field max-w-32 shrink-0 px-2 py-1.5 text-xs capitalize text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand disabled:opacity-50"
+                className="field max-w-36 shrink-0 px-2 py-1.5 text-[13px] capitalize text-ink outline-none disabled:opacity-50"
               >
                 {choices.map((shape) => (
                   <option key={shape} value={shape}>

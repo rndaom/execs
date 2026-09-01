@@ -33,8 +33,8 @@ export function ApplyBar({
 }) {
   return (
     <>
-      <div className="sticky bottom-0 z-10 mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-edge bg-bg/95 py-3 backdrop-blur">
-        <p className="min-w-0 text-xs text-ink-muted" aria-live="polite">
+      <div className="sticky bottom-0 z-10 mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-edge bg-bg/95 py-3 backdrop-blur">
+        <p className="t-meta min-w-0" aria-live="polite">
           {status}
         </p>
         <div className="flex shrink-0 items-center gap-2">

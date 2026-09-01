@@ -29,10 +29,10 @@ export function PackPrompt({
       onDefaultAction={() => onChoice("update")}
     >
       {delta && delta.packsAdded.length > 0 ? (
-        <p className="mt-2 text-xs text-ink-muted">Added: {delta.packsAdded.join(", ")}</p>
+        <p className="t-meta mt-2">Added: {delta.packsAdded.join(", ")}</p>
       ) : null}
       {delta && delta.packsRemoved.length > 0 ? (
-        <p className="mt-1 text-xs text-ink-muted">Removed: {delta.packsRemoved.join(", ")}</p>
+        <p className="t-meta mt-1">Removed: {delta.packsRemoved.join(", ")}</p>
       ) : null}
       <div className="mt-4 flex gap-2">
         <button
@@ -54,7 +54,7 @@ export function PackPrompt({
           Keep profile
         </button>
       </div>
-      <p className="mt-3 text-[11px] text-ink-faint">
+      <p className="mt-3 text-[12px] text-ink-faint">
         Escape defers this — execs asks again rather than deciding for you.
       </p>
     </Modal>

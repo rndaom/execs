@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
+import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
@@ -67,25 +68,62 @@ export function ModsPane({
 
   return (
     <div data-testid="settings-mods" className="min-w-0 text-left">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-[13px] leading-6 text-ink-muted">{PRELOADER_EXPLAINER}</p>
+      <PaneHeader title="Mods" lede={PRELOADER_EXPLAINER} />
+
+      {/* The status hero: the three facts, then the two actions that change
+          them. Everything the library offers sits below. */}
+      <div className="hero-row">
+        <div className="min-w-0">
+          <h2 className="t-section">Casual preload bypass</h2>
+          <p className="t-meta mt-1 max-w-[62ch]">
+            Comments out one line in gameinfo.txt so preloaded materials, models and particles stay
+            live on sv_pure servers. The pristine file is backed up first and the change reverses
+            cleanly.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-testid="mods-bypass-toggle"
+              className="btn btn-primary"
+              disabled={locked || !status?.gameinfoFound}
+              onClick={() => onToggleBypass(!(status?.gameinfoBypassed ?? false))}
+            >
+              {status?.gameinfoBypassed ? "Disable bypass" : "Enable bypass"}
+            </button>
+            <button
+              type="button"
+              data-testid="mods-revert"
+              className="btn btn-ghost"
+              disabled={locked || !anythingInstalled}
+              onClick={onRevert}
+            >
+              Restore stock files
+            </button>
+          </div>
+          <p className="mt-4 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
+            Restore puts every patched byte back, un-comments gameinfo.txt and removes the addon
+            pack. Mods load on Valve servers only after the preload runs — keep Casual preload on
+            for this profile.
+          </p>
+        </div>
+
         {status ? (
-          <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <dl className="hero-preview surface m-0 self-start p-5">
             <Stat label="Bypass" value={status.gameinfoBypassed ? "On" : "Off"} />
-            <Stat label="Patched" value={String(status.patchedFiles.length)} />
+            <Stat label="Patched files" value={String(status.patchedFiles.length)} />
             <Stat label="Addon pack" value={status.customVpkPresent ? "Installed" : "None"} />
           </dl>
         ) : null}
       </div>
 
       {status?.stale ? (
-        <Alert tone="warn" testId="mods-stale" className="mt-4 text-xs">
+        <Alert tone="warn" testId="mods-stale" className="mt-6">
           TF2 updated since the last install. The old patches are gone with the update — apply your
           selection again to re-install it on the fresh files.
         </Alert>
       ) : null}
       {payload && anythingInstalled && !payload.preloadLaunchInSteam ? (
-        <Alert tone="warn" testId="mods-launch-warning" className="mt-4 text-xs">
+        <Alert tone="warn" testId="mods-launch-warning" className="mt-6">
           The preload is not in your Steam launch options yet (Steam was open when they were saved).
           Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}
           <code className="font-mono">+exec</code> reaches Steam. Without it, mods stay invisible on
@@ -93,51 +131,10 @@ export function ModsPane({
         </Alert>
       ) : null}
       {status && !status.gameinfoFound ? (
-        <Alert tone="error" testId="mods-no-gameinfo" className="mt-4 text-xs">
+        <Alert tone="error" testId="mods-no-gameinfo" className="mt-6">
           gameinfo.txt was not found — check the TF2 folder on the launcher screen.
         </Alert>
       ) : null}
-
-      <PaneSection
-        title="Casual preload bypass"
-        description={
-          <>
-            Comments out one line in gameinfo.txt (
-            <code className="font-mono">type multiplayer_only</code>) so preloaded materials,
-            models, and particles stay live on sv_pure servers. The pristine file is backed up first
-            and the change reverses cleanly.
-          </>
-        }
-      >
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            data-testid="mods-bypass-toggle"
-            className="btn"
-            disabled={locked || !status?.gameinfoFound}
-            onClick={() => onToggleBypass(!(status?.gameinfoBypassed ?? false))}
-          >
-            {status?.gameinfoBypassed ? "Disable bypass" : "Enable bypass"}
-          </button>
-          <button
-            type="button"
-            data-testid="mods-revert"
-            className="btn btn-ghost"
-            disabled={locked || !anythingInstalled}
-            onClick={onRevert}
-          >
-            Restore stock files
-          </button>
-          <p className="text-[11px] leading-4 text-ink-faint">
-            Restore puts every patched byte back, un-comments gameinfo.txt, and removes the addon
-            pack.
-          </p>
-        </div>
-        <p className="mt-3 text-[11px] leading-4 text-ink-faint">
-          Mods load on Valve servers after the preload runs — keep “Preload on launch” enabled on
-          the Viewmodels pane (it shares the same itemtest preload).
-        </p>
-      </PaneSection>
 
       <PaneSection
         title="Default mod library"
@@ -159,13 +156,13 @@ export function ModsPane({
         }
       >
         {payload && !payload.modsCached && !loading ? (
-          <p className="mt-3 text-xs leading-5 text-ink-muted">
+          <p className="t-meta mt-4">
             One-time download from the pinned casual-pre-loader release; verified and cached for
             offline installs.
           </p>
         ) : null}
         {loading && !catalog ? (
-          <p className="mt-3 text-xs text-ink-muted" role="status">
+          <p className="t-meta mt-4" role="status">
             Loading the mod library…
           </p>
         ) : null}
@@ -174,10 +171,10 @@ export function ModsPane({
           <div className="mt-4 grid gap-8 lg:grid-cols-2">
             <div>
               <h3 className="eyebrow">Addons</h3>
-              <p className="mt-1 text-[11px] leading-4 text-ink-faint">
+              <p className="mt-1 text-[12px] leading-5 text-ink-faint">
                 Packed into a single execs-preloader.vpk in tf/custom.
               </p>
-              <ul className="mt-2 list-none p-0">
+              <ul className="mt-3 list-none p-0">
                 {catalog.addons.map((addon) => (
                   <AddonRow
                     key={addon.id}
@@ -196,10 +193,10 @@ export function ModsPane({
             </div>
             <div>
               <h3 className="eyebrow">Particle mods</h3>
-              <p className="mt-1 text-[11px] leading-4 text-ink-faint">
+              <p className="mt-1 text-[12px] leading-5 text-ink-faint">
                 Shrunk and patched into tf2_misc in place; later picks win contested files.
               </p>
-              <ul className="mt-2 list-none p-0">
+              <ul className="mt-3 list-none p-0">
                 {catalog.particleMods.map((mod) => (
                   <ParticleRow
                     key={mod.name}
@@ -222,12 +219,12 @@ export function ModsPane({
 
       {report ? (
         <section className="section" data-testid="mods-report">
-          <h2 className="text-sm font-semibold text-ink">Last install</h2>
-          <p className="mt-0.5 text-xs leading-5 text-ink-muted" aria-live="polite">
+          <h2 className="t-section">Last install</h2>
+          <p className="t-meta mt-1" aria-live="polite">
             {summarizeReport(report)}
           </p>
           {report.skipped.length > 0 ? (
-            <ul className="mt-2 list-none p-0 font-mono text-[11px] leading-5 text-ink-faint">
+            <ul className="mt-3 list-none p-0 font-mono text-[12px] leading-5 text-ink-faint">
               {report.skipped.map((notice) => (
                 <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
                   {notice.file}
@@ -239,8 +236,8 @@ export function ModsPane({
         </section>
       ) : status && status.skipped.length > 0 ? (
         <section className="section">
-          <h2 className="text-sm font-semibold text-ink">Skipped last time</h2>
-          <ul className="mt-2 list-none p-0 font-mono text-[11px] leading-5 text-ink-faint">
+          <h2 className="t-section">Skipped last time</h2>
+          <ul className="mt-3 list-none p-0 font-mono text-[12px] leading-5 text-ink-faint">
             {status.skipped.map((notice) => (
               <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
                 {notice.file}
@@ -251,11 +248,11 @@ export function ModsPane({
         </section>
       ) : null}
 
-      <p className="mt-6 text-[11px] leading-5 text-ink-faint">
+      <p className="t-meta mt-12 text-ink-faint">
         {PRELOADER_CREDIT}{" "}
         <button
           type="button"
-          className="cursor-pointer border-0 bg-transparent p-0 text-[11px] text-brand underline-offset-2 hover:underline"
+          className="cursor-pointer border-0 bg-transparent p-0 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
           onClick={onOpenRepo}
         >
           casual-pre-loader on GitHub
@@ -264,7 +261,7 @@ export function ModsPane({
 
       <ApplyBar
         status={modsStatusLine(payload, addons, particleMods, running)}
-        actionLabel="Apply mod selection"
+        actionLabel="Apply mods"
         lockedLabel="Close TF2 to apply"
         running={running}
         locked={locked}
@@ -292,7 +289,7 @@ function AddonRow({
 }) {
   const id = `mods-addon-${addon.id.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
-    <li className="border-b border-edge/60 py-3">
+    <li className="border-b border-edge py-3">
       <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
         <input
           id={id}
@@ -305,19 +302,15 @@ function AddonRow({
         />
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
-            <span className="text-[13px] font-medium text-ink">{addon.name}</span>
+            <span className="t-row">{addon.name}</span>
             <span className="badge">{addon.kind}</span>
-            <span className="font-mono text-[10px] text-ink-faint">
-              {formatModBytes(addon.bytes)}
-            </span>
+            <span className="tnum text-[12px] text-ink-faint">{formatModBytes(addon.bytes)}</span>
           </span>
           {addon.description ? (
-            <span className="mt-0.5 block text-xs leading-5 text-ink-muted">
-              {addon.description}
-            </span>
+            <span className="t-meta mt-0.5 block">{addon.description}</span>
           ) : null}
           {addon.hasSound ? (
-            <span className="mt-0.5 block text-[11px] leading-4 text-ink-faint">
+            <span className="mt-0.5 block text-[12px] leading-5 text-ink-faint">
               Includes sounds — sound replacements are best-effort on sv_pure servers.
             </span>
           ) : null}
@@ -342,7 +335,7 @@ function ParticleRow({
   const preview = mod.pcfFiles.slice(0, 3).map((file) => file.replace(/\.pcf$/, ""));
   const more = mod.pcfFiles.length - preview.length;
   return (
-    <li className="border-b border-edge/60 py-3">
+    <li className="border-b border-edge py-3">
       <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
         <input
           id={id}
@@ -355,13 +348,13 @@ function ParticleRow({
         />
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
-            <span className="text-[13px] font-medium text-ink">{mod.name.replace(/_/g, " ")}</span>
-            <span className="font-mono text-[10px] text-ink-faint">
+            <span className="t-row">{mod.name.replace(/_/g, " ")}</span>
+            <span className="tnum text-[12px] text-ink-faint">
               {mod.pcfFiles.length} particle {mod.pcfFiles.length === 1 ? "file" : "files"} ·{" "}
               {formatModBytes(mod.bytes)}
             </span>
           </span>
-          <span className="mt-0.5 block text-xs leading-5 text-ink-muted">
+          <span className="t-meta mt-0.5 block">
             {preview.join(", ")}
             {more > 0 ? ` and ${more} more` : ""}
           </span>
@@ -373,9 +366,9 @@ function ParticleRow({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline gap-2">
-      <dt className="eyebrow">{label}</dt>
-      <dd className="m-0 text-sm font-semibold text-ink">{value}</dd>
+    <div className="row">
+      <dt className="t-meta">{label}</dt>
+      <dd className="tnum m-0 text-[15px] font-medium text-ink">{value}</dd>
     </div>
   );
 }
