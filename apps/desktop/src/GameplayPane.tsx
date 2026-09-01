@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { ApplyBar } from "./components/ui/ApplyBar";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
-import { PaneSection } from "./components/ui/PaneSection";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
@@ -126,19 +125,10 @@ export function GameplayPane({
         />
       </fieldset>
 
-      <PaneSection
-        id="gameplay-more"
-        title="More"
-        description="Options most people never need to touch."
-      >
+      <section className="section">
         {/* The engine refuses r_drawtracers on any live server, so it is not an
             "obvious toggle" — it and its neighbours live behind a disclosure. */}
-        <Disclosure
-          storageKey="gameplay-advanced"
-          summary="Advanced"
-          testId="gameplay-advanced"
-          className="mt-2"
-        >
+        <Disclosure storageKey="gameplay-advanced" summary="Advanced" testId="gameplay-advanced">
           <fieldset className="min-w-0 md:max-w-xl">
             <legend className="sr-only">Advanced gameplay options</legend>
             <SwitchRow
@@ -186,7 +176,7 @@ export function GameplayPane({
             />
           </fieldset>
         </Disclosure>
-      </PaneSection>
+      </section>
 
       <ApplyBar
         submit
