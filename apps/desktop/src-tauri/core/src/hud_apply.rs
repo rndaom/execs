@@ -1,11 +1,13 @@
 //! First-party HUD option apply. MIT schemas are data; this is our engine.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use crate::hud::{normalize_hud_rel, HudTree};
 use crate::profile::ProfileError;
+use crate::surface::CfgLayer;
 use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -103,9 +105,53 @@ pub struct HudSchemaChoice {
     pub value: String,
 }
 
+/// Prefix for the cfg files a HUD schema's `WriteCfg` controls produce. They
+/// are execed by bare stem from the managed autoexec line, exactly like
+/// `execs_binds` and `execs_gameplay`, so they must sit directly in the layer's
+/// cfg folder — nested under `tf/cfg/<hudid>/` the engine never found them and
+/// every WriteCfg checkbox was a silent no-op in game.
+pub const HUD_CFG_PREFIX: &str = "execs_hud_";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HudApplyResult {
+    /// Layer-addressed rel paths, ready for `write_owned_file`.
     pub cfg_writes: Vec<(String, Vec<u8>)>,
+    /// Bare stems (`execs_hud_minmode`) for the managed autoexec exec lines.
+    pub exec_stems: Vec<String>,
+}
+
+/// `tf/cfg/execs_hud_<stem>.cfg`, or `tf/cfg/overrides/...` on a comfig layer.
+/// The engine resolves `exec` relative to each search path's cfg folder, so the
+/// address has to match the layer the autoexec line lives in.
+pub fn hud_cfg_path(layer: CfgLayer, stem: &str) -> String {
+    match layer {
+        CfgLayer::Comfig => format!("tf/cfg/overrides/{stem}.cfg"),
+        CfgLayer::Vanilla => format!("tf/cfg/{stem}.cfg"),
+    }
+}
+
+/// `minmode.cfg` / `Minmode` -> `execs_hud_minmode`. Namespaced so a HUD's
+/// choice of file name can never collide with a user's own cfg.
+pub fn hud_cfg_stem(file_name: &str) -> String {
+    let base = file_name.replace('\\', "/");
+    let base = base.rsplit('/').next().unwrap_or(&base);
+    let base = base.strip_suffix(".cfg").unwrap_or(base);
+    let cleaned: String = base
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                ch.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim_matches('_');
+    if cleaned.is_empty() {
+        format!("{HUD_CFG_PREFIX}option")
+    } else {
+        format!("{HUD_CFG_PREFIX}{cleaned}")
+    }
 }
 
 pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
@@ -129,11 +175,24 @@ pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
     }
 }
 
+/// Compatibility shim for the pre-Phase-2 signature. Addresses WriteCfg files
+/// for a **vanilla** cfg layer; a comfig-layer profile needs
+/// `apply_hud_options_for_layer(.., CfgLayer::Comfig)`.
 pub fn apply_hud_options(
     tree: &mut HudTree,
     schema: &HudSchema,
     hud_id: &str,
     options: &BTreeMap<String, String>,
+) -> Result<HudApplyResult, ProfileError> {
+    apply_hud_options_for_layer(tree, schema, hud_id, options, CfgLayer::Vanilla)
+}
+
+pub fn apply_hud_options_for_layer(
+    tree: &mut HudTree,
+    schema: &HudSchema,
+    hud_id: &str,
+    options: &BTreeMap<String, String>,
+    layer: CfgLayer,
 ) -> Result<HudApplyResult, ProfileError> {
     let custom = schema
         .customizations_folder
@@ -150,11 +209,24 @@ pub fn apply_hud_options(
                 custom.as_deref(),
                 enabled.as_deref(),
                 hud_id,
+                layer,
                 &mut cfg_writes,
             )?;
         }
     }
-    Ok(HudApplyResult { cfg_writes })
+    let exec_stems = cfg_writes
+        .iter()
+        .filter_map(|(path, _)| {
+            Path::new(path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(str::to_string)
+        })
+        .collect();
+    Ok(HudApplyResult {
+        cfg_writes,
+        exec_stems,
+    })
 }
 
 fn view_control(control: &HudControl) -> Option<HudSchemaControl> {
@@ -194,6 +266,7 @@ fn view_control(control: &HudControl) -> Option<HudSchemaControl> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_control(
     tree: &mut HudTree,
     control: &HudControl,
@@ -201,6 +274,7 @@ fn apply_control(
     custom: Option<&str>,
     enabled: Option<&str>,
     hud_id: &str,
+    layer: CfgLayer,
     cfg_writes: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), ProfileError> {
     let kind = normalize_type(&control.control_type);
@@ -208,6 +282,9 @@ fn apply_control(
         .get(&control.name)
         .cloned()
         .unwrap_or_else(|| control.value.clone());
+    // `minimum`/`maximum` were surfaced to the UI but never enforced here, so
+    // an out-of-range number went into the HUD file verbatim.
+    let current = clamp_to_bounds(control, current);
     match kind {
         "checkbox" => {
             let on = is_truthy(&current);
@@ -247,13 +324,15 @@ fn apply_control(
                     &write.false_text
                 };
                 cfg_writes.push((
-                    format!("tf/cfg/{hud_id}/{}", normalize_folder(&write.file_name)),
+                    hud_cfg_path(layer, &hud_cfg_stem(&write.file_name)),
                     text.as_bytes().to_vec(),
                 ));
             }
         }
         "color" | "number" => {
-            apply_value_files(tree, control, &current, custom, enabled, hud_id, cfg_writes)?;
+            apply_value_files(
+                tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
+            )?;
         }
         "combo" => {
             if let Some(choice) = control
@@ -261,18 +340,25 @@ fn apply_control(
                 .as_ref()
                 .and_then(|options| options.iter().find(|option| option.value == current))
             {
-                apply_control(tree, choice, options, custom, enabled, hud_id, cfg_writes)?;
+                apply_control(
+                    tree, choice, options, custom, enabled, hud_id, layer, cfg_writes,
+                )?;
             } else {
-                apply_value_files(tree, control, &current, custom, enabled, hud_id, cfg_writes)?;
+                apply_value_files(
+                    tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
+                )?;
             }
         }
         _ => {
-            apply_value_files(tree, control, &current, custom, enabled, hud_id, cfg_writes)?;
+            apply_value_files(
+                tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
+            )?;
         }
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_value_files(
     tree: &mut HudTree,
     control: &HudControl,
@@ -280,8 +366,10 @@ fn apply_value_files(
     custom: Option<&str>,
     enabled: Option<&str>,
     hud_id: &str,
+    layer: CfgLayer,
     cfg_writes: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), ProfileError> {
+    let _ = hud_id;
     if let (Some(file_name), Some(custom), Some(enabled)) =
         (control.file_name.as_deref(), custom, enabled)
     {
@@ -298,11 +386,51 @@ fn apply_value_files(
     }
     if let Some(write) = &control.write_cfg {
         cfg_writes.push((
-            format!("tf/cfg/{hud_id}/{}", normalize_folder(&write.file_name)),
+            hud_cfg_path(layer, &hud_cfg_stem(&write.file_name)),
             write.true_text.as_bytes().to_vec(),
         ));
     }
     Ok(())
+}
+
+/// Hold a numeric control inside the `minimum`/`maximum` the schema declares.
+/// Non-numeric controls and unparseable values are passed through untouched.
+fn clamp_to_bounds(control: &HudControl, value: String) -> String {
+    if control.minimum.is_none() && control.maximum.is_none() {
+        return value;
+    }
+    let Ok(parsed) = value.trim().parse::<f64>() else {
+        return value;
+    };
+    let min = control.minimum.as_ref().and_then(json_to_f64);
+    let max = control.maximum.as_ref().and_then(json_to_f64);
+    let mut clamped = parsed;
+    if let Some(min) = min {
+        clamped = clamped.max(min);
+    }
+    if let Some(max) = max {
+        clamped = clamped.min(max);
+    }
+    if clamped == parsed {
+        return value;
+    }
+    format_number(clamped)
+}
+
+fn json_to_f64(value: &serde_json::Value) -> Option<f64> {
+    match value {
+        serde_json::Value::Number(number) => number.as_f64(),
+        serde_json::Value::String(text) => text.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+fn format_number(value: f64) -> String {
+    if value.fract() == 0.0 && value.abs() < 1e15 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
+    }
 }
 
 fn swap_custom_file(tree: &mut HudTree, custom: &str, enabled: &str, file_name: &str, on: bool) {
@@ -638,19 +766,29 @@ mod tests {
         let mut options = BTreeMap::new();
         options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
         options.insert("minmode".into(), "true".into());
-        let result = apply_hud_options(&mut tree, &schema, "budhud", &options).unwrap();
+        let result =
+            apply_hud_options_for_layer(&mut tree, &schema, "budhud", &options, CfgLayer::Vanilla)
+                .unwrap();
         let colors =
             std::str::from_utf8(tree.get("resource/clientscheme_colors.res").unwrap()).unwrap();
         assert!(colors.contains("0 153 255 255"));
         assert!(colors.contains("Keep"));
         assert!(tree.get("#customization/_enabled/minmode.res").is_some());
         assert!(tree.get("#customization/minmode.res").is_none());
+        // WriteCfg files sit directly in the layer's cfg folder, execed by bare
+        // stem from the managed autoexec line. Nested under `tf/cfg/<hudid>/`
+        // the engine never found them and the checkbox was a silent no-op.
         assert_eq!(
             result.cfg_writes,
             vec![(
-                "tf/cfg/budhud/hud_minmode.cfg".into(),
+                "tf/cfg/execs_hud_hud_minmode.cfg".into(),
                 b"cl_hud_minmode 1\n".to_vec()
             )]
+        );
+        assert_eq!(result.exec_stems, vec!["execs_hud_hud_minmode".to_string()]);
+        assert_eq!(
+            hud_cfg_path(CfgLayer::Comfig, "execs_hud_hud_minmode"),
+            "tf/cfg/overrides/execs_hud_hud_minmode.cfg"
         );
     }
 
@@ -691,7 +829,8 @@ mod tests {
         let mut tree = HudTree::default();
         let mut options = BTreeMap::new();
         options.insert("Background".into(), "dark".into());
-        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+        apply_hud_options_for_layer(&mut tree, &schema, "rayshud", &options, CfgLayer::Vanilla)
+            .unwrap();
         assert_eq!(
             std::str::from_utf8(tree.get("resource/ui/mainmenuoverride.res").unwrap()).unwrap(),
             "#base \"backgrounds/dark.res\"\n"
@@ -731,6 +870,48 @@ mod tests {
         .unwrap()
     }
 
+    /// `Minimum` / `Maximum` were surfaced to the UI and then ignored on apply,
+    /// so an out-of-range number went into the HUD file verbatim.
+    #[test]
+    fn numeric_bounds_are_enforced_on_apply() {
+        let schema: HudSchema = parse_hud_schema(
+            r##"{
+  "Controls": {
+    "Layout": [
+      {
+        "Name": "Opacity",
+        "Type": "IntegerUpDown",
+        "Value": "128",
+        "Minimum": 0,
+        "Maximum": 255,
+        "Files": { "resource/scheme.res": { "Opacity": "$value" } }
+      }
+    ]
+  }
+}"##,
+        )
+        .unwrap();
+
+        let read = |value: &str| {
+            let mut tree = HudTree::default();
+            tree.insert("resource/scheme.res", b"\"Scheme\"\n{\n}\n".to_vec());
+            let mut options = BTreeMap::new();
+            options.insert("Opacity".to_string(), value.to_string());
+            apply_hud_options_for_layer(&mut tree, &schema, "rayshud", &options, CfgLayer::Vanilla)
+                .unwrap();
+            std::str::from_utf8(tree.get("resource/scheme.res").unwrap())
+                .unwrap()
+                .to_string()
+        };
+
+        assert!(read("999").contains("\"255\""), "{}", read("999"));
+        assert!(read("-40").contains("\"0\""), "{}", read("-40"));
+        assert!(read("128").contains("\"128\""));
+        // A value the schema never meant as a number is passed through, not
+        // silently turned into a bound.
+        assert!(read("auto").contains("\"auto\""));
+    }
+
     #[test]
     fn hash_base_combo_keeps_the_body_of_an_existing_file() {
         // Writing the bare `#base` line over the target replaced rayshud's
@@ -743,7 +924,8 @@ mod tests {
         let mut options = BTreeMap::new();
         options.insert("Background".into(), "light".into());
 
-        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+        apply_hud_options_for_layer(&mut tree, &schema, "rayshud", &options, CfgLayer::Vanilla)
+            .unwrap();
 
         let out =
             std::str::from_utf8(tree.get("resource/ui/mainmenuoverride.res").unwrap()).unwrap();
@@ -766,7 +948,8 @@ mod tests {
         let mut options = BTreeMap::new();
         options.insert("Background".into(), "dark".into());
 
-        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+        apply_hud_options_for_layer(&mut tree, &schema, "rayshud", &options, CfgLayer::Vanilla)
+            .unwrap();
 
         let out =
             std::str::from_utf8(tree.get("resource/ui/mainmenuoverride.res").unwrap()).unwrap();
@@ -786,7 +969,8 @@ mod tests {
         let mut options = BTreeMap::new();
         options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
 
-        apply_hud_options(&mut tree, &schema, "budhud", &options).unwrap();
+        apply_hud_options_for_layer(&mut tree, &schema, "budhud", &options, CfgLayer::Vanilla)
+            .unwrap();
 
         let bytes = tree.get("resource/clientscheme_colors.res").unwrap();
         assert_eq!(&bytes[..2], &[0xFF, 0xFE], "the BOM must be preserved");
@@ -808,7 +992,9 @@ mod tests {
         let mut options = BTreeMap::new();
         options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
 
-        let err = apply_hud_options(&mut tree, &schema, "budhud", &options).unwrap_err();
+        let err =
+            apply_hud_options_for_layer(&mut tree, &schema, "budhud", &options, CfgLayer::Vanilla)
+                .unwrap_err();
         assert_eq!(err.code(), "Io");
         // Never patch over content we could not read.
         assert_eq!(
@@ -842,7 +1028,8 @@ mod tests {
         let mut options = BTreeMap::new();
         options.insert("xpos".into(), "42".into());
 
-        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+        apply_hud_options_for_layer(&mut tree, &schema, "rayshud", &options, CfgLayer::Vanilla)
+            .unwrap();
 
         let out = std::str::from_utf8(tree.get("resource/ui/hudlayout.res").unwrap()).unwrap();
         assert!(out.contains("\"1\" [$WIN32]"), "{out}");
