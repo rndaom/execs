@@ -1,21 +1,45 @@
-import type { ComfigPreset, OfficialAddon, ProfileLibrary } from "./bridge";
+import type { ComfigPreset, OfficialAddon, ProfileLibrary, StartFrom } from "./bridge";
 
 export type FirstRunKind = "unused" | "existing";
 
 export type FirstRunSurface = "ready" | "first-existing" | "first-unused" | "loading";
 
-export const COMFIG_PRESETS = [
-  { id: "ultra", label: "Ultra" },
-  { id: "high", label: "High" },
-  { id: "medium_high", label: "Medium high" },
-  { id: "medium", label: "Medium" },
-  { id: "medium_low", label: "Medium low" },
-  { id: "low", label: "Low" },
-  { id: "very_low", label: "Very low" },
-  { id: "none", label: "None" },
-] as const;
-
 export type ComfigPresetId = ComfigPreset;
+
+/**
+ * "Start from" (user decision, 2026-09-01). Creating a profile used to hand
+ * back Valve's `config_default.cfg`, so binds, audio, console and the tutorial
+ * pop-ups all came back. The Create-new wizard now offers a choice; first run
+ * has no active profile to copy, so it is always Fresh TF2.
+ */
+export const START_FROM_OPTIONS: {
+  id: StartFrom;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "current",
+    label: "Current setup",
+    description: "Keep your binds, audio, console and other in-game options; no tutorial pop-ups.",
+  },
+  {
+    id: "fresh",
+    label: "Fresh TF2",
+    description: "Valve defaults, as if newly installed.",
+  },
+];
+
+/**
+ * The choice only exists when there is an active profile whose `config.cfg` we
+ * can copy: the first-run wizard shows no tiles and stays Fresh.
+ */
+export function showStartFromChoice(library: ProfileLibrary | null, creating: boolean): boolean {
+  return creating && library !== null && library.activeProfileId !== null;
+}
+
+export function defaultStartFrom(library: ProfileLibrary | null): StartFrom {
+  return library?.activeProfileId ? "current" : "fresh";
+}
 
 export const OFFICIAL_ADDONS = [
   { id: "no-footsteps", label: "No footsteps" },

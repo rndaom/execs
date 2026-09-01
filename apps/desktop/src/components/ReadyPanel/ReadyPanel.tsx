@@ -14,24 +14,20 @@ export function ReadyPanel({
   profiles,
   progress,
   draftName,
-  inheritBinds,
   settings,
   onDraftName,
   onSave,
   onCreateNew,
-  onToggleInherit,
   onChangeInstall,
 }: {
   path: string;
   profiles: ProfileLibraryState;
   progress: SwitchProgressController;
   draftName: string;
-  inheritBinds: boolean;
   settings?: ReactNode;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onCreateNew: () => void;
-  onToggleInherit: (next: boolean) => void;
   onChangeInstall: () => void;
 }) {
   const { error, busy, running } = useAppStatus();
@@ -49,14 +45,12 @@ export function ReadyPanel({
             draftName={draftName}
             running={running}
             controlsBusy={controlsBusy}
-            inheritBinds={inheritBinds}
             onDraftName={onDraftName}
             onSave={onSave}
             onSwitch={(id) => void profiles.switchProfile(id)}
             onExport={(id) => void profiles.exportProfile(id)}
             onImport={() => void profiles.importProfile()}
             onCreateNew={onCreateNew}
-            onToggleInherit={onToggleInherit}
             onChangeInstall={onChangeInstall}
           />
         }

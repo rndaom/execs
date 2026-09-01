@@ -207,6 +207,14 @@ export type WizardSpec = {
   addons: OfficialAddon[];
 };
 
+/**
+ * What a new profile's `tf/cfg/config.cfg` starts from (user decision,
+ * 2026-09-01). `current` copies the active profile's `config.cfg` verbatim
+ * (binds, audio, `con_enable`, advanced options and the "tutorial already
+ * shown" flags); `fresh` is Valve's `config_default.cfg`.
+ */
+export type StartFrom = "current" | "fresh";
+
 export async function classifyFirstRun(): Promise<FirstRunClass> {
   return call<FirstRunClass>("classify_first_run");
 }
@@ -215,16 +223,11 @@ export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrar
   return call<ProfileLibrary>("apply_unused_wizard", { spec });
 }
 
-export async function getInheritBinds(): Promise<boolean> {
-  return call<boolean>("get_inherit_binds");
-}
-
-export async function setInheritBinds(inherit: boolean): Promise<boolean> {
-  return call<boolean>("set_inherit_binds", { inherit });
-}
-
-export async function createFreshProfile(spec: WizardSpec): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("create_fresh_profile", { spec });
+export async function createFreshProfile(
+  spec: WizardSpec,
+  startFrom: StartFrom,
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom });
 }
 
 export type CfgLayer = "comfig" | "vanilla";
@@ -248,7 +251,7 @@ export type CrosshairRecord = {
   id: string;
   shape: string;
   assignments: Record<string, string>;
-  /** Baked RGB tint for the first-party shapes; null/undefined = white. */
+  /** Pack tint carried by `cl_crosshair_red/green/blue`; null/undefined = white. */
   color?: [number, number, number] | null;
   /** Installed non-builtin crosshairs: name -> "vtf" | "rgba". */
   library?: Record<string, string>;
