@@ -93,7 +93,9 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    names.into_iter().any(|name| process_name_is_tf2_for(os, name.as_ref()))
+    names
+        .into_iter()
+        .any(|name| process_name_is_tf2_for(os, name.as_ref()))
 }
 
 pub fn tf2_running_among<I, S>(names: I) -> bool
@@ -156,13 +158,19 @@ mod tests {
     #[test]
     fn matches_ticket_process_names_only() {
         assert!(process_name_is_tf2_for(ProcessOs::Windows, "tf_win64.exe"));
-        assert!(process_name_is_tf2_for(ProcessOs::Windows, r"C:\games\tf_win64.EXE"));
+        assert!(process_name_is_tf2_for(
+            ProcessOs::Windows,
+            r"C:\games\tf_win64.EXE"
+        ));
         assert!(!process_name_is_tf2_for(ProcessOs::Windows, "hl2.exe"));
         assert!(!process_name_is_tf2_for(ProcessOs::Windows, "steam.exe"));
         assert!(!process_name_is_tf2_for(ProcessOs::Windows, "srcds.exe"));
 
         assert!(process_name_is_tf2_for(ProcessOs::Linux, "tf_linux64"));
-        assert!(process_name_is_tf2_for(ProcessOs::Linux, "/opt/tf/tf_linux64"));
+        assert!(process_name_is_tf2_for(
+            ProcessOs::Linux,
+            "/opt/tf/tf_linux64"
+        ));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "tf_win64.exe"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "hl2_linux"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "steam"));
@@ -171,11 +179,23 @@ mod tests {
     #[test]
     fn steam_is_the_main_client_only() {
         assert!(process_name_is_steam_for(ProcessOs::Windows, "steam.exe"));
-        assert!(process_name_is_steam_for(ProcessOs::Windows, r"C:\Program Files\Steam\steam.EXE"));
+        assert!(process_name_is_steam_for(
+            ProcessOs::Windows,
+            r"C:\Program Files\Steam\steam.EXE"
+        ));
         assert!(process_name_is_steam_for(ProcessOs::Linux, "steam"));
-        assert!(process_name_is_steam_for(ProcessOs::Linux, "/usr/bin/steam"));
-        assert!(!process_name_is_steam_for(ProcessOs::Windows, "steamwebhelper.exe"));
-        assert!(!process_name_is_steam_for(ProcessOs::Linux, "steamwebhelper"));
+        assert!(process_name_is_steam_for(
+            ProcessOs::Linux,
+            "/usr/bin/steam"
+        ));
+        assert!(!process_name_is_steam_for(
+            ProcessOs::Windows,
+            "steamwebhelper.exe"
+        ));
+        assert!(!process_name_is_steam_for(
+            ProcessOs::Linux,
+            "steamwebhelper"
+        ));
         assert!(!process_name_is_steam_for(ProcessOs::Linux, "tf_linux64"));
         assert!(steam_running_among_for(ProcessOs::Linux, ["bash", "steam"]));
         assert!(!steam_running_among_for(
@@ -186,7 +206,8 @@ mod tests {
 
     #[test]
     fn refuse_is_typed_not_silent() {
-        let err = refuse_if_running_among_for(ProcessOs::Linux, ["reaper", "tf_linux64"]).unwrap_err();
+        let err =
+            refuse_if_running_among_for(ProcessOs::Linux, ["reaper", "tf_linux64"]).unwrap_err();
         assert_eq!(err, WriteLockError::GameRunning);
         assert_eq!(err.code(), "GameRunning");
         assert!(refuse_if_running_among_for(ProcessOs::Linux, ["bash", "steam"]).is_ok());

@@ -12,9 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::finder::discover_steam_roots;
 use crate::hash::sha256_file;
-use crate::launch::{
-    cloud_config_path_from, find_cloud_config, find_cloud_config_from,
-};
+use crate::launch::{cloud_config_path_from, find_cloud_config, find_cloud_config_from};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     load_library_from, load_manifest, profiles_dir, put_exclusive_files_from_paths_to,
@@ -267,10 +265,7 @@ where
         .collect()
 }
 
-fn active_profile_id(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-) -> Result<Option<String>, ProfileError> {
+fn active_profile_id(profiles_dir: &Path, tf2_root: &Path) -> Result<Option<String>, ProfileError> {
     Ok(load_library_from(profiles_dir, Some(tf2_root))?.active_profile_id)
 }
 
@@ -294,7 +289,11 @@ fn classify(
         live.insert(entry.dest_rel, entry.source);
     }
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    let manifest_paths: BTreeSet<String> = manifest.files.iter().map(|file| file.path.clone()).collect();
+    let manifest_paths: BTreeSet<String> = manifest
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .collect();
     // Hoisted: rebuilding these inside the per-file loops is O(live × manifest)
     // string clones, and absorb runs on boot and after every TF2 quit.
     let manifest_packs_present = manifest_pack_keys(&manifest.files);
@@ -384,14 +383,20 @@ fn classify(
 }
 
 fn manifest_pack_keys(files: &[ProfileFile]) -> BTreeSet<String> {
-    files.iter().filter_map(|file| pack_key(&file.path)).collect()
+    files
+        .iter()
+        .filter_map(|file| pack_key(&file.path))
+        .collect()
 }
 
 fn group_by_pack<'a>(paths: impl Iterator<Item = &'a String>) -> BTreeMap<String, Vec<String>> {
     let mut groups = BTreeMap::new();
     for path in paths {
         if let Some(pack) = pack_key(path) {
-            groups.entry(pack).or_insert_with(Vec::new).push(path.clone());
+            groups
+                .entry(pack)
+                .or_insert_with(Vec::new)
+                .push(path.clone());
         }
     }
     for files in groups.values_mut() {
@@ -581,10 +586,16 @@ mod tests {
             &root.join("tf/cfg/overrides/autoexec.cfg"),
             "fov_desired 90\n",
         );
-        write_live(&root.join("tf/custom/hud/resource/ui/hudlayout.res"), "hud\n");
+        write_live(
+            &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
+            "hud\n",
+        );
         let id = save_main(&profiles, &root);
 
-        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\nbind w +forward\n");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "unbindall\nbind w +forward\n",
+        );
         write_live(
             &root.join("tf/cfg/overrides/autoexec.cfg"),
             "fov_desired 110\n",
@@ -629,10 +640,7 @@ mod tests {
             .files
             .iter()
             .any(|file| file.path == "tf/cfg/overrides/modules.cfg"));
-        assert!(!manifest
-            .files
-            .iter()
-            .any(|file| file.path.contains("toon")));
+        assert!(!manifest.files.iter().any(|file| file.path.contains("toon")));
         assert_eq!(
             fs::read(root.join("tf/custom/toon/info.vdf")).unwrap(),
             before_live
@@ -650,7 +658,10 @@ mod tests {
             &root.join("tf/cfg/overrides/autoexec.cfg"),
             "fov_desired 90\n",
         );
-        write_live(&root.join("tf/custom/hud/resource/ui/hudlayout.res"), "hud\n");
+        write_live(
+            &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
+            "hud\n",
+        );
         let id = save_main(&profiles, &root);
 
         fs::remove_file(root.join("tf/cfg/overrides/autoexec.cfg")).unwrap();
@@ -688,27 +699,14 @@ mod tests {
         write_live(&root.join("tf/custom/new/pack.txt"), "new\n");
 
         absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
-        let kept = absorb_packs_to(
-            &profiles,
-            &root,
-            PackChoice::Keep,
-            unlocked(),
-            opts(None),
-        )
-        .unwrap();
+        let kept =
+            absorb_packs_to(&profiles, &root, PackChoice::Keep, unlocked(), opts(None)).unwrap();
         assert_eq!(kept.active_profile_id.as_deref(), Some(id.as_str()));
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert!(manifest.files.iter().any(|file| file.path.contains("old")));
         assert!(!manifest.files.iter().any(|file| file.path.contains("new")));
 
-        absorb_packs_to(
-            &profiles,
-            &root,
-            PackChoice::Update,
-            unlocked(),
-            opts(None),
-        )
-        .unwrap();
+        absorb_packs_to(&profiles, &root, PackChoice::Update, unlocked(), opts(None)).unwrap();
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert!(!manifest.files.iter().any(|file| file.path.contains("old")));
         assert!(manifest
@@ -716,7 +714,12 @@ mod tests {
             .iter()
             .any(|file| file.path == "tf/custom/new/pack.txt"));
         assert_eq!(
-            fs::read(exclusive_file_path(&profiles, &id, "tf/custom/new/pack.txt")).unwrap(),
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/new/pack.txt"
+            ))
+            .unwrap(),
             b"new\n"
         );
         assert!(root.join("tf/custom/new/pack.txt").is_file());
@@ -767,7 +770,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(fs::read(root.join("tf/cfg/config.cfg")).unwrap(), b"updated\n");
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"updated\n"
+        );
         assert_eq!(
             fs::read(
                 steam

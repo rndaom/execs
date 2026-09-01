@@ -103,6 +103,7 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - Crash hardening: release builds do **not** use `panic = "abort"` (one background-thread panic must not kill the app); a panic hook logs to `<execs data dir>/logs/panic.log`; the lock poller wraps each tick in `catch_unwind`; heavy commands (save/absorb, crosshair apply, HUD match) run in `spawn_blocking`, never on the main thread; the VPK reader range-reads sibling archives and supports filtered reads (`read_vpk_dir_file_filtered`) so weapon-script loading never materializes gigabytes.
 
 ## Deployment (legacy hub — parked)
+- The hub source is **not on `main`** (removed 2026-09-01, RND-182 Phase 0). `apps/web`, `packages/preview-matrix`, and `tools/capture` live on the `hub` branch, which preserves the full pre-removal tree. Un-parking means reviving that branch, not re-adding files to `main`.
 - Old live URL: https://execs.anthonyrandomcarey.workers.dev (Cloudflare Worker "execs"). Do not treat as the product.
 - Production D1 / R2 remain from the hub; no new hub migrations unless someone un-parks it.
 - `.npmrc` `node-linker=hoisted` — still required on Windows for this monorepo. Don't remove it.

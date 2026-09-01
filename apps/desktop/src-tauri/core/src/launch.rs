@@ -572,16 +572,28 @@ mod tests {
             .join("localconfig.vdf");
         let original = fs::read(&path).unwrap();
 
-        write_launch_options_to_localconfig_from(&[steam.clone()], "-nojoy", None::<&str>).unwrap();
+        write_launch_options_to_localconfig_from(
+            std::slice::from_ref(&steam),
+            "-nojoy",
+            None::<&str>,
+        )
+        .unwrap();
         let backup = path.with_file_name("localconfig.vdf.execs-backup");
         assert_eq!(fs::read(&backup).unwrap(), original);
         assert!(!path.with_file_name("localconfig.vdf.execs-part").exists());
 
         // A second write must not overwrite the pristine copy.
-        write_launch_options_to_localconfig_from(&[steam.clone()], "-console", None::<&str>)
-            .unwrap();
+        write_launch_options_to_localconfig_from(
+            std::slice::from_ref(&steam),
+            "-console",
+            None::<&str>,
+        )
+        .unwrap();
         assert_eq!(fs::read(&backup).unwrap(), original);
-        assert_eq!(read_launch_options_from(&[steam.clone()]), "-console");
+        assert_eq!(
+            read_launch_options_from(std::slice::from_ref(&steam)),
+            "-console"
+        );
         cleanup(&dir);
     }
 
@@ -603,7 +615,12 @@ mod tests {
         write_file(&path, &text);
         fs::create_dir_all(steam.join("userdata").join("111").join("440")).unwrap();
 
-        write_launch_options_to_localconfig_from(&[steam.clone()], "-nojoy", None::<&str>).unwrap();
+        write_launch_options_to_localconfig_from(
+            std::slice::from_ref(&steam),
+            "-nojoy",
+            None::<&str>,
+        )
+        .unwrap();
 
         let after = parse_vdf(&fs::read_to_string(&path).unwrap()).unwrap();
         let app = vdf_get_obj(
@@ -659,7 +676,7 @@ mod tests {
             &localconfig("-autoconfig"),
         );
 
-        let options = read_launch_options_from(&[steam.clone()]);
+        let options = read_launch_options_from(std::slice::from_ref(&steam));
         assert_eq!(options, "-novid -windowed");
         let cloud = find_cloud_config_from(&[steam]).unwrap();
         assert!(cloud.ends_with(Path::new("440/remote/cfg/config.cfg")));
@@ -753,7 +770,7 @@ mod tests {
         write_account(&steam, "111", "-novid");
 
         let result = write_launch_options_to_localconfig_from(
-            &[steam.clone()],
+            std::slice::from_ref(&steam),
             "-novid -nojoy -autoconfig +quit",
             None::<&str>,
         )
@@ -765,7 +782,10 @@ mod tests {
                 reason: LaunchWriteReason::Written,
             }
         );
-        assert_eq!(read_launch_options_from(&[steam.clone()]), "-novid -nojoy");
+        assert_eq!(
+            read_launch_options_from(std::slice::from_ref(&steam)),
+            "-novid -nojoy"
+        );
         let text = fs::read_to_string(
             steam
                 .join("userdata")
@@ -788,9 +808,12 @@ mod tests {
         let steam = dir.join("Steam");
         write_account(&steam, "111", "-novid");
 
-        let result =
-            write_launch_options_to_localconfig_from(&[steam.clone()], "-console", ["steam"])
-                .unwrap();
+        let result = write_launch_options_to_localconfig_from(
+            std::slice::from_ref(&steam),
+            "-console",
+            ["steam"],
+        )
+        .unwrap();
         assert_eq!(
             result,
             LaunchWriteResult {
@@ -846,7 +869,7 @@ mod tests {
             "-novid -autoconfig -dxlevel 90 +quit -console",
             None::<&str>,
             None::<&str>,
-            &[steam.clone()],
+            std::slice::from_ref(&steam),
         )
         .unwrap();
         assert_eq!(result.launch_options, "-novid -console");
@@ -879,7 +902,7 @@ mod tests {
             "-console",
             None::<&str>,
             ["steam"],
-            &[steam.clone()],
+            std::slice::from_ref(&steam),
         )
         .unwrap();
         assert_eq!(result.launch_options, "-console");

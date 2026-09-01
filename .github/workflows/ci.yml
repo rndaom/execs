@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test-and-build:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,20 +22,35 @@ jobs:
         run: pnpm check
       - name: Desktop frontend
         run: pnpm --filter @execs/desktop build
-  desktop-core:
-    runs-on: ubuntu-latest
+
+  rust-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Format
+        run: cargo fmt --all --manifest-path apps/desktop/src-tauri/Cargo.toml --check
+      - name: Clippy
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked
+
+  rust-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Finder and write-lock units
-        run: cargo test --manifest-path apps/desktop/src-tauri/core/Cargo.toml --locked
-      - name: OpenNext production build (workerd compatibility gate)
-        run: pnpm --filter @execs/web exec opennextjs-cloudflare build
-      - name: Playwright smoke
-        working-directory: apps/web
-        run: |
-          pnpm exec playwright install chromium --with-deps
-          pnpm exec playwright test e2e/smoke.spec.ts
-        env:
-          CI: "true"
-      # Deploy runs manually via `pnpm deploy` until a wrangler OIDC token is configured.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Check
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked

@@ -189,7 +189,9 @@ pub fn sanitize_hud_id(id: &str) -> Result<String, ProfileError> {
             .chars()
             .any(|ch| !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'))
     {
-        return Err(ProfileError::Io("Give that HUD a valid folder name.".into()));
+        return Err(ProfileError::Io(
+            "Give that HUD a valid folder name.".into(),
+        ));
     }
     Ok(id)
 }
@@ -215,10 +217,7 @@ pub fn github_repo_parts(repo: &str) -> Option<(String, String)> {
         .or_else(|| trimmed.strip_prefix("http://github.com/"))?;
     let mut parts = rest.split('/');
     let owner = parts.next()?.trim();
-    let name = parts
-        .next()?
-        .trim()
-        .trim_end_matches(".git");
+    let name = parts.next()?.trim().trim_end_matches(".git");
     if owner.is_empty() || name.is_empty() || parts.next().is_some() {
         return None;
     }
@@ -297,7 +296,8 @@ pub fn load_catalog_cache_from(dir: &Path) -> Option<HudCatalogCache> {
 
 pub fn save_catalog_cache_to(dir: &Path, cache: &HudCatalogCache) -> Result<(), ProfileError> {
     fs::create_dir_all(dir).map_err(|err| ProfileError::Io(err.to_string()))?;
-    let json = serde_json::to_string_pretty(cache).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(cache).map_err(|err| ProfileError::Io(err.to_string()))?;
     fs::write(catalog_cache_file(dir), format!("{json}\n"))
         .map_err(|err| ProfileError::Io(err.to_string()))
 }
@@ -351,7 +351,10 @@ pub fn hud_ui_state(manifest: &ProfileManifest, catalog: &[HudCatalogEntry]) -> 
     let update_available = match (&installed, &catalog_hash) {
         (Some(record), Some(hash)) => {
             record.source == HudSource::HudDb
-                && record.hash.as_deref().is_some_and(|current| current != hash)
+                && record
+                    .hash
+                    .as_deref()
+                    .is_some_and(|current| current != hash)
         }
         _ => false,
     };
@@ -526,7 +529,9 @@ pub fn load_hud_tree_from_profile(
         tree.insert(rel, bytes);
     }
     if tree.files.is_empty() {
-        return Err(ProfileError::Io("That profile has no HUD files to edit.".into()));
+        return Err(ProfileError::Io(
+            "That profile has no HUD files to edit.".into(),
+        ));
     }
     Ok(tree)
 }
@@ -627,9 +632,8 @@ where
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    let status = resolve_hud(&manifest).ok_or_else(|| {
-        ProfileError::Io("Install a HUD before saving options.".into())
-    })?;
+    let status = resolve_hud(&manifest)
+        .ok_or_else(|| ProfileError::Io("Install a HUD before saving options.".into()))?;
     let mut tree = load_hud_tree_from_profile(profiles_dir, profile_id, &status.record.id)?;
     let applied =
         crate::hud_apply::apply_hud_options(&mut tree, schema, &status.record.id, &options)?;
@@ -677,7 +681,9 @@ where
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     let Some(hud) = manifest.hud.as_mut() else {
-        return Err(ProfileError::Io("Install a HUD before saving options.".into()));
+        return Err(ProfileError::Io(
+            "Install a HUD before saving options.".into(),
+        ));
     };
     hud.options = options;
     save_manifest(profiles_dir, tf2_root, &manifest)?;
@@ -767,10 +773,7 @@ fn sanitize_zip_entry(raw: &str) -> Result<String, ProfileError> {
             return Err(ProfileError::InvalidPath);
         }
     }
-    let parts: Vec<&str> = name
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .collect();
+    let parts: Vec<&str> = name.split('/').filter(|part| !part.is_empty()).collect();
     if parts.iter().any(|part| *part == "." || *part == "..") {
         return Err(ProfileError::InvalidPath);
     }
@@ -871,7 +874,8 @@ mod tests {
         let mut cursor = Cursor::new(Vec::new());
         {
             let mut zip = ZipWriter::new(&mut cursor);
-            let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
             for (name, bytes) in entries {
                 zip.start_file(*name, options).unwrap();
                 zip.write_all(bytes).unwrap();
@@ -971,9 +975,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
@@ -997,7 +999,11 @@ mod tests {
         )
         .unwrap();
         fs::create_dir_all(root.join("tf/custom/stray/resource/ui")).unwrap();
-        fs::write(root.join("tf/custom/stray/resource/ui/hudlayout.res"), b"x\n").unwrap();
+        fs::write(
+            root.join("tf/custom/stray/resource/ui/hudlayout.res"),
+            b"x\n",
+        )
+        .unwrap();
 
         let mut tree = HudTree::default();
         tree.insert("info.vdf", info_vdf().to_vec());
@@ -1016,7 +1022,10 @@ mod tests {
             unlocked(),
         )
         .unwrap();
-        assert_eq!(detail.hud.as_ref().map(|hud| hud.id.as_str()), Some("rayshud"));
+        assert_eq!(
+            detail.hud.as_ref().map(|hud| hud.id.as_str()),
+            Some("rayshud")
+        );
         assert!(!detail
             .files
             .iter()
@@ -1026,7 +1035,9 @@ mod tests {
             b"new\n"
         );
         assert!(!root.join("tf/custom/oldhud").exists());
-        assert!(root.join("tf/custom/-stray/resource/ui/hudlayout.res").is_file());
+        assert!(root
+            .join("tf/custom/-stray/resource/ui/hudlayout.res")
+            .is_file());
         cleanup(&dir);
     }
 
@@ -1036,9 +1047,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         put_exclusive_file_to(
@@ -1076,9 +1085,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         let mut tree = HudTree::default();
@@ -1107,9 +1114,7 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
-        let id = load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles[0]
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
             .id
             .clone();
         set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
@@ -1175,7 +1180,8 @@ mod tests {
 }"##,
         )
         .unwrap();
-        apply_schema_options_to(&profiles, &root, &id, &schema, options.clone(), unlocked()).unwrap();
+        apply_schema_options_to(&profiles, &root, &id, &schema, options.clone(), unlocked())
+            .unwrap();
 
         let mut fresh = HudTree::default();
         fresh.insert("info.vdf", info_vdf().to_vec());
@@ -1202,10 +1208,9 @@ mod tests {
         .unwrap();
         apply_schema_options_to(&profiles, &root, &id, &schema, options, unlocked()).unwrap();
 
-        let colors = fs::read_to_string(
-            root.join("tf/custom/budhud/resource/clientscheme_colors.res"),
-        )
-        .unwrap();
+        let colors =
+            fs::read_to_string(root.join("tf/custom/budhud/resource/clientscheme_colors.res"))
+                .unwrap();
         assert!(colors.contains("0 153 255 255"));
         assert_eq!(
             fs::read(root.join("tf/cfg/budhud/hud_minmode.cfg")).unwrap(),

@@ -4,6 +4,9 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 const host = process.env.TAURI_DEV_HOST;
+// Keep this in sync with `build.devUrl` in src-tauri/tauri.conf.json: the Tauri
+// config is static JSON and cannot read the environment. See README.
+const devPort = Number(process.env.EXECS_DEV_PORT ?? 1420);
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -15,7 +18,7 @@ export default defineConfig({
   // Prevent Vite from obscuring Rust errors during `tauri dev`.
   clearScreen: false,
   server: {
-    port: 1420,
+    port: devPort,
     strictPort: true,
     host: host || false,
     hmr: host

@@ -156,9 +156,7 @@ where
     }
     for name in &referenced {
         if !valid_crosshair_name(name) {
-            return Err(ProfileError::Io(format!(
-                "Unknown crosshair shape {name}."
-            )));
+            return Err(ProfileError::Io(format!("Unknown crosshair shape {name}.")));
         }
     }
 
@@ -292,7 +290,10 @@ where
     )?))
 }
 
-fn resolve_library_asset(name: &str, asset: &CrosshairAsset) -> Result<ResolvedAsset, ProfileError> {
+fn resolve_library_asset(
+    name: &str,
+    asset: &CrosshairAsset,
+) -> Result<ResolvedAsset, ProfileError> {
     match asset.format {
         CrosshairAssetFormat::Rgba => {
             let expected = (CROSSHAIR_SIZE * CROSSHAIR_SIZE * 4) as usize;
@@ -633,7 +634,7 @@ pub fn decode_vtf_bgra8888(bytes: &[u8], width: u32, height: u32) -> Option<Vec<
         return None;
     }
     let mut rgba = bytes[80..expected].to_vec();
-    for chunk in rgba.chunks_exact_mut(4) {
+    for chunk in rgba.as_chunks_mut::<4>().0 {
         chunk.swap(0, 2);
     }
     Some(rgba)
@@ -721,7 +722,7 @@ pub fn render_shape_rgba(shape: &str) -> Vec<u8> {
 
 fn rgba_to_bgra(rgba: &[u8]) -> Vec<u8> {
     let mut out = rgba.to_vec();
-    for chunk in out.chunks_exact_mut(4) {
+    for chunk in out.as_chunks_mut::<4>().0 {
         chunk.swap(0, 2);
     }
     out
@@ -806,9 +807,9 @@ pub fn force_empty_crosshair_file(text: &str, color: Option<[u8; 3]>) -> String 
         .map(|line| {
             let lower = line.trim_start().to_ascii_lowercase();
             for (index, (prefix, replacement)) in forced.iter().enumerate() {
-                let matches_cvar = lower
-                    .strip_prefix(prefix)
-                    .is_some_and(|rest| !rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'));
+                let matches_cvar = lower.strip_prefix(prefix).is_some_and(|rest| {
+                    !rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+                });
                 if matches_cvar {
                     found[index] = true;
                     return replacement.clone();
@@ -1005,7 +1006,9 @@ mod tests {
         assert!(cfg.contains("cl_crosshair_blue 0"));
         let pixels = shape_pixels("cross", None).unwrap();
         let lit = pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .find(|chunk| chunk[3] == 255)
             .expect("shape draws at least one pixel");
         assert_eq!(&lit[0..3], &[255, 255, 255]);
@@ -1158,7 +1161,10 @@ cl_crosshair_blue 56
         )
         .unwrap();
         let record = detail.crosshair.as_ref().unwrap();
-        assert_eq!(record.library.get("seeker").map(String::as_str), Some("vtf"));
+        assert_eq!(
+            record.library.get("seeker").map(String::as_str),
+            Some("vtf")
+        );
         let written = std::fs::read(
             tf2.join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/seeker.vtf"),
         )
@@ -1262,8 +1268,8 @@ cl_crosshair_blue 56
         // Nothing tracked on the manifest: the old guard would be skipped.
         assert!(pack_paths(&root.join("profiles"), &id).unwrap().is_empty());
 
-        let err = remove_crosshairs_to(&root.join("profiles"), &tf2, &id, [tf2_name()])
-            .unwrap_err();
+        let err =
+            remove_crosshairs_to(&root.join("profiles"), &tf2, &id, [tf2_name()]).unwrap_err();
         assert!(matches!(err, ProfileError::GameRunning));
         assert!(live.join("stray.vmt").is_file(), "live pack must survive");
 

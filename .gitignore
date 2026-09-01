@@ -1,14 +1,11 @@
 node_modules/
-.next/
-.open-next/
-.wrangler/
 dist/
 coverage/
 **/src-tauri/target/
+test-results/
+playwright-report/
 *.log
 .env
 .env.local
-.dev.vars
-cloudflare-env.d.ts
 .artifacts/
 .claude/
