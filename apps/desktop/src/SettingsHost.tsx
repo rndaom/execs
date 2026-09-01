@@ -1,4 +1,4 @@
-import { lint } from "@execs/cfglint";
+import { engineManagedLintOptions, lint } from "@execs/cfglint";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
@@ -54,7 +54,9 @@ function mapsFromFiles(files: CfgText[]): {
   binds: Record<string, string>;
   effective: Record<string, string>;
 } {
-  const result = lint(files);
+  // Same options as the Files pane, so config.cfg's engine-managed ESCAPE bind
+  // and archived console preference reach the derived maps.
+  const result = lint(files, engineManagedLintOptions(files));
   const binds: Record<string, string> = {};
   for (const [key, value] of result.binds) {
     binds[key] = value;

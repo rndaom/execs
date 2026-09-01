@@ -1,4 +1,4 @@
-import { lint } from "@execs/cfglint";
+import { engineManagedLintOptions, lint } from "@execs/cfglint";
 import { canWrite } from "./write-gate";
 
 export type CfgFinding = {
@@ -168,13 +168,9 @@ export function lintBundle(
   files: { path: string; text: string }[],
   hudId?: string | null,
 ): LintBundleResult {
-  const engineManagedConfigPaths = files
-    .filter((file) => normalizeCfgPath(file.path) === ENGINE_MANAGED_CONFIG_PATH)
-    .map((file) => file.path);
-  const advisoryPaths = files
-    .filter((file) => cfgFileMeta(file.path, hudId).advisory)
-    .map((file) => file.path);
-  const result = lint(files, { engineManagedConfigPaths, advisoryPaths });
+  // The player's own cfg: connect/disconnect binds and unresolvable execs warn
+  // instead of refusing the save (cfglint `trust: "self"`).
+  const result = lint(files, engineManagedLintOptions(files, hudId));
   return {
     ok: result.ok,
     findings: result.findings.map((finding) => ({
