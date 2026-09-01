@@ -120,6 +120,94 @@ pub struct HudApplyResult {
     pub exec_stems: Vec<String>,
 }
 
+/// The comment the managed autoexec lines carry (shared with the frontend's
+/// `ensureAutoexecExecLine`, which owns the binds/gameplay lines).
+pub const MANAGED_EXEC_COMMENT: &str = "// execs:managed";
+
+/// `exec` target for a managed stem, addressed from tf/cfg the way the engine
+/// resolves it: `overrides/<stem>` on a comfig layer, the bare stem on vanilla.
+pub fn managed_exec_target(layer: CfgLayer, stem: &str) -> String {
+    match layer {
+        CfgLayer::Comfig => format!("overrides/{stem}"),
+        CfgLayer::Vanilla => stem.to_string(),
+    }
+}
+
+fn exec_target_of_line(line: &str) -> Option<&str> {
+    let body = line.split("//").next().unwrap_or("").trim();
+    let mut parts = body.split_whitespace();
+    if parts.next()? != "exec" {
+        return None;
+    }
+    let target = parts.next()?;
+    Some(target.trim_matches('"'))
+}
+
+fn exec_stem_of_target(target: &str) -> &str {
+    let stem = target.rsplit('/').next().unwrap_or(target);
+    stem.strip_suffix(".cfg").unwrap_or(stem)
+}
+
+/// Make the autoexec exec exactly the HUD option cfgs in `stems`: managed
+/// `execs_hud_*` lines for stems that are gone are dropped, mis-addressed ones
+/// are rewritten in place, missing ones are appended. Everything else in the
+/// file is preserved byte for byte.
+pub fn ensure_hud_exec_lines(existing: &str, layer: CfgLayer, stems: &[String]) -> String {
+    let wanted: Vec<&str> = stems.iter().map(String::as_str).collect();
+    let canonical = |stem: &str| {
+        format!(
+            "exec {} {MANAGED_EXEC_COMMENT}",
+            managed_exec_target(layer, stem)
+        )
+    };
+    let mut seen: Vec<&str> = Vec::new();
+    let mut lines: Vec<String> = Vec::new();
+    for raw in existing.split('\n') {
+        let managed = raw.trim().ends_with(MANAGED_EXEC_COMMENT);
+        if let Some(target) = exec_target_of_line(raw) {
+            let stem = exec_stem_of_target(target);
+            if stem.starts_with(HUD_CFG_PREFIX) {
+                match wanted.iter().find(|w| **w == stem) {
+                    Some(w) if managed => {
+                        if !seen.contains(w) {
+                            seen.push(w);
+                            lines.push(canonical(w));
+                        }
+                        continue;
+                    }
+                    Some(w) => {
+                        if !seen.contains(w) {
+                            seen.push(w);
+                        }
+                    }
+                    None if managed => continue,
+                    None => {}
+                }
+            }
+        }
+        lines.push(raw.to_string());
+    }
+    let mut text = lines.join("\n");
+    let missing: Vec<&str> = wanted
+        .iter()
+        .copied()
+        .filter(|w| !seen.contains(w))
+        .collect();
+    if !missing.is_empty() {
+        let trimmed = text.trim_end().to_string();
+        text = if trimmed.is_empty() {
+            String::new()
+        } else {
+            format!("{trimmed}\n")
+        };
+        for stem in missing {
+            text.push_str(&canonical(stem));
+            text.push('\n');
+        }
+    }
+    text
+}
+
 /// `tf/cfg/execs_hud_<stem>.cfg`, or `tf/cfg/overrides/...` on a comfig layer.
 /// The engine resolves `exec` relative to each search path's cfg folder, so the
 /// address has to match the layer the autoexec line lives in.
@@ -712,6 +800,37 @@ fn normalize_folder(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hud_exec_lines_append_rewrite_and_prune() {
+        let stems = vec!["execs_hud_minmode".to_string()];
+        // Empty autoexec: one appended managed line, layer-addressed.
+        let text = ensure_hud_exec_lines("", CfgLayer::Comfig, &stems);
+        assert_eq!(text, "exec overrides/execs_hud_minmode // execs:managed\n");
+        // A bare-stem managed line on the comfig layer is rewritten in place;
+        // the user's own lines survive untouched.
+        let existing = "exec overrides/execs_binds // execs:managed\nexec execs_hud_minmode // execs:managed\nbind f +duck\n";
+        let text = ensure_hud_exec_lines(existing, CfgLayer::Comfig, &stems);
+        assert_eq!(
+            text,
+            "exec overrides/execs_binds // execs:managed\nexec overrides/execs_hud_minmode // execs:managed\nbind f +duck\n"
+        );
+        // Stems that are gone are pruned; non-HUD managed lines stay.
+        let text = ensure_hud_exec_lines(existing, CfgLayer::Vanilla, &[]);
+        assert_eq!(
+            text,
+            "exec overrides/execs_binds // execs:managed\nbind f +duck\n"
+        );
+        // A hand-written exec of the same target counts as present.
+        let text = ensure_hud_exec_lines("exec execs_hud_minmode\n", CfgLayer::Vanilla, &stems);
+        assert_eq!(text, "exec execs_hud_minmode\n");
+        // Idempotent.
+        let once = ensure_hud_exec_lines("bind w +forward", CfgLayer::Vanilla, &stems);
+        assert_eq!(
+            ensure_hud_exec_lines(&once, CfgLayer::Vanilla, &stems),
+            once
+        );
+    }
 
     fn schema_fixture() -> HudSchema {
         parse_hud_schema(

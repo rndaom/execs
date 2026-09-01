@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use zip::ZipArchive;
 
 use crate::absorb::pack_key;
-use crate::apply::{detail_from_manifest, write_owned_file_to, ProfileDetail};
+use crate::apply::{
+    detail_from_manifest, read_profile_file_from, write_owned_file_to, ProfileDetail,
+    WriteOwnedOptions,
+};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, load_library_from, load_manifest, profiles_dir, put_exclusive_file_to,
@@ -714,7 +717,62 @@ where
         &applied.cfg_writes,
         &running,
     )?;
+    sync_hud_exec_lines_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &applied.exec_stems,
+        &running,
+    )?;
     set_hud_options_to(profiles_dir, tf2_root, profile_id, options, &running)
+}
+
+/// Keep the managed autoexec executing exactly the HUD option cfgs in `stems`
+/// (see `hud_apply::ensure_hud_exec_lines`). The engine resolves `exec` from
+/// tf/cfg, so the line is layer-addressed; without it the WriteCfg files the
+/// schema produced would never run in game.
+pub fn sync_hud_exec_lines(
+    tf2_root: &Path,
+    profile_id: &str,
+    stems: &[String],
+) -> Result<(), ProfileError> {
+    let running = live_process_names();
+    sync_hud_exec_lines_to(&profiles_dir(), tf2_root, profile_id, stems, &running)
+}
+
+pub fn sync_hud_exec_lines_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    stems: &[String],
+    running: &[String],
+) -> Result<(), ProfileError> {
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let layer = crate::apply::cfg_layer_from_files(&manifest.files);
+    let rel = match layer {
+        crate::surface::CfgLayer::Comfig => "tf/cfg/overrides/autoexec.cfg",
+        crate::surface::CfgLayer::Vanilla => "tf/cfg/autoexec.cfg",
+    };
+    let existing = match read_profile_file_from(profiles_dir, tf2_root, profile_id, rel) {
+        Ok(content) => content.text.unwrap_or_default(),
+        // Not in the manifest yet: start from an empty autoexec.
+        Err(ProfileError::InvalidPath) => String::new(),
+        Err(err) => return Err(err),
+    };
+    let next = crate::hud_apply::ensure_hud_exec_lines(&existing, layer, stems);
+    if next == existing {
+        return Ok(());
+    }
+    write_owned_file_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        rel,
+        next.as_bytes(),
+        running.iter().cloned(),
+        WriteOwnedOptions::default(),
+    )?;
+    Ok(())
 }
 
 pub fn set_hud_options(

@@ -134,20 +134,24 @@ fn install_hud_from_catalog(
     let bytes = crate::hud_fetch::fetch_hud_zip(&entry.repo, &entry.hash)?;
     let extracted = execs_core::extract_hud_zip(&bytes)?;
     let mut tree = extracted.tree;
+    let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id)?;
+    let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);
     let mut options = BTreeMap::new();
     if preserve_options {
-        if let Ok(manifest) = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id) {
-            if let Some(hud) = manifest.hud {
-                options = hud.options;
-            }
+        if let Some(hud) = manifest.hud {
+            options = hud.options;
         }
     }
     let mut cfg_writes = Vec::new();
+    let mut exec_stems = Vec::new();
     if execs_core::schema_supported(&entry.id) && !options.is_empty() {
         let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
         let schema = execs_core::parse_hud_schema(&raw)?;
-        let applied = execs_core::apply_hud_options(&mut tree, &schema, &entry.id, &options)?;
+        let applied = execs_core::apply_hud_options_for_layer(
+            &mut tree, &schema, &entry.id, &options, layer,
+        )?;
         cfg_writes = applied.cfg_writes;
+        exec_stems = applied.exec_stems;
     }
     let detail = execs_core::install_hud_pack(
         root,
@@ -160,10 +164,17 @@ fn install_hud_from_catalog(
             options,
         },
     )?;
+    let cfg_writes_written = cfg_writes.len();
     for (path, bytes) in cfg_writes {
         execs_core::write_owned_file(root, profile_id, &path, &bytes)?;
     }
-    Ok(detail)
+    // A replaced HUD drops the previous HUD's option cfgs from autoexec; a HUD
+    // with options gets its execs_hud_* lines so the WriteCfg files actually run.
+    execs_core::sync_hud_exec_lines(root, profile_id, &exec_stems)?;
+    if exec_stems.is_empty() && cfg_writes_written == 0 {
+        return Ok(detail);
+    }
+    Ok(execs_core::get_active_profile_detail(root)?.unwrap_or(detail))
 }
 
 #[cfg(test)]
