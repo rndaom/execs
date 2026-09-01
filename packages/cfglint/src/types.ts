@@ -66,9 +66,36 @@ export interface SummarySection {
   entries: SummaryEntry[];
 }
 
+/**
+ * Who authored the files being linted.
+ *
+ * - `"provided"` (default) — content that arrived from somewhere else and is
+ *   being reviewed before it is trusted. Hostile-config rules block.
+ * - `"self"` — the player's own cfg, edited in-app. `connect`, a `disconnect`
+ *   bind on a gameplay key, and an `exec` the app cannot resolve are ordinary
+ *   things to want in a personal config, so they report as warnings and never
+ *   refuse a save. The rules that stay block-tier are the ones no personal cfg
+ *   needs either: `unbindall`, rcon/password, console lockout, `sv_cheats`,
+ *   and aliases shadowing engine commands.
+ */
+export type LintTrust = "self" | "provided";
+
 export interface LintOptions {
+  /** Who wrote these files. Default `"provided"`. See {@link LintTrust}. */
+  trust?: LintTrust;
   /** exec targets outside the bundle that are considered safe. */
   externalExecAllowlist?: string[];
+  /**
+   * Also resolve `exec <target>` against a bundle path that equals `<target>`
+   * exactly, not just against paths ending in `/cfg/<target>`.
+   *
+   * The engine only ever resolves exec targets relative to each search path's
+   * cfg folder, so this is off by default: `exec execs_binds` from
+   * `tf/cfg/overrides/autoexec.cfg` must NOT find
+   * `tf/cfg/overrides/execs_binds.cfg`, exactly as in game. Enable it for flat
+   * bundles that have no `cfg/` prefix at all (a bare upload of loose files).
+   */
+  bundleRelativeExec?: boolean;
   /**
    * Paths written by the Source engine as its local settings snapshot.
    *
@@ -96,6 +123,12 @@ export interface LintResult {
   /** mastercomfig modules.cfg levels, e.g. { texture_quality: "high" }. */
   moduleLevels: Record<string, string>;
   classesTouched: TfClass[];
+  /**
+   * Human-readable "what this changes" panel, grouped by domain.
+   *
+   * Computed lazily on first access and cached: the desktop lints on every
+   * keystroke and never reads this.
+   */
   summary: SummarySection[];
   /** True when no block-tier findings exist. */
   ok: boolean;

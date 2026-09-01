@@ -14,7 +14,3 @@ export interface CorpusEntry {
 export function lookupCvar(name: string): CorpusEntry | undefined {
   return corpus[name.toLowerCase()];
 }
-
-export function isKnownName(name: string): boolean {
-  return name.toLowerCase() in corpus;
-}
