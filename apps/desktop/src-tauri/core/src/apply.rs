@@ -115,6 +115,24 @@ pub fn list_profile_files_from(
     Ok(load_manifest(profiles_dir, profile_id)?.files)
 }
 
+/// Raw bytes of one file a profile owns, straight from its manifest source
+/// (exclusive tree or shared blob). Unlike [`read_profile_file`] this never
+/// lossily decodes, so callers that copy a file verbatim get exactly the bytes.
+pub fn profile_file_bytes_from(
+    profiles_dir: &Path,
+    profile_id: &str,
+    rel_path: &str,
+) -> Result<Vec<u8>, ProfileError> {
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let file = manifest
+        .files
+        .iter()
+        .find(|file| file.path == rel_path)
+        .ok_or(ProfileError::InvalidPath)?;
+    let source = source_path(profiles_dir, &manifest.id, file)?;
+    fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))
+}
+
 pub fn read_profile_file(
     tf2_root: &Path,
     profile_id: &str,

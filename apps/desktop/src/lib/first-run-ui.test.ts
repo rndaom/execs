@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canApplyWizard,
+  defaultStartFrom,
   firstRunSurface,
+  START_FROM_OPTIONS,
   showCreateNewChrome,
+  showStartFromChoice,
   toggleAddon,
   wizardApplyCopy,
 } from "./first-run-ui";
@@ -43,6 +46,22 @@ describe("first-run routing", () => {
     expect(showCreateNewChrome(empty, "first-existing")).toBe(false);
     expect(showCreateNewChrome(empty, "first-unused")).toBe(false);
     expect(showCreateNewChrome(previewSavedLibrary("/tf2"), "ready")).toBe(true);
+  });
+
+  it("offers Start from only when there is an active profile to copy", () => {
+    const saved = previewSavedLibrary("/tf2");
+    expect(showStartFromChoice(saved, true)).toBe(true);
+    // First run: the wizard is not the Create flow and nothing is active.
+    expect(showStartFromChoice(saved, false)).toBe(false);
+    expect(showStartFromChoice(empty, true)).toBe(false);
+    expect(showStartFromChoice(null, true)).toBe(false);
+  });
+
+  it("defaults to the current setup, and to fresh with no active profile", () => {
+    expect(defaultStartFrom(previewSavedLibrary("/tf2"))).toBe("current");
+    expect(defaultStartFrom(empty)).toBe("fresh");
+    expect(defaultStartFrom(null)).toBe("fresh");
+    expect(START_FROM_OPTIONS.map((option) => option.id)).toEqual(["current", "fresh"]);
   });
 
   it("toggles official addons", () => {

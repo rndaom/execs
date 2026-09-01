@@ -1,3 +1,115 @@
+import type { ComfigPreset } from "./bridge";
+
+export type ComfigPresetEntry = {
+  id: ComfigPreset;
+  label: string;
+  /** One-line summary shown on the tile. */
+  description: string;
+  /** Where the preset sits on the performance ↔ fidelity axis. */
+  balance: string;
+  performance: string;
+  fidelity: string;
+};
+
+/**
+ * The one preset catalog. Both the Comfig pane and the setup wizard render
+ * these — the wizard used to carry a second, longer list of its own.
+ */
+export const COMFIG_PRESETS: ComfigPresetEntry[] = [
+  {
+    id: "ultra",
+    label: "Ultra",
+    description: "Maximum fidelity with the highest system requirements.",
+    balance: "Fidelity",
+    performance: "Lowest",
+    fidelity: "Maximum",
+  },
+  {
+    id: "high",
+    label: "High",
+    description: "High visual quality for modern systems.",
+    balance: "Quality",
+    performance: "Moderate",
+    fidelity: "High",
+  },
+  {
+    id: "medium_high",
+    label: "Medium high",
+    description: "Sharper visuals without the full performance cost.",
+    balance: "Balanced +",
+    performance: "Good",
+    fidelity: "High",
+  },
+  {
+    id: "medium",
+    label: "Medium",
+    description: "A balanced mix of visual quality and performance.",
+    balance: "Balanced",
+    performance: "Great",
+    fidelity: "Balanced",
+  },
+  {
+    id: "medium_low",
+    label: "Medium low",
+    description: "Performance-first settings with readable detail.",
+    balance: "Performance +",
+    performance: "High",
+    fidelity: "Moderate",
+  },
+  {
+    id: "low",
+    label: "Low",
+    description: "Maximum performance with reduced visual effects.",
+    balance: "Performance",
+    performance: "Very high",
+    fidelity: "Low",
+  },
+  {
+    id: "very_low",
+    label: "Very low",
+    description: "Minimum visual cost for the highest frame rate.",
+    balance: "Maximum FPS",
+    performance: "Maximum",
+    fidelity: "Minimal",
+  },
+  {
+    id: "none",
+    label: "None",
+    description: "Skip preset tuning and configure modules yourself.",
+    balance: "Manual",
+    performance: "Stock",
+    fidelity: "Stock",
+  },
+];
+
+/** Shown by default; the rest sit behind "Show all presets". */
+export const FEATURED_PRESETS = new Set<ComfigPreset>(["ultra", "high", "medium", "low"]);
+
+export function comfigPresetById(id: ComfigPreset): ComfigPresetEntry | undefined {
+  return COMFIG_PRESETS.find((preset) => preset.id === id);
+}
+
+export function comfigPresetLabel(id: ComfigPreset): string {
+  return comfigPresetById(id)?.label ?? id;
+}
+
+/**
+ * A preset outside the featured four keeps the full list open — collapsing it
+ * would hide the selection.
+ */
+export function presetListExpanded(selected: ComfigPreset, showAll: boolean): boolean {
+  return showAll || !FEATURED_PRESETS.has(selected);
+}
+
+export function visibleComfigPresets(
+  selected: ComfigPreset,
+  showAll: boolean,
+): ComfigPresetEntry[] {
+  return presetListExpanded(selected, showAll)
+    ? COMFIG_PRESETS
+    : COMFIG_PRESETS.filter((preset) => FEATURED_PRESETS.has(preset.id));
+}
+
 export type ComfigModule = {
   id: string;
   label: string;
