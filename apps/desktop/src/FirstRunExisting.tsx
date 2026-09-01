@@ -84,7 +84,11 @@ export function FirstRunExisting({
             ? "TF2 is open, so nothing can be written yet. Close the game to save."
             : "Your cfg layer, config.cfg, everything in tf/custom, and the launch string. The live files are copied, not moved."
         }
-        meta={formatInstallLabel(path)}
+        meta={
+          <span className="font-mono" title={path}>
+            {formatInstallLabel(path)}
+          </span>
+        }
       >
         {reasons.length > 0 ? (
           <ul data-testid="first-run-reasons" className="mt-4 grid gap-x-10 sm:grid-cols-2">
