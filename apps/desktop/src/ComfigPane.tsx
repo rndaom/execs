@@ -1,5 +1,5 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import presetHigh from "./assets/presets/high.webp";
 import presetLow from "./assets/presets/low.webp";
 import presetMedium from "./assets/presets/medium.webp";
@@ -26,6 +26,7 @@ import {
   resolveComfigState,
   setModuleLevel,
 } from "./lib/comfig-ui";
+import { shouldReseedDraft } from "./lib/files-ui";
 import { COMFIG_PRESETS, OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { canWriteSettings } from "./lib/settings-ui";
 
@@ -201,7 +202,17 @@ export function ComfigPane({
   const [showAllModules, setShowAllModules] = useState(false);
   const [showAllPresets, setShowAllPresets] = useState(false);
 
+  const lastSeededRef = useRef<string | null>(null);
+
+  // `incoming` is a fresh object on every reload, so reseeding on identity
+  // discards the control the user just clicked. This pane is instant-apply and
+  // holds no user-typed draft, so the guard is purely "did the bytes change".
   useEffect(() => {
+    const next = JSON.stringify(incoming);
+    if (!shouldReseedDraft(lastSeededRef.current, next, false)) {
+      return;
+    }
+    lastSeededRef.current = next;
     setDraft(incoming);
   }, [incoming]);
 
