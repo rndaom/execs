@@ -20,6 +20,10 @@ use tauri::{AppHandle, Emitter, Manager};
 /// `tokio::sync::Mutex`, not `std`: the guard is held across `.await`.
 pub struct WriteGate(pub tokio::sync::Mutex<()>);
 
+/// Past this, `panic.log` is rotated to `panic.log.1`. A panic that repeats
+/// on a timer (see the lock poller) would otherwise grow it without bound.
+const PANIC_LOG_MAX_BYTES: u64 = 1024 * 1024;
+
 /// Log panics to %AppData%\execs\logs\panic.log (or the Linux data dir) so a
 /// crash leaves a trace even when no console is attached.
 fn install_panic_logger() {
@@ -29,10 +33,12 @@ fn install_panic_logger() {
         if let Some(dir) = settings.parent() {
             let logs = dir.join("logs");
             let _ = std::fs::create_dir_all(&logs);
+            let path = logs.join("panic.log");
+            rotate_if_large(&path);
             if let Ok(mut file) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(logs.join("panic.log"))
+                .open(&path)
             {
                 let location = info
                     .location()
@@ -43,6 +49,17 @@ fn install_panic_logger() {
         }
         previous(info);
     }));
+}
+
+fn rotate_if_large(path: &std::path::Path) {
+    let Ok(meta) = path.metadata() else {
+        return;
+    };
+    if meta.len() < PANIC_LOG_MAX_BYTES {
+        return;
+    }
+    // One generation is enough: the newest panics are the ones worth reading.
+    let _ = std::fs::rename(path, path.with_extension("log.1"));
 }
 
 fn timestamp() -> String {
@@ -125,16 +142,43 @@ pub fn run() {
         .expect("error while running execs");
 }
 
+/// How many ticks in a row may panic before the poller gives up. A sysinfo
+/// bug that panics deterministically would otherwise panic once a second
+/// forever, filling the panic log and never telling the UI anything.
+const MAX_CONSECUTIVE_PANICS: u32 = 10;
+
 fn spawn_lock_poller(app: AppHandle) {
     std::thread::spawn(move || {
         let mut last = None;
+        let mut panics = 0u32;
         loop {
-            // A failed poll must never take the app down; skip the tick instead.
-            let running = std::panic::catch_unwind(execs_core::is_tf2_running);
-            if let Ok(running) = running {
+            // The whole tick, emit included: an emit panic used to kill the
+            // poller thread silently and freeze the write-lock UI at its last
+            // value forever.
+            let app = app.clone();
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let running = execs_core::is_tf2_running();
+                // Unconditionally on the first tick: the webview subscribes
+                // after `setup` runs, and a change-only emit would drop the
+                // opening state.
                 if last != Some(running) {
                     let _ = app.emit("tf2-running", running);
+                }
+                running
+            }));
+            match outcome {
+                Ok(running) => {
                     last = Some(running);
+                    panics = 0;
+                }
+                Err(_) => {
+                    panics += 1;
+                    if panics >= MAX_CONSECUTIVE_PANICS {
+                        // Say so once, then stop. A stuck lock indicator the
+                        // UI knows about beats one it does not.
+                        let _ = app.emit("tf2-lock-unavailable", true);
+                        return;
+                    }
                 }
             }
             std::thread::sleep(Duration::from_secs(1));
