@@ -42,9 +42,7 @@ export function OnboardingFrame({
         <span>{eyebrow}</span>
       </div>
       <h1 className="t-pane mt-3 max-w-[20ch] text-center text-balance">{title}</h1>
-      {lede ? (
-        <p className="t-body mt-3 max-w-[62ch] text-center text-ink-muted">{lede}</p>
-      ) : null}
+      {lede ? <p className="t-body mt-3 max-w-[62ch] text-center text-ink-muted">{lede}</p> : null}
 
       <div className="mt-10 w-full text-left">{children}</div>
 
