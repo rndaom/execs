@@ -59,7 +59,9 @@ viewmodel_fov 70
 ];
 
 describe("golden bundle", () => {
-  const result = lint(GOLDEN_BUNDLE);
+  // A flat bundle with no `cfg/` folder, so `exec binds` only resolves with
+  // the opt-in bundle-relative match.
+  const result = lint(GOLDEN_BUNDLE, { bundleRelativeExec: true });
 
   it("has no block findings", () => {
     expect(result.findings.filter((f) => f.tier === "block")).toEqual([]);

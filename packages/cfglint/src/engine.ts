@@ -9,6 +9,7 @@ import {
   DISRUPTIVE_COMMANDS,
   GAMEPLAY_KEYS,
   MAX_ALIAS_DEPTH,
+  MAX_ALIAS_EXPANSIONS,
   MAX_EXEC_DEPTH,
   MOUSE_CVARS,
   NET_CVAR_RANGES,
@@ -22,8 +23,10 @@ import type {
   Command,
   CvarValue,
   Finding,
+  FindingTier,
   LintOptions,
   LintResult,
+  SummarySection,
   TfClass,
 } from "./types.ts";
 
@@ -42,6 +45,19 @@ interface ScanContext {
 const MODULE_LINE_RE = /^([a-z0-9_]+)=([a-z0-9_.-]+)$/i;
 const ENGINE_MENU_COMMANDS = new Set(["cancelselect", "escape"]);
 
+/**
+ * mastercomfig's `modules.cfg` is `name=level` data, not commands — but only
+ * at the two locations mastercomfig actually reads. A `modules.cfg` shipped
+ * anywhere else in a pack is a normal cfg and gets linted like one.
+ */
+function isModulesData(path: string): boolean {
+  return (
+    path === "modules.cfg" ||
+    path === "overrides/modules.cfg" ||
+    path.endsWith("/overrides/modules.cfg")
+  );
+}
+
 export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const findings: Finding[] = [];
   const seenFindings = new Set<string>();
@@ -56,6 +72,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     (opts.engineManagedConfigPaths ?? []).map(normalizePath),
   );
   const advisoryPaths = new Set((opts.advisoryPaths ?? []).map(normalizePath));
+  const trust = opts.trust ?? "provided";
+  // Rules that exist to catch a hostile config, not a bad one. In the player's
+  // own cfg these are legitimate things to bind, so they advise instead of
+  // refusing the save.
+  const selfTrusted: FindingTier = trust === "self" ? "warn" : "block";
   // Files whose text authored the payload currently being scanned. An alias
   // defined in an advisory (provided) file keeps its advisory status even when
   // a user file invokes it — the finding anchors at the invocation site, but
@@ -69,7 +90,10 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     at: Command,
     via?: string,
   ) => {
-    const key = `${ruleId}|${at.file}|${at.line}|${at.col}|${via ?? ""}`;
+    // Every command inside one payload anchors at the payload's own line/col,
+    // so the command name has to be part of the key — otherwise
+    // `bind mouse1 "kill; explode"` collapses into a single finding.
+    const key = `${ruleId}|${at.file}|${at.line}|${at.col}|${via ?? ""}|${at.name}`;
     if (seenFindings.has(key)) return;
     seenFindings.add(key);
     const origin = payloadOriginStack[payloadOriginStack.length - 1];
@@ -103,7 +127,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 
   // modules.cfg is mastercomfig data (name=level lines), not commands.
   for (const [path, { file }] of parsed) {
-    if (basename(path) !== "modules.cfg") continue;
+    if (!isModulesData(path)) continue;
     for (const line of file.text.split("\n")) {
       const m = line.trim().match(MODULE_LINE_RE);
       if (m) moduleLevels[m[1].toLowerCase()] = m[2].toLowerCase();
@@ -114,11 +138,12 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   // resolves exec targets relative to each search path's cfg folder, never
   // relative to the exec'ing file — `exec execs_binds` issued from
   // overrides/autoexec.cfg does NOT find overrides/execs_binds.cfg in game,
-  // so it must not resolve here either.
+  // so it must not resolve here either. `bundleRelativeExec` re-enables the
+  // exact-path match for flat bundles with no cfg/ folder at all.
   const resolveExec = (target: string): string | null => {
     let t = target.replace(/\\/g, "/").toLowerCase().replace(/^\.\//, "");
     if (!t.endsWith(".cfg")) t += ".cfg";
-    if (parsed.has(t)) return t;
+    if (opts.bundleRelativeExec && parsed.has(t)) return t;
     for (const path of parsed.keys()) {
       if (path.endsWith(`/cfg/${t}`)) return path;
     }
@@ -138,6 +163,26 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   }
 
   // ---- command scanning -----------------------------------------------------
+  // Exec position of the file currently being walked. Payload `exec`s continue
+  // the same chain so a bind cannot be used to escape the depth/cycle budget.
+  let execDepth = 0;
+  let execChain: string[] = [];
+  let aliasExpansions = 0;
+  let aliasBudgetSpent = false;
+
+  /** Reports an `exec` whose target is not part of the linted set. */
+  const reportUnresolvedExec = (target: string, cmd: Command, via?: string): void => {
+    const bare = target.toLowerCase().replace(/\.cfg$/, "");
+    if (externalAllow.has(bare)) return; // well-known engine/user file
+    report(
+      selfTrusted,
+      "exec-external",
+      `\`exec ${target}\` targets a cfg that is not in this profile`,
+      cmd,
+      via,
+    );
+  };
+
   const checkCommand = (cmd: Command, ctx: ScanContext, aliasStack: string[]): void => {
     const { name } = cmd;
     const value = cmd.args[0]?.toLowerCase();
@@ -146,7 +191,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 
     if (NETWORK_HIJACK_COMMANDS.has(name)) {
       report(
-        "block",
+        selfTrusted,
         "connect-redirect",
         `\`${name}\` routes the player to a server chosen by the config author`,
         cmd,
@@ -276,14 +321,35 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     }
 
     if (name === "exec") {
-      return; // handled by the evaluator (needs depth/cycle context)
+      // Top-level execs belong to the evaluation walk below, which owns the
+      // exec graph. An exec *inside a bind or alias payload* never reaches
+      // that walk, so it is resolved and followed here — hiding a payload
+      // behind `bind f "exec sketchy"` must not launder it.
+      if (ctx.via === undefined) return;
+      const target = cmd.args[0];
+      if (!target) return;
+      const resolved = resolveExec(target);
+      if (!resolved) {
+        reportUnresolvedExec(target, cmd, ctx.via);
+        return;
+      }
+      if (execChain.includes(resolved)) {
+        report("warn", "exec-cycle", `\`exec ${target}\` creates a cycle`, cmd, ctx.via);
+        return;
+      }
+      if (execDepth + 1 > MAX_EXEC_DEPTH) {
+        report("warn", "exec-depth", `exec chain deeper than ${MAX_EXEC_DEPTH}`, cmd, ctx.via);
+        return;
+      }
+      walkFile(resolved, execDepth + 1, [...execChain, resolved]);
+      return;
     }
 
     // Disruptive / chat / self-harm commands matter inside key payloads.
     if (DISRUPTIVE_COMMANDS.has(name)) {
       if (ctx.bindKey && GAMEPLAY_KEYS.has(ctx.bindKey)) {
         report(
-          "block",
+          selfTrusted,
           "disruptive-bind",
           `\`${name}\` bound to gameplay key "${ctx.bindKey}" ends the session mid-game`,
           cmd,
@@ -363,6 +429,22 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         );
         return;
       }
+      if (aliasExpansions >= MAX_ALIAS_EXPANSIONS) {
+        // Depth is bounded but breadth is not: a fan-out of aliases is
+        // exponential and this runs synchronously while the user types.
+        if (!aliasBudgetSpent) {
+          aliasBudgetSpent = true;
+          report(
+            "warn",
+            "alias-budget",
+            `alias expansion stopped after ${MAX_ALIAS_EXPANSIONS} steps — some payloads were not scanned`,
+            cmd,
+            ctx.via,
+          );
+        }
+        return;
+      }
+      aliasExpansions++;
       payloadOriginStack.push(aliasDef.site.file);
       try {
         scanPayload(aliasDef.payload, cmd, ctx, [...aliasStack, name]);
@@ -398,55 +480,52 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   }
 
   const visited = new Set<string>();
-  const walkFile = (path: string, execDepth: number, chain: string[]): void => {
+  function walkFile(path: string, depth: number, chain: string[]): void {
     const entry = parsed.get(path);
     if (!entry) return;
     visited.add(path);
-    for (const cmd of entry.commands) {
-      if (cmd.name === "exec" && cmd.args[0]) {
-        const target = cmd.args[0];
-        const resolved = resolveExec(target);
-        if (!resolved) {
-          const bare = target.toLowerCase().replace(/\.cfg$/, "");
-          if (externalAllow.has(bare)) {
-            // fine — well-known engine/user file
-          } else {
-            report(
-              "block",
-              "exec-external",
-              `\`exec ${target}\` targets a file outside this upload`,
-              cmd,
-            );
+    const prevDepth = execDepth;
+    const prevChain = execChain;
+    execDepth = depth;
+    execChain = chain;
+    try {
+      for (const cmd of entry.commands) {
+        if (cmd.name === "exec" && cmd.args[0]) {
+          const target = cmd.args[0];
+          const resolved = resolveExec(target);
+          if (!resolved) {
+            reportUnresolvedExec(target, cmd);
+            continue;
           }
+          if (chain.includes(resolved)) {
+            report("warn", "exec-cycle", `\`exec ${target}\` creates a cycle`, cmd);
+            continue;
+          }
+          if (depth + 1 > MAX_EXEC_DEPTH) {
+            report("warn", "exec-depth", `exec chain deeper than ${MAX_EXEC_DEPTH}`, cmd);
+            continue;
+          }
+          walkFile(resolved, depth + 1, [...chain, resolved]);
           continue;
         }
-        if (chain.includes(resolved)) {
-          report("warn", "exec-cycle", `\`exec ${target}\` creates a cycle`, cmd);
-          continue;
-        }
-        if (execDepth + 1 > MAX_EXEC_DEPTH) {
-          report("warn", "exec-depth", `exec chain deeper than ${MAX_EXEC_DEPTH}`, cmd);
-          continue;
-        }
-        walkFile(resolved, execDepth + 1, [...chain, resolved]);
-        continue;
+        checkCommand(cmd, {}, []);
       }
-      checkCommand(cmd, {}, []);
+    } finally {
+      execDepth = prevDepth;
+      execChain = prevChain;
     }
-  };
+  }
 
   // Roots: files nothing else execs. Deterministic order: autoexec first,
   // then class configs, then the rest alphabetically.
-  const roots = [...parsed.keys()].filter(
-    (p) => !execdFrom.has(p) && basename(p) !== "modules.cfg",
-  );
+  const roots = [...parsed.keys()].filter((p) => !execdFrom.has(p) && !isModulesData(p));
   roots.sort((a, b) => rootRank(a) - rootRank(b) || a.localeCompare(b));
   for (const root of roots) {
     walkFile(root, 0, [root]);
   }
   // Files only reachable through exec cycles have no root — sweep them too.
   for (const path of parsed.keys()) {
-    if (!visited.has(path) && basename(path) !== "modules.cfg") {
+    if (!visited.has(path) && !isModulesData(path)) {
       walkFile(path, 0, [path]);
     }
   }
@@ -469,13 +548,22 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       a.col - b.col,
   );
 
+  // The summary is only read by the review UI; the desktop lints on every
+  // keystroke and never touches it. Build it on first access, then cache.
+  let summaryCache: SummarySection[] | undefined;
+
   return {
     findings,
     effective,
     binds,
     moduleLevels,
     classesTouched,
-    summary: buildSummary(effective),
+    get summary(): SummarySection[] {
+      if (summaryCache === undefined) {
+        summaryCache = buildSummary(effective);
+      }
+      return summaryCache;
+    },
     ok: !findings.some((f) => f.tier === "block"),
   };
 }
