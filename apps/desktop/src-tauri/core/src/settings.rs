@@ -133,7 +133,10 @@ mod tests {
         let file = dir.join("execs").join("settings.json");
 
         let stored = remember_tf2_root_to(&file, &root).unwrap();
-        assert_eq!(remembered_tf2_root_from(&file).as_deref(), Some(stored.as_path()));
+        assert_eq!(
+            remembered_tf2_root_from(&file).as_deref(),
+            Some(stored.as_path())
+        );
 
         let parsed = load_settings_from(&file).unwrap();
         assert_eq!(parsed.schema, 1);
@@ -193,7 +196,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(remembered_tf2_root_from(&file).as_deref(), Some(root.as_path()));
+        assert_eq!(
+            remembered_tf2_root_from(&file).as_deref(),
+            Some(root.as_path())
+        );
         let migrated = load_settings_from(&file).unwrap();
         assert_eq!(migrated.tf2_root, root.to_string_lossy());
         assert!(migrated.inherit_binds);

@@ -147,7 +147,8 @@ pub fn scan_tf2_installs_in(steam_roots: &[PathBuf]) -> Vec<Tf2Install> {
             if !library_has_tf2(&lib, &lib_path) {
                 continue;
             }
-            let installdir = read_installdir(&lib_path).unwrap_or_else(|| DEFAULT_INSTALLDIR.into());
+            let installdir =
+                read_installdir(&lib_path).unwrap_or_else(|| DEFAULT_INSTALLDIR.into());
             let root = lib_path.join("steamapps").join("common").join(installdir);
             if let Ok(valid) = normalize_tf2_root(&root) {
                 let key = valid.to_string_lossy().into_owned();
@@ -199,7 +200,10 @@ fn libraries_for_steam(steam: &Path) -> Vec<SteamLibrary> {
 
 fn library_has_tf2(parsed: &SteamLibrary, lib_path: &Path) -> bool {
     parsed.apps.iter().any(|app| app == TF2_APP)
-        || lib_path.join("steamapps").join("appmanifest_440.acf").is_file()
+        || lib_path
+            .join("steamapps")
+            .join("appmanifest_440.acf")
+            .is_file()
 }
 
 fn read_installdir(lib_path: &Path) -> Option<String> {

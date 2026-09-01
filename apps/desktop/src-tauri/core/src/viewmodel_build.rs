@@ -21,19 +21,15 @@ pub fn viewmodel_group(id: &str) -> Option<&'static ViewmodelGroup> {
 /// How much of the viewmodel a hidden group removes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ViewmodelHideMode {
     /// Move every bone off-screen — the weapon *and* the arms disappear.
     /// This is what CompVMInstaller does.
+    #[default]
     Full,
     /// Move only the weapon attachment bones. The weapon disappears while the
     /// hands keep their normal animation.
     Weapon,
-}
-
-impl Default for ViewmodelHideMode {
-    fn default() -> Self {
-        Self::Full
-    }
 }
 
 impl ViewmodelHideMode {
@@ -106,7 +102,9 @@ fn hide_all_bones(text: &str) -> Result<String, String> {
         .filter(|line| line.trim_start().starts_with("time "))
         .count()
         .max(1);
-    let cut = text.find("skeleton").ok_or("SMD has no skeleton keyword.")?;
+    let cut = text
+        .find("skeleton")
+        .ok_or("SMD has no skeleton keyword.")?;
     let mut out = String::with_capacity(cut + bones * 32 + frames * 10 + 16);
     out.push_str(&text[..cut]);
     out.push_str("skeleton\n  time 0\n");
@@ -198,10 +196,7 @@ fn changed_zip_folders(hidden_groups: &BTreeSet<String>) -> Result<Vec<String>, 
 }
 
 /// Files to hide for one class folder (group files plus Soldier's forced set).
-fn hidden_files_for_folder(
-    hidden_groups: &BTreeSet<String>,
-    zip_folder: &str,
-) -> BTreeSet<String> {
+fn hidden_files_for_folder(hidden_groups: &BTreeSet<String>, zip_folder: &str) -> BTreeSet<String> {
     let mut files = BTreeSet::new();
     for id in hidden_groups {
         if let Some(group) = viewmodel_group(id) {
@@ -413,11 +408,10 @@ fn build_in_staging(
             std::fs::write(&smd_path, hidden).map_err(|err| ProfileError::Io(err.to_string()))?;
         }
 
-        let qc_text = std::fs::read_to_string(&qc_path)
-            .map_err(|err| ProfileError::Io(err.to_string()))?;
-        let model_name = model_name_from_qc(&qc_text).ok_or_else(|| {
-            ProfileError::Io(format!("QC for {folder} has no $ModelName."))
-        })?;
+        let qc_text =
+            std::fs::read_to_string(&qc_path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        let model_name = model_name_from_qc(&qc_text)
+            .ok_or_else(|| ProfileError::Io(format!("QC for {folder} has no $ModelName.")))?;
 
         let log = run_studiomdl(studiomdl, &game_dir, &qc_path, staging, folder)?;
         let compiled = game_dir.join("models").join(&model_name);
@@ -435,8 +429,7 @@ fn build_in_staging(
                 "studiomdl failed for {folder}: {tail}"
             )));
         }
-        let bytes =
-            std::fs::read(&compiled).map_err(|err| ProfileError::Io(err.to_string()))?;
+        let bytes = std::fs::read(&compiled).map_err(|err| ProfileError::Io(err.to_string()))?;
         pack_files.insert(format!("models/{model_name}"), bytes);
     }
 
@@ -581,6 +574,9 @@ mod tests {
         hidden.insert("scout/rocketlaunchers".to_string());
         assert!(changed_zip_folders(&hidden).is_err());
         let known: BTreeSet<String> = ["demoman/melee".to_string()].into_iter().collect();
-        assert_eq!(changed_zip_folders(&known).unwrap(), vec!["demo".to_string()]);
+        assert_eq!(
+            changed_zip_folders(&known).unwrap(),
+            vec!["demo".to_string()]
+        );
     }
 }

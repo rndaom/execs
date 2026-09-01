@@ -28,7 +28,8 @@ pub fn overlay_binds(stock: &str, inherited: &str) -> String {
         out.push_str("bind ");
         out.push_str(key);
         out.push(' ');
-        if value.contains(char::is_whitespace) && !(value.starts_with('"') && value.ends_with('"')) {
+        if value.contains(char::is_whitespace) && !(value.starts_with('"') && value.ends_with('"'))
+        {
             out.push('"');
             out.push_str(value);
             out.push('"');
@@ -74,7 +75,7 @@ fn apply_bind_commands(text: &str, binds: &mut BTreeMap<String, String>) {
 }
 
 fn is_gameplay_cmd(cmd: &str) -> bool {
-    GAMEPLAY_CMDS.iter().any(|item| *item == cmd)
+    GAMEPLAY_CMDS.contains(&cmd)
 }
 
 fn tokenize_line(raw: &str) -> Option<Vec<String>> {
@@ -140,7 +141,8 @@ mod tests {
     #[test]
     fn signature_ignores_host_cvars_and_quotes() {
         let stock = "unbindall\nbind \"w\" +forward\nbind s +back\n";
-        let first_launch = "unbindall\nbind w +forward\nbind \"s\" +back\nname Player\nvolume 1.0\n";
+        let first_launch =
+            "unbindall\nbind w +forward\nbind \"s\" +back\nname Player\nvolume 1.0\n";
         assert_eq!(
             gameplay_script_signature(stock),
             gameplay_script_signature(first_launch)
