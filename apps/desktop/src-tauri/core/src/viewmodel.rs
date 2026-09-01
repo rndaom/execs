@@ -232,7 +232,7 @@ where
         preload,
         options,
     });
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     Ok(detail_from_manifest(&load_manifest(
         profiles_dir,
         profile_id,
@@ -320,7 +320,7 @@ where
         .as_ref()
         .is_some_and(|record| record.preload);
     manifest.viewmodel = None;
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     if preload_was && !keep_preload {
         set_preload_state(
             profiles_dir,
@@ -474,7 +474,7 @@ where
     if let Some(record) = manifest.viewmodel.as_mut() {
         record.preload = enabled;
     }
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     Ok(detail_from_manifest(&load_manifest(
         profiles_dir,
         profile_id,

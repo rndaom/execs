@@ -433,6 +433,9 @@ pub fn write_vpk_v2(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
 }
 
 /// Minimal VPK v1 writer. All files live in the directory archive.
+/// VPK v1. The game loads v2 packs (commit 7017510); this remains only so the
+/// reader keeps a v1 fixture to parse.
+#[cfg(test)]
 pub fn write_vpk_v1(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
     let (tree, data) = build_vpk_tree(files);
     let mut out = Vec::with_capacity(12 + tree.len() + data.len());

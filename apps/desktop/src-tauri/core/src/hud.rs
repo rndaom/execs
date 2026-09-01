@@ -453,7 +453,7 @@ where
     let mut stored = record;
     stored.id = id.clone();
     manifest.hud = Some(stored);
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
 
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     if library.active_profile_id.as_deref() == Some(profile_id) {
@@ -508,7 +508,7 @@ where
         source: HudSource::HudDb,
         options,
     });
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     profile_detail_fallback(profiles_dir, tf2_root, profile_id)
 }
 
@@ -686,7 +686,7 @@ where
         ));
     };
     hud.options = options;
-    save_manifest(profiles_dir, tf2_root, &manifest)?;
+    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
     profile_detail_fallback(profiles_dir, tf2_root, profile_id)
 }
 

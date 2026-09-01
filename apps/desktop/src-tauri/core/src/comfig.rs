@@ -12,7 +12,7 @@ use crate::apply::{write_owned_file_to, ProfileDetail, WriteOwnedOptions};
 use crate::blob::blob_path;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, is_forbidden_rel_path, is_shared_file_name, is_shared_rel_path,
+    exclusive_file_path, is_file_safe_rel_path, is_shared_file_name, is_shared_rel_path,
     load_library_from, load_manifest, normalize_rel_path, profiles_dir, remove_manifest_files_to,
     FileStorage, ProfileError, ProfileFile,
 };
@@ -635,7 +635,7 @@ fn walk_import(
         let Ok(rel) = normalize_rel_path(&rel) else {
             continue;
         };
-        if is_forbidden_rel_path(&rel) || is_shared_rel_path(&rel) {
+        if !is_file_safe_rel_path(&rel) || is_shared_rel_path(&rel) {
             continue;
         }
         let bytes = fs::read(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
