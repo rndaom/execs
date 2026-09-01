@@ -1,7 +1,6 @@
 import { CaretDown, DownloadSimple, FolderOpen, Plus, UploadSimple } from "@phosphor-icons/react";
 import { useEffect, useRef } from "react";
 import type { ProfileLibrary } from "../../lib/bridge";
-import { showCreateNewChrome } from "../../lib/first-run-ui";
 import {
   canCreateNew,
   canExportProfile,
@@ -9,40 +8,34 @@ import {
   canSaveCurrent,
   libraryStatusCopy,
 } from "../../lib/library-ui";
-import { InheritBindsToggle } from "./InheritBindsToggle";
-
 /**
- * The profile popover: switch, save current, import, change install and the
- * inherit-binds setting. Escape and an outside click close it, and focus
- * returns to the summary — a `<details>` menu gives none of that for free.
+ * The profile popover: switch, save current, import and change install. Escape
+ * and an outside click close it, and focus returns to the summary — a
+ * `<details>` menu gives none of that for free.
  */
 export function ProfileMenu({
   library,
   draftName,
   running,
   controlsBusy,
-  inheritBinds,
   onDraftName,
   onSave,
   onSwitch,
   onExport,
   onImport,
   onCreateNew,
-  onToggleInherit,
   onChangeInstall,
 }: {
   library: ProfileLibrary | null;
   draftName: string;
   running: boolean;
   controlsBusy: boolean;
-  inheritBinds: boolean;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onSwitch: (id: string) => void;
   onExport: (id: string) => void;
   onImport: () => void;
   onCreateNew: () => void;
-  onToggleInherit: (next: boolean) => void;
   onChangeInstall: () => void;
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
@@ -82,7 +75,6 @@ export function ProfileMenu({
   const showExport = library ? canExportProfile(library, running) : false;
   const canImport = library ? canImportProfile(library, running) && !controlsBusy : false;
   const showCreate = library ? canCreateNew(library) : false;
-  const showInherit = showCreateNewChrome(library, "ready");
   const activeProfile = library?.profiles.find((profile) => profile.id === library.activeProfileId);
 
   return (
@@ -208,16 +200,6 @@ export function ProfileMenu({
               Save
             </button>
           </form>
-        ) : null}
-
-        {showInherit ? (
-          <div className="mt-3 border-t border-edge pt-3">
-            <InheritBindsToggle
-              inheritBinds={inheritBinds}
-              disabled={controlsBusy}
-              onChange={onToggleInherit}
-            />
-          </div>
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2 border-t border-edge pt-3">
