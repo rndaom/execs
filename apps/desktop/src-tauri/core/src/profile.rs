@@ -192,6 +192,11 @@ pub struct ProfileManifest {
     pub crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewmodel: Option<ViewmodelRecord>,
+    /// Pack keys the user chose to Keep out of the profile. Without this the
+    /// same prompt returns on every boot and after every TF2 quit until they
+    /// pick Update. Cleared by an Update.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored_packs: Vec<String>,
 }
 
 /// Read model for the UI. `profiles` is empty when the library is unusable.
@@ -256,17 +261,56 @@ pub fn normalize_rel_path(path: &str) -> Result<String, ProfileError> {
         if *part == "." || *part == ".." || part.contains('\0') {
             return Err(ProfileError::InvalidPath);
         }
+        // `PathBuf::push("C:")` replaces the accumulated path on Windows, and a
+        // `:` anywhere else names an NTFS alternate data stream.
+        if part.contains(':') {
+            return Err(ProfileError::InvalidPath);
+        }
+        if is_reserved_device_name(part) {
+            return Err(ProfileError::InvalidPath);
+        }
     }
     Ok(parts.join("/"))
 }
 
-pub fn is_forbidden_rel_path(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    let file = lower.rsplit('/').next().unwrap_or(lower.as_str());
-    if matches!(file, "steam.inf" | "gameinfo.txt" | "video.txt") {
+/// Windows refuses (or redirects) these names with or without an extension,
+/// in any directory. `CON`, `nul.txt` and `com1.cfg` are all reserved.
+fn is_reserved_device_name(part: &str) -> bool {
+    let stem = part.split('.').next().unwrap_or(part);
+    if stem.len() < 3 || stem.len() > 4 {
+        return false;
+    }
+    let lower = stem.to_ascii_lowercase();
+    if matches!(lower.as_str(), "con" | "prn" | "aux" | "nul") {
         return true;
     }
-    file.starts_with("tf2_") && file.ends_with(".vpk") && !lower.starts_with("tf/custom/")
+    let (prefix, digit) = lower.split_at(3);
+    matches!(prefix, "com" | "lpt")
+        && matches!(digit, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+}
+
+/// The single allowlist for every path this app is allowed to write, in the
+/// live game folder and in the profile library alike: `tf/cfg/` or
+/// `tf/custom/`, never `tf/cfg/user/`, never an official VPK or `steam.inf` /
+/// `gameinfo.txt` / `video.txt`.
+///
+/// Re-exported as `crate::apply::is_file_safe_rel_path` for existing callers.
+pub fn is_file_safe_rel_path(path: &str) -> bool {
+    let Ok(normalized) = normalize_rel_path(path) else {
+        return false;
+    };
+    let lower = normalized.to_ascii_lowercase();
+    let file = lower.rsplit('/').next().unwrap_or(lower.as_str());
+    if matches!(file, "steam.inf" | "gameinfo.txt" | "video.txt") {
+        return false;
+    }
+    if file.starts_with("tf2_") && file.ends_with(".vpk") && !lower.starts_with("tf/custom/") {
+        return false;
+    }
+    if lower.starts_with("tf/cfg/user/") || lower == "tf/cfg/user" {
+        return false;
+    }
+    lower.starts_with("tf/cfg/") || lower.starts_with("tf/custom/")
 }
 
 pub fn load_library(confirmed_root: Option<&Path>) -> Result<ProfileLibrary, ProfileError> {
@@ -282,13 +326,6 @@ pub fn load_library_from(
         None => Ok(empty_library(false, confirmed_root.is_some(), confirmed)),
         Some(index) => Ok(library_from_index(index, confirmed_root, confirmed)),
     }
-}
-
-pub fn list_profiles_from(
-    profiles_dir: &Path,
-    confirmed_root: Option<&Path>,
-) -> Result<Vec<ProfileSummary>, ProfileError> {
-    Ok(load_library_from(profiles_dir, confirmed_root)?.profiles)
 }
 
 pub fn init_library(tf2_root: &Path) -> Result<ProfileLibrary, ProfileError> {
@@ -343,6 +380,7 @@ where
         hud: None,
         crosshair: None,
         viewmodel: None,
+        ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
@@ -410,8 +448,8 @@ where
         Some(raw) => sanitize_launch_options(raw),
         None => read_launch_options(),
     };
+    set_manifest_launch_options(profiles_dir, tf2_root, &profile_id, launch, &running)?;
     let mut index = usable_index(profiles_dir, tf2_root)?;
-    set_manifest_launch_options(profiles_dir, &mut index, &profile_id, launch)?;
     if index.active_profile_id.is_none() {
         index.active_profile_id = Some(profile_id);
         write_json(&index_file(profiles_dir), &index)?;
@@ -791,11 +829,15 @@ pub fn load_manifest(
     Ok(manifest)
 }
 
+/// The one manifest writer. Every path that changes a profile manifest goes
+/// through here so the write lock is taken and `updated_at` is refreshed.
 pub(crate) fn save_manifest(
     profiles_dir: &Path,
     tf2_root: &Path,
     manifest: &ProfileManifest,
+    running_names: &[String],
 ) -> Result<(), ProfileError> {
+    refuse_writes(running_names)?;
     let mut index = usable_index(profiles_dir, tf2_root)?;
     write_json(&manifest_file(profiles_dir, &manifest.id), manifest)?;
     touch_profile(&mut index, &manifest.id);
@@ -855,6 +897,7 @@ fn create_empty_record(
         hud: None,
         crosshair: None,
         viewmodel: None,
+        ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
     fs::create_dir_all(exclusive_files_dir(profiles_dir, &summary.id))
@@ -865,18 +908,16 @@ fn create_empty_record(
     Ok(id)
 }
 
-fn set_manifest_launch_options(
+pub(crate) fn set_manifest_launch_options(
     profiles_dir: &Path,
-    index: &mut LibraryIndex,
+    tf2_root: &Path,
     profile_id: &str,
     launch_options: String,
+    running_names: &[String],
 ) -> Result<(), ProfileError> {
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.launch_options = launch_options;
-    write_json(&manifest_file(profiles_dir, profile_id), &manifest)?;
-    touch_profile(index, profile_id);
-    write_json(&index_file(profiles_dir), index)?;
-    Ok(())
+    save_manifest(profiles_dir, tf2_root, &manifest, running_names)
 }
 
 fn refuse_writes<I, S>(running_names: I) -> Result<(), ProfileError>
@@ -1144,6 +1185,63 @@ mod tests {
 
     fn cleanup(dir: &Path) {
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn normalize_rejects_drive_letters_ads_and_device_names() {
+        // `PathBuf::push("C:")` would replace the accumulated path on Windows.
+        assert_eq!(
+            normalize_rel_path("C:/Windows/System32/x"),
+            Err(ProfileError::InvalidPath)
+        );
+        assert_eq!(
+            normalize_rel_path("tf/cfg/c:/autoexec.cfg"),
+            Err(ProfileError::InvalidPath)
+        );
+        // NTFS alternate data stream.
+        assert_eq!(
+            normalize_rel_path("tf/cfg/a:b.cfg"),
+            Err(ProfileError::InvalidPath)
+        );
+        for reserved in [
+            "tf/cfg/CON",
+            "tf/cfg/nul.cfg",
+            "tf/cfg/Com1.cfg",
+            "tf/custom/lpt9/info.vdf",
+            "tf/cfg/aux",
+            "tf/cfg/PRN.txt",
+        ] {
+            assert_eq!(
+                normalize_rel_path(reserved),
+                Err(ProfileError::InvalidPath),
+                "{reserved} should be refused"
+            );
+        }
+        // Ordinary names that merely start with those letters stay legal.
+        for ok in [
+            "tf/cfg/console.cfg",
+            "tf/cfg/comfig.cfg",
+            "tf/custom/aux2/info.vdf",
+            "tf/cfg/com0.cfg",
+        ] {
+            assert!(normalize_rel_path(ok).is_ok(), "{ok} should be allowed");
+        }
+    }
+
+    #[test]
+    fn file_safe_predicate_is_the_only_allowlist() {
+        assert!(is_file_safe_rel_path("tf/cfg/overrides/autoexec.cfg"));
+        assert!(is_file_safe_rel_path("tf/cfg/config.cfg"));
+        assert!(is_file_safe_rel_path("tf/custom/hud/info.vdf"));
+        assert!(is_file_safe_rel_path("tf/custom/tf2_stuff.vpk"));
+        assert!(!is_file_safe_rel_path("tf/cfg/user/autoexec.cfg"));
+        assert!(!is_file_safe_rel_path("tf/steam.inf"));
+        assert!(!is_file_safe_rel_path("tf/gameinfo.txt"));
+        assert!(!is_file_safe_rel_path("tf/tf2_misc_dir.vpk"));
+        assert!(!is_file_safe_rel_path("bin/x64/client.dll"));
+        assert!(!is_file_safe_rel_path("../tf/cfg/autoexec.cfg"));
+        assert!(!is_file_safe_rel_path("C:/Windows/System32/x"));
+        assert!(!is_file_safe_rel_path("tf/cfg/nul.cfg"));
     }
 
     #[test]

@@ -14,3 +14,25 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+
+[features]
+# The `examples/` probes are read-only field tools pointed at a real TF2
+# install, not product surface. Gating them keeps them out of every
+# `cargo test` / `cargo check`; run one with `--features probes`.
+probes = []
+
+[[example]]
+name = "mdl_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "pack_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "viewmodel_build_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "vtf_probe"
+required-features = ["probes"]

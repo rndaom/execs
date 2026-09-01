@@ -12,7 +12,7 @@ use crate::apply::{write_owned_file_to, ProfileDetail, WriteOwnedOptions};
 use crate::blob::blob_path;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, is_forbidden_rel_path, is_shared_file_name, is_shared_rel_path,
+    exclusive_file_path, is_file_safe_rel_path, is_shared_file_name, is_shared_rel_path,
     load_library_from, load_manifest, normalize_rel_path, profiles_dir, remove_manifest_files_to,
     FileStorage, ProfileError, ProfileFile,
 };
@@ -349,6 +349,23 @@ where
     let current = read_comfig_state_from(profiles_dir, tf2_root, profile_id)?;
     let desired: Vec<OfficialAddon> = unique_addons(addons);
 
+    // Every asset we are about to install has to be present before anything is
+    // removed. A partial download used to leave the old addons gone and the new
+    // ones never written.
+    let mut install: Vec<(String, &[u8])> = Vec::new();
+    for addon in &desired {
+        if current.addons.contains(addon) {
+            continue;
+        }
+        let rel = addon.rel_path();
+        let Some(asset) = find_asset(assets, &rel) else {
+            return Err(ProfileError::Io(format!(
+                "Missing official mastercomfig file: {rel}"
+            )));
+        };
+        install.push((rel, asset));
+    }
+
     let mut remove = Vec::new();
     for addon in &current.addons {
         if !desired.contains(addon) {
@@ -360,16 +377,7 @@ where
         remove_live_paths_if_active(profiles_dir, tf2_root, profile_id, &remove)?;
     }
 
-    for addon in &desired {
-        if current.addons.contains(addon) {
-            continue;
-        }
-        let rel = addon.rel_path();
-        let Some(asset) = find_asset(assets, &rel) else {
-            return Err(ProfileError::Io(format!(
-                "Missing official mastercomfig file: {rel}"
-            )));
-        };
+    for (rel, asset) in install {
         write_owned_file_to(
             profiles_dir,
             tf2_root,
@@ -419,18 +427,21 @@ where
             "Pick a comfig-custom folder to import.".into(),
         ));
     }
-    let files = collect_import_files(source_dir)?;
-    for (rel, bytes) in files {
+    // Walk and write in one pass: buffering every file's bytes first held the
+    // whole folder in RAM before a single write happened.
+    let mut wrote = |rel: &str, bytes: &[u8]| -> Result<(), ProfileError> {
         write_owned_file_to(
             profiles_dir,
             tf2_root,
             profile_id,
-            &rel,
-            &bytes,
+            rel,
+            bytes,
             &running,
             WriteOwnedOptions::default(),
         )?;
-    }
+        Ok(())
+    };
+    walk_import(source_dir, &[], 0, &mut wrote)?;
     profile_detail(profiles_dir, tf2_root, profile_id)
 }
 
@@ -593,17 +604,21 @@ fn live_tf2_path(tf2_root: &Path, rel: &str) -> PathBuf {
     path
 }
 
-fn collect_import_files(source_dir: &Path) -> Result<Vec<(String, Vec<u8>)>, ProfileError> {
-    let mut out = Vec::new();
-    walk_import(source_dir, &[], &mut out)?;
-    Ok(out)
-}
+/// A comfig-custom folder nested deeper than this is a symlink loop or a
+/// crafted tree, not something a user hand-made.
+const IMPORT_MAX_DEPTH: usize = 32;
 
 fn walk_import(
     dir: &Path,
     rel_parts: &[String],
-    out: &mut Vec<(String, Vec<u8>)>,
+    depth: usize,
+    out: &mut impl FnMut(&str, &[u8]) -> Result<(), ProfileError>,
 ) -> Result<(), ProfileError> {
+    if depth >= IMPORT_MAX_DEPTH {
+        return Err(ProfileError::Io(format!(
+            "comfig-custom is nested more than {IMPORT_MAX_DEPTH} folders deep; import stopped."
+        )));
+    }
     let entries = fs::read_dir(dir).map_err(|err| ProfileError::Io(err.to_string()))?;
     for entry in entries {
         let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
@@ -618,7 +633,7 @@ fn walk_import(
         if path.is_dir() {
             let mut next = rel_parts.to_vec();
             next.push(name);
-            walk_import(&path, &next, out)?;
+            walk_import(&path, &next, depth + 1, out)?;
             continue;
         }
         if !path.is_file() {
@@ -635,11 +650,11 @@ fn walk_import(
         let Ok(rel) = normalize_rel_path(&rel) else {
             continue;
         };
-        if is_forbidden_rel_path(&rel) || is_shared_rel_path(&rel) {
+        if !is_file_safe_rel_path(&rel) || is_shared_rel_path(&rel) {
             continue;
         }
         let bytes = fs::read(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
-        out.push((rel, bytes));
+        out(&rel, &bytes)?;
     }
     Ok(())
 }
@@ -805,6 +820,58 @@ mod tests {
             .collect();
         assert!(!paths.contains(&rel));
         assert!(!root.join("tf/custom").join(addon.vpk_file_name()).is_file());
+        cleanup(&dir);
+    }
+
+    /// A partial download used to leave the old addon removed and the new one
+    /// never written, because the remove ran before the assets were checked.
+    #[test]
+    fn a_missing_new_asset_leaves_the_installed_addons_alone() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let installed = OfficialAddon::NoTutorial;
+        let assets = [WizardAsset {
+            path: "tf/custom/mastercomfig-addon-no-tutorial.vpk",
+            bytes: b"addon-vpk",
+        }];
+        set_comfig_addons_to(&profiles, &root, &id, &[installed], &assets, unlocked()).unwrap();
+
+        // Swap to a different addon, but hand over none of its bytes.
+        let err = set_comfig_addons_to(
+            &profiles,
+            &root,
+            &id,
+            &[OfficialAddon::Lowmem],
+            &[],
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ProfileError::Io(ref msg) if msg.contains("Missing official")));
+
+        let state = read_comfig_state_from(&profiles, &root, &id).unwrap();
+        assert_eq!(state.addons, vec![OfficialAddon::NoTutorial]);
+        assert_eq!(
+            fs::read(root.join("tf/custom").join(installed.vpk_file_name())).unwrap(),
+            b"addon-vpk"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn import_refuses_a_folder_nested_past_the_depth_cap() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let source = dir.join("comfig-custom");
+        let mut deep = source.clone();
+        for index in 0..(IMPORT_MAX_DEPTH + 2) {
+            deep = deep.join(format!("d{index}"));
+        }
+        write_file(&deep.join("x.cfg"), "fov_desired 90\n");
+
+        let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
+        assert!(matches!(err, ProfileError::Io(ref msg) if msg.contains("folders deep")));
         cleanup(&dir);
     }
 
