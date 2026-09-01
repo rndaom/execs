@@ -672,6 +672,19 @@ export async function removeViewmodels(): Promise<ProfileDetail> {
   }
 }
 
+/**
+ * Whether this machine can compile a viewmodel pack (TF2's own studiomdl,
+ * Windows only for now). False disables Build rather than sending a Linux
+ * user into a dead end with a `.exe` in the error.
+ */
+export async function viewmodelBuildAvailable(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("viewmodel_build_available");
+  } catch (error) {
+    throw new Error(invokeErrorMessage(error));
+  }
+}
+
 export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
   try {
     return await invoke<ProfileDetail>("set_viewmodel_preload", { enabled });
