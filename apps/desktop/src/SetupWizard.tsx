@@ -1,5 +1,7 @@
 import { Check, Plus, SlidersHorizontal } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import { Alert } from "./components/ui/Alert";
+import { PaneSection } from "./components/ui/PaneSection";
+import { useAppStatus } from "./hooks/useAppStatus";
 import type { WizardSpec } from "./lib/bridge";
 import {
   COMFIG_PRESETS,
@@ -72,11 +74,7 @@ export function SetupWizard({
   draftName,
   preset,
   addons,
-  running,
-  busy,
-  error,
   creating = false,
-  chrome,
   onDraftName,
   onPreset,
   onToggleAddon,
@@ -87,17 +85,14 @@ export function SetupWizard({
   draftName: string;
   preset: ComfigPresetId;
   addons: OfficialAddonId[];
-  running: boolean;
-  busy: boolean;
-  error: string | null;
   creating?: boolean;
-  chrome?: ReactNode;
   onDraftName: (name: string) => void;
   onPreset: (preset: ComfigPresetId) => void;
   onToggleAddon: (id: OfficialAddonId) => void;
   onApply: () => void;
   onCancel?: () => void;
 }) {
+  const { running, busy, error } = useAppStatus();
   const canApply = canApplyWizard(draftName, running, busy);
 
   return (
@@ -106,8 +101,8 @@ export function SetupWizard({
         <span aria-hidden="true" className="size-2.5 rounded-sm bg-brand" />
         execs
       </p>
-      <div className="mt-6 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-ink-faint">
-        <SlidersHorizontal aria-hidden="true" size={17} weight="bold" />
+      <div className="eyebrow mt-6 flex items-center gap-2">
+        <SlidersHorizontal aria-hidden="true" size={15} weight="bold" />
         <span>{title}</span>
       </div>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
@@ -126,19 +121,14 @@ export function SetupWizard({
           onApply();
         }}
       >
-        <div className="space-y-8 p-5 sm:p-7">
-          <section aria-labelledby="profile-details-heading">
-            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-              <div>
-                <h2 id="profile-details-heading" className="text-base font-semibold text-ink">
-                  Profile details
-                </h2>
-                <p className="mt-1 text-xs leading-5 text-ink-muted">
-                  This name appears in your profile switcher.
-                </p>
-              </div>
-              <p className="text-xs text-ink-faint">Required</p>
-            </div>
+        <div className="space-y-4 p-5 sm:p-7">
+          <PaneSection
+            id="wizard-details"
+            first
+            title="Profile details"
+            description="This name appears in your profile switcher."
+            meta="Required"
+          >
             <label className="sr-only" htmlFor="wizard-name">
               Profile name
             </label>
@@ -152,22 +142,14 @@ export function SetupWizard({
               autoComplete="off"
               className="field mt-3 w-full px-4 py-3 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
             />
-            {chrome ? <div className="mt-3 border-t border-edge/60 pt-3">{chrome}</div> : null}
-          </section>
+          </PaneSection>
 
-          <section aria-labelledby="preset-heading">
-            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-              <div>
-                <h2 id="preset-heading" className="text-base font-semibold text-ink">
-                  Choose a preset
-                </h2>
-                <p className="mt-1 text-xs leading-5 text-ink-muted">
-                  You can fine-tune every module later from the Comfig page.
-                </p>
-              </div>
-              <p className="text-xs text-ink-faint">Powered by mastercomfig</p>
-            </div>
-
+          <PaneSection
+            id="wizard-preset"
+            title="Choose a preset"
+            description="You can fine-tune every module later from the Comfig page."
+            meta="Powered by mastercomfig"
+          >
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {COMFIG_PRESETS.map((item) => {
                 const selected = preset === item.id;
@@ -224,21 +206,14 @@ export function SetupWizard({
                 );
               })}
             </div>
-          </section>
+          </PaneSection>
 
-          <section aria-labelledby="addons-heading">
-            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-              <div>
-                <h2 id="addons-heading" className="text-base font-semibold text-ink">
-                  Official addons
-                </h2>
-                <p className="mt-1 text-xs leading-5 text-ink-muted">
-                  Optional packages maintained alongside mastercomfig.
-                </p>
-              </div>
-              <p className="text-xs text-ink-faint">{addons.length} selected</p>
-            </div>
-
+          <PaneSection
+            id="wizard-addons"
+            title="Official addons"
+            description="Optional packages maintained alongside mastercomfig."
+            meta={`${addons.length} selected`}
+          >
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {OFFICIAL_ADDONS.map((item) => {
                 const selected = addons.includes(item.id);
@@ -286,9 +261,9 @@ export function SetupWizard({
                 );
               })}
             </div>
-          </section>
+          </PaneSection>
 
-          <p className="text-xs leading-5 text-ink-muted">
+          <p className="mt-8 text-xs leading-5 text-ink-muted">
             Uses official mastercomfig packages. execs is not affiliated with{" "}
             <a
               href="https://comfig.app"
@@ -301,14 +276,7 @@ export function SetupWizard({
             .
           </p>
 
-          {error ? (
-            <p
-              role="alert"
-              className="rounded-xl border border-team-red/50 bg-team-red/10 px-4 py-3 text-sm text-ink"
-            >
-              {error}
-            </p>
-          ) : null}
+          {error ? <Alert tone="error">{error}</Alert> : null}
         </div>
 
         <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-3 border-t border-edge bg-panel/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-7">

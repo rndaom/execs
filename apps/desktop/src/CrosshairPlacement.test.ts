@@ -3,20 +3,25 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CrosshairPane } from "./CrosshairPane";
 import { GameplayPane } from "./GameplayPane";
+import { AppStatusProvider } from "./hooks/useAppStatus";
+
+const STATUS = { error: null, setError: () => undefined, busy: false, running: false };
 
 function renderGameplay() {
   return renderToStaticMarkup(
-    createElement(GameplayPane, {
-      running: false,
-      busy: false,
-      layer: "comfig",
-      effective: {},
-      managedText: 'cl_crosshair_file ""\ncl_crosshair_scale 32\n',
-      transparentViewmodels: false,
-      canUseComfigAddons: true,
-      onToggleTransparentViewmodels: () => undefined,
-      onSave: () => undefined,
-    }),
+    createElement(
+      AppStatusProvider,
+      { value: STATUS },
+      createElement(GameplayPane, {
+        layer: "comfig",
+        effective: {},
+        managedText: 'cl_crosshair_file ""\ncl_crosshair_scale 32\n',
+        transparentViewmodels: false,
+        canUseComfigAddons: true,
+        onToggleTransparentViewmodels: () => undefined,
+        onSave: () => undefined,
+      }),
+    ),
   );
 }
 
