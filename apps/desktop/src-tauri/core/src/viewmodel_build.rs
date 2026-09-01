@@ -267,6 +267,61 @@ fn extract_class_sources(
 }
 
 /// Case-insensitive lookup of `<file>.smd` inside the class anims dir.
+/// Run one compile with a hard timeout, returning studiomdl's combined log.
+///
+/// Output goes to a file rather than pipes: polling `try_wait` while a child
+/// fills a pipe buffer deadlocks, and studiomdl is chatty.
+fn run_studiomdl(
+    studiomdl: &Path,
+    game_dir: &Path,
+    qc_path: &Path,
+    staging: &Path,
+    folder: &str,
+) -> Result<String, ProfileError> {
+    let log_path = staging.join(format!("studiomdl-{folder}.log"));
+    if let Some(parent) = log_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
+    }
+    let log = std::fs::File::create(&log_path).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let errors = log
+        .try_clone()
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    let mut child = std::process::Command::new(studiomdl)
+        .arg("-game")
+        .arg(game_dir)
+        .arg("-nop4")
+        .arg(qc_path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(log))
+        .stderr(std::process::Stdio::from(errors))
+        .spawn()
+        .map_err(|err| ProfileError::Io(format!("Could not run studiomdl: {err}")))?;
+
+    let deadline = std::time::Instant::now() + STUDIOMDL_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {}
+            Err(err) => {
+                let _ = child.kill();
+                return Err(ProfileError::Io(format!(
+                    "Could not wait for studiomdl: {err}"
+                )));
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(ProfileError::Io(format!(
+                "studiomdl did not finish within {} seconds compiling {folder}; it was stopped.",
+                STUDIOMDL_TIMEOUT.as_secs()
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Ok(std::fs::read_to_string(&log_path).unwrap_or_default())
+}
+
 fn find_smd(anims_dir: &Path, file: &str) -> Option<PathBuf> {
     let wanted = format!("{}.smd", file.to_ascii_lowercase());
     let entries = std::fs::read_dir(anims_dir).ok()?;
@@ -279,9 +334,40 @@ fn find_smd(anims_dir: &Path, file: &str) -> Option<PathBuf> {
     None
 }
 
+/// How long one class's compile may take before we kill studiomdl. It can
+/// hang for good on a bad QC or a Windows error dialog, and `output()` would
+/// then block the calling thread and the pane's busy state forever.
+const STUDIOMDL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// TF2's compiler binary name for the host platform. Native Linux installs
+/// ship `bin/studiomdl`, so a hardcoded `.exe` dead-ends the whole path — and
+/// puts a Windows filename in a Linux user's error message.
+pub fn studiomdl_file_name() -> &'static str {
+    if cfg!(windows) {
+        "studiomdl.exe"
+    } else {
+        "studiomdl"
+    }
+}
+
 /// Build the pack VPK. `studiomdl` is TF2's own compiler; `staging` is a
-/// scratch dir this function owns (created/overwritten, caller may delete).
+/// scratch dir this function owns — it is emptied on entry AND on every exit
+/// path, so a failed build cannot leave hundreds of MB of extracted SMDs
+/// behind, and a stale tree from another selection can never be packed.
 pub fn build_viewmodel_pack_vpk(
+    animations_zip: &[u8],
+    hidden_groups: &BTreeSet<String>,
+    mode: ViewmodelHideMode,
+    studiomdl: &Path,
+    staging: &Path,
+) -> Result<Vec<u8>, ProfileError> {
+    let _ = std::fs::remove_dir_all(staging);
+    let result = build_in_staging(animations_zip, hidden_groups, mode, studiomdl, staging);
+    let _ = std::fs::remove_dir_all(staging);
+    result
+}
+
+fn build_in_staging(
     animations_zip: &[u8],
     hidden_groups: &BTreeSet<String>,
     mode: ViewmodelHideMode,
@@ -294,9 +380,10 @@ pub fn build_viewmodel_pack_vpk(
         ));
     }
     if !studiomdl.is_file() {
-        return Err(ProfileError::Io(
-            "Could not find studiomdl.exe in the TF2 install's bin folder.".into(),
-        ));
+        return Err(ProfileError::Io(format!(
+            "Could not find {} in the TF2 install's bin folder.",
+            studiomdl_file_name()
+        )));
     }
     let folders = changed_zip_folders(hidden_groups)?;
     let game_dir = staging.join("game");
@@ -332,22 +419,11 @@ pub fn build_viewmodel_pack_vpk(
             ProfileError::Io(format!("QC for {folder} has no $ModelName."))
         })?;
 
-        let output = std::process::Command::new(studiomdl)
-            .arg("-game")
-            .arg(&game_dir)
-            .arg("-nop4")
-            .arg(&qc_path)
-            .output()
-            .map_err(|err| {
-                ProfileError::Io(format!("Could not run studiomdl: {err}"))
-            })?;
+        let log = run_studiomdl(studiomdl, &game_dir, &qc_path, staging, folder)?;
         let compiled = game_dir.join("models").join(&model_name);
         if !compiled.is_file() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let tail: String = stdout
+            let tail: String = log
                 .lines()
-                .chain(stderr.lines())
                 .rev()
                 .take(6)
                 .collect::<Vec<_>>()
@@ -370,6 +446,35 @@ pub fn build_viewmodel_pack_vpk(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Linux user must never be told to go find `studiomdl.exe`, and a
+    /// failed build must not leave its staging tree on disk.
+    #[test]
+    fn missing_compiler_is_named_per_platform_and_staging_is_cleaned() {
+        let dir = crate::test_temp_dir();
+        let staging = dir.join("staging");
+        // Leftovers from an earlier failed run.
+        std::fs::create_dir_all(staging.join("src/scout")).unwrap();
+        std::fs::write(staging.join("src/scout/leftover.smd"), b"stale").unwrap();
+
+        let hidden: BTreeSet<String> = ["scout_primary".to_string()].into_iter().collect();
+        let err = build_viewmodel_pack_vpk(
+            b"not a zip",
+            &hidden,
+            ViewmodelHideMode::Full,
+            &dir.join("bin").join(studiomdl_file_name()),
+            &staging,
+        )
+        .unwrap_err();
+
+        let message = err.message();
+        assert!(message.contains(studiomdl_file_name()), "{message}");
+        if !cfg!(windows) {
+            assert!(!message.contains(".exe"), "{message}");
+        }
+        assert!(!staging.exists(), "staging must be cleaned on every path");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     const SAMPLE_SMD: &str = "version 1\nnodes\n  0 \"bip_pelvis\" -1\n  1 \"bip_spine\" 0\nend\nskeleton\n  time 0\n    0 1.5 2.5 3.5 0.1 0.2 0.3\n    1 0.5 0.5 0.5 0 0 0\n  time 1\n    0 1.6 2.6 3.6 0.1 0.2 0.3\n  time 2\n    1 0.9 0.9 0.9 0 0 0\nend\n";
 

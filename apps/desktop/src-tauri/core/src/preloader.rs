@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::hash::sha256_hex;
+use crate::process_lock::refuse_if_running_among;
 use crate::pcf::{
     check_parents, decode_pcf, encode_pcf, extract_elements, find_root_systems,
     get_parent_elements, remove_duplicate_elements, update_materials, PcfFile,
@@ -110,6 +111,27 @@ fn line_has(line: &[u8], needle: &[u8]) -> bool {
     line.windows(needle.len()).any(|window| window == needle)
 }
 
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    haystack.windows(needle.len()).position(|window| window == needle)
+}
+
+/// Where the `type` key sits on a `type multiplayer_only` line, and whether a
+/// `//` opens *before* it (the only comment that actually disables the key).
+///
+/// A `//` anywhere else on the line is a trailing annotation — it must never
+/// be read as "the bypass is on", and revert must never strip it.
+fn gameinfo_type_line(line: &[u8]) -> Option<(usize, bool)> {
+    if !line_has(line, b"multiplayer_only") {
+        return None;
+    }
+    let pos_type = find_bytes(line, b"type")?;
+    let commented = find_bytes(line, b"//").is_some_and(|pos| pos < pos_type);
+    Some((pos_type, commented))
+}
+
 /// Whether the `type multiplayer_only` line is currently commented out.
 pub fn gameinfo_bypass_state(tf2_root: &Path) -> Result<GameinfoBypass, String> {
     let path = gameinfo_path(tf2_root);
@@ -119,62 +141,133 @@ pub fn gameinfo_bypass_state(tf2_root: &Path) -> Result<GameinfoBypass, String> 
             enabled: false,
         });
     };
-    let enabled = split_lines_inclusive(&bytes).iter().any(|line| {
-        line_has(line, b"type") && line_has(line, b"multiplayer_only") && line_has(line, b"//")
-    });
+    // Only the FIRST matching line decides: that is the one the toggle edits.
+    let enabled = split_lines_inclusive(&bytes)
+        .iter()
+        .find_map(|line| gameinfo_type_line(line))
+        .is_some_and(|(_, commented)| commented);
     Ok(GameinfoBypass {
         found: true,
         enabled,
     })
 }
 
-/// Toggle the bypass by commenting/uncommenting the `type multiplayer_only`
-/// line, byte-preserving everything else. A pristine copy is kept in the app
-/// data folder before the first edit. Returns whether the file changed.
+/// Comment/uncomment one `type multiplayer_only` line in place. Returns true
+/// when the line changed.
+fn toggle_type_line(line: &mut Vec<u8>, enabled: bool) -> bool {
+    let Some((pos_type, commented)) = gameinfo_type_line(line) else {
+        return false;
+    };
+    if enabled == commented {
+        return false;
+    }
+    if enabled {
+        line.splice(pos_type..pos_type, b"//".iter().copied());
+        return true;
+    }
+    // Disable: strip exactly the `//` that opens this key, plus whatever
+    // whitespace sits between it and `type` (our own enable inserts none, so
+    // the round trip is byte-identical). A trailing comment is never touched.
+    let mut start = pos_type;
+    while start > 0 && (line[start - 1] == b' ' || line[start - 1] == b'\t') {
+        start -= 1;
+    }
+    if start < 2 || &line[start - 2..start] != b"//" {
+        return false;
+    }
+    line.drain(start - 2..pos_type);
+    true
+}
+
+fn gameinfo_backup_path(data_dir: &Path) -> PathBuf {
+    preloader_dir(data_dir).join("gameinfo.original.txt")
+}
+
+/// Keep the pristine backup usable. It is written on first sight, and
+/// refreshed whenever the game's file differs from it while the bypass is
+/// *off* — that is a TF2 update replacing gameinfo.txt, and a stale backup
+/// would otherwise restore last patch's file forever.
+fn refresh_gameinfo_backup(
+    data_dir: &Path,
+    bytes: &[u8],
+    currently_enabled: bool,
+) -> Result<(), String> {
+    let backup = gameinfo_backup_path(data_dir);
+    let stale = match std::fs::read(&backup) {
+        Ok(existing) => existing != bytes && !currently_enabled,
+        Err(_) => true,
+    };
+    if !stale {
+        return Ok(());
+    }
+    std::fs::create_dir_all(preloader_dir(data_dir))
+        .map_err(|err| format!("Could not prepare the preloader folder: {err}"))?;
+    std::fs::write(&backup, bytes)
+        .map_err(|err| format!("Could not back up gameinfo.txt: {err}"))
+}
+
+/// Put the pristine gameinfo.txt back from the app-data backup. Returns false
+/// when there is no backup or the file already matches it.
+pub fn restore_gameinfo_from_backup(
+    tf2_root: &Path,
+    data_dir: &Path,
+    running_names: &[String],
+) -> Result<bool, String> {
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
+    let backup = gameinfo_backup_path(data_dir);
+    let Ok(pristine) = std::fs::read(&backup) else {
+        return Ok(false);
+    };
+    let path = gameinfo_path(tf2_root);
+    if std::fs::read(&path).is_ok_and(|current| current == pristine) {
+        return Ok(false);
+    }
+    // Re-check right before the write into the official file.
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
+    std::fs::write(&path, &pristine)
+        .map_err(|err| format!("Could not restore gameinfo.txt: {err}"))?;
+    Ok(true)
+}
+
+/// Toggle the bypass by commenting/uncommenting the *first*
+/// `type multiplayer_only` line, byte-preserving everything else (CRLF, BOM,
+/// trailing comments, and every other line). A pristine copy is kept in the
+/// app data folder. Returns whether the file changed.
 pub fn set_gameinfo_bypass(
     tf2_root: &Path,
     data_dir: &Path,
     enabled: bool,
+    running_names: &[String],
 ) -> Result<bool, String> {
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let path = gameinfo_path(tf2_root);
     let bytes = std::fs::read(&path)
         .map_err(|err| format!("Could not read gameinfo.txt: {err}"))?;
 
+    let currently_enabled = split_lines_inclusive(&bytes)
+        .iter()
+        .find_map(|line| gameinfo_type_line(line))
+        .is_some_and(|(_, commented)| commented);
+    refresh_gameinfo_backup(data_dir, &bytes, currently_enabled)?;
+
     let mut lines = split_lines_inclusive(&bytes);
     let mut changed = false;
     for line in &mut lines {
-        if !(line_has(line, b"type") && line_has(line, b"multiplayer_only")) {
+        if gameinfo_type_line(line).is_none() {
             continue;
         }
-        let commented = line_has(line, b"//");
-        if enabled && !commented {
-            if let Some(pos) = line
-                .windows(4)
-                .position(|window| window == b"type")
-            {
-                line.splice(pos..pos, b"//".iter().copied());
-                changed = true;
-            }
-        } else if !enabled && commented {
-            if let Some(pos) = line.windows(2).position(|window| window == b"//") {
-                line.drain(pos..pos + 2);
-                changed = true;
-            }
-        }
+        // Only the first matching line is ours; a commented example line
+        // further down must stay exactly as the game shipped it.
+        changed = toggle_type_line(line, enabled);
+        break;
     }
     if !changed {
         return Ok(false);
     }
 
-    let backup_dir = preloader_dir(data_dir);
-    std::fs::create_dir_all(&backup_dir)
-        .map_err(|err| format!("Could not prepare the preloader folder: {err}"))?;
-    let backup = backup_dir.join("gameinfo.original.txt");
-    if !backup.exists() {
-        std::fs::write(&backup, &bytes)
-            .map_err(|err| format!("Could not back up gameinfo.txt: {err}"))?;
-    }
-
+    // Re-check immediately before the first write into the official file:
+    // the caller's entry check can be minutes old (downloads happen between).
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let updated: Vec<u8> = lines.concat();
     std::fs::write(&path, updated)
         .map_err(|err| format!("Could not write gameinfo.txt: {err}"))?;
@@ -263,6 +356,23 @@ fn vpk_fingerprint(path: &Path) -> Result<(u64, u128), String> {
 
 fn misc_vpk_path(tf2_root: &Path) -> PathBuf {
     tf2_root.join("tf").join(MISC_VPK)
+}
+
+/// Whether the mods preloader still needs the shared `execs_preload` cfg and
+/// its launch token. The cfg is shared with viewmodel packs, so removing a
+/// viewmodel pack must not take it away while patched particles or addon
+/// content are still installed — that is the "installed but nothing works"
+/// failure mode on Valve Casual.
+pub fn preload_is_wanted(data_dir: &Path, tf2_root: &Path) -> bool {
+    let state = load_state(data_dir);
+    !state.patched.is_empty()
+        || !state.addons.is_empty()
+        || !state.particle_mods.is_empty()
+        || tf2_root
+            .join("tf")
+            .join("custom")
+            .join(PRELOADER_VPK)
+            .is_file()
 }
 
 // ---------------------------------------------------------------------------
@@ -871,7 +981,9 @@ pub fn apply_preloader_selection(
     data_dir: &Path,
     zip_path: &Path,
     selection: &PreloaderSelection,
+    running_names: &[String],
 ) -> Result<PreloaderReport, String> {
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let vpk_path = misc_vpk_path(tf2_root);
     if !vpk_path.is_file() {
         return Err(format!("{MISC_VPK} was not found — is the TF2 folder right?"));
@@ -899,15 +1011,9 @@ pub fn apply_preloader_selection(
     save_state(data_dir, &state)?;
 
     let entries = map_vpk_entries(&vpk_path).map_err(|err| err.message())?;
-    adopt_orphaned_snapshots(data_dir, &mut state);
-    for failure in restore_patched_entries(tf2_root, data_dir, &mut state, &entries)? {
-        report.skipped.push(SkipNotice {
-            file: failure.clone(),
-            mod_name: String::new(),
-            reason: "could not restore the previous patch".into(),
-        });
-    }
 
+    // Validate the selection BEFORE the destructive restore pass: a stale UI
+    // selection must fail without having uninstalled the user's mods first.
     let catalog = read_mods_catalog(zip_path)?;
     for name in &selection.addons {
         if !catalog.addons.iter().any(|addon| &addon.id == name) {
@@ -923,6 +1029,26 @@ pub fn apply_preloader_selection(
             return Err(format!("Unknown particle mod: {name}"));
         }
     }
+
+    // Re-check the run lock immediately before the first write into the
+    // official VPK: the caller checked before an 81 MB download.
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
+
+    adopt_orphaned_snapshots(data_dir, &mut state);
+    for failure in restore_patched_entries(tf2_root, data_dir, &mut state, &entries)? {
+        report.skipped.push(SkipNotice {
+            file: failure.clone(),
+            mod_name: String::new(),
+            reason: "could not restore the previous patch".into(),
+        });
+    }
+    // Nothing from the old selection is installed any more. Record that now,
+    // so a failure later in this run cannot leave state.json advertising mods
+    // the restore pass just removed.
+    state.addons.clear();
+    state.particle_mods.clear();
+    state.skipped.clear();
+    save_state(data_dir, &state)?;
 
     let mut archive = zip_archive(zip_path)?;
 
@@ -1226,7 +1352,7 @@ pub fn apply_preloader_selection(
         report.custom_vpk_written = true;
     }
 
-    set_gameinfo_bypass(tf2_root, data_dir, true)?;
+    set_gameinfo_bypass(tf2_root, data_dir, true, running_names)?;
     // Report what actually happened: a gameinfo.txt without the expected
     // line means the bypass is not in effect.
     report.gameinfo_bypassed = gameinfo_bypass_state(tf2_root)?.enabled;
@@ -1256,7 +1382,12 @@ pub struct RevertReport {
 
 /// Put every stock byte back: restore patched entries from snapshots,
 /// uncomment gameinfo.txt, and remove the custom VPK.
-pub fn revert_preloader(tf2_root: &Path, data_dir: &Path) -> Result<RevertReport, String> {
+pub fn revert_preloader(
+    tf2_root: &Path,
+    data_dir: &Path,
+    running_names: &[String],
+) -> Result<RevertReport, String> {
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let mut report = RevertReport::default();
     let mut state = load_state(data_dir);
     let vpk_path = misc_vpk_path(tf2_root);
@@ -1274,6 +1405,8 @@ pub fn revert_preloader(tf2_root: &Path, data_dir: &Path) -> Result<RevertReport
                 .failures
                 .push("The game updated since the last install; stock files are already fresh.".into());
         } else {
+            // Re-check right before the first write into the official VPK.
+            refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
             let entries = map_vpk_entries(&vpk_path).map_err(|err| err.message())?;
             let tracked: Vec<String> = state.patched.keys().cloned().collect();
             let failures = restore_patched_entries(tf2_root, data_dir, &mut state, &entries)?;
@@ -1286,7 +1419,7 @@ pub fn revert_preloader(tf2_root: &Path, data_dir: &Path) -> Result<RevertReport
         }
     }
 
-    report.gameinfo_restored = set_gameinfo_bypass(tf2_root, data_dir, false)?;
+    report.gameinfo_restored = set_gameinfo_bypass(tf2_root, data_dir, false, running_names)?;
 
     let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
     if custom_vpk.exists() {
@@ -1540,20 +1673,244 @@ mod tests {
         let (root, data) = fake_root();
         let before = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
         assert!(!gameinfo_bypass_state(&root).unwrap().enabled);
-        assert!(set_gameinfo_bypass(&root, &data, true).unwrap());
+        assert!(set_gameinfo_bypass(&root, &data, true, &[]).unwrap());
         assert!(gameinfo_bypass_state(&root).unwrap().enabled);
         let bypassed = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
         assert!(bypassed
             .windows(b"//type multiplayer_only".len())
             .any(|window| window == b"//type multiplayer_only"));
         // Idempotent, and the pristine backup exists.
-        assert!(!set_gameinfo_bypass(&root, &data, true).unwrap());
+        assert!(!set_gameinfo_bypass(&root, &data, true, &[]).unwrap());
         assert_eq!(
             std::fs::read(data.join("preloader/gameinfo.original.txt")).unwrap(),
             before
         );
-        assert!(set_gameinfo_bypass(&root, &data, false).unwrap());
+        assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
         assert_eq!(std::fs::read(root.join("tf/gameinfo.txt")).unwrap(), before);
+    }
+
+    fn running_names() -> Vec<String> {
+        // The lock matches on the current platform's process name, so a Linux
+        // test run needs the Linux name to exercise the same branch.
+        let name = if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        };
+        vec!["explorer".to_string(), name.to_string()]
+    }
+
+    /// A gameinfo.txt line carrying a trailing comment must round-trip
+    /// byte-for-byte, and must never be read as "already bypassed".
+    #[test]
+    fn gameinfo_trailing_comment_is_not_a_bypass_and_survives_the_round_trip() {
+        let (root, data) = fake_root();
+        let path = root.join("tf/gameinfo.txt");
+        let before =
+            b"\"GameInfo\"\r\n{\r\n\ttype\tmultiplayer_only\t// annotated by hand\r\n}\r\n"
+                .to_vec();
+        std::fs::write(&path, &before).unwrap();
+
+        // The trailing `//` sits AFTER `type`, so the key is still live.
+        assert!(!gameinfo_bypass_state(&root).unwrap().enabled);
+
+        assert!(set_gameinfo_bypass(&root, &data, true, &[]).unwrap());
+        assert!(gameinfo_bypass_state(&root).unwrap().enabled);
+        let bypassed = std::fs::read(&path).unwrap();
+        assert!(line_has(&bypassed, b"//type\tmultiplayer_only"));
+        // The annotation is untouched.
+        assert!(line_has(&bypassed, b"// annotated by hand"));
+
+        assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    /// CRLF line ends and a UTF-8 BOM are game bytes; only the two `//` bytes
+    /// may ever differ.
+    #[test]
+    fn gameinfo_preserves_crlf_and_bom() {
+        let (root, data) = fake_root();
+        let path = root.join("tf/gameinfo.txt");
+        let mut before = vec![0xEF, 0xBB, 0xBF];
+        before.extend_from_slice(b"\"GameInfo\"\r\n{\r\n\ttype multiplayer_only\r\n}\r\n");
+        std::fs::write(&path, &before).unwrap();
+
+        set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
+        let bypassed = std::fs::read(&path).unwrap();
+        assert_eq!(&bypassed[0..3], &[0xEF, 0xBB, 0xBF]);
+        assert_eq!(bypassed.len(), before.len() + 2);
+        assert_eq!(
+            bypassed.iter().filter(|byte| **byte == b'\r').count(),
+            before.iter().filter(|byte| **byte == b'\r').count()
+        );
+
+        set_gameinfo_bypass(&root, &data, false, &[]).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    /// A commented example line further down the file is Valve's, not ours.
+    #[test]
+    fn gameinfo_toggles_only_the_first_type_line() {
+        let (root, data) = fake_root();
+        let path = root.join("tf/gameinfo.txt");
+        let before = b"\"GameInfo\"\n{\n\ttype multiplayer_only\n\t//type multiplayer_only\n}\n"
+            .to_vec();
+        std::fs::write(&path, &before).unwrap();
+
+        set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
+        let bypassed = String::from_utf8(std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(bypassed.matches("//type multiplayer_only").count(), 2);
+
+        // Reverting puts the first line back and leaves the example commented.
+        assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    /// After a TF2 update replaces gameinfo.txt while the bypass is off, the
+    /// backup must follow the new file — and it must be restorable.
+    #[test]
+    fn gameinfo_backup_refreshes_after_a_game_update_and_restores() {
+        let (root, data) = fake_root();
+        let path = root.join("tf/gameinfo.txt");
+        let backup = data.join("preloader/gameinfo.original.txt");
+        let original = std::fs::read(&path).unwrap();
+
+        set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
+        assert_eq!(std::fs::read(&backup).unwrap(), original);
+        // While bypassed, the (edited) live file must NOT overwrite the backup.
+        set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
+        assert_eq!(std::fs::read(&backup).unwrap(), original);
+        set_gameinfo_bypass(&root, &data, false, &[]).unwrap();
+
+        // A game update rewrites the file with the bypass off.
+        let updated = b"\"GameInfo\"\r\n{\r\n\tgame \"Team Fortress\"\r\n\ttype multiplayer_only\r\n}\r\n".to_vec();
+        std::fs::write(&path, &updated).unwrap();
+        set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
+        assert_eq!(std::fs::read(&backup).unwrap(), updated);
+
+        // The backup is a real repair path.
+        std::fs::write(&path, b"corrupted").unwrap();
+        assert!(restore_gameinfo_from_backup(&root, &data, &[]).unwrap());
+        assert_eq!(std::fs::read(&path).unwrap(), updated);
+        assert!(!restore_gameinfo_from_backup(&root, &data, &[]).unwrap());
+    }
+
+    /// The run lock lives in core now, not only in the command layer: the
+    /// download between the command's check and the first write is exactly
+    /// the window a user can start TF2 in.
+    #[test]
+    fn preloader_writes_refuse_while_tf2_runs_and_touch_nothing() {
+        let (root, data) = fake_root();
+        let zip_path = fake_mods_zip(root.parent().unwrap());
+        let gameinfo = root.join("tf/gameinfo.txt");
+        let vpk_path = root.join("tf").join(MISC_VPK);
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+
+        // Install something first so revert has real work to refuse.
+        let selection = PreloaderSelection {
+            addons: vec![],
+            particle_mods: vec!["Blue Water".into()],
+        };
+        apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
+
+        let gameinfo_before = std::fs::read(&gameinfo).unwrap();
+        let dir_before = std::fs::read(&vpk_path).unwrap();
+        let sibling_before = std::fs::read(&sibling_path).unwrap();
+        let running = running_names();
+        let locked = crate::process_lock::WriteLockError::GameRunning.message();
+
+        assert_eq!(
+            apply_preloader_selection(&root, &data, &zip_path, &selection, &running).unwrap_err(),
+            locked
+        );
+        assert_eq!(
+            revert_preloader(&root, &data, &running).unwrap_err(),
+            locked
+        );
+        assert_eq!(
+            set_gameinfo_bypass(&root, &data, false, &running).unwrap_err(),
+            locked
+        );
+        assert_eq!(
+            restore_gameinfo_from_backup(&root, &data, &running).unwrap_err(),
+            locked
+        );
+
+        assert_eq!(std::fs::read(&gameinfo).unwrap(), gameinfo_before);
+        assert_eq!(std::fs::read(&vpk_path).unwrap(), dir_before);
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), sibling_before);
+        assert!(root.join("tf/custom").join(PRELOADER_VPK).is_file());
+    }
+
+    /// An unknown id must fail before the restore pass has uninstalled the
+    /// selection the user still has.
+    #[test]
+    fn unknown_addon_fails_before_anything_is_restored() {
+        let (root, data) = fake_root();
+        let zip_path = fake_mods_zip(root.parent().unwrap());
+        let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+
+        apply_preloader_selection(
+            &root,
+            &data,
+            &zip_path,
+            &PreloaderSelection {
+                addons: vec![],
+                particle_mods: vec!["Blue Water".into()],
+            },
+            &[],
+        )
+        .unwrap();
+        let patched_sibling = std::fs::read(&sibling_path).unwrap();
+        let patched_status = preloader_status(&root, &data).unwrap();
+        assert_eq!(patched_status.particle_mods, vec!["Blue Water".to_string()]);
+
+        let err = apply_preloader_selection(
+            &root,
+            &data,
+            &zip_path,
+            &PreloaderSelection {
+                addons: vec!["no-such-addon".into()],
+                particle_mods: vec![],
+            },
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.contains("Unknown addon"), "{err}");
+
+        // Nothing was unpatched, and state still describes what is installed.
+        assert_eq!(std::fs::read(&sibling_path).unwrap(), patched_sibling);
+        let after = preloader_status(&root, &data).unwrap();
+        assert_eq!(after.particle_mods, patched_status.particle_mods);
+        assert_eq!(after.patched_files, patched_status.patched_files);
+    }
+
+    /// The shared preload cfg belongs to the mods preloader too.
+    #[test]
+    fn preload_is_wanted_tracks_installed_mods() {
+        let (root, data) = fake_root();
+        assert!(!preload_is_wanted(&data, &root));
+
+        let zip_path = fake_mods_zip(root.parent().unwrap());
+        apply_preloader_selection(
+            &root,
+            &data,
+            &zip_path,
+            &PreloaderSelection {
+                addons: vec![],
+                particle_mods: vec!["Blue Water".into()],
+            },
+            &[],
+        )
+        .unwrap();
+        assert!(preload_is_wanted(&data, &root));
+
+        revert_preloader(&root, &data, &[]).unwrap();
+        assert!(!preload_is_wanted(&data, &root));
+
+        // A stray pack on disk alone is enough.
+        std::fs::write(root.join("tf/custom").join(PRELOADER_VPK), b"vpk").unwrap();
+        assert!(preload_is_wanted(&data, &root));
     }
 
     #[test]
@@ -1577,7 +1934,7 @@ mod tests {
             addons: vec!["Flat Look".into()],
             particle_mods: Vec::new(),
         };
-        let report = apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
+        let report = apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
         assert!(report.skipped.is_empty(), "{:?}", report.skipped);
 
         let custom = root.join("tf/custom").join(PRELOADER_VPK);
@@ -1741,7 +2098,7 @@ mod tests {
             addons: vec!["Flat Look".into()],
             particle_mods: vec!["Blue Water".into()],
         };
-        let report = apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
+        let report = apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
         assert!(report.gameinfo_bypassed);
         assert!(report.custom_vpk_written);
         assert_eq!(
@@ -1794,12 +2151,12 @@ mod tests {
         // Re-applying with nothing selected restores particles and drops the
         // custom VPK, but keeps the bypass on.
         let report =
-            apply_preloader_selection(&root, &data, &zip_path, &PreloaderSelection::default())
+            apply_preloader_selection(&root, &data, &zip_path, &PreloaderSelection::default(), &[])
                 .unwrap();
         assert!(report.patched_files.is_empty());
         assert!(!report.custom_vpk_written);
 
-        let report = revert_preloader(&root, &data).unwrap();
+        let report = revert_preloader(&root, &data, &[]).unwrap();
         assert!(report.gameinfo_restored);
         assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine_dir);
         assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
@@ -1824,7 +2181,7 @@ mod tests {
             addons: vec![],
             particle_mods: vec!["Blue Water".into()],
         };
-        apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
+        apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
 
         // Simulate the crash: patches and snapshots exist, but tracking was
         // lost before the state save.
@@ -1835,8 +2192,8 @@ mod tests {
 
         // Retrying must adopt the orphaned snapshots instead of snapshotting
         // the currently-modded bytes as "stock".
-        apply_preloader_selection(&root, &data, &zip_path, &selection).unwrap();
-        let report = revert_preloader(&root, &data).unwrap();
+        apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
+        let report = revert_preloader(&root, &data, &[]).unwrap();
         assert!(report.failures.is_empty(), "{:?}", report.failures);
         assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
     }
@@ -1860,6 +2217,7 @@ mod tests {
                 addons: vec![],
                 particle_mods: vec!["Blue Water".into()],
             },
+            &[],
         )
         .unwrap();
 
@@ -1868,7 +2226,7 @@ mod tests {
         std::fs::write(&vpk_path, &current).unwrap();
 
         assert!(!preloader_status(&root, &data).unwrap().stale);
-        let report = revert_preloader(&root, &data).unwrap();
+        let report = revert_preloader(&root, &data, &[]).unwrap();
         assert!(
             !report.restored_files.is_empty(),
             "drift must not skip the restore: {:?}",
@@ -1929,6 +2287,7 @@ mod tests {
                 addons: vec![],
                 particle_mods: vec!["Big".into()],
             },
+            &[],
         )
         .unwrap();
         assert!(report.patched_files.is_empty());
