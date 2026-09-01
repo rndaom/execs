@@ -93,8 +93,6 @@ pub fn run() {
             commands::absorb::absorb_packs,
             commands::first_run::classify_first_run,
             commands::first_run::apply_unused_wizard,
-            commands::first_run::get_inherit_binds,
-            commands::first_run::set_inherit_binds,
             commands::first_run::create_fresh_profile,
             commands::files::get_active_profile_detail,
             commands::files::read_profile_file,

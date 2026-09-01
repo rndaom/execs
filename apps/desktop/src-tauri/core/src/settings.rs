@@ -9,13 +9,13 @@ use crate::finder::{normalize_tf2_root, user_path_string, Tf2RootError};
 
 pub const SETTINGS_SCHEMA: u32 = 1;
 
+/// Old files may still carry `inheritBinds` (removed 2026-09-01 with the
+/// Start-from choice). Unknown keys are ignored, so they keep loading.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub schema: u32,
     #[serde(rename = "tf2Root")]
     pub tf2_root: String,
-    #[serde(rename = "inheritBinds", default)]
-    pub inherit_binds: bool,
 }
 
 /// Windows `%AppData%\execs`, Linux `~/.local/share/execs` (or `$XDG_DATA_HOME/execs`).
@@ -98,37 +98,12 @@ pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
 
 pub fn remember_tf2_root_to(file: &Path, root: &Path) -> Result<PathBuf, Tf2RootError> {
     let valid = normalize_tf2_root(root)?;
-    let inherit_binds = load_settings_from(file)
-        .map(|settings| settings.inherit_binds)
-        .unwrap_or(false);
     let settings = Settings {
         schema: SETTINGS_SCHEMA,
         tf2_root: user_path_string(&valid),
-        inherit_binds,
     };
     save_settings_to(file, &settings).map_err(Tf2RootError::Io)?;
     Ok(valid)
-}
-
-pub fn inherit_binds() -> bool {
-    inherit_binds_from(&settings_file())
-}
-
-pub fn inherit_binds_from(file: &Path) -> bool {
-    load_settings_from(file)
-        .map(|settings| settings.inherit_binds)
-        .unwrap_or(false)
-}
-
-pub fn set_inherit_binds(inherit: bool) -> Result<(), String> {
-    set_inherit_binds_to(&settings_file(), inherit)
-}
-
-pub fn set_inherit_binds_to(file: &Path, inherit: bool) -> Result<(), String> {
-    let mut settings =
-        load_settings_from(file).ok_or_else(|| "Confirm a TF2 install first.".to_string())?;
-    settings.inherit_binds = inherit;
-    save_settings_to(file, &settings)
 }
 
 pub fn remembered_tf2_root() -> Option<PathBuf> {
@@ -180,7 +155,6 @@ mod tests {
         let parsed = load_settings_from(&file).unwrap();
         assert_eq!(parsed.schema, 1);
         assert!(parsed.tf2_root.contains("Team Fortress 2"));
-        assert!(!parsed.inherit_binds);
 
         fs::remove_file(root.join("tf").join("steam.inf")).unwrap();
         assert_eq!(remembered_tf2_root_from(&file), None);
@@ -194,26 +168,22 @@ mod tests {
     }
 
     #[test]
-    fn inherit_binds_defaults_off_and_survives_root_remember() {
+    fn legacy_inherit_binds_key_is_ignored_not_fatal() {
         let dir = crate::test_temp_dir();
-        let root = dir.join("Team Fortress 2");
-        write_tf2(&root);
-        let file = dir.join("execs").join("settings.json");
-        remember_tf2_root_to(&file, &root).unwrap();
-        assert!(!inherit_binds_from(&file));
-
-        set_inherit_binds_to(&file, true).unwrap();
-        assert!(inherit_binds_from(&file));
-        remember_tf2_root_to(&file, &root).unwrap();
-        assert!(inherit_binds_from(&file));
-
+        fs::create_dir_all(&dir).unwrap();
         let legacy = dir.join("legacy.json");
         fs::write(
             &legacy,
-            "{\n  \"schema\": 1,\n  \"tf2Root\": \"ignored\"\n}\n",
+            "{
+  \"schema\": 1,
+  \"tf2Root\": \"D:/steam\",
+  \"inheritBinds\": true
+}
+",
         )
         .unwrap();
-        assert!(!inherit_binds_from(&legacy));
+        let parsed = load_settings_from(&legacy).unwrap();
+        assert_eq!(parsed.tf2_root, "D:/steam");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -230,7 +200,6 @@ mod tests {
             &Settings {
                 schema: SETTINGS_SCHEMA,
                 tf2_root: legacy,
-                inherit_binds: true,
             },
         )
         .unwrap();
@@ -241,7 +210,6 @@ mod tests {
         );
         let migrated = load_settings_from(&file).unwrap();
         assert_eq!(migrated.tf2_root, root.to_string_lossy());
-        assert!(migrated.inherit_binds);
         assert!(!fs::read_to_string(&file).unwrap().contains(r"\\?\"));
         let _ = fs::remove_dir_all(&dir);
     }

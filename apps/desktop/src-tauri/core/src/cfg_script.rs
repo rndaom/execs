@@ -1,6 +1,6 @@
-//! Lightweight Source cfg helpers for first-run classify and wizard binds.
+//! Lightweight Source cfg helpers for first-run classification.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 const GAMEPLAY_CMDS: &[&str] = &["bind", "unbind", "unbindall", "alias", "exec"];
 
@@ -16,62 +16,6 @@ pub fn gameplay_script_signature(text: &str) -> BTreeSet<String> {
         out.insert(tokens.join(" "));
     }
     out
-}
-
-pub fn overlay_binds(stock: &str, inherited: &str) -> String {
-    let mut binds = BTreeMap::new();
-    apply_bind_commands(stock, &mut binds);
-    apply_bind_commands(inherited, &mut binds);
-
-    let mut out = String::from("unbindall\n");
-    for (key, value) in &binds {
-        out.push_str("bind ");
-        out.push_str(key);
-        out.push(' ');
-        if value.contains(char::is_whitespace) && !(value.starts_with('"') && value.ends_with('"'))
-        {
-            out.push('"');
-            out.push_str(value);
-            out.push('"');
-        } else {
-            out.push_str(value);
-        }
-        out.push('\n');
-    }
-    for raw in stock.lines() {
-        let Some(tokens) = tokenize_line(raw) else {
-            let trimmed = raw.trim();
-            if !trimmed.is_empty() {
-                out.push_str(trimmed);
-                out.push('\n');
-            }
-            continue;
-        };
-        if is_gameplay_cmd(&tokens[0]) {
-            continue;
-        }
-        out.push_str(raw.trim_end());
-        out.push('\n');
-    }
-    out
-}
-
-fn apply_bind_commands(text: &str, binds: &mut BTreeMap<String, String>) {
-    for raw in text.lines() {
-        let Some(tokens) = tokenize_line(raw) else {
-            continue;
-        };
-        match tokens[0].as_str() {
-            "unbindall" => binds.clear(),
-            "unbind" if tokens.len() >= 2 => {
-                binds.remove(&tokens[1]);
-            }
-            "bind" if tokens.len() >= 3 => {
-                binds.insert(tokens[1].clone(), tokens[2..].join(" "));
-            }
-            _ => {}
-        }
-    }
 }
 
 fn is_gameplay_cmd(cmd: &str) -> bool {
@@ -157,16 +101,5 @@ mod tests {
             gameplay_script_signature(stock),
             gameplay_script_signature(changed)
         );
-    }
-
-    #[test]
-    fn overlay_replaces_keys_and_keeps_stock_cvars() {
-        let stock = "unbindall\nbind w +forward\nbind s +back\nvolume 1\n";
-        let inherited = "unbindall\nbind w +back\nbind space +jump\n";
-        let out = overlay_binds(stock, inherited);
-        assert!(out.contains("bind w +back"));
-        assert!(out.contains("bind space +jump"));
-        assert!(!out.contains("bind s +back"));
-        assert!(out.contains("volume 1"));
     }
 }
