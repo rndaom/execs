@@ -18,7 +18,9 @@ use crate::pcf::{
     check_parents, decode_pcf, encode_pcf, extract_elements, find_root_systems,
     get_parent_elements, remove_duplicate_elements, update_materials, PcfFile,
 };
-use crate::vpk::{map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v1, VpkEntryLocation};
+use crate::vpk::{
+    map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v2, VpkEntryLocation,
+};
 
 pub const PRELOADER_VPK: &str = "execs-preloader.vpk";
 pub const MISC_VPK: &str = "tf2_misc_dir.vpk";
@@ -1219,7 +1221,7 @@ pub fn apply_preloader_selection(
     } else {
         std::fs::create_dir_all(custom_vpk.parent().expect("custom dir"))
             .map_err(|err| format!("Could not prepare tf/custom: {err}"))?;
-        std::fs::write(&custom_vpk, write_vpk_v1(&custom))
+        std::fs::write(&custom_vpk, write_vpk_v2(&custom))
             .map_err(|err| format!("Could not write {PRELOADER_VPK}: {err}"))?;
         report.custom_vpk_written = true;
     }

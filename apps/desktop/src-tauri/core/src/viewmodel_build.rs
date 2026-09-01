@@ -12,7 +12,7 @@ use zip::ZipArchive;
 
 use crate::profile::ProfileError;
 use crate::viewmodel_groups::{ViewmodelGroup, SOLDIER_FORCED_FILES, VIEWMODEL_GROUPS};
-use crate::vpk::write_vpk_v1;
+use crate::vpk::write_vpk_v2;
 
 pub fn viewmodel_group(id: &str) -> Option<&'static ViewmodelGroup> {
     VIEWMODEL_GROUPS.iter().find(|group| group.id == id)
@@ -364,7 +364,7 @@ pub fn build_viewmodel_pack_vpk(
         pack_files.insert(format!("models/{model_name}"), bytes);
     }
 
-    Ok(write_vpk_v1(&pack_files))
+    Ok(write_vpk_v2(&pack_files))
 }
 
 #[cfg(test)]
