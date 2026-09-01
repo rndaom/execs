@@ -27,6 +27,16 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   launch: "Launch",
 };
 
+/**
+ * The sidebar reads as three short groups instead of one nine-item list:
+ * what you set up, how it looks, and everything else.
+ */
+export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
+  { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
+  { label: "Look", tabs: ["hud", "crosshair", "viewmodels"] },
+  { label: "More", tabs: ["mods", "files", "launch"] },
+];
+
 export function showSettingsChrome(library: ProfileLibrary | null): boolean {
   return (
     library?.usable === true &&

@@ -1,8 +1,14 @@
 import { Check, Copy } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { formatInstallLabel } from "../../lib/finder-ui";
 
-/** The app chrome: wordmark, profile menu, install path, game-running dot. */
+/**
+ * The app chrome: wordmark, profile switcher, install folder, game-running dot.
+ *
+ * The path collapses to its folder name — the full path stays in the `title`
+ * and in the copy button — so the chrome stops being a wall of monospace.
+ */
 export function ReadyHeader({
   path,
   running,
@@ -25,33 +31,32 @@ export function ReadyHeader({
 
       <div className="mx-1 hidden h-7 w-px bg-edge md:block" />
 
-      <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
-        <span className="shrink-0 text-xs text-ink-muted">Install path</span>
-        <span className="truncate font-mono text-xs text-ink-muted" title={path}>
-          {path}
+      <div className="hidden min-w-0 items-center gap-1.5 md:flex">
+        <span className="t-meta truncate" title={path}>
+          {formatInstallLabel(path)}
         </span>
         <button
           type="button"
           data-testid="install-path-copy"
-          title={feedback === "copied" ? "Copied" : "Copy install path"}
+          title={feedback === "copied" ? "Copied" : `Copy install path — ${path}`}
           aria-label={feedback === "copied" ? "Copied install path" : "Copy install path"}
           onClick={() => void copy(path)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-md p-1.5 transition-colors ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-md p-1.5 transition-colors duration-150 ${
             feedback === "copied"
-              ? "text-health"
-              : "text-ink-muted hover:bg-panel-raised hover:text-ink"
+              ? "text-ok"
+              : "text-ink-faint hover:bg-panel-raised hover:text-ink"
           }`}
         >
-          {feedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+          {feedback === "copied" ? <Check size={14} weight="bold" /> : <Copy size={14} />}
           <span aria-live="polite" className={feedback === "idle" ? "sr-only" : "text-[11px]"}>
             {feedback === "copied" ? "Copied" : feedback === "failed" ? "Copy failed" : ""}
           </span>
         </button>
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-2 text-xs text-ink-muted">
+      <div className="t-meta ml-auto flex shrink-0 items-center gap-2">
         <span
-          className={`size-2 rounded-full ${running ? "bg-team-red" : "bg-ink-faint"}`}
+          className={`size-2 rounded-full ${running ? "bg-warn" : "bg-ink-faint"}`}
           aria-hidden="true"
         />
         <span className="hidden sm:inline">{running ? "Game running" : "Game closed"}</span>

@@ -47,12 +47,12 @@ export function SwitchProgressList({
       className="overlay fixed inset-x-4 bottom-4 z-50 p-4 text-left sm:left-auto sm:right-6 sm:w-[26rem]"
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-ink">
+        <p className="t-row">
           {complete ? "Profile applied" : "Applying profile"}
         </p>
-        {complete ? <Check size={16} weight="bold" className="text-health" /> : null}
+        {complete ? <Check size={16} weight="bold" className="text-ok" /> : null}
       </div>
-      <p data-testid="switch-progress-current" className="mt-0.5 text-[13px] text-ink-muted">
+      <p data-testid="switch-progress-current" className="t-meta mt-1">
         {complete ? "All profile steps completed." : `Current stage — ${currentLabel}`}
       </p>
 
@@ -80,17 +80,17 @@ export function SwitchProgressList({
               data-done={done ? "true" : "false"}
               aria-current={current ? "step" : undefined}
               aria-label={`${item.label}: ${done ? "done" : current ? "current" : "pending"}`}
-              className={`flex min-w-0 items-center gap-2 text-xs ${
-                current ? "text-brand" : done ? "text-ink" : "text-ink-faint"
+              className={`flex min-w-0 items-center gap-2 text-[12.5px] ${
+                current ? "text-ink" : done ? "text-ink-muted" : "text-ink-faint"
               }`}
             >
               <span
                 aria-hidden="true"
                 className={`flex size-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${
                   current
-                    ? "border-brand bg-brand/15 text-brand"
+                    ? "border-brand text-ink"
                     : done
-                      ? "border-health/60 bg-health/10 text-health"
+                      ? "border-ok/60 text-ok"
                       : "border-edge text-ink-faint"
                 }`}
               >

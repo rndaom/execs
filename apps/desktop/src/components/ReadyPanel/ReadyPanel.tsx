@@ -59,7 +59,7 @@ export function ReadyPanel({
       {error ? (
         <div
           role="alert"
-          className="shrink-0 border-b border-team-red/50 bg-team-red/10 px-5 py-2 text-sm text-ink"
+          className="t-body shrink-0 border-b border-error/50 bg-error/10 px-5 py-2 text-ink"
         >
           {error}
         </div>
@@ -75,7 +75,7 @@ export function ReadyPanel({
       {settings ?? (
         <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
           <p className="eyebrow">Profile library</p>
-          <p className="mt-2 max-w-md text-sm text-ink-muted">
+          <p className="t-body mt-3 max-w-md text-ink-muted">
             {library ? libraryStatusCopy(library) : "Loading profiles…"}
           </p>
           <button
