@@ -26,17 +26,11 @@
   --color-on-brand: #121212;
 
   --color-team-red: #b8383b;
-  --color-team-blu: #5885a2;
   --color-health: #729e42;
 
-  --color-q-unique: #ffd700;
+  /* The only item-quality colour still in use: the "advisory / careful" badge. */
   --color-q-strange: #cf6a32;
-  --color-q-vintage: #476291;
-  --color-q-genuine: #4d7455;
-  --color-q-unusual: #8650ac;
-  --color-q-collectors: #aa0000;
 
-  --font-display: "Inter", ui-sans-serif, sans-serif;
   --font-body: "Inter", ui-sans-serif, sans-serif;
 
   --radius-pill: 9999px;
