@@ -14,7 +14,7 @@ export function WriteLockBanner({
       <div
         role="status"
         data-testid="tf2-write-lock"
-        className="border-b border-team-red bg-team-red/20 px-4 py-2 text-center text-sm text-ink"
+        className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
       >
         TF2 is running — execs is read-only until the game quits.
       </div>
@@ -24,7 +24,7 @@ export function WriteLockBanner({
     <div
       role="status"
       data-testid="write-lock-degraded"
-      className="border-b border-q-strange/60 bg-q-strange/15 px-4 py-2 text-center text-sm text-ink"
+      className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
     >
       {degraded}
     </div>
