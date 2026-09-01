@@ -33,8 +33,13 @@ export const GAMEPLAY_KEYS = new Set([
   "0",
 ]);
 
-/** Commands that end or damage the play session when triggered unexpectedly. */
-export const DISRUPTIVE_COMMANDS = new Set(["quit", "exit", "disconnect", "retry", "restart"]);
+/**
+ * Commands that end or damage the play session when triggered unexpectedly.
+ *
+ * `restart` is deliberately absent: it is a server command with no client
+ * effect, so flagging it in a client cfg is a pure false positive.
+ */
+export const DISRUPTIVE_COMMANDS = new Set(["quit", "exit", "disconnect", "retry"]);
 
 /** Commands that route the client to another server / leak control. */
 export const NETWORK_HIJACK_COMMANDS = new Set(["connect", "redirect"]);
@@ -85,6 +90,13 @@ export const BUILTIN_COMMANDS = new Set(["wait", "toggleconsole", "slot10"]);
 export const DEFAULT_EXTERNAL_EXEC_ALLOWLIST = ["config_default", "undo360controller"];
 
 export const MAX_ALIAS_DEPTH = 8;
+/**
+ * Total alias expansions per lint run. Depth alone does not bound the work:
+ * seven aliases each invoking the next six times stay inside `MAX_ALIAS_DEPTH`
+ * while costing 6^7 expansions. The lint runs synchronously on the Files pane
+ * render path, so it needs a flat ceiling as well.
+ */
+export const MAX_ALIAS_EXPANSIONS = 5000;
 export const MAX_EXEC_DEPTH = 4;
 
 /** Sane ranges for net cvars; outside → warn. */

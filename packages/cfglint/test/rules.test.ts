@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { lint } from "../src/engine.ts";
-import type { CfgFile } from "../src/types.ts";
+import type { CfgFile, LintOptions } from "../src/types.ts";
 
 const one = (text: string, path = "autoexec.cfg"): CfgFile[] => [{ path, text }];
-const rules = (files: CfgFile[]) => {
-  const result = lint(files);
+const rules = (files: CfgFile[], opts: LintOptions = {}) => {
+  const result = lint(files, opts);
   return { result, ids: result.findings.map((f) => `${f.tier}:${f.ruleId}`) };
 };
+/**
+ * These fixtures are flat bundles (`autoexec.cfg`, `b.cfg`, …) with no `cfg/`
+ * folder, so their execs only resolve with the opt-in bundle-relative match.
+ */
+const FLAT: LintOptions = { bundleRelativeExec: true };
 
 describe("block-tier rules", () => {
   it("blocks unbindall", () => {
@@ -112,7 +117,7 @@ describe("block-tier rules", () => {
       { path: "autoexec.cfg", text: "exec extra/net" },
       { path: "extra/net.cfg", text: "cl_interp 0.033" },
     ];
-    const { result, ids } = rules(files);
+    const { result, ids } = rules(files, FLAT);
     expect(ids).not.toContain("block:exec-external");
     expect(result.effective.get("cl_interp")?.value).toBe("0.033");
   });
@@ -149,7 +154,7 @@ describe("warn-tier rules", () => {
       { path: "a.cfg", text: "exec b" },
       { path: "b.cfg", text: "exec a" },
     ];
-    expect(rules(files).ids).toContain("warn:exec-cycle");
+    expect(rules(files, FLAT).ids).toContain("warn:exec-cycle");
   });
 
   it("warns on exec chains deeper than 4", () => {
@@ -161,7 +166,7 @@ describe("warn-tier rules", () => {
       { path: "c4.cfg", text: "exec c5" },
       { path: "c5.cfg", text: "volume 1" },
     ];
-    expect(rules(files).ids).toContain("warn:exec-depth");
+    expect(rules(files, FLAT).ids).toContain("warn:exec-depth");
   });
 
   it("warns on con_logfile and host_writeconfig", () => {
@@ -194,7 +199,7 @@ describe("clean configs and metadata", () => {
       { path: "autoexec.cfg", text: "fov_desired 75\nexec override" },
       { path: "override.cfg", text: "fov_desired 90" },
     ];
-    expect(rules(files).result.effective.get("fov_desired")?.value).toBe("90");
+    expect(rules(files, FLAT).result.effective.get("fov_desired")?.value).toBe("90");
   });
 
   it("records binds last-write-wins", () => {
@@ -231,6 +236,12 @@ describe("clean configs and metadata", () => {
     // fov_desired default is 75 — setting it to 75 changes nothing.
     const allCvars = result.summary.flatMap((s) => s.entries.map((e) => e.cvar));
     expect(allCvars).not.toContain("fov_desired");
+  });
+
+  it("builds the summary lazily and caches it", () => {
+    const result = lint(one("r_shadows 0"));
+    expect(result.summary).toBe(result.summary);
+    expect(result.summary.flatMap((s) => s.entries).map((e) => e.cvar)).toContain("r_shadows");
   });
 
   it("flags unknown commands as info, never block", () => {
