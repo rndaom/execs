@@ -1,33 +1,43 @@
 import { ArrowLeft, ArrowRight, ArrowSquareOut, Images, X } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert } from "./components/ui/Alert";
+import { Modal } from "./components/ui/Modal";
+import { Switch } from "./components/ui/Switch";
+import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useSeededDraft } from "./hooks/useSeededDraft";
 import {
   type HudCatalogEntry,
   type HudSchemaView,
   type HudUiState,
   openExternal,
 } from "./lib/bridge";
+import { hexToRgb, rgbToHex } from "./lib/color";
 import {
   canInstallHud,
   filterHudCatalog,
   formatHudRgba,
-  hexToRgb,
   hudOptionsDirty,
-  hudUpdateAvailable,
   installedHudLabel,
   isHudCheckboxOn,
   paginateHudCatalog,
   parseHudRgba,
-  rgbToHex,
   seedHudOptions,
   stepHudScreenshot,
 } from "./lib/hud-ui";
-import { canWriteSettings } from "./lib/settings-ui";
 
 type HudViewer = { entry: HudCatalogEntry; index: number };
 
+/** A 0–255 HUD alpha as the percentage people actually think in. */
+function alphaPercent(alpha: number): number {
+  return Math.round((alpha / 255) * 100);
+}
+
+/** Switching HUDs is a different record — that draft must not carry over. */
+function installedKeyOf(state: HudUiState): string {
+  return state.installed?.id ?? "";
+}
+
 export function HudPane({
-  running,
-  busy,
   catalogLoading,
   catalogError,
   catalog,
@@ -39,8 +49,6 @@ export function HudPane({
   onMatch,
   onApplyOptions,
 }: {
-  running: boolean;
-  busy: boolean;
   catalogLoading: boolean;
   catalogError: string | null;
   catalog: HudCatalogEntry[];
@@ -52,24 +60,25 @@ export function HudPane({
   onMatch: (id: string) => void;
   onApplyOptions: (options: Record<string, string>) => void;
 }) {
-  const locked = !canWriteSettings(running, busy);
+  const { running, busy } = useAppStatus();
+  const locked = !useCanWrite();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [viewer, setViewer] = useState<HudViewer | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const seeded = useMemo(() => seedHudOptions(schema, state.installed), [schema, state.installed]);
-  const [draft, setDraft] = useState(seeded);
+  const [draft, setDraft] = useSeededDraft(
+    seeded,
+    (value) => JSON.stringify(value),
+    installedKeyOf(state),
+  );
   const filtered = filterHudCatalog(catalog, query);
   const paged = paginateHudCatalog(filtered, page);
   const dirty = hudOptionsDirty(draft, seeded);
   const installedId = state.installed?.id ?? null;
   const installedLabel = installedHudLabel(state);
-  const updateAvailable = hudUpdateAvailable(state);
 
-  useEffect(() => {
-    setDraft(seeded);
-  }, [seeded]);
-
+  // Escape and focus are the Modal's job; only the arrow-key paging is ours.
   useEffect(() => {
     if (!viewer) {
       return;
@@ -78,9 +87,7 @@ export function HudPane({
       if (!viewer) {
         return;
       }
-      if (event.key === "Escape") {
-        setViewer(null);
-      } else if (event.key === "ArrowRight") {
+      if (event.key === "ArrowRight") {
         setViewer({
           entry: viewer.entry,
           index: stepHudScreenshot(viewer.index, 1, viewer.entry.screenshots.length),
@@ -138,7 +145,7 @@ export function HudPane({
                   Match to catalog…
                 </button>
               ) : null}
-              {updateAvailable ? (
+              {state.updateAvailable ? (
                 <button
                   type="button"
                   data-testid="hud-update"
@@ -181,36 +188,24 @@ export function HudPane({
                       if (control.controlType === "checkbox") {
                         const enabled = isHudCheckboxOn(value);
                         return (
-                          <label
+                          <div
                             key={control.name}
-                            className={`flex cursor-pointer items-center justify-between gap-3 py-1 text-xs text-ink ${locked ? "cursor-not-allowed opacity-50" : ""}`}
-                            htmlFor={`hud-opt-${control.name}`}
+                            className="flex items-center justify-between gap-3 py-1 text-xs text-ink"
                           >
                             <span>{control.label}</span>
-                            <input
-                              id={`hud-opt-${control.name}`}
-                              data-testid={`hud-opt-${control.name}`}
-                              type="checkbox"
+                            <Switch
                               checked={enabled}
                               disabled={locked}
-                              onChange={(event) =>
+                              label={control.label}
+                              testId={`hud-opt-${control.name}`}
+                              onChange={(next) =>
                                 setDraft((current) => ({
                                   ...current,
-                                  [control.name]: event.target.checked ? "true" : "false",
+                                  [control.name]: next ? "true" : "false",
                                 }))
                               }
-                              className="peer sr-only"
                             />
-                            <span
-                              className={`min-w-12 rounded-pill border px-2 py-0.5 text-center text-[11px] peer-focus-visible:ring-2 peer-focus-visible:ring-brand ${
-                                enabled
-                                  ? "border-brand bg-brand/15 text-brand"
-                                  : "border-edge-strong text-ink-muted"
-                              }`}
-                            >
-                              {enabled ? "On" : "Off"}
-                            </span>
-                          </label>
+                          </div>
                         );
                       }
                       if (control.controlType === "combo") {
@@ -244,6 +239,11 @@ export function HudPane({
                         );
                       }
                       if (control.controlType === "number") {
+                        // The schema's own bounds — respected on the way out,
+                        // not just advertised: `min`/`max` alone do not stop a
+                        // typed value from being applied.
+                        const minimum = Number(control.minimum);
+                        const maximum = Number(control.maximum);
                         return (
                           <label
                             key={control.name}
@@ -265,6 +265,25 @@ export function HudPane({
                                   [control.name]: event.target.value,
                                 }))
                               }
+                              onBlur={(event) => {
+                                const raw = Number(event.target.value);
+                                if (!Number.isFinite(raw)) {
+                                  return;
+                                }
+                                let next = raw;
+                                if (Number.isFinite(minimum)) {
+                                  next = Math.max(minimum, next);
+                                }
+                                if (Number.isFinite(maximum)) {
+                                  next = Math.min(maximum, next);
+                                }
+                                if (next !== raw) {
+                                  setDraft((current) => ({
+                                    ...current,
+                                    [control.name]: String(next),
+                                  }));
+                                }
+                              }}
                               className="field w-full px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none disabled:opacity-50"
                             />
                           </label>
@@ -296,7 +315,7 @@ export function HudPane({
                               className="h-7 w-10 cursor-pointer rounded-md border border-edge-strong bg-panel disabled:opacity-50"
                             />
                           </div>
-                          <label className="mt-2 grid grid-cols-[auto_minmax(0,1fr)_2rem] items-center gap-2 text-[11px] text-ink-muted">
+                          <label className="mt-2 grid grid-cols-[auto_minmax(0,1fr)_3rem] items-center gap-2 text-[11px] text-ink-muted">
                             <span>Opacity</span>
                             <input
                               data-testid={`hud-opt-${control.name}-alpha`}
@@ -318,8 +337,19 @@ export function HudPane({
                               }
                               className="min-w-0 accent-brand disabled:opacity-50"
                             />
-                            <span className="text-right tabular-nums">{rgba.a}</span>
+                            {/* Percentage is what people mean by opacity; the
+                                raw 0–255 the HUD file stores rides along. */}
+                            <span
+                              data-testid={`hud-opt-${control.name}-alpha-value`}
+                              className="text-right tabular-nums"
+                              title={`${rgba.a} of 255`}
+                            >
+                              {alphaPercent(rgba.a)}%
+                            </span>
                           </label>
+                          <p className="mt-0.5 text-right text-[10px] text-ink-faint">
+                            Written as {rgba.a} of 255
+                          </p>
                         </div>
                       );
                     })}
@@ -391,7 +421,7 @@ export function HudPane({
         </div>
 
         {catalogLoading ? (
-          <div
+          <p
             data-testid="hud-catalog-loading"
             role="status"
             aria-live="polite"
@@ -400,21 +430,17 @@ export function HudPane({
             {catalog.length === 0
               ? "Loading the HUD catalog…"
               : `Checking for catalog updates… ${catalog.length} cached HUDs remain available.`}
-          </div>
+          </p>
         ) : null}
 
         {catalogError ? (
-          <div
-            data-testid="hud-catalog-error"
-            role="alert"
-            className="mt-3 rounded-lg border border-team-red/50 bg-team-red/10 px-4 py-2 text-xs text-ink"
-          >
-            <p className="font-medium">Could not refresh the HUD catalog.</p>
-            <p className="mt-0.5 text-ink-muted">
+          <Alert tone="error" testId="hud-catalog-error" className="mt-3 py-2 text-xs">
+            <span className="font-medium">Could not refresh the HUD catalog.</span>{" "}
+            <span className="text-ink-muted">
               {catalogError}
               {catalog.length > 0 ? " The last loaded catalog is still available." : ""}
-            </p>
-          </div>
+            </span>
+          </Alert>
         ) : null}
 
         <div
@@ -434,7 +460,10 @@ export function HudPane({
               </p>
             )
           ) : (
-            <div className="grid gap-3 xl:grid-cols-2">
+            /* Hairline rows, not per-row boxes: the de-carded rule the
+               crosshair and viewmodel lists already follow. The banner keeps
+               its own frame — that one is real media. */
+            <div>
               {paged.items.map((entry) => {
                 const current = installedId?.toLowerCase() === entry.id.toLowerCase();
                 const installable = canInstallHud(entry);
@@ -444,9 +473,7 @@ export function HudPane({
                     key={entry.id}
                     data-testid={`hud-card-${entry.id}`}
                     data-github={entry.github ? "true" : "false"}
-                    className={`overflow-hidden rounded-xl border bg-panel/60 transition-colors ${
-                      current ? "border-brand/70" : "border-edge hover:border-edge-strong"
-                    }`}
+                    className="flex flex-wrap items-start gap-x-4 gap-y-3 border-b border-edge/60 py-3.5"
                   >
                     {entry.banner ? (
                       <button
@@ -454,36 +481,36 @@ export function HudPane({
                         title={shots > 0 ? `View ${entry.name} screenshots` : undefined}
                         disabled={shots === 0}
                         onClick={() => setViewer({ entry, index: 0 })}
-                        className="block w-full cursor-zoom-in border-b border-edge disabled:cursor-default"
+                        className={`surface w-28 shrink-0 cursor-zoom-in disabled:cursor-default ${
+                          current ? "border-brand/70" : ""
+                        }`}
                       >
                         <img
                           src={entry.banner}
                           alt={`${entry.name} HUD preview`}
                           loading="lazy"
-                          className="h-24 w-full object-cover"
+                          className="h-16 w-full object-cover"
                         />
                       </button>
                     ) : null}
-                    <div className="p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p
-                            className={`text-sm font-semibold ${current ? "text-brand" : "text-ink"}`}
-                          >
-                            {entry.name}
-                          </p>
-                          <p className="truncate text-[11px] text-ink-muted">by {entry.author}</p>
-                        </div>
+                    <div className="min-w-48 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <p
+                          className={`text-[13px] font-semibold ${current ? "text-brand" : "text-ink"}`}
+                        >
+                          {entry.name}
+                        </p>
+                        <p className="truncate text-[11px] text-ink-muted">by {entry.author}</p>
                         {current ? (
                           <span className="badge border border-brand text-brand">Active</span>
                         ) : null}
                       </div>
                       {entry.flags.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-1">
+                        <div className="mt-1.5 flex flex-wrap gap-1">
                           {entry.flags.map((flag) => (
                             <span
                               key={flag}
-                              className="rounded-pill bg-bg px-2 py-0.5 text-[10px] text-ink-faint"
+                              className="rounded-pill bg-panel px-2 py-0.5 text-[10px] text-ink-faint"
                             >
                               {flag}
                             </span>
@@ -491,54 +518,56 @@ export function HudPane({
                         </div>
                       ) : null}
                       {!installable ? (
-                        <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
                           External install only. Open the author’s page for instructions.
                         </p>
                       ) : null}
-                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-edge/60 pt-3">
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        data-testid={`hud-install-${entry.id}`}
+                        disabled={locked || !installable || current}
+                        onClick={() => onInstall(entry.id)}
+                        className="btn btn-primary px-3 py-1.5 text-xs"
+                      >
+                        {/* Honest label: this row cannot be installed from
+                            here, so "Install" was never the action on offer. */}
+                        {current
+                          ? "Installed"
+                          : !installable
+                            ? "External only"
+                            : running
+                              ? "Close TF2 to install"
+                              : "Install"}
+                      </button>
+                      {shots > 0 ? (
                         <button
                           type="button"
-                          data-testid={`hud-install-${entry.id}`}
-                          disabled={locked || !installable || current}
-                          onClick={() => onInstall(entry.id)}
-                          className="btn btn-primary px-3 py-1.5 text-xs"
-                        >
-                          {current
-                            ? "Installed"
-                            : !installable
-                              ? "Install"
-                              : running
-                                ? "Close TF2 to install"
-                                : "Install"}
-                        </button>
-                        {shots > 0 ? (
-                          <button
-                            type="button"
-                            data-testid={`hud-screenshots-${entry.id}`}
-                            onClick={() => setViewer({ entry, index: 0 })}
-                            className="btn btn-ghost px-3 py-1.5 text-[11px]"
-                          >
-                            <Images size={13} />
-                            Screenshots ({shots})
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => void openExternal(entry.comfigUrl)}
+                          data-testid={`hud-screenshots-${entry.id}`}
+                          onClick={() => setViewer({ entry, index: 0 })}
                           className="btn btn-ghost px-3 py-1.5 text-[11px]"
                         >
-                          comfig.app
-                          <ArrowSquareOut size={11} />
+                          <Images size={13} />
+                          Screenshots ({shots})
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => void openExternal(entry.tf2hudsUrl)}
-                          className="btn btn-ghost px-3 py-1.5 text-[11px]"
-                        >
-                          tf2huds.dev
-                          <ArrowSquareOut size={11} />
-                        </button>
-                      </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void openExternal(entry.comfigUrl)}
+                        className="btn btn-ghost px-3 py-1.5 text-[11px]"
+                      >
+                        comfig.app
+                        <ArrowSquareOut size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void openExternal(entry.tf2hudsUrl)}
+                        className="btn btn-ghost px-3 py-1.5 text-[11px]"
+                      >
+                        tf2huds.dev
+                        <ArrowSquareOut size={11} />
+                      </button>
                     </div>
                   </article>
                 );
@@ -639,26 +668,15 @@ function HudLightbox({
   const count = entry.screenshots.length;
   const src = entry.screenshots[index];
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${entry.name} screenshots`}
-      data-testid="hud-lightbox"
-      className="fixed inset-0 z-50 flex flex-col bg-bg/95 p-4 backdrop-blur-sm sm:p-6"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-      onKeyDown={() => {}}
+    <Modal
+      open
+      testId="hud-lightbox"
+      title={entry.name}
+      description={`by ${entry.author} · ${index + 1} of ${count}`}
+      className="fixed inset-4 z-50 flex flex-col sm:inset-8"
+      onClose={onClose}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink">{entry.name}</p>
-          <p className="text-xs text-ink-muted">
-            by {entry.author} · {index + 1} of {count}
-          </p>
-        </div>
+      <div className="absolute top-3 right-3">
         <div className="flex items-center gap-2">
           {entry.album ? (
             <button
@@ -730,6 +748,6 @@ function HudLightbox({
           ))}
         </div>
       ) : null}
-    </div>
+    </Modal>
   );
 }

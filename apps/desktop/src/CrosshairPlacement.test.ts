@@ -25,27 +25,31 @@ function renderGameplay() {
   );
 }
 
-function renderCrosshair(running = false) {
+function renderCrosshair(running = false, managedText?: string) {
   return renderToStaticMarkup(
-    createElement(CrosshairPane, {
-      running,
-      busy: false,
-      layer: "comfig",
-      effective: {},
-      managedText: [
-        "fov_desired 90",
-        "viewmodel_fov 70",
-        "cl_crosshair_file crosshair3",
-        "cl_crosshair_scale 40",
-        "cl_crosshair_red 10",
-        "cl_crosshair_green 20",
-        "cl_crosshair_blue 30",
-      ].join("\n"),
-      record: null,
-      onSaveStock: () => undefined,
-      onApply: () => undefined,
-      onRemove: () => undefined,
-    }),
+    createElement(
+      AppStatusProvider,
+      { value: { ...STATUS, running } },
+      createElement(CrosshairPane, {
+        layer: "comfig",
+        effective: {},
+        managedText:
+          managedText ??
+          [
+            "fov_desired 90",
+            "viewmodel_fov 70",
+            "cl_crosshair_file crosshair3",
+            "cl_crosshair_scale 40",
+            "cl_crosshair_red 10",
+            "cl_crosshair_green 20",
+            "cl_crosshair_blue 30",
+          ].join("\n"),
+        record: null,
+        onSaveStock: () => undefined,
+        onApply: () => undefined,
+        onRemove: () => undefined,
+      }),
+    ),
   );
 }
 
@@ -79,19 +83,7 @@ describe("crosshair settings placement", () => {
     expect(markup).toContain('data-testid="stock-crosshair-shape"');
     expect(markup).toContain('data-file="crosshair3"');
     expect(markup).toContain("<circle");
-    const crosshair7 = renderToStaticMarkup(
-      createElement(CrosshairPane, {
-        running: false,
-        busy: false,
-        layer: "comfig",
-        effective: {},
-        managedText: "cl_crosshair_file crosshair7\n",
-        record: null,
-        onSaveStock: () => undefined,
-        onApply: () => undefined,
-        onRemove: () => undefined,
-      }),
-    );
+    const crosshair7 = renderCrosshair(false, "cl_crosshair_file crosshair7\n");
     expect(crosshair7).toContain('data-file="crosshair7"');
     expect(crosshair7).toContain("<rect");
     expect(crosshair7).not.toContain("<circle");
@@ -99,7 +91,7 @@ describe("crosshair settings placement", () => {
 
   it("offers an all-classes tab with per-slot assignment", () => {
     const markup = renderCrosshair();
-    expect(markup).toContain('data-testid="crosshair-class-all"');
+    expect(markup).toContain('id="crosshair-class-tab-all"');
     expect(markup).toContain('data-testid="crosshair-all-classes"');
     expect(markup).toContain('data-testid="crosshair-slot-primary"');
     expect(markup).toContain('data-testid="crosshair-slot-melee"');
