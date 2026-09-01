@@ -1,0 +1,158 @@
+import { useCallback, useEffect, useState } from "react";
+import type { Api } from "../lib/api";
+import type { FirstRunKind, ProfileLibrary, Tf2Install } from "../lib/bridge";
+import {
+  type ComfigPresetId,
+  canApplyWizard,
+  type OfficialAddonId,
+  toggleAddon,
+} from "../lib/first-run-ui";
+import { wizardSpec } from "../SetupWizard";
+import type { SwitchProgressController } from "./useSwitchProgress";
+
+export type FirstRunState = {
+  kind: FirstRunKind | null;
+  reasons: string[];
+  preset: ComfigPresetId;
+  addons: OfficialAddonId[];
+  /** The Create-new wizard is open over an existing library. */
+  creating: boolean;
+  setPreset: (preset: ComfigPresetId) => void;
+  toggleAddon: (id: OfficialAddonId) => void;
+  openCreate: () => void;
+  cancelCreate: () => void;
+  applyWizard: (name: string) => Promise<boolean>;
+  clear: () => void;
+  reset: () => void;
+};
+
+/** First-run classification plus the setup / create-new wizard. */
+export function useFirstRun(
+  api: Api,
+  {
+    confirmed,
+    library,
+    busy,
+    running,
+    progress,
+    setError,
+    setBusy,
+    setLibrary,
+    seedCreating = false,
+  }: {
+    confirmed: Tf2Install | null;
+    library: ProfileLibrary | null;
+    busy: boolean;
+    running: boolean;
+    progress: SwitchProgressController;
+    setError: (message: string | null) => void;
+    setBusy: (busy: boolean) => void;
+    setLibrary: (library: ProfileLibrary) => void;
+    /** `?preview=create` opens straight into the Create-new wizard. */
+    seedCreating?: boolean;
+  },
+): FirstRunState {
+  const [kind, setKind] = useState<FirstRunKind | null>(null);
+  const [reasons, setReasons] = useState<string[]>([]);
+  const [preset, setPreset] = useState<ComfigPresetId>("medium");
+  const [addons, setAddons] = useState<OfficialAddonId[]>([]);
+  const [creating, setCreating] = useState(seedCreating);
+
+  useEffect(() => {
+    if (!confirmed || !library) {
+      return;
+    }
+    if (library.rootMismatch || !library.usable || library.profiles.length > 0) {
+      setKind(null);
+      setReasons([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .classifyFirstRun()
+      .then((result) => {
+        if (!cancelled) {
+          setKind(result.kind);
+          setReasons(result.reasons);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not check this install.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, confirmed, library, setError]);
+
+  const clear = useCallback(() => {
+    setKind(null);
+    setReasons([]);
+  }, []);
+
+  const openCreate = useCallback(() => {
+    setCreating(true);
+    setError(null);
+    setPreset("medium");
+    setAddons([]);
+    progress.cancel();
+  }, [progress, setError]);
+
+  const cancelCreate = useCallback(() => {
+    setCreating(false);
+    setError(null);
+    progress.cancel();
+  }, [progress, setError]);
+
+  const applyWizard = useCallback(
+    async (name: string) => {
+      if (!canApplyWizard(name, running, busy) || progress.state.active) {
+        return false;
+      }
+      setError(null);
+      progress.start();
+      setBusy(true);
+      try {
+        const spec = wizardSpec(name, preset, addons);
+        setLibrary(
+          creating ? await api.createFreshProfile(spec) : await api.applyUnusedWizard(spec),
+        );
+        progress.complete();
+        setCreating(false);
+        clear();
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not apply that setup.");
+        progress.cancel();
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, addons, busy, clear, creating, preset, progress, running, setBusy, setError, setLibrary],
+  );
+
+  const reset = useCallback(() => {
+    setKind(null);
+    setReasons([]);
+    setCreating(false);
+    setPreset("medium");
+    setAddons([]);
+  }, []);
+
+  return {
+    kind,
+    reasons,
+    preset,
+    addons,
+    creating,
+    setPreset,
+    toggleAddon: (id) => setAddons((current) => toggleAddon(current, id)),
+    openCreate,
+    cancelCreate,
+    applyWizard,
+    clear,
+    reset,
+  };
+}

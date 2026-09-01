@@ -1,4 +1,5 @@
 import { parseCommands } from "@execs/cfglint";
+import { canWrite } from "./write-gate";
 
 export type BindsLayer = "comfig" | "vanilla";
 
@@ -168,7 +169,7 @@ export function normalizeBindCommand(command: string): string {
 }
 
 export function canRecordBinds(running: boolean, busy: boolean): boolean {
-  return !running && !busy;
+  return canWrite(running, busy);
 }
 
 /** Source key name for a `KeyboardEvent.code`, or `Mouse0`–`Mouse4`. */

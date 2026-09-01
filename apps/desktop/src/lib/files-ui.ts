@@ -1,4 +1,5 @@
 import { lint } from "@execs/cfglint";
+import { canWrite } from "./write-gate";
 
 export type CfgFinding = {
   ruleId: string;
@@ -129,7 +130,7 @@ export function canSaveCfg(
   dirty: boolean,
   editable = true,
 ): boolean {
-  return blockingFindings.length === 0 && editable && !running && !busy && dirty;
+  return blockingFindings.length === 0 && editable && dirty && canWrite(running, busy);
 }
 
 /**

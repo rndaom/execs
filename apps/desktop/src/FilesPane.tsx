@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { useAppStatus } from "./hooks/useAppStatus";
+import { useSeededDraft } from "./hooks/useSeededDraft";
 import {
   blockingFindingsForFile,
   type CfgFinding,
@@ -7,22 +9,18 @@ import {
   cfgFiles,
   findingTierClass,
   lintBundle,
-  shouldReseedDraft,
 } from "./lib/files-ui";
 
 export function FilesPane({
-  running,
-  busy,
   files,
   hudId,
   onSave,
 }: {
-  running: boolean;
-  busy: boolean;
   files: { path: string; text: string }[];
   hudId: string | null;
   onSave: (path: string, text: string) => void;
 }) {
+  const { running, busy } = useAppStatus();
   const listed = useMemo(() => cfgFiles(files, hudId), [files, hudId]);
   const [picked, setPicked] = useState<string | null>(null);
   const selected =
@@ -31,35 +29,28 @@ export function FilesPane({
       : (listed[0]?.path ?? null);
   const selectedMeta = selected !== null ? cfgFileMeta(selected, hudId) : null;
   const source = files.find((file) => file.path === selected)?.text ?? "";
-  const [draft, setDraft] = useState(source);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
 
   const editable = selectedMeta?.editable ?? false;
+  // A reload hands this pane a brand-new `files` array even when the bytes are
+  // identical; the shared hook reseeds on real content change or a file switch,
+  // never over unsaved edits.
+  const [draft, setDraft] = useSeededDraft(source, (text) => text, selected);
   const dirty = selected !== null && editable && draft !== source;
 
-  const lastPathRef = useRef<string | null>(selected);
-  const lastSourceRef = useRef<string | null>(null);
-
-  // A reload hands this pane a brand-new `files` array even when the bytes are
-  // identical, so reseeding on identity alone throws away whatever the user was
-  // typing. Reseed on a real content change, or when the file itself changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `dirty` is read, not a trigger.
-  useEffect(() => {
-    const pathChanged = lastPathRef.current !== selected;
-    if (!pathChanged && !shouldReseedDraft(lastSourceRef.current, source, dirty)) {
-      return;
-    }
-    lastPathRef.current = selected;
-    lastSourceRef.current = source;
-    setDraft(source);
-  }, [selected, source]);
+  // Alias expansion in cfglint is expensive and the bundle can be dozens of
+  // files: lint the settled text, not every keystroke.
+  const deferredDraft = useDeferredValue(draft);
   const bundle = useMemo(
     () =>
       listed.map((file) => {
         const live = files.find((item) => item.path === file.path)?.text ?? "";
-        return { path: file.path, text: file.path === selected && editable ? draft : live };
+        return {
+          path: file.path,
+          text: file.path === selected && editable ? deferredDraft : live,
+        };
       }),
-    [listed, files, selected, draft, editable],
+    [listed, files, selected, deferredDraft, editable],
   );
   const lint = useMemo(() => lintBundle(bundle, hudId), [bundle, hudId]);
   const strictFindings = lint.findings.filter((finding) => !finding.advisory);
@@ -247,7 +238,7 @@ export function FilesPane({
                 readOnly={running || !editable}
                 onChange={(event) => setDraft(event.target.value)}
                 spellCheck={false}
-                className="min-h-72 flex-1 resize-y border-0 bg-bg px-4 py-3 font-mono text-xs leading-5 text-ink outline-none transition-shadow focus:shadow-[inset_2px_0_0_#cf6a32] read-only:cursor-not-allowed read-only:text-ink-muted xl:min-h-[25rem]"
+                className="min-h-72 flex-1 resize-y border-0 bg-bg px-4 py-3 font-mono text-xs leading-5 text-ink outline-none transition-shadow focus:shadow-[inset_2px_0_0_var(--color-brand)] read-only:cursor-not-allowed read-only:text-ink-muted xl:min-h-[25rem]"
               />
               <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-edge px-3 py-2.5">
                 <p className="text-[11px] text-ink-muted">

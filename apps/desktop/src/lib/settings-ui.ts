@@ -1,4 +1,5 @@
 import type { ProfileLibrary } from "./bridge";
+import { canWrite } from "./write-gate";
 
 export const SETTINGS_TABS = [
   "comfig",
@@ -36,5 +37,5 @@ export function showSettingsChrome(library: ProfileLibrary | null): boolean {
 }
 
 export function canWriteSettings(running: boolean, busy: boolean): boolean {
-  return !running && !busy;
+  return canWrite(running, busy);
 }

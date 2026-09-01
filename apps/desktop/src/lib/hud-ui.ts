@@ -248,19 +248,6 @@ export function formatHudRgba(r: number, g: number, b: number, a: number): strin
   return `${r} ${g} ${b} ${a}`;
 }
 
-function toHexByte(value: number): string {
-  return value.toString(16).padStart(2, "0");
-}
-
-export function rgbToHex(r: number, g: number, b: number): string {
-  return `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
-}
-
-export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!match) {
-    return null;
-  }
-  const n = Number.parseInt(match[1], 16);
-  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
+// Moved to lib/color.ts (shared with the crosshair tint); re-exported so the
+// HUD and crosshair panes keep their existing import site.
+export { hexToRgb, rgbToHex } from "./color";

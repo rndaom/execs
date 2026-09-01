@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { PaneSection } from "./components/ui/PaneSection";
+import { useAppStatus } from "./hooks/useAppStatus";
 import {
   applyRecordedBind,
   BIND_ACTIONS,
@@ -16,8 +18,6 @@ import {
 } from "./lib/binds-ui";
 
 export type BindsPaneProps = {
-  running: boolean;
-  busy: boolean;
   layer: BindsLayer;
   effectiveBinds: Record<string, string>;
   managedText: string;
@@ -46,14 +46,8 @@ const BIND_GROUPS: Array<{
   },
 ];
 
-export function BindsPane({
-  running,
-  busy,
-  layer,
-  effectiveBinds,
-  managedText,
-  onSave,
-}: BindsPaneProps) {
+export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsPaneProps) {
+  const { running, busy } = useAppStatus();
   const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
   const canRecord = canRecordBinds(running, busy);
@@ -188,11 +182,12 @@ export function BindsPane({
       </div>
 
       {BIND_GROUPS.map((group) => (
-        <section key={group.title} className="section">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-semibold text-ink">{group.title}</h2>
-            <p className="text-xs text-ink-faint">{group.description}</p>
-          </div>
+        <PaneSection
+          key={group.title}
+          id={`binds-${group.title.toLowerCase()}`}
+          title={group.title}
+          meta={group.description}
+        >
           <ul className="mt-1 grid sm:grid-cols-2 sm:gap-x-10 xl:grid-cols-3">
             {group.ids.map((actionId) => {
               const action = BIND_ACTIONS.find((item) => item.id === actionId);
@@ -240,7 +235,7 @@ export function BindsPane({
               );
             })}
           </ul>
-        </section>
+        </PaneSection>
       ))}
 
       {!canRecord ? (
