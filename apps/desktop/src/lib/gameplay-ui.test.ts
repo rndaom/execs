@@ -34,14 +34,12 @@ describe("gameplay clamp", () => {
       cl_crosshair_red: -4,
       cl_crosshair_green: 300,
       cl_crosshair_blue: 12.2,
-      cl_crosshair_alpha: 400,
     });
     expect(next.viewmodel_fov).toBe(90);
     expect(next.cl_crosshair_scale).toBe(16);
     expect(next.cl_crosshair_red).toBe(0);
     expect(next.cl_crosshair_green).toBe(255);
     expect(next.cl_crosshair_blue).toBe(12);
-    expect(next.cl_crosshair_alpha).toBe(255);
   });
 });
 
@@ -72,7 +70,6 @@ describe("gameplay serialize and parse", () => {
       cl_crosshair_red: 10,
       cl_crosshair_green: 20,
       cl_crosshair_blue: 30,
-      cl_crosshair_alpha: 40,
     });
     expect(parseGameplay(serializeGameplay(original))).toEqual(original);
   });
@@ -119,16 +116,19 @@ describe("gameplay seed", () => {
 
 describe("autoexec exec line", () => {
   it("appends execs_gameplay without duplicating", () => {
-    expect(ensureAutoexecExecLine("", GAMEPLAY_STEM)).toBe(
+    expect(ensureAutoexecExecLine("", GAMEPLAY_STEM, "vanilla")).toBe(
       "exec execs_gameplay // execs:managed\n",
     );
-    expect(ensureAutoexecExecLine("echo hi\n", GAMEPLAY_STEM)).toBe(
+    expect(ensureAutoexecExecLine("echo hi\n", GAMEPLAY_STEM, "vanilla")).toBe(
       "echo hi\nexec execs_gameplay // execs:managed\n",
     );
-    expect(ensureAutoexecExecLine("exec execs_gameplay.cfg\n", GAMEPLAY_STEM)).toBe(
+    expect(ensureAutoexecExecLine("exec execs_gameplay.cfg\n", GAMEPLAY_STEM, "vanilla")).toBe(
       "exec execs_gameplay.cfg\n",
     );
     expect(gameplayAutoexecPatch("comfig")?.path).toBe("tf/cfg/overrides/autoexec.cfg");
+    expect(gameplayAutoexecPatch("comfig")?.text).toBe(
+      "exec overrides/execs_gameplay // execs:managed\n",
+    );
     expect(gameplayAutoexecPatch("vanilla")?.text).toBe("exec execs_gameplay // execs:managed\n");
     expect(
       gameplayAutoexecPatch("vanilla", "exec execs_gameplay // execs:managed\n"),

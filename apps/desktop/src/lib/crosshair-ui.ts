@@ -357,6 +357,28 @@ export function isCrosshairShape(value: string): boolean {
   return isBuiltinCrosshairShape(value);
 }
 
+/**
+ * Multiply an RGBA buffer by a tint, matching how the engine modulates the
+ * crosshair sprite with cl_crosshair_red/green/blue. Returns a new buffer; a
+ * null color is the identity.
+ */
+export function tintCrosshairRgba(
+  rgba: Uint8ClampedArray | number[],
+  color: CrosshairColor | null,
+): Uint8ClampedArray {
+  const out = Uint8ClampedArray.from(rgba);
+  if (!color) {
+    return out;
+  }
+  const [red, green, blue] = color;
+  for (let i = 0; i < out.length; i += 4) {
+    out[i] = (out[i] * red) / 255;
+    out[i + 1] = (out[i + 1] * green) / 255;
+    out[i + 2] = (out[i + 2] * blue) / 255;
+  }
+  return out;
+}
+
 /** Draw a first-party shape into a 64×64 RGBA buffer (row-major, unpremultiplied). */
 export function renderCrosshairRgba(
   shape: string,

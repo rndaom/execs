@@ -639,12 +639,18 @@ export async function removeCrosshairs(): Promise<ProfileDetail> {
 }
 
 /** Build a Yttrium-style pack from hidden animation groups and install it. */
+/** "full" hides the weapon and the arms; "weapon" keeps the hands animating. */
+export type ViewmodelHideMode = "full" | "weapon";
+
 export async function buildViewmodelPack(
   hidden: string[],
   preload: boolean,
+  hideMode: ViewmodelHideMode = "full",
 ): Promise<ProfileDetail> {
   try {
-    return await invoke<ProfileDetail>("build_viewmodel_pack", { hidden, preload });
+    // camelCase: Tauri v2 lower-camels command args, and a snake_case key
+    // would silently arrive as None.
+    return await invoke<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
   } catch (error) {
     throw new Error(invokeErrorMessage(error));
   }
@@ -733,6 +739,8 @@ export type PreloaderStatusPayload = {
   status: PreloaderStatus;
   modsCached: boolean;
   modsSizeBytes: number;
+  /** Steam's stored TF2 launch options carry the preload exec. */
+  preloadLaunchInSteam: boolean;
 };
 
 export type CatalogAddon = {
@@ -770,6 +778,10 @@ export type PreloaderReport = {
   customVpkWritten: boolean;
   gameinfoBypassed: boolean;
   baselineReset: boolean;
+  /** Materials generated for textures a mod shipped without one. */
+  synthesizedVmts: number;
+  /** Model materials moved under console/ so Casual serves them. */
+  relocatedModelMaterials: number;
 };
 
 export type PreloaderRevertReport = {

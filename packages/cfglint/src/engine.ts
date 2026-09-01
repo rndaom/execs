@@ -110,13 +110,17 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     }
   }
 
-  // exec target -> bundle path resolution (case-insensitive, suffix match).
+  // exec target -> bundle path resolution (case-insensitive). The engine
+  // resolves exec targets relative to each search path's cfg folder, never
+  // relative to the exec'ing file — `exec execs_binds` issued from
+  // overrides/autoexec.cfg does NOT find overrides/execs_binds.cfg in game,
+  // so it must not resolve here either.
   const resolveExec = (target: string): string | null => {
     let t = target.replace(/\\/g, "/").toLowerCase().replace(/^\.\//, "");
     if (!t.endsWith(".cfg")) t += ".cfg";
     if (parsed.has(t)) return t;
     for (const path of parsed.keys()) {
-      if (path.endsWith(`/${t}`)) return path;
+      if (path.endsWith(`/cfg/${t}`)) return path;
     }
     return null;
   };

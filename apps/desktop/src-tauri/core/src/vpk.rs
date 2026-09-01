@@ -307,9 +307,16 @@ pub fn read_vpk_entry(dir_path: &Path, entry: &VpkEntryLocation) -> Result<Vec<u
     Ok(body)
 }
 
-/// Rewrite one entry in place. `data` must exactly match the stored length —
-/// callers pad shrunk files up to size first — and the directory CRC is
-/// updated to match, so the archive stays self-consistent.
+/// Rewrite one entry's DATA in place. `data` must exactly match the stored
+/// length — callers pad shrunk files up to size first.
+///
+/// The `_dir.vpk` file is NEVER touched — not even the entry's CRC. That is
+/// load-bearing, not sloppiness: the directory carries Valve's tree checksum
+/// and signature, and sv_pure validates files against the directory's stock
+/// CRCs. Leaving the directory byte-pristine (stale CRC over modded data) is
+/// exactly what lets patched content pass the pure check; rewriting the CRC
+/// both breaks the tree checksum and advertises the modded hash, and the
+/// engine then rejects the entire archive on pure servers.
 pub fn patch_vpk_entry(
     dir_path: &Path,
     entry: &VpkEntryLocation,
@@ -330,14 +337,17 @@ pub fn patch_vpk_entry(
             entry.length
         )));
     }
-    let (data_path, start) = if entry.archive_index == DIR_ARCHIVE {
-        (dir_path.to_path_buf(), entry.data_base + u64::from(entry.offset))
-    } else {
-        (
-            sibling_archive_path(dir_path, entry.archive_index)?,
-            u64::from(entry.offset),
-        )
-    };
+    if entry.archive_index == DIR_ARCHIVE {
+        // Data stored inside the _dir.vpk itself would force a write to the
+        // directory file; no stock particle uses this layout, and keeping the
+        // directory byte-pristine matters more than supporting it.
+        return Err(VpkError(format!(
+            "{} stores its data in the directory file; not supported.",
+            entry.rel
+        )));
+    }
+    let data_path = sibling_archive_path(dir_path, entry.archive_index)?;
+    let start = u64::from(entry.offset);
     let mut data_file = std::fs::OpenOptions::new()
         .write(true)
         .open(&data_path)
@@ -356,20 +366,6 @@ pub fn patch_vpk_entry(
         .write_all(data)
         .map_err(|err| VpkError(err.to_string()))?;
     data_file
-        .sync_all()
-        .map_err(|err| VpkError(err.to_string()))?;
-
-    let mut dir_file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(dir_path)
-        .map_err(|err| VpkError(err.to_string()))?;
-    dir_file
-        .seek(SeekFrom::Start(entry.crc_pos))
-        .map_err(|err| VpkError(err.to_string()))?;
-    dir_file
-        .write_all(&crc32(data).to_le_bytes())
-        .map_err(|err| VpkError(err.to_string()))?;
-    dir_file
         .sync_all()
         .map_err(|err| VpkError(err.to_string()))?;
     Ok(())
@@ -398,8 +394,51 @@ pub fn sibling_archive_path(dir_path: &Path, index: u16) -> Result<std::path::Pa
     Ok(sibling)
 }
 
+/// VPK v2 writer. All files live in the directory archive.
+///
+/// v2 is what TF2 itself ships and what every pack the game loads happily from
+/// `tf/custom` uses (mastercomfig's included). A structurally valid v1 pack is
+/// misread by the engine -- materials come back starting partway into the file,
+/// which surfaces as `unknown shader "ric"` and `missing {` in the console --
+/// so packs execs writes for the game must be v2.
+pub fn write_vpk_v2(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
+    let (tree, data) = build_vpk_tree(files);
+    // Section sizes match a known-good pack: no per-archive hashes, the 48-byte
+    // checksum block, no signature.
+    const OTHER_MD5_SIZE: u32 = 48;
+    let mut out = Vec::with_capacity(28 + tree.len() + data.len() + OTHER_MD5_SIZE as usize);
+    out.extend_from_slice(&SIGNATURE.to_le_bytes());
+    out.extend_from_slice(&2u32.to_le_bytes());
+    out.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes()); // archive MD5 section
+    out.extend_from_slice(&OTHER_MD5_SIZE.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes()); // signature section
+    out.extend_from_slice(&tree);
+    out.extend_from_slice(&data);
+    out.extend_from_slice(&crate::hash::md5(&tree));
+    // With no archive MD5 section, its checksum is the hash of nothing.
+    out.extend_from_slice(&crate::hash::md5(&[]));
+    let whole = crate::hash::md5(&out);
+    out.extend_from_slice(&whole);
+    out
+}
+
 /// Minimal VPK v1 writer. All files live in the directory archive.
 pub fn write_vpk_v1(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
+    let (tree, data) = build_vpk_tree(files);
+    let mut out = Vec::with_capacity(12 + tree.len() + data.len());
+    out.extend_from_slice(&SIGNATURE.to_le_bytes());
+    out.extend_from_slice(&1u32.to_le_bytes());
+    out.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+    out.extend_from_slice(&tree);
+    out.extend_from_slice(&data);
+    out
+}
+
+/// The directory tree and file-data blob both versions share: entries grouped
+/// extension/path/name, data offsets relative to the end of the tree.
+fn build_vpk_tree(files: &BTreeMap<String, Vec<u8>>) -> (Vec<u8>, Vec<u8>) {
     let mut grouped: BTreeMap<String, BTreeMap<String, BTreeMap<String, Vec<u8>>>> =
         BTreeMap::new();
     for (rel, bytes) in files {
@@ -442,13 +481,7 @@ pub fn write_vpk_v1(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
     }
     tree.push(0);
 
-    let mut out = Vec::with_capacity(12 + tree.len() + data.len());
-    out.extend_from_slice(&SIGNATURE.to_le_bytes());
-    out.extend_from_slice(&1u32.to_le_bytes());
-    out.extend_from_slice(&(tree.len() as u32).to_le_bytes());
-    out.extend_from_slice(&tree);
-    out.extend_from_slice(&data);
-    out
+    (tree, data)
 }
 
 fn read_u32(cur: &mut Cursor<&[u8]>) -> Result<u32, VpkError> {
@@ -502,6 +535,45 @@ pub(crate) fn crc32(data: &[u8]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn v2_header_matches_the_layout_the_game_ships() {
+        let mut files = BTreeMap::new();
+        files.insert("materials/a/b.vmt".to_string(), b"\"UnlitGeneric\"
+{
+}
+".to_vec());
+        files.insert("root.txt".to_string(), b"hello".to_vec());
+        let bytes = write_vpk_v2(&files);
+
+        let u32_at = |at: usize| {
+            u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize
+        };
+        assert_eq!(u32_at(0), SIGNATURE as usize);
+        assert_eq!(u32_at(4), 2, "version");
+        let (tree, data) = (u32_at(8), u32_at(12));
+        let (archive_md5, other_md5, signature) = (u32_at(16), u32_at(20), u32_at(24));
+        assert_eq!((archive_md5, other_md5, signature), (0, 48, 0));
+        // The section sizes must account for every byte, as they do in the
+        // game's own directory files.
+        assert_eq!(28 + tree + data + archive_md5 + other_md5 + signature, bytes.len());
+
+        // The checksum block: tree, archive-md5 section, whole file.
+        let block = bytes.len() - 48;
+        assert_eq!(bytes[block..block + 16], crate::hash::md5(&bytes[28..28 + tree]));
+        assert_eq!(bytes[block + 16..block + 32], crate::hash::md5(&[]));
+        assert_eq!(bytes[block + 32..], crate::hash::md5(&bytes[..block + 32]));
+    }
+
+    #[test]
+    fn v2_round_trips_through_the_reader() {
+        let mut files = BTreeMap::new();
+        files.insert("materials/a/b.vmt".to_string(), b"one".to_vec());
+        files.insert("models/c.mdl".to_string(), b"two".to_vec());
+        let archive = read_vpk_dir_bytes(&write_vpk_v2(&files)).unwrap();
+        assert_eq!(archive.files.get("materials/a/b.vmt").unwrap(), b"one");
+        assert_eq!(archive.files.get("models/c.mdl").unwrap(), b"two");
+    }
 
     #[test]
     fn writes_and_reads_a_single_file() {

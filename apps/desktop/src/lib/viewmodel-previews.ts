@@ -22,6 +22,42 @@ export function viewmodelPreviewSrc(
   return SHOTS[`../assets/viewmodels/${classId}-${slot}.webp`] ?? null;
 }
 
+/** The visibility group holding the stock weapon each preview shows, so the
+ * imagery can reflect what the current selection actually hides. Ids must match
+ * `viewmodel-groups.ts`. */
+export const VIEWMODEL_PREVIEW_GROUPS: Record<
+  ViewmodelClass,
+  Partial<Record<ViewmodelPreviewSlot, string>>
+> = {
+  scout: { primary: "scout/scatterguns", secondary: "scout/pistols", melee: "scout/melee" },
+  soldier: { primary: "soldier/rockets", secondary: "soldier/shotguns", melee: "soldier/melee" },
+  pyro: { primary: "pyro/flamethrowers", secondary: "pyro/shotguns", melee: "pyro/melee" },
+  demoman: {
+    primary: "demoman/grenades",
+    secondary: "demoman/stickybombs",
+    melee: "demoman/melee",
+  },
+  heavy: { primary: "heavy/miniguns", secondary: "heavy/shotguns", melee: "heavy/melee" },
+  engineer: {
+    primary: "engineer/shotguns",
+    secondary: "engineer/pistols",
+    melee: "engineer/wrenches",
+  },
+  medic: { primary: "medic/primaries", secondary: "medic/mediguns", melee: "medic/melee" },
+  sniper: { primary: "sniper/rifles", secondary: "sniper/smgs", melee: "sniper/melee" },
+  spy: { primary: "spy/revolvers", melee: "spy/melee" },
+};
+
+/** Whether the weapon in this preview is hidden by the current selection. */
+export function previewSlotHidden(
+  classId: ViewmodelClass,
+  slot: ViewmodelPreviewSlot,
+  hidden: Set<string>,
+): boolean {
+  const group = VIEWMODEL_PREVIEW_GROUPS[classId][slot];
+  return group !== undefined && hidden.has(group);
+}
+
 /** Stock-loadout weapon names, for captions under the preview imagery. */
 export const VIEWMODEL_PREVIEW_WEAPONS: Record<
   ViewmodelClass,
