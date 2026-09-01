@@ -15,7 +15,7 @@ use crate::profile::{
 };
 use crate::surface::CfgLayer;
 use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
-use crate::vpk::{read_vpk_dir_file_filtered, write_vpk_v1};
+use crate::vpk::{read_vpk_dir_file_filtered, write_vpk_v2};
 
 pub const EXECS_CROSSHAIRS_PACK: &str = "execs-crosshairs";
 pub const CROSSHAIR_SIZE: u32 = 64;
@@ -861,7 +861,7 @@ pub fn build_script_vpk(scripts: &BTreeMap<String, String>) -> Vec<u8> {
         };
         files.insert(rel, encrypt_weapon_ctx(body.as_bytes()));
     }
-    write_vpk_v1(&files)
+    write_vpk_v2(&files)
 }
 
 #[cfg(test)]
