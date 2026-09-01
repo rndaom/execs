@@ -11,6 +11,7 @@ import {
   previewPackDelta,
   previewSavedLibrary,
   previewSwitchLibrary,
+  shouldAbsorbOnLockChange,
   switchStepIndex,
 } from "./library-ui";
 
@@ -95,5 +96,25 @@ describe("library UI helpers", () => {
     expect(imported.profiles.map((profile) => profile.name)).toEqual(["Main", "Imported"]);
     expect(imported.activeProfileId).toBe("preview-1");
     expect(imported.activeProfileId).not.toBe("preview-2");
+  });
+});
+
+describe("shouldAbsorbOnLockChange", () => {
+  it("treats unknown -> closed as a quit", () => {
+    expect(shouldAbsorbOnLockChange(null, false)).toBe(true);
+  });
+
+  it("treats running -> closed as a quit", () => {
+    expect(shouldAbsorbOnLockChange(true, false)).toBe(true);
+  });
+
+  it("ignores a repeated closed report", () => {
+    expect(shouldAbsorbOnLockChange(false, false)).toBe(false);
+  });
+
+  it("never absorbs while TF2 is starting or running", () => {
+    expect(shouldAbsorbOnLockChange(null, true)).toBe(false);
+    expect(shouldAbsorbOnLockChange(false, true)).toBe(false);
+    expect(shouldAbsorbOnLockChange(true, true)).toBe(false);
   });
 });

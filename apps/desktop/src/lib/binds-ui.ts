@@ -190,6 +190,33 @@ export function sourceKeyFromCode(code: string): string | null {
   return null;
 }
 
+/** Shown when a pressed key has no TF2 source name; cleared after this long. */
+export const UNBINDABLE_KEY_MESSAGE = "That key can't be bound in TF2.";
+export const UNBINDABLE_KEY_NOTICE_MS = 2000;
+
+/**
+ * What the recorder should do with the key it just resolved.
+ *
+ * `null` means the key is outside TF2's table (F13+, media keys, the Windows
+ * key, a 6th mouse button…). Swallowing it leaves the row stuck on "Waiting for
+ * input" with no explanation, so it gets a notice and the recorder keeps
+ * listening.
+ */
+export type RecorderOutcome =
+  | { kind: "unbindable"; message: string }
+  | { kind: "cancel" }
+  | { kind: "bind"; key: string };
+
+export function recorderOutcomeForKey(key: string | null): RecorderOutcome {
+  if (key === null) {
+    return { kind: "unbindable", message: UNBINDABLE_KEY_MESSAGE };
+  }
+  if (key === "escape") {
+    return { kind: "cancel" };
+  }
+  return { kind: "bind", key };
+}
+
 export function sourceKeyFromMouseButton(button: number): string | null {
   if (button >= 0 && button <= 4) {
     return `mouse${button + 1}`;
