@@ -26,6 +26,10 @@ export const CROSSHAIR_SCALE_MIN = 16;
 export const CROSSHAIR_SCALE_MAX = 64;
 export const COLOR_MIN = 0;
 export const COLOR_MAX = 255;
+/** `tf_dingaling_pitch*` bounds, from the engine's ConVar declaration. */
+export const PITCH_MIN = 1;
+export const PITCH_MAX = 255;
+export const HITSOUND_EFFECT_MAX = 8;
 
 export const CROSSHAIR_FILES = [
   "",
@@ -57,6 +61,20 @@ export type GameplaySettings = {
   cl_crosshair_red: number;
   cl_crosshair_green: number;
   cl_crosshair_blue: number;
+  /** Hit sound: on/off, 0–1 volume, damage-pitch range, built-in effect 0–8. */
+  tf_dingalingaling: GameplayToggle;
+  tf_dingaling_volume: number;
+  tf_dingaling_pitchmindmg: number;
+  tf_dingaling_pitchmaxdmg: number;
+  tf_dingalingaling_effect: number;
+  /** Seconds between hit sounds; 0 = every damage instance. */
+  tf_dingalingaling_repeat_delay: number;
+  /** Kill sound: same shape. */
+  tf_dingalingaling_lasthit: GameplayToggle;
+  tf_dingaling_lasthit_volume: number;
+  tf_dingaling_lasthit_pitchmindmg: number;
+  tf_dingaling_lasthit_pitchmaxdmg: number;
+  tf_dingalingaling_last_effect: number;
 };
 
 const CROSSHAIR_FILE_SET = new Set<string>(CROSSHAIR_FILES);
@@ -68,6 +86,15 @@ function corpusNumber(name: string, fallback: number): number {
   }
   const value = Number(raw);
   return Number.isFinite(value) ? Math.round(value) : fallback;
+}
+
+function corpusFloat(name: string, fallback: number): number {
+  const raw = lookupCvar(name)?.d;
+  if (raw === undefined) {
+    return fallback;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function corpusToggle(name: string, fallback: GameplayToggle): GameplayToggle {
@@ -92,7 +119,28 @@ export function defaultGameplay(): GameplaySettings {
     cl_crosshair_red: corpusNumber("cl_crosshair_red", 200),
     cl_crosshair_green: corpusNumber("cl_crosshair_green", 200),
     cl_crosshair_blue: corpusNumber("cl_crosshair_blue", 200),
+    tf_dingalingaling: corpusToggle("tf_dingalingaling", 0),
+    // The engine's ConVar default (tf_hud_account.cpp); the corpus dump
+    // records the archived value of whoever generated it.
+    tf_dingaling_volume: 0.75,
+    tf_dingaling_pitchmindmg: corpusNumber("tf_dingaling_pitchmindmg", 100),
+    tf_dingaling_pitchmaxdmg: corpusNumber("tf_dingaling_pitchmaxdmg", 100),
+    tf_dingalingaling_effect: corpusNumber("tf_dingalingaling_effect", 0),
+    tf_dingalingaling_repeat_delay: corpusFloat("tf_dingalingaling_repeat_delay", 0),
+    tf_dingalingaling_lasthit: corpusToggle("tf_dingalingaling_lasthit", 0),
+    tf_dingaling_lasthit_volume: 0.75,
+    tf_dingaling_lasthit_pitchmindmg: corpusNumber("tf_dingaling_lasthit_pitchmindmg", 100),
+    tf_dingaling_lasthit_pitchmaxdmg: corpusNumber("tf_dingaling_lasthit_pitchmaxdmg", 100),
+    tf_dingalingaling_last_effect: corpusNumber("tf_dingalingaling_last_effect", 0),
   };
+}
+
+/** Clamp a float to a range at two decimals (cvar files stay readable). */
+export function clampFloat(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.round(Math.min(max, Math.max(min, value)) * 100) / 100;
 }
 
 export function clampInt(value: number, min: number, max: number): number {
@@ -120,6 +168,29 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
     cl_crosshair_red: clampInt(settings.cl_crosshair_red, COLOR_MIN, COLOR_MAX),
     cl_crosshair_green: clampInt(settings.cl_crosshair_green, COLOR_MIN, COLOR_MAX),
     cl_crosshair_blue: clampInt(settings.cl_crosshair_blue, COLOR_MIN, COLOR_MAX),
+    tf_dingalingaling: settings.tf_dingalingaling ? 1 : 0,
+    tf_dingaling_volume: clampFloat(settings.tf_dingaling_volume, 0, 1),
+    tf_dingaling_pitchmindmg: clampInt(settings.tf_dingaling_pitchmindmg, PITCH_MIN, PITCH_MAX),
+    tf_dingaling_pitchmaxdmg: clampInt(settings.tf_dingaling_pitchmaxdmg, PITCH_MIN, PITCH_MAX),
+    tf_dingalingaling_effect: clampInt(settings.tf_dingalingaling_effect, 0, HITSOUND_EFFECT_MAX),
+    tf_dingalingaling_repeat_delay: clampFloat(settings.tf_dingalingaling_repeat_delay, 0, 10),
+    tf_dingalingaling_lasthit: settings.tf_dingalingaling_lasthit ? 1 : 0,
+    tf_dingaling_lasthit_volume: clampFloat(settings.tf_dingaling_lasthit_volume, 0, 1),
+    tf_dingaling_lasthit_pitchmindmg: clampInt(
+      settings.tf_dingaling_lasthit_pitchmindmg,
+      PITCH_MIN,
+      PITCH_MAX,
+    ),
+    tf_dingaling_lasthit_pitchmaxdmg: clampInt(
+      settings.tf_dingaling_lasthit_pitchmaxdmg,
+      PITCH_MIN,
+      PITCH_MAX,
+    ),
+    tf_dingalingaling_last_effect: clampInt(
+      settings.tf_dingalingaling_last_effect,
+      0,
+      HITSOUND_EFFECT_MAX,
+    ),
   };
 }
 
@@ -175,6 +246,17 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `cl_crosshair_red ${next.cl_crosshair_red}`,
     `cl_crosshair_green ${next.cl_crosshair_green}`,
     `cl_crosshair_blue ${next.cl_crosshair_blue}`,
+    `tf_dingalingaling ${next.tf_dingalingaling}`,
+    `tf_dingaling_volume ${next.tf_dingaling_volume}`,
+    `tf_dingaling_pitchmindmg ${next.tf_dingaling_pitchmindmg}`,
+    `tf_dingaling_pitchmaxdmg ${next.tf_dingaling_pitchmaxdmg}`,
+    `tf_dingalingaling_effect ${next.tf_dingalingaling_effect}`,
+    `tf_dingalingaling_repeat_delay ${next.tf_dingalingaling_repeat_delay}`,
+    `tf_dingalingaling_lasthit ${next.tf_dingalingaling_lasthit}`,
+    `tf_dingaling_lasthit_volume ${next.tf_dingaling_lasthit_volume}`,
+    `tf_dingaling_lasthit_pitchmindmg ${next.tf_dingaling_lasthit_pitchmindmg}`,
+    `tf_dingaling_lasthit_pitchmaxdmg ${next.tf_dingaling_lasthit_pitchmaxdmg}`,
+    `tf_dingalingaling_last_effect ${next.tf_dingalingaling_last_effect}`,
     "",
   ].join("\n");
 }
@@ -243,6 +325,47 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   const blue = read("cl_crosshair_blue");
   if (blue !== undefined) {
     next.cl_crosshair_blue = parseIntish(blue, next.cl_crosshair_blue);
+  }
+  const toggles: Array<"tf_dingalingaling" | "tf_dingalingaling_lasthit"> = [
+    "tf_dingalingaling",
+    "tf_dingalingaling_lasthit",
+  ];
+  for (const name of toggles) {
+    const raw = read(name);
+    if (raw !== undefined) {
+      next[name] = parseToggle(raw, next[name]);
+    }
+  }
+  const ints: Array<
+    | "tf_dingaling_pitchmindmg"
+    | "tf_dingaling_pitchmaxdmg"
+    | "tf_dingalingaling_effect"
+    | "tf_dingaling_lasthit_pitchmindmg"
+    | "tf_dingaling_lasthit_pitchmaxdmg"
+    | "tf_dingalingaling_last_effect"
+  > = [
+    "tf_dingaling_pitchmindmg",
+    "tf_dingaling_pitchmaxdmg",
+    "tf_dingalingaling_effect",
+    "tf_dingaling_lasthit_pitchmindmg",
+    "tf_dingaling_lasthit_pitchmaxdmg",
+    "tf_dingalingaling_last_effect",
+  ];
+  for (const name of ints) {
+    const raw = read(name);
+    if (raw !== undefined) {
+      next[name] = parseIntish(raw, next[name]);
+    }
+  }
+  const floats: Array<
+    "tf_dingaling_volume" | "tf_dingaling_lasthit_volume" | "tf_dingalingaling_repeat_delay"
+  > = ["tf_dingaling_volume", "tf_dingaling_lasthit_volume", "tf_dingalingaling_repeat_delay"];
+  for (const name of floats) {
+    const raw = read(name);
+    if (raw !== undefined) {
+      const value = Number(String(raw).trim());
+      next[name] = Number.isFinite(value) ? value : next[name];
+    }
   }
   return clampGameplay(next);
 }

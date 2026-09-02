@@ -70,6 +70,37 @@ pub async fn fetch_community_crosshair(file: String) -> Result<CommunityCrosshai
     .await
 }
 
+/// Thumbnails for the community picker: every requested Venom entry fetched
+/// (with cache) and decoded to frame 0. Entries that fail to download or
+/// decode are simply absent from the map.
+#[tauri::command]
+pub async fn fetch_community_crosshair_previews(
+    files: Vec<String>,
+) -> Result<BTreeMap<String, StockCrosshairSprite>, CommandError> {
+    blocking(move || {
+        let fetched = crate::crosshair_fetch::fetch_crosshair_vtfs(&files);
+        let mut out = BTreeMap::new();
+        for (file, bytes) in fetched {
+            let Ok(decoded) = execs_core::vtf_read::decode_vtf_frame0(&bytes) else {
+                continue;
+            };
+            if decoded.frames > 1 {
+                continue;
+            }
+            out.insert(
+                file,
+                StockCrosshairSprite {
+                    width: decoded.width,
+                    height: decoded.height,
+                    rgba: decoded.rgba,
+                },
+            );
+        }
+        Ok(out)
+    })
+    .await
+}
+
 /// Decode the active profile's installed library crosshairs for previews.
 #[tauri::command]
 pub async fn get_pack_crosshair_previews(

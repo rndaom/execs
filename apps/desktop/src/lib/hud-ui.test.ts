@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   canInstallHud,
+  compactCount,
   filterHudCatalog,
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
+  type HudSort,
   hudOptionsDirty,
+  hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
   normalizeHudSearch,
@@ -17,6 +20,7 @@ import {
   previewInstalledState,
   rgbToHex,
   seedHudOptions,
+  sortHudCatalog,
   stepHudScreenshot,
 } from "./hud-ui";
 
@@ -109,5 +113,33 @@ describe("hud option and search edges", () => {
     expect(normalizeHudSearch("  Rays' HUD!  ")).toBe("rayshud");
     expect(normalizeHudSearch("budhud-remastered")).toBe("budhudremastered");
     expect(normalizeHudSearch("-_-")).toBe("");
+  });
+});
+
+describe("hud sorting", () => {
+  const entries = PREVIEW_HUD_CATALOG.concat([
+    { ...PREVIEW_HUD_CATALOG[0], id: "budhud", name: "budhud", author: "whayay" },
+  ]);
+  const stats = {
+    rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
+    budhud: { updated: "2026-08-28", downloads: 900000, views: 500 },
+  };
+
+  it("sorts by name, date and counts, with unknowns last", () => {
+    const names = (sort: HudSort) => sortHudCatalog(entries, stats, sort).map((e) => e.id);
+    expect(names("name")).toEqual(["budhud", "rayshud", "toonhud"]);
+    expect(names("updated")).toEqual(["budhud", "rayshud", "toonhud"]);
+    expect(names("downloads")).toEqual(["budhud", "rayshud", "toonhud"]);
+    expect(names("views")).toEqual(["rayshud", "budhud", "toonhud"]);
+  });
+
+  it("describes what is known in one line", () => {
+    expect(hudStatCopy(stats.rayshud)).toBe("398k downloads · 1.2M views · updated Jan 2026");
+    expect(hudStatCopy({ updated: "2024-03-02" })).toBe("updated Mar 2024");
+    expect(hudStatCopy(undefined)).toBeNull();
+    expect(hudStatCopy({})).toBeNull();
+    expect(compactCount(999)).toBe("999");
+    expect(compactCount(12_345)).toBe("12k");
+    expect(compactCount(12_345_678)).toBe("12M");
   });
 });

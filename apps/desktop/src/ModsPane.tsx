@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
+import { Switch, SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
 import type {
@@ -18,6 +19,9 @@ import {
   modsStatusLine,
   PRELOADER_CREDIT,
   PRELOADER_EXPLAINER,
+  REPAIR_POLL_MS,
+  REPAIR_TIMEOUT_MS,
+  repairComplete,
   summarizeReport,
   toggleName,
 } from "./lib/mods-ui";
@@ -30,7 +34,11 @@ export type ModsPaneProps = {
   onDownloadLibrary: () => void;
   onApply: (addons: string[], particleMods: string[]) => void;
   onToggleBypass: (enabled: boolean) => void;
+  onTogglePreload: (enabled: boolean) => void;
   onRevert: () => void;
+  /** Start Steam's verify; the pane polls `onRefreshStatus` until it finishes. */
+  onRepair: () => Promise<void>;
+  onRefreshStatus: () => Promise<void>;
   onOpenRepo: () => void;
 };
 
@@ -44,7 +52,10 @@ export function ModsPane({
   onDownloadLibrary,
   onApply,
   onToggleBypass,
+  onTogglePreload,
   onRevert,
+  onRepair,
+  onRefreshStatus,
   onOpenRepo,
 }: ModsPaneProps) {
   const { running, busy } = useAppStatus();
@@ -60,6 +71,44 @@ export function ModsPane({
 
   const locked = !useCanWrite();
   const canApply = modsApplyEnabled(payload, addons, particleMods);
+  const untracked = status?.untrackedModified ?? [];
+  // Steam's verify runs outside the app; while it does, poll the status and,
+  // once every stale file reads as stock again, put the selection back.
+  const [repair, setRepair] = useState<"idle" | "waiting" | "timeout" | "done">("idle");
+  const repairStarted = useRef(0);
+  const repairSelection = useRef<ModSelection>(installed);
+  useEffect(() => {
+    if (repair !== "waiting") {
+      return;
+    }
+    if (repairComplete(payload)) {
+      setRepair("done");
+      const { addons: wantAddons, particleMods: wantParticles } = repairSelection.current;
+      if (wantAddons.length > 0 || wantParticles.length > 0) {
+        onApply(wantAddons, wantParticles);
+      }
+      return;
+    }
+    if (Date.now() - repairStarted.current > REPAIR_TIMEOUT_MS) {
+      setRepair("timeout");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void onRefreshStatus().catch(() => {});
+    }, REPAIR_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [repair, payload, onApply, onRefreshStatus]);
+
+  async function startRepair() {
+    repairStarted.current = Date.now();
+    repairSelection.current = { addons, particleMods };
+    setRepair("waiting");
+    try {
+      await onRepair();
+    } catch {
+      setRepair("idle");
+    }
+  }
   const anythingInstalled =
     (status?.patchedFiles.length ?? 0) > 0 ||
     (status?.addons.length ?? 0) > 0 ||
@@ -72,24 +121,37 @@ export function ModsPane({
 
       {/* The status hero: the three facts, then the two actions that change
           them. Everything the library offers sits below. */}
+      {/* Casual preload lives here and only here: the profile's preload on
+          launch (what viewmodel packs and mods both need) and the gameinfo
+          bypass that keeps preloaded content live on Valve servers. */}
       <div className="hero-row">
         <div className="min-w-0">
-          <h2 className="t-section">Casual preload bypass</h2>
+          <h2 className="t-section">Casual preload</h2>
           <p className="t-meta mt-1 max-w-[62ch]">
-            Comments out one line in gameinfo.txt so preloaded materials, models and particles stay
-            live on sv_pure servers. The pristine file is backed up first and the change reverses
-            cleanly.
+            Valve Casual runs sv_pure, so custom animations, materials and particles only survive
+            when the game precaches them before you join. Two parts, both for this profile.
           </p>
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              data-testid="mods-bypass-toggle"
-              className="btn btn-primary"
+          <div className="mt-3 max-w-xl">
+            <SwitchRow
+              id="mods-profile-preload"
+              testId="mods-profile-preload"
+              label="Preload on launch"
+              description="Loads itemtest for a moment at startup so viewmodel packs and mods are cached before you join a server. Community and listen servers work without it."
+              checked={payload?.profilePreload ?? false}
+              disabled={locked || !payload}
+              onChange={onTogglePreload}
+            />
+            <SwitchRow
+              id="mods-bypass-toggle"
+              testId="mods-bypass-toggle"
+              label="Material bypass"
+              description="Comments out one line in gameinfo.txt so preloaded materials, models and particles stay live on sv_pure servers. The pristine file is backed up first."
+              checked={status?.gameinfoBypassed ?? false}
               disabled={locked || !status?.gameinfoFound}
-              onClick={() => onToggleBypass(!(status?.gameinfoBypassed ?? false))}
-            >
-              {status?.gameinfoBypassed ? "Disable bypass" : "Enable bypass"}
-            </button>
+              onChange={onToggleBypass}
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               data-testid="mods-revert"
@@ -100,15 +162,15 @@ export function ModsPane({
               Restore stock files
             </button>
           </div>
-          <p className="mt-4 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
+          <p className="mt-3 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
             Restore puts every patched byte back, un-comments gameinfo.txt and removes the addon
-            pack. Mods load on Valve servers only after the preload runs — keep Casual preload on
-            for this profile.
+            pack. Building a viewmodel pack or applying mods turns Preload on launch on by itself.
           </p>
         </div>
 
         {status ? (
           <dl className="hero-preview surface m-0 self-start p-5">
+            <Stat label="Preload" value={payload?.profilePreload ? "On" : "Off"} />
             <Stat label="Bypass" value={status.gameinfoBypassed ? "On" : "Off"} />
             <Stat label="Patched files" value={String(status.patchedFiles.length)} />
             <Stat label="Addon pack" value={status.customVpkPresent ? "Installed" : "None"} />
@@ -122,13 +184,42 @@ export function ModsPane({
           selection again to re-install it on the fresh files.
         </Alert>
       ) : null}
-      {payload && anythingInstalled && !payload.preloadLaunchInSteam ? (
+      {payload && anythingInstalled && payload.profilePreload && !payload.preloadLaunchInSteam ? (
         <Alert tone="warn" testId="mods-launch-warning" className="mt-6">
           The preload is not in your Steam launch options yet (Steam was open when they were saved).
           Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}
           <code className="font-mono">+exec</code> reaches Steam. Without it, mods stay invisible on
           Valve servers.
         </Alert>
+      ) : null}
+      {untracked.length > 0 || repair === "waiting" || repair === "timeout" ? (
+        <section data-testid="mods-repair" className="section">
+          <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+            <div className="min-w-0 max-w-[62ch]">
+              <h2 className="t-section">
+                {repair === "waiting"
+                  ? "Waiting for Steam to verify the game files"
+                  : `${untracked.length} particle ${untracked.length === 1 ? "file needs" : "files need"} a repair`}
+              </h2>
+              <p className="t-meta mt-1">
+                {repair === "waiting"
+                  ? "Steam is checking TF2 now. When it puts the stock files back, execs re-applies the mods you have selected. This can take a few minutes; keep the game closed."
+                  : repair === "timeout"
+                    ? "Steam has not finished yet. Leave it running and press Repair again once it is done, or press Apply to re-install your selection."
+                    : "These were patched by an earlier install whose tracking was lost, so execs has no stock copy to put back and they can reference materials that are no longer shipped — the sprite-renderer console flood. Only Steam holds the stock bytes: Repair asks Steam to verify TF2's files, then execs re-applies your selection on top."}
+              </p>
+            </div>
+            <button
+              type="button"
+              data-testid="mods-repair-button"
+              className="btn btn-primary"
+              disabled={locked || repair === "waiting"}
+              onClick={() => void startRepair()}
+            >
+              {repair === "waiting" ? "Verifying…" : "Repair with Steam"}
+            </button>
+          </div>
+        </section>
       ) : null}
       {status && !status.gameinfoFound ? (
         <Alert tone="error" testId="mods-no-gameinfo" className="mt-6">
@@ -290,16 +381,7 @@ function AddonRow({
   const id = `mods-addon-${addon.id.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
     <li className="border-b border-edge py-3">
-      <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
-        <input
-          id={id}
-          data-testid={id}
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={onToggle}
-          className="mt-1 size-3.5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
-        />
+      <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
             <span className="t-row">{addon.name}</span>
@@ -315,7 +397,14 @@ function AddonRow({
             </span>
           ) : null}
         </span>
-      </label>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          label={addon.name}
+          testId={id}
+          onChange={onToggle}
+        />
+      </div>
     </li>
   );
 }
@@ -336,16 +425,7 @@ function ParticleRow({
   const more = mod.pcfFiles.length - preview.length;
   return (
     <li className="border-b border-edge py-3">
-      <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
-        <input
-          id={id}
-          data-testid={id}
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={onToggle}
-          className="mt-1 size-3.5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
-        />
+      <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
             <span className="t-row">{mod.name.replace(/_/g, " ")}</span>
@@ -359,7 +439,14 @@ function ParticleRow({
             {more > 0 ? ` and ${more} more` : ""}
           </span>
         </span>
-      </label>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          label={mod.name.replace(/_/g, " ")}
+          testId={id}
+          onChange={onToggle}
+        />
+      </div>
     </li>
   );
 }

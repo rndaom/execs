@@ -6,6 +6,7 @@ pub mod crosshair;
 pub mod files;
 pub mod finder;
 pub mod first_run;
+pub mod hitsound;
 pub mod hud;
 pub mod launch;
 pub mod library;

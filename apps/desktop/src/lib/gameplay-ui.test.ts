@@ -69,8 +69,35 @@ describe("gameplay serialize and parse", () => {
       cl_crosshair_red: 10,
       cl_crosshair_green: 20,
       cl_crosshair_blue: 30,
+      tf_dingalingaling: 1,
+      tf_dingaling_volume: 0.4,
+      tf_dingaling_pitchmindmg: 90,
+      tf_dingaling_pitchmaxdmg: 120,
+      tf_dingalingaling_effect: 3,
+      tf_dingalingaling_repeat_delay: 0.25,
+      tf_dingalingaling_lasthit: 1,
+      tf_dingaling_lasthit_volume: 1,
+      tf_dingaling_lasthit_pitchmindmg: 100,
+      tf_dingaling_lasthit_pitchmaxdmg: 100,
+      tf_dingalingaling_last_effect: 8,
     });
     expect(parseGameplay(serializeGameplay(original))).toEqual(original);
+  });
+
+  it("keeps the hit sound cvars inside their engine bounds", () => {
+    const next = clampGameplay({
+      ...defaultGameplay(),
+      tf_dingaling_volume: 1.7,
+      tf_dingaling_pitchmindmg: 0,
+      tf_dingalingaling_effect: 12,
+      tf_dingalingaling_repeat_delay: -1,
+    });
+    expect(next.tf_dingaling_volume).toBe(1);
+    expect(next.tf_dingaling_pitchmindmg).toBe(1);
+    expect(next.tf_dingalingaling_effect).toBe(8);
+    expect(next.tf_dingalingaling_repeat_delay).toBe(0);
+    expect(serializeGameplay(defaultGameplay())).toContain("tf_dingalingaling 0");
+    expect(serializeGameplay(defaultGameplay())).toContain("tf_dingaling_volume 0.75");
   });
 
   it("parses quoted default crosshair as empty", () => {

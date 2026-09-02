@@ -8,6 +8,7 @@ export const SETTINGS_TABS = [
   "hud",
   "crosshair",
   "viewmodels",
+  "sounds",
   "mods",
   "files",
   "launch",
@@ -22,6 +23,7 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   hud: "HUD",
   crosshair: "Crosshair",
   viewmodels: "Viewmodels",
+  sounds: "Sounds",
   mods: "Mods",
   files: "Files",
   launch: "Launch",
@@ -33,7 +35,7 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
  */
 export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
   { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
-  { label: "Look", tabs: ["hud", "crosshair", "viewmodels"] },
+  { label: "Look", tabs: ["hud", "crosshair", "viewmodels", "sounds"] },
   { label: "More", tabs: ["mods", "files", "launch"] },
 ];
 

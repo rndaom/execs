@@ -17,6 +17,19 @@ export const PRELOADER_REPO_URL = "https://github.com/cueki/casual-pre-loader";
 export const PRELOADER_EXPLAINER =
   "Patches particle files inside the game's own archives and relaxes gameinfo.txt so custom content survives Valve Casual's sv_pure. Every changed byte is snapshotted first and one click restores stock files.";
 
+/** How long the pane keeps polling for Steam's verify to finish. */
+export const REPAIR_POLL_MS = 5_000;
+export const REPAIR_TIMEOUT_MS = 20 * 60_000;
+
+/**
+ * Whether a repair has finished: every particle file execs could not restore
+ * now reads as stock again. Steam's verify also puts back the files execs
+ * patched itself, so the caller re-applies the selection afterwards.
+ */
+export function repairComplete(status: PreloaderStatusPayload | null): boolean {
+  return status !== null && status.status.untrackedModified.length === 0;
+}
+
 export function toggleName(list: string[], name: string): string[] {
   return list.includes(name) ? list.filter((entry) => entry !== name) : [...list, name];
 }
@@ -141,10 +154,13 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
     ],
     stale: false,
     customVpkPresent: true,
+    // One stale patch from an earlier install, so the preview shows the repair flow.
+    untrackedModified: ["particles/muzzle_flash.pcf"],
   },
   modsCached: true,
   modsSizeBytes: 81_529_475,
   preloadLaunchInSteam: true,
+  profilePreload: true,
 };
 
 const PREVIEW_ADDONS: CatalogAddon[] = [

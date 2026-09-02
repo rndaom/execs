@@ -56,6 +56,8 @@ struct ProfileZipManifest {
     crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     viewmodel: Option<ViewmodelRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hitsound: Option<crate::hitsound::HitsoundRecord>,
 }
 
 /// Entries are streamed to `staging` rather than held in RAM: a 200 MB profile
@@ -233,6 +235,7 @@ fn write_profile_zip(
         hud: manifest.hud.clone(),
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
+        hitsound: manifest.hitsound.clone(),
     };
 
     let file = fs::File::create(zip_path).map_err(io_err)?;
@@ -530,6 +533,7 @@ fn apply_payload(
         payload.manifest.hud.clone(),
         payload.manifest.crosshair.clone(),
         payload.manifest.viewmodel.clone(),
+        payload.manifest.hitsound.clone(),
         running,
     )
 }
@@ -543,6 +547,7 @@ fn write_imported_launch_and_hud(
     hud: Option<HudRecord>,
     crosshair: Option<CrosshairRecord>,
     viewmodel: Option<ViewmodelRecord>,
+    hitsound: Option<crate::hitsound::HitsoundRecord>,
     running: &[String],
 ) -> Result<(), ProfileError> {
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
@@ -550,6 +555,7 @@ fn write_imported_launch_and_hud(
     manifest.hud = hud;
     manifest.crosshair = crosshair;
     manifest.viewmodel = viewmodel;
+    manifest.hitsound = hitsound;
     crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)
 }
 

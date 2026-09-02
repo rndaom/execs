@@ -84,25 +84,69 @@ export function StockCrosshairSettings({
           </p>
 
           <div className="mt-5 flex min-w-0 flex-col gap-6">
-            <label className="t-row flex flex-col gap-2" htmlFor="stock-crosshair-file">
-              Crosshair file
-              <select
-                id="stock-crosshair-file"
+            <fieldset>
+              <legend className="t-row">Crosshair</legend>
+              <div
                 data-testid="stock-crosshair-file"
-                value={draft.cl_crosshair_file}
-                disabled={locked}
-                onChange={(event) =>
-                  patch({ cl_crosshair_file: event.target.value as CrosshairFile })
-                }
-                className="field px-3 py-2.5 text-[14px] font-normal text-ink outline-none disabled:opacity-50"
+                data-value={draft.cl_crosshair_file}
+                className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8"
               >
-                {CROSSHAIR_FILES.map((file) => (
-                  <option key={file || "default"} value={file}>
-                    {file === "" ? "Default / none" : `${file} — ${STOCK_CROSSHAIR_LABELS[file]}`}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {CROSSHAIR_FILES.map((file) => {
+                  const selected = draft.cl_crosshair_file === file;
+                  const fileSprite = file === "" ? null : (sprites?.[file] ?? null);
+                  const filePrimitives = stockCrosshairPrimitives(file);
+                  return (
+                    <label
+                      key={file || "default"}
+                      title={file === "" ? "Default / none" : STOCK_CROSSHAIR_LABELS[file]}
+                      className={`thumb cursor-pointer focus-within:ring-2 focus-within:ring-brand ${
+                        selected ? "thumb-selected" : ""
+                      } ${locked ? "thumb-disabled" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="stock-crosshair-file"
+                        data-testid={`stock-crosshair-file-${file || "default"}`}
+                        value={file}
+                        checked={selected}
+                        disabled={locked}
+                        onChange={() => patch({ cl_crosshair_file: file })}
+                        className="sr-only"
+                      />
+                      <span className="thumb-art grid place-items-center" aria-hidden="true">
+                        {fileSprite ? (
+                          <StockSpriteCanvas
+                            file={file}
+                            sprite={fileSprite}
+                            red={draft.cl_crosshair_red}
+                            green={draft.cl_crosshair_green}
+                            blue={draft.cl_crosshair_blue}
+                            size={40}
+                          />
+                        ) : filePrimitives ? (
+                          <StockShapeSvg
+                            file={file}
+                            primitives={filePrimitives}
+                            color={color}
+                            size={40}
+                          />
+                        ) : (
+                          <span className="text-[10px] text-ink-faint">weapon</span>
+                        )}
+                      </span>
+                      <span className="thumb-label">
+                        {file === "" ? "None" : file.replace("crosshair", "")}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="t-meta mt-2">
+                {draft.cl_crosshair_file === ""
+                  ? "Default / none — each weapon draws its own crosshair."
+                  : STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}
+              </p>
+            </fieldset>
 
             <StockSliderRow
               id="stock-crosshair-scale"
@@ -131,7 +175,7 @@ export function StockCrosshairSettings({
                   min={COLOR_MIN}
                   max={COLOR_MAX}
                   disabled={locked}
-                  accentClass="accent-team-red"
+                  accentClass="range-red"
                   onChange={(cl_crosshair_red) => patch({ cl_crosshair_red })}
                 />
                 <StockSliderRow
@@ -141,7 +185,7 @@ export function StockCrosshairSettings({
                   min={COLOR_MIN}
                   max={COLOR_MAX}
                   disabled={locked}
-                  accentClass="accent-health"
+                  accentClass="range-green"
                   onChange={(cl_crosshair_green) => patch({ cl_crosshair_green })}
                 />
                 <StockSliderRow
@@ -151,7 +195,7 @@ export function StockCrosshairSettings({
                   min={COLOR_MIN}
                   max={COLOR_MAX}
                   disabled={locked}
-                  accentClass="accent-team-blu"
+                  accentClass="range-blue"
                   onChange={(cl_crosshair_blue) => patch({ cl_crosshair_blue })}
                 />
               </div>
@@ -174,6 +218,7 @@ export function StockCrosshairSettings({
                 green={draft.cl_crosshair_green}
                 blue={draft.cl_crosshair_blue}
                 size={renderedSize}
+                testId="stock-crosshair-sprite"
               />
             ) : primitives ? (
               <StockShapeSvg
@@ -181,6 +226,7 @@ export function StockCrosshairSettings({
                 primitives={primitives}
                 color={color}
                 size={renderedSize}
+                testId="stock-crosshair-shape"
               />
             ) : (
               <p className="t-meta max-w-48 px-3 text-center">
@@ -230,6 +276,7 @@ function StockSpriteCanvas({
   green,
   blue,
   size,
+  testId,
 }: {
   file: string;
   sprite: StockCrosshairSprite;
@@ -237,6 +284,7 @@ function StockSpriteCanvas({
   green: number;
   blue: number;
   size: number;
+  testId?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -259,7 +307,7 @@ function StockSpriteCanvas({
   return (
     <canvas
       ref={canvasRef}
-      data-testid="stock-crosshair-sprite"
+      data-testid={testId}
       data-file={file}
       width={sprite.width}
       height={sprite.height}
@@ -274,15 +322,17 @@ function StockShapeSvg({
   primitives,
   color,
   size,
+  testId,
 }: {
   file: CrosshairFile;
   primitives: StockShapePrimitive[];
   color: string;
   size: number;
+  testId?: string;
 }) {
   return (
     <svg
-      data-testid="stock-crosshair-shape"
+      data-testid={testId}
       data-file={file || "default"}
       viewBox="0 0 64 64"
       width={size}
@@ -355,7 +405,7 @@ function StockSliderRow({
   min,
   max,
   disabled,
-  accentClass = "accent-brand",
+  accentClass = "",
   note,
   onChange,
 }: {
@@ -390,7 +440,7 @@ function StockSliderRow({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
-        className={`mt-3 w-full cursor-pointer ${accentClass} disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`range mt-3 w-full ${accentClass}`}
       />
       {note ? <p className="mt-1 text-[12px] leading-5 text-ink-faint">{note}</p> : null}
     </div>

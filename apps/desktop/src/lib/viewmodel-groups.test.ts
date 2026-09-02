@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { VIEWMODEL_GROUPS, viewmodelGroupsForClass } from "./viewmodel-groups";
-import { VIEWMODEL_PREVIEW_GROUPS } from "./viewmodel-previews";
+import {
+  VIEWMODEL_GROUP_PREVIEWS,
+  VIEWMODEL_SLOTS,
+  viewmodelBlankStem,
+  viewmodelStemForGroup,
+} from "./viewmodel-previews";
 import { VIEWMODEL_CLASSES } from "./viewmodel-ui";
 
 describe("viewmodel groups", () => {
@@ -27,13 +32,28 @@ describe("viewmodel groups", () => {
     expect(counted).toBe(VIEWMODEL_GROUPS.length);
   });
 
-  it("resolves every preview's group id — a typo silently means 'never hides'", () => {
+  it("gives every group a preview screenshot and a slot, and no preview an unknown group", () => {
     const ids = new Set(VIEWMODEL_GROUPS.map((group) => group.id));
-    for (const [classId, slots] of Object.entries(VIEWMODEL_PREVIEW_GROUPS)) {
-      for (const [slot, id] of Object.entries(slots)) {
-        expect(ids.has(id), `${classId}/${slot} → ${id}`).toBe(true);
-        expect(id.startsWith(`${classId}/`), id).toBe(true);
-      }
+    for (const group of VIEWMODEL_GROUPS) {
+      const preview = VIEWMODEL_GROUP_PREVIEWS[group.id];
+      expect(preview, group.id).toBeDefined();
+      expect(preview.image, group.id).toMatch(/^[a-z_]+$/);
+      expect(
+        preview.image.startsWith(group.classId === "demoman" ? "demo_" : `${group.classId}_`),
+        group.id,
+      ).toBe(true);
+      expect(VIEWMODEL_SLOTS, group.id).toContain(preview.slot);
+      expect(preview.weapons.length, group.id).toBeGreaterThan(0);
     }
+    for (const id of Object.keys(VIEWMODEL_GROUP_PREVIEWS)) {
+      expect(ids.has(id), id).toBe(true);
+    }
+  });
+
+  it("shows the class blank once a group is hidden and the weapon while it is not", () => {
+    expect(viewmodelStemForGroup("scout", "scout/scatterguns", false)).toBe("scout_scattergun");
+    expect(viewmodelStemForGroup("scout", "scout/scatterguns", true)).toBe("scout_blank");
+    expect(viewmodelStemForGroup("demoman", "demoman/melee", true)).toBe("demo_blank");
+    expect(viewmodelStemForGroup("spy", "spy/not-a-group", false)).toBe(viewmodelBlankStem("spy"));
   });
 });
