@@ -192,6 +192,9 @@ export function CrosshairPane({
             <CrosshairLibraryChips
               choices={shapeChoices}
               selected={draft.shape}
+              color={draft.color}
+              customRgba={draft.customRgba}
+              previewFor={previewFor}
               locked={locked}
               canBrowseCommunity={isTauri()}
               hasDesign={draft.design !== null}
@@ -206,6 +209,7 @@ export function CrosshairPane({
               choices={shapeChoices}
               classTab={classTab}
               locked={locked}
+              previewFor={previewFor}
               onSelectClass={setClassTab}
               onChange={setDraft}
             />
@@ -272,6 +276,7 @@ export function CrosshairPane({
         <CommunityPicker
           open
           existing={draft.library}
+          color={draft.color}
           onAdd={addCommunity}
           onClose={() => setPickerOpen(false)}
         />

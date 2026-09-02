@@ -43,6 +43,15 @@ pub async fn build_viewmodel_pack(
     .await
 }
 
+/// One of CompVMInstaller's preview screenshots, as raw JPEG bytes (a
+/// `Response`, not a JSON array — a 130 KB image would otherwise cross the
+/// bridge as half a megabyte of comma-separated numbers).
+#[tauri::command]
+pub async fn viewmodel_preview_image(name: String) -> Result<tauri::ipc::Response, CommandError> {
+    let bytes = blocking(move || Ok(crate::viewmodel_fetch::fetch_preview_image(&name)?)).await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 /// TF2's own compiler, named for the host platform — a native Linux install
 /// ships `bin/studiomdl`, not `bin/studiomdl.exe`.
 fn studiomdl_path(root: &Path) -> PathBuf {

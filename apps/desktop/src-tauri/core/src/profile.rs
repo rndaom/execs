@@ -192,6 +192,8 @@ pub struct ProfileManifest {
     pub crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewmodel: Option<ViewmodelRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hitsound: Option<crate::hitsound::HitsoundRecord>,
     /// Pack keys the user chose to Keep out of the profile. Without this the
     /// same prompt returns on every boot and after every TF2 quit until they
     /// pick Update. Cleared by an Update.
@@ -380,6 +382,7 @@ where
         hud: None,
         crosshair: None,
         viewmodel: None,
+        hitsound: None,
         ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
@@ -897,6 +900,7 @@ fn create_empty_record(
         hud: None,
         crosshair: None,
         viewmodel: None,
+        hitsound: None,
         ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;

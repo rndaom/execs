@@ -11,6 +11,8 @@ import {
   type AbsorbDelta,
   BridgeError,
   type ComfigState,
+  type HitsoundRecord,
+  type HitsoundSlotChange,
   type HudUiState,
   type OfficialAddon,
   openEmbeddedPage,
@@ -103,6 +105,8 @@ export function createPreviewApi(state: PreviewState): Api {
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
   let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
+  let hitsound: HitsoundRecord | null =
+    state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
 
   function detail(): ProfileDetail | null {
@@ -123,6 +127,7 @@ export function createPreviewApi(state: PreviewState): Api {
       hud: hudState.installed,
       crosshair,
       viewmodel,
+      hitsound,
     };
   }
 
@@ -306,6 +311,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getHudState() {
       return hudState;
     },
+    async getHudAlbum() {
+      return [];
+    },
     async installHud(id: string) {
       const entry = PREVIEW_HUD_CATALOG.find((item) => item.id === id);
       const supported = schemaSupportedIds().includes(id);
@@ -356,6 +364,10 @@ export function createPreviewApi(state: PreviewState): Api {
     async fetchCommunityCrosshair(file: string) {
       throw notInPreview(`Downloading ${file}`);
     },
+    async fetchCommunityCrosshairPreviews() {
+      // No network in preview: the picker shows name-only tiles.
+      return {};
+    },
     async getPackCrosshairPreviews() {
       // Decoded sprites need the user's own game files; the panes fall back to
       // their drawn geometry, which is exactly what preview should show.
@@ -387,6 +399,9 @@ export function createPreviewApi(state: PreviewState): Api {
       viewmodel = null;
       return requireDetail();
     },
+    async viewmodelPreviewImage(name: string) {
+      throw notInPreview(`Fetching the ${name} preview`);
+    },
     async viewmodelBuildAvailable() {
       return true;
     },
@@ -394,6 +409,43 @@ export function createPreviewApi(state: PreviewState): Api {
       if (viewmodel) {
         viewmodel = { ...viewmodel, preload: enabled };
       }
+      return requireDetail();
+    },
+
+    // --- hit and kill sounds ------------------------------------------------
+    async hitsoundBytes() {
+      throw notInPreview("Auditioning sounds");
+    },
+    async listStockHitsounds() {
+      // Every stock effect is "present" in preview; nothing can play anyway.
+      const { STOCK_HITSOUND_EFFECTS } = await import("./hitsound-ui");
+      return STOCK_HITSOUND_EFFECTS.flatMap((effect) => [effect.hit, effect.kill]);
+    },
+    async pickHitsoundFile() {
+      throw notInPreview("Picking a sound file");
+    },
+    async applyHitsounds(hit: HitsoundSlotChange, kill: HitsoundSlotChange) {
+      const next: HitsoundRecord = { ...(hitsound ?? {}) };
+      const apply = (slot: "hit" | "kill", change: HitsoundSlotChange) => {
+        if (change.change === "clear") {
+          next[slot] = null;
+        } else if (change.change === "install") {
+          const pick = change.pick;
+          next[slot] =
+            pick.kind === "community"
+              ? { name: pick.name, source: "community" }
+              : pick.kind === "file"
+                ? { name: pick.name, source: "file" }
+                : (next[slot] ?? null);
+        }
+      };
+      apply("hit", hit);
+      apply("kill", kill);
+      hitsound = next.hit || next.kill ? next : null;
+      return requireDetail();
+    },
+    async removeHitsounds() {
+      hitsound = null;
       return requireDetail();
     },
 
@@ -447,6 +499,7 @@ export function createPreviewApi(state: PreviewState): Api {
           patchedFiles: [],
           customVpkPresent: false,
           stale: false,
+          untrackedModified: [],
         },
       };
       return {

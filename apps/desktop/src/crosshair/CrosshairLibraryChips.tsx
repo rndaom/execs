@@ -1,14 +1,24 @@
 import { PencilSimple, Plus, X } from "@phosphor-icons/react";
-import { type CrosshairShape, isBuiltinCrosshairShape } from "../lib/crosshair-ui";
+import {
+  type CrosshairColor,
+  type CrosshairShape,
+  isBuiltinCrosshairShape,
+} from "../lib/crosshair-ui";
 import { crosshairShapeLabel } from "./CrosshairPreview";
+import { CrosshairThumb } from "./CrosshairThumb";
+import type { PreviewPixels } from "./useCrosshairDraft";
 
 /**
  * The base-crosshair picker: first-party shapes, the imported PNG, and every
- * library entry, plus the two doors into the designer and the community pack.
+ * library entry — each drawn, not named — plus the two doors into the
+ * designer and the community pack.
  */
 export function CrosshairLibraryChips({
   choices,
   selected,
+  color,
+  customRgba,
+  previewFor,
   locked,
   canBrowseCommunity,
   hasDesign,
@@ -19,6 +29,9 @@ export function CrosshairLibraryChips({
 }: {
   choices: CrosshairShape[];
   selected: CrosshairShape;
+  color: CrosshairColor | null;
+  customRgba: number[] | null;
+  previewFor: (name: string) => PreviewPixels | null;
   locked: boolean;
   canBrowseCommunity: boolean;
   hasDesign: boolean;
@@ -57,18 +70,17 @@ export function CrosshairLibraryChips({
           </button>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
         {choices.map((shape) => {
           const isSelected = selected === shape;
           const isLibrary = !isBuiltinCrosshairShape(shape);
           return (
             <label
               key={shape}
-              className={`group/chip relative cursor-pointer rounded-lg border px-3 py-2.5 text-center text-[13px] font-medium outline-none transition-colors duration-150 focus-within:ring-2 focus-within:ring-brand ${
-                isSelected
-                  ? "border-transparent text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
-                  : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
-              }`}
+              title={crosshairShapeLabel(shape)}
+              className={`thumb group/chip cursor-pointer focus-within:ring-2 focus-within:ring-brand ${
+                isSelected ? "thumb-selected" : ""
+              } ${locked ? "thumb-disabled" : ""}`}
             >
               <input
                 type="radio"
@@ -79,7 +91,14 @@ export function CrosshairLibraryChips({
                 onChange={() => onSelect(shape)}
                 className="sr-only"
               />
-              <span className={isLibrary ? "block truncate" : "capitalize"}>
+              <CrosshairThumb
+                shape={shape}
+                customRgba={customRgba}
+                color={color}
+                preview={isLibrary ? previewFor(shape) : null}
+                size={44}
+              />
+              <span className={`thumb-label ${isLibrary ? "" : "capitalize"}`}>
                 {crosshairShapeLabel(shape)}
               </span>
               {isLibrary ? (

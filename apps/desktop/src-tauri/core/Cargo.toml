@@ -11,6 +11,9 @@ sha2 = "0.10"
 sysinfo = "0.33"
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# Dropbox-hosted HUDs in hud-db are 7z archives without exception; pure Rust,
+# decompression only.
+sevenz-rust = { version = "0.6", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
@@ -35,4 +38,8 @@ required-features = ["probes"]
 
 [[example]]
 name = "vtf_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "pcf_probe"
 required-features = ["probes"]
