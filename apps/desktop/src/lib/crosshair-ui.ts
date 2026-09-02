@@ -212,11 +212,10 @@ export const WEAPON_CATALOG: WeaponCatalogEntry[] = [
   { script: "tf_weapon_builder_spy", label: "Red-Tape Recorder", classId: "spy", slot: "pda" },
 ];
 
-export const CROSSHAIR_CASUAL_COPY =
-  "Custom VTF crosshairs usually work on Valve Casual when they live under replay/thumbnails. Set the default in-game crosshair file above to Default / none or they will not show.";
+export const CROSSHAIR_CASUAL_COPY = "Custom crosshairs usually work on Valve Casual.";
 
 export const CROSSHAIR_STOCK_OVERRIDE_NOTE =
-  "The default in-game crosshair overrides custom crosshairs unless its file is Default / none.";
+  "Set the crosshair file above to Default / none, or these will not show.";
 
 export type CrosshairColor = [number, number, number];
 

@@ -34,7 +34,7 @@ export function FinderPanel({
       eyebrow="Find TF2"
       icon={<MagnifyingGlass aria-hidden="true" size={13} weight="bold" />}
       title="Confirm your Team Fortress 2 install"
-      lede="Profiles are tied to this folder. Nothing is written until you confirm."
+      lede="Profiles are tied to this folder; nothing is written until you confirm."
       footer={
         <div className="flex items-center justify-end gap-3 border-t border-edge pt-6">
           <button type="button" onClick={onBrowse} disabled={busy} className="btn btn-ghost">
@@ -54,9 +54,7 @@ export function FinderPanel({
       {scanning ? (
         <p className="t-meta">Scanning Steam libraries…</p>
       ) : installs.length === 0 ? (
-        <p className="t-meta">
-          No Team Fortress 2 install found. Use Browse to pick the Team Fortress 2 folder.
-        </p>
+        <p className="t-meta">No install found — use Browse to pick the TF2 folder.</p>
       ) : (
         <ul className="flex flex-col">
           {installs.map((install) => {

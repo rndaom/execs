@@ -13,12 +13,11 @@ export const GAMEPLAY_STEM = EXECS_GAMEPLAY_STEM;
 
 export const GAMEPLAY_HEADER = "// execs gameplay — managed, do not edit by hand";
 
-export const FLIP_VIEWMODELS_NOTE = "Does not apply while connected to a server.";
+export const FLIP_VIEWMODELS_NOTE = "Not while connected to a server.";
 
 /// r_drawtracers is FCVAR_CHEAT: the engine refuses it on any server without
 /// sv_cheats, logging "Can't use cheat cvar r_drawtracers in multiplayer".
-export const ALL_TRACERS_NOTE =
-  "Cheat-protected: the game ignores this on live servers, so it only applies with sv_cheats on.";
+export const ALL_TRACERS_NOTE = "Ignored on live servers; needs sv_cheats.";
 
 export const FOV_MIN = 54;
 export const FOV_MAX = 90;

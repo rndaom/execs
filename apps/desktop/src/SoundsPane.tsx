@@ -55,9 +55,9 @@ import {
   stockEntries,
 } from "./lib/sound-library";
 
-const SLOT_COPY: Record<HitsoundKind, { title: string; lede: string }> = {
-  hit: { title: "Hit sound", lede: "Plays every time you damage an enemy." },
-  kill: { title: "Kill sound", lede: "Plays on the hit that finishes them." },
+const SLOT_TITLES: Record<HitsoundKind, string> = {
+  hit: "Hit sound",
+  kill: "Kill sound",
 };
 
 const SOURCE_FILTERS: { id: SoundSourceId | "all"; label: string }[] = [
@@ -225,11 +225,11 @@ export function SoundsPane({
   }
 
   const status = running
-    ? "TF2 is open — your choices are safe, but nothing can be written yet."
+    ? "Draft kept until TF2 closes"
     : dirty
       ? needsPack
-        ? "Saves the settings and writes the sound files into this profile."
-        : "Saves the settings to this profile."
+        ? "Unsaved changes — writes sound files"
+        : "Unsaved changes"
       : "Saved";
 
   const stockAvailable = (entry: SoundLibraryEntry, kind: HitsoundKind) => {
@@ -244,7 +244,6 @@ export function SoundsPane({
     <section data-testid="settings-sounds" className="min-w-0 text-left">
       <PaneHeader
         title="Sounds"
-        lede="A ding when you land a hit and another when you get the kill. Pick a sound from the library below, set the volume, and it follows this profile."
         actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
       />
 
@@ -274,21 +273,19 @@ export function SoundsPane({
           <div className="min-w-0">
             <h2 className="t-section">Library</h2>
             <p className="t-meta mt-1">
-              {comfig === null
-                ? "Loading comfig.app's list…"
-                : `${library.length} sounds · play one, then send it to a slot.`}
+              {comfig === null ? "Loading…" : `${library.length} sounds`}
             </p>
           </div>
           <button
             type="button"
             data-testid="sounds-choose-file"
             disabled={picking || !canAudition}
-            title={canAudition ? undefined : "Choosing a file needs the desktop app."}
+            title={canAudition ? undefined : "Needs the desktop app."}
             onClick={() => void chooseFile()}
             className="btn btn-ghost"
           >
             <UploadSimple size={14} />
-            {picking ? "Reading…" : "Add your own WAV…"}
+            {picking ? "Reading…" : "Add a WAV…"}
           </button>
         </div>
         {pickError ? (
@@ -383,7 +380,7 @@ export function SoundsPane({
         </ul>
         {comfigError ? (
           <p data-testid="sounds-comfig-error" className="t-meta mt-3 text-ink-faint">
-            comfig.app's list could not be loaded: {comfigError}
+            comfig.app list unavailable: {comfigError}
           </p>
         ) : null}
       </section>
@@ -393,7 +390,7 @@ export function SoundsPane({
           <div className="grid gap-x-12 gap-y-6 lg:grid-cols-2">
             {(["hit", "kill"] as const).map((kind) => (
               <fieldset key={kind} className="min-w-0">
-                <legend className="eyebrow mb-3">{SLOT_COPY[kind].title} pitch</legend>
+                <legend className="eyebrow mb-3">{SLOT_TITLES[kind]} pitch</legend>
                 <Slider
                   id={`sounds-${kind}-pitch-min`}
                   label="Pitch at 10 damage"
@@ -407,7 +404,7 @@ export function SoundsPane({
                 <Slider
                   id={`sounds-${kind}-pitch-max`}
                   label="Pitch at 150 damage"
-                  hint="Rises with damage when set above the 10-damage pitch."
+                  hint="Rises with damage when above the 10-damage pitch."
                   value={draft[kind].pitchMax}
                   min={PITCH_MIN}
                   max={PITCH_MAX}
@@ -420,7 +417,7 @@ export function SoundsPane({
               <Slider
                 id="sounds-repeat-delay"
                 label="Hit sound repeat delay"
-                hint="Seconds between hit sounds. 0 plays one per damage tick; flamethrowers and miniguns get loud."
+                hint="0 plays one per damage tick; miniguns get loud."
                 value={Math.round(draft.repeatDelay * 100)}
                 min={0}
                 max={100}
@@ -446,8 +443,7 @@ export function SoundsPane({
           TF2Hitsounds
           <ArrowSquareOut size={11} />
         </button>
-        . The comfig.app library is mastercomfig's collection of community uploads (each sound
-        belongs to its uploader); browse it at{" "}
+        . comfig.app sounds are community uploads owned by their uploaders; browse them at{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app/app/?page=hits")}
@@ -503,20 +499,19 @@ function SoundSlot({
   onPlay: (choice: SoundChoice) => void;
   onChange: (update: Partial<SlotDraft>) => void;
 }) {
-  const copy = SLOT_COPY[kind];
+  const title = SLOT_TITLES[kind];
   const key = soundKey(pickForChoice(kind, slot.choice));
   const isPlaying = playing === key;
   return (
     <section data-testid={`sounds-${kind}`} className="min-w-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="t-section">{copy.title}</h2>
-          <p className="t-meta mt-1">{copy.lede}</p>
+          <h2 className="t-section">{title}</h2>
         </div>
         <Switch
           checked={slot.enabled}
           disabled={locked}
-          label={`${copy.title} on`}
+          label={`${title} on`}
           testId={`sounds-${kind}-enabled`}
           onChange={(enabled) => onChange({ enabled })}
         />
@@ -578,7 +573,7 @@ function PlayButton({
       aria-label={playing ? "Stop" : "Play"}
       aria-pressed={playing}
       disabled={disabled}
-      title={disabled ? "Playback needs the desktop app and your game files." : undefined}
+      title={disabled ? "Needs the desktop app." : undefined}
       onClick={onClick}
       className={`play-button ${playing ? "play-button-active" : ""}`}
     >

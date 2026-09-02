@@ -111,7 +111,7 @@ export function CrosshairPane({
     <section data-testid="settings-crosshair" className="min-w-0 text-left">
       <PaneHeader
         title="Crosshair"
-        lede="TF2's own crosshair, or a first-party pack you build yourself."
+        lede="TF2's own crosshair, or a pack you build."
         actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
       />
 
@@ -125,7 +125,6 @@ export function CrosshairPane({
 
       <PaneSection
         title="Custom crosshairs"
-        description="Pick a shape, a community crosshair or design your own, then override individual weapons if you want."
         meta={
           <span className={`badge ${record ? "badge-ok" : ""}`}>
             {record ? "Pack installed" : "Not installed"}
@@ -149,7 +148,7 @@ export function CrosshairPane({
                 data-testid="crosshair-stored-custom"
                 className="mt-1 text-[12px] leading-5 text-ink-faint"
               >
-                Your imported PNG is stored in the installed pack and stays in use on apply.
+                Your imported PNG is kept in the installed pack.
               </p>
             ) : null}
 
@@ -189,8 +188,7 @@ export function CrosshairPane({
                 </span>
               </label>
               <p className="mt-1.5 text-[12px] leading-5 text-ink-faint">
-                Tints the whole pack, through the same cvars as the crosshair above — applying
-                overwrites the colour set there.
+                Tints the whole pack; applying overwrites the colour above.
               </p>
             </div>
 
@@ -232,7 +230,6 @@ export function CrosshairPane({
       </PaneSection>
 
       <p className="t-meta mt-8 text-ink-faint">
-        Applying writes a first-party pack to this profile's custom folder.{" "}
         {COMMUNITY_CROSSHAIR_CREDIT} Stock crosshair previews are decoded from your own copy of the
         game. execs is not affiliated with Valve or Steam; Team Fortress 2 and its sprites are ©
         Valve Corporation.
@@ -242,15 +239,15 @@ export function CrosshairPane({
         status={
           locked
             ? running
-              ? "Close TF2 before changing crosshair files."
-              : "Finish the current profile task before changing crosshairs."
+              ? "Close TF2 to change crosshairs"
+              : "Finish the current task first"
             : !dirty
               ? "Saved"
               : record
-                ? "Rewrites the installed pack."
-                : "Writes a new pack to this profile."
+                ? "Rewrites the installed pack"
+                : "Writes a new pack"
         }
-        actionLabel={record ? "Update crosshair pack" : "Install crosshair pack"}
+        actionLabel={record ? "Update pack" : "Install pack"}
         lockedLabel="Close TF2 to apply"
         running={running}
         locked={locked}

@@ -20,7 +20,7 @@ export const START_FROM_OPTIONS: {
   {
     id: "current",
     label: "Current setup",
-    description: "Keep your binds, audio, console and other in-game options; no tutorial pop-ups.",
+    description: "Keeps your binds, audio and console options; no tutorial pop-ups.",
   },
   {
     id: "fresh",

@@ -3,11 +3,11 @@ import type { ViewmodelHideMode, ViewmodelRecord, ViewmodelSource } from "./brid
 export const EXECS_VIEWMODELS_PACK = "execs-viewmodels";
 
 export const VIEWMODEL_CASUAL_COPY =
-  "Animation packs need the first-party preload to apply on Valve Casual. Community and listen servers work without it. Whichever hide mode you pick, a hidden weapon is also hidden in third person — TF2 shares one model between both views. File-safe FOV and min viewmodels stay on the Gameplay pane.";
+  "Packs need the preload on Valve Casual; community and listen servers work without it. A hidden weapon is also hidden in third person. FOV and min viewmodels live on the Gameplay pane.";
 
 /** Upstream (and our) rule: hiding any Soldier group also hides the Original. */
 export const SOLDIER_ORIGINAL_NOTE =
-  "Hiding any Soldier group also hides the Original's animations — leaving them stock glitches in game, so the pack force-hides it.";
+  "Hiding any Soldier group also hides the Original; leaving it stock glitches in game.";
 
 export const VIEWMODEL_CLASSES = [
   "scout",
@@ -38,12 +38,6 @@ export function parseHideMode(raw: string | undefined | null): ViewmodelHideMode
 export const HIDE_MODE_LABELS: Record<ViewmodelHideMode, string> = {
   full: "Weapon and hands",
   weapon: "Weapon only, keep hands",
-};
-
-export const HIDE_MODE_NOTES: Record<ViewmodelHideMode, string> = {
-  full: "The whole viewmodel disappears for the weapons you hide — this is what Yttrium's original pack does. Hidden weapons also stay hidden in third person, because TF2 shares one model between both views.",
-  weapon:
-    "Only the weapon is taken away; your arms and hands keep animating normally. Hidden weapons also stay hidden in third person, because TF2 shares one model between both views.",
 };
 
 export function serializeHiddenGroups(hidden: string[]): string {

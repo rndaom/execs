@@ -27,11 +27,9 @@ describe("launch UI helpers", () => {
   it("explains Steam write without asking them to quit", () => {
     expect(steamWriteCopy("written")).toBe("Wrote Steam launch options.");
     expect(steamWriteCopy("steam_open")).toBe(
-      "Saved on the profile. Steam is open — copy into TF2 Properties yourself.",
+      "Saved. Steam is open — copy into TF2 Properties yourself.",
     );
-    expect(steamWriteCopy("no_account")).toBe(
-      "Saved on the profile. Could not find a Steam userdata folder.",
-    );
+    expect(steamWriteCopy("no_account")).toBe("Saved. No Steam userdata folder found.");
     expect(steamWriteCopy("steam_open")).not.toMatch(/quit Steam/i);
     expect(steamWriteCopy("no_account")).not.toMatch(/quit Steam/i);
   });

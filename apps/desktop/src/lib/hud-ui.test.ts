@@ -51,7 +51,7 @@ describe("hud catalog helpers", () => {
         installed: { id: "rayshud", hash: null, source: "local", options: {} },
         inferred: true,
       }),
-    ).toBe("Installed (from this profile)");
+    ).toBe("Found in this profile");
   });
 
   it("seeds schema options from the profile and marks dirty edits", () => {

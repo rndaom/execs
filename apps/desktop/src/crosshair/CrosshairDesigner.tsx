@@ -54,8 +54,7 @@ export function CrosshairDesigner({
     <Modal
       open={open}
       testId="crosshair-designer"
-      title="Design your own crosshair"
-      description="Rendered at real sprite size — what you see is what gets baked."
+      title="Design a crosshair"
       className="fixed top-1/2 left-1/2 z-50 w-[min(42rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto p-5"
       onClose={onClose}
     >
@@ -103,11 +102,7 @@ export function CrosshairDesigner({
             value={design.size}
             min={DESIGN_LIMITS.size.min}
             max={sizeMax}
-            note={
-              sizeCapped
-                ? `Capped at ${sizeMax} px — thickness, gap and outline all take room inside the 64 × 64 sprite.`
-                : undefined
-            }
+            note={sizeCapped ? `Capped at ${sizeMax} px by thickness, gap and outline.` : undefined}
             onChange={(size) => patch({ size })}
           />
           <DesignerSlider

@@ -50,7 +50,7 @@ export function forbiddenLaunchNotice(tokens: ForbiddenLaunchToken[]): string {
   if (tokens.length === 0) {
     return "";
   }
-  return `${tokens.join(", ")} will be removed on save — execs never stores reset flags on a profile.`;
+  return `${tokens.join(", ")} will be removed on save.`;
 }
 
 export function strippedLaunchNotice(tokens: ForbiddenLaunchToken[]): string {
@@ -65,8 +65,8 @@ export function steamWriteCopy(status: SteamWriteStatus): string {
     case "written":
       return "Wrote Steam launch options.";
     case "steam_open":
-      return "Saved on the profile. Steam is open — copy into TF2 Properties yourself.";
+      return "Saved. Steam is open — copy into TF2 Properties yourself.";
     case "no_account":
-      return "Saved on the profile. Could not find a Steam userdata folder.";
+      return "Saved. No Steam userdata folder found.";
   }
 }

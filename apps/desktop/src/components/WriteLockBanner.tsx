@@ -16,7 +16,7 @@ export function WriteLockBanner({
         data-testid="tf2-write-lock"
         className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
       >
-        TF2 is running — execs is read-only until the game quits.
+        TF2 is running — execs is read-only.
       </div>
     );
   }

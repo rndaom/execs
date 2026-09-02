@@ -136,15 +136,14 @@ export function ModsPane({
         <div className="min-w-0">
           <h2 className="t-section">Casual preload</h2>
           <p className="t-meta mt-1 max-w-[62ch]">
-            Valve Casual runs sv_pure, so custom animations, materials and particles only survive
-            when the game precaches them before you join. Two parts, both for this profile.
+            Valve Casual runs sv_pure — content only survives if it is precached first.
           </p>
           <div className="mt-3 max-w-xl">
             <SwitchRow
               id="mods-profile-preload"
               testId="mods-profile-preload"
               label="Preload on launch"
-              description="Loads itemtest for a moment at startup so viewmodel packs and mods are cached before you join a server. Community and listen servers work without it."
+              description="Loads itemtest briefly at startup; community servers work without it."
               checked={payload?.profilePreload ?? false}
               disabled={locked || !payload}
               onChange={onTogglePreload}
@@ -153,7 +152,7 @@ export function ModsPane({
               id="mods-bypass-toggle"
               testId="mods-bypass-toggle"
               label="Material bypass"
-              description="Comments out one line in gameinfo.txt so preloaded materials, models and particles stay live on sv_pure servers. The pristine file is backed up first."
+              description="Keeps preloaded materials live on sv_pure; edits one line in gameinfo.txt, backed up first."
               checked={status?.gameinfoBypassed ?? false}
               disabled={locked || !status?.gameinfoFound}
               onChange={onToggleBypass}
@@ -171,8 +170,8 @@ export function ModsPane({
             </button>
           </div>
           <p className="mt-3 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
-            Restore puts every patched byte back, un-comments gameinfo.txt and removes the addon
-            pack. Building a viewmodel pack or applying mods turns Preload on launch on by itself.
+            Restore puts back every patched byte, un-comments gameinfo.txt and removes the addon
+            pack. Building a pack or applying mods turns Preload on by itself.
           </p>
         </div>
 
@@ -188,16 +187,13 @@ export function ModsPane({
 
       {status?.stale ? (
         <Alert tone="warn" testId="mods-stale" className="mt-6">
-          TF2 updated since the last install. The old patches are gone with the update — apply your
-          selection again to re-install it on the fresh files.
+          TF2 updated — the old patches are gone. Apply again to re-install them.
         </Alert>
       ) : null}
       {payload && anythingInstalled && payload.profilePreload && !payload.preloadLaunchInSteam ? (
         <Alert tone="warn" testId="mods-launch-warning" className="mt-6">
-          The preload is not in your Steam launch options yet (Steam was open when they were saved).
-          Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}
-          <code className="font-mono">+exec</code> reaches Steam. Without it, mods stay invisible on
-          Valve servers.
+          Steam was open, so the preload never reached your launch options. Close Steam fully and
+          press Apply again. Without it, mods stay invisible on Valve servers.
         </Alert>
       ) : null}
       {untracked.length > 0 || repair === "waiting" ? (
@@ -206,15 +202,15 @@ export function ModsPane({
             <div className="min-w-0 max-w-[62ch]">
               <h2 className="t-section">
                 {repair === "waiting"
-                  ? "Waiting for Steam to verify the game files"
+                  ? "Waiting for Steam to verify"
                   : `${untracked.length} particle ${untracked.length === 1 ? "file needs" : "files need"} a repair`}
               </h2>
               <p className="t-meta mt-1">
                 {repair === "waiting"
-                  ? "Steam is checking TF2 now. When it puts the stock files back, execs re-applies the mods you have selected. This can take a few minutes; keep the game closed."
+                  ? "Keep the game closed; your selection re-applies when Steam finishes."
                   : repair === "timeout"
-                    ? "Steam has not finished yet. Leave it running and press Repair again once it is done, or press Apply to re-install your selection."
-                    : "These were patched by an earlier install whose tracking was lost, so execs has no stock copy to put back and they can reference materials that are no longer shipped — the sprite-renderer console flood. Only Steam holds the stock bytes: Repair asks Steam to verify TF2's files, then execs re-applies your selection on top."}
+                    ? "Steam has not finished. Press Repair again once it is done."
+                    : "Patched by an earlier install with no snapshot to restore. Repair asks Steam to verify TF2, then re-applies your selection."}
               </p>
             </div>
             <button
@@ -231,13 +227,12 @@ export function ModsPane({
       ) : null}
       {status && !status.gameinfoFound ? (
         <Alert tone="error" testId="mods-no-gameinfo" className="mt-6">
-          gameinfo.txt was not found — check the TF2 folder on the launcher screen.
+          gameinfo.txt not found — check the TF2 folder.
         </Alert>
       ) : null}
 
       <PaneSection
         title="Default mod library"
-        description="The curated set the original preloader ships: texture addons packed into tf/custom, and particle mods patched into the game archives."
         meta={
           payload && !payload.modsCached ? (
             <button
@@ -255,14 +250,11 @@ export function ModsPane({
         }
       >
         {payload && !payload.modsCached && !loading ? (
-          <p className="t-meta mt-4">
-            One-time download from the pinned casual-pre-loader release; verified and cached for
-            offline installs.
-          </p>
+          <p className="t-meta mt-4">One-time download, verified and cached.</p>
         ) : null}
         {loading && !catalog ? (
           <p className="t-meta mt-4" role="status">
-            Loading the mod library…
+            Loading library…
           </p>
         ) : null}
 
@@ -271,7 +263,7 @@ export function ModsPane({
             <div>
               <h3 className="eyebrow">Addons</h3>
               <p className="mt-1 text-[12px] leading-5 text-ink-faint">
-                Packed into a single execs-preloader.vpk in tf/custom.
+                Packed into execs-preloader.vpk in tf/custom.
               </p>
               <ul className="mt-3 list-none p-0">
                 {catalog.addons.map((addon) => (
@@ -293,7 +285,7 @@ export function ModsPane({
             <div>
               <h3 className="eyebrow">Particle mods</h3>
               <p className="mt-1 text-[12px] leading-5 text-ink-faint">
-                Shrunk and patched into tf2_misc in place; later picks win contested files.
+                Patched into tf2_misc in place; later picks win contested files.
               </p>
               <ul className="mt-3 list-none p-0">
                 {catalog.particleMods.map((mod) => (
@@ -401,7 +393,7 @@ function AddonRow({
           ) : null}
           {addon.hasSound ? (
             <span className="mt-0.5 block text-[12px] leading-5 text-ink-faint">
-              Includes sounds — sound replacements are best-effort on sv_pure servers.
+              Includes sounds — best-effort on sv_pure.
             </span>
           ) : null}
         </span>

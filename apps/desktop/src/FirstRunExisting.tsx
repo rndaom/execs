@@ -33,7 +33,7 @@ export function FirstRunExisting({
       eyebrow="Existing setup found"
       icon={<ShieldCheck aria-hidden="true" size={13} weight="bold" />}
       title="Keep what you already built"
-      lede="This install already has customization. Save a snapshot of it before execs changes anything."
+      lede="Save a snapshot before execs changes anything."
       testId="first-run-existing"
       footer={
         <div className="flex flex-col-reverse gap-3 border-t border-edge pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -64,7 +64,6 @@ export function FirstRunExisting({
         <label htmlFor="first-run-profile-name" className="t-row block">
           Profile name
         </label>
-        <p className="t-meta mt-1">A name you will recognise in the switcher later.</p>
         <input
           id="first-run-profile-name"
           value={draftName}
@@ -81,8 +80,8 @@ export function FirstRunExisting({
         title="What gets saved"
         description={
           running
-            ? "TF2 is open, so nothing can be written yet. Close the game to save."
-            : "Your cfg layer, config.cfg, everything in tf/custom, and the launch string. The live files are copied, not moved."
+            ? "Close TF2 to save."
+            : "Your cfg layer, config.cfg, tf/custom and the launch string — copied, not moved."
         }
         meta={
           <span className="font-mono" title={path}>

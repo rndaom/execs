@@ -130,7 +130,7 @@ export function HudPane({
     <section data-testid="settings-hud" className="min-w-0 text-left">
       <PaneHeader
         title="HUD"
-        lede="One HUD per profile, installed in a click. Layout, scheme and animations survive Valve Casual; custom materials usually do not."
+        lede="One HUD per profile — custom materials usually do not survive Valve Casual."
         actions={<span className="tnum t-meta text-ink-faint">{catalog.length} in catalog</span>}
       />
 
@@ -146,7 +146,7 @@ export function HudPane({
               </p>
               <p className="t-meta mt-3 max-w-[62ch]">
                 {state.inferred
-                  ? "This profile already has a HUD folder. Match it to hud-db to enable updates."
+                  ? "Match it to hud-db to enable updates."
                   : "Installing another HUD replaces this one."}
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
@@ -445,8 +445,7 @@ export function HudPane({
             </Disclosure>
           ) : state.installed && !state.schemaSupported ? (
             <p data-testid="hud-options-notes" className="t-meta section">
-              This HUD has no in-app options. Open the author’s customization notes on comfig.app or
-              GitHub.
+              No in-app options for this HUD.
             </p>
           ) : null}
         </section>
@@ -454,9 +453,6 @@ export function HudPane({
         <div>
           <p className="eyebrow">Active HUD</p>
           <h2 className="t-pane mt-2 text-[22px]">Stock Team Fortress 2</h2>
-          <p className="t-meta mt-1">
-            Install one from the catalog below, or bring your own from this computer.
-          </p>
         </div>
       )}
 
@@ -469,7 +465,7 @@ export function HudPane({
           className="btn btn-ghost"
         >
           <UploadSimple size={14} />
-          Import a HUD archive…
+          Import archive…
         </button>
         <button
           type="button"
@@ -479,20 +475,16 @@ export function HudPane({
           className="btn btn-ghost"
         >
           <FolderOpen size={14} />
-          Import a HUD folder…
+          Import folder…
         </button>
-        <span className="t-meta">
-          A zip or 7z, or an extracted folder, with info.vdf inside. It replaces the active HUD.
-        </span>
+        <span className="t-meta">Zip, 7z or folder with info.vdf; replaces the active HUD.</span>
       </div>
 
       <section id="hud-catalog" className="section scroll-mt-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="t-section">Catalog</h2>
-            <p className="t-meta mt-1">
-              {query.trim() ? `${paged.total} matching HUDs` : "Search hud-db by name or author"}
-            </p>
+            {query.trim() ? <p className="t-meta mt-1 tnum">{paged.total} matching</p> : null}
           </div>
           <div className="flex min-w-0 flex-1 flex-wrap items-end justify-end gap-2 sm:flex-nowrap">
             <label className="min-w-48 max-w-sm flex-1" htmlFor="hud-search">
@@ -545,17 +537,17 @@ export function HudPane({
             className="t-meta mt-4"
           >
             {catalog.length === 0
-              ? "Loading the HUD catalog…"
-              : `Checking for catalog updates… ${catalog.length} cached HUDs remain available.`}
+              ? "Loading catalog…"
+              : `Refreshing… showing ${catalog.length} cached HUDs.`}
           </p>
         ) : null}
 
         {catalogError ? (
           <Alert tone="error" testId="hud-catalog-error" className="mt-4 py-2">
-            <span className="font-medium">Could not refresh the HUD catalog.</span>{" "}
+            <span className="font-medium">Could not refresh the catalog.</span>{" "}
             <span className="text-ink-muted">
               {catalogError}
-              {catalog.length > 0 ? " The last loaded catalog is still available." : ""}
+              {catalog.length > 0 ? " Showing the last loaded catalog." : ""}
             </span>
           </Alert>
         ) : null}
@@ -567,8 +559,8 @@ export function HudPane({
                 {query.trim()
                   ? "No HUDs match that search."
                   : catalogError
-                    ? "The catalog is unavailable. Try refreshing it again."
-                    : "No HUDs are available in the catalog."}
+                    ? "Catalog unavailable — try Refresh."
+                    : "Catalog is empty."}
               </p>
             )
           ) : (
@@ -821,9 +813,9 @@ function HudLightbox({
   const albumUrl = entry.album;
   const albumNote = albumUrl
     ? album === null && !albumFailed
-      ? "Loading the author's album…"
+      ? "Loading album…"
       : albumFailed
-        ? "The author's album could not be loaded in-app."
+        ? "Album could not load in-app."
         : album && album.length > 0
           ? `${album.length} from the author's album`
           : null
@@ -885,9 +877,7 @@ function HudLightbox({
           />
         ) : (
           <p className="t-meta">
-            {albumUrl && !albumFailed && album === null
-              ? "Loading pictures…"
-              : "No pictures for this HUD yet."}
+            {albumUrl && !albumFailed && album === null ? "Loading pictures…" : "No pictures yet."}
           </p>
         )}
         {count > 1 ? (

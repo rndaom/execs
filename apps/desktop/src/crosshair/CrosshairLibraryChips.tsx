@@ -56,7 +56,7 @@ export function CrosshairLibraryChips({
             className="btn btn-ghost"
           >
             <PencilSimple size={13} />
-            {hasDesign ? "Edit your design" : "Design your own"}
+            {hasDesign ? "Edit design" : "Design your own"}
           </button>
           <button
             type="button"

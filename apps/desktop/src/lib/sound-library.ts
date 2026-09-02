@@ -42,7 +42,7 @@ export function stockEntries(): SoundLibraryEntry[] {
     id: `stock:${effect.index}`,
     label: effect.label,
     source: "stock",
-    meta: effect.index === 0 ? "The plain ding — what a custom file replaces." : undefined,
+    meta: effect.index === 0 ? "The plain ding" : undefined,
     choiceFor: () => ({ kind: "stock", effect: effect.index }),
     pickFor: (kind) => ({ kind: "stock", stem: kind === "hit" ? effect.hit : effect.kill }),
   }));
@@ -63,7 +63,7 @@ export function ownEntry(picked: PickedHitsound): SoundLibraryEntry {
     id: `own:${picked.token}`,
     label: picked.name,
     source: "own",
-    meta: picked.converted ? "Converted to 16-bit 44.1 kHz for TF2." : undefined,
+    meta: picked.converted ? "Converted to 16-bit 44.1 kHz" : undefined,
     choiceFor: () => ({ kind: "file", picked }),
     pickFor: () => ({ kind: "file", token: picked.token, name: picked.name }),
   };

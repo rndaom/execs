@@ -78,7 +78,7 @@ export function GameplayPane({
     >
       <PaneHeader
         title="Gameplay"
-        lede="Field of view and viewmodels, stored in your active profile."
+        lede="Field of view and viewmodels."
         actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
       />
 
@@ -88,7 +88,6 @@ export function GameplayPane({
           id="gameplay-fov"
           testId="gameplay-fov"
           label="World FOV"
-          hint="How much of the map you see."
           value={draft.fov_desired}
           min={FOV_MIN}
           max={FOV_MAX}
@@ -100,7 +99,6 @@ export function GameplayPane({
           id="gameplay-viewmodel-fov"
           testId="gameplay-viewmodel-fov"
           label="Viewmodel FOV"
-          hint="How much of the screen your weapon covers."
           value={draft.viewmodel_fov}
           min={FOV_MIN}
           max={FOV_MAX}
@@ -116,7 +114,6 @@ export function GameplayPane({
           id="gameplay-draw-viewmodel"
           testId="gameplay-draw-viewmodel"
           label="Draw viewmodel"
-          description="Show your equipped weapon in first person."
           checked={draft.r_drawviewmodel === 1}
           disabled={locked}
           onChange={(next) => patch({ r_drawviewmodel: next ? 1 : 0 })}
@@ -125,7 +122,7 @@ export function GameplayPane({
           id="gameplay-min-viewmodels"
           testId="gameplay-min-viewmodels"
           label="Min viewmodels"
-          description="Use TF2's compact weapon placement."
+          description="Compact weapon placement."
           checked={draft.tf_use_min_viewmodels === 1}
           disabled={locked}
           onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
@@ -142,7 +139,6 @@ export function GameplayPane({
               id="gameplay-flip"
               testId="gameplay-flip"
               label="Left-handed viewmodels"
-              description="Mirror the first-person weapon to the left."
               checked={draft.cl_flipviewmodels === 1}
               disabled={locked}
               note={FLIP_VIEWMODELS_NOTE}
@@ -152,13 +148,13 @@ export function GameplayPane({
               id="gameplay-transparent-viewmodels"
               testId="gameplay-transparent-viewmodels"
               label="Transparent viewmodels"
-              description="Make your weapon translucent. Applies immediately."
+              description="Applies immediately."
               checked={transparentViewmodels}
               disabled={locked || !canUseComfigAddons}
               note={
                 canUseComfigAddons
-                  ? "Needs a HUD with transparent-viewmodel support and DirectX 9. mastercomfig turns post-processing and anti-aliasing off while this is on."
-                  : "Requires mastercomfig — install official packages on the Comfig pane first."
+                  ? "Needs DirectX 9 and a HUD that supports it; turns off post-processing and anti-aliasing."
+                  : "Needs mastercomfig packages from the Comfig pane."
               }
               onChange={() => onToggleTransparentViewmodels()}
             />
@@ -166,7 +162,6 @@ export function GameplayPane({
               id="gameplay-tracers-fp"
               testId="gameplay-tracers-fp"
               label="First-person tracers"
-              description="Show tracers from your own weapon."
               checked={draft.r_drawtracers_firstperson === 1}
               disabled={locked}
               onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
@@ -175,7 +170,6 @@ export function GameplayPane({
               id="gameplay-tracers"
               testId="gameplay-tracers"
               label="All tracers"
-              description="Render tracer effects in the world."
               checked={draft.r_drawtracers === 1}
               disabled={locked}
               note={ALL_TRACERS_NOTE}
@@ -193,13 +187,7 @@ export function GameplayPane({
         dirty={dirty}
         actionLabel="Save gameplay"
         lockedLabel="Close TF2 to apply"
-        status={
-          running
-            ? "TF2 is open — your draft is safe, but it cannot be written yet."
-            : dirty
-              ? "Unsaved changes"
-              : "Saved"
-        }
+        status={running ? "Draft kept until TF2 closes" : dirty ? "Unsaved changes" : "Saved"}
       />
     </form>
   );
@@ -209,7 +197,6 @@ function SliderRow({
   id,
   testId,
   label,
-  hint,
   value,
   min,
   max,
@@ -220,7 +207,6 @@ function SliderRow({
   id: string;
   testId: string;
   label: string;
-  hint?: string;
   value: number;
   min: number;
   max: number;
@@ -239,7 +225,6 @@ function SliderRow({
           {suffix}
         </output>
       </div>
-      {hint ? <p className="t-meta mt-0.5">{hint}</p> : null}
       <input
         id={id}
         data-testid={testId}

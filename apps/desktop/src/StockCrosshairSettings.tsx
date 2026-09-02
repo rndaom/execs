@@ -86,9 +86,6 @@ export function StockCrosshairSettings({
       <div className="hero-row">
         <div className="min-w-0">
           <h2 className="t-section">Default in-game crosshair</h2>
-          <p className="t-meta mt-1">
-            TF2's built-in crosshair is the lightweight choice that works everywhere.
-          </p>
 
           <div className="mt-5 flex min-w-0 flex-col gap-6">
             <fieldset>
@@ -148,11 +145,7 @@ export function StockCrosshairSettings({
                   );
                 })}
               </div>
-              <p className="t-meta mt-2">
-                {draft.cl_crosshair_file === ""
-                  ? "Default / none — each weapon draws its own crosshair."
-                  : STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}
-              </p>
+              <p className="t-meta mt-2">{STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}</p>
             </fieldset>
 
             <StockSliderRow
@@ -237,7 +230,7 @@ export function StockCrosshairSettings({
               />
             ) : (
               <p className="t-meta max-w-48 px-3 text-center">
-                Default / none — each weapon draws its own crosshair.
+                Each weapon draws its own crosshair.
               </p>
             )}
             <span className="eyebrow absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5">
@@ -250,9 +243,6 @@ export function StockCrosshairSettings({
               {draft.cl_crosshair_red}, {draft.cl_crosshair_green}, {draft.cl_crosshair_blue}
             </span>
           </div>
-          <p className="t-meta mt-2 text-ink-faint">
-            Pick Default / none before using the custom crosshair builder below.
-          </p>
         </div>
       </div>
 

@@ -22,7 +22,6 @@ import {
 } from "./lib/viewmodel-previews";
 import {
   HIDE_MODE_LABELS,
-  HIDE_MODE_NOTES,
   SOLDIER_ORIGINAL_NOTE,
   seedViewmodelDraft,
   serializeHiddenGroups,
@@ -147,16 +146,16 @@ export function ViewmodelPane({
   }
 
   const buildStatus = !canBuild
-    ? "Building packs needs TF2's studiomdl (Windows only for now)."
+    ? "Building needs TF2's studiomdl (Windows only)"
     : running
-      ? "Close TF2 to build."
+      ? "Close TF2 to build"
       : draft.hidden.length === 0 && record
-        ? "Nothing hidden — use Remove pack below to restore stock viewmodels."
+        ? "Nothing hidden — use Remove pack to restore stock"
         : draft.hidden.length === 0
-          ? "Nothing hidden yet — hover a group to preview it, click to hide it."
+          ? "Nothing hidden yet"
           : dirty || !builtPack
-            ? "Build compiles with TF2's own studiomdl in an isolated staging folder."
-            : "The installed pack matches these choices.";
+            ? "Unsaved changes"
+            : "Pack is up to date";
 
   const stageCaption =
     focusGroup === null
@@ -167,7 +166,7 @@ export function ViewmodelPane({
     <section data-testid="settings-viewmodels" className="min-w-0 text-left">
       <PaneHeader
         title="Viewmodels"
-        lede="Hover a weapon group to see it in first person; click to hide it. Field of view and min viewmodels live on the Gameplay pane."
+        lede="Hover a group to preview it; click to hide it."
         actions={
           <>
             <span className="tnum t-meta text-ink-faint">
@@ -223,21 +222,19 @@ export function ViewmodelPane({
             ) : (
               <p className="t-meta absolute inset-0 grid place-items-center px-6 text-center">
                 {preview.loading
-                  ? "Loading the preview…"
+                  ? "Loading preview…"
                   : focusHidden || focusGroup === null
                     ? "Nothing on screen."
-                    : "No preview for this group yet."}
+                    : "No preview yet."}
               </p>
             )}
             <figcaption className="absolute bottom-2.5 left-3 rounded-md bg-bg/80 px-2 py-0.5 text-[12px] text-ink-muted backdrop-blur-sm">
               {stageCaption}
             </figcaption>
           </figure>
-          <p className="mt-3 text-[12px] leading-5 text-ink-faint">
-            {focusGroup && focusInfo
-              ? focusInfo.weapons
-              : "Hover a group on the right to see what it covers."}
-          </p>
+          {focusGroup && focusInfo ? (
+            <p className="mt-3 text-[12px] leading-5 text-ink-faint">{focusInfo.weapons}</p>
+          ) : null}
         </div>
 
         <div className="min-w-0">
@@ -297,10 +294,7 @@ export function ViewmodelPane({
       <section className="section">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
-            <h3 className="t-row">What a hidden group removes</h3>
-            <p className="mt-1 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
-              {HIDE_MODE_NOTES[draft.hideMode]}
-            </p>
+            <h3 className="t-row">Hide mode</h3>
           </div>
           <Segmented
             label="Hide mode"
@@ -322,9 +316,6 @@ export function ViewmodelPane({
           summary="Pack and preload"
           testId="viewmodel-pack-disclosure"
         >
-          <p className="t-meta mt-1 max-w-[62ch]">
-            Prefer a ready-made pack? Import any prebuilt viewmodel VPK instead of building.
-          </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -334,7 +325,7 @@ export function ViewmodelPane({
               className="btn btn-ghost"
             >
               <DownloadSimple size={15} />
-              {record ? "Replace with a VPK…" : "Import prebuilt VPK…"}
+              {record ? "Replace VPK…" : "Import VPK…"}
             </button>
             {record ? (
               <button
@@ -351,8 +342,7 @@ export function ViewmodelPane({
           </div>
 
           <p className="t-meta mt-4 max-w-[62ch]">
-            Building or importing turns Casual preload on for this profile so the pack applies on
-            Valve servers. The switch itself lives on the Mods pane, with the rest of the preload.
+            Building or importing turns Casual preload on; the switch lives on the Mods pane.
           </p>
         </Disclosure>
       </section>
@@ -373,7 +363,7 @@ export function ViewmodelPane({
 
       <ApplyBar
         status={buildStatus}
-        actionLabel={builtPack ? "Rebuild pack" : "Build and install pack"}
+        actionLabel={builtPack ? "Rebuild pack" : "Build pack"}
         lockedLabel="Close TF2 to build"
         running={running}
         locked={!canBuild || locked}

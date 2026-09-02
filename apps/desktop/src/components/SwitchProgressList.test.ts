@@ -13,7 +13,7 @@ describe("profile switch progress chrome", () => {
       }),
     );
 
-    expect(markup).toContain("Current stage — Write files");
+    expect(markup).toContain("Write files");
     // The fill bar is driven by revealed real stages (4 of 6 here)…
     expect(markup).toContain('data-testid="switch-progress-bar"');
     expect(markup).toContain('data-fraction="0.667"');
@@ -31,7 +31,7 @@ describe("profile switch progress chrome", () => {
       }),
     );
 
-    expect(markup).toContain("All profile steps completed.");
+    expect(markup).toContain("All steps done");
     expect(markup).toContain('aria-busy="false"');
     expect(markup).toContain('data-fraction="1.000"');
     expect(markup.match(/data-done="true"/g)).toHaveLength(6);
