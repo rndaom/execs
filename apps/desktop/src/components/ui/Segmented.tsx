@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 
 export type SegmentedOption<Id extends string> = {
   id: Id;
@@ -32,7 +32,10 @@ export function Segmented<Id extends string>({
   testIdPrefix?: string;
   onChange: (id: Id) => void;
 }) {
-  const name = `segmented-${label.replace(/\s+/g, "-").toLowerCase()}`;
+  // Per instance, not per label: two groups with the same label on one page
+  // (Boost under each sound slot) must not share a radio group or ids.
+  const instance = useId();
+  const name = `segmented-${label.replace(/\s+/g, "-").toLowerCase()}-${instance}`;
   return (
     <fieldset
       className={`segmented ${size === "sm" ? "segmented-sm" : ""} ${
