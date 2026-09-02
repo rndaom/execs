@@ -305,11 +305,6 @@ pub struct AlbumImage {
     pub height: u32,
 }
 
-/// Imgur's album endpoint refuses anonymous reads without a registered client
-/// id. It is supplied at build time (`EXECS_IMGUR_CLIENT_ID`); without one,
-/// imgur albums are opened in the browser instead of loaded in-app.
-const IMGUR_CLIENT_ID: Option<&str> = option_env!("EXECS_IMGUR_CLIENT_ID");
-
 /// The album behind `social.album`, cached forever by URL (albums are
 /// effectively immutable once published; a refresh is a catalog refresh).
 pub fn fetch_hud_album(album: &str) -> Result<Vec<AlbumImage>, String> {
@@ -336,8 +331,10 @@ pub fn fetch_hud_album(album: &str) -> Result<Vec<AlbumImage>, String> {
 
 fn fetch_album_uncached(album: &str) -> Result<Vec<AlbumImage>, String> {
     let trimmed = album.trim();
-    if let Some(id) = imgur_album_id(trimmed) {
-        return fetch_imgur_album(&id);
+    if imgur_album_id(trimmed).is_some() {
+        // Reading an album needs a registered imgur client id, which this app
+        // does not ship; the lightbox offers the album as a browser link.
+        return Err("Imgur albums open in your browser.".into());
     }
     if let Some(id) = imgur_image_id(trimmed) {
         let ext = trimmed.rsplit('.').next().unwrap_or("jpg");
@@ -394,59 +391,6 @@ pub fn imgur_image_id(url: &str) -> Option<String> {
     } else {
         None
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct ImgurAlbumImages {
-    #[serde(default)]
-    data: Vec<ImgurImage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ImgurImage {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    link: String,
-    #[serde(rename = "type", default)]
-    mime: String,
-    #[serde(default)]
-    width: u32,
-    #[serde(default)]
-    height: u32,
-}
-
-fn fetch_imgur_album(id: &str) -> Result<Vec<AlbumImage>, String> {
-    let Some(client_id) = IMGUR_CLIENT_ID.filter(|id| !id.is_empty()) else {
-        return Err("Imgur albums open in your browser in this build.".into());
-    };
-    let url = format!("https://api.imgur.com/3/album/{id}/images");
-    let response = net::api_client()?
-        .get(&url)
-        .header("Authorization", format!("Client-ID {client_id}"))
-        .send()
-        .map_err(net::request_error)?;
-    if !response.status().is_success() {
-        return Err(format!("Imgur refused the album ({})", response.status()));
-    }
-    let parsed: ImgurAlbumImages = response.json().map_err(|err| err.to_string())?;
-    Ok(imgur_images(parsed.data))
-}
-
-fn imgur_images(items: Vec<ImgurImage>) -> Vec<AlbumImage> {
-    items
-        .into_iter()
-        .filter(|item| item.mime.starts_with("image/") && !item.link.is_empty())
-        .map(|item| {
-            let ext = item.link.rsplit('.').next().unwrap_or("jpg").to_string();
-            AlbumImage {
-                thumb: Some(format!("https://i.imgur.com/{}l.{ext}", item.id)),
-                url: item.link,
-                width: item.width,
-                height: item.height,
-            }
-        })
-        .collect()
 }
 
 /// `github.com/<o>/<r>/blob/<branch>/<path>` → the raw file URL.
@@ -701,32 +645,6 @@ mod tests {
             Some("UnERCnT")
         );
         assert_eq!(imgur_album_id("https://ibb.co/album/dwngXw"), None);
-    }
-
-    #[test]
-    fn imgur_videos_are_dropped_and_thumbnails_derived() {
-        let images = imgur_images(vec![
-            ImgurImage {
-                id: "En690dR".into(),
-                link: "https://i.imgur.com/En690dR.png".into(),
-                mime: "image/png".into(),
-                width: 1920,
-                height: 1080,
-            },
-            ImgurImage {
-                id: "vid".into(),
-                link: "https://i.imgur.com/vid.mp4".into(),
-                mime: "video/mp4".into(),
-                width: 0,
-                height: 0,
-            },
-        ]);
-        assert_eq!(images.len(), 1);
-        assert_eq!(
-            images[0].thumb.as_deref(),
-            Some("https://i.imgur.com/En690dRl.png")
-        );
-        assert_eq!(images[0].width, 1920);
     }
 
     #[test]
