@@ -27,6 +27,8 @@ function renderHudPane(catalogLoading: boolean, catalogError: string | null): st
         onUpdate: noop,
         onMatch: noop,
         onApplyOptions: noop,
+        onImportArchive: noop,
+        onImportFolder: noop,
       }),
     ),
   );

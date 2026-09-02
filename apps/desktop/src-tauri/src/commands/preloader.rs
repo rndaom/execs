@@ -19,17 +19,48 @@ pub struct PreloaderStatusPayload {
     /// options could only be saved to the profile (Steam was open), this
     /// stays false and the pane tells the user how to finish the job.
     pub preload_launch_in_steam: bool,
+    /// The active profile carries the shared preload cfg (Casual preload on).
+    pub profile_preload: bool,
 }
 
 fn preloader_status_payload(root: &Path) -> Result<PreloaderStatusPayload, CommandError> {
     let steam_options = execs_core::launch::read_launch_options();
+    // The profile-level preload switch: whether the active profile carries
+    // the shared preload cfg. No active profile reads as off.
+    let profile_preload = active_profile_id(root)
+        .ok()
+        .and_then(|id| execs_core::load_manifest(&execs_core::profiles_dir(), &id).ok())
+        .map(|manifest| execs_core::profile_has_preload(&manifest))
+        .unwrap_or(false);
     Ok(PreloaderStatusPayload {
         status: execs_core::preloader::preloader_status(root, &execs_core::execs_data_dir())?,
         mods_cached: crate::mods_fetch::is_cached(),
         mods_size_bytes: crate::mods_fetch::MODS_SIZE_BYTES,
         preload_launch_in_steam: steam_options.contains("+exec execs_preload")
             || steam_options.contains("+exec overrides/execs_preload"),
+        profile_preload,
     })
+}
+
+/// The one Casual-preload switch for the active profile (Mods pane).
+#[tauri::command]
+pub async fn set_profile_preload(
+    gate: tauri::State<'_, WriteGate>,
+    enabled: bool,
+) -> Result<PreloaderStatusPayload, CommandError> {
+    let _guard = gate.0.lock().await;
+    with_root(move |root| {
+        let profile_id = active_profile_id(&root)?;
+        execs_core::set_profile_preload(&root, &profile_id, enabled)?;
+        if enabled {
+            execs_core::preloader::record_preload_profile(
+                &execs_core::execs_data_dir(),
+                &profile_id,
+            )?;
+        }
+        preloader_status_payload(&root)
+    })
+    .await
 }
 
 #[tauri::command]

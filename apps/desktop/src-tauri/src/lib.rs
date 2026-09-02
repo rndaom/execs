@@ -143,6 +143,9 @@ pub fn run() {
             commands::preloader::set_gameinfo_bypass,
             commands::preloader::revert_preloader,
             commands::preloader::repair_game_files,
+            commands::preloader::set_profile_preload,
+            commands::hud::import_hud_archive,
+            commands::hud::import_hud_folder,
         ])
         .setup(|app| {
             app.manage(WriteGate(tokio::sync::Mutex::new(())));

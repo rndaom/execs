@@ -160,6 +160,7 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
   modsCached: true,
   modsSizeBytes: 81_529_475,
   preloadLaunchInSteam: true,
+  profilePreload: true,
 };
 
 const PREVIEW_ADDONS: CatalogAddon[] = [

@@ -338,6 +338,47 @@ where
     )?))
 }
 
+/// Whether the profile carries the shared preload cfg (either layer).
+pub fn profile_has_preload(manifest: &crate::profile::ProfileManifest) -> bool {
+    manifest
+        .files
+        .iter()
+        .any(|file| is_preload_path(&file.path))
+}
+
+/// The one Casual-preload switch (Mods pane): write or remove the shared
+/// preload cfg and launch token for the active profile, regardless of what
+/// wants it. A viewmodel record present on the profile follows the choice so
+/// the two can never disagree.
+pub fn set_profile_preload(
+    tf2_root: &Path,
+    profile_id: &str,
+    enabled: bool,
+) -> Result<ProfileDetail, ProfileError> {
+    let profiles_dir = profiles_dir();
+    let running: Vec<String> = live_process_names();
+    let steam = running.clone();
+    let steam_roots = discover_steam_roots();
+    set_preload_state(
+        &profiles_dir,
+        tf2_root,
+        profile_id,
+        enabled,
+        &running,
+        &steam,
+        &steam_roots,
+    )?;
+    let mut manifest = load_manifest(&profiles_dir, profile_id)?;
+    if let Some(record) = manifest.viewmodel.as_mut() {
+        record.preload = enabled;
+    }
+    save_manifest(&profiles_dir, tf2_root, &manifest, &running)?;
+    Ok(detail_from_manifest(&load_manifest(
+        &profiles_dir,
+        profile_id,
+    )?))
+}
+
 /// The mods preloader needs the shared preload cfg + launch token too, with
 /// or without a viewmodel pack installed.
 pub fn ensure_profile_preload(tf2_root: &Path, profile_id: &str) -> Result<(), ProfileError> {
