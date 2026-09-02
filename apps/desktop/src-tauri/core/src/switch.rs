@@ -443,7 +443,7 @@ fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
 /// game's own regenerable file, so a pack whose files we removed is left as a
 /// husk that still reads as installed — that is how a swapped-away HUD keeps
 /// showing up next to the new one.
-fn only_game_caches(dir: &Path) -> bool {
+pub(crate) fn only_game_caches(dir: &Path) -> bool {
     let Ok(entries) = fs::read_dir(dir) else {
         return false;
     };
@@ -470,7 +470,7 @@ fn only_game_caches(dir: &Path) -> bool {
     saw_one
 }
 
-fn prune_empty_parents(start: &Path, tf2_root: &Path) {
+pub(crate) fn prune_empty_parents(start: &Path, tf2_root: &Path) {
     let stop = [
         tf2_root.to_path_buf(),
         tf2_root.join("tf"),

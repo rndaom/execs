@@ -34,6 +34,8 @@ pub struct ProfileDetail {
     pub viewmodel: Option<ViewmodelRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hitsound: Option<crate::hitsound::HitsoundRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mods: Vec<crate::mods::ModRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,6 +65,7 @@ pub fn detail_from_manifest(manifest: &crate::profile::ProfileManifest) -> Profi
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
         hitsound: manifest.hitsound.clone(),
+        mods: manifest.mods.clone(),
     }
 }
 

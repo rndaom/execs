@@ -14,6 +14,7 @@ import {
   type HitsoundRecord,
   type HitsoundSlotChange,
   type HudUiState,
+  type ModRecord,
   type OfficialAddon,
   openEmbeddedPage,
   openExternal,
@@ -40,7 +41,15 @@ import {
   previewSavedProfile,
   SWITCH_STEPS,
 } from "./library-ui";
-import { PREVIEW_MODS_CATALOG, PREVIEW_MODS_STATUS } from "./mods-ui";
+import {
+  PREVIEW_GAMEBANANA_CATEGORIES,
+  PREVIEW_GAMEBANANA_RECORDS,
+  PREVIEW_MODS_CATALOG,
+  PREVIEW_MODS_STATUS,
+  PREVIEW_PARTICLE_SOURCES,
+  PREVIEW_PROFILE_MODS,
+  sortGameBananaMods,
+} from "./mods-ui";
 import {
   type PreviewState,
   previewConfirmed,
@@ -102,12 +111,19 @@ export function createPreviewApi(state: PreviewState): Api {
   let launchOptions = recommendedLaunchOptions();
   let hudState: HudUiState =
     state === "settings-hud-installed" ? previewInstalledState() : emptyHudState();
+  let mods: ModRecord[] =
+    state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
   let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
   let hitsound: HitsoundRecord | null =
     state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
+
+  /** Only packs that are still installed can offer particles. */
+  function particleSources() {
+    return PREVIEW_PARTICLE_SOURCES.filter((source) => mods.some((mod) => mod.id === source.modId));
+  }
 
   function detail(): ProfileDetail | null {
     const active = library?.profiles.find((profile) => profile.id === library?.activeProfileId);
@@ -128,6 +144,7 @@ export function createPreviewApi(state: PreviewState): Api {
       crosshair,
       viewmodel,
       hitsound,
+      mods,
     };
   }
 
@@ -449,14 +466,17 @@ export function createPreviewApi(state: PreviewState): Api {
           next[slot] = null;
         } else if (change.change === "install") {
           const pick = change.pick;
+          const boost = change.boost;
           next[slot] =
             pick.kind === "community"
-              ? { name: pick.name, source: "community" }
+              ? { name: pick.name, source: "community", boost }
               : pick.kind === "file"
-                ? { name: pick.name, source: "file" }
+                ? { name: pick.name, source: "file", boost }
                 : pick.kind === "comfig"
-                  ? { name: pick.name, source: "comfig" }
-                  : (next[slot] ?? null);
+                  ? { name: pick.name, source: "comfig", boost }
+                  : next[slot]
+                    ? { ...next[slot], boost }
+                    : null;
         }
       };
       apply("hit", hit);
@@ -473,9 +493,84 @@ export function createPreviewApi(state: PreviewState): Api {
     openExternal,
     openEmbeddedPage,
 
+    // --- your mods and GameBanana -------------------------------------------
+    async importModArchive() {
+      throw notInPreview("Importing a mod archive");
+    },
+    async importModFolder() {
+      throw notInPreview("Importing a mod folder");
+    },
+    async removeMod(id: string) {
+      mods = mods.filter((mod) => mod.id !== id);
+      modsPayload = {
+        ...modsPayload,
+        status: {
+          ...modsPayload.status,
+          profileParticleMods: (modsPayload.status.profileParticleMods ?? []).filter((modId) =>
+            mods.some((mod) => mod.id === modId),
+          ),
+        },
+        profileParticleSources: particleSources(),
+      };
+      return requireDetail();
+    },
+    async searchGameBananaMods(
+      query: string,
+      sort,
+      category: number | null,
+      page: number,
+      includeMature = false,
+    ) {
+      const needle = query.trim().toLowerCase();
+      const matching = PREVIEW_GAMEBANANA_RECORDS.filter((record) => {
+        const hitsQuery =
+          needle === "" ||
+          record.name.toLowerCase().includes(needle) ||
+          record.author.toLowerCase().includes(needle);
+        return hitsQuery && (category === null || record.categoryId === category);
+      });
+      // A small page so the preview exercises the pager, not one long grid.
+      const perPage = 3;
+      const start = (page - 1) * perPage;
+      const slice = sortGameBananaMods(matching, sort).slice(start, start + perPage);
+      return {
+        // Flagged records are dropped from the page, not from the run: the
+        // count and the pager still describe every listing, like the real one.
+        records: includeMature ? slice : slice.filter((record) => !record.mature),
+        total: matching.length,
+        perPage,
+        complete: start + slice.length >= matching.length,
+      };
+    },
+    async gameBananaModCategories() {
+      return PREVIEW_GAMEBANANA_CATEGORIES;
+    },
+    async installGameBananaMod(id: number) {
+      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
+      if (!listing) {
+        throw notInPreview(`Installing mod ${id}`);
+      }
+      if (!mods.some((mod) => mod.source.kind === "gamebanana" && mod.source.id === id)) {
+        mods = [
+          ...mods,
+          {
+            id: `gb-${id}`,
+            name: listing.name,
+            source: { kind: "gamebanana", id, url: listing.url },
+            pack: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.vpk`,
+            files: 12,
+            bytes: 4_200_000,
+            installedAt: new Date().toISOString(),
+          },
+        ];
+        modsPayload = { ...modsPayload, profileParticleSources: particleSources() };
+      }
+      return requireDetail();
+    },
+
     // --- preloader ----------------------------------------------------------
     async getPreloaderStatus() {
-      return modsPayload;
+      return { ...modsPayload, profileParticleSources: particleSources() };
     },
     async getDefaultMods() {
       return { cached: true, catalog: PREVIEW_MODS_CATALOG };
@@ -484,10 +579,20 @@ export function createPreviewApi(state: PreviewState): Api {
       modsPayload = { ...modsPayload, modsCached: true };
       return { cached: true, catalog: PREVIEW_MODS_CATALOG };
     },
-    async applyPreloaderMods(addons: string[], particleMods: string[]) {
+    async applyPreloaderMods(
+      addons: string[],
+      particleMods: string[],
+      profileParticleMods: string[] = [],
+    ) {
       modsPayload = {
         ...modsPayload,
-        status: { ...modsPayload.status, addons, particleMods, stale: false },
+        status: {
+          ...modsPayload.status,
+          addons,
+          particleMods,
+          profileParticleMods,
+          stale: false,
+        },
       };
       return {
         patchedFiles: modsPayload.status.patchedFiles,
@@ -529,6 +634,7 @@ export function createPreviewApi(state: PreviewState): Api {
           gameinfoBypassed: false,
           addons: [],
           particleMods: [],
+          profileParticleMods: [],
           patchedFiles: [],
           customVpkPresent: false,
           stale: false,

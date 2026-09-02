@@ -21,7 +21,8 @@ on the user's machine, pinned to a specific release or commit.
 | [mastercomfig cvar reference](https://github.com/mastercomfig/mastercomfig/tree/release/docs/tf2) | `packages/cfglint/src/cvars.gen.ts` is generated from `cvarlist_win.md` and `hiddencvars.md`. | MIT |
 | ICE cipher by Matthew Kwan | `core/src/ice.rs` is a port of the reference implementation, used to read weapon scripts from the user's own game files. | Public domain |
 
-The app also talks to GameBanana, teamfortress.tv and Dropbox to resolve HUD
+The Mods pane browses and downloads from [GameBanana](https://gamebanana.com) through its public API; each mod
+belongs to its author. The app also talks to GameBanana, teamfortress.tv and Dropbox to resolve HUD
 downloads linked from hud-db, links out to authors' imgur albums, and reads download and view
 counts from [tf2huds.dev](https://tf2huds.dev). Nothing from those hosts is
 redistributed.

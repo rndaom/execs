@@ -178,7 +178,7 @@ pub fn resolve_hud_download(entry: &HudCatalogEntry) -> Result<String, String> {
         HudInstallKind::Github => execs_core::hud_zip_url(&entry.repo, &entry.hash)
             .ok_or_else(|| "That HUD is not a pinned GitHub download.".to_string()),
         HudInstallKind::Direct => Ok(direct_download_url(&entry.repo)),
-        HudInstallKind::Gamebanana => resolve_gamebanana(&entry.repo),
+        HudInstallKind::Gamebanana => crate::gamebanana::download_url_for_page(&entry.repo),
         HudInstallKind::Thread => resolve_thread(&entry.repo),
         HudInstallKind::None => Err(no_download_message()),
     }
@@ -207,53 +207,6 @@ pub fn direct_download_url(url: &str) -> String {
     } else {
         format!("{trimmed}?dl=1")
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct GameBananaDownloadPage {
-    #[serde(rename = "_aFiles", default)]
-    files: Vec<GameBananaFile>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GameBananaFile {
-    #[serde(rename = "_sFile", default)]
-    file: String,
-    #[serde(rename = "_sDownloadUrl", default)]
-    download_url: String,
-    #[serde(rename = "_tsDateAdded", default)]
-    added: u64,
-}
-
-fn gamebanana_mod_id(repo: &str) -> Option<u64> {
-    let rest = repo.trim().trim_end_matches('/').rsplit("/mods/").next()?;
-    rest.split(['/', '?', '#']).next()?.parse().ok()
-}
-
-/// GameBanana's public per-mod API lists the files; take the newest archive
-/// this app can unpack (zip or 7z — RAR is refused at extraction with its own
-/// message, so it is only chosen when nothing else exists).
-fn resolve_gamebanana(repo: &str) -> Result<String, String> {
-    let id = gamebanana_mod_id(repo).ok_or("That GameBanana link has no mod id.")?;
-    let url = format!("https://gamebanana.com/apiv11/Mod/{id}/DownloadPage");
-    let page: GameBananaDownloadPage = net::get_json(&net::api_client()?, &url)
-        .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
-    pick_gamebanana_file(page.files)
-}
-
-fn pick_gamebanana_file(mut files: Vec<GameBananaFile>) -> Result<String, String> {
-    files.retain(|file| !file.download_url.is_empty());
-    files.sort_by_key(|file| std::cmp::Reverse(file.added));
-    let unpackable = |name: &str| {
-        let lower = name.to_ascii_lowercase();
-        lower.ends_with(".zip") || lower.ends_with(".7z")
-    };
-    let chosen = files
-        .iter()
-        .find(|file| unpackable(&file.file))
-        .or_else(|| files.first())
-        .ok_or("That GameBanana page lists no files.")?;
-    Ok(chosen.download_url.clone())
 }
 
 /// A teamfortress.tv thread: the last Dropbox archive link in the post.
@@ -563,50 +516,6 @@ mod tests {
             direct_download_url("https://example.com/hud.zip"),
             "https://example.com/hud.zip"
         );
-    }
-
-    #[test]
-    fn gamebanana_picks_the_newest_unpackable_file() {
-        assert_eq!(
-            gamebanana_mod_id("https://gamebanana.com/mods/461758"),
-            Some(461758)
-        );
-        assert_eq!(
-            gamebanana_mod_id("https://gamebanana.com/mods/461758/"),
-            Some(461758)
-        );
-        assert_eq!(gamebanana_mod_id("https://gamebanana.com/guis/25711"), None);
-        let files = vec![
-            GameBananaFile {
-                file: "old.rar".into(),
-                download_url: "https://gamebanana.com/dl/1".into(),
-                added: 10,
-            },
-            GameBananaFile {
-                file: "newest.rar".into(),
-                download_url: "https://gamebanana.com/dl/3".into(),
-                added: 30,
-            },
-            GameBananaFile {
-                file: "middle.zip".into(),
-                download_url: "https://gamebanana.com/dl/2".into(),
-                added: 20,
-            },
-        ];
-        assert_eq!(
-            pick_gamebanana_file(files).unwrap(),
-            "https://gamebanana.com/dl/2"
-        );
-        let only_rar = vec![GameBananaFile {
-            file: "x.rar".into(),
-            download_url: "https://gamebanana.com/dl/9".into(),
-            added: 1,
-        }];
-        assert_eq!(
-            pick_gamebanana_file(only_rar).unwrap(),
-            "https://gamebanana.com/dl/9"
-        );
-        assert!(pick_gamebanana_file(Vec::new()).is_err());
     }
 
     #[test]

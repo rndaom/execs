@@ -323,6 +323,7 @@ fn preloader_writes_refuse_while_tf2_runs_and_touch_nothing() {
     let selection = PreloaderSelection {
         addons: vec![],
         particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: Vec::new(),
     };
     apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
 
@@ -370,6 +371,7 @@ fn unknown_addon_fails_before_anything_is_restored() {
         &PreloaderSelection {
             addons: vec![],
             particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -385,6 +387,7 @@ fn unknown_addon_fails_before_anything_is_restored() {
         &PreloaderSelection {
             addons: vec!["no-such-addon".into()],
             particle_mods: vec![],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -412,6 +415,7 @@ fn preload_is_wanted_tracks_installed_mods() {
         &PreloaderSelection {
             addons: vec![],
             particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -447,6 +451,7 @@ fn addon_materials_that_replace_stock_assets_still_ship_loose() {
     let selection = PreloaderSelection {
         addons: vec!["Flat Look".into()],
         particle_mods: Vec::new(),
+        profile_particle_mods: Vec::new(),
     };
     let report = apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
     assert!(report.skipped.is_empty(), "{:?}", report.skipped);
@@ -617,6 +622,7 @@ fn apply_patches_and_revert_restores() {
     let selection = PreloaderSelection {
         addons: vec!["Flat Look".into()],
         particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: Vec::new(),
     };
     let report = apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
     assert!(report.gameinfo_bypassed);
@@ -699,6 +705,7 @@ fn interrupted_apply_cannot_clobber_snapshots() {
     let selection = PreloaderSelection {
         addons: vec![],
         particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: Vec::new(),
     };
     apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
 
@@ -735,6 +742,7 @@ fn mtime_drift_does_not_reset_baseline() {
         &PreloaderSelection {
             addons: vec![],
             particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -805,6 +813,7 @@ fn oversized_mod_is_skipped_with_notice() {
         &PreloaderSelection {
             addons: vec![],
             particle_mods: vec!["Big".into()],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -862,6 +871,7 @@ fn fingerprint_covers_the_sibling_archives() {
         &PreloaderSelection {
             addons: vec![],
             particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -931,6 +941,7 @@ fn restore_refuses_an_entry_the_game_replaced_in_place() {
         &PreloaderSelection {
             addons: vec![],
             particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
         },
         &[],
     )
@@ -993,6 +1004,7 @@ fn blue_water() -> PreloaderSelection {
     PreloaderSelection {
         addons: vec![],
         particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: Vec::new(),
     }
 }
 

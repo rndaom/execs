@@ -259,6 +259,22 @@ export type CrosshairRecord = {
   design?: string | null;
 };
 
+/** Where a pack in the profile came from. */
+export type ModSource = { kind: "local" } | { kind: "gamebanana"; id: number; url: string };
+
+/** One pack the user brought into the active profile's `tf/custom`. */
+export type ModRecord = {
+  id: string;
+  name: string;
+  source: ModSource;
+  /** The pack's file name under `tf/custom`. */
+  pack: string;
+  files: number;
+  bytes: number;
+  /** ISO timestamp of the install. */
+  installedAt: string;
+};
+
 export type ViewmodelSource = "compiled" | "imported";
 
 export type ViewmodelRecord = {
@@ -336,6 +352,8 @@ export type ProfileDetail = {
   crosshair?: CrosshairRecord | null;
   viewmodel?: ViewmodelRecord | null;
   hitsound?: HitsoundRecord | null;
+  /** Packs the user brought in. Absent on payloads from an older backend. */
+  mods?: ModRecord[];
 };
 
 export type ProfileFileContent = {
@@ -611,6 +629,8 @@ export type HitsoundSource = "community" | "file" | "comfig";
 export type HitsoundEntry = {
   name: string;
   source: HitsoundSource;
+  /** Gain baked into the file: 0, 6 or 12 dB. */
+  boost?: number;
 };
 
 /** What the profile's sound pack holds; a missing slot plays the engine's own sound. */
@@ -630,7 +650,7 @@ export type HitsoundPick =
 export type HitsoundSlotChange =
   | { change: "keep" }
   | { change: "clear" }
-  | { change: "install"; pick: HitsoundPick };
+  | { change: "install"; pick: HitsoundPick; boost: number };
 
 export type WavInfo = {
   formatTag: number;
@@ -719,6 +739,91 @@ export async function openEmbeddedPage(page: EmbeddedPage): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Your mods (bring your own) and the GameBanana browser
+// ---------------------------------------------------------------------------
+
+/** One listing from GameBanana's TF2 section. */
+export type GameBananaMod = {
+  id: number;
+  name: string;
+  author: string;
+  category: string;
+  categoryId: number;
+  likes: number;
+  views: number;
+  /** GameBanana withholds this on some listings. */
+  downloads: number | null;
+  /** Unix seconds. */
+  updatedAt: number;
+  addedAt: number;
+  thumb: string | null;
+  url: string;
+  /** Flagged on GameBanana as mature content. */
+  mature: boolean;
+};
+
+export type GameBananaPage = {
+  records: GameBananaMod[];
+  total: number;
+  perPage: number;
+  /** No further pages to load. */
+  complete: boolean;
+};
+
+export type GameBananaCategory = {
+  id: number;
+  name: string;
+};
+
+export type GameBananaSort = "downloads" | "likes" | "views" | "updated" | "new";
+
+/** Pick an archive or vpk and install it into the active profile. Null = cancelled. */
+export async function importModArchive(): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_mod_archive");
+}
+
+/** Pick a folder and install it into the active profile. Null = cancelled. */
+export async function importModFolder(): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_mod_folder");
+}
+
+export async function removeMod(id: string): Promise<ProfileDetail> {
+  return call<ProfileDetail>("remove_mod", { id });
+}
+
+/**
+ * One page of GameBanana listings. `page` is 1-based. A search query cannot be
+ * ordered server-side, so the caller sorts what it has loaded.
+ *
+ * With `includeMature` false, flagged records are dropped from the page by our
+ * own client, so a page can hold fewer than `perPage` records; `total` and
+ * `perPage` still describe the unfiltered run, and the pager rides those.
+ */
+export async function searchGameBananaMods(
+  query: string,
+  sort: GameBananaSort,
+  category: number | null,
+  page: number,
+  includeMature = false,
+): Promise<GameBananaPage> {
+  return call<GameBananaPage>("search_gamebanana_mods", {
+    query,
+    sort,
+    category,
+    page,
+    includeMature,
+  });
+}
+
+export async function gameBananaModCategories(): Promise<GameBananaCategory[]> {
+  return call<GameBananaCategory[]>("gamebanana_mod_categories");
+}
+
+export async function installGameBananaMod(id: number): Promise<ProfileDetail> {
+  return call<ProfileDetail>("install_gamebanana_mod", { id });
+}
+
+// ---------------------------------------------------------------------------
 // Preloader (gameinfo bypass + default mod library)
 // ---------------------------------------------------------------------------
 
@@ -739,6 +844,15 @@ export type PreloaderStatus = {
   customVpkPresent: boolean;
   /** Particle files modified in the official VPK that execs holds no snapshot for. */
   untrackedModified: string[];
+  /** Ids of the profile's own mods whose particles are patched in. */
+  profileParticleMods?: string[];
+};
+
+/** Particles a pack in the profile can contribute to the preloader. */
+export type ParticleSource = {
+  modId: string;
+  name: string;
+  pcfFiles: string[];
 };
 
 export type PreloaderStatusPayload = {
@@ -749,6 +863,8 @@ export type PreloaderStatusPayload = {
   preloadLaunchInSteam: boolean;
   /** The active profile carries the shared preload cfg (Casual preload on). */
   profilePreload: boolean;
+  /** Particle sources found in the profile's own mods. Absent on older payloads. */
+  profileParticleSources?: ParticleSource[];
 };
 
 export type CatalogAddon = {
@@ -814,8 +930,13 @@ export async function downloadDefaultMods(): Promise<DefaultModsPayload> {
 export async function applyPreloaderMods(
   addons: string[],
   particleMods: string[],
+  profileParticleMods: string[] = [],
 ): Promise<PreloaderReport> {
-  return call<PreloaderReport>("apply_preloader_mods", { addons, particleMods });
+  return call<PreloaderReport>("apply_preloader_mods", {
+    addons,
+    particleMods,
+    profileParticleMods,
+  });
 }
 
 export async function setGameinfoBypass(enabled: boolean): Promise<PreloaderStatusPayload> {

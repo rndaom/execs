@@ -31,6 +31,8 @@ use super::state::{
 use super::{
     catalog::read_mods_catalog, DUPLICATE_EFFECT_FILES, DX8_TWIN_STEMS, MISC_VPK, PRELOADER_VPK,
 };
+use crate::mods::{profile_particle_sources_from, read_mod_pcf, ParticleSource};
+use crate::profile::{load_library_from, profiles_dir};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +41,10 @@ pub struct PreloaderSelection {
     pub addons: Vec<String>,
     #[serde(default)]
     pub particle_mods: Vec<String>,
+    /// Ids of mods on the active profile whose own `particles/*.pcf` files are
+    /// patched in alongside the library's.
+    #[serde(default)]
+    pub profile_particle_mods: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -167,6 +173,9 @@ pub fn apply_preloader_selection(
             return Err(format!("Unknown particle mod: {name}"));
         }
     }
+    // Same rule for the profile's own mods: an id the caller passes that no
+    // longer names an installed mod fails here, before anything is touched.
+    let profile_mods = resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods)?;
 
     // Re-check the run lock immediately before the first write into the
     // official VPK: the caller checked before an 81 MB download.
@@ -185,6 +194,7 @@ pub fn apply_preloader_selection(
     // the restore pass just removed.
     state.addons.clear();
     state.particle_mods.clear();
+    state.profile_particle_mods.clear();
     state.skipped.clear();
     save_state(data_dir, &state)?;
 
@@ -234,9 +244,56 @@ pub fn apply_preloader_selection(
         }
     }
 
+    // The profile's own mods are queued after the library's, so a mod the user
+    // brought in wins a file the library also supplies.
+    if let Some((profile_id, sources)) = &profile_mods {
+        let profiles = profiles_dir();
+        for source in sources {
+            for pcf in &source.pcf_files {
+                let bytes = match read_mod_pcf(&profiles, profile_id, &source.mod_id, pcf) {
+                    Ok(Some(bytes)) => bytes,
+                    // The pack went away between the validation above and here,
+                    // or its bytes are unreadable: drop the one file rather than
+                    // failing a run that has already restored the old patches.
+                    Ok(None) | Err(_) => {
+                        report.skipped.push(SkipNotice {
+                            file: pcf.clone(),
+                            mod_name: source.name.clone(),
+                            reason: "is no longer installed on this profile".into(),
+                        });
+                        continue;
+                    }
+                };
+                let file = pcf.to_ascii_lowercase();
+                let target = if file == "blood_trail.pcf" {
+                    // Same rule as the library's mods: blood_trail's own slot is
+                    // too small, and npc_fx loads the same systems.
+                    "npc_fx.pcf".to_string()
+                } else {
+                    file
+                };
+                if let Some(previous) = work.get(&target) {
+                    report.skipped.push(SkipNotice {
+                        file: target.clone(),
+                        mod_name: previous.mod_name.clone(),
+                        reason: format!("overridden by {}", source.name),
+                    });
+                }
+                work.insert(
+                    target.clone(),
+                    WorkItem {
+                        target,
+                        mod_name: source.name.clone(),
+                        bytes,
+                    },
+                );
+            }
+        }
+    }
+
     // Rebuild the duplicate-carrier files whenever particle mods are in play
-    // and a mod didn't already replace them outright.
-    if !selection.particle_mods.is_empty() {
+    // and a mod did not already replace them outright.
+    if !selection.particle_mods.is_empty() || profile_mods.is_some() {
         let mut roots_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for rel in entries.keys() {
             let Some(name) = rel.strip_prefix("particles/") else {
@@ -564,12 +621,41 @@ pub fn apply_preloader_selection(
     state.vpk_len = vpk_fingerprint(&vpk_path)?;
     state.addons = selection.addons.clone();
     state.particle_mods = selection.particle_mods.clone();
+    state.profile_particle_mods = selection.profile_particle_mods.clone();
     state.skipped = report.skipped.clone();
     save_state(data_dir, &state)?;
 
     report.addons_installed = selection.addons.clone();
     report.particle_mods_installed = selection.particle_mods.clone();
     Ok(report)
+}
+
+/// The active profile's mods a selection names, resolved to their particle
+/// listings. `None` when the selection names none, so an apply that only uses
+/// the library never touches the profile library at all.
+fn resolve_profile_particle_mods(
+    tf2_root: &Path,
+    ids: &[String],
+) -> Result<Option<(String, Vec<ParticleSource>)>, String> {
+    if ids.is_empty() {
+        return Ok(None);
+    }
+    let profiles = profiles_dir();
+    let library = load_library_from(&profiles, Some(tf2_root)).map_err(|err| err.message())?;
+    let profile_id = library.active_profile_id.ok_or(
+        "Save or switch to a profile before using its own mods as particle sources.".to_string(),
+    )?;
+    let available =
+        profile_particle_sources_from(&profiles, &profile_id).map_err(|err| err.message())?;
+    let mut resolved = Vec::with_capacity(ids.len());
+    for id in ids {
+        let source = available
+            .iter()
+            .find(|source| &source.mod_id == id)
+            .ok_or_else(|| format!("Unknown profile mod: {id}"))?;
+        resolved.push(source.clone());
+    }
+    Ok(Some((profile_id, resolved)))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -642,6 +728,7 @@ pub fn revert_preloader(
     }
     state.addons.clear();
     state.particle_mods.clear();
+    state.profile_particle_mods.clear();
     state.skipped.clear();
     save_state(data_dir, &state)?;
     Ok(report)
@@ -676,6 +763,9 @@ pub struct PreloaderStatus {
     pub patched_files: Vec<String>,
     pub addons: Vec<String>,
     pub particle_mods: Vec<String>,
+    /// Ids of the active profile's own mods whose particles are installed.
+    #[serde(default)]
+    pub profile_particle_mods: Vec<String>,
     pub skipped: Vec<SkipNotice>,
     pub stale: bool,
     pub custom_vpk_present: bool,
@@ -704,6 +794,7 @@ pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderSta
         patched_files: state.patched.keys().cloned().collect(),
         addons: state.addons,
         particle_mods: state.particle_mods,
+        profile_particle_mods: state.profile_particle_mods,
         skipped: state.skipped,
         stale,
         custom_vpk_present: tf2_root
@@ -713,4 +804,34 @@ pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderSta
             .is_file(),
         untracked_modified,
     })
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    /// A selection saved or sent by a build that predates profile mods must
+    /// still load, and must not reach for the profile library at all.
+    #[test]
+    fn the_profile_mod_list_defaults_to_empty_and_is_skipped_when_it_is() {
+        let selection: PreloaderSelection =
+            serde_json::from_str(r#"{"addons":["Flat Look"],"particleMods":["Blue Water"]}"#)
+                .unwrap();
+        assert!(selection.profile_particle_mods.is_empty());
+        assert_eq!(
+            resolve_profile_particle_mods(Path::new("no/such/root"), &[]).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn the_selection_round_trips_the_new_field_in_camel_case() {
+        let json = serde_json::to_value(PreloaderSelection {
+            addons: Vec::new(),
+            particle_mods: Vec::new(),
+            profile_particle_mods: vec!["cool-effects".into()],
+        })
+        .unwrap();
+        assert_eq!(json["profileParticleMods"][0], "cool-effects");
+    }
 }

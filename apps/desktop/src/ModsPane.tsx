@@ -1,20 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { GameBananaBrowser } from "./components/GameBananaBrowser";
+import { ModList } from "./components/ModList";
 import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
+import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { Switch, SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
+import type { Api } from "./lib/api";
 import type {
   CatalogAddon,
   CatalogParticleMod,
+  ModRecord,
   ModsCatalog,
+  ParticleSource,
   PreloaderReport,
   PreloaderStatusPayload,
 } from "./lib/bridge";
 import {
   formatModBytes,
+  installedModSelection,
+  type ModSelection,
+  modDomId,
   modsApplyEnabled,
   modsStatusLine,
   PRELOADER_CREDIT,
@@ -22,17 +31,22 @@ import {
   REPAIR_POLL_MS,
   REPAIR_TIMEOUT_MS,
   repairComplete,
+  serializeModSelection,
   summarizeReport,
   toggleName,
+  visibleModSelection,
 } from "./lib/mods-ui";
 
 export type ModsPaneProps = {
+  api: Api;
   payload: PreloaderStatusPayload | null;
   catalog: ModsCatalog | null;
+  /** The active profile's own packs; absent on an older backend. */
+  mods: ModRecord[];
   loading: boolean;
   report: PreloaderReport | null;
   onDownloadLibrary: () => void;
-  onApply: (addons: string[], particleMods: string[]) => void;
+  onApply: (addons: string[], particleMods: string[], profileParticleMods: string[]) => void;
   onToggleBypass: (enabled: boolean) => void;
   onTogglePreload: (enabled: boolean) => void;
   onRevert: () => void;
@@ -40,13 +54,18 @@ export type ModsPaneProps = {
   onRepair: () => Promise<void>;
   onRefreshStatus: () => Promise<void>;
   onOpenRepo: () => void;
+  onImportArchive: () => void;
+  onImportFolder: () => void;
+  onRemoveMod: (id: string) => void;
+  /** Resolves once the install and the profile reload behind it finished. */
+  onInstallGameBananaMod: (id: number) => Promise<void>;
 };
 
-type ModSelection = { addons: string[]; particleMods: string[] };
-
 export function ModsPane({
+  api,
   payload,
   catalog,
+  mods,
   loading,
   report,
   onDownloadLibrary,
@@ -57,20 +76,24 @@ export function ModsPane({
   onRepair,
   onRefreshStatus,
   onOpenRepo,
+  onImportArchive,
+  onImportFolder,
+  onRemoveMod,
+  onInstallGameBananaMod,
 }: ModsPaneProps) {
   const { running, busy } = useAppStatus();
   const status = payload?.status ?? null;
-  const installed = useMemo<ModSelection>(
-    () => ({ addons: status?.addons ?? [], particleMods: status?.particleMods ?? [] }),
-    [status],
-  );
-  const [selection, setSelection] = useSeededDraft(installed, (value) =>
-    JSON.stringify([[...value.addons].sort(), [...value.particleMods].sort()]),
-  );
-  const { addons, particleMods } = selection;
+  const installed = useMemo<ModSelection>(() => installedModSelection(payload), [payload]);
+  const [draft, setSelection] = useSeededDraft(installed, serializeModSelection);
+  const particleSources = payload?.profileParticleSources ?? [];
+  // Removing a pack takes its rows with it; a pick left behind would keep Apply
+  // lit over something nothing on screen can switch off.
+  const selection = visibleModSelection(draft, particleSources, installed.profileParticleMods);
+  const { addons, particleMods, profileParticleMods } = selection;
+  const [browsing, setBrowsing] = useState(false);
 
   const locked = !useCanWrite();
-  const canApply = modsApplyEnabled(payload, addons, particleMods);
+  const canApply = modsApplyEnabled(payload, selection);
   const untracked = status?.untrackedModified ?? [];
   // Steam's verify runs outside the app; while it does, poll the status and,
   // once every stale file reads as stock again, put the selection back.
@@ -83,9 +106,13 @@ export function ModsPane({
     }
     if (repairComplete(payload)) {
       setRepair("done");
-      const { addons: wantAddons, particleMods: wantParticles } = repairSelection.current;
-      if (wantAddons.length > 0 || wantParticles.length > 0) {
-        onApply(wantAddons, wantParticles);
+      const want = repairSelection.current;
+      if (
+        want.addons.length > 0 ||
+        want.particleMods.length > 0 ||
+        want.profileParticleMods.length > 0
+      ) {
+        onApply(want.addons, want.particleMods, want.profileParticleMods);
       }
       return;
     }
@@ -109,7 +136,7 @@ export function ModsPane({
 
   async function startRepair() {
     repairStarted.current = Date.now();
-    repairSelection.current = { addons, particleMods };
+    repairSelection.current = selection;
     setRepair("waiting");
     try {
       await onRepair();
@@ -231,6 +258,33 @@ export function ModsPane({
         </Alert>
       ) : null}
 
+      <ModList
+        mods={mods}
+        locked={locked}
+        running={running}
+        onImportArchive={onImportArchive}
+        onImportFolder={onImportFolder}
+        onRemove={onRemoveMod}
+      />
+
+      <PaneSection title="Browse GameBanana" id="mods-gamebanana">
+        <Disclosure
+          storageKey="mods-gamebanana"
+          summary="Search and install"
+          testId="mods-gamebanana-disclosure"
+          onOpenChange={setBrowsing}
+        >
+          <GameBananaBrowser
+            api={api}
+            active={browsing}
+            installed={mods}
+            locked={locked}
+            running={running}
+            onInstall={onInstallGameBananaMod}
+          />
+        </Disclosure>
+      </PaneSection>
+
       <PaneSection
         title="Default mod library"
         meta={
@@ -306,6 +360,29 @@ export function ModsPane({
             </div>
           </div>
         ) : null}
+
+        {/* Particles the user's own packs bring: same patching, same Apply. */}
+        {particleSources.length > 0 ? (
+          <div data-testid="mods-profile-particles" className="mt-8">
+            <h3 className="eyebrow">From your mods</h3>
+            <ul className="mt-3 list-none p-0">
+              {particleSources.map((source) => (
+                <ProfileParticleRow
+                  key={source.modId}
+                  source={source}
+                  checked={profileParticleMods.includes(source.modId)}
+                  disabled={locked}
+                  onToggle={() =>
+                    setSelection((current) => ({
+                      ...current,
+                      profileParticleMods: toggleName(current.profileParticleMods, source.modId),
+                    }))
+                  }
+                />
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </PaneSection>
 
       {report ? (
@@ -351,7 +428,7 @@ export function ModsPane({
       </p>
 
       <ApplyBar
-        status={modsStatusLine(payload, addons, particleMods, running)}
+        status={modsStatusLine(payload, selection, running)}
         actionLabel="Apply mods"
         lockedLabel="Close TF2 to apply"
         running={running}
@@ -361,7 +438,7 @@ export function ModsPane({
         // when the stale notice tells the user to press it.
         dirty={canApply}
         testId="mods-apply"
-        onApply={() => onApply(addons, particleMods)}
+        onApply={() => onApply(addons, particleMods, profileParticleMods)}
       />
     </div>
   );
@@ -444,6 +521,39 @@ function ParticleRow({
           disabled={disabled}
           label={mod.name.replace(/_/g, " ")}
           testId={id}
+          onChange={onToggle}
+        />
+      </div>
+    </li>
+  );
+}
+
+function ProfileParticleRow({
+  source,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  source: ParticleSource;
+  checked: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const count = source.pcfFiles.length;
+  return (
+    <li className="border-b border-edge py-3 last:border-b-0">
+      <div className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="t-row block truncate">{source.name}</span>
+          <span className="t-meta mt-0.5 block">
+            {count} particle {count === 1 ? "file" : "files"}
+          </span>
+        </span>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          label={source.name}
+          testId={`mods-profile-particle-${modDomId(source.modId)}`}
           onChange={onToggle}
         />
       </div>

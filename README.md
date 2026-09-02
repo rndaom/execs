@@ -25,7 +25,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Crosshair.** Stock, 173 community crosshairs, or your own design per weapon.
 - **Viewmodels.** Hide weapons per class, compiled with the game's own tools.
 - **Sounds.** Hit and kill sounds from a library, or your own WAV.
-- **Mods.** Casual preload for custom particles, with one-click restore.
+- **Mods.** Bring your own packs, or browse GameBanana and install in a click. Casual preload keeps them alive on Valve servers, with one-click restore.
 - **Files.** Edit any cfg with a linter that knows the engine.
 
 <p align="center">

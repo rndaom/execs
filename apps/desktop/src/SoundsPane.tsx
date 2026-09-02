@@ -29,6 +29,8 @@ import {
   serializeGameplay,
 } from "./lib/gameplay-ui";
 import {
+  BOOST_STEPS,
+  type BoostDb,
   choiceLabel,
   choiceSourceLabel,
   HITSOUND_CASUAL_COPY,
@@ -218,8 +220,8 @@ export function SoundsPane({
     onSaveCvars(serializeGameplay(next));
     if (needsPack) {
       onApply(
-        slotChange(draft.hit, record?.hit ?? null),
-        slotChange(draft.kill, record?.kill ?? null),
+        slotChange("hit", draft.hit, record?.hit ?? null),
+        slotChange("kill", draft.kill, record?.kill ?? null),
       );
     }
   }
@@ -551,6 +553,26 @@ function SoundSlot({
           onChange={(volume) => onChange({ volume })}
         />
       </div>
+      {slot.choice.kind !== "stock" ? (
+        <div className="mt-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="t-row">Boost</p>
+            <p className="t-meta">Makes the file itself louder.</p>
+          </div>
+          <Segmented
+            label="Boost"
+            size="sm"
+            disabled={locked}
+            testIdPrefix={`sounds-${kind}-boost`}
+            options={BOOST_STEPS.map((db) => ({
+              id: String(db) as "0" | "6" | "12",
+              label: db === 0 ? "Off" : `+${db} dB`,
+            }))}
+            value={String(slot.boost) as "0" | "6" | "12"}
+            onChange={(id) => onChange({ boost: Number(id) as BoostDb })}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

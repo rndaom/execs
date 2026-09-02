@@ -40,11 +40,21 @@ export type SoundChoice =
   /** The custom file already installed in this slot — nothing to re-send. */
   | { kind: "installed"; entry: HitsoundEntry };
 
+/** Gain baked into a custom file, in dB. The engine caps the cvar volume at 1. */
+export const BOOST_STEPS = [0, 6, 12] as const;
+export type BoostDb = (typeof BOOST_STEPS)[number];
+
+export function boostOf(entry: HitsoundEntry | null | undefined): BoostDb {
+  const value = entry?.boost ?? 0;
+  return BOOST_STEPS.includes(value as BoostDb) ? (value as BoostDb) : 0;
+}
+
 export type SlotDraft = {
   enabled: boolean;
   choice: SoundChoice;
   /** 0–100, the cvar's 0–1 scaled. */
   volume: number;
+  boost: BoostDb;
   pitchMin: number;
   pitchMax: number;
 };
@@ -79,6 +89,7 @@ export function seedSoundsDraft(
     return {
       enabled: (kind === "hit" ? cvars.tf_dingalingaling : cvars.tf_dingalingaling_lasthit) === 1,
       choice,
+      boost: boostOf(entry),
       volume: Math.round(
         (kind === "hit" ? cvars.tf_dingaling_volume : cvars.tf_dingaling_lasthit_volume) * 100,
       ),
@@ -115,22 +126,32 @@ export function soundsToCvars(draft: SoundsDraft, base: GameplaySettings): Gamep
 }
 
 /** What Apply has to do to the pack for one slot. */
-export function slotChange(slot: SlotDraft, installed: HitsoundEntry | null): HitsoundSlotChange {
+export function slotChange(
+  kind: HitsoundKind,
+  slot: SlotDraft,
+  installed: HitsoundEntry | null,
+): HitsoundSlotChange {
+  const boost = slot.boost;
   switch (slot.choice.kind) {
     case "community":
-      return { change: "install", pick: { kind: "community", name: slot.choice.id } };
+      return { change: "install", pick: { kind: "community", name: slot.choice.id }, boost };
     case "file":
       return {
         change: "install",
         pick: { kind: "file", token: slot.choice.picked.token, name: slot.choice.picked.name },
+        boost,
       };
     case "comfig":
       return {
         change: "install",
         pick: { kind: "comfig", hash: slot.choice.hash, name: slot.choice.name },
+        boost,
       };
     case "installed":
-      return { change: "keep" };
+      // Same file, different loudness: the backend re-encodes from the source.
+      return boost === boostOf(installed)
+        ? { change: "keep" }
+        : { change: "install", pick: { kind: "installed", slot: kind }, boost };
     default:
       // A stock effect: the file is dormant either way, and dropping it keeps
       // the pack honest about what plays.
@@ -140,8 +161,8 @@ export function slotChange(slot: SlotDraft, installed: HitsoundEntry | null): Hi
 
 /** Whether the pack needs touching at all (cvars are saved regardless). */
 export function packChangeNeeded(draft: SoundsDraft, record: HitsoundRecord | null): boolean {
-  const hit = slotChange(draft.hit, record?.hit ?? null);
-  const kill = slotChange(draft.kill, record?.kill ?? null);
+  const hit = slotChange("hit", draft.hit, record?.hit ?? null);
+  const kill = slotChange("kill", draft.kill, record?.kill ?? null);
   return hit.change !== "keep" || kill.change !== "keep";
 }
 
@@ -238,6 +259,7 @@ export function serializeSoundsDraft(draft: SoundsDraft): string {
   const slot = (value: SlotDraft) =>
     JSON.stringify([
       value.enabled,
+      value.boost,
       value.choice.kind,
       value.choice.kind === "stock"
         ? value.choice.effect
