@@ -115,7 +115,7 @@ Working agreement: durable product/design decisions get recorded here as they ar
 
 ## The hub (removed)
 - The Cloudflare community hub (`apps/web`, `packages/preview-matrix`, `tools/capture`: Steam login, browse, upload, R2, D1) is **not part of this app**. It left `main` on 2026-09-01 (RND-182, commit `e47b655`) and the `hub` branch that preserved it was deleted on 2026-09-02 at the user's request. Nothing is lost: main's history still holds the full tree at `952dea3` (the merge of PR #19, the last commit before the removal) — `git show 952dea3:apps/web/package.json` works. Reviving it means branching from there, not re-adding files to `main`.
-- The old Worker at https://execs.anthonyrandomcarey.workers.dev and its production D1 / R2 are Cloudflare resources outside this repo; they were not touched. Tear them down in the Cloudflare dashboard if the hub is gone for good.
+- The Cloudflare side is gone too (2026-09-02): the `execs` Worker (https://execs.anthonyrandomcarey.workers.dev), the `execs` D1 database (every table was empty) and the `execs-files` / `execs-media` R2 buckets (zero objects) were deleted with wrangler. Nothing remains on the account for this project; `haven-bucket` there belongs to another project.
 - `.npmrc` `node-linker=hoisted` — still required on Windows for this monorepo. Don't remove it.
 
 ## Conventions
