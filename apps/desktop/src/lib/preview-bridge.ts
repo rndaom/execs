@@ -332,6 +332,12 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return requireDetail();
     },
+    async importHudArchive() {
+      throw notInPreview("Importing a HUD archive");
+    },
+    async importHudFolder() {
+      throw notInPreview("Importing a HUD folder");
+    },
     async matchHudCatalog(id: string) {
       return api.installHud(id);
     },
@@ -500,6 +506,13 @@ export function createPreviewApi(state: PreviewState): Api {
         ...modsPayload,
         status: { ...modsPayload.status, gameinfoBypassed: enabled },
       };
+      return modsPayload;
+    },
+    async setProfilePreload(enabled: boolean) {
+      modsPayload = { ...modsPayload, profilePreload: enabled };
+      if (viewmodel) {
+        viewmodel = { ...viewmodel, preload: enabled };
+      }
       return modsPayload;
     },
     async repairGameFiles() {

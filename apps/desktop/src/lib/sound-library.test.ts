@@ -98,6 +98,7 @@ describe("repair flow", () => {
       modsCached: true,
       modsSizeBytes: 1,
       preloadLaunchInSteam: true,
+      profilePreload: true,
       status: {
         gameinfoFound: true,
         gameinfoBypassed: false,

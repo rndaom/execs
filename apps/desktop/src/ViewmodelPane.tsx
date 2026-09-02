@@ -5,7 +5,6 @@ import { ClassTabs } from "./components/ui/ClassTabs";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
-import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
 import { prefetchViewmodelPreviews, useViewmodelPreview } from "./hooks/useViewmodelPreview";
@@ -55,14 +54,12 @@ export function ViewmodelPane({
   onBuild,
   onImport,
   onRemove,
-  onTogglePreload,
 }: {
   api: Api;
   record: ViewmodelRecord | null;
   onBuild: (hidden: string[], preload: boolean, hideMode: ViewmodelHideMode) => void;
   onImport: (preload: boolean) => void;
   onRemove: () => void;
-  onTogglePreload: (enabled: boolean) => void;
 }) {
   const { running } = useAppStatus();
   const locked = !useCanWrite();
@@ -359,28 +356,10 @@ export function ViewmodelPane({
             ) : null}
           </div>
 
-          <div className="mt-4 max-w-xl">
-            <SwitchRow
-              id="viewmodel-preload"
-              testId="viewmodel-preload"
-              label="Casual preload"
-              description="Precache on itemtest before joining Valve Casual so the pack applies there. Community and listen servers work without it."
-              checked={draft.preload}
-              disabled={locked}
-              onChange={(next) => {
-                // With a pack installed the write is the source of truth: flipping
-                // the draft here would leave the switch in the new position even
-                // when the command fails. Let the reseeded record move it. Without
-                // a pack there is nothing to write — this is just the preference
-                // the next build/import will use.
-                if (record) {
-                  onTogglePreload(next);
-                  return;
-                }
-                setDraft((current) => ({ ...current, preload: next }));
-              }}
-            />
-          </div>
+          <p className="t-meta mt-4 max-w-[62ch]">
+            Building or importing turns Casual preload on for this profile so the pack applies on
+            Valve servers. The switch itself lives on the Mods pane, with the rest of the preload.
+          </p>
         </Disclosure>
       </section>
 
