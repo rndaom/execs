@@ -5,7 +5,7 @@ Working agreement: durable product/design decisions get recorded here as they ar
 ## Product identity
 - Name "execs" is a working name — renameable before launch.
 - The product is a **Windows + Linux desktop companion** (Tauri 2 + existing React/TS UI, `cfglint` as a library). Not a website.
-- The Cloudflare community hub (Steam login, browse, upload, R2, D1) is **parked**. Do not build hub features in parallel.
+- There is no community hub any more (Steam login, browse, upload, R2, D1 — removed 2026-09-02; see "The hub (removed)"). Do not build hub features.
 - V1 audience: TF2 players setting up a fresh install or switching named setups. No Steam login required.
 - Everything we ship is **first-party** except mastercomfig (integrated, not rebuilt). Do not embed other community apps.
 
@@ -113,10 +113,9 @@ Working agreement: durable product/design decisions get recorded here as they ar
 - Write lock: process **name** `tf_win64.exe` (Windows) / `tf_linux64` (Linux). `refuse_if_running()` wraps live-surface and profile-library writes. Confirming the TF2 root and toggling inherit-binds are app-data settings writes and stay allowed while the game is open. Do not lock on `steam`, `srcds`, `hl2.exe`, or Proton `tf_win64.exe` on Linux.
 - Crash hardening: release builds do **not** use `panic = "abort"` (one background-thread panic must not kill the app); a panic hook logs to `<execs data dir>/logs/panic.log`; the lock poller wraps each tick in `catch_unwind`; heavy commands (save/absorb, crosshair apply, HUD match) run in `spawn_blocking`, never on the main thread; the VPK reader range-reads sibling archives and supports filtered reads (`read_vpk_dir_file_filtered`) so weapon-script loading never materializes gigabytes.
 
-## Deployment (legacy hub — parked)
-- The hub source is **not on `main`** (removed 2026-09-01, RND-182 Phase 0). `apps/web`, `packages/preview-matrix`, and `tools/capture` live on the `hub` branch, which preserves the full pre-removal tree. Un-parking means reviving that branch, not re-adding files to `main`.
-- Old live URL: https://execs.anthonyrandomcarey.workers.dev (Cloudflare Worker "execs"). Do not treat as the product.
-- Production D1 / R2 remain from the hub; no new hub migrations unless someone un-parks it.
+## The hub (removed)
+- The Cloudflare community hub (`apps/web`, `packages/preview-matrix`, `tools/capture`: Steam login, browse, upload, R2, D1) is **not part of this app**. It left `main` on 2026-09-01 (RND-182, commit `e47b655`) and the `hub` branch that preserved it was deleted on 2026-09-02 at the user's request. Nothing is lost: main's history still holds the full tree at `952dea3` (the merge of PR #19, the last commit before the removal) — `git show 952dea3:apps/web/package.json` works. Reviving it means branching from there, not re-adding files to `main`.
+- The old Worker at https://execs.anthonyrandomcarey.workers.dev and its production D1 / R2 are Cloudflare resources outside this repo; they were not touched. Tear them down in the Cloudflare dashboard if the hub is gone for good.
 - `.npmrc` `node-linker=hoisted` — still required on Windows for this monorepo. Don't remove it.
 
 ## Conventions
