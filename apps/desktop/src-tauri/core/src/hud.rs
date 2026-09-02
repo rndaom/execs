@@ -384,6 +384,107 @@ const MAX_HUD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
 const SEVEN_ZIP_MAGIC: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
 
+/// A HUD from a folder on disk (an extracted download, or one the user
+/// built), read under the same caps as an archive and with the same
+/// wrapper-folder stripping. `sound.cache`, VCS metadata and OS junk are
+/// left behind.
+pub fn hud_tree_from_dir(dir: &Path) -> Result<ExtractedHud, ProfileError> {
+    if !dir.is_dir() {
+        return Err(ProfileError::Io("That is not a folder.".into()));
+    }
+    let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut total: u64 = 0;
+    let mut stack = vec![(dir.to_path_buf(), String::new())];
+    while let Some((path, rel)) = stack.pop() {
+        let entries = fs::read_dir(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if is_junk_name(&name) {
+                continue;
+            }
+            let child_rel = if rel.is_empty() {
+                name.clone()
+            } else {
+                format!("{rel}/{name}")
+            };
+            let child = entry.path();
+            if child.is_dir() {
+                stack.push((child, child_rel));
+                continue;
+            }
+            if !child.is_file() {
+                continue;
+            }
+            if raw.len() >= MAX_HUD_ENTRIES {
+                return Err(ProfileError::Io(format!(
+                    "That folder has more than {MAX_HUD_ENTRIES} files; refusing to import it."
+                )));
+            }
+            let meta = child
+                .metadata()
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
+            if meta.len() > MAX_HUD_ENTRY_BYTES {
+                return Err(ProfileError::Io(format!(
+                    "{child_rel} is larger than 64 MiB; refusing to import this HUD."
+                )));
+            }
+            total += meta.len();
+            if total > MAX_HUD_TOTAL_BYTES {
+                return Err(ProfileError::Io(
+                    "That folder holds more than 512 MiB; refusing to import it.".into(),
+                ));
+            }
+            let bytes = fs::read(&child).map_err(|err| ProfileError::Io(err.to_string()))?;
+            raw.push((sanitize_zip_entry(&child_rel)?, bytes));
+        }
+    }
+    finish_extracted(raw)
+}
+
+fn is_junk_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        ".git"
+            | ".svn"
+            | ".hg"
+            | ".ds_store"
+            | "thumbs.db"
+            | "desktop.ini"
+            | "sound.cache"
+            | "__macosx"
+    )
+}
+
+/// A folder name for a HUD imported from the user's own files, from the
+/// archive or folder it came from: lowercased, invalid characters folded to
+/// dashes, archive extensions dropped, never empty or leading-dash.
+pub fn hud_id_from_name(name: &str) -> String {
+    let stem = name
+        .trim()
+        .trim_end_matches(".zip")
+        .trim_end_matches(".7z")
+        .trim_end_matches(".ZIP")
+        .trim_end_matches(".7Z");
+    let mut id = String::new();
+    let mut last_dash = true;
+    for ch in stem.chars() {
+        let ch = ch.to_ascii_lowercase();
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            id.push(ch);
+            last_dash = false;
+        } else if !last_dash {
+            id.push('-');
+            last_dash = true;
+        }
+    }
+    let id = id.trim_matches('-').to_string();
+    if id.is_empty() {
+        "custom-hud".to_string()
+    } else {
+        id
+    }
+}
+
 /// A HUD archive of whatever kind the host handed back: zip (GitHub,
 /// GameBanana), 7z (every Dropbox entry) — sniffed by magic, never by the
 /// URL's extension. RAR is named in the error so the user knows why.
@@ -1199,6 +1300,39 @@ mod tests {
         );
         // A truncated 7z is an error, not a panic.
         assert!(extract_hud_archive(&HUD_MIN_7Z[..40]).is_err());
+    }
+
+    #[test]
+    fn a_folder_imports_like_an_archive_and_gets_a_safe_id() {
+        let root = crate::test_temp_dir();
+        let hud = root.join("My HUD (v2)");
+        std::fs::create_dir_all(hud.join("resource/ui")).unwrap();
+        std::fs::create_dir_all(hud.join(".git")).unwrap();
+        std::fs::write(
+            hud.join("info.vdf"),
+            "\"Root\"\n{\n\t\"ui_version\"\t\"3\"\n}\n",
+        )
+        .unwrap();
+        std::fs::write(hud.join("resource/ui/hudlayout.res"), "x").unwrap();
+        std::fs::write(hud.join("sound.cache"), "stale").unwrap();
+        std::fs::write(hud.join(".git/HEAD"), "ref").unwrap();
+        let extracted = hud_tree_from_dir(&hud).unwrap();
+        assert_eq!(extracted.ui_version, Some(3));
+        assert_eq!(extracted.tree.files.len(), 2);
+        assert!(extracted.tree.get("resource/ui/hudlayout.res").is_some());
+        assert!(hud_tree_from_dir(&root.join("missing")).is_err());
+        // A folder that is not a HUD is refused by the same rule as an archive.
+        let not_hud = root.join("pictures");
+        std::fs::create_dir_all(&not_hud).unwrap();
+        std::fs::write(not_hud.join("a.png"), "p").unwrap();
+        assert!(hud_tree_from_dir(&not_hud).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(hud_id_from_name("My HUD (v2).zip"), "my-hud-v2");
+        assert_eq!(hud_id_from_name("rayshud-master.7z"), "rayshud-master");
+        assert_eq!(hud_id_from_name("--!!"), "custom-hud");
+        assert_eq!(hud_id_from_name("flawhud_2024"), "flawhud_2024");
+        assert!(sanitize_hud_id(&hud_id_from_name("weird name?")).is_ok());
     }
 
     #[test]

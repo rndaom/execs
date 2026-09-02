@@ -1,4 +1,12 @@
-import { ArrowLeft, ArrowRight, ArrowSquareOut, Images, X } from "@phosphor-icons/react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowSquareOut,
+  FolderOpen,
+  Images,
+  UploadSimple,
+  X,
+} from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
@@ -61,6 +69,8 @@ export function HudPane({
   onUpdate,
   onMatch,
   onApplyOptions,
+  onImportArchive,
+  onImportFolder,
 }: {
   api: Api;
   catalogLoading: boolean;
@@ -75,6 +85,9 @@ export function HudPane({
   onUpdate: () => void;
   onMatch: (id: string) => void;
   onApplyOptions: (options: Record<string, string>) => void;
+  /** Install a HUD from a zip/7z or a folder on this computer. */
+  onImportArchive: () => void;
+  onImportFolder: () => void;
 }) {
   const { running, busy } = useAppStatus();
   const locked = !useCanWrite();
@@ -409,9 +422,37 @@ export function HudPane({
         <div>
           <p className="eyebrow">Active HUD</p>
           <h2 className="t-pane mt-2 text-[22px]">Stock Team Fortress 2</h2>
-          <p className="t-meta mt-1">Install a HUD below to add it to this profile.</p>
+          <p className="t-meta mt-1">
+            Install one from the catalog below, or bring your own from this computer.
+          </p>
         </div>
       )}
+
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="hud-import-archive"
+          disabled={locked}
+          onClick={onImportArchive}
+          className="btn btn-ghost"
+        >
+          <UploadSimple size={14} />
+          Import a HUD archive…
+        </button>
+        <button
+          type="button"
+          data-testid="hud-import-folder"
+          disabled={locked}
+          onClick={onImportFolder}
+          className="btn btn-ghost"
+        >
+          <FolderOpen size={14} />
+          Import a HUD folder…
+        </button>
+        <span className="t-meta">
+          A zip or 7z, or an extracted folder, with info.vdf inside. It replaces the active HUD.
+        </span>
+      </div>
 
       <section id="hud-catalog" className="section scroll-mt-4">
         <div className="flex flex-wrap items-end justify-between gap-3">

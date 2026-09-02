@@ -3,7 +3,7 @@ import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
-import { Switch } from "./components/ui/Switch";
+import { Switch, SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
 import type {
@@ -34,6 +34,7 @@ export type ModsPaneProps = {
   onDownloadLibrary: () => void;
   onApply: (addons: string[], particleMods: string[]) => void;
   onToggleBypass: (enabled: boolean) => void;
+  onTogglePreload: (enabled: boolean) => void;
   onRevert: () => void;
   /** Start Steam's verify; the pane polls `onRefreshStatus` until it finishes. */
   onRepair: () => Promise<void>;
@@ -51,6 +52,7 @@ export function ModsPane({
   onDownloadLibrary,
   onApply,
   onToggleBypass,
+  onTogglePreload,
   onRevert,
   onRepair,
   onRefreshStatus,
@@ -119,24 +121,37 @@ export function ModsPane({
 
       {/* The status hero: the three facts, then the two actions that change
           them. Everything the library offers sits below. */}
+      {/* Casual preload lives here and only here: the profile's preload on
+          launch (what viewmodel packs and mods both need) and the gameinfo
+          bypass that keeps preloaded content live on Valve servers. */}
       <div className="hero-row">
         <div className="min-w-0">
-          <h2 className="t-section">Casual preload bypass</h2>
+          <h2 className="t-section">Casual preload</h2>
           <p className="t-meta mt-1 max-w-[62ch]">
-            Comments out one line in gameinfo.txt so preloaded materials, models and particles stay
-            live on sv_pure servers. The pristine file is backed up first and the change reverses
-            cleanly.
+            Valve Casual runs sv_pure, so custom animations, materials and particles only survive
+            when the game precaches them before you join. Two parts, both for this profile.
           </p>
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              data-testid="mods-bypass-toggle"
-              className="btn btn-primary"
+          <div className="mt-3 max-w-xl">
+            <SwitchRow
+              id="mods-profile-preload"
+              testId="mods-profile-preload"
+              label="Preload on launch"
+              description="Loads itemtest for a moment at startup so viewmodel packs and mods are cached before you join a server. Community and listen servers work without it."
+              checked={payload?.profilePreload ?? false}
+              disabled={locked || !payload}
+              onChange={onTogglePreload}
+            />
+            <SwitchRow
+              id="mods-bypass-toggle"
+              testId="mods-bypass-toggle"
+              label="Material bypass"
+              description="Comments out one line in gameinfo.txt so preloaded materials, models and particles stay live on sv_pure servers. The pristine file is backed up first."
+              checked={status?.gameinfoBypassed ?? false}
               disabled={locked || !status?.gameinfoFound}
-              onClick={() => onToggleBypass(!(status?.gameinfoBypassed ?? false))}
-            >
-              {status?.gameinfoBypassed ? "Disable bypass" : "Enable bypass"}
-            </button>
+              onChange={onToggleBypass}
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               data-testid="mods-revert"
@@ -147,15 +162,15 @@ export function ModsPane({
               Restore stock files
             </button>
           </div>
-          <p className="mt-4 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
+          <p className="mt-3 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
             Restore puts every patched byte back, un-comments gameinfo.txt and removes the addon
-            pack. Mods load on Valve servers only after the preload runs — keep Casual preload on
-            for this profile.
+            pack. Building a viewmodel pack or applying mods turns Preload on launch on by itself.
           </p>
         </div>
 
         {status ? (
           <dl className="hero-preview surface m-0 self-start p-5">
+            <Stat label="Preload" value={payload?.profilePreload ? "On" : "Off"} />
             <Stat label="Bypass" value={status.gameinfoBypassed ? "On" : "Off"} />
             <Stat label="Patched files" value={String(status.patchedFiles.length)} />
             <Stat label="Addon pack" value={status.customVpkPresent ? "Installed" : "None"} />
@@ -169,7 +184,7 @@ export function ModsPane({
           selection again to re-install it on the fresh files.
         </Alert>
       ) : null}
-      {payload && anythingInstalled && !payload.preloadLaunchInSteam ? (
+      {payload && anythingInstalled && payload.profilePreload && !payload.preloadLaunchInSteam ? (
         <Alert tone="warn" testId="mods-launch-warning" className="mt-6">
           The preload is not in your Steam launch options yet (Steam was open when they were saved).
           Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}

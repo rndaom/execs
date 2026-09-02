@@ -460,6 +460,16 @@ export async function installHud(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("install_hud", { id });
 }
 
+/** Pick a zip/7z on disk and install it as this profile's HUD. Null = cancelled. */
+export async function importHudArchive(): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_hud_archive");
+}
+
+/** Pick a folder on disk and install it as this profile's HUD. Null = cancelled. */
+export async function importHudFolder(): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_hud_folder");
+}
+
 export async function matchHudCatalog(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("match_hud_catalog", { id });
 }
@@ -738,6 +748,8 @@ export type PreloaderStatusPayload = {
   modsSizeBytes: number;
   /** Steam's stored TF2 launch options carry the preload exec. */
   preloadLaunchInSteam: boolean;
+  /** The active profile carries the shared preload cfg (Casual preload on). */
+  profilePreload: boolean;
 };
 
 export type CatalogAddon = {
@@ -813,6 +825,11 @@ export async function setGameinfoBypass(enabled: boolean): Promise<PreloaderStat
 
 export async function revertPreloader(): Promise<PreloaderRevertReport> {
   return call<PreloaderRevertReport>("revert_preloader");
+}
+
+/** The one Casual-preload switch for the active profile. */
+export async function setProfilePreload(enabled: boolean): Promise<PreloaderStatusPayload> {
+  return call<PreloaderStatusPayload>("set_profile_preload", { enabled });
 }
 
 /** Ask Steam to verify TF2's files (`steam://validate/440`). */

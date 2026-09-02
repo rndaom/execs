@@ -62,11 +62,12 @@ pub use hitsound::{
 };
 pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
-    extract_hud_archive, extract_hud_zip, hud_ui_state, hud_zip_url, install_hud_pack,
-    load_catalog_cache_from, load_hud_tree_from_profile, match_hud_catalog, resolve_hud,
-    save_catalog_cache_to, schema_file_name, schema_supported, set_hud_options,
-    sync_hud_exec_lines, sync_hud_exec_lines_to, write_hud_tree_files, HudCatalogCache,
-    HudCatalogEntry, HudInstallKind, HudStatus, HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
+    extract_hud_archive, extract_hud_zip, hud_id_from_name, hud_tree_from_dir, hud_ui_state,
+    hud_zip_url, install_hud_pack, load_catalog_cache_from, load_hud_tree_from_profile,
+    match_hud_catalog, resolve_hud, save_catalog_cache_to, schema_file_name, schema_supported,
+    set_hud_options, sync_hud_exec_lines, sync_hud_exec_lines_to, write_hud_tree_files,
+    HudCatalogCache, HudCatalogEntry, HudInstallKind, HudStatus, HudTree, HudUiState,
+    SUPPORTED_SCHEMA_HUDS,
 };
 pub use hud_apply::{
     apply_hud_options, apply_hud_options_for_layer, hud_cfg_path, hud_cfg_stem, parse_hud_schema,
@@ -93,7 +94,8 @@ pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
 pub use viewmodel::{
     ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
-    remove_profile_preload_if_unused, remove_viewmodels, set_viewmodel_preload,
+    profile_has_preload, remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
+    set_viewmodel_preload,
 };
 pub use viewmodel_build::{build_viewmodel_pack_vpk, studiomdl_file_name, ViewmodelHideMode};
 pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};

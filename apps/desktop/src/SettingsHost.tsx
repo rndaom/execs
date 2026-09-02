@@ -596,6 +596,21 @@ export function SettingsHost({
               await reloadHud(false);
             });
           }}
+          onImportArchive={() => {
+            void runWrite(async () => {
+              // Cancelling the dialog is a no-op, not an error.
+              if (await api.importHudArchive()) {
+                await reloadHud(false);
+              }
+            });
+          }}
+          onImportFolder={() => {
+            void runWrite(async () => {
+              if (await api.importHudFolder()) {
+                await reloadHud(false);
+              }
+            });
+          }}
         />
       );
     }
@@ -647,11 +662,6 @@ export function SettingsHost({
           onRemove={() => {
             void runWrite(async () => {
               await api.removeViewmodels();
-            });
-          }}
-          onTogglePreload={(enabled) => {
-            void runWrite(async () => {
-              await api.setViewmodelPreload(enabled);
             });
           }}
         />
@@ -721,6 +731,11 @@ export function SettingsHost({
           onToggleBypass={(enabled) => {
             void runWrite(async () => {
               setModsPayload(await api.setGameinfoBypass(enabled));
+            });
+          }}
+          onTogglePreload={(enabled) => {
+            void runWrite(async () => {
+              setModsPayload(await api.setProfilePreload(enabled));
             });
           }}
           onRevert={() => {
