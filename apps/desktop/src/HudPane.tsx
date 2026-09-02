@@ -4,6 +4,7 @@ import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
+import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
@@ -12,6 +13,7 @@ import {
   type HudAlbumImage,
   type HudCatalogEntry,
   type HudSchemaView,
+  type HudStat,
   type HudUiState,
   openExternal,
 } from "./lib/bridge";
@@ -20,13 +22,17 @@ import {
   canInstallHud,
   filterHudCatalog,
   formatHudRgba,
+  HUD_SORTS,
+  type HudSort,
   hudInstallSourceCopy,
   hudOptionsDirty,
+  hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
   paginateHudCatalog,
   parseHudRgba,
   seedHudOptions,
+  sortHudCatalog,
   stepHudScreenshot,
 } from "./lib/hud-ui";
 
@@ -47,6 +53,7 @@ export function HudPane({
   catalogLoading,
   catalogError,
   catalog,
+  stats,
   state,
   schema,
   onRefresh,
@@ -59,6 +66,8 @@ export function HudPane({
   catalogLoading: boolean;
   catalogError: string | null;
   catalog: HudCatalogEntry[];
+  /** Popularity and recency per id; empty until the stats have loaded. */
+  stats: Record<string, HudStat>;
   state: HudUiState;
   schema: HudSchemaView | null;
   onRefresh: () => void;
@@ -70,6 +79,7 @@ export function HudPane({
   const { running, busy } = useAppStatus();
   const locked = !useCanWrite();
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<HudSort>("name");
   const [page, setPage] = useState(0);
   const [viewer, setViewer] = useState<HudViewer | null>(null);
   const seeded = useMemo(() => seedHudOptions(schema, state.installed), [schema, state.installed]);
@@ -78,7 +88,10 @@ export function HudPane({
     (value) => JSON.stringify(value),
     installedKeyOf(state),
   );
-  const filtered = filterHudCatalog(catalog, query);
+  const filtered = useMemo(
+    () => sortHudCatalog(filterHudCatalog(catalog, query), stats, sort),
+    [catalog, query, stats, sort],
+  );
   const paged = paginateHudCatalog(filtered, page);
   const dirty = hudOptionsDirty(draft, seeded);
   const installedId = state.installed?.id ?? null;
@@ -436,6 +449,21 @@ export function HudPane({
           </div>
         </div>
 
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="t-meta">Sort</span>
+          <Segmented
+            label="Sort HUDs"
+            size="sm"
+            testIdPrefix="hud-sort"
+            options={HUD_SORTS}
+            value={sort}
+            onChange={(next) => {
+              setSort(next);
+              setPage(0);
+            }}
+          />
+        </div>
+
         {catalogLoading ? (
           <p
             data-testid="hud-catalog-loading"
@@ -480,6 +508,7 @@ export function HudPane({
                 const shots = entry.screenshots.length;
                 const hasPictures = shots > 0 || entry.album !== null;
                 const sourceCopy = hudInstallSourceCopy(entry);
+                const statCopy = hudStatCopy(stats[entry.id.toLowerCase()] ?? stats[entry.id]);
                 return (
                   <article
                     key={entry.id}
@@ -514,11 +543,15 @@ export function HudPane({
                         <p className="truncate text-[12.5px] text-ink-faint">by {entry.author}</p>
                         {current ? <span className="badge badge-ok">Active</span> : null}
                       </div>
-                      {entry.flags.length > 0 || sourceCopy ? (
+                      {statCopy || entry.flags.length > 0 || sourceCopy ? (
                         <p className="t-meta mt-0.5">
-                          {entry.flags.length > 0 ? entry.flags.join(" · ") : null}
-                          {entry.flags.length > 0 && sourceCopy ? " · " : null}
-                          {sourceCopy}
+                          {[
+                            statCopy,
+                            entry.flags.length > 0 ? entry.flags.join(" · ") : null,
+                            sourceCopy,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       ) : null}
                     </div>

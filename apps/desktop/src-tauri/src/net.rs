@@ -12,7 +12,14 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-const USER_AGENT: &str = "execs";
+/// Honest product identification. Some hosts (comfig.app's sound CDN) hand a
+/// bot challenge to empty or bare-library user agents; a product token with
+/// a contact URL is what they ask of well-behaved clients.
+const USER_AGENT: &str = concat!(
+    "execs/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/rndaom/execs)"
+);
 
 /// Bulk downloads (release VPKs, HUD zips, the 81 MB mod library). Ten
 /// minutes covers a slow link; a stalled connection still fails instead of

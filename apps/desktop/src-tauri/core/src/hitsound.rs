@@ -64,6 +64,8 @@ pub enum HitsoundSource {
     Community,
     /// A file the user picked; `name` is its original file name.
     File,
+    /// comfig.app's hits library; `name` is the entry's display name.
+    Comfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -362,6 +364,118 @@ fn encode_pcm16(channels: &[Vec<f32>], rate: u32) -> Vec<u8> {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// MS-ADPCM → PCM, for auditioning only
+// ---------------------------------------------------------------------------
+
+/// Microsoft ADPCM's fixed predictor coefficient table (7 pairs).
+const ADPCM_COEFFS: [(i32, i32); 7] = [
+    (256, 0),
+    (512, -256),
+    (0, 0),
+    (192, 64),
+    (240, 0),
+    (460, -208),
+    (392, -232),
+];
+const ADPCM_ADAPT: [i32; 16] = [
+    230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230,
+];
+
+/// A copy of `bytes` the webview can play. The engine takes 4-bit MS-ADPCM
+/// (every comfig.app sound is one) but browser audio elements do not, so
+/// those are decoded to 16-bit PCM here; anything else passes through.
+pub fn preview_wav(bytes: &[u8]) -> Vec<u8> {
+    match inspect_wav(bytes) {
+        Ok(info) if info.format_tag == WAVE_FORMAT_ADPCM => {
+            decode_ms_adpcm(bytes, &info).unwrap_or_else(|_| bytes.to_vec())
+        }
+        _ => bytes.to_vec(),
+    }
+}
+
+fn decode_ms_adpcm(bytes: &[u8], info: &WavInfo) -> Result<Vec<u8>, String> {
+    let chunks = wav_chunks(bytes)?;
+    let channels = usize::from(info.channels);
+    if !(1..=2).contains(&channels) {
+        return Err("Only mono and stereo ADPCM can be previewed.".into());
+    }
+    let block_align = usize::from(read_u16(chunks.fmt, 12).unwrap_or(0));
+    if block_align < 7 * channels {
+        return Err("That ADPCM WAV has an invalid block size.".into());
+    }
+    // Optional cbSize + samples-per-block; fall back to the MS default
+    // derived from the block size when a writer left the extension out.
+    let samples_per_block = read_u16(chunks.fmt, 18)
+        .filter(|value| *value > 0)
+        .map(usize::from)
+        .unwrap_or((block_align - 7 * channels) * 2 / channels + 2);
+    let mut out: Vec<Vec<f32>> = vec![Vec::new(); channels];
+    for block in chunks.data.chunks(block_align) {
+        if block.len() < 7 * channels {
+            break;
+        }
+        let mut predictor = [0usize; 2];
+        let mut delta = [0i32; 2];
+        let mut sample1 = [0i32; 2];
+        let mut sample2 = [0i32; 2];
+        for ch in 0..channels {
+            predictor[ch] = usize::from(block[ch]).min(ADPCM_COEFFS.len() - 1);
+        }
+        let mut at = channels;
+        for slot in delta.iter_mut().take(channels) {
+            *slot = i32::from(read_i16(block, at));
+            at += 2;
+        }
+        for slot in sample1.iter_mut().take(channels) {
+            *slot = i32::from(read_i16(block, at));
+            at += 2;
+        }
+        for slot in sample2.iter_mut().take(channels) {
+            *slot = i32::from(read_i16(block, at));
+            at += 2;
+        }
+        // The two header samples come first, oldest first.
+        for ch in 0..channels {
+            out[ch].push(sample2[ch] as f32 / 32768.0);
+            out[ch].push(sample1[ch] as f32 / 32768.0);
+        }
+        let mut produced = 2usize;
+        let nibbles = block[at..].iter().flat_map(|byte| [byte >> 4, byte & 0x0F]);
+        let mut ch = 0usize;
+        for nibble in nibbles {
+            if produced >= samples_per_block && ch == 0 {
+                break;
+            }
+            let (c1, c2) = ADPCM_COEFFS[predictor[ch]];
+            let predicted = (sample1[ch] * c1 + sample2[ch] * c2) >> 8;
+            let signed = if nibble & 0x08 != 0 {
+                i32::from(nibble) - 16
+            } else {
+                i32::from(nibble)
+            };
+            let sample = (predicted + signed * delta[ch]).clamp(-32768, 32767);
+            out[ch].push(sample as f32 / 32768.0);
+            sample2[ch] = sample1[ch];
+            sample1[ch] = sample;
+            delta[ch] = ((ADPCM_ADAPT[usize::from(nibble)] * delta[ch]) >> 8).max(16);
+            ch += 1;
+            if ch == channels {
+                ch = 0;
+                produced += 1;
+            }
+        }
+    }
+    if out[0].is_empty() {
+        return Err("That ADPCM WAV holds no samples.".into());
+    }
+    Ok(encode_pcm16(&out, info.sample_rate))
+}
+
+fn read_i16(bytes: &[u8], at: usize) -> i16 {
+    read_u16(bytes, at).map(|value| value as i16).unwrap_or(0)
 }
 
 /// One slot's intended state on apply.
@@ -863,6 +977,96 @@ mod tests {
             vec!["hitsound", "hitsound_electro1", "killsound_vortex"]
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn adpcm_wav(channels: u16, blocks: usize, nibble: u8) -> Vec<u8> {
+        let block_align: u16 = 7 * channels + 8 * channels;
+        let samples_per_block: u16 = 2 + 16;
+        let mut fmt = Vec::new();
+        fmt.extend_from_slice(&WAVE_FORMAT_ADPCM.to_le_bytes());
+        fmt.extend_from_slice(&channels.to_le_bytes());
+        fmt.extend_from_slice(&44100u32.to_le_bytes());
+        fmt.extend_from_slice(&0u32.to_le_bytes());
+        fmt.extend_from_slice(&block_align.to_le_bytes());
+        fmt.extend_from_slice(&4u16.to_le_bytes());
+        fmt.extend_from_slice(&2u16.to_le_bytes());
+        fmt.extend_from_slice(&samples_per_block.to_le_bytes());
+        let mut data = Vec::new();
+        for _ in 0..blocks {
+            // predictor 0: coef (256, 0) → predicted = sample1
+            data.resize(data.len() + usize::from(channels), 0u8);
+            for _ in 0..channels {
+                data.extend_from_slice(&16i16.to_le_bytes()); // delta
+            }
+            for _ in 0..channels {
+                data.extend_from_slice(&1000i16.to_le_bytes()); // sample1
+            }
+            for _ in 0..channels {
+                data.extend_from_slice(&500i16.to_le_bytes()); // sample2
+            }
+            for _ in 0..8 * channels {
+                data.push(nibble << 4 | nibble);
+            }
+        }
+        let mut out = Vec::new();
+        out.extend_from_slice(b"RIFF");
+        out.extend_from_slice(&((4 + 8 + fmt.len() + 8 + data.len()) as u32).to_le_bytes());
+        out.extend_from_slice(b"WAVE");
+        out.extend_from_slice(b"fmt ");
+        out.extend_from_slice(&(fmt.len() as u32).to_le_bytes());
+        out.extend_from_slice(&fmt);
+        out.extend_from_slice(b"data");
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&data);
+        out
+    }
+
+    #[test]
+    fn adpcm_installs_verbatim_but_previews_as_pcm() {
+        let wav = adpcm_wav(2, 3, 0);
+        let (installed, info) = prepare_hitsound_wav(&wav).unwrap();
+        assert_eq!(installed, wav, "the engine plays ADPCM as-is");
+        assert_eq!(info.format_tag, WAVE_FORMAT_ADPCM);
+
+        let preview = preview_wav(&wav);
+        let decoded = inspect_wav(&preview).unwrap();
+        assert_eq!(decoded.format_tag, WAVE_FORMAT_PCM);
+        assert_eq!(decoded.bits_per_sample, 16);
+        assert_eq!(decoded.channels, 2);
+        assert_eq!(decoded.sample_rate, 44100);
+        // 3 blocks × 18 samples × 2 channels × 2 bytes.
+        assert_eq!(decoded.data_bytes, 3 * 18 * 2 * 2);
+        // Predictor 0 with zero nibbles repeats sample1 after the two header
+        // samples: 500, 1000, 1000, 1000, …
+        let data_at = preview.len() - decoded.data_bytes;
+        let sample = |index: usize| {
+            i16::from_le_bytes([
+                preview[data_at + index * 2],
+                preview[data_at + index * 2 + 1],
+            ])
+        };
+        assert_eq!(sample(0), 500);
+        assert_eq!(sample(1), 500);
+        assert_eq!(sample(2), 1000);
+        assert_eq!(sample(3), 1000);
+        assert_eq!(sample(4), 1000);
+        assert_eq!(sample(6), 1000);
+
+        // A positive nibble climbs by delta: 1000 + 1*16, then delta adapts.
+        let climbing = preview_wav(&adpcm_wav(1, 1, 1));
+        let climbing_info = inspect_wav(&climbing).unwrap();
+        let at = climbing.len() - climbing_info.data_bytes;
+        let s = |index: usize| {
+            i16::from_le_bytes([climbing[at + index * 2], climbing[at + index * 2 + 1]])
+        };
+        assert_eq!(s(2), 1016);
+        assert!(s(3) > s(2));
+
+        // PCM passes through untouched; garbage and truncation never panic.
+        let pcm = pcm_wav(44100, 1, 16, 10);
+        assert_eq!(preview_wav(&pcm), pcm);
+        assert_eq!(preview_wav(b"nope"), b"nope".to_vec());
+        let _ = preview_wav(&wav[..40]);
     }
 
     #[test]

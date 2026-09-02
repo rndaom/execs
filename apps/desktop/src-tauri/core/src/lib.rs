@@ -56,9 +56,9 @@ pub use finder::{
 };
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use hitsound::{
-    apply_hitsounds, extract_stock_hitsounds, inspect_wav, prepare_hitsound_wav, remove_hitsounds,
-    stored_hitsound, HitsoundChange, HitsoundEntry, HitsoundKind, HitsoundRecord, HitsoundSource,
-    WavInfo, EXECS_HITSOUNDS_PACK, STOCK_HITSOUND_EFFECTS,
+    apply_hitsounds, extract_stock_hitsounds, inspect_wav, prepare_hitsound_wav, preview_wav,
+    remove_hitsounds, stored_hitsound, HitsoundChange, HitsoundEntry, HitsoundKind, HitsoundRecord,
+    HitsoundSource, WavInfo, EXECS_HITSOUNDS_PACK, STOCK_HITSOUND_EFFECTS,
 };
 pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
