@@ -10,23 +10,33 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::apply::manifest_source_path;
 use crate::finder::discover_steam_roots;
-use crate::hash::sha256_file;
+use crate::hash::{part_path, sha256_file, write_atomic, PART_SUFFIX};
 use crate::launch::{cloud_config_path_from, find_cloud_config, find_cloud_config_from};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     load_library_from, load_manifest, profiles_dir, put_exclusive_files_from_paths_to,
     remove_manifest_files_to, ProfileError, ProfileFile, ProfileLibrary,
 };
-use crate::surface::inventory_live_surface_with;
+use crate::surface::{inventory_live_surface_with, is_stock_custom_entry, is_stock_custom_pack};
+use crate::switch::{live_candidates, live_path};
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
+
+/// Prefix of every pack the app builds and manages itself (viewmodels,
+/// crosshairs, hitsounds, mods). The user adds and removes these through the
+/// app, so one going missing is a failed write, not a deletion they made.
+const APP_PACK_PREFIX: &str = "execs-";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PackChoice {
     Update,
     Keep,
+    /// Put the removed packs back from the library. `packs_added` are left
+    /// exactly as they are: neither absorbed nor ignored.
+    Restore,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,6 +66,10 @@ pub struct AbsorbOwnedResult {
     pub delta: AbsorbDelta,
     /// True only when this absorb observed and stored a changed config.cfg.
     pub config_cfg_absorbed: bool,
+    /// Packs (or plain owned paths) this absorb rewrote from the library after
+    /// an interrupted write. Empty on every ordinary pass.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repaired: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -64,8 +78,14 @@ pub struct AbsorbOptions<'a> {
     pub steam_roots: Option<&'a [PathBuf]>,
 }
 
-/// Top-level `tf/custom/` pack identity. A leading `-` is the Source disable prefix.
+/// Top-level `tf/custom/` pack identity. A leading `-` is the Source disable
+/// prefix. Entries that belong to Valve or to an interrupted write of ours are
+/// not packs at all: this is the one gate both the live scan and the manifest
+/// go through, so junk can never be prompted for, absorbed, or grouped.
 pub fn pack_key(rel: &str) -> Option<String> {
+    if is_stock_custom_entry(rel) {
+        return None;
+    }
     let rest = rel.strip_prefix("tf/custom/")?;
     let first = rest.split('/').next()?;
     if first.is_empty() {
@@ -138,9 +158,13 @@ where
             library,
             delta: AbsorbDelta::empty(),
             config_cfg_absorbed: false,
+            repaired: Vec::new(),
         });
     };
 
+    // Before the delta is read off the live tree, put back what a killed write
+    // left half-done — otherwise this pass reports the missing pack as deleted.
+    let repaired = repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     let config_cfg_absorbed = classified.delta.config_cfg;
     put_live_files(
@@ -176,6 +200,7 @@ where
         library: load_library_from(profiles_dir, Some(tf2_root))?,
         delta: remaining,
         config_cfg_absorbed,
+        repaired,
     })
 }
 
@@ -210,6 +235,7 @@ where
     let Some(profile_id) = library.active_profile_id.clone() else {
         return Ok(library);
     };
+    repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     if choice == PackChoice::Update {
         // Update is the user changing their mind about every pack they had
         // previously kept out, so the ignore list has to go before `classify`
@@ -222,6 +248,25 @@ where
     }
 
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    if choice == PackChoice::Restore {
+        // The removed packs are still in the manifest, so the library still
+        // holds their bytes. Added packs are not part of this answer.
+        let paths: Vec<String> = classified
+            .delta
+            .packs_removed
+            .iter()
+            .flat_map(|pack| {
+                classified
+                    .pack_manifest_files
+                    .get(pack)
+                    .into_iter()
+                    .flatten()
+            })
+            .cloned()
+            .collect();
+        write_library_files_to_live(profiles_dir, tf2_root, &profile_id, &paths)?;
+        return load_library_from(profiles_dir, Some(tf2_root));
+    }
     if choice == PackChoice::Keep {
         // Record exactly what was on screen. Anything that appears later is a
         // new decision, not a re-prompt of this one.
@@ -268,6 +313,126 @@ where
         remove_manifest_files_to(profiles_dir, tf2_root, &profile_id, &remove, &running)?;
     }
     load_library_from(profiles_dir, Some(tf2_root))
+}
+
+/// Put back live files an interrupted write left missing, before the delta is
+/// read off the live tree.
+///
+/// Every live write goes through `<path>.execs-part` + rename. Killing the
+/// process between the two — a dev-server restart on a Rust rebuild, a crash, a
+/// power loss — leaves the side file and no destination, and the next boot
+/// reads that as the user deleting the pack: the prompt offers to drop a pack
+/// the library still holds in full, and Keep then hides the game having none.
+///
+/// A manifest file missing from the live tree is rewritten when its library
+/// copy exists and either its `.execs-part` sibling is still there (our own
+/// interrupted write, unambiguously) or its pack is one of ours (`execs-*`,
+/// which the user manages through the app, not by deleting files). Anything
+/// else stays a real deletion. Stray side files go either way, and pack keys
+/// that were repaired stop being ignored.
+fn repair_interrupted_writes(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running: &[String],
+) -> Result<Vec<String>, ProfileError> {
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut repaired_packs = BTreeSet::new();
+    let mut repaired_files = Vec::new();
+    for file in &manifest.files {
+        if is_stock_custom_entry(&file.path)
+            || live_candidates(tf2_root, &file.path)
+                .iter()
+                .any(|path| path.exists())
+        {
+            continue;
+        }
+        let dest = live_path(tf2_root, &file.path);
+        let pack = pack_key(&file.path);
+        let app_owned = pack
+            .as_deref()
+            .is_some_and(|pack| pack.starts_with(APP_PACK_PREFIX));
+        if !part_path(&dest).exists() && !app_owned {
+            continue;
+        }
+        let Ok(source) = manifest_source_path(profiles_dir, profile_id, file) else {
+            continue;
+        };
+        let bytes = fs::read(&source).map_err(|e| ProfileError::Io(e.to_string()))?;
+        write_atomic(&dest, &bytes).map_err(|e| ProfileError::Io(e.to_string()))?;
+        match pack {
+            Some(pack) => {
+                repaired_packs.insert(pack);
+            }
+            None => repaired_files.push(file.path.clone()),
+        }
+    }
+
+    remove_stray_parts(&tf2_root.join("tf").join("custom"));
+    remove_stray_parts(&tf2_root.join("tf").join("cfg"));
+
+    let before = manifest.ignored_packs.len();
+    manifest
+        .ignored_packs
+        .retain(|pack| !is_stock_custom_pack(pack) && !repaired_packs.contains(pack));
+    if manifest.ignored_packs.len() != before {
+        crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)?;
+    }
+
+    let mut repaired: Vec<String> = repaired_packs.into_iter().collect();
+    repaired.extend(repaired_files);
+    repaired.sort();
+    repaired.dedup();
+    Ok(repaired)
+}
+
+/// Delete our own `.execs-part` side files under `dir`, recursively. Only that
+/// suffix: everything else in the live tree belongs to the game or the user.
+fn remove_stray_parts(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        let path = entry.path();
+        if kind.is_dir() {
+            remove_stray_parts(&path);
+        } else if kind.is_file()
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with(PART_SUFFIX)
+        {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
+
+/// Rewrite live files from the profile's own library copies. Used by Restore,
+/// where every path is still in the manifest.
+fn write_library_files_to_live(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    paths: &[String],
+) -> Result<(), ProfileError> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    for path in paths {
+        let Some(file) = manifest.files.iter().find(|file| &file.path == path) else {
+            continue;
+        };
+        let source = manifest_source_path(profiles_dir, profile_id, file)?;
+        let bytes = fs::read(&source).map_err(|e| ProfileError::Io(e.to_string()))?;
+        write_atomic(&live_path(tf2_root, path), &bytes)
+            .map_err(|e| ProfileError::Io(e.to_string()))?;
+    }
+    Ok(())
 }
 
 fn collect_running<I, S>(running_names: I) -> Vec<String>
@@ -378,8 +543,15 @@ fn classify(
     let live_packs: BTreeSet<String> = pack_live_files.keys().cloned().collect();
     let manifest_packs: BTreeSet<String> = pack_manifest_files.keys().cloned().collect();
     // Packs the user chose to Keep stay out of both deltas, so the prompt does
-    // not return on every boot.
-    let ignored: BTreeSet<String> = manifest.ignored_packs.iter().cloned().collect();
+    // not return on every boot. Junk keys a Keep recorded before junk stopped
+    // counting as a pack are dropped here as well as from the manifest, so a
+    // read-only scan sees the same list a repaired manifest holds.
+    let ignored: BTreeSet<String> = manifest
+        .ignored_packs
+        .iter()
+        .filter(|pack| !is_stock_custom_pack(pack))
+        .cloned()
+        .collect();
     let packs_added: Vec<String> = live_packs
         .difference(&manifest_packs)
         .filter(|pack| !ignored.contains(*pack))
@@ -969,6 +1141,209 @@ mod tests {
             .files
             .iter()
             .any(|file| file.path == "tf/custom/hud/info.vdf"));
+        cleanup(&dir);
+    }
+
+    /// Steam's own `readme.txt` and `workshop/` (both restored by a file
+    /// verify) and the `.execs-part` side file a killed write leaves behind are
+    /// not packs. Shown as added packs they push the real question off the
+    /// prompt and a Keep records junk in `ignored_packs` forever.
+    #[test]
+    fn stock_custom_entries_and_part_files_are_never_packs() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/hud/info.vdf"), "hud\n");
+        let id = save_main(&profiles, &root);
+
+        write_live(
+            &root.join("tf/custom/execs-viewmodels.vpk.execs-part"),
+            "half a vpk\n",
+        );
+        write_live(&root.join("tf/custom/readme.txt"), "valve\n");
+        write_live(&root.join("tf/custom/workshop/12345/item.vpk"), "wshop\n");
+
+        let delta = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
+        assert!(!delta.has_pack_changes(), "{delta:?}");
+        assert!(delta.owned_changed.is_empty(), "{delta:?}");
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(!manifest.files.iter().any(|file| {
+            file.path.contains("readme")
+                || file.path.contains("workshop")
+                || file.path.ends_with(PART_SUFFIX)
+        }));
+        // Valve's files stay exactly where they are; only our own leftover goes.
+        assert!(root.join("tf/custom/readme.txt").is_file());
+        assert!(root.join("tf/custom/workshop/12345/item.vpk").is_file());
+        assert!(!root
+            .join("tf/custom/execs-viewmodels.vpk.execs-part")
+            .exists());
+        cleanup(&dir);
+    }
+
+    /// The field bug: a switch was killed mid-copy (a dev-server restart, a
+    /// crash, a power loss), leaving `<pack>.execs-part` and no pack. The next
+    /// boot must put the pack back rather than offer to forget it.
+    #[test]
+    fn an_interrupted_write_is_repaired_from_the_library() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/toonhud.vpk"), "pack bytes\n");
+        let id = save_main(&profiles, &root);
+
+        fs::remove_file(root.join("tf/custom/toonhud.vpk")).unwrap();
+        // The user answered the resulting prompt with Keep, so the pack is on
+        // the ignore list while the library still holds it in full.
+        absorb_packs_to(&profiles, &root, PackChoice::Keep, unlocked(), opts(None)).unwrap();
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().ignored_packs,
+            vec!["toonhud.vpk".to_string()]
+        );
+        write_live(&root.join("tf/custom/toonhud.vpk.execs-part"), "half\n");
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert_eq!(result.repaired, vec!["toonhud.vpk".to_string()]);
+        assert_eq!(
+            fs::read(root.join("tf/custom/toonhud.vpk")).unwrap(),
+            b"pack bytes\n"
+        );
+        assert!(!root.join("tf/custom/toonhud.vpk.execs-part").exists());
+        assert!(load_manifest(&profiles, &id)
+            .unwrap()
+            .ignored_packs
+            .is_empty());
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        cleanup(&dir);
+    }
+
+    /// Packs the app builds are managed through the app, never by deleting the
+    /// file, so one that is missing while the library holds it is a failed
+    /// write even when the side file is gone too.
+    #[test]
+    fn a_missing_app_pack_is_restored_without_a_side_file() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/execs-viewmodels.vpk"), "vpk bytes\n");
+        let id = save_main(&profiles, &root);
+        fs::remove_file(root.join("tf/custom/execs-viewmodels.vpk")).unwrap();
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert_eq!(result.repaired, vec!["execs-viewmodels.vpk".to_string()]);
+        assert_eq!(
+            fs::read(root.join("tf/custom/execs-viewmodels.vpk")).unwrap(),
+            b"vpk bytes\n"
+        );
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        assert!(load_manifest(&profiles, &id)
+            .unwrap()
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/execs-viewmodels.vpk"));
+        cleanup(&dir);
+    }
+
+    /// The other half of the rule: a pack the user brought in themselves and
+    /// deleted themselves is a real deletion, not a repair.
+    #[test]
+    fn a_missing_foreign_pack_is_left_deleted() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/toonhud.vpk"), "pack bytes\n");
+        save_main(&profiles, &root);
+        fs::remove_file(root.join("tf/custom/toonhud.vpk")).unwrap();
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert!(result.repaired.is_empty(), "{:?}", result.repaired);
+        assert!(!root.join("tf/custom/toonhud.vpk").exists());
+        assert_eq!(result.delta.packs_removed, vec!["toonhud.vpk".to_string()]);
+        cleanup(&dir);
+    }
+
+    /// Restore answers the prompt the other way from Update: the packs that
+    /// went missing come back from the library, and the new ones are left
+    /// exactly as they are — neither adopted nor ignored.
+    #[test]
+    fn restore_rewrites_the_removed_packs_and_leaves_the_new_ones() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/hud/info.vdf"), "hud\n");
+        write_live(&root.join("tf/custom/hud/resource/x.res"), "res\n");
+        let id = save_main(&profiles, &root);
+        fs::remove_dir_all(root.join("tf/custom/hud")).unwrap();
+        write_live(&root.join("tf/custom/new/pack.txt"), "new\n");
+
+        let before = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
+        assert_eq!(before.packs_removed, vec!["hud".to_string()]);
+        assert_eq!(before.packs_added, vec!["new".to_string()]);
+
+        absorb_packs_to(
+            &profiles,
+            &root,
+            PackChoice::Restore,
+            unlocked(),
+            opts(None),
+        )
+        .unwrap();
+
+        assert_eq!(
+            fs::read(root.join("tf/custom/hud/info.vdf")).unwrap(),
+            b"hud\n"
+        );
+        assert_eq!(
+            fs::read(root.join("tf/custom/hud/resource/x.res")).unwrap(),
+            b"res\n"
+        );
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest.ignored_packs.is_empty());
+        assert!(!manifest.files.iter().any(|file| file.path.contains("new")));
+        assert!(root.join("tf/custom/new/pack.txt").is_file());
+        let after = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
+        assert!(after.packs_removed.is_empty(), "{after:?}");
+        assert_eq!(after.packs_added, vec!["new".to_string()]);
+        cleanup(&dir);
+    }
+
+    /// The user's machine holds `ignored_packs` entries recorded when junk
+    /// still counted as a pack. They stop suppressing anything at once and
+    /// leave the manifest on the next absorb, with no action from the user.
+    #[test]
+    fn stale_junk_ignore_entries_are_dropped() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/toonhud.vpk"), "pack\n");
+        let id = save_main(&profiles, &root);
+        let mut manifest = load_manifest(&profiles, &id).unwrap();
+        manifest.ignored_packs = vec![
+            "execs-viewmodels.vpk.execs-part".to_string(),
+            "readme.txt".into(),
+            "toonhud.vpk".into(),
+            "workshop".into(),
+        ];
+        crate::profile::save_manifest(&profiles, &root, &manifest, &[]).unwrap();
+
+        absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().ignored_packs,
+            vec!["toonhud.vpk".to_string()]
+        );
         cleanup(&dir);
     }
 

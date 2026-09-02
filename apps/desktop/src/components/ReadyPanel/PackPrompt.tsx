@@ -1,10 +1,11 @@
-import type { AbsorbDelta } from "../../lib/bridge";
+import type { AbsorbDelta, PackChoice } from "../../lib/bridge";
 import { Modal } from "../ui/Modal";
 
 /**
  * "Custom files changed" — how pack changes from a TF2 session are adopted.
  * Update is the default action, on Enter as well as on click; dismissing only
- * defers it, so the question is re-offered later.
+ * defers it, so the question is re-offered later. Restore is offered only when
+ * something went missing, since it answers exactly that half of the delta.
  */
 export function PackPrompt({
   delta,
@@ -14,7 +15,7 @@ export function PackPrompt({
 }: {
   delta: AbsorbDelta | null;
   busy: boolean;
-  onChoice: (choice: "update" | "keep") => void;
+  onChoice: (choice: PackChoice) => void;
   onDefer: () => void;
 }) {
   return (
@@ -45,6 +46,17 @@ export function PackPrompt({
         >
           Update profile
         </button>
+        {delta && delta.packsRemoved.length > 0 ? (
+          <button
+            type="button"
+            data-testid="absorb-pack-restore"
+            disabled={busy}
+            onClick={() => onChoice("restore")}
+            className="btn btn-ghost"
+          >
+            Restore removed
+          </button>
+        ) : null}
         <button
           type="button"
           data-testid="absorb-pack-keep"

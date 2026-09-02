@@ -135,9 +135,13 @@ export type AbsorbOwnedResult = {
   library: ProfileLibrary;
   delta: AbsorbDelta;
   configCfgAbsorbed: boolean;
+  /** Packs rewritten from the library after an interrupted write. */
+  repaired?: string[];
 };
 
-export type PackChoice = "update" | "keep";
+/** Update adopts the live packs, Keep leaves the profile alone, Restore puts
+ * the removed packs back from the library. */
+export type PackChoice = "update" | "keep" | "restore";
 
 export async function absorbOwned(): Promise<AbsorbOwnedResult> {
   return call<AbsorbOwnedResult>("absorb_owned");

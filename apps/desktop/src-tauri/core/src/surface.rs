@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::hash::PART_SUFFIX;
 use crate::profile::{
     is_file_safe_rel_path, is_shared_file_name, normalize_rel_path, ProfileError, SHARED_VPK_NAME,
 };
@@ -54,6 +55,37 @@ pub fn is_global_custom_file(rel: &str) -> bool {
     GLOBAL_CUSTOM_FILES
         .iter()
         .any(|path| path.eq_ignore_ascii_case(rel))
+}
+
+/// Top-level `tf/custom/` entries that are never profile content. `readme.txt`
+/// is Valve's own file and `workshop/` is where the game downloads Workshop
+/// items; a Steam file verify restores both. Together with the `.execs-part`
+/// side file [`crate::hash::write_atomic`] leaves behind when the app is killed
+/// mid-copy, these are the three things that look like packs but are not: shown
+/// as added packs they push the real question off the prompt, absorbed they
+/// become profile files, and written by a switch they spread to every profile.
+pub const STOCK_CUSTOM_ENTRIES: &[&str] = &["readme.txt", "workshop"];
+
+/// True for a top-level `tf/custom/` entry name that is not profile content.
+/// Also the shape of a pack key, so a stale `ignored_packs` entry can be
+/// recognised and dropped.
+pub fn is_stock_custom_pack(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let lower = lower.strip_prefix('-').unwrap_or(&lower);
+    lower.ends_with(PART_SUFFIX) || STOCK_CUSTOM_ENTRIES.contains(&lower)
+}
+
+/// True for a relative path that is one of those entries: any `.execs-part`
+/// side file anywhere, or anything under a stock `tf/custom/` entry.
+pub fn is_stock_custom_entry(rel: &str) -> bool {
+    let lower = rel.replace('\\', "/").to_ascii_lowercase();
+    if lower.ends_with(PART_SUFFIX) {
+        return true;
+    }
+    let Some(rest) = lower.strip_prefix("tf/custom/") else {
+        return false;
+    };
+    is_stock_custom_pack(rest.split('/').next().unwrap_or_default())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -297,9 +329,10 @@ fn collect_custom(
         return Ok(());
     }
     walk_tree(&dir, tf2_root, dests, skipped, visited, false, false)?;
-    // Not "skipped" — these are deliberately install-wide, not a problem to
-    // report, so they leave no trace in the profile surface at all.
-    dests.retain(|rel, _| !is_global_custom_file(rel));
+    // Not "skipped" — the global pack is deliberately install-wide and the
+    // stock entries belong to Valve or to an interrupted write of ours, so
+    // neither is a problem to report and neither leaves a trace in the profile.
+    dests.retain(|rel, _| !is_global_custom_file(rel) && !is_stock_custom_entry(rel));
     Ok(())
 }
 
@@ -630,6 +663,34 @@ mod tests {
         assert!(!inventory.skipped.iter().any(|rel| rel
             .starts_with("tf/custom/execs-preloader.vpk")
             && !rel.ends_with(".cache")));
+        cleanup(&dir);
+    }
+
+    /// Valve's own `tf/custom` entries and the side file a killed write leaves
+    /// behind are not profile content: a profile that adopts them offers junk
+    /// in the pack prompt and writes it back to every install it touches.
+    #[test]
+    fn stock_custom_entries_and_part_files_stay_out_of_the_surface() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        write_file(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_file(&root.join("tf/custom/readme.txt"), "valve\n");
+        write_file(&root.join("tf/custom/workshop/12345/item.vpk"), "wshop\n");
+        write_file(
+            &root.join("tf/custom/execs-viewmodels.vpk.execs-part"),
+            "half\n",
+        );
+        // A pack of the user's own may carry any of those names inside it.
+        write_file(&root.join("tf/custom/myhud/readme.txt"), "mine\n");
+        write_file(&root.join("tf/custom/myhud/info.vdf"), "hud\n");
+
+        let inventory = inventory_live_surface(&root).unwrap();
+        let taken = dests(&inventory);
+        assert!(!taken.iter().any(|rel| rel.starts_with("tf/custom/readme")));
+        assert!(!taken.iter().any(|rel| rel.contains("workshop")));
+        assert!(!taken.iter().any(|rel| rel.ends_with(PART_SUFFIX)));
+        assert!(taken.contains(&"tf/custom/myhud/readme.txt"));
+        assert!(taken.contains(&"tf/custom/myhud/info.vdf"));
         cleanup(&dir);
     }
 

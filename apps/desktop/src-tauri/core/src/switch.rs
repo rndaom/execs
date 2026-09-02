@@ -18,6 +18,7 @@ use crate::profile::{
     clear_active_profile_to, exclusive_file_path, load_library_from, load_manifest, profiles_dir,
     set_active_profile_to, FileStorage, ProfileError, ProfileFile, ProfileLibrary, ProfileManifest,
 };
+use crate::surface::is_stock_custom_entry;
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
 
@@ -331,6 +332,13 @@ fn write_target_live(
         if !is_file_safe_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
         }
+        // Valve's own `tf/custom` entries and `.execs-part` leftovers are not
+        // profile content. A manifest written before they stopped counting as
+        // packs still lists them; writing them would spread junk to every
+        // profile the user switches to. Absorb drops them from the manifest.
+        if is_stock_custom_entry(&file.path) {
+            continue;
+        }
         let dest_rel = rewrite_extra_hud_path(&file.path, &extra_huds);
         let source = target_source(profiles_dir, target, file);
         if !source.is_file() {
@@ -415,7 +423,9 @@ fn rewrite_extra_hud_path(rel: &str, extra_huds: &[String]) -> String {
     }
 }
 
-fn live_candidates(tf2_root: &Path, rel: &str) -> Vec<PathBuf> {
+/// Where a manifest path can be found live: its own path, plus the Source
+/// disable-prefixed name a user renames a pack to.
+pub(crate) fn live_candidates(tf2_root: &Path, rel: &str) -> Vec<PathBuf> {
     let mut out = vec![live_path(tf2_root, rel)];
     if let Some(disabled) = disabled_custom_rel(rel) {
         out.push(live_path(tf2_root, &disabled));
@@ -431,7 +441,7 @@ fn disabled_custom_rel(rel: &str) -> Option<String> {
     Some(format!("tf/custom/-{rest}"))
 }
 
-fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
+pub(crate) fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
     let mut path = tf2_root.to_path_buf();
     for part in rel.split('/') {
         path.push(part);
