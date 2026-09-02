@@ -16,6 +16,7 @@ function renderHudPane(catalogLoading: boolean, catalogError: string | null): st
       createElement(HudPane, {
         // The lightbox is the only consumer, and it is closed in every case here.
         api: {} as Api,
+        profileId: "profile-a",
         catalogLoading,
         catalogError,
         catalog: PREVIEW_HUD_CATALOG,

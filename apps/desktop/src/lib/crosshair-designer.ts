@@ -229,10 +229,10 @@ export type DilateKernel = "square" | "round";
 /**
  * Grow a mask by `by` pixels in one pass with a real 2-D kernel.
  *
- * The old version iterated a 4-neighbour (von Neumann) kernel `by` times, which
- * grows a diamond: `outline: 3` produced pointy corners instead of a uniform
- * 3px ring. `square` is the Chebyshev disc (a full (2by+1)² block), `round` the
- * Euclidean one — the latter keeps circular designs circular.
+ * One pass with the full kernel, not `by` passes of a 4-neighbour one: that
+ * grows a diamond, so `outline: 3` comes out with pointy corners instead of a
+ * uniform 3px ring. `square` is the Chebyshev disc (a full (2by+1)² block),
+ * `round` the Euclidean one — the latter keeps circular designs circular.
  */
 export function dilate(mask: Uint8Array, by: number, kernel: DilateKernel = "round"): Uint8Array {
   if (by <= 0) {

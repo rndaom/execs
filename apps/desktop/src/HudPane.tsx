@@ -15,7 +15,7 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { Api } from "./lib/api";
 import {
   type HudAlbumImage,
@@ -51,13 +51,17 @@ function alphaPercent(alpha: number): number {
   return Math.round((alpha / 255) * 100);
 }
 
-/** Switching HUDs is a different record — that draft must not carry over. */
-function installedKeyOf(state: HudUiState): string {
-  return state.installed?.id ?? "";
+/** Above this many choices a schema combo stays a dropdown. */
+const SEGMENTED_CHOICE_MAX = 4;
+
+/** Switching profiles or HUDs is a different record — the draft goes with it. */
+function installedKeyOf(profileId: string | null, state: HudUiState): string {
+  return draftRecordKey(profileId, state.installed?.id ?? "");
 }
 
 export function HudPane({
   api,
+  profileId,
   catalogLoading,
   catalogError,
   catalog,
@@ -73,6 +77,8 @@ export function HudPane({
   onImportFolder,
 }: {
   api: Api;
+  /** The profile this draft belongs to; a switch discards it. */
+  profileId: string | null;
   catalogLoading: boolean;
   catalogError: string | null;
   catalog: HudCatalogEntry[];
@@ -99,7 +105,7 @@ export function HudPane({
   const [draft, setDraft] = useSeededDraft(
     seeded,
     (value) => JSON.stringify(value),
-    installedKeyOf(state),
+    installedKeyOf(profileId, state),
   );
   const filtered = useMemo(
     () => sortHudCatalog(filterHudCatalog(catalog, query), stats, sort),
@@ -252,6 +258,32 @@ export function HudPane({
                           );
                         }
                         if (control.controlType === "combo") {
+                          // A short list is pills; only a long one still earns
+                          // a dropdown (AGENTS.md, "Fewer controls").
+                          if (control.choices.length <= SEGMENTED_CHOICE_MAX) {
+                            return (
+                              <div
+                                key={control.name}
+                                className="flex items-center justify-between gap-3 py-1 text-[13.5px] text-ink"
+                              >
+                                <span>{control.label}</span>
+                                <Segmented
+                                  label={control.label}
+                                  size="sm"
+                                  testIdPrefix={`hud-opt-${control.name}`}
+                                  options={control.choices.map((choice) => ({
+                                    id: choice.value,
+                                    label: choice.label,
+                                  }))}
+                                  value={value}
+                                  disabled={locked}
+                                  onChange={(next) =>
+                                    setDraft((current) => ({ ...current, [control.name]: next }))
+                                  }
+                                />
+                              </div>
+                            );
+                          }
                           return (
                             <label
                               key={control.name}
@@ -786,7 +818,8 @@ function HudLightbox({
     return () => window.removeEventListener("keydown", onKey);
   }, [safeIndex, count, onPick]);
 
-  const albumNote = entry.album
+  const albumUrl = entry.album;
+  const albumNote = albumUrl
     ? album === null && !albumFailed
       ? "Loading the author's album…"
       : albumFailed
@@ -809,10 +842,10 @@ function HudLightbox({
     >
       <div className="absolute top-3 right-3">
         <div className="flex items-center gap-2">
-          {entry.album && albumFailed ? (
+          {albumUrl && albumFailed ? (
             <button
               type="button"
-              onClick={() => void openExternal(entry.album as string)}
+              onClick={() => void openExternal(albumUrl)}
               className="btn btn-ghost"
             >
               Open album
@@ -852,7 +885,7 @@ function HudLightbox({
           />
         ) : (
           <p className="t-meta">
-            {entry.album && !albumFailed && album === null
+            {albumUrl && !albumFailed && album === null
               ? "Loading pictures…"
               : "No pictures for this HUD yet."}
           </p>

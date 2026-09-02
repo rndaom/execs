@@ -200,6 +200,18 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       return;
     }
     if (name === "password" || RCON_NAMES.has(name)) {
+      // `password` is FCVAR_ARCHIVE, so Source writes it into config.cfg on
+      // every `host_writeconfig` — an untouched settings snapshot still
+      // carries `password "0"`. Blocking that would leave the player unable to
+      // save their own config.cfg at all. Accept the unset form, and only that
+      // form, at the top level of the engine-managed file: a real password
+      // still blocks here, and `password` blocks outright everywhere else.
+      const archivedUnset =
+        name === "password" &&
+        isEngineManagedTopLevel &&
+        cmd.args.length <= 1 &&
+        (value === undefined || value === "" || value === "0");
+      if (archivedUnset) return;
       report(
         "block",
         "rcon-password",
@@ -383,7 +395,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       return;
     }
 
-    if (MOUSE_CVARS.has(name)) {
+    // `sensitivity` and the `m_*` family are archived too, so every config.cfg
+    // carries them. Warning there would pin a notice to the player's own
+    // settings snapshot that they could never clear. This branch falls through
+    // either way, so the value still reaches the effective state below.
+    if (MOUSE_CVARS.has(name) && !isEngineManagedTopLevel) {
       report(
         "warn",
         "mouse-tamper",
@@ -548,8 +564,10 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       a.col - b.col,
   );
 
-  // The summary is only read by the review UI; the desktop lints on every
-  // keystroke and never touches it. Build it on first access, then cache.
+  // Nothing on the hot path reads `summary`: the desktop lints on every
+  // keystroke and only ever looks at `findings`. It is here for callers that
+  // want to show what a config actually changes — the CLI prints it. Build it
+  // on first access, then cache.
   let summaryCache: SummarySection[] | undefined;
 
   return {

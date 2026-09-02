@@ -7,7 +7,7 @@ import {
   updateProgressCopy,
 } from "../lib/updater-ui";
 
-/** "Update available" strip. Later dismisses for the session (RND-159). */
+/** "Update available" strip. Later dismisses it for the session. */
 export function UpdateBanner({ update }: { update: AppUpdateState }) {
   if (!showUpdateBanner(update.available, update.dismissed) || !update.available) {
     return null;

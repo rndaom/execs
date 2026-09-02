@@ -188,7 +188,7 @@ describe("engine-faithful exec resolution", () => {
   });
 
   it("only takes the bundle-exact shortcut when asked", () => {
-    // A flat upload has no cfg/ folder for the engine rule to match against.
+    // A flat bundle has no cfg/ folder for the engine rule to match against.
     const flat: CfgFile[] = [
       { path: "autoexec.cfg", text: "exec execs_binds" },
       { path: "execs_binds.cfg", text: "bind f5 save_replay" },

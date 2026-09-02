@@ -5,8 +5,9 @@ import { Alert } from "./components/ui/Alert";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
-import type { StartFrom, WizardSpec } from "./lib/bridge";
+import { openExternal, type StartFrom, type WizardSpec } from "./lib/bridge";
 import { presetListExpanded, visibleComfigPresets } from "./lib/comfig-catalog";
+import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import {
   type ComfigPresetId,
   canApplyWizard,
@@ -15,17 +16,6 @@ import {
   START_FROM_OPTIONS,
   wizardApplyCopy,
 } from "./lib/first-run-ui";
-
-const ADDON_DETAILS: Record<OfficialAddonId, string> = {
-  "no-footsteps": "Disable footstep sound effects.",
-  "no-pyroland": "Reduce Pyroland visual overrides.",
-  "no-soundscapes": "Disable ambient map soundscapes.",
-  "no-tutorial": "Remove tutorial prompts and coaching.",
-  lowmem: "Lower memory use on constrained systems.",
-  "null-canceling-movement": "Resolve opposing movement inputs cleanly.",
-  "flat-mouse": "Use direct, unaccelerated mouse input.",
-  "transparent-viewmodels": "Make first-person viewmodels translucent.",
-};
 
 export function SetupWizard({
   title,
@@ -210,7 +200,7 @@ export function SetupWizard({
                 type="checkbox"
                 testId={`wizard-addon-${item.id}`}
                 title={item.label}
-                description={ADDON_DETAILS[item.id]}
+                description={OFFICIAL_ADDON_DETAILS[item.id]}
                 selected={addons.includes(item.id)}
                 disabled={busy}
                 onSelect={() => onToggleAddon(item.id)}
@@ -221,14 +211,13 @@ export function SetupWizard({
 
         <p className="t-meta mt-12 text-ink-faint">
           Uses official mastercomfig packages. execs is not affiliated with{" "}
-          <a
-            href="https://comfig.app"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={() => void openExternal("https://comfig.app")}
             className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
           >
             comfig.app
-          </a>
+          </button>
           .
         </p>
 

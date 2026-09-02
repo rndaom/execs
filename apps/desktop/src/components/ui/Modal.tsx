@@ -5,8 +5,7 @@ const FOCUSABLE =
 
 /**
  * A real modal: focus trap, focus restore on close, Escape to dismiss, and
- * Enter on the default action. Replaces the hand-rolled prompt/lightbox
- * overlays that had none of those.
+ * Enter on the default action. Every prompt and lightbox renders through it.
  */
 export function Modal({
   open,

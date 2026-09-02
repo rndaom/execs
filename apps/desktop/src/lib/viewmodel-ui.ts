@@ -31,10 +31,6 @@ export type ViewmodelDraft = {
   hideMode: ViewmodelHideMode;
 };
 
-export function emptyViewmodelDraft(): ViewmodelDraft {
-  return { preload: true, hidden: [], hideMode: "full" };
-}
-
 export function parseHideMode(raw: string | undefined | null): ViewmodelHideMode {
   return raw === "weapon" ? "weapon" : "full";
 }

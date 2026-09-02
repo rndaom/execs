@@ -6,7 +6,7 @@ import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import { prefetchViewmodelPreviews, useViewmodelPreview } from "./hooks/useViewmodelPreview";
 import type { Api } from "./lib/api";
 import { isTauri, openExternal, type ViewmodelHideMode, type ViewmodelRecord } from "./lib/bridge";
@@ -17,7 +17,6 @@ import {
   VIEWMODEL_SLOTS,
   type ViewmodelSlot,
   viewmodelBlankStem,
-  viewmodelFallbackSrc,
   viewmodelGroupPreview,
   viewmodelStemForGroup,
 } from "./lib/viewmodel-previews";
@@ -50,12 +49,15 @@ function serializeViewmodelDraft(draft: ViewmodelDraft): string {
  */
 export function ViewmodelPane({
   api,
+  profileId,
   record,
   onBuild,
   onImport,
   onRemove,
 }: {
   api: Api;
+  /** The profile this draft belongs to; a switch discards it. */
+  profileId: string | null;
   record: ViewmodelRecord | null;
   onBuild: (hidden: string[], preload: boolean, hideMode: ViewmodelHideMode) => void;
   onImport: (preload: boolean) => void;
@@ -63,7 +65,7 @@ export function ViewmodelPane({
 }) {
   const { running } = useAppStatus();
   const locked = !useCanWrite();
-  const recordKey = JSON.stringify(record ?? null);
+  const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
   // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
   const seeded = useMemo(() => seedViewmodelDraft(record), [recordKey]);
   const [draft, setDraft] = useSeededDraft(seeded, serializeViewmodelDraft, recordKey);
@@ -123,13 +125,7 @@ export function ViewmodelPane({
   const preview = useViewmodelPreview(api, canFetchPreviews ? stem : null);
   const focusInfo = focusGroup ? viewmodelGroupPreview(focusGroup) : null;
   const focusLabel = focusGroup ? groups.find((group) => group.id === focusGroup)?.label : null;
-  // Browser preview has no network: fall back to the vendored wiki render for
-  // the slot's stock weapon, and to nothing at all once it is hidden.
-  const fallbackSrc =
-    !canFetchPreviews && focusInfo && !focusHidden
-      ? viewmodelFallbackSrc(classId, focusInfo.slot)
-      : null;
-  const stageSrc = preview.src ?? fallbackSrc;
+  const stageSrc = preview.src;
 
   const dirty =
     serializeHiddenGroups(draft.hidden) !== serializeHiddenGroups(seeded.hidden) ||
@@ -164,7 +160,7 @@ export function ViewmodelPane({
 
   const stageCaption =
     focusGroup === null
-      ? `${VIEWMODEL_CLASSES.includes(classId) ? capitalize(classId) : classId} · nothing out`
+      ? `${capitalize(classId)} · nothing out`
       : `${capitalize(classId)} · ${focusLabel ?? focusGroup} — ${focusHidden ? "hidden" : "shown"}`;
 
   return (
@@ -222,9 +218,7 @@ export function ViewmodelPane({
                 data-testid="viewmodel-preview-image"
                 src={stageSrc}
                 alt={stageCaption}
-                className={`absolute inset-0 size-full rounded-[inherit] enter-fade ${
-                  preview.src ? "object-cover" : "object-contain object-[80%_100%] p-6"
-                }`}
+                className="absolute inset-0 size-full rounded-[inherit] object-cover enter-fade"
               />
             ) : (
               <p className="t-meta absolute inset-0 grid place-items-center px-6 text-center">
@@ -442,9 +436,7 @@ function SlotGroup({
                 >
                   {hidden ? <EyeSlash size={15} weight="bold" /> : <Eye size={15} />}
                 </span>
-                <span className={`min-w-0 flex-1 text-[14px] ${hidden ? "text-ink" : "text-ink"}`}>
-                  {group.label}
-                </span>
+                <span className="min-w-0 flex-1 text-[14px] text-ink">{group.label}</span>
                 <span className="shrink-0 text-[11.5px] text-ink-faint">
                   {hidden ? "Hidden" : "Shown"}
                 </span>

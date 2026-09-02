@@ -69,8 +69,9 @@ export interface SummarySection {
 /**
  * Who authored the files being linted.
  *
- * - `"provided"` (default) — content that arrived from somewhere else and is
- *   being reviewed before it is trusted. Hostile-config rules block.
+ * - `"provided"` (default) — content that did not come from the user's own
+ *   files: a downloaded pack, an imported profile, a HUD's bundled cfg.
+ *   Nobody vouched for it, so hostile-config rules block.
  * - `"self"` — the player's own cfg, edited in-app. `connect`, a `disconnect`
  *   bind on a gameplay key, and an `exec` the app cannot resolve are ordinary
  *   things to want in a personal config, so they report as warnings and never
@@ -93,7 +94,8 @@ export interface LintOptions {
    * cfg folder, so this is off by default: `exec execs_binds` from
    * `tf/cfg/overrides/autoexec.cfg` must NOT find
    * `tf/cfg/overrides/execs_binds.cfg`, exactly as in game. Enable it for flat
-   * bundles that have no `cfg/` prefix at all (a bare upload of loose files).
+   * bundles whose cfg files sit loose at the root, with no `cfg/` prefix at
+   * all.
    */
   bundleRelativeExec?: boolean;
   /**

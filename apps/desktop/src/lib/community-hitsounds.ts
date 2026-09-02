@@ -53,13 +53,3 @@ export const COMMUNITY_HITSOUNDS: CommunityHitsound[] = [
 export function communityHitsoundLabel(id: string): string {
   return COMMUNITY_HITSOUNDS.find((entry) => entry.id === id)?.label ?? id;
 }
-
-export function searchCommunityHitsounds(query: string): CommunityHitsound[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) {
-    return COMMUNITY_HITSOUNDS;
-  }
-  return COMMUNITY_HITSOUNDS.filter(
-    (entry) => entry.id.includes(needle) || entry.label.toLowerCase().includes(needle),
-  );
-}

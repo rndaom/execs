@@ -13,6 +13,7 @@ function renderGameplay() {
       AppStatusProvider,
       { value: STATUS },
       createElement(GameplayPane, {
+        profileId: "profile-a",
         layer: "comfig",
         effective: {},
         managedText: 'cl_crosshair_file ""\ncl_crosshair_scale 32\n',
@@ -31,6 +32,7 @@ function renderCrosshair(running = false, managedText?: string) {
       AppStatusProvider,
       { value: { ...STATUS, running } },
       createElement(CrosshairPane, {
+        profileId: "profile-a",
         layer: "comfig",
         effective: {},
         managedText:

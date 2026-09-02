@@ -31,20 +31,19 @@ pub mod wizard;
 pub mod zip;
 
 pub use absorb::{
-    absorb_owned, absorb_packs, scan_absorb_delta, write_config_cfg_dual, AbsorbDelta,
-    AbsorbOwnedResult, PackChoice,
+    absorb_owned, absorb_packs, write_config_cfg_dual, AbsorbDelta, AbsorbOwnedResult, PackChoice,
 };
 pub use apply::{
-    get_active_profile_detail, list_profile_files, profile_file_bytes_from, read_profile_file,
-    write_owned_file, ProfileDetail, ProfileFileContent,
+    get_active_profile_detail, profile_file_bytes_from, read_profile_file, write_owned_file,
+    ProfileDetail, ProfileFileContent,
 };
 pub use comfig::{
     apply_official_vpk_bytes, apply_official_vpk_bytes_to, import_comfig_custom,
     import_comfig_custom_to, official_download_urls, official_package_rel_paths, parse_modules_cfg,
-    parse_setup_hook, read_active_comfig_state, read_active_comfig_state_from, read_comfig_state,
-    read_comfig_state_from, serialize_modules_cfg, serialize_setup_hook, set_comfig_addons,
-    set_comfig_addons_to, write_comfig_modules, write_comfig_modules_to, write_comfig_preset,
-    write_comfig_preset_to, ComfigState,
+    parse_setup_hook, read_active_comfig_state_from, read_comfig_state, read_comfig_state_from,
+    serialize_modules_cfg, serialize_setup_hook, set_comfig_addons, set_comfig_addons_to,
+    write_comfig_modules, write_comfig_modules_to, write_comfig_preset, write_comfig_preset_to,
+    ComfigState,
 };
 pub use crosshair::{
     apply_crosshairs, extract_stock_crosshair_sprites, remove_crosshairs, stored_pack_crosshair,
@@ -65,9 +64,8 @@ pub use hud::{
     extract_hud_archive, extract_hud_zip, hud_id_from_name, hud_tree_from_dir, hud_ui_state,
     hud_zip_url, install_hud_pack, load_catalog_cache_from, load_hud_tree_from_profile,
     match_hud_catalog, resolve_hud, save_catalog_cache_to, schema_file_name, schema_supported,
-    set_hud_options, sync_hud_exec_lines, sync_hud_exec_lines_to, write_hud_tree_files,
-    HudCatalogCache, HudCatalogEntry, HudInstallKind, HudStatus, HudTree, HudUiState,
-    SUPPORTED_SCHEMA_HUDS,
+    sync_hud_exec_lines, sync_hud_exec_lines_to, HudCatalogCache, HudCatalogEntry, HudInstallKind,
+    HudStatus, HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
 };
 pub use hud_apply::{
     apply_hud_options, apply_hud_options_for_layer, hud_cfg_path, hud_cfg_stem, parse_hud_schema,
@@ -78,17 +76,17 @@ pub use launch::{
     LaunchWriteReason, SetLaunchResult,
 };
 pub use process_lock::{
-    is_steam_running, is_tf2_running, refuse_if_running, refuse_if_running_among,
-    write_lock_status, WriteLock, WriteLockError,
+    is_tf2_running, os_description, refuse_if_running, refuse_if_running_among, write_lock_status,
+    WriteLock, WriteLockError,
 };
 pub use profile::{
-    create_profile_record, init_library, load_library, load_manifest, profiles_dir,
-    save_current_as, CrosshairRecord, HudRecord, HudSource, ProfileError, ProfileFile,
-    ProfileLibrary, ProfileSummary, ViewmodelRecord, ViewmodelSource,
+    init_library, load_library, load_manifest, profiles_dir, save_current_as, CrosshairRecord,
+    HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary, ProfileSummary,
+    ViewmodelRecord, ViewmodelSource,
 };
 pub use settings::{
     execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
-    remembered_tf2_root_from, settings_file, Settings,
+    remembered_tf2_root_from, settings_file, try_execs_data_dir, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
@@ -97,7 +95,7 @@ pub use viewmodel::{
     profile_has_preload, remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
     set_viewmodel_preload,
 };
-pub use viewmodel_build::{build_viewmodel_pack_vpk, studiomdl_file_name, ViewmodelHideMode};
+pub use viewmodel_build::{build_viewmodel_pack_vpk, ViewmodelHideMode, STUDIOMDL_FILE_NAME};
 pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use wizard::{
     download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, ComfigPreset,

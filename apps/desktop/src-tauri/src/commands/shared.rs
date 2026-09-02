@@ -27,11 +27,10 @@ pub fn confirmed_root() -> Result<PathBuf, CommandError> {
     execs_core::remembered_tf2_root().ok_or_else(|| ProfileError::NoConfirmedRoot.into())
 }
 
-/// The active profile. There is no caller-supplied id any more: the
-/// `id: Option<String>` parameter that used to ride along on sixteen commands
-/// was never populated by the frontend and was threaded through
-/// inconsistently (the HUD commands hardcoded `None` while their siblings
-/// passed it on), which made it a trap rather than a feature.
+/// The active profile. No command takes a caller-supplied id: the frontend
+/// never populates one, and an `id: Option<String>` threaded through sixteen
+/// commands inconsistently (the HUD commands hardcoding `None` while their
+/// siblings pass it on) is a trap rather than a feature.
 pub fn active_profile_id(root: &Path) -> Result<String, CommandError> {
     let library = execs_core::load_library(Some(root))?;
     library

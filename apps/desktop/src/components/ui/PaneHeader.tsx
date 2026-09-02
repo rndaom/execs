@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 /**
  * The top of every settings pane: one 28px title, one line of lede, and an
- * optional right-hand action. Panes own their own header now that the shell
- * carries no per-tab chrome (RND-188).
+ * optional right-hand action. The shell carries no per-tab chrome, so each
+ * pane owns its own header.
  */
 export function PaneHeader({
   title,

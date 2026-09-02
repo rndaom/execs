@@ -13,10 +13,10 @@ const TREE_URL: &str =
 const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db/main";
 
 /// TF2HUD.Editor's schema JSON, pinned like every other remote asset in the
-/// app. It used to be read off a moving `master` and cached forever under a
-/// filename with no version in it, so a bad fetch was served for good and an
-/// upstream fix never arrived. The SHA is part of the cache filename, so
-/// bumping this constant invalidates the cache by construction.
+/// app. Read off a moving `master` and cached under a filename with no version
+/// in it, a bad fetch is served for good and an upstream fix never arrives.
+/// The SHA is part of the cache filename, so bumping this constant invalidates
+/// the cache by construction.
 const SCHEMA_COMMIT: &str = "17bccd15d818d12707ce89574318acbc23c85a9f";
 const RAW_SCHEMA_BASE: &str = "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor";
 
@@ -168,6 +168,10 @@ pub fn fetch_hud_archive(entry: &HudCatalogEntry) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// One wording for the dead end every unfetchable HUD shares. The sites
+/// differ in why there is no archive, never in what the user can do next.
+pub const OPEN_AUTHORS_PAGE: &str = "open the author's page.";
+
 /// A direct archive URL for the entry, or why there is none.
 pub fn resolve_hud_download(entry: &HudCatalogEntry) -> Result<String, String> {
     match entry.install {
@@ -176,10 +180,14 @@ pub fn resolve_hud_download(entry: &HudCatalogEntry) -> Result<String, String> {
         HudInstallKind::Direct => Ok(direct_download_url(&entry.repo)),
         HudInstallKind::Gamebanana => resolve_gamebanana(&entry.repo),
         HudInstallKind::Thread => resolve_thread(&entry.repo),
-        HudInstallKind::None => {
-            Err("That HUD has no download this app can fetch — open the author's page.".to_string())
-        }
+        HudInstallKind::None => Err(no_download_message()),
     }
+}
+
+/// Why a catalog entry cannot be installed. `install_hud_from_catalog`
+/// refuses these before any fetch, so it is the message the user sees.
+pub fn no_download_message() -> String {
+    format!("That HUD has no download this app can fetch — {OPEN_AUTHORS_PAGE}")
 }
 
 /// Dropbox share links serve an HTML preview unless `dl=1` is asked for.
@@ -248,15 +256,14 @@ fn pick_gamebanana_file(mut files: Vec<GameBananaFile>) -> Result<String, String
     Ok(chosen.download_url.clone())
 }
 
-/// A teamfortress.tv thread: the first Dropbox archive link in the post.
+/// A teamfortress.tv thread: the last Dropbox archive link in the post.
 fn resolve_thread(repo: &str) -> Result<String, String> {
     let html = net::get_text(&net::api_client()?, repo.trim())
         .map_err(|err| format!("Could not read that thread ({err})"))?;
     thread_download_link(&html)
         .map(|link| direct_download_url(&link))
         .ok_or_else(|| {
-            "That thread has no Dropbox download this app can fetch — open the author's page."
-                .to_string()
+            format!("That thread has no Dropbox download this app can fetch — {OPEN_AUTHORS_PAGE}")
         })
 }
 
@@ -298,9 +305,10 @@ pub struct AlbumImage {
     pub height: u32,
 }
 
-/// Imgur's own web client id; the album endpoint refuses anonymous reads
-/// without one and this is the key imgur.com itself sends.
-const IMGUR_CLIENT_ID: &str = "546c25a59c58ad7";
+/// Imgur's album endpoint refuses anonymous reads without a registered client
+/// id. It is supplied at build time (`EXECS_IMGUR_CLIENT_ID`); without one,
+/// imgur albums are opened in the browser instead of loaded in-app.
+const IMGUR_CLIENT_ID: Option<&str> = option_env!("EXECS_IMGUR_CLIENT_ID");
 
 /// The album behind `social.album`, cached forever by URL (albums are
 /// effectively immutable once published; a refresh is a catalog refresh).
@@ -409,10 +417,13 @@ struct ImgurImage {
 }
 
 fn fetch_imgur_album(id: &str) -> Result<Vec<AlbumImage>, String> {
+    let Some(client_id) = IMGUR_CLIENT_ID.filter(|id| !id.is_empty()) else {
+        return Err("Imgur albums open in your browser in this build.".into());
+    };
     let url = format!("https://api.imgur.com/3/album/{id}/images");
     let response = net::api_client()?
         .get(&url)
-        .header("Authorization", format!("Client-ID {IMGUR_CLIENT_ID}"))
+        .header("Authorization", format!("Client-ID {client_id}"))
         .send()
         .map_err(net::request_error)?;
     if !response.status().is_success() {

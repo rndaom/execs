@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // CLI harness: node bin/cfglint.mjs [--self] [--flat] <file-or-dir> [...more]
 // Prints a lint report for local cfg files. Dev tool only.
-// Requires Node >= 22.6 (this .mjs imports TypeScript directly).
+//
+// This file imports ../src/index.ts directly, so it needs Node's type
+// stripping — that, and nothing else, is why the package pins
+// `engines.node` to >= 22.6.
 //
 //   --self  lint as the player's own config (hostile-config rules advise
 //           instead of blocking)

@@ -1,0 +1,23 @@
+{
+  "name": "execs-promo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render Promo out/execs-promo.mp4",
+    "render:gif": "remotion render Promo out/execs-promo.gif --codec=gif --every-nth-frame=2 --scale=0.6",
+    "still": "remotion still Promo out/poster.png --frame=90"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.520",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remotion": "4.0.520"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.9.0"
+  }
+}

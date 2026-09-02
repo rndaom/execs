@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
-import { useSeededDraft } from "../hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "../hooks/useSeededDraft";
 import type { CrosshairAssetPayload, CrosshairRecord, StockCrosshairSprite } from "../lib/bridge";
 import { communityLibraryName } from "../lib/community-crosshairs";
 import {
@@ -35,16 +35,18 @@ export type CrosshairDraftApi = {
 /**
  * The crosshair builder's draft and every mutation on it.
  *
- * Seeded through `useSeededDraft` keyed by record CONTENT: an unrelated write
- * (a stock-crosshair apply, say) reloads the profile detail with fresh object
- * identities, and reseeding on identity would wipe un-applied work — an
- * imported PNG, a colour, a page of weapon overrides.
+ * Seeded through `useSeededDraft` keyed by the profile plus the record's
+ * CONTENT: an unrelated write (a stock-crosshair apply, say) reloads the
+ * profile detail with fresh object identities, and reseeding on identity would
+ * wipe un-applied work — an imported PNG, a colour, a page of weapon
+ * overrides. A profile switch is a different key and does discard the draft.
  */
 export function useCrosshairDraft(
+  profileId: string | null,
   record: CrosshairRecord | null,
   packPreviews: Record<string, StockCrosshairSprite> | null,
 ): CrosshairDraftApi {
-  const recordKey = JSON.stringify(record ?? null);
+  const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
   // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
   const seeded = useMemo(() => seedCrosshairDraft(record), [recordKey]);
   const [draft, setDraft] = useSeededDraft(seeded, (value) => JSON.stringify(value), recordKey);

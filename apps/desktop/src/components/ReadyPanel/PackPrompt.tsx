@@ -2,9 +2,9 @@ import type { AbsorbDelta } from "../../lib/bridge";
 import { Modal } from "../ui/Modal";
 
 /**
- * "Custom files changed" — the mechanism for adopting pack changes after a
- * TF2 session (RND-150). Update is the default action, on Enter as well as on
- * click; dismissing only defers it, so the question is re-offered later.
+ * "Custom files changed" — how pack changes from a TF2 session are adopted.
+ * Update is the default action, on Enter as well as on click; dismissing only
+ * defers it, so the question is re-offered later.
  */
 export function PackPrompt({
   delta,

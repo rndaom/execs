@@ -13,7 +13,7 @@ export type ComfigPresetEntry = {
 
 /**
  * The one preset catalog. Both the Comfig pane and the setup wizard render
- * these — the wizard used to carry a second, longer list of its own.
+ * these, so the wizard and the Comfig pane offer one list.
  */
 export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {

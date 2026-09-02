@@ -80,6 +80,7 @@ pub(crate) fn decode_vanilla(
 /// Root systems each rebuild file may keep: roots whose only home is that
 /// file. A root shared with a non-rebuild file lives on there; one shared
 /// only among rebuild files stays with the alphabetically first so it can't
+/// end up in two rebuilt files at once.
 pub fn rebuild_keep_lists(
     roots_by_file: &BTreeMap<String, Vec<String>>,
 ) -> BTreeMap<String, Vec<String>> {
@@ -130,12 +131,11 @@ pub fn apply_preloader_selection(
     let mut report = PreloaderReport::default();
     let mut state = load_state(data_dir);
 
-    // A resized VPK usually means a game update — but it is also what a build
-    // that measures the fingerprint differently sees (2026-09-01: the switch
-    // from dir-only to dir+siblings took this branch, and the wholesale
-    // `patched.clear()` + snapshot purge that used to live here orphaned 61
-    // patched files with no stock bytes left anywhere). Nothing is discarded
-    // on that signal any more: the restore pass below judges every entry
+    // A resized VPK usually means a game update, but it is also what a change
+    // in how the fingerprint is measured looks like — and tracking is the only
+    // record of which entries we patched, so discarding it on that signal
+    // strands patched files with no stock bytes left anywhere. The signal only
+    // raises `baseline_reset`: the restore pass below judges every entry
     // against the directory's own stock CRC, which is right whatever resized
     // the archive. Mtime drift is not even a signal — our own patches and a
     // partially-failed restore both touch it.
@@ -535,9 +535,7 @@ pub fn apply_preloader_selection(
     if custom.is_empty() {
         let _ = std::fs::remove_file(&custom_vpk);
     } else {
-        std::fs::create_dir_all(custom_vpk.parent().expect("custom dir"))
-            .map_err(|err| format!("Could not prepare tf/custom: {err}"))?;
-        std::fs::write(&custom_vpk, write_vpk_v2(&custom))
+        crate::hash::write_atomic(&custom_vpk, &write_vpk_v2(&custom))
             .map_err(|err| format!("Could not write {PRELOADER_VPK}: {err}"))?;
         report.custom_vpk_written = true;
     }

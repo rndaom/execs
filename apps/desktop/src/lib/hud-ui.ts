@@ -99,7 +99,6 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
     ],
     album: null,
     comfigUrl: "https://comfig.app/huds/page/rayshud/",
-    tf2hudsUrl: "https://tf2huds.dev/hud/rayshud",
   },
   {
     id: "toonhud",
@@ -114,7 +113,6 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
     screenshots: [],
     album: null,
     comfigUrl: "https://comfig.app/huds/page/toonhud/",
-    tf2hudsUrl: "https://tf2huds.dev/hud/toonhud",
   },
 ];
 
@@ -190,21 +188,6 @@ export function previewInstalledState(): HudUiState {
     schemaSupported: true,
     catalogHash: "abc123",
     updateAvailable: true,
-  };
-}
-
-export function previewInferredState(): HudUiState {
-  return {
-    installed: {
-      id: "rayshud",
-      hash: null,
-      source: "local",
-      options: {},
-    },
-    inferred: true,
-    schemaSupported: true,
-    catalogHash: "abc123",
-    updateAvailable: false,
   };
 }
 
@@ -344,7 +327,3 @@ export function parseHudRgba(value: string): { r: number; g: number; b: number; 
 export function formatHudRgba(r: number, g: number, b: number, a: number): string {
   return `${r} ${g} ${b} ${a}`;
 }
-
-// Moved to lib/color.ts (shared with the crosshair tint); re-exported so the
-// HUD and crosshair panes keep their existing import site.
-export { hexToRgb, rgbToHex } from "./color";

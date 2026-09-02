@@ -43,8 +43,9 @@ pub fn process_name_is_tf2_for(os: ProcessOs, name: &str) -> bool {
     let lower = base.to_ascii_lowercase();
     match os {
         ProcessOs::Windows => lower == "tf_win64.exe" || lower == "tf_win64",
-        // Native Linux only. Proton `tf_win64.exe` on Linux is out of scope.
-        ProcessOs::Linux => lower == "tf_linux64",
+        // Native, plus the Windows binary under Proton: the lock exists to
+        // stop writes into a running game, whichever runtime launched it.
+        ProcessOs::Linux => lower == "tf_linux64" || lower == "tf_win64.exe",
     }
 }
 
@@ -84,10 +85,6 @@ where
     steam_running_among_for(current_process_os(), names)
 }
 
-pub fn is_steam_running() -> bool {
-    steam_running_among(live_process_names())
-}
-
 pub fn tf2_running_among_for<I, S>(os: ProcessOs, names: I) -> bool
 where
     I: IntoIterator<Item = S>,
@@ -120,6 +117,17 @@ pub fn live_process_names() -> Vec<String> {
 
 pub fn is_tf2_running() -> bool {
     tf2_running_among(live_process_names())
+}
+
+/// "Windows 11 (10.0.26200) x86_64" style line for bug reports.
+pub fn os_description() -> String {
+    let name = System::long_os_version().unwrap_or_else(|| std::env::consts::OS.to_string());
+    let kernel = System::kernel_version().unwrap_or_default();
+    if kernel.is_empty() {
+        format!("{name} {}", std::env::consts::ARCH)
+    } else {
+        format!("{name} ({kernel}) {}", std::env::consts::ARCH)
+    }
 }
 
 pub fn write_lock_status() -> WriteLock {
@@ -174,7 +182,7 @@ mod tests {
             ProcessOs::Linux,
             "/opt/tf/tf_linux64"
         ));
-        assert!(!process_name_is_tf2_for(ProcessOs::Linux, "tf_win64.exe"));
+        assert!(process_name_is_tf2_for(ProcessOs::Linux, "tf_win64.exe"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "hl2_linux"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "steam"));
     }

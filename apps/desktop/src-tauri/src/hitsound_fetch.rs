@@ -162,7 +162,7 @@ fn valid_token(token: &str) -> bool {
 }
 
 pub fn stash_picked(wav: &[u8]) -> Result<String, String> {
-    let token = uuid_token();
+    let token = execs_core::hash::random_token();
     let dir = picked_dir();
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
     std::fs::write(dir.join(format!("{token}.wav")), wav).map_err(|err| err.to_string())?;
@@ -175,24 +175,6 @@ pub fn read_picked(token: &str) -> Result<Vec<u8>, String> {
     }
     std::fs::read(picked_dir().join(format!("{token}.wav")))
         .map_err(|_| "That picked file is no longer available — choose it again.".to_string())
-}
-
-fn uuid_token() -> String {
-    // 128 random bits from the OS, hex-encoded. `sha256_hex` of the entropy
-    // keeps this dependency-free in the app crate.
-    let mut seed = [0u8; 32];
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    seed[..16].copy_from_slice(&nanos.to_le_bytes());
-    let pid = std::process::id() as u128;
-    seed[16..].copy_from_slice(&pid.rotate_left(17).to_le_bytes());
-    let addr = &seed as *const _ as usize as u128;
-    for (i, byte) in addr.to_le_bytes().iter().enumerate() {
-        seed[i] ^= byte;
-    }
-    execs_core::hash::sha256_hex(&seed)[..32].to_string()
 }
 
 #[cfg(test)]
@@ -243,9 +225,10 @@ mod tests {
 
     #[test]
     fn tokens_are_32_hex_and_unknown_ones_are_refused() {
-        let token = uuid_token();
+        let token = execs_core::hash::random_token();
         assert!(valid_token(&token), "{token}");
-        assert_ne!(token, uuid_token());
+        assert_eq!(token, token.to_ascii_lowercase());
+        assert_ne!(token, execs_core::hash::random_token());
         assert!(read_picked("../../etc/passwd").is_err());
         assert!(read_picked("0123456789abcdef0123456789abcdef").is_err());
     }

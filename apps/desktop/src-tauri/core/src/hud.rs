@@ -89,7 +89,6 @@ pub struct HudCatalogEntry {
     #[serde(default)]
     pub album: Option<String>,
     pub comfig_url: String,
-    pub tf2huds_url: String,
 }
 
 /// Where a HUD's archive comes from. hud-db's `repo` is only validated as an
@@ -337,7 +336,6 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         .filter(|album| album.starts_with("https://") || album.starts_with("http://"));
     Ok(HudCatalogEntry {
         comfig_url: format!("https://comfig.app/huds/page/{id}/"),
-        tf2huds_url: format!("https://tf2huds.dev/hud/{id}"),
         github: is_github_hud_repo(&parsed.repo),
         install: HudInstallKind::from_repo(&parsed.repo),
         id,
@@ -376,8 +374,8 @@ pub fn save_catalog_cache_to(dir: &Path, cache: &HudCatalogCache) -> Result<(), 
 
 /// Ceilings on a HUD zip. The bytes come from a `codeload.github.com` URL
 /// whose owner/repo/commit all come from hud-db JSON, and the whole archive is
-/// held in memory while it is extracted, so a zip bomb or a merely enormous
-/// repo used to take the app down.
+/// held in memory while it is extracted, so without a ceiling a zip bomb or a
+/// merely enormous repo takes the app down.
 const MAX_HUD_ENTRIES: usize = 20_000;
 const MAX_HUD_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_HUD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
@@ -816,24 +814,6 @@ pub fn load_hud_tree_from_profile(
     Ok(tree)
 }
 
-pub fn write_hud_tree_files(
-    tf2_root: &Path,
-    profile_id: &str,
-    hud_id: &str,
-    tree: &HudTree,
-    cfg_writes: &[(String, Vec<u8>)],
-) -> Result<ProfileDetail, ProfileError> {
-    write_hud_tree_files_to(
-        &profiles_dir(),
-        tf2_root,
-        profile_id,
-        hud_id,
-        tree,
-        cfg_writes,
-        live_process_names(),
-    )
-}
-
 pub fn write_hud_tree_files_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -999,20 +979,6 @@ pub fn sync_hud_exec_lines_to(
     Ok(())
 }
 
-pub fn set_hud_options(
-    tf2_root: &Path,
-    profile_id: &str,
-    options: BTreeMap<String, String>,
-) -> Result<ProfileDetail, ProfileError> {
-    set_hud_options_to(
-        &profiles_dir(),
-        tf2_root,
-        profile_id,
-        options,
-        live_process_names(),
-    )
-}
-
 pub fn set_hud_options_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -1081,9 +1047,8 @@ fn apply_hud_replace_live(
 }
 
 /// Drop every managed `execs_hud_*.cfg` the profile still carries that the new
-/// option set does not produce. They used to live under `tf/cfg/<hudid>/` and
-/// were never cleaned up at all, so a switched-away HUD left its folder in the
-/// profile forever.
+/// option set does not produce, so a switched-away HUD leaves nothing of its
+/// options behind in the profile.
 fn remove_stale_hud_cfgs(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -1488,9 +1453,9 @@ mod tests {
         );
     }
 
-    /// The only guard used to be "the wrapper is not named info.vdf", so a zip
-    /// whose entries all sat under one real content folder had that folder
-    /// stripped off.
+    /// "The wrapper is not named info.vdf" is not guard enough on its own: a
+    /// zip whose entries all sit under one real content folder must keep that
+    /// folder.
     #[test]
     fn extract_only_strips_a_wrapper_that_actually_wraps_a_hud() {
         let bytes = zip_bytes(&[

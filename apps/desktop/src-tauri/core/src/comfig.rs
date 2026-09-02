@@ -172,10 +172,6 @@ pub fn read_comfig_state(tf2_root: &Path, profile_id: &str) -> Result<ComfigStat
     read_comfig_state_from(&profiles_dir(), tf2_root, profile_id)
 }
 
-pub fn read_active_comfig_state(tf2_root: &Path) -> Result<Option<ComfigState>, ProfileError> {
-    read_active_comfig_state_from(&profiles_dir(), tf2_root)
-}
-
 pub fn read_active_comfig_state_from(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -350,8 +346,8 @@ where
     let desired: Vec<OfficialAddon> = unique_addons(addons);
 
     // Every asset we are about to install has to be present before anything is
-    // removed. A partial download used to leave the old addons gone and the new
-    // ones never written.
+    // removed, so a partial download cannot leave the installed addons gone and
+    // the new ones never written.
     let mut install: Vec<(String, &[u8])> = Vec::new();
     for addon in &desired {
         if current.addons.contains(addon) {
@@ -823,8 +819,9 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// A partial download used to leave the old addon removed and the new one
-    /// never written, because the remove ran before the assets were checked.
+    /// The remove must not run before the assets are checked, or a partial
+    /// download leaves the installed addon removed and the new one never
+    /// written.
     #[test]
     fn a_missing_new_asset_leaves_the_installed_addons_alone() {
         let dir = test_temp_dir();

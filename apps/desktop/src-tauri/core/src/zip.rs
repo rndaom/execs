@@ -26,8 +26,8 @@ pub const ZIP_SCHEMA: u32 = 1;
 pub const ZIP_MANIFEST_NAME: &str = "execs-profile.json";
 
 /// Import ceilings. A profile zip is a mastercomfig layer plus a HUD plus
-/// skins; anything past these is a deflate bomb or a mistake, and reading it
-/// used to OOM-kill the app before a single byte was validated.
+/// skins; anything past these is a deflate bomb or a mistake, and reading one
+/// unchecked OOM-kills the app before a single byte is validated.
 const MAX_TOTAL_UNCOMPRESSED: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_ENTRY_UNCOMPRESSED: u64 = 1024 * 1024 * 1024;
 /// Real game content does not deflate anywhere near this well.
@@ -61,8 +61,8 @@ struct ProfileZipManifest {
 }
 
 /// Entries are streamed to `staging` rather than held in RAM: a 200 MB profile
-/// (mastercomfig + a HUD + skins is normal) used to need ~400 MB resident, and
-/// a crafted archive needed as much as it liked.
+/// (mastercomfig + a HUD + skins is normal) would otherwise need ~400 MB
+/// resident, and a crafted archive as much as it liked.
 struct ZipPayload {
     manifest: ProfileZipManifest,
     exclusive: HashMap<String, PathBuf>,
@@ -149,24 +149,6 @@ pub fn export_profile_to(
             Err(err)
         }
     }
-}
-
-/// Compatibility shim for the pre-Phase-2 signature. Export never took the
-/// write lock; the list was discarded.
-#[deprecated(note = "export is not a mutation; call export_profile_to without running_names")]
-pub fn export_profile_to_with_lock<I, S>(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    zip_path: &Path,
-    running_names: I,
-) -> Result<(), ProfileError>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let _running_names = running_names;
-    export_profile_to(profiles_dir, tf2_root, profile_id, zip_path)
 }
 
 /// Import a versioned zip as a new library profile. Does not set `activeProfileId`
@@ -737,8 +719,8 @@ mod tests {
 }
 "#;
 
-    /// The importer used to `read_to_end` every entry into RAM before a single
-    /// byte was validated, so a deflate bomb OOM-killed the app.
+    /// The importer must not `read_to_end` every entry into RAM before a single
+    /// byte is validated: a deflate bomb OOM-kills the app.
     #[test]
     fn import_refuses_an_absurd_compression_ratio() {
         let dir = crate::test_temp_dir();

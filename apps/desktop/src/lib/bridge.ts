@@ -209,7 +209,7 @@ export type WizardSpec = {
 
 /**
  * What a new profile's `tf/cfg/config.cfg` starts from (user decision,
- * 2026-09-01). `current` copies the active profile's `config.cfg` verbatim
+ * `current` copies the active profile's `config.cfg` verbatim
  * (binds, audio, `con_enable`, advanced options and the "tutorial already
  * shown" flags); `fresh` is Valve's `config_default.cfg`.
  */
@@ -290,7 +290,6 @@ export type HudCatalogEntry = {
   /** Optional external album page (e.g. Imgur). */
   album: string | null;
   comfigUrl: string;
-  tf2hudsUrl: string;
 };
 
 export type HudUiState = {
@@ -557,10 +556,10 @@ export async function removeCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_crosshairs");
 }
 
-/** Build a Yttrium-style pack from hidden animation groups and install it. */
 /** "full" hides the weapon and the arms; "weapon" keeps the hands animating. */
 export type ViewmodelHideMode = "full" | "weapon";
 
+/** Build a Yttrium-style pack from hidden animation groups and install it. */
 export async function buildViewmodelPack(
   hidden: string[],
   preload: boolean,
@@ -854,6 +853,11 @@ let pendingUpdate: Awaited<ReturnType<typeof import("@tauri-apps/plugin-updater"
 export async function getAppVersion(): Promise<string> {
   const { getVersion } = await import("@tauri-apps/api/app");
   return getVersion();
+}
+
+/** Version, OS, TF2 folder, active profile and the crash-log tail, as text for a bug report. */
+export function getDiagnostics(): Promise<string> {
+  return call<string>("get_diagnostics");
 }
 
 export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {

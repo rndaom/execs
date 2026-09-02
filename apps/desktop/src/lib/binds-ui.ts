@@ -417,10 +417,6 @@ export function applyRecordedBind(
   return serializeManagedBinds(next);
 }
 
-/**
- * If config.cfg rebound a tracked action onto another key, rewrite that
- * action's bind in the managed file. Never emits `unbindall`.
- */
 /** Binds from `tf/cfg/config.cfg` only — not the managed overlay. */
 export function configBindsFromFiles(
   files: Array<{ path: string; text: string }>,

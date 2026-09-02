@@ -9,8 +9,8 @@ use crate::finder::{normalize_tf2_root, user_path_string, Tf2RootError};
 
 pub const SETTINGS_SCHEMA: u32 = 1;
 
-/// Old files may still carry `inheritBinds` (removed 2026-09-01 with the
-/// Start-from choice). Unknown keys are ignored, so they keep loading.
+/// Settings files written by earlier versions may carry keys this struct does
+/// not have, such as `inheritBinds`. Unknown keys are ignored, so they load.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub schema: u32,

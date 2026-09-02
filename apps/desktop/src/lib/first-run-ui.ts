@@ -7,10 +7,10 @@ export type FirstRunSurface = "ready" | "first-existing" | "first-unused" | "loa
 export type ComfigPresetId = ComfigPreset;
 
 /**
- * "Start from" (user decision, 2026-09-01). Creating a profile used to hand
- * back Valve's `config_default.cfg`, so binds, audio, console and the tutorial
- * pop-ups all came back. The Create-new wizard now offers a choice; first run
- * has no active profile to copy, so it is always Fresh TF2.
+ * "Start from": the Create-new wizard's two tiles. `current` keeps the active
+ * profile's binds, audio, console preferences and tutorial "already shown"
+ * flags; `fresh` is Valve's `config_default.cfg`. First run has no active
+ * profile to copy, so it is always Fresh TF2.
  */
 export const START_FROM_OPTIONS: {
   id: StartFrom;
@@ -86,11 +86,4 @@ export function wizardApplyCopy(running: boolean, creating = false): string {
     return "Close TF2 to apply";
   }
   return creating ? "Create" : "Apply";
-}
-
-export function showCreateNewChrome(
-  library: ProfileLibrary | null,
-  surface: FirstRunSurface,
-): boolean {
-  return surface === "ready" && library !== null && library.profiles.length > 0;
 }

@@ -643,9 +643,9 @@ mod tests {
         progress.iter().map(|item| item.step).collect()
     }
 
-    /// The `localconfig.vdf` write result used to be dropped with `let _`, so a
-    /// switch never told the user their launch options were skipped because
-    /// Steam was open. It is now on the outcome and on the final progress step.
+    /// The `localconfig.vdf` write result rides on the outcome and on the final
+    /// progress step: dropped with `let _`, a switch never tells the user their
+    /// launch options were skipped because Steam was open.
     #[test]
     fn switch_surfaces_the_launch_options_write_reason() {
         let dir = crate::test_temp_dir();

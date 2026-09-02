@@ -38,6 +38,9 @@ describe("trust: self", () => {
       "unbindall",
       "rcon_password hunter2",
       'password "letmein"',
+      // Even the engine's own unset form blocks outside config.cfg: nothing
+      // but the settings snapshot has a reason to carry a `password` line.
+      'password "0"',
       "unbind escape",
       "con_enable 0",
       "sv_cheats 1",
@@ -124,5 +127,50 @@ describe("engineManagedLintOptions", () => {
     expect(result.binds.get("escape")).toBe("cancelselect");
     expect(result.effective.get("con_enable")?.value).toBe("0");
     expect(result.findings.some((f) => f.advisory && f.ruleId === "unbindall")).toBe(true);
+  });
+
+  it("accepts the archived `password` line every config.cfg carries", () => {
+    // `password` is FCVAR_ARCHIVE, so host_writeconfig emits `password "0"`
+    // whether or not the player ever joined a passworded server. Blocking it
+    // made the user's own config.cfg permanently unsaveable.
+    const bundle: CfgFile[] = [
+      {
+        path: "tf/cfg/config.cfg",
+        text: 'unbindall\nbind "ESCAPE" "cancelselect"\ncon_enable "0"\npassword "0"\nsensitivity "3"\n',
+      },
+    ];
+    const result = lint(bundle, engineManagedLintOptions(bundle));
+    expect(result.ok).toBe(true);
+    expect(result.findings.some((f) => f.ruleId === "rcon-password")).toBe(false);
+  });
+
+  it("still blocks a real password in config.cfg", () => {
+    const bundle: CfgFile[] = [{ path: "tf/cfg/config.cfg", text: 'password "hunter2"\n' }];
+    const result = lint(bundle, engineManagedLintOptions(bundle));
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("block:rcon-password");
+  });
+
+  it('blocks `password "0"` in a cfg the engine does not manage', () => {
+    const bundle: CfgFile[] = [{ path: "tf/cfg/overrides/autoexec.cfg", text: 'password "0"\n' }];
+    // engineManagedLintOptions finds no config.cfg here, so nothing is exempt.
+    const result = lint(bundle, engineManagedLintOptions(bundle));
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("block:rcon-password");
+  });
+
+  it("does not nag about the archived mouse cvars in config.cfg", () => {
+    // Every config.cfg archives `sensitivity` and the m_* family; a permanent
+    // warn on the Files pane is noise the player cannot clear.
+    const bundle: CfgFile[] = [
+      { path: "tf/cfg/config.cfg", text: 'sensitivity "3"\nm_yaw "0.022"\n' },
+      { path: "tf/cfg/overrides/autoexec.cfg", text: 'm_pitch "0.022"\n' },
+    ];
+    const result = lint(bundle, engineManagedLintOptions(bundle));
+    const tampers = result.findings.filter((f) => f.ruleId === "mouse-tamper");
+    expect(tampers.map((f) => f.file)).toEqual(["tf/cfg/overrides/autoexec.cfg"]);
+    // Exempting the warn must not drop the value from the derived state.
+    expect(result.effective.get("sensitivity")?.value).toBe("3");
+    expect(result.effective.get("m_yaw")?.value).toBe("0.022");
   });
 });

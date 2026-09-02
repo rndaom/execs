@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   blockingFindingsForFile,
   type CfgFinding,
@@ -13,10 +13,13 @@ import {
 } from "./lib/files-ui";
 
 export function FilesPane({
+  profileId,
   files,
   hudId,
   onSave,
 }: {
+  /** The profile this draft belongs to; a switch discards it. */
+  profileId: string | null;
   files: { path: string; text: string }[];
   hudId: string | null;
   onSave: (path: string, text: string) => void;
@@ -36,7 +39,11 @@ export function FilesPane({
   // A reload hands this pane a brand-new `files` array even when the bytes are
   // identical; the shared hook reseeds on real content change or a file switch,
   // never over unsaved edits.
-  const [draft, setDraft] = useSeededDraft(source, (text) => text, selected);
+  const [draft, setDraft] = useSeededDraft(
+    source,
+    (text) => text,
+    draftRecordKey(profileId, selected),
+  );
   const dirty = selected !== null && editable && draft !== source;
 
   // Alias expansion in cfglint is expensive and the bundle can be dozens of
@@ -56,8 +63,8 @@ export function FilesPane({
   const lint = useMemo(() => lintBundle(bundle, hudId), [bundle, hudId]);
   const strictFindings = lint.findings.filter((finding) => !finding.advisory);
   const advisoryFindings = lint.findings.filter((finding) => finding.advisory);
-  // RND-157 scopes the refusal to the file being saved: a block finding in some
-  // other cfg is shown, but it is that file's problem, not this one's.
+  // The refusal is scoped to the file being saved: a block finding in another
+  // cfg is still shown, but it is that file's problem, not this one's.
   const blockingHere = useMemo(
     () => blockingFindingsForFile(lint.findings, selected),
     [lint.findings, selected],

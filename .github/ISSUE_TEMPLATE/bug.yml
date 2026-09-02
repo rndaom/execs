@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in execs did not work the way it says it will.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The fields below are what it takes to reproduce a problem on another machine; without them most reports stall.
+  - type: input
+    id: version
+    attributes:
+      label: execs version
+      description: Shown in the footer of the app window.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux (AppImage)
+        - Linux (.deb)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Paste the exact error text if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the HUD pane
+        2. Click Install on ...
+        3. ...
+  - type: dropdown
+    id: comfig
+    attributes:
+      label: Is mastercomfig installed on the profile?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        If the app crashed, attach or paste `logs/panic.log` from the execs data folder:
+        Windows `%AppData%\execs\logs\panic.log`, Linux `~/.local/share/execs/logs/panic.log`.
+      render: text

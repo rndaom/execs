@@ -11,8 +11,8 @@ export type TabItem<Id extends string> = {
  * Underlined tab strip with a roving tabindex (only the selected tab is in the
  * tab order; Arrow/Home/End move between them), per the WAI-ARIA tabs pattern.
  *
- * Exported for the content panes to adopt — the Comfig module groups and the
- * per-class crosshair/viewmodel strips are the same widget.
+ * Shared by the Comfig module groups and the per-class crosshair and viewmodel
+ * strips — they are the same widget.
  */
 export function ClassTabs<Id extends string>({
   tabs,

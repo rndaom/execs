@@ -64,7 +64,7 @@ const PREVIEW_FILES: { path: string; text: string }[] = [
   },
   {
     path: "tf/cfg/overrides/execs_binds.cfg",
-    text: "// execs binds — managed, do not edit by hand\nbind w +forward\nbind s +back\nbind space +jump\n",
+    text: '// execs binds — managed, do not edit by hand\nbind w +forward\nbind s +back\nbind a +moveleft\nbind d +moveright\nbind space +jump\nbind ctrl +duck\nbind e "voicemenu 0 0"\nbind f +use\nbind v +voicerecord\nbind f1 "load_itempreset 0"\nbind f2 "load_itempreset 1"\n',
   },
   {
     path: "tf/cfg/overrides/execs_gameplay.cfg",
@@ -547,6 +547,10 @@ export function createPreviewApi(state: PreviewState): Api {
     async getAppVersion() {
       const { PREVIEW_APP_VERSION } = await import("./updater-ui");
       return PREVIEW_APP_VERSION;
+    },
+    async getDiagnostics() {
+      const { PREVIEW_APP_VERSION } = await import("./updater-ui");
+      return `execs ${PREVIEW_APP_VERSION}\nOS: preview\nTF2: ${BROWSED.path}\nProfiles: 1 (active: Main)\npanic.log: none\n`;
     },
     async checkAppUpdate() {
       return previewUpdate(state);

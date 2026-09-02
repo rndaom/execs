@@ -18,8 +18,8 @@ pub async fn get_hud_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, Comm
 }
 
 /// `HudUiState` plus one honest bit. When the catalog cannot be read (offline
-/// with a cold cache), the state used to be computed against an empty catalog
-/// and the pane said "up to date" while actually knowing nothing.
+/// with a cold cache), a state computed against an empty catalog would have
+/// the pane say "up to date" while it knows nothing.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HudStatePayload {
@@ -255,7 +255,7 @@ fn install_hud_from_catalog(
     let entry = crate::hud_fetch::catalog_entry(id)?;
     if !entry.install.installable() {
         return Err(CommandError::unknown(
-            "That HUD has no download this app can fetch — open the author’s page.",
+            crate::hud_fetch::no_download_message(),
         ));
     }
     let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
