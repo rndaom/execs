@@ -24,6 +24,7 @@ import {
 import type {
   HudCatalogEntry,
   HudSchemaView,
+  HudStat,
   HudUiState,
   ModsCatalog,
   PreloaderReport,
@@ -106,6 +107,7 @@ export function SettingsHost({
   const [launchSaved, setLaunchSaved] = useState<{ sent: string; saved: string } | null>(null);
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
   const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
+  const [hudStats, setHudStats] = useState<Record<string, HudStat>>({});
   const [hudState, setHudState] = useState<HudUiState>(emptyHudState);
   const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(null);
   const [hudCatalogLoading, setHudCatalogLoading] = useState(true);
@@ -230,6 +232,16 @@ export function SettingsHost({
         }
         setHudCatalog(nextCatalog);
         setHudState(nextState);
+        // Numbers are decoration on top of the catalog: fetched after it,
+        // never blocking it, and a failure just leaves the sort on names.
+        api
+          .getHudStats(refresh)
+          .then((nextStats) => {
+            if (request === hudRequest.current) {
+              setHudStats(nextStats);
+            }
+          })
+          .catch(() => {});
         if (nextState.schemaSupported) {
           const nextSchema = await api.getHudSchema();
           if (request === hudRequest.current) {
@@ -550,6 +562,7 @@ export function SettingsHost({
           catalogLoading={hudCatalogLoading}
           catalogError={hudCatalogError}
           catalog={hudCatalog}
+          stats={hudStats}
           state={hudState}
           schema={hudSchema}
           onRefresh={() => {
@@ -720,6 +733,16 @@ export function SettingsHost({
               }
             });
           }}
+          onRepair={async () => {
+            onError(null);
+            try {
+              await api.repairGameFiles();
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not start the repair.");
+              throw err;
+            }
+          }}
+          onRefreshStatus={refreshModsStatus}
           onOpenRepo={() => {
             void api.openExternal(PRELOADER_REPO_URL);
           }}

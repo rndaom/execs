@@ -19,6 +19,7 @@ function renderHudPane(catalogLoading: boolean, catalogError: string | null): st
         catalogLoading,
         catalogError,
         catalog: PREVIEW_HUD_CATALOG,
+        stats: {},
         state: emptyHudState(),
         schema: null,
         onRefresh: noop,

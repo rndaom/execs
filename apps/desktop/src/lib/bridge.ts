@@ -438,6 +438,19 @@ export type HudAlbumImage = {
   height: number;
 };
 
+/** What the two sites that publish numbers know about one HUD. */
+export type HudStat = {
+  /** ISO date of comfig.app's "Last updated". */
+  updated?: string | null;
+  downloads?: number | null;
+  views?: number | null;
+};
+
+/** Per-HUD popularity and recency, keyed by hud-db id; cached for a day. */
+export async function getHudStats(refresh = false): Promise<Record<string, HudStat>> {
+  return call<Record<string, HudStat>>("get_hud_stats", { refresh });
+}
+
 /** The pictures behind a HUD's Imgur album or GitHub showcase page. */
 export async function getHudAlbum(id: string): Promise<HudAlbumImage[]> {
   return call<HudAlbumImage[]>("get_hud_album", { id });
@@ -584,7 +597,7 @@ export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDeta
 
 export type HitsoundKind = "hit" | "kill";
 
-export type HitsoundSource = "community" | "file";
+export type HitsoundSource = "community" | "file" | "comfig";
 
 export type HitsoundEntry = {
   name: string;
@@ -602,7 +615,8 @@ export type HitsoundPick =
   | { kind: "community"; name: string }
   | { kind: "file"; token: string; name: string }
   | { kind: "installed"; slot: HitsoundKind }
-  | { kind: "stock"; stem: string };
+  | { kind: "stock"; stem: string }
+  | { kind: "comfig"; hash: string; name: string };
 
 export type HitsoundSlotChange =
   | { change: "keep" }
@@ -629,6 +643,18 @@ export type PickedHitsound = {
 /** Raw WAV bytes for auditioning one pick in an audio element. */
 export async function hitsoundBytes(pick: HitsoundPick): Promise<ArrayBuffer> {
   return call<ArrayBuffer>("hitsound_bytes", { pick });
+}
+
+/** One comfig.app hits-library entry from the pinned index. */
+export type ComfigHitsound = {
+  name: string;
+  hash: string;
+  kind: HitsoundKind;
+};
+
+/** comfig.app's hits library (pinned index, cached). */
+export async function comfigHitsoundIndex(): Promise<ComfigHitsound[]> {
+  return call<ComfigHitsound[]>("comfig_hitsound_index");
 }
 
 /** Stems of the stock hit/kill sounds found in the user's own sound VPK. */
@@ -787,6 +813,11 @@ export async function setGameinfoBypass(enabled: boolean): Promise<PreloaderStat
 
 export async function revertPreloader(): Promise<PreloaderRevertReport> {
   return call<PreloaderRevertReport>("revert_preloader");
+}
+
+/** Ask Steam to verify TF2's files (`steam://validate/440`). */
+export async function repairGameFiles(): Promise<void> {
+  return call<void>("repair_game_files");
 }
 
 // ---------------------------------------------------------------------------

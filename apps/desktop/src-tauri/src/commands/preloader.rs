@@ -140,6 +140,20 @@ pub async fn set_gameinfo_bypass(
     .await
 }
 
+/// Hand the stale-patch problem to the only thing that holds stock bytes:
+/// Steam's own file verification. `steam://validate/440` starts "Verify
+/// integrity of game files" for TF2; the pane polls status until the
+/// untracked entries read as stock again and then re-applies the selection.
+#[tauri::command]
+pub async fn repair_game_files() -> Result<(), CommandError> {
+    blocking(|| {
+        execs_core::refuse_if_running()?;
+        tauri_plugin_opener::open_url("steam://validate/440", None::<&str>)
+            .map_err(|err| CommandError::unknown(format!("Could not ask Steam to verify ({err})")))
+    })
+    .await
+}
+
 /// Restore every stock byte: particle snapshots, gameinfo.txt, custom VPK.
 #[tauri::command]
 pub async fn revert_preloader(

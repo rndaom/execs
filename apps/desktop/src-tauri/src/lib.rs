@@ -4,6 +4,7 @@ mod crosshair_fetch;
 mod error;
 mod hitsound_fetch;
 mod hud_fetch;
+mod hud_stats;
 mod mods_fetch;
 mod net;
 mod viewmodel_fetch;
@@ -110,6 +111,7 @@ pub fn run() {
             commands::hud::get_hud_catalog,
             commands::hud::get_hud_state,
             commands::hud::get_hud_album,
+            commands::hud::get_hud_stats,
             commands::hud::install_hud,
             commands::hud::match_hud_catalog,
             commands::hud::update_hud,
@@ -129,6 +131,7 @@ pub fn run() {
             commands::viewmodel::viewmodel_preview_image,
             commands::hitsound::hitsound_bytes,
             commands::hitsound::list_stock_hitsounds,
+            commands::hitsound::comfig_hitsound_index,
             commands::hitsound::pick_hitsound_file,
             commands::hitsound::apply_hitsounds,
             commands::hitsound::remove_hitsounds,
@@ -139,6 +142,7 @@ pub fn run() {
             commands::preloader::apply_preloader_mods,
             commands::preloader::set_gameinfo_bypass,
             commands::preloader::revert_preloader,
+            commands::preloader::repair_game_files,
         ])
         .setup(|app| {
             app.manage(WriteGate(tokio::sync::Mutex::new(())));
