@@ -128,7 +128,7 @@ pub fn profile_file_bytes_from(
         .iter()
         .find(|file| file.path == rel_path)
         .ok_or(ProfileError::InvalidPath)?;
-    let source = source_path(profiles_dir, &manifest.id, file)?;
+    let source = manifest_source_path(profiles_dir, &manifest.id, file)?;
     fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))
 }
 
@@ -154,7 +154,7 @@ pub fn read_profile_file_from(
         .iter()
         .find(|file| file.path == path)
         .ok_or(ProfileError::InvalidPath)?;
-    let source = source_path(profiles_dir, &manifest.id, file)?;
+    let source = manifest_source_path(profiles_dir, &manifest.id, file)?;
     let bytes = fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))?;
     let text = String::from_utf8(bytes.clone()).ok();
     Ok(ProfileFileContent {
@@ -234,7 +234,7 @@ fn apply_owned_file_to_live(
         .iter()
         .find(|file| file.path == rel_path)
         .ok_or(ProfileError::InvalidPath)?;
-    let source = source_path(profiles_dir, &manifest.id, file)?;
+    let source = manifest_source_path(profiles_dir, &manifest.id, file)?;
     let dest = live_path(tf2_root, rel_path);
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
@@ -253,7 +253,9 @@ fn apply_owned_file_to_live(
     Ok(())
 }
 
-fn source_path(
+/// Where the library keeps one manifest file: the profile's exclusive tree or
+/// the shared blob store. `Err` means the library copy is gone.
+pub(crate) fn manifest_source_path(
     profiles_dir: &Path,
     profile_id: &str,
     file: &ProfileFile,

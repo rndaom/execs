@@ -228,6 +228,7 @@ export function createPreviewApi(state: PreviewState): Api {
         library: library ?? emptyLibrary(BROWSED.path, true),
         delta,
         configCfgAbsorbed: false,
+        repaired: [],
       };
     },
     async absorbPacks() {
