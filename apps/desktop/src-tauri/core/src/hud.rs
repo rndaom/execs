@@ -76,6 +76,10 @@ pub struct HudCatalogEntry {
     pub repo: String,
     pub hash: String,
     pub github: bool,
+    /// How the app can fetch this HUD's files (derived from `repo`'s host).
+    /// `none` means the author's page is the only route.
+    #[serde(default)]
+    pub install: HudInstallKind,
     pub flags: Vec<String>,
     pub banner: Option<String>,
     /// Full-size screenshot URLs from hud-db's `resources` (image names only).
@@ -86,6 +90,46 @@ pub struct HudCatalogEntry {
     pub album: Option<String>,
     pub comfig_url: String,
     pub tf2huds_url: String,
+}
+
+/// Where a HUD's archive comes from. hud-db's `repo` is only validated as an
+/// https URL: 241 entries are GitHub repos, 26 are direct Dropbox `.7z`
+/// links, 27 are GameBanana mod pages whose public API lists the file, and a
+/// few are forum threads that link a Dropbox file. The rest have no
+/// mechanical route.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HudInstallKind {
+    Github,
+    Direct,
+    Gamebanana,
+    Thread,
+    #[default]
+    None,
+}
+
+impl HudInstallKind {
+    pub fn from_repo(repo: &str) -> Self {
+        if is_github_hud_repo(repo) {
+            return Self::Github;
+        }
+        let lower = repo.trim().to_ascii_lowercase();
+        let host = lower
+            .strip_prefix("https://")
+            .or_else(|| lower.strip_prefix("http://"))
+            .and_then(|rest| rest.split('/').next())
+            .unwrap_or("");
+        match host {
+            "www.dropbox.com" | "dropbox.com" | "dl.dropboxusercontent.com" => Self::Direct,
+            "gamebanana.com" | "www.gamebanana.com" if lower.contains("/mods/") => Self::Gamebanana,
+            "www.teamfortress.tv" | "teamfortress.tv" => Self::Thread,
+            _ => Self::None,
+        }
+    }
+
+    pub fn installable(self) -> bool {
+        !matches!(self, Self::None)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -295,6 +339,7 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         comfig_url: format!("https://comfig.app/huds/page/{id}/"),
         tf2huds_url: format!("https://tf2huds.dev/hud/{id}"),
         github: is_github_hud_repo(&parsed.repo),
+        install: HudInstallKind::from_repo(&parsed.repo),
         id,
         name: parsed.name,
         author: parsed.author,
@@ -312,8 +357,8 @@ pub fn catalog_cache_dir() -> PathBuf {
 }
 
 pub fn catalog_cache_file(dir: &Path) -> PathBuf {
-    // v2: entries gained screenshots/album; old caches are ignored and refetched.
-    dir.join("catalog-v2.json")
+    // v3: entries gained the install kind; old caches are ignored and refetched.
+    dir.join("catalog-v3.json")
 }
 
 pub fn load_catalog_cache_from(dir: &Path) -> Option<HudCatalogCache> {
@@ -336,6 +381,98 @@ pub fn save_catalog_cache_to(dir: &Path, cache: &HudCatalogCache) -> Result<(), 
 const MAX_HUD_ENTRIES: usize = 20_000;
 const MAX_HUD_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_HUD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+
+const SEVEN_ZIP_MAGIC: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
+
+/// A HUD archive of whatever kind the host handed back: zip (GitHub,
+/// GameBanana), 7z (every Dropbox entry) — sniffed by magic, never by the
+/// URL's extension. RAR is named in the error so the user knows why.
+pub fn extract_hud_archive(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
+    if bytes.starts_with(b"PK") {
+        return extract_hud_zip(bytes);
+    }
+    if bytes.starts_with(&SEVEN_ZIP_MAGIC) {
+        return extract_hud_7z(bytes);
+    }
+    if bytes.starts_with(b"Rar!") {
+        return Err(ProfileError::Io(
+            "That HUD is a RAR archive, which this app cannot unpack. Open the author's page to install it by hand.".into(),
+        ));
+    }
+    if bytes.starts_with(b"<") || bytes.starts_with(b"{") {
+        return Err(ProfileError::Io(
+            "The download returned a web page instead of the HUD archive. Try again later or open the author's page.".into(),
+        ));
+    }
+    Err(ProfileError::Io(
+        "The download is not a zip or 7z archive.".into(),
+    ))
+}
+
+fn extract_hud_7z(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
+    let mut reader = sevenz_rust::SevenZReader::new(
+        Cursor::new(bytes),
+        bytes.len() as u64,
+        sevenz_rust::Password::empty(),
+    )
+    .map_err(|err| ProfileError::Io(format!("Could not read the 7z archive ({err})")))?;
+    let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut total: u64 = 0;
+    let mut count = 0usize;
+    reader
+        .for_each_entries(|entry, stream| {
+            if entry.is_directory() {
+                return Ok(true);
+            }
+            count += 1;
+            if count > MAX_HUD_ENTRIES {
+                return Err(sevenz_rust::Error::other(format!(
+                    "That HUD archive has more than {MAX_HUD_ENTRIES} files; refusing to unpack it."
+                )));
+            }
+            let rel = sanitize_zip_entry(entry.name())
+                .map_err(|err| sevenz_rust::Error::other(err.message()))?;
+            if entry.size() > MAX_HUD_ENTRY_BYTES {
+                return Err(sevenz_rust::Error::other(format!(
+                    "{rel} is larger than 64 MiB; refusing to unpack this HUD."
+                )));
+            }
+            let budget = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
+            let mut data = Vec::new();
+            stream
+                .take(budget.min(MAX_HUD_ENTRY_BYTES) + 1)
+                .read_to_end(&mut data)
+                .map_err(|err| sevenz_rust::Error::other(err.to_string()))?;
+            total += data.len() as u64;
+            if total > MAX_HUD_TOTAL_BYTES {
+                return Err(sevenz_rust::Error::other(
+                    "That HUD archive unpacks to more than 512 MiB; refusing to unpack it.",
+                ));
+            }
+            raw.push((rel, data));
+            Ok(true)
+        })
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    finish_extracted(raw)
+}
+
+fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, ProfileError> {
+    let stripped = strip_wrapper_folder(raw);
+    let mut tree = HudTree::default();
+    for (path, data) in stripped {
+        tree.insert(path, data);
+    }
+    if tree.get("info.vdf").is_none() {
+        return Err(ProfileError::Io(
+            "That archive is not a HUD (missing info.vdf at the root).".into(),
+        ));
+    }
+    let ui_version = tree
+        .get("info.vdf")
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
+        .and_then(parse_ui_version);
+    Ok(ExtractedHud { tree, ui_version })
+}
 
 pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
     let mut archive =
@@ -376,21 +513,7 @@ pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
         }
         raw.push((rel, data));
     }
-    let stripped = strip_wrapper_folder(raw);
-    let mut tree = HudTree::default();
-    for (path, data) in stripped {
-        tree.insert(path, data);
-    }
-    if tree.get("info.vdf").is_none() {
-        return Err(ProfileError::Io(
-            "That zip is not a HUD (missing info.vdf at the root).".into(),
-        ));
-    }
-    let ui_version = tree
-        .get("info.vdf")
-        .and_then(|bytes| std::str::from_utf8(bytes).ok())
-        .and_then(parse_ui_version);
-    Ok(ExtractedHud { tree, ui_version })
+    finish_extracted(raw)
 }
 
 pub fn hud_ui_state(manifest: &ProfileManifest, catalog: &[HudCatalogEntry]) -> HudUiState {
@@ -1045,6 +1168,72 @@ pub(crate) fn normalize_hud_rel(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A three-file HUD inside a wrapper folder, written with py7zr (LZMA2).
+    const HUD_MIN_7Z: &[u8] = include_bytes!("../fixtures/hud-min.7z");
+
+    #[test]
+    fn a_7z_hud_archive_unpacks_like_a_zip_with_its_wrapper_stripped() {
+        let extracted = extract_hud_archive(HUD_MIN_7Z).unwrap();
+        assert_eq!(extracted.ui_version, Some(3));
+        assert!(extracted.tree.get("info.vdf").is_some());
+        assert!(extracted.tree.get("resource/ui/hudlayout.res").is_some());
+        assert_eq!(
+            extracted.tree.get("resource/ui/nested/child.res").unwrap(),
+            b"#base ../hudlayout.res\n"
+        );
+        assert_eq!(extracted.tree.files.len(), 3);
+    }
+
+    #[test]
+    fn archives_are_sniffed_by_magic_and_rar_is_named() {
+        let err = extract_hud_archive(b"Rar!\x1a\x07\x01\x00rest").unwrap_err();
+        assert!(err.message().contains("RAR"), "{}", err.message());
+        let err = extract_hud_archive(b"<!doctype html><html>").unwrap_err();
+        assert!(err.message().contains("web page"), "{}", err.message());
+        let err = extract_hud_archive(b"garbage").unwrap_err();
+        assert!(
+            err.message().contains("not a zip or 7z"),
+            "{}",
+            err.message()
+        );
+        // A truncated 7z is an error, not a panic.
+        assert!(extract_hud_archive(&HUD_MIN_7Z[..40]).is_err());
+    }
+
+    #[test]
+    fn install_kind_follows_the_repo_host() {
+        assert_eq!(
+            HudInstallKind::from_repo("https://github.com/raysfire/rayshud"),
+            HudInstallKind::Github
+        );
+        assert_eq!(
+            HudInstallKind::from_repo("https://www.dropbox.com/s/x/Hud.7z?dl=1"),
+            HudInstallKind::Direct
+        );
+        assert_eq!(
+            HudInstallKind::from_repo("https://gamebanana.com/mods/461758"),
+            HudInstallKind::Gamebanana
+        );
+        assert_eq!(
+            HudInstallKind::from_repo("https://gamebanana.com/guis/25711"),
+            HudInstallKind::None
+        );
+        assert_eq!(
+            HudInstallKind::from_repo("https://www.teamfortress.tv/53194/arekk-hud"),
+            HudInstallKind::Thread
+        );
+        assert_eq!(
+            HudInstallKind::from_repo("https://toonhud.com/"),
+            HudInstallKind::None
+        );
+        assert_eq!(
+            HudInstallKind::from_repo("https://steamcommunity.com/groups/axhud"),
+            HudInstallKind::None
+        );
+        assert!(HudInstallKind::Direct.installable());
+        assert!(!HudInstallKind::None.installable());
+    }
     use crate::apply::WriteOwnedOptions;
     use crate::profile::{create_profile_record_to, set_active_profile_to};
     use crate::test_temp_dir;

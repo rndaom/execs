@@ -3,6 +3,7 @@ import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
+import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
 import type {
@@ -128,6 +129,17 @@ export function ModsPane({
           Close Steam fully, then press Apply here again — or re-apply from the Launch pane — so{" "}
           <code className="font-mono">+exec</code> reaches Steam. Without it, mods stay invisible on
           Valve servers.
+        </Alert>
+      ) : null}
+      {status && status.untrackedModified.length > 0 ? (
+        <Alert tone="warn" testId="mods-untracked" className="mt-6">
+          {status.untrackedModified.length} particle{" "}
+          {status.untrackedModified.length === 1 ? "file is" : "files are"} modified inside
+          tf2_misc, but execs holds no stock copy for them — patches from an earlier install whose
+          tracking was lost, or from another tool. Their effects may point at materials that are no
+          longer installed, which floods the console with sprite-renderer warnings. Restore stock
+          files here first, then run <strong>Verify integrity of game files</strong> in Steam, then
+          apply your mods again.
         </Alert>
       ) : null}
       {status && !status.gameinfoFound ? (
@@ -290,16 +302,7 @@ function AddonRow({
   const id = `mods-addon-${addon.id.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
     <li className="border-b border-edge py-3">
-      <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
-        <input
-          id={id}
-          data-testid={id}
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={onToggle}
-          className="mt-1 size-3.5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
-        />
+      <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
             <span className="t-row">{addon.name}</span>
@@ -315,7 +318,14 @@ function AddonRow({
             </span>
           ) : null}
         </span>
-      </label>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          label={addon.name}
+          testId={id}
+          onChange={onToggle}
+        />
+      </div>
     </li>
   );
 }
@@ -336,16 +346,7 @@ function ParticleRow({
   const more = mod.pcfFiles.length - preview.length;
   return (
     <li className="border-b border-edge py-3">
-      <label htmlFor={id} className="flex cursor-pointer items-start gap-3">
-        <input
-          id={id}
-          data-testid={id}
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={onToggle}
-          className="mt-1 size-3.5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
-        />
+      <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
             <span className="t-row">{mod.name.replace(/_/g, " ")}</span>
@@ -359,7 +360,14 @@ function ParticleRow({
             {more > 0 ? ` and ${more} more` : ""}
           </span>
         </span>
-      </label>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          label={mod.name.replace(/_/g, " ")}
+          testId={id}
+          onChange={onToggle}
+        />
+      </div>
     </li>
   );
 }

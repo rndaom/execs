@@ -39,9 +39,51 @@ pub fn fetch_crosshair_vtf(file: &str) -> Result<Vec<u8>, String> {
     })
 }
 
+/// The picker wants every thumbnail at once: 173 static VTFs are ~1.7 MiB in
+/// total, so they are fetched across a small worker pool and cached by the
+/// pinned commit. One failed file costs the user one blank thumbnail, never
+/// the whole grid.
+const PREVIEW_WORKERS: usize = 8;
+
+pub fn fetch_crosshair_vtfs(files: &[String]) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    if files.is_empty() {
+        return out;
+    }
+    let worker_count = PREVIEW_WORKERS.min(files.len());
+    let chunk_size = files.len().div_ceil(worker_count);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = files
+            .chunks(chunk_size)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    let mut fetched = Vec::with_capacity(chunk.len());
+                    for file in chunk {
+                        if let Ok(bytes) = fetch_crosshair_vtf(file) {
+                            fetched.push((file.clone(), bytes));
+                        }
+                    }
+                    fetched
+                })
+            })
+            .collect();
+        for handle in handles {
+            if let Ok(batch) = handle.join() {
+                out.extend(batch);
+            }
+        }
+    });
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fetching_nothing_touches_nothing() {
+        assert!(fetch_crosshair_vtfs(&[]).is_empty());
+    }
 
     #[test]
     fn remote_file_names_are_restricted_to_plain_stems() {

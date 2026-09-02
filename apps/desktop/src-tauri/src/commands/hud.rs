@@ -26,6 +26,20 @@ pub struct HudStatePayload {
     pub catalog_unavailable: bool,
 }
 
+/// The pictures behind a HUD's external album (Imgur, or a GitHub showcase
+/// page), so the lightbox can show them in-app instead of linking out.
+#[tauri::command]
+pub async fn get_hud_album(id: String) -> Result<Vec<crate::hud_fetch::AlbumImage>, CommandError> {
+    blocking(move || {
+        let entry = crate::hud_fetch::catalog_entry(&id)?;
+        let Some(album) = entry.album else {
+            return Ok(Vec::new());
+        };
+        Ok(crate::hud_fetch::fetch_hud_album(&album)?)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
     with_profile(|_root, profile_id| {
@@ -126,13 +140,13 @@ fn install_hud_from_catalog(
     preserve_options: bool,
 ) -> Result<ProfileDetail, CommandError> {
     let entry = crate::hud_fetch::catalog_entry(id)?;
-    if !entry.github {
+    if !entry.install.installable() {
         return Err(CommandError::unknown(
-            "Open the author’s page for that HUD — it is not a GitHub zip.",
+            "That HUD has no download this app can fetch — open the author’s page.",
         ));
     }
-    let bytes = crate::hud_fetch::fetch_hud_zip(&entry.repo, &entry.hash)?;
-    let extracted = execs_core::extract_hud_zip(&bytes)?;
+    let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
+    let extracted = execs_core::extract_hud_archive(&bytes)?;
     let mut tree = extracted.tree;
     let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id)?;
     let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);

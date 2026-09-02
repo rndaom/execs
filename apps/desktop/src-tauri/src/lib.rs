@@ -2,6 +2,7 @@ mod comfig_fetch;
 mod commands;
 mod crosshair_fetch;
 mod error;
+mod hitsound_fetch;
 mod hud_fetch;
 mod mods_fetch;
 mod net;
@@ -108,6 +109,7 @@ pub fn run() {
             commands::launch::set_profile_launch_options,
             commands::hud::get_hud_catalog,
             commands::hud::get_hud_state,
+            commands::hud::get_hud_album,
             commands::hud::install_hud,
             commands::hud::match_hud_catalog,
             commands::hud::update_hud,
@@ -115,6 +117,7 @@ pub fn run() {
             commands::hud::apply_hud_options,
             commands::crosshair::apply_crosshairs,
             commands::crosshair::fetch_community_crosshair,
+            commands::crosshair::fetch_community_crosshair_previews,
             commands::crosshair::get_pack_crosshair_previews,
             commands::crosshair::get_stock_crosshair_sprites,
             commands::crosshair::remove_crosshairs,
@@ -123,6 +126,12 @@ pub fn run() {
             commands::viewmodel::remove_viewmodels,
             commands::viewmodel::set_viewmodel_preload,
             commands::viewmodel::viewmodel_build_available,
+            commands::viewmodel::viewmodel_preview_image,
+            commands::hitsound::hitsound_bytes,
+            commands::hitsound::list_stock_hitsounds,
+            commands::hitsound::pick_hitsound_file,
+            commands::hitsound::apply_hitsounds,
+            commands::hitsound::remove_hitsounds,
             commands::open_embedded_page,
             commands::preloader::get_preloader_status,
             commands::preloader::get_default_mods,
