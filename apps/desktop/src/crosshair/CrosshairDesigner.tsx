@@ -1,6 +1,8 @@
 import { X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "../components/ui/Modal";
+import { Segmented } from "../components/ui/Segmented";
+import { Switch } from "../components/ui/Switch";
 import {
   type CrosshairDesign,
   clampDesign,
@@ -79,23 +81,18 @@ export function CrosshairDesigner({
               style={{ imageRendering: "pixelated" }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-1">
-            {DESIGN_STYLES.map((style) => (
-              <button
-                key={style}
-                type="button"
-                aria-pressed={design.style === style}
-                data-testid={`crosshair-designer-style-${style}`}
-                onClick={() => patch({ style })}
-                className={`rounded-lg px-2.5 py-1.5 text-[13px] capitalize transition-colors duration-150 ${
-                  design.style === style
-                    ? "bg-panel-raised text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
-                    : "bg-panel text-ink-muted hover:text-ink"
-                }`}
-              >
-                {style}
-              </button>
-            ))}
+          <div className="mt-3">
+            <Segmented
+              label="Style"
+              size="sm"
+              testIdPrefix="crosshair-designer-style"
+              options={DESIGN_STYLES.map((style) => ({
+                id: style,
+                label: <span className="capitalize">{style}</span>,
+              }))}
+              value={design.style}
+              onChange={(style) => patch({ style })}
+            />
           </div>
         </div>
 
@@ -147,18 +144,17 @@ export function CrosshairDesigner({
             max={DESIGN_LIMITS.opacity.max}
             onChange={(opacity) => patch({ opacity })}
           />
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             {design.style !== "dot" ? (
-              <label className="flex items-center gap-2 text-xs text-ink">
-                <input
-                  type="checkbox"
-                  data-testid="crosshair-designer-dot"
+              <span className="flex items-center gap-2 text-xs text-ink">
+                <Switch
                   checked={design.dot}
-                  onChange={(event) => patch({ dot: event.target.checked })}
-                  className="accent-brand"
+                  label="Center dot"
+                  testId="crosshair-designer-dot"
+                  onChange={(dot) => patch({ dot })}
                 />
                 Center dot
-              </label>
+              </span>
             ) : null}
             {design.dot && design.style !== "dot" ? (
               <DesignerSlider
@@ -171,16 +167,15 @@ export function CrosshairDesigner({
                 onChange={(dotSize) => patch({ dotSize })}
               />
             ) : null}
-            <label className="flex items-center gap-2 text-xs text-ink">
-              <input
-                type="checkbox"
-                data-testid="crosshair-designer-shadow"
+            <span className="flex items-center gap-2 text-xs text-ink">
+              <Switch
                 checked={design.shadow}
-                onChange={(event) => patch({ shadow: event.target.checked })}
-                className="accent-brand"
+                label="Drop shadow"
+                testId="crosshair-designer-shadow"
+                onChange={(shadow) => patch({ shadow })}
               />
               Drop shadow
-            </label>
+            </span>
           </div>
         </div>
       </div>
@@ -244,7 +239,7 @@ function DesignerSlider({
         value={value}
         aria-describedby={noteId}
         onChange={(event) => onChange(Number(event.target.value))}
-        className={`${compact ? "w-24" : "mt-1.5 w-full"} cursor-pointer accent-brand`}
+        className={`range ${compact ? "w-24" : "mt-1.5 w-full"}`}
       />
       {note ? (
         <p id={noteId} className="mt-1 text-[10px] leading-4 text-ink-faint">

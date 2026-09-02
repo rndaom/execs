@@ -268,6 +268,13 @@ export type ViewmodelRecord = {
   options: Record<string, string>;
 };
 
+/**
+ * How the app can fetch a HUD's files, derived from its hud-db `repo` host:
+ * a pinned GitHub zip, a direct (Dropbox) archive, a GameBanana listing, a
+ * forum thread that links an archive, or nothing mechanical at all.
+ */
+export type HudInstallKind = "github" | "direct" | "gamebanana" | "thread" | "none";
+
 export type HudCatalogEntry = {
   id: string;
   name: string;
@@ -275,6 +282,7 @@ export type HudCatalogEntry = {
   repo: string;
   hash: string;
   github: boolean;
+  install: HudInstallKind;
   flags: string[];
   banner: string | null;
   /** Full-size hud-db screenshot URLs (video links are filtered out). */
@@ -328,6 +336,7 @@ export type ProfileDetail = {
   hud?: HudRecord | null;
   crosshair?: CrosshairRecord | null;
   viewmodel?: ViewmodelRecord | null;
+  hitsound?: HitsoundRecord | null;
 };
 
 export type ProfileFileContent = {
@@ -421,6 +430,19 @@ export async function getHudState(): Promise<HudUiState> {
   return call<HudUiState>("get_hud_state");
 }
 
+/** One picture from a HUD's external album, resolved to a direct image URL. */
+export type HudAlbumImage = {
+  url: string;
+  thumb: string | null;
+  width: number;
+  height: number;
+};
+
+/** The pictures behind a HUD's Imgur album or GitHub showcase page. */
+export async function getHudAlbum(id: string): Promise<HudAlbumImage[]> {
+  return call<HudAlbumImage[]>("get_hud_album", { id });
+}
+
 export async function installHud(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("install_hud", { id });
 }
@@ -479,6 +501,18 @@ export async function fetchCommunityCrosshair(file: string): Promise<CommunityCr
   return call<CommunityCrosshair>("fetch_community_crosshair", { file });
 }
 
+/**
+ * Thumbnails for the community picker: every requested upstream file stem,
+ * fetched (with cache) and decoded. Missing keys failed to download or decode.
+ */
+export async function fetchCommunityCrosshairPreviews(
+  files: string[],
+): Promise<Record<string, StockCrosshairSprite>> {
+  return call<Record<string, StockCrosshairSprite>>("fetch_community_crosshair_previews", {
+    files,
+  });
+}
+
 /** Decoded previews of the installed pack's library crosshairs. */
 export async function getPackCrosshairPreviews(): Promise<Record<string, StockCrosshairSprite>> {
   return call<Record<string, StockCrosshairSprite>>("get_pack_crosshair_previews");
@@ -531,8 +565,91 @@ export async function viewmodelBuildAvailable(): Promise<boolean> {
   return call<boolean>("viewmodel_build_available");
 }
 
+/**
+ * One of CompVMInstaller's preview screenshots (JPEG bytes) by its upstream
+ * resource stem, e.g. `scout_scattergun`. Raw bytes cross the bridge as an
+ * ArrayBuffer, not a JSON array.
+ */
+export async function viewmodelPreviewImage(name: string): Promise<ArrayBuffer> {
+  return call<ArrayBuffer>("viewmodel_preview_image", { name });
+}
+
 export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
   return call<ProfileDetail>("set_viewmodel_preload", { enabled });
+}
+
+// ---------------------------------------------------------------------------
+// Hit and kill sounds
+// ---------------------------------------------------------------------------
+
+export type HitsoundKind = "hit" | "kill";
+
+export type HitsoundSource = "community" | "file";
+
+export type HitsoundEntry = {
+  name: string;
+  source: HitsoundSource;
+};
+
+/** What the profile's sound pack holds; a missing slot plays the engine's own sound. */
+export type HitsoundRecord = {
+  hit?: HitsoundEntry | null;
+  kill?: HitsoundEntry | null;
+};
+
+/** One sound the pane can audition or install. */
+export type HitsoundPick =
+  | { kind: "community"; name: string }
+  | { kind: "file"; token: string; name: string }
+  | { kind: "installed"; slot: HitsoundKind }
+  | { kind: "stock"; stem: string };
+
+export type HitsoundSlotChange =
+  | { change: "keep" }
+  | { change: "clear" }
+  | { change: "install"; pick: HitsoundPick };
+
+export type WavInfo = {
+  formatTag: number;
+  channels: number;
+  sampleRate: number;
+  bitsPerSample: number;
+  dataBytes: number;
+  durationMs: number;
+};
+
+export type PickedHitsound = {
+  token: string;
+  name: string;
+  info: WavInfo;
+  /** True when the file was re-encoded to something the engine plays. */
+  converted: boolean;
+};
+
+/** Raw WAV bytes for auditioning one pick in an audio element. */
+export async function hitsoundBytes(pick: HitsoundPick): Promise<ArrayBuffer> {
+  return call<ArrayBuffer>("hitsound_bytes", { pick });
+}
+
+/** Stems of the stock hit/kill sounds found in the user's own sound VPK. */
+export async function listStockHitsounds(): Promise<string[]> {
+  return call<string[]>("list_stock_hitsounds");
+}
+
+/** Open the file dialog for a WAV, prepare it for the engine, and stash it. */
+export async function pickHitsoundFile(): Promise<PickedHitsound | null> {
+  return call<PickedHitsound | null>("pick_hitsound_file");
+}
+
+export async function applyHitsounds(
+  hit: HitsoundSlotChange,
+  kill: HitsoundSlotChange,
+): Promise<ProfileDetail> {
+  return call<ProfileDetail>("apply_hitsounds", { hit, kill });
+}
+
+export async function removeHitsounds(): Promise<ProfileDetail> {
+  return call<ProfileDetail>("remove_hitsounds");
 }
 
 /** Open an external link in the system browser (plain anchors are inert in the packaged webview). */
@@ -585,6 +702,8 @@ export type PreloaderStatus = {
   skipped: PreloaderSkipNotice[];
   stale: boolean;
   customVpkPresent: boolean;
+  /** Particle files modified in the official VPK that execs holds no snapshot for. */
+  untrackedModified: string[];
 };
 
 export type PreloaderStatusPayload = {

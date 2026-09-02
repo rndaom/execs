@@ -46,6 +46,7 @@ import { PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import type { SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
+import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
 type CfgText = { path: string; text: string };
@@ -545,6 +546,7 @@ export function SettingsHost({
     if (tab === "hud") {
       return (
         <HudPane
+          api={api}
           catalogLoading={hudCatalogLoading}
           catalogError={hudCatalogError}
           catalog={hudCatalog}
@@ -617,6 +619,7 @@ export function SettingsHost({
     if (tab === "viewmodels") {
       return (
         <ViewmodelPane
+          api={api}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
             void runWrite(async () => {
@@ -636,6 +639,34 @@ export function SettingsHost({
           onTogglePreload={(enabled) => {
             void runWrite(async () => {
               await api.setViewmodelPreload(enabled);
+            });
+          }}
+        />
+      );
+    }
+
+    if (tab === "sounds") {
+      const path = gameplayPath(layer);
+      return (
+        <SoundsPane
+          api={api}
+          record={detail?.hitsound ?? null}
+          layer={layer}
+          effective={maps.effective}
+          managedText={files.find((file) => file.path === path)?.text ?? ""}
+          onSaveCvars={(gameplayText) => {
+            void runWrite(async () => {
+              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+            });
+          }}
+          onApply={(hit, kill) => {
+            void runWrite(async () => {
+              await api.applyHitsounds(hit, kill);
+            });
+          }}
+          onRemove={() => {
+            void runWrite(async () => {
+              await api.removeHitsounds();
             });
           }}
         />

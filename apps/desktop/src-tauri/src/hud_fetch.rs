@@ -2,9 +2,9 @@
 
 use execs_core::{
     catalog_cache_dir, catalog_entry_from_json, load_catalog_cache_from, save_catalog_cache_to,
-    schema_file_name, HudCatalogCache, HudCatalogEntry,
+    schema_file_name, HudCatalogCache, HudCatalogEntry, HudInstallKind,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::net::{self, MIB};
 
@@ -159,10 +159,372 @@ pub fn catalog_entry(id: &str) -> Result<HudCatalogEntry, String> {
         .ok_or_else(|| format!("hud-db has no HUD named {id}."))
 }
 
-pub fn fetch_hud_zip(repo: &str, hash: &str) -> Result<Vec<u8>, String> {
-    let url = execs_core::hud_zip_url(repo, hash)
-        .ok_or_else(|| "That HUD is not a pinned GitHub download.".to_string())?;
-    net::download_bytes(&url, HUD_ZIP_MAX_BYTES)
+/// The archive for any catalog entry the app can fetch mechanically. GitHub
+/// stays the pinned codeload zip; the other hosts are resolved to a direct
+/// file URL first (see `HudInstallKind`).
+pub fn fetch_hud_archive(entry: &HudCatalogEntry) -> Result<Vec<u8>, String> {
+    let url = resolve_hud_download(entry)?;
+    let bytes = net::download_bytes(&url, HUD_ZIP_MAX_BYTES)?;
+    Ok(bytes)
+}
+
+/// A direct archive URL for the entry, or why there is none.
+pub fn resolve_hud_download(entry: &HudCatalogEntry) -> Result<String, String> {
+    match entry.install {
+        HudInstallKind::Github => execs_core::hud_zip_url(&entry.repo, &entry.hash)
+            .ok_or_else(|| "That HUD is not a pinned GitHub download.".to_string()),
+        HudInstallKind::Direct => Ok(direct_download_url(&entry.repo)),
+        HudInstallKind::Gamebanana => resolve_gamebanana(&entry.repo),
+        HudInstallKind::Thread => resolve_thread(&entry.repo),
+        HudInstallKind::None => {
+            Err("That HUD has no download this app can fetch — open the author's page.".to_string())
+        }
+    }
+}
+
+/// Dropbox share links serve an HTML preview unless `dl=1` is asked for.
+pub fn direct_download_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if !trimmed.contains("dropbox.com") {
+        return trimmed.to_string();
+    }
+    if trimmed.contains("dl=1") {
+        return trimmed.to_string();
+    }
+    if trimmed.contains("dl=0") {
+        return trimmed.replace("dl=0", "dl=1");
+    }
+    if trimmed.contains('?') {
+        format!("{trimmed}&dl=1")
+    } else {
+        format!("{trimmed}?dl=1")
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GameBananaDownloadPage {
+    #[serde(rename = "_aFiles", default)]
+    files: Vec<GameBananaFile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GameBananaFile {
+    #[serde(rename = "_sFile", default)]
+    file: String,
+    #[serde(rename = "_sDownloadUrl", default)]
+    download_url: String,
+    #[serde(rename = "_tsDateAdded", default)]
+    added: u64,
+}
+
+fn gamebanana_mod_id(repo: &str) -> Option<u64> {
+    let rest = repo.trim().trim_end_matches('/').rsplit("/mods/").next()?;
+    rest.split(['/', '?', '#']).next()?.parse().ok()
+}
+
+/// GameBanana's public per-mod API lists the files; take the newest archive
+/// this app can unpack (zip or 7z — RAR is refused at extraction with its own
+/// message, so it is only chosen when nothing else exists).
+fn resolve_gamebanana(repo: &str) -> Result<String, String> {
+    let id = gamebanana_mod_id(repo).ok_or("That GameBanana link has no mod id.")?;
+    let url = format!("https://gamebanana.com/apiv11/Mod/{id}/DownloadPage");
+    let page: GameBananaDownloadPage = net::get_json(&net::api_client()?, &url)
+        .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
+    pick_gamebanana_file(page.files)
+}
+
+fn pick_gamebanana_file(mut files: Vec<GameBananaFile>) -> Result<String, String> {
+    files.retain(|file| !file.download_url.is_empty());
+    files.sort_by_key(|file| std::cmp::Reverse(file.added));
+    let unpackable = |name: &str| {
+        let lower = name.to_ascii_lowercase();
+        lower.ends_with(".zip") || lower.ends_with(".7z")
+    };
+    let chosen = files
+        .iter()
+        .find(|file| unpackable(&file.file))
+        .or_else(|| files.first())
+        .ok_or("That GameBanana page lists no files.")?;
+    Ok(chosen.download_url.clone())
+}
+
+/// A teamfortress.tv thread: the first Dropbox archive link in the post.
+fn resolve_thread(repo: &str) -> Result<String, String> {
+    let html = net::get_text(&net::api_client()?, repo.trim())
+        .map_err(|err| format!("Could not read that thread ({err})"))?;
+    thread_download_link(&html)
+        .map(|link| direct_download_url(&link))
+        .ok_or_else(|| {
+            "That thread has no Dropbox download this app can fetch — open the author's page."
+                .to_string()
+        })
+}
+
+fn thread_download_link(html: &str) -> Option<String> {
+    let mut best: Option<String> = None;
+    for (index, _) in html.match_indices("https://www.dropbox.com/") {
+        let rest = &html[index..];
+        let end = rest
+            .find(|c: char| c == '"' || c == '\'' || c == '<' || c == '>' || c.is_whitespace())
+            .unwrap_or(rest.len());
+        let link = rest[..end].replace("&amp;", "&");
+        let lower = link.to_ascii_lowercase();
+        let archive = lower.contains(".7z") || lower.contains(".zip");
+        if archive {
+            // Later links in a thread are newer edits; keep the last archive.
+            best = Some(link);
+        } else if best.is_none() {
+            best = Some(link);
+        }
+    }
+    best
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot albums
+// ---------------------------------------------------------------------------
+
+/// One picture from a HUD's external album, resolved to a direct image URL
+/// the lightbox can load (the CSP allows i.imgur.com and GitHub raw hosts).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumImage {
+    pub url: String,
+    #[serde(default)]
+    pub thumb: Option<String>,
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
+}
+
+/// Imgur's own web client id; the album endpoint refuses anonymous reads
+/// without one and this is the key imgur.com itself sends.
+const IMGUR_CLIENT_ID: &str = "546c25a59c58ad7";
+
+/// The album behind `social.album`, cached forever by URL (albums are
+/// effectively immutable once published; a refresh is a catalog refresh).
+pub fn fetch_hud_album(album: &str) -> Result<Vec<AlbumImage>, String> {
+    let cache = catalog_cache_dir().join("albums").join(format!(
+        "{}.json",
+        execs_core::hash::sha256_hex(album.as_bytes())
+    ));
+    if let Ok(text) = std::fs::read_to_string(&cache) {
+        if let Ok(images) = serde_json::from_str::<Vec<AlbumImage>>(&text) {
+            if !images.is_empty() {
+                return Ok(images);
+            }
+        }
+    }
+    let images = fetch_album_uncached(album)?;
+    if let Some(parent) = cache.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(text) = serde_json::to_string(&images) {
+        let _ = std::fs::write(&cache, text);
+    }
+    Ok(images)
+}
+
+fn fetch_album_uncached(album: &str) -> Result<Vec<AlbumImage>, String> {
+    let trimmed = album.trim();
+    if let Some(id) = imgur_album_id(trimmed) {
+        return fetch_imgur_album(&id);
+    }
+    if let Some(id) = imgur_image_id(trimmed) {
+        let ext = trimmed.rsplit('.').next().unwrap_or("jpg");
+        return Ok(vec![AlbumImage {
+            url: format!("https://i.imgur.com/{id}.{ext}"),
+            thumb: Some(format!("https://i.imgur.com/{id}l.{ext}")),
+            width: 0,
+            height: 0,
+        }]);
+    }
+    if let Some(raw) = github_blob_to_raw(trimmed) {
+        let text = net::get_text(&net::api_client()?, &raw)?;
+        let images = markdown_images(&text, &raw);
+        if images.is_empty() {
+            return Err("That showcase page has no images.".into());
+        }
+        return Ok(images);
+    }
+    Err("That album is on a site this app cannot read in-app.".into())
+}
+
+/// `imgur.com/a/<id>`, `imgur.com/a/<slug>-<id>`, `imgur.com/gallery/<slug>-<id>`.
+pub fn imgur_album_id(url: &str) -> Option<String> {
+    let lower = url.to_ascii_lowercase();
+    if !lower.contains("imgur.com/") {
+        return None;
+    }
+    let path = url.split("imgur.com/").nth(1)?;
+    let mut parts = path
+        .split(['?', '#'])
+        .next()?
+        .trim_end_matches('/')
+        .split('/');
+    let kind = parts.next()?;
+    if kind != "a" && kind != "gallery" {
+        return None;
+    }
+    let last = parts.next_back()?;
+    let id = last.rsplit('-').next()?;
+    if (5..=7).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        Some(id.to_string())
+    } else {
+        None
+    }
+}
+
+/// `i.imgur.com/<id>.<ext>` — a single image linked as the whole album.
+pub fn imgur_image_id(url: &str) -> Option<String> {
+    let rest = url.split("i.imgur.com/").nth(1)?;
+    let file = rest.split(['?', '#', '/']).next()?;
+    let (id, _ext) = file.rsplit_once('.')?;
+    if (5..=7).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        Some(id.to_string())
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ImgurAlbumImages {
+    #[serde(default)]
+    data: Vec<ImgurImage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImgurImage {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    link: String,
+    #[serde(rename = "type", default)]
+    mime: String,
+    #[serde(default)]
+    width: u32,
+    #[serde(default)]
+    height: u32,
+}
+
+fn fetch_imgur_album(id: &str) -> Result<Vec<AlbumImage>, String> {
+    let url = format!("https://api.imgur.com/3/album/{id}/images");
+    let response = net::api_client()?
+        .get(&url)
+        .header("Authorization", format!("Client-ID {IMGUR_CLIENT_ID}"))
+        .send()
+        .map_err(net::request_error)?;
+    if !response.status().is_success() {
+        return Err(format!("Imgur refused the album ({})", response.status()));
+    }
+    let parsed: ImgurAlbumImages = response.json().map_err(|err| err.to_string())?;
+    Ok(imgur_images(parsed.data))
+}
+
+fn imgur_images(items: Vec<ImgurImage>) -> Vec<AlbumImage> {
+    items
+        .into_iter()
+        .filter(|item| item.mime.starts_with("image/") && !item.link.is_empty())
+        .map(|item| {
+            let ext = item.link.rsplit('.').next().unwrap_or("jpg").to_string();
+            AlbumImage {
+                thumb: Some(format!("https://i.imgur.com/{}l.{ext}", item.id)),
+                url: item.link,
+                width: item.width,
+                height: item.height,
+            }
+        })
+        .collect()
+}
+
+/// `github.com/<o>/<r>/blob/<branch>/<path>` → the raw file URL.
+pub fn github_blob_to_raw(url: &str) -> Option<String> {
+    let rest = url.split("github.com/").nth(1)?;
+    let mut parts = rest.splitn(5, '/');
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+    if parts.next()? != "blob" {
+        return None;
+    }
+    let branch = parts.next()?;
+    let path = parts.next()?.split(['?', '#']).next()?;
+    Some(format!(
+        "https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+    ))
+}
+
+/// Image URLs out of a markdown showcase page — `![alt](src)` and
+/// `<img src="…">` — resolved against the page's raw URL.
+pub fn markdown_images(text: &str, base: &str) -> Vec<AlbumImage> {
+    let mut out = Vec::new();
+    let mut push = |src: &str| {
+        let src = src.trim().trim_matches('"').trim_matches('\'');
+        if src.is_empty() {
+            return;
+        }
+        let url = resolve_relative(src, base);
+        let lower = url.to_ascii_lowercase();
+        let is_image = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+            .iter()
+            .any(|ext| lower.split(['?', '#']).next().unwrap_or("").ends_with(ext));
+        if is_image && !out.iter().any(|img: &AlbumImage| img.url == url) {
+            out.push(AlbumImage {
+                url,
+                thumb: None,
+                width: 0,
+                height: 0,
+            });
+        }
+    };
+    for (index, _) in text.match_indices("![") {
+        let rest = &text[index..];
+        let Some(open) = rest.find("](") else {
+            continue;
+        };
+        let after = &rest[open + 2..];
+        let Some(close) = after.find(')') else {
+            continue;
+        };
+        let src = after[..close].split_whitespace().next().unwrap_or("");
+        push(src);
+    }
+    for (index, _) in text.match_indices("src=") {
+        let rest = &text[index + 4..];
+        let quote = rest.chars().next();
+        let src = match quote {
+            Some('"') | Some('\'') => {
+                let q = quote.unwrap();
+                rest[1..].split(q).next().unwrap_or("")
+            }
+            _ => rest
+                .split(|c: char| c.is_whitespace() || c == '>')
+                .next()
+                .unwrap_or(""),
+        };
+        push(src);
+    }
+    out
+}
+
+fn resolve_relative(src: &str, base: &str) -> String {
+    if src.starts_with("http://") || src.starts_with("https://") {
+        // GitHub blob links inside a showcase page still need the raw host.
+        return github_blob_to_raw(src).unwrap_or_else(|| src.to_string());
+    }
+    let dir = base.rsplit_once('/').map(|(dir, _)| dir).unwrap_or(base);
+    let mut path = dir.to_string();
+    let mut src = src;
+    while let Some(rest) = src.strip_prefix("./") {
+        src = rest;
+    }
+    while let Some(rest) = src.strip_prefix("../") {
+        src = rest;
+        if let Some((parent, _)) = path.rsplit_once('/') {
+            path = parent.to_string();
+        }
+    }
+    format!("{path}/{src}")
 }
 
 pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
@@ -225,6 +587,155 @@ mod tests {
         assert_eq!(
             documents[0].1,
             "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-data/rayshud.json"
+        );
+    }
+
+    #[test]
+    fn dropbox_links_are_forced_to_direct_download() {
+        assert_eq!(
+            direct_download_url("https://www.dropbox.com/s/x/Hud.7z?dl=0"),
+            "https://www.dropbox.com/s/x/Hud.7z?dl=1"
+        );
+        assert_eq!(
+            direct_download_url("https://www.dropbox.com/scl/fi/a/b.7z?rlkey=k&dl=1"),
+            "https://www.dropbox.com/scl/fi/a/b.7z?rlkey=k&dl=1"
+        );
+        assert_eq!(
+            direct_download_url("https://www.dropbox.com/s/x/Hud.7z"),
+            "https://www.dropbox.com/s/x/Hud.7z?dl=1"
+        );
+        assert_eq!(
+            direct_download_url("https://example.com/hud.zip"),
+            "https://example.com/hud.zip"
+        );
+    }
+
+    #[test]
+    fn gamebanana_picks_the_newest_unpackable_file() {
+        assert_eq!(
+            gamebanana_mod_id("https://gamebanana.com/mods/461758"),
+            Some(461758)
+        );
+        assert_eq!(
+            gamebanana_mod_id("https://gamebanana.com/mods/461758/"),
+            Some(461758)
+        );
+        assert_eq!(gamebanana_mod_id("https://gamebanana.com/guis/25711"), None);
+        let files = vec![
+            GameBananaFile {
+                file: "old.rar".into(),
+                download_url: "https://gamebanana.com/dl/1".into(),
+                added: 10,
+            },
+            GameBananaFile {
+                file: "newest.rar".into(),
+                download_url: "https://gamebanana.com/dl/3".into(),
+                added: 30,
+            },
+            GameBananaFile {
+                file: "middle.zip".into(),
+                download_url: "https://gamebanana.com/dl/2".into(),
+                added: 20,
+            },
+        ];
+        assert_eq!(
+            pick_gamebanana_file(files).unwrap(),
+            "https://gamebanana.com/dl/2"
+        );
+        let only_rar = vec![GameBananaFile {
+            file: "x.rar".into(),
+            download_url: "https://gamebanana.com/dl/9".into(),
+            added: 1,
+        }];
+        assert_eq!(
+            pick_gamebanana_file(only_rar).unwrap(),
+            "https://gamebanana.com/dl/9"
+        );
+        assert!(pick_gamebanana_file(Vec::new()).is_err());
+    }
+
+    #[test]
+    fn a_thread_yields_its_last_dropbox_archive_link() {
+        let html = r#"<a href="https://www.dropbox.com/s/aaa/Old.7z?dl=0">old</a>
+        text <a href='https://www.dropbox.com/s/bbb/New.7z?dl=0&amp;x=1'>new</a>
+        <a href="https://www.dropbox.com/sh/folder">folder</a>"#;
+        assert_eq!(
+            thread_download_link(html).as_deref(),
+            Some("https://www.dropbox.com/s/bbb/New.7z?dl=0&x=1")
+        );
+        assert!(thread_download_link("<p>nothing here</p>").is_none());
+    }
+
+    #[test]
+    fn imgur_ids_come_out_of_every_album_spelling() {
+        assert_eq!(
+            imgur_album_id("https://imgur.com/a/aJ1K5").as_deref(),
+            Some("aJ1K5")
+        );
+        assert_eq!(
+            imgur_album_id("https://imgur.com/a/MpISq3D/").as_deref(),
+            Some("MpISq3D")
+        );
+        assert_eq!(
+            imgur_album_id("https://imgur.com/a/isa-hud-MpISq3D").as_deref(),
+            Some("MpISq3D")
+        );
+        assert_eq!(
+            imgur_album_id("https://imgur.com/gallery/ahud-cc-9npCWPa").as_deref(),
+            Some("9npCWPa")
+        );
+        assert_eq!(imgur_album_id("https://i.imgur.com/UnERCnT.jpg"), None);
+        assert_eq!(
+            imgur_image_id("https://i.imgur.com/UnERCnT.jpg").as_deref(),
+            Some("UnERCnT")
+        );
+        assert_eq!(imgur_album_id("https://ibb.co/album/dwngXw"), None);
+    }
+
+    #[test]
+    fn imgur_videos_are_dropped_and_thumbnails_derived() {
+        let images = imgur_images(vec![
+            ImgurImage {
+                id: "En690dR".into(),
+                link: "https://i.imgur.com/En690dR.png".into(),
+                mime: "image/png".into(),
+                width: 1920,
+                height: 1080,
+            },
+            ImgurImage {
+                id: "vid".into(),
+                link: "https://i.imgur.com/vid.mp4".into(),
+                mime: "video/mp4".into(),
+                width: 0,
+                height: 0,
+            },
+        ]);
+        assert_eq!(images.len(), 1);
+        assert_eq!(
+            images[0].thumb.as_deref(),
+            Some("https://i.imgur.com/En690dRl.png")
+        );
+        assert_eq!(images[0].width, 1920);
+    }
+
+    #[test]
+    fn showcase_pages_resolve_to_raw_image_urls() {
+        assert_eq!(
+            github_blob_to_raw("https://github.com/o/r/blob/screenshots/showcase.md").as_deref(),
+            Some("https://raw.githubusercontent.com/o/r/screenshots/showcase.md")
+        );
+        assert_eq!(github_blob_to_raw("https://github.com/o/r"), None);
+        let base = "https://raw.githubusercontent.com/o/r/screenshots/showcase.md";
+        let md = "# Showcase\n![hud](./main.png)\n![again](main.png)\n<img src=\"sub/menu.jpg\">\n![abs](https://github.com/o/r/blob/screenshots/x.webp?raw=true)\n[link](notes.md)";
+        let images = markdown_images(md, base);
+        let urls: Vec<&str> = images.iter().map(|img| img.url.as_str()).collect();
+        assert_eq!(
+            urls,
+            vec![
+                "https://raw.githubusercontent.com/o/r/screenshots/main.png",
+                "https://raw.githubusercontent.com/o/r/screenshots/x.webp",
+                "https://raw.githubusercontent.com/o/r/screenshots/sub/menu.jpg",
+            ]
         );
     }
 

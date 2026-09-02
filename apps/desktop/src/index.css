@@ -64,6 +64,10 @@
   --sidebar-width: 224px;
 
   --motion: 150ms;
+  /* Anything that moves (a pane arriving, a sheet opening) uses this ease and
+     this slightly longer beat; colour and ring changes keep --motion. */
+  --motion-move: 220ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html,
@@ -148,7 +152,59 @@ a:focus-visible,
   }
 }
 
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @layer components {
+  /* ---- Motion -----------------------------------------------------------
+     A pane or a picture arriving fades up over one beat; overlays scale in
+     from just below. Both are cancelled by the reduced-motion rule above. */
+
+  .enter-fade {
+    animation: enter-fade var(--motion-move) var(--ease-out) both;
+  }
+
+  .overlay-enter {
+    animation: overlay-in var(--motion-move) var(--ease-out) both;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgb(0 0 0 / 0.55);
+    backdrop-filter: blur(2px);
+    animation: scrim-in var(--motion) ease both;
+  }
+
   /* ---- Type scale -------------------------------------------------------
      Six steps, Inter throughout. `.eyebrow` is the only uppercase voice. */
 
@@ -326,6 +382,7 @@ a:focus-visible,
 
   .tile-selected {
     border-color: transparent;
+    background: color-mix(in srgb, var(--color-brand) 6%, transparent);
     box-shadow: inset 0 0 0 1.5px var(--color-brand);
   }
 
@@ -339,17 +396,16 @@ a:focus-visible,
     opacity: 0.4;
   }
 
-  /* The small check that marks a selected tile. */
+  /* The small dot that marks a selected tile — a ring already says
+     "selected"; the dot only helps the eye find it in a grid. */
   .tile-check {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
     flex: none;
-    width: 18px;
-    height: 18px;
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
     border-radius: var(--radius-pill);
     background: var(--color-brand);
-    color: var(--color-on-brand);
   }
 
   /* ---- Controls --------------------------------------------------------- */
@@ -366,7 +422,12 @@ a:focus-visible,
     transition:
       background-color var(--motion) ease,
       border-color var(--motion) ease,
-      color var(--motion) ease;
+      color var(--motion) ease,
+      transform var(--motion) var(--ease-out);
+  }
+
+  .btn:not(:disabled):active {
+    transform: translateY(0.5px) scale(0.985);
   }
 
   .btn:disabled {
@@ -433,6 +494,231 @@ a:focus-visible,
     color: var(--color-error);
   }
 
+  /* ---- Segmented control ------------------------------------------------
+     Two to five choices in one pill; the selected segment sits on the raised
+     surface in ink. The no-dropdown answer for "pick one". */
+
+  .segmented {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--color-edge);
+    border-radius: 0.625rem;
+    background: var(--color-bg);
+    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .segmented-item {
+    display: flex;
+    min-width: 0;
+  }
+
+  .segmented-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-width: 0;
+    border-radius: 0.45rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background-color var(--motion) ease,
+      color var(--motion) ease,
+      box-shadow var(--motion) ease;
+  }
+
+  .segmented-label:hover {
+    color: var(--color-ink);
+  }
+
+  .segmented-label[data-selected="true"] {
+    background: var(--color-panel-raised);
+    color: var(--color-ink);
+    box-shadow: inset 0 0 0 1px var(--color-edge-strong);
+  }
+
+  .segmented-sm .segmented-label {
+    padding: 0.25rem 0.625rem;
+    font-size: 12.5px;
+  }
+
+  .segmented-disabled .segmented-label {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  /* ---- Play button ------------------------------------------------------ */
+
+  .play-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-edge-strong);
+    color: var(--color-ink);
+    background: var(--color-panel-raised);
+    transition:
+      background-color var(--motion) ease,
+      color var(--motion) ease,
+      border-color var(--motion) ease,
+      transform var(--motion) var(--ease-out);
+  }
+
+  .play-button:not(:disabled):hover {
+    border-color: var(--color-ink-faint);
+  }
+
+  .play-button:not(:disabled):active {
+    transform: scale(0.94);
+  }
+
+  .play-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+  }
+
+  .play-button-active {
+    background: var(--color-brand);
+    border-color: var(--color-brand);
+    color: var(--color-on-brand);
+  }
+
+  /* ---- Range ------------------------------------------------------------
+     One slider look: a hairline track, a filled run in ink, and a round
+     thumb. The accent is not spent here. */
+
+  .range {
+    appearance: none;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .range:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .range::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: var(--radius-pill);
+    background: var(--color-edge-strong);
+  }
+
+  .range::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6.5px;
+    border-radius: var(--radius-pill);
+    border: 2px solid var(--color-bg);
+    background: var(--color-ink);
+    box-shadow: 0 0 0 1px var(--color-edge-strong);
+    transition: transform var(--motion) var(--ease-out);
+  }
+
+  .range:not(:disabled):hover::-webkit-slider-thumb,
+  .range:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+
+  .range-red::-webkit-slider-thumb {
+    background: var(--color-team-red);
+  }
+
+  .range-green::-webkit-slider-thumb {
+    background: var(--color-health);
+  }
+
+  .range-blue::-webkit-slider-thumb {
+    background: var(--color-team-blu);
+  }
+
+  .range::-moz-range-track {
+    height: 3px;
+    border-radius: var(--radius-pill);
+    background: var(--color-edge-strong);
+  }
+
+  .range::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-pill);
+    border: 2px solid var(--color-bg);
+    background: var(--color-ink);
+  }
+
+  /* ---- Thumbnail choice grid --------------------------------------------
+     Small square pictures (crosshairs) picked by looking, not by reading.
+     Selected = the same 1.5px ring the tiles use. */
+
+  .thumb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    border: 1px solid var(--color-edge);
+    border-radius: 0.625rem;
+    background: transparent;
+    padding: 8px 6px 7px;
+    transition:
+      border-color var(--motion) ease,
+      background-color var(--motion) ease,
+      box-shadow var(--motion) ease;
+  }
+
+  .thumb:not(.thumb-disabled):hover {
+    border-color: var(--color-edge-strong);
+    background: var(--color-panel);
+  }
+
+  .thumb-selected {
+    border-color: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--color-brand);
+  }
+
+  .thumb-disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .thumb-art {
+    display: block;
+    width: 48px;
+    height: 48px;
+    border-radius: 0.375rem;
+    background: var(--color-bg);
+    image-rendering: pixelated;
+  }
+
+  .thumb-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 11.5px;
+    line-height: 1.3;
+    color: var(--color-ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .thumb-selected .thumb-label {
+    color: var(--color-ink);
+  }
+
   /* ---- Disclosure -------------------------------------------------------
      "Fine-tune…" / "Advanced" sections fold away by default. */
 
@@ -464,5 +750,9 @@ a:focus-visible,
 
   .disclosure[open] > summary .disclosure-caret {
     transform: rotate(90deg);
+  }
+
+  .disclosure[open] > :not(summary) {
+    animation: enter-fade var(--motion-move) var(--ease-out) both;
   }
 }

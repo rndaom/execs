@@ -243,7 +243,7 @@ function SliderRow({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-4 w-full cursor-pointer accent-brand disabled:cursor-not-allowed disabled:opacity-50"
+        className="range mt-4 w-full"
       />
       <div className="tnum mt-1 flex justify-between text-[11px] text-ink-faint">
         <span>{min}</span>

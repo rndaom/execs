@@ -8,8 +8,10 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
     repo: "https://github.com/raysfire/rayshud",
     hash: "abc123",
     github: true,
+    install: "github",
     flags: ["menus", "customization"],
-    banner: null,
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/hud.webp",
     screenshots: [
       "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/hud.webp",
       "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/scoreboard.webp",
@@ -25,6 +27,7 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
     repo: "https://toonhud.com/",
     hash: "11.4",
     github: false,
+    install: "none",
     flags: ["customization"],
     banner: null,
     screenshots: [],
@@ -184,7 +187,23 @@ export function schemaSupportedIds(): string[] {
 }
 
 export function canInstallHud(entry: HudCatalogEntry): boolean {
-  return entry.github;
+  return entry.install !== "none";
+}
+
+/** One line on where a non-GitHub install comes from, or null for GitHub. */
+export function hudInstallSourceCopy(entry: HudCatalogEntry): string | null {
+  switch (entry.install) {
+    case "direct":
+      return "Fetched from the author's Dropbox link.";
+    case "gamebanana":
+      return "Fetched from the author's GameBanana page.";
+    case "thread":
+      return "Fetched from the archive linked in the author's thread.";
+    case "none":
+      return "No download this app can fetch — open the author's page.";
+    default:
+      return null;
+  }
 }
 
 export function installedHudLabel(state: HudUiState): string | null {

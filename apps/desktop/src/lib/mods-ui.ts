@@ -141,6 +141,7 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
     ],
     stale: false,
     customVpkPresent: true,
+    untrackedModified: [],
   },
   modsCached: true,
   modsSizeBytes: 81_529_475,

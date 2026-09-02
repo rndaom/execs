@@ -13,6 +13,7 @@ export function Modal({
   title,
   description,
   role = "dialog",
+  scrim = true,
   testId,
   className = "",
   children,
@@ -23,6 +24,8 @@ export function Modal({
   title: ReactNode;
   description?: ReactNode;
   role?: "dialog" | "alertdialog";
+  /** Dim the page behind the sheet. Off for corner prompts. */
+  scrim?: boolean;
   testId?: string;
   className?: string;
   children?: ReactNode;
@@ -104,26 +107,31 @@ export function Modal({
   }
 
   return (
-    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is dynamic (dialog | alertdialog); aria-modal is valid for both.
-    <div
-      ref={ref}
-      data-testid={testId}
-      role={role}
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={descriptionId}
-      tabIndex={-1}
-      className={`overlay p-4 text-left ${className}`.trim()}
-    >
-      <p id={titleId} className="t-section">
-        {title}
-      </p>
-      {description ? (
-        <p id={descriptionId} className="t-meta mt-1">
-          {description}
+    <>
+      {/* A scrim only for centred sheets; corner prompts (alertdialog) stay
+          over the live page so the user can see what they are answering. */}
+      {scrim ? <div className="scrim" aria-hidden="true" onClick={onClose} /> : null}
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `role` is dynamic (dialog | alertdialog); aria-modal is valid for both. */}
+      <div
+        ref={ref}
+        data-testid={testId}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        className={`overlay overlay-enter p-4 text-left ${className}`.trim()}
+      >
+        <p id={titleId} className="t-section">
+          {title}
         </p>
-      ) : null}
-      {children}
-    </div>
+        {description ? (
+          <p id={descriptionId} className="t-meta mt-1">
+            {description}
+          </p>
+        ) : null}
+        {children}
+      </div>
+    </>
   );
 }
