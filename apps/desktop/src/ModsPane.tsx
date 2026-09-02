@@ -184,7 +184,7 @@ export function ModsPane({
               <h2 className="t-section">
                 {repair === "waiting"
                   ? "Waiting for Steam to verify the game files"
-                  : `${untracked.length} particle ${untracked.length === 1 ? "file" : "files"} need a repair`}
+                  : `${untracked.length} particle ${untracked.length === 1 ? "file needs" : "files need"} a repair`}
               </h2>
               <p className="t-meta mt-1">
                 {repair === "waiting"
