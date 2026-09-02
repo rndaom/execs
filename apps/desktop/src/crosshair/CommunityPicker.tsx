@@ -118,7 +118,6 @@ export function CommunityPicker({
       open={open}
       testId="crosshair-community-picker"
       title="Community crosshairs"
-      description="The Venom Crosshairs pack — pick one and it downloads into your library."
       className="fixed inset-4 z-50 flex flex-col sm:inset-x-[max(1rem,calc(50vw-28rem))] sm:inset-y-8"
       onClose={onClose}
     >

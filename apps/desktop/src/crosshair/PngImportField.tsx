@@ -64,14 +64,12 @@ export function PngImportField({
     reset();
     setError(null);
     if (file.size > MAX_PNG_BYTES) {
-      setError(
-        `That file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Crosshair PNGs must be under 2 MB.`,
-      );
+      setError(`That PNG is ${(file.size / (1024 * 1024)).toFixed(1)} MB; the limit is 2 MB.`);
       return;
     }
     const head = new Uint8Array(await file.slice(0, PNG_MAGIC.length).arrayBuffer());
     if (PNG_MAGIC.some((byte, index) => head[index] !== byte)) {
-      setError("That is not a PNG file — check the extension and try again.");
+      setError("That is not a PNG file.");
       return;
     }
     const url = URL.createObjectURL(file);
@@ -84,7 +82,7 @@ export function PngImportField({
         if (pixels) {
           onImport(pixels);
         } else {
-          setError("Could not read the image data from that PNG.");
+          setError("Could not read that PNG.");
         }
         return;
       }
@@ -92,17 +90,16 @@ export function PngImportField({
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      setError("That PNG could not be decoded. It may be corrupt.");
+      setError("That PNG could not be decoded.");
     };
     image.src = url;
   }
 
   return (
     <div className="mt-5">
-      <p className="eyebrow">Import a 64 × 64 PNG</p>
-      <label className="btn btn-ghost mt-2 w-full">
+      <label className="btn btn-ghost w-full">
         <UploadSimple size={14} />
-        Choose a PNG…
+        Import 64 × 64 PNG…
         <input
           data-testid="crosshair-import-png"
           type="file"
@@ -128,7 +125,7 @@ export function PngImportField({
       {pending ? (
         <div data-testid="crosshair-import-resize" className="mt-2 text-[12.5px] leading-5">
           <p className="text-ink-muted">
-            That PNG is {pending.width} × {pending.height}. Crosshair sprites are 64 × 64.
+            That PNG is {pending.width} × {pending.height}, not 64 × 64.
           </p>
           <div className="mt-1.5 flex gap-2">
             <button
@@ -141,7 +138,7 @@ export function PngImportField({
                 if (pixels) {
                   onImport(pixels);
                 } else {
-                  setError("Could not read the image data from that PNG.");
+                  setError("Could not read that PNG.");
                 }
               }}
             >

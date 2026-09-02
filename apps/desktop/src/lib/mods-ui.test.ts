@@ -119,8 +119,6 @@ describe("mods apply gating", () => {
     expect(modsStatusLine(stale, installed.addons, installed.particles, true)).toContain(
       "TF2 is open",
     );
-    expect(modsStatusLine(status, installed.addons, installed.particles, false)).toBe(
-      "Installed mods match your selection",
-    );
+    expect(modsStatusLine(status, installed.addons, installed.particles, false)).toBe("Up to date");
   });
 });

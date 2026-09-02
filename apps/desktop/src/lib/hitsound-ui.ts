@@ -29,7 +29,7 @@ export const STOCK_HITSOUND_EFFECTS: { index: number; label: string; hit: string
   ];
 
 export const HITSOUND_CASUAL_COPY =
-  "Custom files play on Valve Casual too — TF2 exempts sound/ui/hitsound.wav and killsound.wav from sv_pure by name.";
+  "Custom files play on Valve Casual: TF2 exempts these two names from sv_pure.";
 
 /** What one slot should sound like after the next apply. */
 export type SoundChoice =

@@ -67,12 +67,7 @@ export function WeaponOverrideTable({
       testId="crosshair-overrides"
       className="mt-8 border-t border-edge pt-2"
     >
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="t-meta mt-0.5">
-            Set whole slots for every class at once, or pick a class to fine-tune single weapons.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-end justify-end gap-3">
         {classTab !== ALL_CLASSES_TAB ? (
           <button
             type="button"
@@ -81,7 +76,7 @@ export function WeaponOverrideTable({
             onClick={() => onChange(copyClassToAllClasses(draft, classTab))}
             className="btn btn-ghost"
           >
-            Apply {classTab}'s shapes to all classes
+            Copy to all classes
           </button>
         ) : (
           <span className="tnum text-[12.5px] text-ink-faint">{slots.length} weapon slots</span>
@@ -134,9 +129,6 @@ export function WeaponOverrideTable({
               );
             })}
           </div>
-          <p className="mt-3 text-[12px] leading-5 text-ink-faint">
-            Slot picks apply to every weapon in that slot across all nine classes.
-          </p>
         </div>
       ) : (
         <div

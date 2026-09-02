@@ -14,8 +14,7 @@ export const PRELOADER_CREDIT =
 export const PRELOADER_REPO_URL = "https://github.com/cueki/casual-pre-loader";
 
 /** One-line explanation used at the top of the pane. */
-export const PRELOADER_EXPLAINER =
-  "Patches particle files inside the game's own archives and relaxes gameinfo.txt so custom content survives Valve Casual's sv_pure. Every changed byte is snapshotted first and one click restores stock files.";
+export const PRELOADER_EXPLAINER = "Custom content that survives Valve Casual's sv_pure.";
 
 /** How long the pane keeps polling for Steam's verify to finish. */
 export const REPAIR_POLL_MS = 5_000;
@@ -86,18 +85,18 @@ export function modsStatusLine(
   running: boolean,
 ): string {
   if (running) {
-    return "TF2 is open — game files cannot be patched while it runs.";
+    return "TF2 is open — game files cannot be patched";
   }
   if (status && !status.modsCached) {
-    return "Download the mod library before applying a selection.";
+    return "Download the mod library first";
   }
   if (selectionDirty(status, addons, particleMods)) {
     return "Selection differs from what's installed";
   }
   if (status?.status.stale) {
-    return "TF2 updated since the last install — re-apply to put these mods back on the fresh files";
+    return "TF2 updated — re-apply to put these mods back";
   }
-  return "Installed mods match your selection";
+  return "Up to date";
 }
 
 /** Short human summary for the report banner after an apply. */

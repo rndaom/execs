@@ -191,7 +191,7 @@ export function ComfigPane({
     : busy
       ? "Saving…"
       : detail === null
-        ? "Loading active profile…"
+        ? "Loading…"
         : !packagesInstalled
           ? "Packages not installed"
           : null;
@@ -228,8 +228,8 @@ export function ComfigPane({
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <div className="min-w-0">
-              <h2 className="t-section">Choose a preset</h2>
-              <p className="t-meta mt-1">Your preset supplies the default for every module.</p>
+              <h2 className="t-section">Preset</h2>
+              <p className="t-meta mt-1">Sets the default for every module.</p>
             </div>
           </div>
 
@@ -287,7 +287,7 @@ export function ComfigPane({
           </figure>
         ) : (
           <div className="surface hero-preview grid aspect-video place-items-center self-start p-6 text-center">
-            <p className="t-meta">Custom preset — the modules below decide every setting.</p>
+            <p className="t-meta">Custom preset — modules decide every setting.</p>
           </div>
         )}
       </div>
@@ -394,7 +394,6 @@ export function ComfigPane({
       <PaneSection
         id="comfig-addons"
         title="Official addons"
-        description="Optional mastercomfig packages. Each one can be removed again at any time."
         meta={<span className="tnum">{draft.addons.length} selected</span>}
       >
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -428,11 +427,9 @@ export function ComfigPane({
           <div className="min-w-0">
             <h2 className="t-section">Packages and extras</h2>
             <p className="t-meta mt-1">
-              {busy
-                ? "Saving your latest comfig change."
-                : !packagesInstalled
-                  ? "No official packages are installed yet. Fetch the latest release from GitHub."
-                  : "Changes save as you make them. Extras opens the full mastercomfig customizer in-app."}
+              {packagesInstalled
+                ? "Changes save as you make them."
+                : "No mastercomfig packages installed yet."}
             </p>
           </div>
 

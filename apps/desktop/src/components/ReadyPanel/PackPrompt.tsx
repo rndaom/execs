@@ -24,7 +24,7 @@ export function PackPrompt({
       scrim={false}
       testId="absorb-pack-prompt"
       title="Custom files changed"
-      description="TF2 changed packs in custom. Update the active profile?"
+      description="Update the active profile?"
       className="fixed top-20 right-5 z-50 w-[min(390px,calc(100vw-2.5rem))]"
       onClose={onDefer}
       onDefaultAction={() => onChoice("update")}
@@ -55,9 +55,7 @@ export function PackPrompt({
           Keep profile
         </button>
       </div>
-      <p className="mt-3 text-[12px] text-ink-faint">
-        Escape defers this — execs asks again rather than deciding for you.
-      </p>
+      <p className="mt-3 text-[12px] text-ink-faint">Escape defers; execs asks again later.</p>
     </Modal>
   );
 }

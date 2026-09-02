@@ -27,22 +27,18 @@ export type BindsPaneProps = {
 
 const BIND_GROUPS: Array<{
   title: string;
-  description: string;
   ids: BindActionId[];
 }> = [
   {
     title: "Movement",
-    description: "The keys you use every life.",
     ids: ["forward", "back", "moveleft", "moveright", "jump", "duck"],
   },
   {
     title: "Teamplay",
-    description: "Communication and interaction.",
     ids: ["medic", "use", "voice"],
   },
   {
     title: "Loadouts",
-    description: "Jump straight to a saved item preset.",
     ids: ["loadout0", "loadout1", "loadout2", "loadout3"],
   },
 ];
@@ -67,8 +63,8 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
     function finish(key: string | null) {
       const outcome = recorderOutcomeForKey(key);
       if (outcome.kind === "unbindable") {
-        // Keep listening: the row must not sit on "Waiting for input" with no
-        // explanation just because the key is outside TF2's table.
+        // Keep listening: the recorder must not sit open with no explanation
+        // just because the key is outside TF2's table.
         setRecorderNotice(outcome.message);
         return;
       }
@@ -128,7 +124,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
   }, [canRecord]);
 
   // The notice is transient: it explains one rejected key, then gets out of the
-  // way so "Waiting for input" reads true again.
+  // way so the recorder line reads true again.
   useEffect(() => {
     if (recorderNotice === null) {
       return;
@@ -153,7 +149,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
     <section data-testid="settings-binds" className="min-w-0 text-left">
       <PaneHeader
         title="Binds"
-        lede="Click an action, then press any key, mouse button or scroll direction. Escape cancels."
+        lede="Click an action, then press a key, button or scroll."
         actions={<p className="t-meta font-mono text-ink-faint">{bindsFilePath(layer)}</p>}
       />
 
@@ -166,12 +162,12 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
         {recordingAction ? (
           <>
             <p className="t-body text-ink">
-              Recording <span className="font-medium">{recordingAction.label}</span> — press the new
-              key now.
+              Recording <span className="font-medium">{recordingAction.label}</span> — press a key.
+              Escape cancels.
             </p>
             {recorderNotice ? (
               <p data-testid="bind-recorder-notice" className="t-meta mt-1">
-                {recorderNotice} Try another key.
+                {recorderNotice}
               </p>
             ) : null}
           </>
@@ -183,7 +179,6 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
           key={group.title}
           id={`binds-${group.title.toLowerCase()}`}
           title={group.title}
-          meta={group.description}
         >
           <ul className="mt-2 grid sm:grid-cols-2 sm:gap-x-10">
             {group.ids.map((actionId) => {
@@ -211,9 +206,6 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
                   >
                     <span className="min-w-0 flex-1">
                       <span className="t-row block">{action.label}</span>
-                      <span className="mt-0.5 block text-[12.5px] text-ink-faint">
-                        {listening ? "Waiting for input" : "Click to rebind"}
-                      </span>
                     </span>
                     <span
                       data-testid={`bind-key-${action.id}`}
@@ -235,7 +227,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
 
       {!canRecord ? (
         <p className="t-meta mt-8">
-          {running ? "Close TF2 before changing binds." : "Finish the current profile task first."}
+          {running ? "Close TF2 to change binds." : "Finish the current task first."}
         </p>
       ) : null}
     </section>

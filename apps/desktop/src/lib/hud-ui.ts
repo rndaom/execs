@@ -258,13 +258,13 @@ export function canInstallHud(entry: HudCatalogEntry): boolean {
 export function hudInstallSourceCopy(entry: HudCatalogEntry): string | null {
   switch (entry.install) {
     case "direct":
-      return "Fetched from the author's Dropbox link.";
+      return "From Dropbox";
     case "gamebanana":
-      return "Fetched from the author's GameBanana page.";
+      return "From GameBanana";
     case "thread":
-      return "Fetched from the archive linked in the author's thread.";
+      return "From the author's thread";
     case "none":
-      return "No download this app can fetch — open the author's page.";
+      return "No direct download";
     default:
       return null;
   }
@@ -274,7 +274,7 @@ export function installedHudLabel(state: HudUiState): string | null {
   if (!state.installed) {
     return null;
   }
-  return state.inferred ? "Installed (from this profile)" : "Installed";
+  return state.inferred ? "Found in this profile" : "Installed";
 }
 
 export function seedHudOptions(

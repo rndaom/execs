@@ -121,7 +121,7 @@ export function ProfileMenu({
         </div>
         {showCreate && running ? (
           <p data-testid="create-new-locked" className="mt-2 text-[12px] text-ink-faint">
-            Close TF2 to create a profile — it writes the live game folder.
+            Close TF2 to create a profile.
           </p>
         ) : null}
 

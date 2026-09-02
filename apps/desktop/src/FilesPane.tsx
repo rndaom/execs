@@ -117,7 +117,7 @@ export function FilesPane({
     <section data-testid="settings-files" className="flex min-w-0 flex-col gap-4 text-left">
       <PaneHeader
         title="Files"
-        lede="Edit the cfg files you own. Files shipped by TF2, your HUD or other packs are read-only, and their contents never block your saves."
+        lede="Files from TF2, your HUD or packs are read-only."
         actions={
           <span className="tnum t-meta text-ink-faint">
             {listed.length} {listed.length === 1 ? "file" : "files"}
@@ -175,7 +175,7 @@ export function FilesPane({
               className="border-t border-edge px-3 py-2.5 text-[12.5px] leading-5 text-ink"
             >
               <p>
-                Unsaved changes — Save or Discard before opening{" "}
+                Save or discard before opening{" "}
                 <span className="font-mono text-ink-muted">{pendingPath}</span>.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -249,8 +249,8 @@ export function FilesPane({
                     : !editable
                       ? `Provided by ${originLabel(selectedMeta?.origin)} — read-only.`
                       : dirty
-                        ? "Changes have not been saved."
-                        : "No unsaved changes."}
+                        ? "Unsaved changes"
+                        : "Saved"}
                 </p>
                 {editable ? (
                   <button
@@ -267,7 +267,7 @@ export function FilesPane({
             </>
           ) : (
             <div className="t-meta grid min-h-72 flex-1 place-items-center bg-bg px-6 text-center">
-              Choose a cfg file to begin editing.
+              No file open.
             </div>
           )}
         </div>
@@ -276,7 +276,6 @@ export function FilesPane({
           <div className="flex min-h-12 items-center justify-between gap-3 border-b border-edge px-3 py-2">
             <div>
               <h3 className="t-row">Validation</h3>
-              <p className="text-[12px] text-ink-faint">Live cfg lint</p>
             </div>
             <span
               data-testid="files-lint-badge"
@@ -292,8 +291,7 @@ export function FilesPane({
                 data-testid="files-blocked"
                 className="t-meta rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-ink"
               >
-                Block-tier findings must be fixed before this file can be saved. Commands are not
-                stripped.
+                Fix the block findings to save this file; nothing is stripped.
               </p>
             ) : null}
 
@@ -302,8 +300,8 @@ export function FilesPane({
                 data-testid="files-blocked-elsewhere"
                 className="t-meta rounded-lg border border-edge px-3 py-2"
               >
-                {blockingElsewhere} block-tier {blockingElsewhere === 1 ? "issue" : "issues"} in
-                other files. They do not block this file&apos;s save — open those files to fix them.
+                {blockingElsewhere} block {blockingElsewhere === 1 ? "issue" : "issues"} in other
+                files; they do not block this save.
               </p>
             ) : null}
 
@@ -316,9 +314,6 @@ export function FilesPane({
             ) : (
               <div className="px-1 py-2">
                 <p className="t-row text-ok">No findings in your files</p>
-                <p className="t-meta mt-1">
-                  Everything you can edit passes the current safety checks.
-                </p>
               </div>
             )}
 
@@ -331,8 +326,7 @@ export function FilesPane({
                   </span>
                 </summary>
                 <p className="px-1 pb-2 text-[12px] leading-5 text-ink-faint">
-                  Findings in TF2-, HUD-, or pack-provided cfg. They are how those files work and
-                  never block your saves.
+                  How those files work; never blocks your saves.
                 </p>
                 <ul className="flex flex-col gap-2">
                   {advisoryFindings.map((finding) => (

@@ -39,7 +39,7 @@ describe("HudPane catalog status", () => {
   it("keeps cached catalog actions available while refresh reports progress", () => {
     const markup = renderHudPane(true, null);
 
-    expect(markup).toContain("Checking for catalog updates");
+    expect(markup).toContain("Refreshing… showing 2 cached HUDs.");
     expect(markup).toContain('data-testid="hud-refresh" disabled=""');
     expect(markup).not.toContain('data-testid="hud-install-rayshud" disabled=""');
   });
@@ -47,7 +47,7 @@ describe("HudPane catalog status", () => {
   it("shows an inline refresh error without discarding cached entries", () => {
     const markup = renderHudPane(false, "The request timed out.");
 
-    expect(markup).toContain("Could not refresh the HUD catalog.");
+    expect(markup).toContain("Could not refresh the catalog.");
     expect(markup).toContain("The request timed out.");
     expect(markup).toContain('data-testid="hud-card-rayshud"');
   });

@@ -26,7 +26,7 @@ export function SwitchProgressList({
   const currentIndex = switchStep ? switchStepIndex(switchStep) : -1;
   const currentLabel = switchStep
     ? (SWITCH_STEPS[currentIndex]?.label ?? "Applying profile")
-    : "Preparing profile operation…";
+    : "Preparing…";
   const complete = !active && switchStep === "done";
   // One implementation of the fill: the tested presenter helper, not a second
   // copy of the arithmetic inline.
@@ -51,7 +51,7 @@ export function SwitchProgressList({
         {complete ? <Check size={16} weight="bold" className="text-ok" /> : null}
       </div>
       <p data-testid="switch-progress-current" className="t-meta mt-1">
-        {complete ? "All profile steps completed." : `Current stage — ${currentLabel}`}
+        {complete ? "All steps done" : currentLabel}
       </p>
 
       <div

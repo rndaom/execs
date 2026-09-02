@@ -42,13 +42,13 @@ export function LaunchPane({
     <div data-testid="settings-launch" className="min-w-0 text-left">
       <PaneHeader
         title="Launch options"
-        lede="Stored with this profile. Steam is updated only while Steam is already closed; otherwise the string stays ready to copy."
+        lede="Stored with this profile; Steam updates only while closed."
       />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
         <section>
           <label className="t-row block" htmlFor="launch-options">
-            Profile launch string
+            Launch string
           </label>
           <textarea
             id="launch-options"
@@ -91,7 +91,7 @@ export function LaunchPane({
               className="t-meta flex items-center gap-2"
             >
               {status ? <CheckCircle size={15} className="text-ok" weight="fill" /> : null}
-              {status || "Save after editing, then copy the same string into Steam if needed."}
+              {status || "Save, then copy into Steam if needed."}
             </p>
             <div className="flex gap-2">
               <button
@@ -120,12 +120,11 @@ export function LaunchPane({
         <aside className="h-fit lg:border-l lg:border-edge lg:pl-8">
           <h2 className="t-section">Never stored</h2>
           <p className="t-meta mt-2">
-            Reset and wrapper flags — <code className="text-ink-muted">-autoconfig</code>,{" "}
+            Reset and wrapper flags: <code className="text-ink-muted">-autoconfig</code>,{" "}
             <code className="text-ink-muted">-default</code>,{" "}
             <code className="text-ink-muted">-dxlevel</code>,{" "}
             <code className="text-ink-muted">+quit</code>,{" "}
-            <code className="text-ink-muted">gamemoderun %command%</code> — are never stored on a
-            profile.
+            <code className="text-ink-muted">gamemoderun %command%</code>.
           </p>
         </aside>
       </div>

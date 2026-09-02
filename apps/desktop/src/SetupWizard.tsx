@@ -59,7 +59,7 @@ export function SetupWizard({
       eyebrow={title}
       icon={<SlidersHorizontal aria-hidden="true" size={13} weight="bold" />}
       title="Build your TF2 profile"
-      lede="Name it and pick a preset. Everything else already has a sensible default."
+      lede="Name it and pick a preset."
       width="wide"
       footer={
         <div className="flex flex-col-reverse gap-3 border-t border-edge pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -103,7 +103,6 @@ export function SetupWizard({
         <label htmlFor="wizard-name" className="t-row block">
           Profile name
         </label>
-        <p className="t-meta mt-1">This name appears in your profile switcher.</p>
         <input
           id="wizard-name"
           data-testid="wizard-name"
@@ -119,7 +118,7 @@ export function SetupWizard({
           <PaneSection
             id="wizard-start-from"
             title="Start from"
-            description="Where your in-game options come from. Everything below is set by this wizard."
+            description="Where your in-game options come from."
           >
             <div data-testid="wizard-start-from" className="mt-4 grid gap-3 sm:grid-cols-2">
               {START_FROM_OPTIONS.map((option) => (
@@ -141,8 +140,8 @@ export function SetupWizard({
 
         <PaneSection
           id="wizard-preset"
-          title="Choose a preset"
-          description="Your preset supplies the default for every module. You can fine-tune later."
+          title="Preset"
+          description="Sets the default for every module."
           meta={
             canCollapsePresets ? (
               <button
@@ -189,7 +188,6 @@ export function SetupWizard({
         <PaneSection
           id="wizard-addons"
           title="Official addons"
-          description="Optional packages maintained alongside mastercomfig. All off by default."
           meta={<span className="tnum">{addons.length} selected</span>}
         >
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
