@@ -18,6 +18,18 @@ export const PREVIEW_COMFIG_STATE: ComfigUiState = {
   addons: ["no-tutorial"],
 };
 
+/** One line per official addon, shared by the Comfig pane and the wizard. */
+export const OFFICIAL_ADDON_DETAILS: Record<OfficialAddon, string> = {
+  "no-footsteps": "Remove player footstep sounds.",
+  "no-pyroland": "Disable Pyroland visual effects.",
+  "no-soundscapes": "Remove ambient map soundscapes.",
+  "no-tutorial": "Skip tutorial hints and prompts.",
+  lowmem: "Reduce memory use on limited systems.",
+  "null-canceling-movement": "Keep opposite movement keys responsive.",
+  "flat-mouse": "Use direct, unaccelerated mouse input.",
+  "transparent-viewmodels": "Make weapon viewmodels transparent.",
+};
+
 export function defaultComfigState(): ComfigUiState {
   return {
     preset: "medium",

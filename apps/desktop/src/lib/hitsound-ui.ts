@@ -254,10 +254,3 @@ export function serializeSoundsDraft(draft: SoundsDraft): string {
     ]);
   return JSON.stringify([slot(draft.hit), slot(draft.kill), draft.repeatDelay]);
 }
-
-export function formatWavInfo(info: PickedHitsound["info"]): string {
-  const seconds = (info.durationMs / 1000).toFixed(2);
-  const channels =
-    info.channels === 1 ? "mono" : info.channels === 2 ? "stereo" : `${info.channels} ch`;
-  return `${seconds} s · ${(info.sampleRate / 1000).toFixed(1)} kHz ${channels}`;
-}

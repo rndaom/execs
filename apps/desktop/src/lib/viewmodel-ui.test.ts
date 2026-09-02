@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  emptyViewmodelDraft,
   parseHiddenGroups,
   parseHideMode,
   previewViewmodelRecord,
@@ -46,7 +45,6 @@ describe("viewmodel ui", () => {
 
 describe("hide mode", () => {
   it("defaults to the full-viewmodel hide and round-trips the weapon-only choice", () => {
-    expect(emptyViewmodelDraft().hideMode).toBe("full");
     expect(parseHideMode(undefined)).toBe("full");
     expect(parseHideMode("nonsense")).toBe("full");
     expect(parseHideMode("weapon")).toBe("weapon");

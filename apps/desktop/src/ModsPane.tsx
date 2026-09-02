@@ -99,6 +99,14 @@ export function ModsPane({
     return () => window.clearTimeout(timer);
   }, [repair, payload, onApply, onRefreshStatus]);
 
+  // Steam can finish after the wait gave up. Once the status reports nothing
+  // left to repair the section goes away rather than counting zero files.
+  useEffect(() => {
+    if (repair === "timeout" && untracked.length === 0) {
+      setRepair("idle");
+    }
+  }, [repair, untracked.length]);
+
   async function startRepair() {
     repairStarted.current = Date.now();
     repairSelection.current = { addons, particleMods };
@@ -192,7 +200,7 @@ export function ModsPane({
           Valve servers.
         </Alert>
       ) : null}
-      {untracked.length > 0 || repair === "waiting" || repair === "timeout" ? (
+      {untracked.length > 0 || repair === "waiting" ? (
         <section data-testid="mods-repair" className="section">
           <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
             <div className="min-w-0 max-w-[62ch]">
@@ -357,8 +365,8 @@ export function ModsPane({
         running={running}
         locked={locked}
         // Not `selectionDirty`: a TF2 update wipes the patches without touching
-        // the recorded selection, so Apply used to be disabled exactly when the
-        // stale notice told the user to press it.
+        // the recorded selection, so gating on it would disable Apply exactly
+        // when the stale notice tells the user to press it.
         dirty={canApply}
         testId="mods-apply"
         onApply={() => onApply(addons, particleMods)}

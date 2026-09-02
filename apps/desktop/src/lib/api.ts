@@ -19,7 +19,7 @@ export type Api = Omit<
   | "default"
 >;
 
-export const bridgeApi: Api = realBridge;
+const bridgeApi: Api = realBridge;
 
 /**
  * Pick the adapter once, at the root. The preview fixtures live behind a

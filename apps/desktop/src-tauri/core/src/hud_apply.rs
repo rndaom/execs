@@ -263,9 +263,8 @@ pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
     }
 }
 
-/// Compatibility shim for the pre-Phase-2 signature. Addresses WriteCfg files
-/// for a **vanilla** cfg layer; a comfig-layer profile needs
-/// `apply_hud_options_for_layer(.., CfgLayer::Comfig)`.
+/// `apply_hud_options_for_layer` for a **vanilla** cfg layer; a comfig-layer
+/// profile needs `apply_hud_options_for_layer(.., CfgLayer::Comfig)`.
 pub fn apply_hud_options(
     tree: &mut HudTree,
     schema: &HudSchema,
@@ -1096,7 +1095,7 @@ mod tests {
         let (decoded, encoding) = decode_hud_text("x.res", bytes).unwrap();
         assert_eq!(encoding, TextEncoding::Utf16Le);
         assert!(decoded.contains("0 153 255 255"));
-        // The rest of the scheme is what used to be lost.
+        // The rest of the scheme survives the decode too.
         assert!(decoded.contains("Keep"));
     }
 

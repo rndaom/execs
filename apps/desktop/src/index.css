@@ -5,7 +5,7 @@
 @import "tailwindcss";
 
 /*
- * execs design system (RND-188, 2026-09-01).
+ * execs design system.
  *
  * A calm dark product surface with a single warm accent. The TF2 identity lives
  * in the accent and the warm ink — never in a display face, card chrome or
@@ -48,9 +48,6 @@
   --color-team-red: #b8383b;
   --color-team-blu: #5885a2;
   --color-health: #729e42;
-
-  /* The one item-quality colour still in use: the "careful" badge. */
-  --color-q-strange: #cf6a32;
 
   --font-body: "Inter", ui-sans-serif, sans-serif;
 

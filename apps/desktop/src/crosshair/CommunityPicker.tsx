@@ -15,7 +15,7 @@ import {
   communityLibraryName,
   searchCommunityCrosshairs,
 } from "../lib/community-crosshairs";
-import type { CrosshairColor } from "../lib/crosshair-ui";
+import type { CrosshairColor, CrosshairLibraryEntry } from "../lib/crosshair-ui";
 import { CrosshairThumb } from "./CrosshairThumb";
 import type { PreviewPixels } from "./useCrosshairDraft";
 
@@ -59,7 +59,8 @@ export function CommunityPicker({
   onClose,
 }: {
   open: boolean;
-  existing: Record<string, unknown>;
+  /** The builder's library, so an entry already added reads as added. */
+  existing: Record<string, CrosshairLibraryEntry>;
   color: CrosshairColor | null;
   onAdd: (id: string, preview: PreviewPixels, bytes: number[]) => void;
   onClose: () => void;

@@ -4,7 +4,7 @@ import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   ALL_TRACERS_NOTE,
   canApplyGameplay,
@@ -21,6 +21,8 @@ import {
 } from "./lib/gameplay-ui";
 
 export type GameplayPaneProps = {
+  /** The profile this draft belongs to; a switch discards it. */
+  profileId: string | null;
   layer: GameplayLayer;
   effective: Record<string, string>;
   managedText: string;
@@ -33,6 +35,7 @@ export type GameplayPaneProps = {
 };
 
 export function GameplayPane({
+  profileId,
   layer,
   effective,
   managedText,
@@ -44,7 +47,11 @@ export function GameplayPane({
   const { running, busy } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
   const locked = !canApplyGameplay(running, busy);
-  const [draft, setDraft] = useSeededDraft(seeded, serializeGameplay, gameplayPath(layer));
+  const [draft, setDraft] = useSeededDraft(
+    seeded,
+    serializeGameplay,
+    draftRecordKey(profileId, gameplayPath(layer)),
+  );
   const dirty = gameplayDirty(draft, seeded);
 
   function patch(update: Partial<GameplaySettings>) {

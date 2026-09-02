@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  autoexecPath,
   canApplyGameplay,
   clampGameplay,
   defaultGameplay,
@@ -9,9 +8,7 @@ import {
   FOV_MIN,
   GAMEPLAY_HEADER,
   GAMEPLAY_STEM,
-  gameplayFromEffective,
   gameplayPath,
-  parseGameplay,
   seedGameplay,
   serializeGameplay,
 } from "./gameplay-ui";
@@ -81,7 +78,7 @@ describe("gameplay serialize and parse", () => {
       tf_dingaling_lasthit_pitchmaxdmg: 100,
       tf_dingalingaling_last_effect: 8,
     });
-    expect(parseGameplay(serializeGameplay(original))).toEqual(original);
+    expect(seedGameplay(serializeGameplay(original), {})).toEqual(original);
   });
 
   it("keeps the hit sound cvars inside their engine bounds", () => {
@@ -101,8 +98,8 @@ describe("gameplay serialize and parse", () => {
   });
 
   it("parses quoted default crosshair as empty", () => {
-    expect(parseGameplay('cl_crosshair_file ""\n').cl_crosshair_file).toBe("");
-    expect(parseGameplay("cl_crosshair_file 0\n").cl_crosshair_file).toBe("");
+    expect(seedGameplay('cl_crosshair_file ""\n', {}).cl_crosshair_file).toBe("");
+    expect(seedGameplay("cl_crosshair_file 0\n", {}).cl_crosshair_file).toBe("");
     expect(serializeGameplay(defaultGameplay())).toContain('cl_crosshair_file ""');
   });
 
@@ -119,8 +116,6 @@ describe("gameplay paths", () => {
   it("uses vanilla vs comfig paths", () => {
     expect(gameplayPath("comfig")).toBe("tf/cfg/overrides/execs_gameplay.cfg");
     expect(gameplayPath("vanilla")).toBe("tf/cfg/execs_gameplay.cfg");
-    expect(autoexecPath("comfig")).toBe("tf/cfg/overrides/autoexec.cfg");
-    expect(autoexecPath("vanilla")).toBe("tf/cfg/autoexec.cfg");
   });
 });
 
@@ -135,8 +130,8 @@ describe("gameplay seed", () => {
   });
 
   it("reads effective when the managed file is empty", () => {
-    expect(gameplayFromEffective({ fov_desired: "65" }).fov_desired).toBe(65);
-    expect(parseGameplay("").fov_desired).toBe(90);
+    expect(seedGameplay("", { fov_desired: "65" }).fov_desired).toBe(65);
+    expect(seedGameplay("", {}).fov_desired).toBe(90);
   });
 });
 
@@ -151,7 +146,7 @@ describe("autoexec exec line", () => {
     expect(ensureAutoexecExecLine("exec execs_gameplay.cfg\n", GAMEPLAY_STEM, "vanilla")).toBe(
       "exec execs_gameplay.cfg\n",
     );
-    // The exec line is addressed from tf/cfg on the comfig layer (RND-155).
+    // The exec line is addressed from tf/cfg on the comfig layer.
     expect(ensureAutoexecExecLine("", GAMEPLAY_STEM, "comfig")).toBe(
       "exec overrides/execs_gameplay // execs:managed\n",
     );

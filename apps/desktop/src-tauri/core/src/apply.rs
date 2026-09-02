@@ -102,13 +102,6 @@ pub fn get_active_profile_detail_from(
     Ok(Some(profile_detail_from(profiles_dir, &id)?))
 }
 
-pub fn list_profile_files(
-    tf2_root: &Path,
-    profile_id: &str,
-) -> Result<Vec<ProfileFile>, ProfileError> {
-    list_profile_files_from(&profiles_dir(), tf2_root, profile_id)
-}
-
 pub fn list_profile_files_from(
     profiles_dir: &Path,
     tf2_root: &Path,

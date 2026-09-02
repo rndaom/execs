@@ -79,9 +79,9 @@ pub(crate) const UNTRACKED_REASON: &str = "is modified in tf2_misc but execs has
 /// `particles/*.pcf` entries whose live bytes are not stock and that no
 /// snapshot covers. execs cannot restore these: they are stale patches from an
 /// install whose tracking was lost, or from another tool, and their effects
-/// may reference materials that are no longer installed — the 2026-09-01
-/// "unimplemented sprite renderer" console flood was exactly that. Reported
-/// so the user knows to verify game files in Steam.
+/// may reference materials this install does not ship, which the engine
+/// reports as an "unimplemented sprite renderer" console flood. Reported so
+/// the user knows to verify game files in Steam.
 pub(crate) fn untracked_modified_particles(
     vpk_path: &Path,
     entries: &BTreeMap<String, VpkEntryLocation>,
@@ -272,9 +272,9 @@ pub(crate) fn adopt_orphaned_snapshots(data_dir: &Path, state: &mut PreloaderSta
 /// the directory describes a file the game has since changed; writing it back
 /// would plant old stock bytes under a new CRC, so it is discarded and
 /// reported. This per-entry judgement is what makes a resized VPK safe to
-/// handle without throwing every snapshot away — the 2026-09-01 field
-/// incident, where a fingerprint-definition change took the old "game update"
-/// branch and orphaned 61 patched files with no snapshots left to restore.
+/// handle without throwing every snapshot away: a change in what the
+/// fingerprint measures reads as a resize too, and discarding tracking on that
+/// signal orphans patched files with no snapshots left to restore.
 pub(crate) fn restore_patched_entries(
     tf2_root: &Path,
     data_dir: &Path,

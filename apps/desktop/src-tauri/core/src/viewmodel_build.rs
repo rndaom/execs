@@ -86,9 +86,6 @@ pub fn hide_smd_sequence(text: &str, mode: ViewmodelHideMode) -> Result<String, 
     }
 }
 
-/// Faithful to CompVMInstaller's EditFile: keep everything before `skeleton`,
-/// emit frame 0 with all bones at (-100,-100,-100) rot 0, then empty frames so
-/// the original frame count (and therefore timing/anim events) is preserved.
 /// Byte offset of `lines[index]` within `text`. `str::lines` drops the line
 /// terminators, so the offsets have to be accumulated rather than searched for.
 fn line_offset(text: &str, lines: &[&str], index: usize) -> usize {
@@ -106,6 +103,9 @@ fn line_offset(text: &str, lines: &[&str], index: usize) -> usize {
     offset
 }
 
+/// Faithful to CompVMInstaller's EditFile: keep everything before `skeleton`,
+/// emit frame 0 with all bones at (-100,-100,-100) rot 0, then empty frames so
+/// the original frame count (and therefore timing/anim events) is preserved.
 fn hide_all_bones(text: &str) -> Result<String, String> {
     let lines: Vec<&str> = text.lines().collect();
     let nodes = section(&lines, "nodes").ok_or("SMD has no nodes section.")?;
@@ -280,7 +280,6 @@ fn extract_class_sources(
     })
 }
 
-/// Case-insensitive lookup of `<file>.smd` inside the class anims dir.
 /// Run one compile with a hard timeout, returning studiomdl's combined log.
 ///
 /// Output goes to a file rather than pipes: polling `try_wait` while a child
@@ -333,9 +332,14 @@ fn run_studiomdl(
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    Ok(std::fs::read_to_string(&log_path).unwrap_or_default())
+    // studiomdl writes in the console code page, not UTF-8; a lossy read keeps
+    // the diagnostic readable instead of turning the whole log into "".
+    Ok(std::fs::read(&log_path)
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .unwrap_or_default())
 }
 
+/// Case-insensitive lookup of `<file>.smd` inside the class anims dir.
 fn find_smd(anims_dir: &Path, file: &str) -> Option<PathBuf> {
     let wanted = format!("{}.smd", file.to_ascii_lowercase());
     let entries = std::fs::read_dir(anims_dir).ok()?;
@@ -353,16 +357,10 @@ fn find_smd(anims_dir: &Path, file: &str) -> Option<PathBuf> {
 /// then block the calling thread and the pane's busy state forever.
 const STUDIOMDL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// TF2's compiler binary name for the host platform. Native Linux installs
-/// ship `bin/studiomdl`, so a hardcoded `.exe` dead-ends the whole path — and
-/// puts a Windows filename in a Linux user's error message.
-pub fn studiomdl_file_name() -> &'static str {
-    if cfg!(windows) {
-        "studiomdl.exe"
-    } else {
-        "studiomdl"
-    }
-}
+/// TF2's compiler binary, under `bin/` in the install. Viewmodel builds are
+/// Windows-only (`viewmodel_build_available` gates on the host), so this is
+/// the only name a build ever looks for.
+pub const STUDIOMDL_FILE_NAME: &str = "studiomdl.exe";
 
 /// Build the pack VPK. `studiomdl` is TF2's own compiler; `staging` is a
 /// scratch dir this function owns — it is emptied on entry AND on every exit
@@ -395,8 +393,7 @@ fn build_in_staging(
     }
     if !studiomdl.is_file() {
         return Err(ProfileError::Io(format!(
-            "Could not find {} in the TF2 install's bin folder.",
-            studiomdl_file_name()
+            "Could not find {STUDIOMDL_FILE_NAME} in the TF2 install's bin folder."
         )));
     }
     let folders = changed_zip_folders(hidden_groups)?;
@@ -459,9 +456,9 @@ fn build_in_staging(
 mod tests {
     use super::*;
 
-    /// `text.find("skeleton")` used to cut at the first literal occurrence of
-    /// the word, so a bone whose name contains it truncated the nodes section
-    /// and produced an SMD studiomdl rejects.
+    /// `text.find("skeleton")` cuts at the first literal occurrence of the
+    /// word, so a bone whose name contains it truncates the nodes section and
+    /// produces an SMD studiomdl rejects.
     #[test]
     fn hide_all_bones_cuts_at_the_located_line_not_the_first_word() {
         let smd = "version 1\nnodes\n  0 \"skeleton_root\" -1\n  1 \"bip_hand_R\" 0\nend\n\
@@ -475,10 +472,10 @@ mod tests {
         assert!(out.trim_end().ends_with("end"), "{out}");
     }
 
-    /// A Linux user must never be told to go find `studiomdl.exe`, and a
-    /// failed build must not leave its staging tree on disk.
+    /// A failed build names the compiler it could not find, and must not
+    /// leave its staging tree on disk.
     #[test]
-    fn missing_compiler_is_named_per_platform_and_staging_is_cleaned() {
+    fn missing_compiler_is_named_and_staging_is_cleaned() {
         let dir = crate::test_temp_dir();
         let staging = dir.join("staging");
         // Leftovers from an earlier failed run.
@@ -490,16 +487,13 @@ mod tests {
             b"not a zip",
             &hidden,
             ViewmodelHideMode::Full,
-            &dir.join("bin").join(studiomdl_file_name()),
+            &dir.join("bin").join(STUDIOMDL_FILE_NAME),
             &staging,
         )
         .unwrap_err();
 
         let message = err.message();
-        assert!(message.contains(studiomdl_file_name()), "{message}");
-        if !cfg!(windows) {
-            assert!(!message.contains(".exe"), "{message}");
-        }
+        assert!(message.contains(STUDIOMDL_FILE_NAME), "{message}");
         assert!(!staging.exists(), "staging must be cleaned on every path");
         let _ = std::fs::remove_dir_all(&dir);
     }

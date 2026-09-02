@@ -31,8 +31,10 @@ const PANIC_LOG_MAX_BYTES: u64 = 1024 * 1024;
 fn install_panic_logger() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let settings = execs_core::settings_file();
-        if let Some(dir) = settings.parent() {
+        // Fallible on purpose: a panic inside a panic hook aborts the process
+        // with no log at all, and an unset %APPDATA% is exactly the kind of
+        // machine where that log would matter.
+        if let Ok(dir) = execs_core::try_execs_data_dir() {
             let logs = dir.join("logs");
             let _ = std::fs::create_dir_all(&logs);
             let path = logs.join("panic.log");
@@ -136,6 +138,7 @@ pub fn run() {
             commands::hitsound::apply_hitsounds,
             commands::hitsound::remove_hitsounds,
             commands::open_embedded_page,
+            commands::diagnostics::get_diagnostics,
             commands::preloader::get_preloader_status,
             commands::preloader::get_default_mods,
             commands::preloader::download_default_mods,
@@ -166,9 +169,9 @@ fn spawn_lock_poller(app: AppHandle) {
         let mut last = None;
         let mut panics = 0u32;
         loop {
-            // The whole tick, emit included: an emit panic used to kill the
-            // poller thread silently and freeze the write-lock UI at its last
-            // value forever.
+            // The whole tick, emit included: an emit panic would otherwise
+            // kill the poller thread silently and freeze the write-lock UI at
+            // its last value forever.
             let app = app.clone();
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let running = execs_core::is_tf2_running();

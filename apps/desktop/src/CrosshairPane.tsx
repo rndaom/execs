@@ -26,6 +26,7 @@ import {
   type CrosshairColor,
   type CrosshairShape,
   CUSTOM_CROSSHAIR_SHAPE,
+  crosshairDraftDirty,
 } from "./lib/crosshair-ui";
 import { type GameplayLayer, gameplayPath } from "./lib/gameplay-ui";
 import { StockCrosshairSettings } from "./StockCrosshairSettings";
@@ -37,6 +38,7 @@ import { StockCrosshairSettings } from "./StockCrosshairSettings";
  * the draft plus every mutation on it live in `useCrosshairDraft`.
  */
 export function CrosshairPane({
+  profileId,
   record,
   layer,
   effective,
@@ -47,6 +49,8 @@ export function CrosshairPane({
   onApply,
   onRemove,
 }: {
+  /** The profile these drafts belong to; a switch discards them. */
+  profileId: string | null;
   record: CrosshairRecord | null;
   layer: GameplayLayer;
   effective: Record<string, string>;
@@ -71,13 +75,17 @@ export function CrosshairPane({
   const {
     draft,
     setDraft,
+    seeded,
     previewFor,
     addCommunity,
     removeLibraryEntry,
     saveDesign,
     setImportedPng,
     libraryPayload,
-  } = useCrosshairDraft(record, packPreviews);
+  } = useCrosshairDraft(profileId, record, packPreviews);
+  // With no pack installed there is nothing to diff against: installing the
+  // shape on screen is itself the change.
+  const dirty = record === null || crosshairDraftDirty(draft, seeded);
   const [classTab, setClassTab] = useState<ClassTab>(ALL_CLASSES_TAB);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
@@ -108,6 +116,7 @@ export function CrosshairPane({
       />
 
       <StockCrosshairSettings
+        profileId={profileId}
         effective={effective}
         sprites={stockSprites}
         managedText={managedText}
@@ -235,15 +244,17 @@ export function CrosshairPane({
             ? running
               ? "Close TF2 before changing crosshair files."
               : "Finish the current profile task before changing crosshairs."
-            : record
-              ? "Rewrites the installed pack."
-              : "Writes a new pack to this profile."
+            : !dirty
+              ? "Saved"
+              : record
+                ? "Rewrites the installed pack."
+                : "Writes a new pack to this profile."
         }
         actionLabel={record ? "Update crosshair pack" : "Install crosshair pack"}
         lockedLabel="Close TF2 to apply"
         running={running}
         locked={locked}
-        dirty
+        dirty={dirty}
         testId="crosshair-apply"
         extra={
           record ? (

@@ -3,6 +3,7 @@
 pub mod absorb;
 pub mod comfig;
 pub mod crosshair;
+pub mod diagnostics;
 pub mod files;
 pub mod finder;
 pub mod first_run;

@@ -4,7 +4,6 @@ import {
   defaultStartFrom,
   firstRunSurface,
   START_FROM_OPTIONS,
-  showCreateNewChrome,
   showStartFromChoice,
   toggleAddon,
   wizardApplyCopy,
@@ -40,12 +39,6 @@ describe("first-run routing", () => {
     expect(wizardApplyCopy(false)).toBe("Apply");
     expect(wizardApplyCopy(false, true)).toBe("Create");
     expect(wizardApplyCopy(true, true)).toBe("Close TF2 to apply");
-  });
-
-  it("hides create-new chrome on first-run screens", () => {
-    expect(showCreateNewChrome(empty, "first-existing")).toBe(false);
-    expect(showCreateNewChrome(empty, "first-unused")).toBe(false);
-    expect(showCreateNewChrome(previewSavedLibrary("/tf2"), "ready")).toBe(true);
   });
 
   it("offers Start from only when there is an active profile to copy", () => {

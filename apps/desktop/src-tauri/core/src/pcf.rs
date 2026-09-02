@@ -838,8 +838,8 @@ fn optimize_string_dictionary(pcf: &mut PcfFile) -> Result<(), PcfError> {
         }
     }
     let new_dictionary: Vec<Vec<u8>> = used.into_iter().collect();
-    // Indices are u16 on the wire. `index as u16` used to truncate silently and
-    // hand `encode_pcf` a file whose indices were already wrong.
+    // Indices are u16 on the wire, and `index as u16` would truncate silently
+    // and hand `encode_pcf` a file whose indices are already wrong.
     if new_dictionary.len() > u16::MAX as usize {
         return Err(PcfError(
             "Particle file needs more than 65535 dictionary entries.".into(),
@@ -1162,7 +1162,7 @@ mod tests {
     }
 
     /// `element_count` is bounded by `bytes.len()`, but a `PcfElement` is ~72
-    /// bytes, so a 10 MB crafted file used to reserve ~700 MB up front.
+    /// bytes, so a 10 MB crafted file would reserve ~700 MB up front.
     #[test]
     fn a_crafted_element_count_does_not_reserve_the_world() {
         let mut bytes = PCF_HEADERS[1].as_bytes().to_vec();

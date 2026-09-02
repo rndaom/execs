@@ -52,23 +52,22 @@ pub async fn viewmodel_preview_image(name: String) -> Result<tauri::ipc::Respons
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-/// TF2's own compiler, named for the host platform — a native Linux install
-/// ships `bin/studiomdl`, not `bin/studiomdl.exe`.
+/// TF2's own compiler, inside the install's `bin` folder.
 fn studiomdl_path(root: &Path) -> PathBuf {
-    root.join("bin").join(execs_core::studiomdl_file_name())
+    root.join("bin").join(execs_core::STUDIOMDL_FILE_NAME)
 }
 
-/// Whether this machine can build a viewmodel pack at all. Only Windows for
-/// now: TF2 ships `bin/studiomdl.exe` there, and the Linux depot has no
-/// native compiler to point at. The pane disables Build rather than letting
-/// the user click into a dead end.
+/// Whether this machine can build a viewmodel pack at all. Windows only:
+/// TF2 ships `bin/studiomdl.exe` there, and the Linux depot has no native
+/// compiler to point at. The pane disables Build rather than letting the
+/// user click into a dead end.
 #[tauri::command]
 pub async fn viewmodel_build_available() -> Result<bool, CommandError> {
     blocking(|| {
         let Some(root) = execs_core::remembered_tf2_root() else {
             return Ok(false);
         };
-        Ok(cfg!(windows) && root.join("bin").join("studiomdl.exe").is_file())
+        Ok(cfg!(windows) && studiomdl_path(&root).is_file())
     })
     .await
 }

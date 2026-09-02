@@ -348,10 +348,6 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
-pub fn create_profile_record(tf2_root: &Path, name: &str) -> Result<ProfileLibrary, ProfileError> {
-    create_profile_record_to(&profiles_dir(), tf2_root, name, live_process_names())
-}
-
 pub fn create_profile_record_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -1032,9 +1028,9 @@ fn roots_match(stored: &str, confirmed: &Path) -> bool {
 }
 
 /// The one gate on what may enter a profile manifest. This is the allowlist
-/// (`tf/cfg/`, `tf/custom/`, never `tf/cfg/user/`), not the old four-name
-/// denylist — anything that reaches a manifest is something a later switch will
-/// happily copy into the live game folder.
+/// (`tf/cfg/`, `tf/custom/`, never `tf/cfg/user/`), never a denylist — anything
+/// that reaches a manifest is something a later switch will happily copy into
+/// the live game folder.
 fn checked_rel_path(path: &str) -> Result<String, ProfileError> {
     let path = normalize_rel_path(path)?;
     if !crate::apply::is_file_safe_rel_path(&path) {

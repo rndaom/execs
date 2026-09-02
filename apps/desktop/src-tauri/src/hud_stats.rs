@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use execs_core::catalog_cache_dir;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,11 @@ const TF2HUDS_BASE: &str = "https://tf2huds.dev";
 const TF2HUDS_MAX_PAGES: usize = 40;
 const STATS_WORKERS: usize = 8;
 const STATS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+/// Wall clock for one whole refresh. Both walks are paginated and tf2huds.dev
+/// adds a call per HUD, so a slow day could otherwise run for many minutes.
+/// Past it the walks stop and hand back what they have, which is used but not
+/// cached.
+const STATS_DEADLINE: Duration = Duration::from_secs(90);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +46,17 @@ pub struct HudStatsCache {
     pub fetched_at: u64,
     pub stats: BTreeMap<String, HudStat>,
 }
+
+/// What one source's walk gathered, and whether it reached the end of the
+/// listing. A walk the deadline cut short is still worth showing; it is not
+/// worth freezing into the cache for a day.
+struct Walk<T> {
+    found: T,
+    complete: bool,
+}
+
+/// `(downloads, views)` per hud-db id.
+type Counts = BTreeMap<String, (u64, u64)>;
 
 fn cache_file() -> PathBuf {
     catalog_cache_dir().join("stats-v1.json")
@@ -68,8 +84,11 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
         }
     }
     let client = net::api_client()?;
-    let updated = fetch_comfig_updated(&client);
-    let counts = fetch_tf2huds_counts(&client);
+    let deadline = Instant::now() + STATS_DEADLINE;
+    let updated = fetch_comfig_updated(&client, deadline);
+    let counts = fetch_tf2huds_counts(&client, deadline);
+    let complete = matches!(&updated, Ok(walk) if walk.complete)
+        && matches!(&counts, Ok(walk) if walk.complete);
     let (updated, counts) = match (updated, counts) {
         (Err(err), Err(_)) => {
             if let Some(cache) = cached {
@@ -77,7 +96,10 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
             }
             return Err(err);
         }
-        (updated, counts) => (updated.unwrap_or_default(), counts.unwrap_or_default()),
+        (updated, counts) => (
+            updated.map(|walk| walk.found).unwrap_or_default(),
+            counts.map(|walk| walk.found).unwrap_or_default(),
+        ),
     };
     let mut stats: BTreeMap<String, HudStat> = BTreeMap::new();
     for (id, date) in updated {
@@ -88,15 +110,20 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
         stat.downloads = Some(downloads);
         stat.views = Some(views);
     }
-    let cache = HudStatsCache {
-        fetched_at: now_secs(),
-        stats: stats.clone(),
-    };
-    if let Some(parent) = cache_file().parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(text) = serde_json::to_string(&cache) {
-        let _ = std::fs::write(cache_file(), text);
+    // Only a refresh that read both sources to the end earns a day of TTL:
+    // caching a walk the deadline cut short, or one whose source was down,
+    // would hold half the numbers back until tomorrow.
+    if complete {
+        let cache = HudStatsCache {
+            fetched_at: now_secs(),
+            stats: stats.clone(),
+        };
+        if let Some(parent) = cache_file().parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(text) = serde_json::to_string(&cache) {
+            let _ = std::fs::write(cache_file(), text);
+        }
     }
     Ok(stats)
 }
@@ -107,9 +134,15 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
 
 fn fetch_comfig_updated(
     client: &reqwest::blocking::Client,
-) -> Result<BTreeMap<String, String>, String> {
+    deadline: Instant,
+) -> Result<Walk<BTreeMap<String, String>>, String> {
     let mut out = BTreeMap::new();
+    let mut complete = true;
     for page in 1..=COMFIG_MAX_PAGES {
+        if Instant::now() >= deadline {
+            complete = false;
+            break;
+        }
         let url = format!("{COMFIG_LIST_BASE}/{page}/");
         let html = match net::get_text(client, &url) {
             Ok(html) => html,
@@ -123,7 +156,15 @@ fn fetch_comfig_updated(
         }
         out.extend(found);
     }
-    Ok(out)
+    // Pages that parse to nothing mean the listing's markup moved, not that
+    // comfig.app has no dates. Failing keeps that out of the cache.
+    if out.is_empty() {
+        return Err("comfig.app listed no HUD update dates.".to_string());
+    }
+    Ok(Walk {
+        found: out,
+        complete,
+    })
 }
 
 /// Pairs of (id, ISO date) from one listing page. Each card carries
@@ -213,10 +254,16 @@ struct SvelteNode {
 
 fn fetch_tf2huds_counts(
     client: &reqwest::blocking::Client,
-) -> Result<BTreeMap<String, (u64, u64)>, String> {
+    deadline: Instant,
+) -> Result<Walk<Counts>, String> {
     // 1. The listing pages give the site's own ids.
     let mut ids: Vec<String> = Vec::new();
+    let mut complete = true;
     for page in 1..=TF2HUDS_MAX_PAGES {
+        if Instant::now() >= deadline {
+            complete = false;
+            break;
+        }
         let url = format!("{TF2HUDS_BASE}/huds/__data.json?page={page}");
         let text = match net::get_text(client, &url) {
             Ok(text) => text,
@@ -240,14 +287,19 @@ fn fetch_tf2huds_counts(
     // 2. One data call per HUD, in parallel; each carries its comfig id.
     let worker_count = STATS_WORKERS.min(ids.len().max(1));
     let chunk_size = ids.len().div_ceil(worker_count).max(1);
-    let out = std::thread::scope(|scope| {
+    let (out, walked_all) = std::thread::scope(|scope| {
         let handles: Vec<_> = ids
             .chunks(chunk_size)
             .map(|chunk| {
                 let client = client.clone();
                 scope.spawn(move || {
                     let mut found = Vec::new();
+                    let mut complete = true;
                     for id in chunk {
+                        if Instant::now() >= deadline {
+                            complete = false;
+                            break;
+                        }
                         let url = format!("{TF2HUDS_BASE}/hud/{id}/__data.json");
                         if let Ok(text) = net::get_text(&client, &url) {
                             if let Some(entry) = tf2huds_counts(&text) {
@@ -255,21 +307,29 @@ fn fetch_tf2huds_counts(
                             }
                         }
                     }
-                    found
+                    (found, complete)
                 })
             })
             .collect();
         let mut out = BTreeMap::new();
+        let mut walked_all = true;
         for handle in handles {
-            if let Ok(batch) = handle.join() {
-                for (id, downloads, views) in batch {
-                    out.insert(id, (downloads, views));
+            match handle.join() {
+                Ok((batch, complete)) => {
+                    walked_all &= complete;
+                    for (id, downloads, views) in batch {
+                        out.insert(id, (downloads, views));
+                    }
                 }
+                Err(_) => walked_all = false,
             }
         }
-        out
+        (out, walked_all)
     });
-    Ok(out)
+    Ok(Walk {
+        found: out,
+        complete: complete && walked_all,
+    })
 }
 
 fn devalue_nodes(text: &str) -> Vec<Vec<serde_json::Value>> {

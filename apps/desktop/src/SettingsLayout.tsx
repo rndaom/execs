@@ -29,11 +29,10 @@ const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
 };
 
 /**
- * The settings shell: a 224px grouped sidebar and one 880px content column.
+ * The settings shell: a grouped sidebar and one 880px content column.
  *
- * The lock state is shown in exactly one place — the top banner (RND-188). The
- * sidebar box and the per-pane "read-only" pill it used to duplicate are gone;
- * the disabled controls carry the rest of the message.
+ * The lock state is shown in exactly one place, the top banner; the disabled
+ * controls carry the rest of the message.
  */
 export function SettingsLayout({
   tab,
@@ -49,7 +48,7 @@ export function SettingsLayout({
       data-testid="settings-panes"
       className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-edge bg-bg lg:flex-row"
     >
-      <aside className="shrink-0 border-b border-edge bg-panel lg:w-[224px] lg:border-r lg:border-b-0">
+      <aside className="shrink-0 border-b border-edge bg-panel lg:w-(--sidebar-width) lg:border-r lg:border-b-0">
         <nav
           className="flex gap-0.5 overflow-x-auto px-3 py-3 lg:flex-col lg:gap-0 lg:px-0 lg:py-6"
           aria-label="Settings"

@@ -199,7 +199,9 @@ pub fn set_gameinfo_bypass(
     // the caller's entry check can be minutes old (downloads happen between).
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let updated: Vec<u8> = lines.concat();
-    std::fs::write(&path, updated).map_err(|err| format!("Could not write gameinfo.txt: {err}"))?;
+    // Atomic: a truncated gameinfo.txt means TF2 does not start at all.
+    crate::hash::write_atomic(&path, &updated)
+        .map_err(|err| format!("Could not write gameinfo.txt: {err}"))?;
     Ok(true)
 }
 

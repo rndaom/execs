@@ -13,7 +13,7 @@ import { OptionTile } from "./components/ui/OptionTile";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   type ComfigPreset,
   type OfficialAddon,
@@ -30,7 +30,13 @@ import {
   presetListExpanded,
   visibleComfigPresets,
 } from "./lib/comfig-catalog";
-import { type ComfigUiState, hasBaseVpk, hasComfigCustom, setModuleLevel } from "./lib/comfig-ui";
+import {
+  type ComfigUiState,
+  hasBaseVpk,
+  hasComfigCustom,
+  OFFICIAL_ADDON_DETAILS,
+  setModuleLevel,
+} from "./lib/comfig-ui";
 import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { canWriteSettings } from "./lib/settings-ui";
 
@@ -44,17 +50,6 @@ const PRESET_IMAGES: Record<Exclude<ComfigPreset, "none">, string> = {
   medium_low: presetMediumLow,
   low: presetLow,
   very_low: presetVeryLow,
-};
-
-const ADDON_DETAILS: Record<OfficialAddon, string> = {
-  "no-footsteps": "Remove player footstep sounds.",
-  "no-pyroland": "Disable Pyroland visual effects.",
-  "no-soundscapes": "Remove ambient map soundscapes.",
-  "no-tutorial": "Skip tutorial hints and prompts.",
-  lowmem: "Reduce memory use on limited systems.",
-  "null-canceling-movement": "Keep opposite movement keys responsive.",
-  "flat-mouse": "Use direct, unaccelerated mouse input.",
-  "transparent-viewmodels": "Make weapon viewmodels transparent.",
 };
 
 const DEFAULT_VISIBLE_MODULES = 12;
@@ -146,8 +141,13 @@ export function ComfigPane({
     [state],
   );
   // This pane is instant-apply and holds no user-typed draft, so the shared
-  // seed guard only has to answer "did the incoming bytes change".
-  const [draft, setDraft] = useSeededDraft(incoming, (value) => JSON.stringify(value));
+  // seed guard only has to answer "did the incoming bytes change" — plus the
+  // profile key, so a switch never leaves the previous preset on screen.
+  const [draft, setDraft] = useSeededDraft(
+    incoming,
+    (value) => JSON.stringify(value),
+    draftRecordKey(detail?.id ?? null),
+  );
   const [activeGroupId, setActiveGroupId] = useState<ComfigModuleGroupId>("graphics");
   const [moduleSearch, setModuleSearch] = useState("");
   const [showAllModules, setShowAllModules] = useState(false);
@@ -407,7 +407,7 @@ export function ComfigPane({
                 type="checkbox"
                 testId={`comfig-addon-${item.id}`}
                 title={item.label}
-                description={ADDON_DETAILS[item.id]}
+                description={OFFICIAL_ADDON_DETAILS[item.id]}
                 selected={selected}
                 disabled={locked}
                 onSelect={() => {

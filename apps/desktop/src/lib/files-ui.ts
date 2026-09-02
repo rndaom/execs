@@ -109,8 +109,7 @@ export function cfgFiles(files: { path: string }[], hudId?: string | null): CfgF
  *
  * Advisory findings never block, and findings in *other* files are the
  * business of those files — a stray `unbindall` in an unrelated cfg must not
- * make the file the user is editing unsavable (RND-157 scopes the refusal to
- * the file being saved).
+ * make the file the user is editing unsavable.
  */
 export function blockingFindingsForFile(findings: CfgFinding[], path: string | null): CfgFinding[] {
   if (path === null) {

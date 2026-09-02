@@ -253,6 +253,7 @@ fn linux_steam_candidates() -> Vec<PathBuf> {
         out.push(home.join(".steam/steam"));
         out.push(home.join(".steam/root"));
         out.push(home.join(".var/app/com.valvesoftware.Steam/data/Steam"));
+        out.push(home.join("snap/steam/common/.local/share/Steam"));
     }
     out
 }

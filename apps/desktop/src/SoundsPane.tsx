@@ -6,7 +6,7 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import { forgetSoundUrl, soundKey, useSoundPlayer } from "./hooks/useSoundPlayer";
 import type { Api } from "./lib/api";
 import {
@@ -77,6 +77,7 @@ const SOURCE_FILTERS: { id: SoundSourceId | "all"; label: string }[] = [
  */
 export function SoundsPane({
   api,
+  profileId,
   record,
   layer,
   effective,
@@ -86,6 +87,8 @@ export function SoundsPane({
   onRemove,
 }: {
   api: Api;
+  /** The profile this draft belongs to; a switch discards it. */
+  profileId: string | null;
   record: HitsoundRecord | null;
   layer: GameplayLayer;
   effective: Record<string, string>;
@@ -97,7 +100,7 @@ export function SoundsPane({
   const { running } = useAppStatus();
   const locked = !useCanWrite();
   const cvars = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
-  const recordKey = JSON.stringify(record ?? null);
+  const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
   // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
   const seeded = useMemo(() => seedSoundsDraft(record, cvars), [recordKey, cvars]);
   const [draft, setDraft] = useSeededDraft(seeded, serializeSoundsDraft, recordKey);

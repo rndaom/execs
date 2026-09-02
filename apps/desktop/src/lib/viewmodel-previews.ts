@@ -333,14 +333,3 @@ export function viewmodelStemForGroup(
 
 /** Slot order the pane lists groups in. */
 export const VIEWMODEL_SLOTS: ViewmodelSlot[] = ["primary", "secondary", "melee", "pda"];
-
-/** Real first-person renders from the Official TF2 Wiki, vendored — used only
- * where the CompVMInstaller screenshots cannot be fetched (browser preview). */
-const FALLBACK_SHOTS = import.meta.glob("../assets/viewmodels/*.webp", {
-  eager: true,
-  import: "default",
-}) as Record<string, string>;
-
-export function viewmodelFallbackSrc(classId: ViewmodelClass, slot: ViewmodelSlot): string | null {
-  return FALLBACK_SHOTS[`../assets/viewmodels/${classId}-${slot}.webp`] ?? null;
-}

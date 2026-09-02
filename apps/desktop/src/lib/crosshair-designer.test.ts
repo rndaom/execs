@@ -143,8 +143,8 @@ describe("crosshair designer", () => {
 
 describe("designer fits inside the sprite", () => {
   it("caps size against gap, thickness and outline so the arms are never clipped", () => {
-    // 32 - 16 - 4 - 3 = 9: past that the old slider just clipped the arms flat
-    // against the sprite edge while the user kept dragging.
+    // 32 - 16 - 4 - 3 = 9: past that the arms would clip flat against the
+    // sprite edge while the user kept dragging.
     expect(maxDesignSize({ style: "cross", thickness: 8, gap: 16, outline: 3 })).toBe(9);
     expect(maxDesignSize({ style: "cross", thickness: 2, gap: 0, outline: 0 })).toBe(30);
     // Circle and dot ignore the gap, so they get the full reach back.
@@ -270,7 +270,7 @@ describe("designer centring", () => {
 });
 
 describe("outline dilation", () => {
-  it("grows a full block, not the 4-neighbour diamond the old kernel made", () => {
+  it("grows a full block, not a 4-neighbour diamond", () => {
     const mask = new Uint8Array(SIZE * SIZE);
     mask[32 * SIZE + 32] = 1;
     const grown = dilate(mask, 3, "square");

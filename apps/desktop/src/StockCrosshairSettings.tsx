@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { StockCrosshairSprite } from "./lib/bridge";
 import {
   COLOR_MAX,
@@ -23,11 +23,14 @@ import {
 } from "./lib/stock-crosshair-shapes";
 
 export function StockCrosshairSettings({
+  profileId,
   effective,
   sprites = null,
   managedText,
   onSave,
 }: {
+  /** The profile this draft belongs to; a switch discards it. */
+  profileId: string | null;
   effective: Record<string, string>;
   /** Real sprites from the user's game files; geometry fallback when null. */
   sprites?: Record<string, StockCrosshairSprite> | null;
@@ -39,7 +42,11 @@ export function StockCrosshairSettings({
   // Applying the crosshair pack rewrites cl_crosshair_red/green/blue in this
   // same managed file. Reseeding on every incoming change wiped whatever the
   // user was mid-edit here; `useSeededDraft` keeps a dirty draft instead.
-  const [draft, setDraft] = useSeededDraft(seeded, serializeGameplay);
+  const [draft, setDraft] = useSeededDraft(
+    seeded,
+    serializeGameplay,
+    draftRecordKey(profileId, "stock-crosshair"),
+  );
   const locked = !useCanWrite();
   const dirty = gameplayDirty(draft, seeded);
 

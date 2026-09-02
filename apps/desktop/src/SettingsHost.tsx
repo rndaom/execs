@@ -147,6 +147,9 @@ export function SettingsHost({
 
   const busy = externalBusy || localBusy;
   const layer = detail?.layer ?? "comfig";
+  // Part of every pane's draft key: switching profiles must discard the drafts
+  // on screen, even when the two profiles hold identical content.
+  const profileId = detail?.id ?? null;
   const maps = useMemo(() => mapsFromFiles(files), [files]);
 
   async function reload(opts?: { syncBinds?: boolean }) {
@@ -535,6 +538,7 @@ export function SettingsHost({
         layer === "comfig" && detail !== null && hasBaseVpk(detail.files.map((file) => file.path));
       return (
         <GameplayPane
+          profileId={profileId}
           layer={layer}
           effective={maps.effective}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
@@ -559,6 +563,7 @@ export function SettingsHost({
       return (
         <HudPane
           api={api}
+          profileId={profileId}
           catalogLoading={hudCatalogLoading}
           catalogError={hudCatalogError}
           catalog={hudCatalog}
@@ -619,6 +624,7 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <CrosshairPane
+          profileId={profileId}
           record={detail?.crosshair ?? null}
           layer={layer}
           effective={maps.effective}
@@ -648,6 +654,7 @@ export function SettingsHost({
       return (
         <ViewmodelPane
           api={api}
+          profileId={profileId}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
             void runWrite(async () => {
@@ -673,6 +680,7 @@ export function SettingsHost({
       return (
         <SoundsPane
           api={api}
+          profileId={profileId}
           record={detail?.hitsound ?? null}
           layer={layer}
           effective={maps.effective}
@@ -723,7 +731,7 @@ export function SettingsHost({
                 setModsReport(await api.applyPreloaderMods(addons, particleMods));
               } finally {
                 // A failed apply still restored the previous install
-                // backend-side; the pane must reflect that, not the old state.
+                // backend-side; the pane must reflect that, not the stale state.
                 await refreshModsStatus().catch(() => {});
               }
             });
@@ -768,6 +776,7 @@ export function SettingsHost({
     if (tab === "files") {
       return (
         <FilesPane
+          profileId={profileId}
           files={files}
           hudId={detail?.hud?.id ?? null}
           onSave={(path, text) => {

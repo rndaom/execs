@@ -1,4 +1,4 @@
-import type { HitsoundKind, HitsoundPick, PickedHitsound } from "./bridge";
+import type { ComfigHitsound, HitsoundKind, HitsoundPick, PickedHitsound } from "./bridge";
 import { COMMUNITY_HITSOUNDS } from "./community-hitsounds";
 import { type SoundChoice, STOCK_HITSOUND_EFFECTS } from "./hitsound-ui";
 
@@ -36,13 +36,6 @@ export const SOUND_SORTS: { id: SoundSort; label: string }[] = [
 ];
 
 const SOURCE_ORDER: SoundSourceId[] = ["own", "stock", "community", "comfig"];
-
-/** A comfig.app hits-library entry, as the pinned index lists it. */
-export type ComfigHitsound = {
-  name: string;
-  hash: string;
-  kind: HitsoundKind;
-};
 
 export function stockEntries(): SoundLibraryEntry[] {
   return STOCK_HITSOUND_EFFECTS.map((effect) => ({

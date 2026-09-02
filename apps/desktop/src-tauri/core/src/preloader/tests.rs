@@ -846,8 +846,8 @@ fn rebuild_keep_lists_prefer_sole_homes() {
 }
 
 /// The patched bytes live in the sibling archives, so a content update that
-/// rewrites `_000.vpk` while the directory file keeps its length used to be
-/// invisible — and the restore then wrote stale snapshot bytes at stale
+/// rewrites `_000.vpk` while the directory file keeps its length must not be
+/// invisible: the restore would then write stale snapshot bytes at stale
 /// offsets into fresh game data.
 #[test]
 fn fingerprint_covers_the_sibling_archives() {
@@ -891,7 +891,7 @@ fn snapshot_names_are_hashed_and_legacy_names_migrate() {
         hashed.file_name().unwrap().to_str().unwrap(),
         crate::hash::sha256_hex(rel.as_bytes())
     );
-    // Distinct rels that used to collide now have distinct snapshot names.
+    // Distinct rels get distinct snapshot names.
     assert_ne!(hashed, snapshot_path(&data, "particles/blue/water.pcf"));
 
     // A snapshot written by an older build is adopted, migrated to the hashed
@@ -1019,11 +1019,10 @@ fn overwrite_entry(vpk_path: &Path, rel: &str, content: &[u8]) -> Vec<u8> {
     padded
 }
 
-/// 2026-09-01 field incident: a resized VPK used to take a "game update"
-/// branch that cleared the tracking and deleted every snapshot without
-/// restoring anything. A build that changed how the fingerprint is measured
-/// tripped it on a live install, leaving 61 patched particle files that
-/// nothing could put back. A resize must restore, not discard.
+/// A resized VPK must restore, not discard. Clearing the tracking and deleting
+/// every snapshot on that signal leaves patched particle files nothing can put
+/// back, and a change in how the fingerprint is measured reads as a resize
+/// too.
 #[test]
 fn a_resized_vpk_restores_tracked_patches_instead_of_discarding_them() {
     let (root, data) = fake_root();

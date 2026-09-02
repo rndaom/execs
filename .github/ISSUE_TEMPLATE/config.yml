@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/rndaom/execs/discussions
+    about: Ask how something works, or propose a feature, in Discussions.
+  - name: mastercomfig support
+    url: https://docs.comfig.app/latest/support/
+    about: Questions about mastercomfig presets and modules themselves belong upstream.

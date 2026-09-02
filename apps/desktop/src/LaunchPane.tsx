@@ -33,8 +33,8 @@ export function LaunchPane({
   const status = steamWrite ? steamWriteCopy(steamWrite) : "";
   const { feedback, copy } = useCopyFeedback();
 
-  // The backend strips these on save (RND-158). Flagging them as you type means
-  // the textarea never silently changes under the user.
+  // The backend strips these on save; flagging them as you type means the
+  // textarea never silently changes under the user.
   const forbidden = forbiddenLaunchTokens(value);
   const stripped = lastSave ? strippedLaunchTokens(lastSave.sent, lastSave.saved) : [];
 

@@ -1,5 +1,5 @@
 import { UploadSimple } from "@phosphor-icons/react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Alert } from "../components/ui/Alert";
 import { CROSSHAIR_CANVAS_SIZE } from "../lib/crosshair-ui";
 
@@ -37,10 +37,9 @@ function rasterize(image: CanvasImageSource, width: number, height: number): num
 /**
  * Import a PNG as the "custom" crosshair.
  *
- * Validates before it decodes anything into a texture: size cap, real PNG
- * magic bytes (a renamed JPEG used to sail through), exact 64×64 dimensions
- * with an explicit opt-in to rescale, and an inline message on a decode
- * failure instead of the old silent `onerror` return.
+ * Validates before it decodes anything into a texture: a size cap, real PNG
+ * magic bytes (an extension is not evidence), exact 64×64 dimensions with an
+ * explicit opt-in to rescale, and an inline message when a decode fails.
  */
 export function PngImportField({
   locked,
@@ -51,7 +50,6 @@ export function PngImportField({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
 
   function reset() {
     setPending((current) => {
@@ -106,7 +104,6 @@ export function PngImportField({
         <UploadSimple size={14} />
         Choose a PNG…
         <input
-          ref={inputRef}
           data-testid="crosshair-import-png"
           type="file"
           accept="image/png"

@@ -12,7 +12,7 @@ export function canEditLaunch(running: boolean, busy: boolean): boolean {
 }
 
 /**
- * Flags a profile must never store (AGENTS.md / RND-158). The backend strips
+ * Flags a profile must never store (AGENTS.md). The backend strips
  * these on save; the pane flags them as you type so the textarea never changes
  * under the user without an explanation.
  */

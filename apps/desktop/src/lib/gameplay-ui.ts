@@ -198,10 +198,6 @@ export function gameplayPath(layer: GameplayLayer): string {
   return ownedCfgPath(layer, `${EXECS_GAMEPLAY_STEM}.cfg`);
 }
 
-export function autoexecPath(layer: GameplayLayer): string {
-  return autoexecFilePath(layer);
-}
-
 export function parseCvarMap(text: string): Record<string, string> {
   const values: Record<string, string> = {};
   for (const command of parseCommands(text, "execs_gameplay.cfg")) {
@@ -213,12 +209,8 @@ export function parseCvarMap(text: string): Record<string, string> {
   return values;
 }
 
-export function gameplayFromEffective(effective: Record<string, string>): GameplaySettings {
+function gameplayFromEffective(effective: Record<string, string>): GameplaySettings {
   return applyCvars(defaultGameplay(), effective);
-}
-
-export function parseGameplay(text: string): GameplaySettings {
-  return applyCvars(defaultGameplay(), parseCvarMap(text));
 }
 
 /** Managed file wins for keys it actually sets; effective fills the rest. */

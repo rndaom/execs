@@ -370,8 +370,8 @@ mod tests {
         assert_eq!(&decoded.rgba[0..4], &[255, 255, 255, 200]);
     }
 
-    /// Community crosshair packs ship these; they used to fall through to
-    /// "Unsupported VTF format" and the preview silently dropped to the SVG.
+    /// Community crosshair packs ship these; falling through to "Unsupported
+    /// VTF format" drops the preview silently to the SVG.
     #[test]
     fn decodes_i8_ia88_and_a8() {
         let mut bytes = header(2, 2, 2, 1, FORMAT_I8, 1, 80);

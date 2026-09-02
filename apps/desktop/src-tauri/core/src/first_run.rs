@@ -168,8 +168,8 @@ mod tests {
     }
 
     /// The engine writes whatever bytes the user typed into `name`, so a
-    /// Latin-1 config.cfg is ordinary. It used to make `classify_first_run`
-    /// return `Io(...)` and dead-end the entire first-run screen.
+    /// Latin-1 config.cfg is ordinary. `classify_first_run` must not answer
+    /// `Io(...)` for one and dead-end the entire first-run screen.
     #[test]
     fn a_non_utf8_config_cfg_still_classifies() {
         let dir = crate::test_temp_dir();

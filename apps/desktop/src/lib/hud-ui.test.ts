@@ -16,9 +16,7 @@ import {
   PREVIEW_HUD_SCHEMA,
   paginateHudCatalog,
   parseHudRgba,
-  previewInferredState,
   previewInstalledState,
-  rgbToHex,
   seedHudOptions,
   sortHudCatalog,
   stepHudScreenshot,
@@ -45,8 +43,15 @@ describe("hud catalog helpers", () => {
   });
 
   it("labels a local HUD as installed from this profile", () => {
-    expect(installedHudLabel(previewInstalledState())).toBe("Installed");
-    expect(installedHudLabel(previewInferredState())).toBe("Installed (from this profile)");
+    const installed = previewInstalledState();
+    expect(installedHudLabel(installed)).toBe("Installed");
+    expect(
+      installedHudLabel({
+        ...installed,
+        installed: { id: "rayshud", hash: null, source: "local", options: {} },
+        inferred: true,
+      }),
+    ).toBe("Installed (from this profile)");
   });
 
   it("seeds schema options from the profile and marks dirty edits", () => {
@@ -60,7 +65,6 @@ describe("hud catalog helpers", () => {
   it("round-trips HUD color strings", () => {
     expect(parseHudRgba("0 153 255 255")).toEqual({ r: 0, g: 153, b: 255, a: 255 });
     expect(formatHudRgba(0, 153, 255, 128)).toBe("0 153 255 128");
-    expect(rgbToHex(0, 153, 255)).toBe("#0099ff");
   });
 });
 

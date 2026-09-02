@@ -1,7 +1,6 @@
 /**
- * The one toggle pill. Replaces three independent implementations (the
- * former inherit-binds button switch, the Gameplay peer-checked checkbox and
- * the wizard tile) so the knob geometry and disabled treatment cannot drift.
+ * The one toggle pill: every on/off in the product renders through it, so the
+ * knob geometry and the disabled treatment cannot drift apart.
  */
 export function Switch({
   checked,

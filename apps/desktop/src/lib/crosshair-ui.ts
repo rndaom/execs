@@ -277,6 +277,17 @@ export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): 
   return { shape, assignments, customRgba: null, color, library, design: record?.design ?? null };
 }
 
+/**
+ * Whether the builder holds anything an apply would write.
+ *
+ * Both sides come from the same seed, so a plain serialization is enough: a
+ * new shape, an override, a tint, a designer save, an imported PNG or a
+ * community entry all show up as a difference from the installed record.
+ */
+export function crosshairDraftDirty(draft: CrosshairDraft, seeded: CrosshairDraft): boolean {
+  return JSON.stringify(draft) !== JSON.stringify(seeded);
+}
+
 function clampChannel(value: number): number {
   return Math.min(255, Math.max(0, Number.isFinite(value) ? Math.round(value) : 255));
 }

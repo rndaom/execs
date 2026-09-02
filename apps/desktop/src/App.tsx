@@ -234,7 +234,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             />
           )}
 
-          <AppFooter update={update} pinned={settingsOpen} />
+          <AppFooter api={api} update={update} pinned={settingsOpen} />
         </main>
       </div>
     </AppStatusProvider>

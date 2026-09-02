@@ -95,18 +95,6 @@ pub fn write_config_cfg_dual_to(
     Ok(())
 }
 
-pub fn scan_absorb_delta(tf2_root: &Path) -> Result<AbsorbDelta, ProfileError> {
-    let cloud = find_cloud_config();
-    scan_absorb_delta_to(
-        &profiles_dir(),
-        tf2_root,
-        AbsorbOptions {
-            cloud_config: cloud.as_deref(),
-            steam_roots: None,
-        },
-    )
-}
-
 pub fn scan_absorb_delta_to(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -726,8 +714,8 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// Keep used to record nothing, so the same pack prompt came back on every
-    /// boot and after every TF2 quit until the user gave in and chose Update.
+    /// Keep has to be recorded, or the same pack prompt returns on every boot
+    /// and after every TF2 quit until the user gives in and chooses Update.
     #[test]
     fn keep_is_remembered_so_the_prompt_does_not_return() {
         let dir = crate::test_temp_dir();

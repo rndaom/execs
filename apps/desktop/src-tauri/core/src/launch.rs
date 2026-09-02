@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::finder::discover_steam_roots;
 use crate::hash::write_atomic;
-use crate::process_lock::{
-    live_process_names, refuse_if_running_among, steam_running_among, ProcessOs,
-};
+use crate::process_lock::{live_process_names, refuse_if_running_among, steam_running_among};
 use crate::profile::{load_library_from, load_manifest, profiles_dir, ProfileError};
 use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
 
@@ -77,13 +75,6 @@ pub fn read_launch_options_from(steam_roots: &[PathBuf]) -> String {
 /// Official mastercomfig recommended set. Same on Windows and Linux (no `gamemoderun`).
 pub fn recommended_launch_options() -> String {
     sanitize_launch_options(RECOMMENDED_LAUNCH_OPTIONS)
-}
-
-#[deprecated(
-    note = "the OS distinction was removed with gamemoderun; call recommended_launch_options()"
-)]
-pub fn recommended_launch_options_for(_os: ProcessOs) -> String {
-    recommended_launch_options()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -597,8 +588,8 @@ mod tests {
             .join("111")
             .join("config")
             .join("localconfig.vdf");
-        // `"key" "value" [$WIN32]` used to be read as the key `[$WIN32]` whose
-        // value was the next key, shifting everything after it by one.
+        // A naive parser reads `"key" "value" [$WIN32]` as the key `[$WIN32]`
+        // whose value is the next key, shifting everything after it by one.
         let text = localconfig("-novid").replace(
             "\"LaunchOptions\"\t\t\"-novid\"",
             "\"LaunchOptions\"\t\t\"-novid\"\n\t\t\t\t\t\t\t\"Cloud\"\t\t\"1\" [$WIN32]\n\t\t\t\t\t\t\t\"LastPlayed\"\t\t\"99\"",
@@ -732,11 +723,6 @@ mod tests {
     fn recommended_is_the_official_comfig_set() {
         let expected = "-novid -nojoy -nosteamcontroller -nohltv -particles 1";
         assert_eq!(recommended_launch_options(), expected);
-        #[allow(deprecated)]
-        {
-            assert_eq!(recommended_launch_options_for(ProcessOs::Windows), expected);
-            assert_eq!(recommended_launch_options_for(ProcessOs::Linux), expected);
-        }
         assert_eq!(
             sanitize_launch_options(&format!(
                 "{expected} -autoconfig -default -dxlevel 90 +quit"
@@ -935,8 +921,8 @@ mod tests {
     }
 
     /// Every manifest write goes through `save_manifest`, so the index's
-    /// `updated_at` moves with it — the launch-options writer used to skip it
-    /// and leave the UI showing a stale "last updated".
+    /// `updated_at` moves with it; a writer that skips it leaves the UI showing
+    /// a stale "last updated".
     #[test]
     fn setting_launch_options_touches_the_profile_record() {
         let dir = crate::test_temp_dir();

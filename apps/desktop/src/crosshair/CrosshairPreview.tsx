@@ -16,8 +16,7 @@ export function crosshairShapeLabel(shape: string): string {
  *
  * Community sprites are written into the pack at their own dimensions (32px and
  * 128px entries exist), so this scales any size into the canvas with
- * nearest-neighbour and centres it. The previous `width === 64` guard fell
- * through for everything else and left the user staring at an empty box.
+ * nearest-neighbour and centres it.
  */
 export function CrosshairPreview({
   shape,

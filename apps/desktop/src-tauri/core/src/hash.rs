@@ -5,6 +5,7 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 /// MD5, needed only for the checksum block a VPK v2 directory carries. Not a
 /// security primitive — never use it for integrity decisions.
@@ -64,6 +65,13 @@ pub fn md5(bytes: &[u8]) -> [u8; 16] {
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+/// 32 lowercase hex characters from a v4 UUID: 122 random bits from the OS.
+/// For names that must not collide or be guessed, such as the handles the
+/// frontend gets for a picked file.
+pub fn random_token() -> String {
+    Uuid::new_v4().simple().to_string()
 }
 
 pub fn sha256_reader(mut reader: impl Read) -> io::Result<String> {

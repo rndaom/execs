@@ -13,9 +13,9 @@ export type AppStatus = {
 const AppStatusContext = createContext<AppStatus | null>(null);
 
 /**
- * `{error, busy, running}` used to be threaded App → ReadyPanel →
- * SettingsLayout → SettingsHost → every pane, and re-derived at each hop. One
- * context, one derivation.
+ * `{error, busy, running}` for every pane: one context and one derivation,
+ * rather than a prop threaded App → ReadyPanel → SettingsLayout →
+ * SettingsHost → pane and re-derived at each hop.
  */
 export function AppStatusProvider({ value, children }: { value: AppStatus; children?: ReactNode }) {
   return <AppStatusContext.Provider value={value}>{children}</AppStatusContext.Provider>;

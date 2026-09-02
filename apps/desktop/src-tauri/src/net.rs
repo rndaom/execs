@@ -1,12 +1,11 @@
 //! The app's one HTTP layer. Core stays network-free; everything that leaves
 //! this process goes through here.
 //!
-//! Five fetch modules used to re-implement the same thing: build a client,
-//! GET, check the status, buffer the body, compute a cache path, verify,
-//! write the cache. Three of them borrowed `comfig_fetch::download_bytes`, so
-//! a mastercomfig-specific module was the de-facto HTTP layer — which is
-//! exactly why two GitHub API calls shipped with no timeout at all and no
-//! download had a size ceiling. One module, one timeout policy, one cap.
+//! One module, one timeout policy, one cap. Building a client, GETting,
+//! checking the status, buffering the body, computing a cache path, verifying
+//! and writing the cache all live here; re-implemented per fetch module, that
+//! is how an API call ends up with no timeout and a download with no size
+//! ceiling.
 
 use std::io::Read;
 use std::path::Path;
@@ -40,24 +39,16 @@ pub const MIB: u64 = 1024 * 1024;
 /// *and* after a fresh download, so a corrupted or tampered cache file is
 /// re-fetched instead of served.
 #[derive(Debug, Clone, Copy)]
-// `Size` and `None` complete the policy this module is meant to express, and
-// both are exercised by its tests; today's pinned assets all happen to want a
-// hash or a magic number.
-#[allow(dead_code)]
 pub enum Verify {
     Sha256(&'static str),
-    Size(u64),
     Magic(&'static [u8]),
-    None,
 }
 
 impl Verify {
     pub fn accepts(&self, bytes: &[u8]) -> bool {
         match self {
             Self::Sha256(expected) => execs_core::hash::sha256_hex(bytes) == *expected,
-            Self::Size(expected) => bytes.len() as u64 == *expected,
             Self::Magic(magic) => bytes.starts_with(magic),
-            Self::None => true,
         }
     }
 }
@@ -207,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_accepts_matching_hash_size_and_magic() {
+    fn verify_accepts_matching_hash_and_magic() {
         let bytes = b"VTF\0hello".to_vec();
         let hash: &'static str = Box::leak(execs_core::hash::sha256_hex(&bytes).into_boxed_str());
         assert!(Verify::Sha256(hash).accepts(&bytes));
@@ -215,11 +206,8 @@ mod tests {
             "0000000000000000000000000000000000000000000000000000000000000000"
         )
         .accepts(&bytes));
-        assert!(Verify::Size(9).accepts(&bytes));
-        assert!(!Verify::Size(8).accepts(&bytes));
         assert!(Verify::Magic(b"VTF\0").accepts(&bytes));
         assert!(!Verify::Magic(b"VPK\0").accepts(&bytes));
-        assert!(Verify::None.accepts(&bytes));
     }
 
     #[test]
@@ -268,7 +256,7 @@ mod tests {
 
         assert!(called.get(), "a failing cache must re-download");
         assert_eq!(bytes, good);
-        // ...and the bad file is gone, so the next run is a cache hit.
+        // ...and the bad file has been replaced, so the next run is a cache hit.
         assert_eq!(std::fs::read(&cache).unwrap(), good);
     }
 

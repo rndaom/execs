@@ -18,7 +18,7 @@ export type FirstRunState = {
   addons: OfficialAddonId[];
   /** The Create-new wizard is open over an existing library. */
   creating: boolean;
-  /** Where the new profile's `config.cfg` comes from (RND-187). */
+  /** Where the new profile's `config.cfg` comes from. */
   startFrom: StartFrom;
   setPreset: (preset: ComfigPresetId) => void;
   toggleAddon: (id: OfficialAddonId) => void;

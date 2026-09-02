@@ -1,0 +1,17 @@
+name: Feature request
+description: Something execs should do that it does not do today.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, not the solution. What do you do by hand today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like execs to do?
+    validations:
+      required: true

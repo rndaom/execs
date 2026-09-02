@@ -252,9 +252,9 @@ where
         )?;
     }
 
-    // One weapon script our minimal VDF parser chokes on used to fail the whole
-    // apply and leave the user with no crosshairs at all. Skip it and carry on;
-    // only a run where nothing patched is a real failure.
+    // One weapon script our minimal VDF parser chokes on must not fail the
+    // whole apply and leave the user with no crosshairs at all. Skip it and
+    // carry on; only a run where nothing patched is a real failure.
     let mut patched_count = 0usize;
     let mut skipped_scripts: Vec<String> = Vec::new();
     for (script, body) in scripts {
@@ -1314,8 +1314,8 @@ cl_crosshair_blue 56
         cleanup(&root);
     }
 
-    /// One weapon script our minimal VDF parser chokes on used to fail the whole
-    /// apply, leaving the user with no crosshairs at all.
+    /// One weapon script our minimal VDF parser chokes on must not fail the
+    /// whole apply and leave the user with no crosshairs at all.
     #[test]
     fn an_unparseable_weapon_script_is_skipped_not_fatal() {
         let (root, tf2, id) = setup();
@@ -1375,7 +1375,7 @@ cl_crosshair_blue 56
     #[test]
     fn rgba_buffer_len_refuses_dimensions_that_overflow() {
         assert_eq!(rgba_buffer_len(64, 64), Some(64 * 64 * 4));
-        // `(width * height * 4) as u32` used to wrap here.
+        // `(width * height * 4) as u32` would wrap here.
         assert_eq!(rgba_buffer_len(u32::MAX, u32::MAX), None);
         assert!(encode_vtf_bgra8888(&[], u32::MAX, u32::MAX).is_err());
     }
@@ -1469,7 +1469,8 @@ cl_crosshair_blue 56
         std::fs::create_dir_all(&live).unwrap();
         std::fs::write(live.join("stray.vmt"), b"vmt").unwrap();
 
-        // Nothing tracked on the manifest: the old guard would be skipped.
+        // Nothing tracked on the manifest, so a guard that only consults it
+        // sees nothing to protect.
         assert!(pack_paths(&root.join("profiles"), &id).unwrap().is_empty());
 
         let err =

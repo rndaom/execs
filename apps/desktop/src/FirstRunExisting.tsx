@@ -7,7 +7,7 @@ import { formatInstallLabel } from "./lib/finder-ui";
 
 /**
  * First launch on an install that already has customization: Save current as…
- * only — no Import, no comfig install (RND-152). Shares the onboarding frame
+ * only — no Import, no comfig install. Shares the onboarding frame
  * with the finder and the wizard.
  */
 export function FirstRunExisting({

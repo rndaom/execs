@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 /**
  * The one selectable tile. Flat and hairline-bordered; the selected state is a
  * 1.5px accent ring, a 6% accent wash and a small dot — never a check mark,
- * never a coloured label (AGENTS.md, Design decisions).
+ * never a coloured label (AGENTS.md, "Design decisions").
  *
  * Renders a real `input` so radio groups keep arrow-key semantics and
  * checkboxes stay checkboxes; the visible tile is its `label`.
