@@ -5,6 +5,8 @@ use std::path::Path;
 
 use execs_core::{HudCatalogEntry, HudSchemaView, HudUiState, ProfileDetail};
 use serde::Serialize;
+use tauri::AppHandle;
+use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{active_manifest, blocking, with_profile};
 use crate::error::CommandError;
@@ -24,6 +26,29 @@ pub struct HudStatePayload {
     #[serde(flatten)]
     pub state: HudUiState,
     pub catalog_unavailable: bool,
+}
+
+/// Popularity and recency per HUD id, from comfig.app (last updated) and
+/// tf2huds.dev (downloads, views). Cached for a day; `refresh` forces a read.
+#[tauri::command]
+pub async fn get_hud_stats(
+    refresh: bool,
+) -> Result<BTreeMap<String, crate::hud_stats::HudStat>, CommandError> {
+    blocking(move || Ok(crate::hud_stats::load_or_fetch_stats(refresh)?)).await
+}
+
+/// The pictures behind a HUD's external album (Imgur, or a GitHub showcase
+/// page), so the lightbox can show them in-app instead of linking out.
+#[tauri::command]
+pub async fn get_hud_album(id: String) -> Result<Vec<crate::hud_fetch::AlbumImage>, CommandError> {
+    blocking(move || {
+        let entry = crate::hud_fetch::catalog_entry(&id)?;
+        let Some(album) = entry.album else {
+            return Ok(Vec::new());
+        };
+        Ok(crate::hud_fetch::fetch_hud_album(&album)?)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -49,6 +74,108 @@ pub async fn install_hud(
     let _guard = gate.0.lock().await;
     with_profile(move |root, profile_id| install_hud_from_catalog(&root, &profile_id, &id, false))
         .await
+}
+
+/// Install a HUD the user has on disk as a zip or 7z. The folder name comes
+/// from the archive's; the record is `Local` (no catalog hash, so no update
+/// checks) until Match to catalog pairs it with a hud-db entry.
+#[tauri::command]
+pub async fn import_hud_archive(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+) -> Result<Option<ProfileDetail>, CommandError> {
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Import a HUD archive")
+            .add_filter("HUD archive", &["zip", "7z"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = picked
+        .into_path()
+        .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let _guard = gate.0.lock().await;
+    with_profile(move |root, profile_id| {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let bytes = std::fs::read(&path).map_err(|err| CommandError::unknown(err.to_string()))?;
+        let extracted = execs_core::extract_hud_archive(&bytes)?;
+        Ok(Some(install_local_hud(
+            &root,
+            &profile_id,
+            &name,
+            extracted.tree,
+        )?))
+    })
+    .await
+}
+
+/// Install a HUD from a folder on disk (an extracted download, or one the
+/// user maintains). Same rules as the archive path.
+#[tauri::command]
+pub async fn import_hud_folder(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+) -> Result<Option<ProfileDetail>, CommandError> {
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Import a HUD folder")
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = picked
+        .into_path()
+        .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let _guard = gate.0.lock().await;
+    with_profile(move |root, profile_id| {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let extracted = execs_core::hud_tree_from_dir(&path)?;
+        Ok(Some(install_local_hud(
+            &root,
+            &profile_id,
+            &name,
+            extracted.tree,
+        )?))
+    })
+    .await
+}
+
+fn install_local_hud(
+    root: &Path,
+    profile_id: &str,
+    name: &str,
+    tree: execs_core::HudTree,
+) -> Result<ProfileDetail, CommandError> {
+    let id = execs_core::hud_id_from_name(name);
+    let detail = execs_core::install_hud_pack(
+        root,
+        profile_id,
+        &tree,
+        execs_core::HudRecord {
+            id,
+            hash: None,
+            source: execs_core::HudSource::Local,
+            options: BTreeMap::new(),
+        },
+    )?;
+    // A replaced catalog HUD may have left its option cfgs behind.
+    execs_core::sync_hud_exec_lines(root, profile_id, &[])?;
+    Ok(execs_core::get_active_profile_detail(root)?.unwrap_or(detail))
 }
 
 #[tauri::command]
@@ -126,13 +253,13 @@ fn install_hud_from_catalog(
     preserve_options: bool,
 ) -> Result<ProfileDetail, CommandError> {
     let entry = crate::hud_fetch::catalog_entry(id)?;
-    if !entry.github {
+    if !entry.install.installable() {
         return Err(CommandError::unknown(
-            "Open the author’s page for that HUD — it is not a GitHub zip.",
+            "That HUD has no download this app can fetch — open the author’s page.",
         ));
     }
-    let bytes = crate::hud_fetch::fetch_hud_zip(&entry.repo, &entry.hash)?;
-    let extracted = execs_core::extract_hud_zip(&bytes)?;
+    let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
+    let extracted = execs_core::extract_hud_archive(&bytes)?;
     let mut tree = extracted.tree;
     let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id)?;
     let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);

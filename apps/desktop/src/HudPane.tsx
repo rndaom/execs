@@ -1,15 +1,27 @@
-import { ArrowLeft, ArrowRight, ArrowSquareOut, Images, X } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowSquareOut,
+  FolderOpen,
+  Images,
+  UploadSimple,
+  X,
+} from "@phosphor-icons/react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
+import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useSeededDraft } from "./hooks/useSeededDraft";
+import type { Api } from "./lib/api";
 import {
+  type HudAlbumImage,
   type HudCatalogEntry,
   type HudSchemaView,
+  type HudStat,
   type HudUiState,
   openExternal,
 } from "./lib/bridge";
@@ -18,12 +30,17 @@ import {
   canInstallHud,
   filterHudCatalog,
   formatHudRgba,
+  HUD_SORTS,
+  type HudSort,
+  hudInstallSourceCopy,
   hudOptionsDirty,
+  hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
   paginateHudCatalog,
   parseHudRgba,
   seedHudOptions,
+  sortHudCatalog,
   stepHudScreenshot,
 } from "./lib/hud-ui";
 
@@ -40,9 +57,11 @@ function installedKeyOf(state: HudUiState): string {
 }
 
 export function HudPane({
+  api,
   catalogLoading,
   catalogError,
   catalog,
+  stats,
   state,
   schema,
   onRefresh,
@@ -50,10 +69,15 @@ export function HudPane({
   onUpdate,
   onMatch,
   onApplyOptions,
+  onImportArchive,
+  onImportFolder,
 }: {
+  api: Api;
   catalogLoading: boolean;
   catalogError: string | null;
   catalog: HudCatalogEntry[];
+  /** Popularity and recency per id; empty until the stats have loaded. */
+  stats: Record<string, HudStat>;
   state: HudUiState;
   schema: HudSchemaView | null;
   onRefresh: () => void;
@@ -61,20 +85,26 @@ export function HudPane({
   onUpdate: () => void;
   onMatch: (id: string) => void;
   onApplyOptions: (options: Record<string, string>) => void;
+  /** Install a HUD from a zip/7z or a folder on this computer. */
+  onImportArchive: () => void;
+  onImportFolder: () => void;
 }) {
   const { running, busy } = useAppStatus();
   const locked = !useCanWrite();
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<HudSort>("name");
   const [page, setPage] = useState(0);
   const [viewer, setViewer] = useState<HudViewer | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
   const seeded = useMemo(() => seedHudOptions(schema, state.installed), [schema, state.installed]);
   const [draft, setDraft] = useSeededDraft(
     seeded,
     (value) => JSON.stringify(value),
     installedKeyOf(state),
   );
-  const filtered = filterHudCatalog(catalog, query);
+  const filtered = useMemo(
+    () => sortHudCatalog(filterHudCatalog(catalog, query), stats, sort),
+    [catalog, query, stats, sort],
+  );
   const paged = paginateHudCatalog(filtered, page);
   const dirty = hudOptionsDirty(draft, seeded);
   const installedId = state.installed?.id ?? null;
@@ -85,41 +115,16 @@ export function HudPane({
     ? (catalog.find((entry) => entry.id.toLowerCase() === installedId.toLowerCase()) ?? null)
     : null;
 
-  // Escape and focus are the Modal's job; only the arrow-key paging is ours.
-  useEffect(() => {
-    if (!viewer) {
-      return;
-    }
-    function onKey(event: KeyboardEvent) {
-      if (!viewer) {
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        setViewer({
-          entry: viewer.entry,
-          index: stepHudScreenshot(viewer.index, 1, viewer.entry.screenshots.length),
-        });
-      } else if (event.key === "ArrowLeft") {
-        setViewer({
-          entry: viewer.entry,
-          index: stepHudScreenshot(viewer.index, -1, viewer.entry.screenshots.length),
-        });
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [viewer]);
-
   function goToPage(next: number) {
     setPage(next);
-    listRef.current?.scrollTo({ top: 0 });
+    document.getElementById("hud-catalog")?.scrollIntoView({ block: "start" });
   }
 
   return (
-    <section data-testid="settings-hud" className="flex min-h-0 min-w-0 flex-col text-left">
+    <section data-testid="settings-hud" className="min-w-0 text-left">
       <PaneHeader
         title="HUD"
-        lede="One HUD is mounted per profile. Layout, scheme and animations generally survive Valve Casual; custom materials usually do not."
+        lede="One HUD per profile, installed in a click. Layout, scheme and animations survive Valve Casual; custom materials usually do not."
         actions={<span className="tnum t-meta text-ink-faint">{catalog.length} in catalog</span>}
       />
 
@@ -128,8 +133,11 @@ export function HudPane({
           <div className="hero-row">
             <div className="min-w-0">
               <p className="eyebrow">Active HUD</p>
-              <h2 className="t-pane mt-2 text-[22px]">{installedId}</h2>
-              <p className="t-meta mt-1">{installedLabel}</p>
+              <h2 className="t-pane mt-2 text-[22px]">{installedEntry?.name ?? installedId}</h2>
+              <p className="t-meta mt-1">
+                {installedEntry ? `by ${installedEntry.author} · ` : ""}
+                {installedLabel}
+              </p>
               <p className="t-meta mt-3 max-w-[62ch]">
                 {state.inferred
                   ? "This profile already has a HUD folder. Match it to hud-db to enable updates."
@@ -158,17 +166,33 @@ export function HudPane({
                     Match to catalog…
                   </button>
                 ) : null}
+                {installedEntry &&
+                (installedEntry.screenshots.length > 0 || installedEntry.album) ? (
+                  <button
+                    type="button"
+                    onClick={() => setViewer({ entry: installedEntry, index: 0 })}
+                    className="btn btn-ghost"
+                  >
+                    <Images size={13} />
+                    Screenshots
+                  </button>
+                ) : null}
               </div>
             </div>
 
             {installedEntry?.banner ? (
-              <figure className="surface hero-preview m-0 self-start">
+              <button
+                type="button"
+                onClick={() => setViewer({ entry: installedEntry, index: 0 })}
+                className="surface hero-preview m-0 cursor-zoom-in self-start"
+                title={`View ${installedEntry.name} screenshots`}
+              >
                 <img
                   src={installedEntry.banner}
                   alt={`${installedEntry.name} HUD preview`}
                   className="aspect-video w-full object-cover"
                 />
-              </figure>
+              </button>
             ) : null}
           </div>
 
@@ -357,7 +381,7 @@ export function HudPane({
                                     ),
                                   }))
                                 }
-                                className="min-w-0 accent-brand disabled:opacity-50"
+                                className="range min-w-0"
                               />
                               {/* Percentage is what people mean by opacity; the
                                 raw 0–255 the HUD file stores rides along. */}
@@ -398,11 +422,39 @@ export function HudPane({
         <div>
           <p className="eyebrow">Active HUD</p>
           <h2 className="t-pane mt-2 text-[22px]">Stock Team Fortress 2</h2>
-          <p className="t-meta mt-1">Install a HUD below to add it to this profile.</p>
+          <p className="t-meta mt-1">
+            Install one from the catalog below, or bring your own from this computer.
+          </p>
         </div>
       )}
 
-      <section className="section">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="hud-import-archive"
+          disabled={locked}
+          onClick={onImportArchive}
+          className="btn btn-ghost"
+        >
+          <UploadSimple size={14} />
+          Import a HUD archive…
+        </button>
+        <button
+          type="button"
+          data-testid="hud-import-folder"
+          disabled={locked}
+          onClick={onImportFolder}
+          className="btn btn-ghost"
+        >
+          <FolderOpen size={14} />
+          Import a HUD folder…
+        </button>
+        <span className="t-meta">
+          A zip or 7z, or an extracted folder, with info.vdf inside. It replaces the active HUD.
+        </span>
+      </div>
+
+      <section id="hud-catalog" className="section scroll-mt-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="t-section">Catalog</h2>
@@ -438,12 +490,27 @@ export function HudPane({
           </div>
         </div>
 
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="t-meta">Sort</span>
+          <Segmented
+            label="Sort HUDs"
+            size="sm"
+            testIdPrefix="hud-sort"
+            options={HUD_SORTS}
+            value={sort}
+            onChange={(next) => {
+              setSort(next);
+              setPage(0);
+            }}
+          />
+        </div>
+
         {catalogLoading ? (
           <p
             data-testid="hud-catalog-loading"
             role="status"
             aria-live="polite"
-            className="t-meta mt-4 rounded-lg border border-edge bg-panel px-4 py-2"
+            className="t-meta mt-4"
           >
             {catalog.length === 0
               ? "Loading the HUD catalog…"
@@ -461,12 +528,7 @@ export function HudPane({
           </Alert>
         ) : null}
 
-        <div
-          ref={listRef}
-          data-testid="hud-catalog"
-          aria-busy={catalogLoading}
-          className="mt-4 max-h-[34rem] overflow-y-auto"
-        >
+        <div data-testid="hud-catalog" aria-busy={catalogLoading} className="mt-4">
           {paged.items.length === 0 ? (
             catalogLoading ? null : (
               <p className="t-meta px-1 py-10 text-center">
@@ -478,105 +540,102 @@ export function HudPane({
               </p>
             )
           ) : (
-            /* Hairline rows, not per-row boxes: the de-carded rule the
-               crosshair and viewmodel lists already follow. The banner keeps
-               its own frame — that one is real media. */
+            /* Hairline rows, not per-row boxes. The banner keeps its own
+               frame — that one is real media. */
             <div>
               {paged.items.map((entry) => {
                 const current = installedId?.toLowerCase() === entry.id.toLowerCase();
                 const installable = canInstallHud(entry);
                 const shots = entry.screenshots.length;
+                const hasPictures = shots > 0 || entry.album !== null;
+                const sourceCopy = hudInstallSourceCopy(entry);
+                const statCopy = hudStatCopy(stats[entry.id.toLowerCase()] ?? stats[entry.id]);
                 return (
                   <article
                     key={entry.id}
                     data-testid={`hud-card-${entry.id}`}
                     data-github={entry.github ? "true" : "false"}
-                    className="flex flex-wrap items-start gap-x-4 gap-y-3 border-b border-edge py-3.5"
+                    data-install={entry.install}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-edge py-3.5"
                   >
-                    {entry.banner ? (
-                      <button
-                        type="button"
-                        title={shots > 0 ? `View ${entry.name} screenshots` : undefined}
-                        disabled={shots === 0}
-                        onClick={() => setViewer({ entry, index: 0 })}
-                        className="surface w-28 shrink-0 cursor-zoom-in disabled:cursor-default"
-                      >
+                    <button
+                      type="button"
+                      title={hasPictures ? `View ${entry.name} screenshots` : undefined}
+                      disabled={!hasPictures}
+                      onClick={() => setViewer({ entry, index: 0 })}
+                      className="surface h-16 w-28 shrink-0 cursor-zoom-in disabled:cursor-default"
+                    >
+                      {entry.banner ? (
                         <img
                           src={entry.banner}
                           alt={`${entry.name} HUD preview`}
                           loading="lazy"
-                          className="h-16 w-full object-cover"
+                          className="h-full w-full object-cover"
                         />
-                      </button>
-                    ) : null}
+                      ) : (
+                        <span className="grid h-full w-full place-items-center text-[11px] text-ink-faint">
+                          No picture
+                        </span>
+                      )}
+                    </button>
                     <div className="min-w-48 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <p className="t-row">{entry.name}</p>
                         <p className="truncate text-[12.5px] text-ink-faint">by {entry.author}</p>
                         {current ? <span className="badge badge-ok">Active</span> : null}
                       </div>
-                      {entry.flags.length > 0 ? (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {entry.flags.map((flag) => (
-                            <span
-                              key={flag}
-                              className="rounded-pill border border-edge px-2 py-0.5 text-[11.5px] text-ink-faint"
-                            >
-                              {flag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      {!installable ? (
-                        <p className="t-meta mt-1.5">
-                          External install only. Open the author’s page for instructions.
+                      {statCopy || entry.flags.length > 0 || sourceCopy ? (
+                        <p className="t-meta mt-0.5">
+                          {[
+                            statCopy,
+                            entry.flags.length > 0 ? entry.flags.join(" · ") : null,
+                            sourceCopy,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       ) : null}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        data-testid={`hud-install-${entry.id}`}
-                        disabled={locked || !installable || current}
-                        onClick={() => onInstall(entry.id)}
-                        className="btn btn-primary"
-                      >
-                        {/* Honest label: this row cannot be installed from
-                            here, so "Install" was never the action on offer. */}
-                        {current
-                          ? "Installed"
-                          : !installable
-                            ? "External only"
-                            : running
-                              ? "Close TF2 to install"
-                              : "Install"}
-                      </button>
-                      {shots > 0 ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      {hasPictures ? (
                         <button
                           type="button"
                           data-testid={`hud-screenshots-${entry.id}`}
                           onClick={() => setViewer({ entry, index: 0 })}
-                          className="btn btn-ghost"
+                          aria-label={`${entry.name} screenshots`}
+                          title="Screenshots"
+                          className="btn btn-quiet p-2"
                         >
-                          <Images size={13} />
-                          Screenshots ({shots})
+                          <Images size={15} />
                         </button>
                       ) : null}
                       <button
                         type="button"
                         onClick={() => void openExternal(entry.comfigUrl)}
-                        className="btn btn-ghost"
+                        aria-label={`${entry.name} on comfig.app`}
+                        title="Open on comfig.app"
+                        className="btn btn-quiet p-2"
                       >
-                        comfig.app
-                        <ArrowSquareOut size={11} />
+                        <ArrowSquareOut size={15} />
                       </button>
                       <button
                         type="button"
-                        onClick={() => void openExternal(entry.tf2hudsUrl)}
-                        className="btn btn-ghost"
+                        data-testid={`hud-install-${entry.id}`}
+                        disabled={(locked && installable) || current}
+                        onClick={() =>
+                          installable ? onInstall(entry.id) : void openExternal(entry.repo)
+                        }
+                        className={`btn ml-1 ${current || !installable ? "btn-ghost" : "btn-primary"}`}
                       >
-                        tf2huds.dev
-                        <ArrowSquareOut size={11} />
+                        {/* Honest label: a row with no fetchable archive
+                            opens the author's page instead of pretending. */}
+                        {current
+                          ? "Installed"
+                          : !installable
+                            ? "Author's page"
+                            : running
+                              ? "Close TF2 to install"
+                              : "Install"}
                       </button>
                     </div>
                   </article>
@@ -648,13 +707,8 @@ export function HudPane({
 
       {viewer ? (
         <HudLightbox
+          api={api}
           viewer={viewer}
-          onStep={(delta) =>
-            setViewer({
-              entry: viewer.entry,
-              index: stepHudScreenshot(viewer.index, delta, viewer.entry.screenshots.length),
-            })
-          }
           onPick={(index) => setViewer({ entry: viewer.entry, index })}
           onClose={() => setViewer(null)}
         />
@@ -663,38 +717,105 @@ export function HudPane({
   );
 }
 
+/**
+ * Every picture of a HUD in one place: hud-db's own screenshots first, then
+ * the author's album (Imgur or a GitHub showcase page) fetched in-app, so
+ * nobody has to leave to see what they are choosing.
+ */
 function HudLightbox({
+  api,
   viewer,
-  onStep,
   onPick,
   onClose,
 }: {
+  api: Api;
   viewer: HudViewer;
-  onStep: (delta: number) => void;
   onPick: (index: number) => void;
   onClose: () => void;
 }) {
   const { entry, index } = viewer;
-  const count = entry.screenshots.length;
-  const src = entry.screenshots[index];
+  const [album, setAlbum] = useState<HudAlbumImage[] | null>(null);
+  const [albumFailed, setAlbumFailed] = useState(false);
+
+  useEffect(() => {
+    setAlbum(null);
+    setAlbumFailed(false);
+    if (!entry.album) {
+      return;
+    }
+    let cancelled = false;
+    api
+      .getHudAlbum(entry.id)
+      .then((images) => {
+        if (!cancelled) {
+          setAlbum(images);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAlbumFailed(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, entry.id, entry.album]);
+
+  // hud-db screenshots first; album pictures after, minus any that duplicate them.
+  const pictures = useMemo(() => {
+    const own = entry.screenshots.map((url) => ({ url, thumb: url }));
+    const extra = (album ?? [])
+      .filter((image) => !entry.screenshots.includes(image.url))
+      .map((image) => ({ url: image.url, thumb: image.thumb ?? image.url }));
+    return [...own, ...extra];
+  }, [entry.screenshots, album]);
+  const count = pictures.length;
+  const safeIndex = count === 0 ? 0 : Math.min(index, count - 1);
+  const current = pictures[safeIndex];
+
+  // Escape and focus are the Modal's job; only the arrow-key paging is ours.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "ArrowRight") {
+        onPick(stepHudScreenshot(safeIndex, 1, count));
+      } else if (event.key === "ArrowLeft") {
+        onPick(stepHudScreenshot(safeIndex, -1, count));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [safeIndex, count, onPick]);
+
+  const albumNote = entry.album
+    ? album === null && !albumFailed
+      ? "Loading the author's album…"
+      : albumFailed
+        ? "The author's album could not be loaded in-app."
+        : album && album.length > 0
+          ? `${album.length} from the author's album`
+          : null
+    : null;
+
   return (
     <Modal
       open
       testId="hud-lightbox"
       title={entry.name}
-      description={`by ${entry.author} · ${index + 1} of ${count}`}
+      description={`by ${entry.author}${count > 0 ? ` · ${safeIndex + 1} of ${count}` : ""}${
+        albumNote ? ` · ${albumNote}` : ""
+      }`}
       className="fixed inset-4 z-50 flex flex-col sm:inset-8"
       onClose={onClose}
     >
       <div className="absolute top-3 right-3">
         <div className="flex items-center gap-2">
-          {entry.album ? (
+          {entry.album && albumFailed ? (
             <button
               type="button"
               onClick={() => void openExternal(entry.album as string)}
               className="btn btn-ghost"
             >
-              Full album
+              Open album
               <ArrowSquareOut size={12} />
             </button>
           ) : null}
@@ -715,24 +836,32 @@ function HudLightbox({
           <button
             type="button"
             aria-label="Previous screenshot"
-            onClick={() => onStep(-1)}
+            onClick={() => onPick(stepHudScreenshot(safeIndex, -1, count))}
             className="btn btn-ghost absolute left-0 z-10 p-2.5"
           >
             <ArrowLeft size={18} />
           </button>
         ) : null}
-        <img
-          key={src}
-          data-testid="hud-lightbox-image"
-          src={src}
-          alt={`${entry.name} screenshot ${index + 1}`}
-          className="max-h-full min-h-0 max-w-full rounded-lg border border-edge object-contain"
-        />
+        {current ? (
+          <img
+            key={current.url}
+            data-testid="hud-lightbox-image"
+            src={current.url}
+            alt={`${entry.name} screenshot ${safeIndex + 1}`}
+            className="enter-fade max-h-full min-h-0 max-w-full rounded-lg border border-edge object-contain"
+          />
+        ) : (
+          <p className="t-meta">
+            {entry.album && !albumFailed && album === null
+              ? "Loading pictures…"
+              : "No pictures for this HUD yet."}
+          </p>
+        )}
         {count > 1 ? (
           <button
             type="button"
             aria-label="Next screenshot"
-            onClick={() => onStep(1)}
+            onClick={() => onPick(stepHudScreenshot(safeIndex, 1, count))}
             className="btn btn-ghost absolute right-0 z-10 p-2.5"
           >
             <ArrowRight size={18} />
@@ -742,18 +871,20 @@ function HudLightbox({
 
       {count > 1 ? (
         <div className="mt-3 flex justify-center gap-2 overflow-x-auto pb-1">
-          {entry.screenshots.map((shot, shotIndex) => (
+          {pictures.map((shot, shotIndex) => (
             <button
-              key={shot}
+              key={shot.url}
               type="button"
               aria-label={`Screenshot ${shotIndex + 1}`}
-              aria-current={shotIndex === index}
+              aria-current={shotIndex === safeIndex}
               onClick={() => onPick(shotIndex)}
-              className={`shrink-0 overflow-hidden rounded-md border transition-colors ${
-                shotIndex === index ? "border-brand" : "border-edge hover:border-edge-strong"
+              className={`shrink-0 overflow-hidden rounded-md transition-shadow ${
+                shotIndex === safeIndex
+                  ? "shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
+                  : "border border-edge hover:border-edge-strong"
               }`}
             >
-              <img src={shot} alt="" loading="lazy" className="h-12 w-20 object-cover" />
+              <img src={shot.thumb} alt="" loading="lazy" className="h-12 w-20 object-cover" />
             </button>
           ))}
         </div>

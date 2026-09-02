@@ -7,6 +7,7 @@ import {
   Package,
   Play,
   SlidersHorizontal,
+  SpeakerHigh,
   UserFocus,
 } from "@phosphor-icons/react";
 import type { ComponentType, ReactNode } from "react";
@@ -21,6 +22,7 @@ const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
   hud: Monitor,
   crosshair: Crosshair,
   viewmodels: UserFocus,
+  sounds: SpeakerHigh,
   mods: Package,
   files: FolderOpen,
   launch: Play,

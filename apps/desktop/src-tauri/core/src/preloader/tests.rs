@@ -988,3 +988,277 @@ fn an_empty_selection_does_not_force_the_bypass_on() {
         "gameinfo.txt must be byte-identical"
     );
 }
+
+fn blue_water() -> PreloaderSelection {
+    PreloaderSelection {
+        addons: vec![],
+        particle_mods: vec!["Blue Water".into()],
+    }
+}
+
+fn entry_bytes(vpk_path: &Path, rel: &str) -> Vec<u8> {
+    let entries = map_vpk_entries(vpk_path).unwrap();
+    crate::vpk::read_vpk_entry(vpk_path, entries.get(rel).unwrap()).unwrap()
+}
+
+/// Judged the way the game does: by the directory's stock CRC.
+fn entry_is_stock(vpk_path: &Path, rel: &str) -> bool {
+    let entries = map_vpk_entries(vpk_path).unwrap();
+    let entry = entries.get(rel).unwrap();
+    is_stock(&crate::vpk::read_vpk_entry(vpk_path, entry).unwrap(), entry)
+}
+
+/// Write `content` (space-padded to the stock size) straight into an entry,
+/// the way another tool — or Steam's verify, when given stock bytes — would.
+fn overwrite_entry(vpk_path: &Path, rel: &str, content: &[u8]) -> Vec<u8> {
+    let entries = map_vpk_entries(vpk_path).unwrap();
+    let entry = entries.get(rel).unwrap();
+    let mut padded = content.to_vec();
+    padded.resize(entry.length as usize, b' ');
+    crate::vpk::patch_vpk_entry(vpk_path, entry, &padded).unwrap();
+    padded
+}
+
+/// 2026-09-01 field incident: a resized VPK used to take a "game update"
+/// branch that cleared the tracking and deleted every snapshot without
+/// restoring anything. A build that changed how the fingerprint is measured
+/// tripped it on a live install, leaving 61 patched particle files that
+/// nothing could put back. A resize must restore, not discard.
+#[test]
+fn a_resized_vpk_restores_tracked_patches_instead_of_discarding_them() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let vpk_path = root.join("tf").join(MISC_VPK);
+    let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
+    let pristine_sibling = std::fs::read(&sibling_path).unwrap();
+
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    assert!(!entry_is_stock(&vpk_path, "particles/water.pcf"));
+
+    // Grow the archive without moving an entry: an update that only appends,
+    // and also exactly what a re-measured fingerprint looks like.
+    let grow = |sibling_path: &Path| {
+        let mut sibling = std::fs::read(sibling_path).unwrap();
+        sibling.extend_from_slice(b"appended by an update");
+        std::fs::write(sibling_path, &sibling).unwrap();
+    };
+    grow(&sibling_path);
+
+    let report =
+        apply_preloader_selection(&root, &data, &zip_path, &PreloaderSelection::default(), &[])
+            .unwrap();
+    assert!(report.baseline_reset);
+    assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+    assert!(entry_is_stock(&vpk_path, "particles/water_dx80.pcf"));
+    assert_eq!(
+        &std::fs::read(&sibling_path).unwrap()[..pristine_sibling.len()],
+        &pristine_sibling[..]
+    );
+    assert!(load_state(&data).patched.is_empty());
+    // Every snapshot was consumed by the restore (the folder itself may stay).
+    let leftover = std::fs::read_dir(originals_dir(&data))
+        .map(|dir| dir.count())
+        .unwrap_or(0);
+    assert_eq!(leftover, 0, "no snapshot may survive a full restore");
+
+    // The same through Restore stock files.
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    grow(&sibling_path);
+    assert!(preloader_status(&root, &data).unwrap().stale);
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert_eq!(report.restored_files.len(), 2);
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+    assert!(load_state(&data).patched.is_empty());
+}
+
+/// An entry that was already modified when execs first patched it (an
+/// earlier install whose tracking was lost, or another tool) is never
+/// mistaken for stock: the snapshot is recorded as non-pristine, the report
+/// says so, and Restore honestly puts back what was there while still
+/// flagging the file. Once stock bytes reappear (Steam's verify), the next
+/// install snapshots them and Restore reaches stock again.
+#[test]
+fn an_entry_modified_before_execs_touched_it_is_reported_and_reverts_to_what_was_there() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let vpk_path = root.join("tf").join(MISC_VPK);
+    let foreign = overwrite_entry(
+        &vpk_path,
+        "particles/water.pcf",
+        &tiny_pcf("water_effect", 1.0),
+    );
+    assert!(!entry_is_stock(&vpk_path, "particles/water.pcf"));
+
+    let report = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let notice = report
+        .skipped
+        .iter()
+        .find(|notice| notice.file == "particles/water.pcf")
+        .expect("the foreign patch is reported");
+    assert!(
+        notice.reason.contains("already modified"),
+        "{}",
+        notice.reason
+    );
+    assert!(
+        !report
+            .skipped
+            .iter()
+            .any(|notice| notice.file == "particles/water_dx80.pcf"),
+        "the twin was stock and must not be flagged: {:?}",
+        report.skipped
+    );
+    let state = load_state(&data);
+    assert!(!state.patched["particles/water.pcf"].pristine);
+    assert!(state.patched["particles/water_dx80.pcf"].pristine);
+
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert_eq!(entry_bytes(&vpk_path, "particles/water.pcf"), foreign);
+    assert!(entry_is_stock(&vpk_path, "particles/water_dx80.pcf"));
+    // What came back is not stock, and the revert says so instead of
+    // reporting a clean restore.
+    assert_eq!(report.failures.len(), 1, "{:?}", report.failures);
+    assert!(report.failures[0].starts_with("particles/water.pcf:"));
+    assert!(report.failures[0].contains("no snapshot"));
+
+    // Steam's verify puts stock bytes back; the next install sees them.
+    overwrite_entry(
+        &vpk_path,
+        "particles/water.pcf",
+        &tiny_pcf("water_effect", 9.0),
+    );
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+    let report = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+    assert!(load_state(&data).patched["particles/water.pcf"].pristine);
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+}
+
+/// A patched particle file execs holds no snapshot for is a stale patch
+/// nothing here can undo — and, when its materials are gone, the source of
+/// the "unimplemented sprite renderer" console flood. Status, the apply
+/// report and the revert report all have to name it.
+#[test]
+fn stale_patches_execs_does_not_track_are_reported_everywhere() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let vpk_path = root.join("tf").join(MISC_VPK);
+    overwrite_entry(
+        &vpk_path,
+        "particles/disguise.pcf",
+        &tiny_pcf("spy_smoke", 1.0),
+    );
+
+    assert_eq!(
+        preloader_status(&root, &data).unwrap().untracked_modified,
+        vec!["particles/disguise.pcf".to_string()]
+    );
+
+    let report = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let notice = report
+        .skipped
+        .iter()
+        .find(|notice| notice.file == "particles/disguise.pcf")
+        .expect("the stale patch is reported");
+    assert!(notice.reason.contains("no snapshot"), "{}", notice.reason);
+    // Our own, tracked patches are not confused with stale ones.
+    assert!(
+        !report
+            .skipped
+            .iter()
+            .any(|notice| notice.file.starts_with("particles/water")),
+        "{:?}",
+        report.skipped
+    );
+    assert_eq!(
+        preloader_status(&root, &data).unwrap().untracked_modified,
+        vec!["particles/disguise.pcf".to_string()]
+    );
+
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+    assert_eq!(report.failures.len(), 1, "{:?}", report.failures);
+    assert!(report.failures[0].starts_with("particles/disguise.pcf:"));
+}
+
+/// After Steam's verify (or an update) has already put stock bytes back,
+/// the restore has nothing to write: the entry is simply untracked. It used
+/// to be reported as "the game replaced this entry" and kept its snapshot
+/// forever, which a later install would then write back over fresh files.
+#[test]
+fn restore_untracks_an_entry_that_already_holds_stock_bytes() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let vpk_path = root.join("tf").join(MISC_VPK);
+
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    overwrite_entry(
+        &vpk_path,
+        "particles/water.pcf",
+        &tiny_pcf("water_effect", 9.0),
+    );
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert!(load_state(&data).patched.is_empty());
+    assert!(!snapshot_path(&data, "particles/water.pcf").exists());
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+}
+
+/// The game ships new stock content for a file at the same size (the
+/// directory CRC moves) while our patched bytes survive in place. The old
+/// snapshot is no longer a restore — writing it would plant outdated stock
+/// bytes under the new CRC — so it is discarded and reported.
+#[test]
+fn a_pristine_snapshot_the_game_outdated_is_discarded_not_written_back() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let vpk_path = root.join("tf").join(MISC_VPK);
+
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let patched = entry_bytes(&vpk_path, "particles/water.pcf");
+
+    // Rebuild the archive as fake_root does, with new stock water content of
+    // the same length.
+    let mut files = BTreeMap::new();
+    let stock_len = patched.len();
+    let mut new_stock = tiny_pcf("water_effect", 12.0);
+    new_stock.resize(stock_len, b' ');
+    let mut old_stock = tiny_pcf("water_effect", 9.0);
+    old_stock.resize(stock_len, b' ');
+    let mut disguise = tiny_pcf("spy_smoke", 3.0);
+    disguise.resize(disguise.len() + 32, b' ');
+    files.insert("particles/water.pcf".to_string(), new_stock);
+    files.insert("particles/water_dx80.pcf".to_string(), old_stock);
+    files.insert("particles/disguise.pcf".to_string(), disguise);
+    write_split_vpk(&vpk_path, &files);
+    // ...and our patch is still sitting there.
+    overwrite_entry(&vpk_path, "particles/water.pcf", &patched);
+
+    let report = revert_preloader(&root, &data, &[]).unwrap();
+    assert!(
+        report
+            .failures
+            .iter()
+            .any(|failure| failure.starts_with("particles/water.pcf:")
+                && failure.contains("discarded")),
+        "{:?}",
+        report.failures
+    );
+    assert_eq!(
+        entry_bytes(&vpk_path, "particles/water.pcf"),
+        patched,
+        "outdated stock bytes must not be written under the new CRC"
+    );
+    assert!(!snapshot_path(&data, "particles/water.pcf").exists());
+    assert!(!load_state(&data)
+        .patched
+        .contains_key("particles/water.pcf"));
+    // The twin, whose stock content did not change, was restored normally.
+    assert!(entry_is_stock(&vpk_path, "particles/water_dx80.pcf"));
+}

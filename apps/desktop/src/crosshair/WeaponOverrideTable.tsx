@@ -1,4 +1,5 @@
 import { ClassTabs } from "../components/ui/ClassTabs";
+import { Disclosure } from "../components/ui/Disclosure";
 import {
   assignmentFor,
   assignSlotForAllClasses,
@@ -11,7 +12,8 @@ import {
   type Tf2Class,
   weaponsForClass,
 } from "../lib/crosshair-ui";
-import { crosshairShapeLabel } from "./CrosshairPreview";
+import { CrosshairChoice } from "./CrosshairChoice";
+import type { PreviewPixels } from "./useCrosshairDraft";
 
 export const ALL_CLASSES_TAB = "all" as const;
 
@@ -34,6 +36,7 @@ export function WeaponOverrideTable({
   choices,
   classTab,
   locked,
+  previewFor,
   onSelectClass,
   onChange,
 }: {
@@ -41,6 +44,7 @@ export function WeaponOverrideTable({
   choices: CrosshairShape[];
   classTab: ClassTab;
   locked: boolean;
+  previewFor: (name: string) => PreviewPixels | null;
   onSelectClass: (tab: ClassTab) => void;
   onChange: (next: CrosshairDraft) => void;
 }) {
@@ -49,12 +53,22 @@ export function WeaponOverrideTable({
     id,
     label: <span className="capitalize">{id === ALL_CLASSES_TAB ? "All classes" : id}</span>,
   }));
+  const overrides = Object.keys(draft.assignments).length;
 
   return (
-    <div className="mt-8 border-t border-edge pt-6">
+    <Disclosure
+      storageKey="crosshair-overrides"
+      summary={
+        <span className="flex items-center gap-2">
+          Weapon overrides
+          {overrides > 0 ? <span className="badge tnum">{overrides}</span> : null}
+        </span>
+      }
+      testId="crosshair-overrides"
+      className="mt-8 border-t border-edge pt-2"
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="t-row">Weapon overrides</h3>
           <p className="t-meta mt-0.5">
             Set whole slots for every class at once, or pick a class to fine-tune single weapons.
           </p>
@@ -97,39 +111,26 @@ export function WeaponOverrideTable({
             {slots.map((slot) => {
               const shared = slotAssignment(draft, slot);
               return (
-                <label key={slot} className="row min-h-11 text-[14px] text-ink">
+                <div key={slot} className="row min-h-11 text-[14px] text-ink">
                   <span className="min-w-0">
                     <span className="block">{slotLabel(slot)}</span>
                     <span className="eyebrow mt-0.5 block">
                       {shared === null ? "Mixed shapes" : "Every class"}
                     </span>
                   </span>
-                  <select
-                    data-testid={`crosshair-slot-${slot}`}
-                    aria-label={`Crosshair for every ${slot} weapon`}
+                  <CrosshairChoice
+                    testId={`crosshair-slot-${slot}`}
+                    label={`Crosshair for every ${slot} weapon`}
+                    value={shared ?? draft.shape}
+                    mixed={shared === null}
+                    choices={choices}
+                    color={draft.color}
+                    customRgba={draft.customRgba}
+                    previewFor={previewFor}
                     disabled={locked}
-                    value={shared ?? "mixed"}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      if (value === "mixed") {
-                        return;
-                      }
-                      onChange(assignSlotForAllClasses(draft, slot, value as CrosshairShape));
-                    }}
-                    className="field max-w-40 shrink-0 px-2 py-1.5 text-[13px] capitalize text-ink outline-none disabled:opacity-50"
-                  >
-                    {shared === null ? (
-                      <option value="mixed" disabled>
-                        mixed
-                      </option>
-                    ) : null}
-                    {choices.map((shape) => (
-                      <option key={shape} value={shape}>
-                        {crosshairShapeLabel(shape)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={(shape) => onChange(assignSlotForAllClasses(draft, slot, shape))}
+                  />
+                </div>
               );
             })}
           </div>
@@ -146,37 +147,31 @@ export function WeaponOverrideTable({
           aria-labelledby={`${TAB_PREFIX}-${classTab}`}
         >
           {weaponsForClass(classTab).map((weapon) => (
-            <label key={weapon.script} className="row min-h-11 text-[14px] text-ink">
+            <div key={weapon.script} className="row min-h-11 text-[14px] text-ink">
               <span className="min-w-0">
                 <span className="block truncate text-[14px]">{weapon.label}</span>
                 <span className="eyebrow mt-0.5 block">{weapon.slot}</span>
               </span>
-              <select
-                data-testid={`crosshair-weapon-${weapon.script}`}
-                aria-label={`Crosshair for ${weapon.label}`}
-                disabled={locked}
+              <CrosshairChoice
+                testId={`crosshair-weapon-${weapon.script}`}
+                label={`Crosshair for ${weapon.label}`}
                 value={assignmentFor(draft, weapon.script)}
-                onChange={(event) =>
+                choices={choices}
+                color={draft.color}
+                customRgba={draft.customRgba}
+                previewFor={previewFor}
+                disabled={locked}
+                onChange={(shape) =>
                   onChange({
                     ...draft,
-                    assignments: {
-                      ...draft.assignments,
-                      [weapon.script]: event.target.value as CrosshairShape,
-                    },
+                    assignments: { ...draft.assignments, [weapon.script]: shape },
                   })
                 }
-                className="field max-w-36 shrink-0 px-2 py-1.5 text-[13px] capitalize text-ink outline-none disabled:opacity-50"
-              >
-                {choices.map((shape) => (
-                  <option key={shape} value={shape}>
-                    {crosshairShapeLabel(shape)}
-                  </option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
           ))}
         </div>
       )}
-    </div>
+    </Disclosure>
   );
 }

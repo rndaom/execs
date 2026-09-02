@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider } from "./hooks/useAppStatus";
+import type { Api } from "./lib/api";
 import { emptyHudState, PREVIEW_HUD_CATALOG } from "./lib/hud-ui";
 
 const noop = () => undefined;
@@ -13,9 +14,12 @@ function renderHudPane(catalogLoading: boolean, catalogError: string | null): st
       AppStatusProvider,
       { value: { error: null, setError: () => undefined, busy: false, running: false } },
       createElement(HudPane, {
+        // The lightbox is the only consumer, and it is closed in every case here.
+        api: {} as Api,
         catalogLoading,
         catalogError,
         catalog: PREVIEW_HUD_CATALOG,
+        stats: {},
         state: emptyHudState(),
         schema: null,
         onRefresh: noop,
@@ -23,6 +27,8 @@ function renderHudPane(catalogLoading: boolean, catalogError: string | null): st
         onUpdate: noop,
         onMatch: noop,
         onApplyOptions: noop,
+        onImportArchive: noop,
+        onImportFolder: noop,
       }),
     ),
   );

@@ -24,6 +24,7 @@ import {
 import type {
   HudCatalogEntry,
   HudSchemaView,
+  HudStat,
   HudUiState,
   ModsCatalog,
   PreloaderReport,
@@ -46,6 +47,7 @@ import { PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import type { SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
+import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
 type CfgText = { path: string; text: string };
@@ -105,6 +107,7 @@ export function SettingsHost({
   const [launchSaved, setLaunchSaved] = useState<{ sent: string; saved: string } | null>(null);
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
   const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
+  const [hudStats, setHudStats] = useState<Record<string, HudStat>>({});
   const [hudState, setHudState] = useState<HudUiState>(emptyHudState);
   const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(null);
   const [hudCatalogLoading, setHudCatalogLoading] = useState(true);
@@ -229,6 +232,16 @@ export function SettingsHost({
         }
         setHudCatalog(nextCatalog);
         setHudState(nextState);
+        // Numbers are decoration on top of the catalog: fetched after it,
+        // never blocking it, and a failure just leaves the sort on names.
+        api
+          .getHudStats(refresh)
+          .then((nextStats) => {
+            if (request === hudRequest.current) {
+              setHudStats(nextStats);
+            }
+          })
+          .catch(() => {});
         if (nextState.schemaSupported) {
           const nextSchema = await api.getHudSchema();
           if (request === hudRequest.current) {
@@ -545,9 +558,11 @@ export function SettingsHost({
     if (tab === "hud") {
       return (
         <HudPane
+          api={api}
           catalogLoading={hudCatalogLoading}
           catalogError={hudCatalogError}
           catalog={hudCatalog}
+          stats={hudStats}
           state={hudState}
           schema={hudSchema}
           onRefresh={() => {
@@ -579,6 +594,21 @@ export function SettingsHost({
             void runWrite(async () => {
               await api.applyHudOptions(options);
               await reloadHud(false);
+            });
+          }}
+          onImportArchive={() => {
+            void runWrite(async () => {
+              // Cancelling the dialog is a no-op, not an error.
+              if (await api.importHudArchive()) {
+                await reloadHud(false);
+              }
+            });
+          }}
+          onImportFolder={() => {
+            void runWrite(async () => {
+              if (await api.importHudFolder()) {
+                await reloadHud(false);
+              }
             });
           }}
         />
@@ -617,6 +647,7 @@ export function SettingsHost({
     if (tab === "viewmodels") {
       return (
         <ViewmodelPane
+          api={api}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
             void runWrite(async () => {
@@ -633,9 +664,32 @@ export function SettingsHost({
               await api.removeViewmodels();
             });
           }}
-          onTogglePreload={(enabled) => {
+        />
+      );
+    }
+
+    if (tab === "sounds") {
+      const path = gameplayPath(layer);
+      return (
+        <SoundsPane
+          api={api}
+          record={detail?.hitsound ?? null}
+          layer={layer}
+          effective={maps.effective}
+          managedText={files.find((file) => file.path === path)?.text ?? ""}
+          onSaveCvars={(gameplayText) => {
             void runWrite(async () => {
-              await api.setViewmodelPreload(enabled);
+              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+            });
+          }}
+          onApply={(hit, kill) => {
+            void runWrite(async () => {
+              await api.applyHitsounds(hit, kill);
+            });
+          }}
+          onRemove={() => {
+            void runWrite(async () => {
+              await api.removeHitsounds();
             });
           }}
         />
@@ -679,6 +733,11 @@ export function SettingsHost({
               setModsPayload(await api.setGameinfoBypass(enabled));
             });
           }}
+          onTogglePreload={(enabled) => {
+            void runWrite(async () => {
+              setModsPayload(await api.setProfilePreload(enabled));
+            });
+          }}
           onRevert={() => {
             void runWrite(async () => {
               try {
@@ -689,6 +748,16 @@ export function SettingsHost({
               }
             });
           }}
+          onRepair={async () => {
+            onError(null);
+            try {
+              await api.repairGameFiles();
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not start the repair.");
+              throw err;
+            }
+          }}
+          onRefreshStatus={refreshModsStatus}
           onOpenRepo={() => {
             void api.openExternal(PRELOADER_REPO_URL);
           }}

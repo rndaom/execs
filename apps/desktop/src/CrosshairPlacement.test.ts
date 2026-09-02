@@ -71,19 +71,28 @@ describe("crosshair settings placement", () => {
     expect(stockStart).toBeGreaterThanOrEqual(0);
     expect(builderStart).toBeGreaterThan(stockStart);
     expect(markup).toContain('data-testid="stock-crosshair-file"');
+    // Every stock file is a picture, not a dropdown line.
+    expect(markup).toContain('data-testid="stock-crosshair-file-crosshair7"');
+    expect(markup).not.toContain("<select");
     expect(markup).toContain('data-testid="crosshair-preview"');
     expect(markup).toContain('data-testid="crosshair-apply"');
     expect(markup).toContain('data-testid="crosshair-color"');
   });
 
   it("renders the selected stock crosshair shape in the live preview", () => {
-    const markup = renderCrosshair();
+    // The picker grid draws every file, so judge the hero preview alone.
+    const hero = (markup: string) => {
+      const start = markup.indexOf('data-testid="stock-crosshair-preview"');
+      const end = markup.indexOf("Live preview", start);
+      return markup.slice(start, end);
+    };
+    const markup = hero(renderCrosshair());
     // cl_crosshair_file crosshair3 = open circle: the SVG carries the file id
     // and circle geometry, not a hardcoded plus.
     expect(markup).toContain('data-testid="stock-crosshair-shape"');
     expect(markup).toContain('data-file="crosshair3"');
     expect(markup).toContain("<circle");
-    const crosshair7 = renderCrosshair(false, "cl_crosshair_file crosshair7\n");
+    const crosshair7 = hero(renderCrosshair(false, "cl_crosshair_file crosshair7\n"));
     expect(crosshair7).toContain('data-file="crosshair7"');
     expect(crosshair7).toContain("<rect");
     expect(crosshair7).not.toContain("<circle");
@@ -100,7 +109,8 @@ describe("crosshair settings placement", () => {
   it("locks both stock and custom controls while TF2 is running", () => {
     const markup = renderCrosshair(true);
 
-    expect(markup).toMatch(/data-testid="stock-crosshair-file"[^>]*disabled=""/);
+    expect(markup).toMatch(/data-testid="stock-crosshair-file-default"[^>]*disabled=""/);
+    expect(markup).toMatch(/data-testid="stock-crosshair-file-crosshair3"[^>]*disabled=""/);
     expect(markup).toMatch(/data-testid="stock-crosshair-apply"[^>]*disabled=""/);
     expect(markup).toMatch(/data-testid="crosshair-apply"[^>]*disabled=""/);
   });

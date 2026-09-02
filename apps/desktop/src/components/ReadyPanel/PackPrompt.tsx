@@ -21,6 +21,7 @@ export function PackPrompt({
     <Modal
       open={delta !== null}
       role="alertdialog"
+      scrim={false}
       testId="absorb-pack-prompt"
       title="Custom files changed"
       description="TF2 changed packs in custom. Update the active profile?"

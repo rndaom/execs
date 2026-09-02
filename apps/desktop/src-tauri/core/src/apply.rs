@@ -32,6 +32,8 @@ pub struct ProfileDetail {
     pub crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewmodel: Option<ViewmodelRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hitsound: Option<crate::hitsound::HitsoundRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,6 +62,7 @@ pub fn detail_from_manifest(manifest: &crate::profile::ProfileManifest) -> Profi
         hud: manifest.hud.clone(),
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
+        hitsound: manifest.hitsound.clone(),
     }
 }
 

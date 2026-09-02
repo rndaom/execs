@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::hash::sha256_hex;
-use crate::vpk::{patch_vpk_entry, VpkEntryLocation};
+use crate::vpk::{crc32, patch_vpk_entry, read_vpk_entry, VpkEntryLocation};
 
 use super::{MISC_VPK, PRELOADER_VPK};
 
@@ -53,6 +53,53 @@ pub struct PatchedEntry {
     /// now, so the rel has to be stored rather than decoded from the name.
     #[serde(default)]
     pub rel: String,
+    /// Whether the snapshot's bytes hashed to the directory's stock CRC when
+    /// it was taken. False means the entry was already modified before execs
+    /// first touched it (an earlier install whose tracking was lost, or
+    /// another tool): a restore can only put those bytes back, not stock.
+    #[serde(default = "default_true")]
+    pub pristine: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// True when `bytes` are exactly the stock content of `entry`. The `_dir.vpk`
+/// is never rewritten, so its CRC is Valve's own record of what the entry
+/// should hold — the ground truth every snapshot decision rests on.
+pub(crate) fn is_stock(bytes: &[u8], entry: &VpkEntryLocation) -> bool {
+    bytes.len() == entry.length as usize && crc32(bytes) == entry.crc
+}
+
+/// Wording shared by the apply report, the revert report and the status for
+/// a patched entry execs holds no snapshot for.
+pub(crate) const UNTRACKED_REASON: &str = "is modified in tf2_misc but execs has no snapshot for it (an earlier install lost its tracking, or another tool patched it); its effects may point at materials that are no longer installed. Verify game files in Steam to get the stock file back";
+
+/// `particles/*.pcf` entries whose live bytes are not stock and that no
+/// snapshot covers. execs cannot restore these: they are stale patches from an
+/// install whose tracking was lost, or from another tool, and their effects
+/// may reference materials that are no longer installed — the 2026-09-01
+/// "unimplemented sprite renderer" console flood was exactly that. Reported
+/// so the user knows to verify game files in Steam.
+pub(crate) fn untracked_modified_particles(
+    vpk_path: &Path,
+    entries: &BTreeMap<String, VpkEntryLocation>,
+    state: &PreloaderState,
+) -> Vec<String> {
+    entries
+        .iter()
+        .filter(|(rel, entry)| {
+            rel.starts_with("particles/")
+                && rel.ends_with(".pcf")
+                && entry.preload_len == 0
+                && !state.patched.contains_key(*rel)
+        })
+        .filter(|(_, entry)| {
+            read_vpk_entry(vpk_path, entry).is_ok_and(|bytes| !is_stock(&bytes, entry))
+        })
+        .map(|(rel, _)| rel.clone())
+        .collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -206,6 +253,9 @@ pub(crate) fn adopt_orphaned_snapshots(data_dir: &Path, state: &mut PreloaderSta
                 // wrote, so the restore below cannot verify it.
                 patched_sha256: String::new(),
                 rel,
+                // Not checked against the directory here; the restore only
+                // applies the CRC test to snapshots that claimed to be stock.
+                pristine: false,
             },
         );
     }
@@ -215,6 +265,16 @@ pub(crate) fn adopt_orphaned_snapshots(data_dir: &Path, state: &mut PreloaderSta
 /// state after every entry. Success (and impossible restores — entry gone or
 /// resized by a game update) drop the tracking; a plain I/O failure keeps the
 /// entry tracked so a later attempt can finish the job.
+///
+/// The directory's stock CRC decides each case. An entry that already holds
+/// stock bytes (a game update, or Steam's verify, put them back) needs nothing
+/// and is simply untracked. A pristine snapshot whose CRC no longer matches
+/// the directory describes a file the game has since changed; writing it back
+/// would plant old stock bytes under a new CRC, so it is discarded and
+/// reported. This per-entry judgement is what makes a resized VPK safe to
+/// handle without throwing every snapshot away — the 2026-09-01 field
+/// incident, where a fingerprint-definition change took the old "game update"
+/// branch and orphaned 61 patched files with no snapshots left to restore.
 pub(crate) fn restore_patched_entries(
     tf2_root: &Path,
     data_dir: &Path,
@@ -225,10 +285,10 @@ pub(crate) fn restore_patched_entries(
     let mut failures = Vec::new();
     let tracked: Vec<String> = state.patched.keys().cloned().collect();
     for rel in tracked {
-        let expected_patched = state
+        let (expected_patched, pristine) = state
             .patched
             .get(&rel)
-            .map(|entry| entry.patched_sha256.clone())
+            .map(|entry| (entry.patched_sha256.clone(), entry.pristine))
             .unwrap_or_default();
         let snapshot = snapshot_path(data_dir, &rel);
         let Ok(original) = std::fs::read(&snapshot) else {
@@ -251,24 +311,42 @@ pub(crate) fn restore_patched_entries(
             save_state(data_dir, state)?;
             continue;
         }
+        let current = match read_vpk_entry(&vpk_path, entry) {
+            Ok(current) => current,
+            Err(err) => {
+                failures.push(format!("{rel}: {}", err.message()));
+                continue;
+            }
+        };
+        // Stock bytes are already in place (a game update, or the user ran
+        // Steam's verify): nothing to write, and the snapshot has done its job.
+        if is_stock(&current, entry) {
+            state.patched.remove(&rel);
+            let _ = std::fs::remove_file(&snapshot);
+            save_state(data_dir, state)?;
+            continue;
+        }
         // A same-size replacement passes the length check, so confirm the entry
         // still holds exactly what we wrote before putting the snapshot back.
         // Keep the snapshot and report rather than overwriting fresh game data.
-        if !expected_patched.is_empty() {
-            match crate::vpk::read_vpk_entry(&vpk_path, entry) {
-                Ok(current) if sha256_hex(&current) != expected_patched => {
-                    failures.push(format!(
-                        "{rel}: the game replaced this entry since we patched it; \
-                         leaving it alone and keeping the snapshot"
-                    ));
-                    continue;
-                }
-                Ok(_) => {}
-                Err(err) => {
-                    failures.push(format!("{rel}: {}", err.message()));
-                    continue;
-                }
-            }
+        if !expected_patched.is_empty() && sha256_hex(&current) != expected_patched {
+            failures.push(format!(
+                "{rel}: the game replaced this entry since we patched it; \
+                 leaving it alone and keeping the snapshot"
+            ));
+            continue;
+        }
+        // Our patch is still there, but the directory now expects different
+        // stock content: the old snapshot is not a restore any more.
+        if pristine && !is_stock(&original, entry) {
+            failures.push(format!(
+                "{rel}: the game changed this file since it was snapshotted; \
+                 the old snapshot was discarded — verify game files in Steam"
+            ));
+            state.patched.remove(&rel);
+            let _ = std::fs::remove_file(&snapshot);
+            save_state(data_dir, state)?;
+            continue;
         }
         match patch_vpk_entry(&vpk_path, entry, &original) {
             Ok(()) => {
