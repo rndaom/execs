@@ -125,6 +125,10 @@ pub struct PreloaderState {
     pub addons: Vec<String>,
     #[serde(default)]
     pub particle_mods: Vec<String>,
+    /// Ids of the active profile's own mods whose particles are installed, so
+    /// the status can name them beside the library's.
+    #[serde(default)]
+    pub profile_particle_mods: Vec<String>,
     #[serde(default)]
     pub patched: BTreeMap<String, PatchedEntry>,
     #[serde(default)]

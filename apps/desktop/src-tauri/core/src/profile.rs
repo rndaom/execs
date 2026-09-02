@@ -194,6 +194,12 @@ pub struct ProfileManifest {
     pub viewmodel: Option<ViewmodelRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hitsound: Option<crate::hitsound::HitsoundRecord>,
+    /// Mods the user brought in themselves, one top-level `tf/custom` pack
+    /// each. The files are ordinary profile files, so switch, export/import
+    /// and absorb already carry them; the records are what lets the UI name
+    /// them, remove them, and offer their particles to the preloader.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mods: Vec<crate::mods::ModRecord>,
     /// Pack keys the user chose to Keep out of the profile. Without this the
     /// same prompt returns on every boot and after every TF2 quit until they
     /// pick Update. Cleared by an Update.
@@ -379,6 +385,7 @@ where
         crosshair: None,
         viewmodel: None,
         hitsound: None,
+        mods: Vec::new(),
         ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
@@ -897,6 +904,7 @@ fn create_empty_record(
         crosshair: None,
         viewmodel: None,
         hitsound: None,
+        mods: Vec::new(),
         ignored_packs: Vec::new(),
     };
     write_json(&manifest_file(profiles_dir, &summary.id), &manifest)?;
@@ -1127,7 +1135,7 @@ pub(crate) mod write_counts {
     }
 }
 
-fn utc_rfc3339() -> String {
+pub(crate) fn utc_rfc3339() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())

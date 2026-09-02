@@ -1,5 +1,6 @@
 pub mod absorb;
 pub mod apply;
+pub mod archive;
 pub mod blob;
 pub mod cfg_script;
 pub mod comfig;
@@ -13,6 +14,7 @@ pub mod hud_apply;
 pub mod ice;
 pub mod launch;
 pub mod mdl;
+pub mod mods;
 pub mod pcf;
 pub mod preloader;
 pub mod process_lock;
@@ -55,9 +57,10 @@ pub use finder::{
 };
 pub use first_run::{classify_first_run, FirstRunClass, FirstRunKind};
 pub use hitsound::{
-    apply_hitsounds, extract_stock_hitsounds, inspect_wav, prepare_hitsound_wav, preview_wav,
-    remove_hitsounds, stored_hitsound, HitsoundChange, HitsoundEntry, HitsoundKind, HitsoundRecord,
-    HitsoundSource, WavInfo, EXECS_HITSOUNDS_PACK, STOCK_HITSOUND_EFFECTS,
+    apply_hitsounds, clamp_boost_db, extract_stock_hitsounds, inspect_wav, prepare_hitsound_wav,
+    prepare_hitsound_wav_boosted, preview_wav, remove_hitsounds, stored_hitsound, HitsoundChange,
+    HitsoundEntry, HitsoundKind, HitsoundRecord, HitsoundSource, WavInfo, EXECS_HITSOUNDS_PACK,
+    STOCK_HITSOUND_EFFECTS,
 };
 pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
@@ -74,6 +77,11 @@ pub use hud_apply::{
 pub use launch::{
     get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
     LaunchWriteReason, SetLaunchResult,
+};
+pub use mods::{
+    install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,
+    mod_id_from_name, profile_particle_sources, remove_mod, ModContent, ModRecord, ModSource,
+    ParticleSource,
 };
 pub use process_lock::{
     is_tf2_running, os_description, refuse_if_running, refuse_if_running_among, write_lock_status,

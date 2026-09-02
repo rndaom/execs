@@ -143,7 +143,12 @@ pub async fn pick_hitsound_file(app: AppHandle) -> Result<Option<PickedHitsound>
 pub enum HitsoundSlotChange {
     Keep,
     Clear,
-    Install { pick: HitsoundPick },
+    Install {
+        pick: HitsoundPick,
+        /// 0, 6 or 12 dB applied to the file itself.
+        #[serde(default)]
+        boost: u8,
+    },
 }
 
 fn resolve_change(
@@ -154,35 +159,70 @@ fn resolve_change(
     Ok(match change {
         HitsoundSlotChange::Keep => HitsoundChange::Keep,
         HitsoundSlotChange::Clear => HitsoundChange::Clear,
-        HitsoundSlotChange::Install { pick } => {
-            let entry =
+        HitsoundSlotChange::Install { pick, boost } => {
+            let boost = execs_core::clamp_boost_db(boost);
+            let (entry, raw) =
                 match &pick {
-                    HitsoundPick::Community { name } => HitsoundEntry {
-                        name: name.clone(),
-                        source: HitsoundSource::Community,
-                    },
-                    HitsoundPick::File { name, .. } => HitsoundEntry {
-                        name: name.clone(),
-                        source: HitsoundSource::File,
-                    },
-                    HitsoundPick::Comfig { name, .. } => HitsoundEntry {
-                        name: name.clone(),
-                        source: HitsoundSource::Comfig,
-                    },
-                    HitsoundPick::Installed { .. } => {
-                        return Err(CommandError::unknown(
-                            "Choose a sound to install, or keep the current one.",
-                        ))
+                    HitsoundPick::Community { name } => (
+                        HitsoundEntry::new(name.clone(), HitsoundSource::Community),
+                        pick_bytes(root, profile_id, &pick)?,
+                    ),
+                    HitsoundPick::File { name, token } => {
+                        let mut entry = HitsoundEntry::new(name.clone(), HitsoundSource::File);
+                        entry.token = Some(token.clone());
+                        (entry, pick_bytes(root, profile_id, &pick)?)
                     }
+                    HitsoundPick::Comfig { name, hash } => {
+                        let mut entry = HitsoundEntry::new(name.clone(), HitsoundSource::Comfig);
+                        entry.hash = Some(hash.clone());
+                        (entry, pick_bytes(root, profile_id, &pick)?)
+                    }
+                    // Re-install what is already there at a different boost: the
+                    // installed bytes are already boosted, so go back to the source.
+                    HitsoundPick::Installed { slot } => installed_source(profile_id, *slot)?,
                     HitsoundPick::Stock { .. } => return Err(CommandError::unknown(
                         "Stock sounds are chosen with the effect setting, not installed as files.",
                     )),
                 };
-            let raw = pick_bytes(root, profile_id, &pick)?;
-            let (wav, _) = execs_core::prepare_hitsound_wav(&raw)?;
+            let mut entry = entry;
+            entry.boost = boost;
+            let (wav, _) = execs_core::prepare_hitsound_wav_boosted(&raw, boost)?;
             HitsoundChange::Install { entry, wav }
         }
     })
+}
+
+/// The installed entry of a slot plus its original (unboosted) bytes.
+fn installed_source(
+    profile_id: &str,
+    slot: HitsoundKind,
+) -> Result<(HitsoundEntry, Vec<u8>), CommandError> {
+    let record = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id)?
+        .hitsound
+        .unwrap_or_default();
+    let entry = match slot {
+        HitsoundKind::Hit => record.hit,
+        HitsoundKind::Kill => record.kill,
+    }
+    .ok_or_else(|| CommandError::unknown("Nothing is installed in that slot."))?;
+    let raw = match entry.source {
+        HitsoundSource::Community => crate::hitsound_fetch::fetch_community_wav(&entry.name)?,
+        HitsoundSource::Comfig => {
+            let hash = entry.hash.as_deref().ok_or_else(|| {
+                CommandError::unknown("Pick this sound from the library again to change its boost.")
+            })?;
+            crate::hitsound_fetch::fetch_comfig_wav(hash)?
+        }
+        HitsoundSource::File => {
+            let token = entry
+                .token
+                .as_deref()
+                .ok_or_else(|| CommandError::unknown("Pick the file again to change its boost."))?;
+            crate::hitsound_fetch::read_picked(token)
+                .map_err(|_| CommandError::unknown("Pick the file again to change its boost."))?
+        }
+    };
+    Ok((entry, raw))
 }
 
 #[tauri::command]

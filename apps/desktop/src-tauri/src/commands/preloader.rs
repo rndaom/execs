@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use execs_core::mods::ParticleSource;
 use execs_core::preloader::{ModsCatalog, PreloaderReport, PreloaderStatus, RevertReport};
 use serde::Serialize;
 
@@ -21,17 +22,28 @@ pub struct PreloaderStatusPayload {
     pub preload_launch_in_steam: bool,
     /// The active profile carries the shared preload cfg (Casual preload on).
     pub profile_preload: bool,
+    /// Mods on the active profile that ship their own `particles/*.pcf`, so the
+    /// pane can offer them beside the default library's. Empty when no profile
+    /// is active.
+    pub profile_particle_sources: Vec<ParticleSource>,
 }
 
 fn preloader_status_payload(root: &Path) -> Result<PreloaderStatusPayload, CommandError> {
     let steam_options = execs_core::launch::read_launch_options();
     // The profile-level preload switch: whether the active profile carries
     // the shared preload cfg. No active profile reads as off.
-    let profile_preload = active_profile_id(root)
-        .ok()
-        .and_then(|id| execs_core::load_manifest(&execs_core::profiles_dir(), &id).ok())
+    let active = active_profile_id(root).ok();
+    let profile_preload = active
+        .as_deref()
+        .and_then(|id| execs_core::load_manifest(&execs_core::profiles_dir(), id).ok())
         .map(|manifest| execs_core::profile_has_preload(&manifest))
         .unwrap_or(false);
+    let profile_particle_sources = active
+        .as_deref()
+        .and_then(|id| {
+            execs_core::mods::profile_particle_sources_from(&execs_core::profiles_dir(), id).ok()
+        })
+        .unwrap_or_default();
     Ok(PreloaderStatusPayload {
         status: execs_core::preloader::preloader_status(root, &execs_core::execs_data_dir())?,
         mods_cached: crate::mods_fetch::is_cached(),
@@ -39,6 +51,7 @@ fn preloader_status_payload(root: &Path) -> Result<PreloaderStatusPayload, Comma
         preload_launch_in_steam: steam_options.contains("+exec execs_preload")
             || steam_options.contains("+exec overrides/execs_preload"),
         profile_preload,
+        profile_particle_sources,
     })
 }
 
@@ -116,6 +129,7 @@ pub async fn apply_preloader_mods(
     gate: tauri::State<'_, WriteGate>,
     addons: Vec<String>,
     particle_mods: Vec<String>,
+    profile_particle_mods: Option<Vec<String>>,
 ) -> Result<PreloaderReport, CommandError> {
     let _guard = gate.0.lock().await;
     with_root(move |root| {
@@ -124,8 +138,11 @@ pub async fn apply_preloader_mods(
         let selection = execs_core::preloader::PreloaderSelection {
             addons,
             particle_mods,
+            profile_particle_mods: profile_particle_mods.unwrap_or_default(),
         };
-        let has_content = !selection.addons.is_empty() || !selection.particle_mods.is_empty();
+        let has_content = !selection.addons.is_empty()
+            || !selection.particle_mods.is_empty()
+            || !selection.profile_particle_mods.is_empty();
         // Re-read the process list AFTER the download: core checks it again
         // right before the first byte goes into an official file.
         let report = execs_core::preloader::apply_preloader_selection(

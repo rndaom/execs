@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 const PREFIX = "execs.disclosure.";
 
@@ -33,6 +33,7 @@ export function Disclosure({
   defaultOpen = false,
   testId,
   className = "",
+  onOpenChange,
   children,
 }: {
   /** Stable per-pane key, e.g. `comfig-modules`. */
@@ -41,11 +42,22 @@ export function Disclosure({
   defaultOpen?: boolean;
   testId?: string;
   className?: string;
+  /**
+   * Fired with the remembered state on mount and on every toggle, so a section
+   * whose content costs something (a network fetch) can wait to be opened.
+   * `<details>` keeps its children mounted either way.
+   */
+  onOpenChange?: (open: boolean) => void;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(() =>
     typeof window === "undefined" ? defaultOpen : readStored(storageKey, defaultOpen),
   );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: report the state, not the callback's identity.
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open]);
 
   const onToggle = useCallback(
     (event: React.SyntheticEvent<HTMLDetailsElement>) => {

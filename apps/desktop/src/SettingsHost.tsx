@@ -707,8 +707,10 @@ export function SettingsHost({
     if (tab === "mods") {
       return (
         <ModsPane
+          api={api}
           payload={modsPayload}
           catalog={modsCatalog}
+          mods={detail?.mods ?? []}
           loading={modsLoading}
           report={modsReport}
           onDownloadLibrary={() => {
@@ -725,10 +727,12 @@ export function SettingsHost({
               })
               .finally(() => setModsLoading(false));
           }}
-          onApply={(addons, particleMods) => {
+          onApply={(addons, particleMods, profileParticleMods) => {
             void runWrite(async () => {
               try {
-                setModsReport(await api.applyPreloaderMods(addons, particleMods));
+                setModsReport(
+                  await api.applyPreloaderMods(addons, particleMods, profileParticleMods),
+                );
               } finally {
                 // A failed apply still restored the previous install
                 // backend-side; the pane must reflect that, not the stale state.
@@ -768,6 +772,36 @@ export function SettingsHost({
           onRefreshStatus={refreshModsStatus}
           onOpenRepo={() => {
             void api.openExternal(PRELOADER_REPO_URL);
+          }}
+          onImportArchive={() => {
+            void runWrite(async () => {
+              // Cancelling the dialog is a no-op, not an error.
+              if (await api.importModArchive()) {
+                await refreshModsStatus().catch(() => {});
+              }
+            });
+          }}
+          onImportFolder={() => {
+            void runWrite(async () => {
+              if (await api.importModFolder()) {
+                await refreshModsStatus().catch(() => {});
+              }
+            });
+          }}
+          onRemoveMod={(id) => {
+            void runWrite(async () => {
+              await api.removeMod(id);
+              // Removing a pack can take its particle sources with it.
+              await refreshModsStatus().catch(() => {});
+            });
+          }}
+          // Awaited by the card, so "Installing…" lasts exactly as long as the
+          // install and the profile reload behind it.
+          onInstallGameBananaMod={async (id) => {
+            await runWrite(async () => {
+              await api.installGameBananaMod(id);
+              await refreshModsStatus().catch(() => {});
+            });
           }}
         />
       );

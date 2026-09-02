@@ -27,7 +27,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: https://raw.githubusercontent.com https://i.imgur.com https://*.imgur.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost",
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://images.gamebanana.com https://raw.githubusercontent.com https://i.imgur.com https://*.imgur.com https://github.com https://*.githubusercontent.com; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost",
       "devCsp": null
     }
   },

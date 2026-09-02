@@ -2,6 +2,7 @@ mod comfig_fetch;
 mod commands;
 mod crosshair_fetch;
 mod error;
+mod gamebanana;
 mod hitsound_fetch;
 mod hud_fetch;
 mod hud_stats;
@@ -149,6 +150,12 @@ pub fn run() {
             commands::preloader::set_profile_preload,
             commands::hud::import_hud_archive,
             commands::hud::import_hud_folder,
+            commands::mods::import_mod_archive,
+            commands::mods::import_mod_folder,
+            commands::mods::remove_mod,
+            commands::mods::search_gamebanana_mods,
+            commands::mods::gamebanana_mod_categories,
+            commands::mods::install_gamebanana_mod,
         ])
         .setup(|app| {
             app.manage(WriteGate(tokio::sync::Mutex::new(())));

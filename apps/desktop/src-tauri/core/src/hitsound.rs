@@ -73,6 +73,44 @@ pub enum HitsoundSource {
 pub struct HitsoundEntry {
     pub name: String,
     pub source: HitsoundSource,
+    /// Gain applied to the file itself, in dB (0, 6 or 12). The engine caps
+    /// `tf_dingaling_volume` at 1, so a quiet file can only get louder here.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub boost: u8,
+    /// The picked-file stash token, kept so the boost can be changed later
+    /// without asking for the file again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    /// comfig.app entry hash, kept for the same reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
+impl HitsoundEntry {
+    pub fn new(name: String, source: HitsoundSource) -> Self {
+        Self {
+            name,
+            source,
+            boost: 0,
+            token: None,
+            hash: None,
+        }
+    }
+}
+
+/// The boost steps the pane offers. Anything else snaps to the nearest one.
+pub const BOOST_STEPS_DB: [u8; 3] = [0, 6, 12];
+
+pub fn clamp_boost_db(db: u8) -> u8 {
+    BOOST_STEPS_DB
+        .iter()
+        .copied()
+        .min_by_key(|step| step.abs_diff(db))
+        .unwrap_or(0)
 }
 
 /// What the pack holds. `None` in a slot means the engine's own sound plays
@@ -236,17 +274,59 @@ pub fn prepare_hitsound_wav(bytes: &[u8]) -> Result<(Vec<u8>, WavInfo), String> 
     if wav_is_engine_ready(&info) {
         return Ok((bytes.to_vec(), info));
     }
-    let converted = convert_to_pcm16(bytes, &info)?;
+    let converted = convert_to_pcm16(bytes, &info, 1.0)?;
     let converted_info = inspect_wav(&converted)?;
     Ok((converted, converted_info))
 }
 
-fn convert_to_pcm16(bytes: &[u8], info: &WavInfo) -> Result<Vec<u8>, String> {
+/// Like [`prepare_hitsound_wav`], then louder by `boost_db` with a soft
+/// clip, re-encoded as 16-bit PCM. ADPCM input is decoded first. A boost of 0
+/// is exactly [`prepare_hitsound_wav`].
+pub fn prepare_hitsound_wav_boosted(
+    bytes: &[u8],
+    boost_db: u8,
+) -> Result<(Vec<u8>, WavInfo), String> {
+    let boost_db = clamp_boost_db(boost_db);
+    if boost_db == 0 {
+        return prepare_hitsound_wav(bytes);
+    }
+    if bytes.len() > HITSOUND_MAX_BYTES {
+        return Err(format!(
+            "That file is larger than the {} MB this app will accept for a hit sound.",
+            HITSOUND_MAX_BYTES / (1024 * 1024)
+        ));
+    }
+    let info = inspect_wav(bytes)?;
+    if info.data_bytes == 0 {
+        return Err("That WAV is empty.".into());
+    }
+    let gain = 10f32.powf(f32::from(boost_db) / 20.0);
+    let pcm = if info.format_tag == WAVE_FORMAT_ADPCM {
+        decode_ms_adpcm(bytes, &info)?
+    } else {
+        bytes.to_vec()
+    };
+    let pcm_info = inspect_wav(&pcm)?;
+    let converted = convert_to_pcm16(&pcm, &pcm_info, gain)?;
+    let converted_info = inspect_wav(&converted)?;
+    Ok((converted, converted_info))
+}
+
+/// `gain` above 1 pushes the signal into a soft clip (tanh), so a boost gets
+/// loud without the crackle a hard clip would add.
+fn convert_to_pcm16(bytes: &[u8], info: &WavInfo, gain: f32) -> Result<Vec<u8>, String> {
     let chunks = wav_chunks(bytes)?;
     let channels = usize::from(info.channels);
-    let frames = decode_frames(chunks.data, info)?;
+    let mut frames = decode_frames(chunks.data, info)?;
     if frames.is_empty() {
         return Err("That WAV is empty.".into());
+    }
+    if gain > 1.0 {
+        for frame in &mut frames {
+            for sample in frame.iter_mut() {
+                *sample = (*sample * gain).tanh();
+            }
+        }
     }
     // Keep mono as mono and fold anything wider than stereo down to stereo:
     // the engine's spatial-stereo prefix only knows one or two channels.
@@ -835,17 +915,11 @@ mod tests {
             &tf2,
             &id,
             HitsoundChange::Install {
-                entry: HitsoundEntry {
-                    name: "quack".into(),
-                    source: HitsoundSource::Community,
-                },
+                entry: HitsoundEntry::new("quack".into(), HitsoundSource::Community),
                 wav: wav.clone(),
             },
             HitsoundChange::Install {
-                entry: HitsoundEntry {
-                    name: "my kill.wav".into(),
-                    source: HitsoundSource::File,
-                },
+                entry: HitsoundEntry::new("my kill.wav".into(), HitsoundSource::File),
                 wav: wav.clone(),
             },
             unlocked(),
@@ -913,10 +987,7 @@ mod tests {
             &tf2,
             &id,
             HitsoundChange::Install {
-                entry: HitsoundEntry {
-                    name: "x".into(),
-                    source: HitsoundSource::File,
-                },
+                entry: HitsoundEntry::new("x".into(), HitsoundSource::File),
                 wav: bad,
             },
             HitsoundChange::Keep,
@@ -1083,5 +1154,34 @@ mod tests {
     fn pack_paths_stay_file_safe() {
         assert!(crate::apply::is_file_safe_rel_path(HITSOUND_REL));
         assert!(crate::apply::is_file_safe_rel_path(KILLSOUND_REL));
+    }
+    #[test]
+    fn boost_makes_the_file_louder_without_clipping_hard() {
+        // A -20 dBFS sine: quiet, but not silence.
+        let mut quiet = pcm_wav(44100, 1, 16, 441);
+        for (index, sample) in quiet[44..].as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let value = (index as f32 * 0.1).sin() * 3276.0;
+            *sample = (value as i16).to_le_bytes();
+        }
+        let (plain, _) = prepare_hitsound_wav_boosted(&quiet, 0).unwrap();
+        assert_eq!(plain, quiet);
+        let (loud, info) = prepare_hitsound_wav_boosted(&quiet, 12).unwrap();
+        assert_eq!(info.bits_per_sample, 16);
+        assert_eq!(info.sample_rate, 44100);
+        let peak = |wav: &[u8]| {
+            let chunks = wav_chunks(wav).unwrap();
+            chunks
+                .data
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|b| i16::from_le_bytes(*b).unsigned_abs())
+                .max()
+                .unwrap_or(0)
+        };
+        assert!(peak(&loud) > peak(&quiet));
+        assert!(peak(&loud) < 32767, "soft clip never pins to full scale");
+        assert_eq!(clamp_boost_db(7), 6);
+        assert_eq!(clamp_boost_db(40), 12);
     }
 }

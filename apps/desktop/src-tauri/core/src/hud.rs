@@ -2,17 +2,16 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use zip::ZipArchive;
 
 use crate::absorb::pack_key;
 use crate::apply::{
     detail_from_manifest, read_profile_file_from, write_owned_file_to, ProfileDetail,
     WriteOwnedOptions,
 };
+use crate::archive::{extract_archive, extract_zip, read_dir_entries, ArchiveLimits};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, load_library_from, load_manifest, profiles_dir, put_exclusive_file_to,
@@ -380,77 +379,15 @@ const MAX_HUD_ENTRIES: usize = 20_000;
 const MAX_HUD_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_HUD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
-const SEVEN_ZIP_MAGIC: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
+pub(crate) const HUD_LIMITS: ArchiveLimits =
+    ArchiveLimits::new(MAX_HUD_ENTRIES, MAX_HUD_ENTRY_BYTES, MAX_HUD_TOTAL_BYTES);
 
 /// A HUD from a folder on disk (an extracted download, or one the user
 /// built), read under the same caps as an archive and with the same
 /// wrapper-folder stripping. `sound.cache`, VCS metadata and OS junk are
 /// left behind.
 pub fn hud_tree_from_dir(dir: &Path) -> Result<ExtractedHud, ProfileError> {
-    if !dir.is_dir() {
-        return Err(ProfileError::Io("That is not a folder.".into()));
-    }
-    let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
-    let mut total: u64 = 0;
-    let mut stack = vec![(dir.to_path_buf(), String::new())];
-    while let Some((path, rel)) = stack.pop() {
-        let entries = fs::read_dir(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if is_junk_name(&name) {
-                continue;
-            }
-            let child_rel = if rel.is_empty() {
-                name.clone()
-            } else {
-                format!("{rel}/{name}")
-            };
-            let child = entry.path();
-            if child.is_dir() {
-                stack.push((child, child_rel));
-                continue;
-            }
-            if !child.is_file() {
-                continue;
-            }
-            if raw.len() >= MAX_HUD_ENTRIES {
-                return Err(ProfileError::Io(format!(
-                    "That folder has more than {MAX_HUD_ENTRIES} files; refusing to import it."
-                )));
-            }
-            let meta = child
-                .metadata()
-                .map_err(|err| ProfileError::Io(err.to_string()))?;
-            if meta.len() > MAX_HUD_ENTRY_BYTES {
-                return Err(ProfileError::Io(format!(
-                    "{child_rel} is larger than 64 MiB; refusing to import this HUD."
-                )));
-            }
-            total += meta.len();
-            if total > MAX_HUD_TOTAL_BYTES {
-                return Err(ProfileError::Io(
-                    "That folder holds more than 512 MiB; refusing to import it.".into(),
-                ));
-            }
-            let bytes = fs::read(&child).map_err(|err| ProfileError::Io(err.to_string()))?;
-            raw.push((sanitize_zip_entry(&child_rel)?, bytes));
-        }
-    }
-    finish_extracted(raw)
-}
-
-fn is_junk_name(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
-        ".git"
-            | ".svn"
-            | ".hg"
-            | ".ds_store"
-            | "thumbs.db"
-            | "desktop.ini"
-            | "sound.cache"
-            | "__macosx"
-    )
+    finish_extracted(read_dir_entries(dir, HUD_LIMITS)?)
 }
 
 /// A folder name for a HUD imported from the user's own files, from the
@@ -487,72 +424,7 @@ pub fn hud_id_from_name(name: &str) -> String {
 /// GameBanana), 7z (every Dropbox entry) — sniffed by magic, never by the
 /// URL's extension. RAR is named in the error so the user knows why.
 pub fn extract_hud_archive(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
-    if bytes.starts_with(b"PK") {
-        return extract_hud_zip(bytes);
-    }
-    if bytes.starts_with(&SEVEN_ZIP_MAGIC) {
-        return extract_hud_7z(bytes);
-    }
-    if bytes.starts_with(b"Rar!") {
-        return Err(ProfileError::Io(
-            "That HUD is a RAR archive, which this app cannot unpack. Open the author's page to install it by hand.".into(),
-        ));
-    }
-    if bytes.starts_with(b"<") || bytes.starts_with(b"{") {
-        return Err(ProfileError::Io(
-            "The download returned a web page instead of the HUD archive. Try again later or open the author's page.".into(),
-        ));
-    }
-    Err(ProfileError::Io(
-        "The download is not a zip or 7z archive.".into(),
-    ))
-}
-
-fn extract_hud_7z(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
-    let mut reader = sevenz_rust::SevenZReader::new(
-        Cursor::new(bytes),
-        bytes.len() as u64,
-        sevenz_rust::Password::empty(),
-    )
-    .map_err(|err| ProfileError::Io(format!("Could not read the 7z archive ({err})")))?;
-    let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
-    let mut total: u64 = 0;
-    let mut count = 0usize;
-    reader
-        .for_each_entries(|entry, stream| {
-            if entry.is_directory() {
-                return Ok(true);
-            }
-            count += 1;
-            if count > MAX_HUD_ENTRIES {
-                return Err(sevenz_rust::Error::other(format!(
-                    "That HUD archive has more than {MAX_HUD_ENTRIES} files; refusing to unpack it."
-                )));
-            }
-            let rel = sanitize_zip_entry(entry.name())
-                .map_err(|err| sevenz_rust::Error::other(err.message()))?;
-            if entry.size() > MAX_HUD_ENTRY_BYTES {
-                return Err(sevenz_rust::Error::other(format!(
-                    "{rel} is larger than 64 MiB; refusing to unpack this HUD."
-                )));
-            }
-            let budget = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
-            let mut data = Vec::new();
-            stream
-                .take(budget.min(MAX_HUD_ENTRY_BYTES) + 1)
-                .read_to_end(&mut data)
-                .map_err(|err| sevenz_rust::Error::other(err.to_string()))?;
-            total += data.len() as u64;
-            if total > MAX_HUD_TOTAL_BYTES {
-                return Err(sevenz_rust::Error::other(
-                    "That HUD archive unpacks to more than 512 MiB; refusing to unpack it.",
-                ));
-            }
-            raw.push((rel, data));
-            Ok(true)
-        })
-        .map_err(|err| ProfileError::Io(err.to_string()))?;
-    finish_extracted(raw)
+    finish_extracted(extract_archive(bytes, HUD_LIMITS)?)
 }
 
 fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, ProfileError> {
@@ -574,45 +446,7 @@ fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, Profile
 }
 
 pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
-    let mut archive =
-        ZipArchive::new(Cursor::new(bytes)).map_err(|err| ProfileError::Io(err.to_string()))?;
-    if archive.len() > MAX_HUD_ENTRIES {
-        return Err(ProfileError::Io(format!(
-            "That HUD zip has more than {MAX_HUD_ENTRIES} files; refusing to unpack it."
-        )));
-    }
-    let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
-    let mut total: u64 = 0;
-    for index in 0..archive.len() {
-        let mut entry = archive
-            .by_index(index)
-            .map_err(|err| ProfileError::Io(err.to_string()))?;
-        if entry.is_dir() {
-            continue;
-        }
-        let rel = sanitize_zip_entry(entry.name())?;
-        if entry.size() > MAX_HUD_ENTRY_BYTES {
-            return Err(ProfileError::Io(format!(
-                "{rel} is larger than 64 MiB; refusing to unpack this HUD."
-            )));
-        }
-        let budget = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
-        let mut data = Vec::new();
-        // `take` also catches an entry whose header understates its real size.
-        entry
-            .by_ref()
-            .take(budget.min(MAX_HUD_ENTRY_BYTES) + 1)
-            .read_to_end(&mut data)
-            .map_err(|err| ProfileError::Io(err.to_string()))?;
-        total += data.len() as u64;
-        if total > MAX_HUD_TOTAL_BYTES {
-            return Err(ProfileError::Io(
-                "That HUD zip unpacks to more than 512 MiB; refusing to unpack it.".into(),
-            ));
-        }
-        raw.push((rel, data));
-    }
-    finish_extracted(raw)
+    finish_extracted(extract_zip(bytes, HUD_LIMITS)?)
 }
 
 pub fn hud_ui_state(manifest: &ProfileManifest, catalog: &[HudCatalogEntry]) -> HudUiState {
@@ -1131,31 +965,6 @@ fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
     path
 }
 
-fn sanitize_zip_entry(raw: &str) -> Result<String, ProfileError> {
-    if raw.contains('\0') {
-        return Err(ProfileError::InvalidPath);
-    }
-    let name = raw.replace('\\', "/");
-    let name = name.trim_start_matches("./");
-    if name.starts_with('/') {
-        return Err(ProfileError::InvalidPath);
-    }
-    let mut chars = name.chars();
-    if let (Some(drive), Some(':')) = (chars.next(), chars.next()) {
-        if drive.is_ascii_alphabetic() {
-            return Err(ProfileError::InvalidPath);
-        }
-    }
-    let parts: Vec<&str> = name.split('/').filter(|part| !part.is_empty()).collect();
-    if parts.iter().any(|part| *part == "." || *part == "..") {
-        return Err(ProfileError::InvalidPath);
-    }
-    if parts.is_empty() {
-        return Err(ProfileError::InvalidPath);
-    }
-    Ok(parts.join("/"))
-}
-
 fn strip_wrapper_folder(entries: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
     let mut first: Option<String> = None;
     for (path, _) in &entries {
@@ -1336,7 +1145,7 @@ mod tests {
     use crate::apply::WriteOwnedOptions;
     use crate::profile::{create_profile_record_to, set_active_profile_to};
     use crate::test_temp_dir;
-    use std::io::Write;
+    use std::io::{Cursor, Write};
     use zip::write::SimpleFileOptions;
     use zip::{CompressionMethod, ZipWriter};
 
