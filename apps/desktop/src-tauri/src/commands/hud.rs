@@ -26,6 +26,15 @@ pub struct HudStatePayload {
     pub catalog_unavailable: bool,
 }
 
+/// Popularity and recency per HUD id, from comfig.app (last updated) and
+/// tf2huds.dev (downloads, views). Cached for a day; `refresh` forces a read.
+#[tauri::command]
+pub async fn get_hud_stats(
+    refresh: bool,
+) -> Result<BTreeMap<String, crate::hud_stats::HudStat>, CommandError> {
+    blocking(move || Ok(crate::hud_stats::load_or_fetch_stats(refresh)?)).await
+}
+
 /// The pictures behind a HUD's external album (Imgur, or a GitHub showcase
 /// page), so the lightbox can show them in-app instead of linking out.
 #[tauri::command]

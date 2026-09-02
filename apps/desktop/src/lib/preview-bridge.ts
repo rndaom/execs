@@ -314,6 +314,12 @@ export function createPreviewApi(state: PreviewState): Api {
     async getHudAlbum() {
       return [];
     },
+    async getHudStats() {
+      return {
+        rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
+        toonhud: { updated: "2024-03-02" },
+      };
+    },
     async installHud(id: string) {
       const entry = PREVIEW_HUD_CATALOG.find((item) => item.id === id);
       const supported = schemaSupportedIds().includes(id);
@@ -416,6 +422,12 @@ export function createPreviewApi(state: PreviewState): Api {
     async hitsoundBytes() {
       throw notInPreview("Auditioning sounds");
     },
+    async comfigHitsoundIndex() {
+      return [
+        { name: "Quake 3 hit", hash: "a".repeat(128), kind: "hit" as const },
+        { name: "Kill bell", hash: "b".repeat(128), kind: "kill" as const },
+      ];
+    },
     async listStockHitsounds() {
       // Every stock effect is "present" in preview; nothing can play anyway.
       const { STOCK_HITSOUND_EFFECTS } = await import("./hitsound-ui");
@@ -436,7 +448,9 @@ export function createPreviewApi(state: PreviewState): Api {
               ? { name: pick.name, source: "community" }
               : pick.kind === "file"
                 ? { name: pick.name, source: "file" }
-                : (next[slot] ?? null);
+                : pick.kind === "comfig"
+                  ? { name: pick.name, source: "comfig" }
+                  : (next[slot] ?? null);
         }
       };
       apply("hit", hit);
@@ -487,6 +501,12 @@ export function createPreviewApi(state: PreviewState): Api {
         status: { ...modsPayload.status, gameinfoBypassed: enabled },
       };
       return modsPayload;
+    },
+    async repairGameFiles() {
+      modsPayload = {
+        ...modsPayload,
+        status: { ...modsPayload.status, untrackedModified: [] },
+      };
     },
     async revertPreloader() {
       modsPayload = {

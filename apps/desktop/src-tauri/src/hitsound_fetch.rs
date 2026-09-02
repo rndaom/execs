@@ -40,6 +40,116 @@ pub fn fetch_community_wav(name: &str) -> Result<Vec<u8>, String> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// comfig.app hits library
+// ---------------------------------------------------------------------------
+
+/// The hits index lives in the comfig-app repo (MIT); pinned so the list
+/// never shifts under a profile that references an entry by hash.
+const COMFIG_INDEX_COMMIT: &str = "3f5fdf9ad7d3952921587169faa368f80fc5b755";
+const COMFIG_INDEX_URL: &str =
+    "https://raw.githubusercontent.com/mastercomfig/comfig-app/3f5fdf9ad7d3952921587169faa368f80fc5b755/src/ssg/hitsounds.json";
+const COMFIG_INDEX_MAX_BYTES: u64 = 4 * MIB;
+/// The audio host. Files are addressed by their SHA-512, so the hash is both
+/// the id and the verification.
+const COMFIG_HITS_BASE: &str = "https://hits.comfig.app";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComfigHitsound {
+    pub name: String,
+    pub hash: String,
+    /// Which list upstream files it under; either slot still accepts it.
+    pub kind: execs_core::HitsoundKind,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ComfigIndexRaw {
+    #[serde(default)]
+    hitsounds: Vec<ComfigIndexEntry>,
+    #[serde(default)]
+    killsounds: Vec<ComfigIndexEntry>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ComfigIndexEntry {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    hash: String,
+}
+
+fn valid_comfig_hash(hash: &str) -> bool {
+    (32..=128).contains(&hash.len()) && hash.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// The whole library, from the pinned index (cached by commit).
+pub fn fetch_comfig_index() -> Result<Vec<ComfigHitsound>, String> {
+    let cached = cache_dir().join(format!("comfig-index-{COMFIG_INDEX_COMMIT}.json"));
+    let bytes = net::download_pinned(
+        COMFIG_INDEX_URL,
+        &cached,
+        Verify::Magic(b"{"),
+        COMFIG_INDEX_MAX_BYTES,
+    )?;
+    let raw: ComfigIndexRaw = serde_json::from_slice(&bytes)
+        .map_err(|err| format!("Could not read the comfig.app hits index ({err})"))?;
+    Ok(comfig_entries(raw))
+}
+
+fn comfig_entries(raw: ComfigIndexRaw) -> Vec<ComfigHitsound> {
+    let mut out = Vec::with_capacity(raw.hitsounds.len() + raw.killsounds.len());
+    let mut seen = std::collections::BTreeSet::new();
+    for (list, kind) in [
+        (raw.hitsounds, execs_core::HitsoundKind::Hit),
+        (raw.killsounds, execs_core::HitsoundKind::Kill),
+    ] {
+        for entry in list {
+            let hash = entry.hash.trim().to_ascii_lowercase();
+            if !valid_comfig_hash(&hash) || !seen.insert(hash.clone()) {
+                continue;
+            }
+            let name = comfig_display_name(&entry.name);
+            if name.is_empty() {
+                continue;
+            }
+            out.push(ComfigHitsound { name, hash, kind });
+        }
+    }
+    out
+}
+
+/// Upstream names are upload file names; show them without the extension
+/// and with separators turned back into spaces.
+fn comfig_display_name(raw: &str) -> String {
+    let stem = raw
+        .trim()
+        .trim_end_matches(".wav")
+        .trim_end_matches(".WAV")
+        .trim_end_matches(".mp3");
+    let spaced: String = stem
+        .chars()
+        .map(|c| if c == '_' || c == '-' { ' ' } else { c })
+        .collect();
+    spaced.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// One comfig.app sound by hash, cached forever (the hash is the content).
+pub fn fetch_comfig_wav(hash: &str) -> Result<Vec<u8>, String> {
+    let hash = hash.trim().to_ascii_lowercase();
+    if !valid_comfig_hash(&hash) {
+        return Err("Unknown comfig.app sound.".into());
+    }
+    let cached = cache_dir().join(format!("comfig-{hash}.wav"));
+    let url = format!("{COMFIG_HITS_BASE}/{hash}.wav");
+    net::download_pinned(&url, &cached, Verify::Magic(b"RIFF"), WAV_MAX_BYTES).map_err(|err| {
+        err.replace(
+            "The download failed verification.",
+            "comfig.app did not return a WAV for that sound.",
+        )
+    })
+}
+
 /// Where a picked-and-prepared user file waits between the file dialog and
 /// Apply. Tokens are random and the directory is app data, so the frontend
 /// never handles a path it could point somewhere else.
@@ -97,6 +207,38 @@ mod tests {
         assert!(!valid_remote_name("Quack"));
         assert!(!valid_remote_name("../etc"));
         assert!(!valid_remote_name("a/b"));
+    }
+
+    #[test]
+    fn comfig_index_entries_are_deduped_validated_and_named_for_people() {
+        let raw = ComfigIndexRaw {
+            hitsounds: vec![
+                ComfigIndexEntry {
+                    name: "quake_3-hit.wav".into(),
+                    hash: "A".repeat(128),
+                },
+                ComfigIndexEntry {
+                    name: "dupe.wav".into(),
+                    hash: "a".repeat(128),
+                },
+                ComfigIndexEntry {
+                    name: "bad".into(),
+                    hash: "zz".into(),
+                },
+            ],
+            killsounds: vec![ComfigIndexEntry {
+                name: "  Kill  Bell .WAV".into(),
+                hash: "b".repeat(64),
+            }],
+        };
+        let entries = comfig_entries(raw);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "quake 3 hit");
+        assert_eq!(entries[0].hash, "a".repeat(128));
+        assert_eq!(entries[0].kind, execs_core::HitsoundKind::Hit);
+        assert_eq!(entries[1].name, "Kill Bell");
+        assert_eq!(entries[1].kind, execs_core::HitsoundKind::Kill);
+        assert!(fetch_comfig_wav("../x").is_err());
     }
 
     #[test]

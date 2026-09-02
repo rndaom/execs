@@ -23,6 +23,8 @@ pub enum HitsoundPick {
     Installed { slot: HitsoundKind },
     /// One of the engine's own sounds, by file stem, from the user's VPK.
     Stock { stem: String },
+    /// A comfig.app hits-library entry by content hash.
+    Comfig { hash: String, name: String },
 }
 
 fn pick_bytes(
@@ -37,6 +39,7 @@ fn pick_bytes(
             execs_core::stored_hitsound(&execs_core::profiles_dir(), profile_id, *slot)
                 .ok_or_else(|| CommandError::unknown("Nothing is installed in that slot."))
         }
+        HitsoundPick::Comfig { hash, .. } => Ok(crate::hitsound_fetch::fetch_comfig_wav(hash)?),
         HitsoundPick::Stock { stem } => {
             let stock = execs_core::extract_stock_hitsounds(root)?;
             stock
@@ -47,11 +50,27 @@ fn pick_bytes(
     }
 }
 
-/// Raw WAV bytes for the audio element, straight through as a `Response`.
+/// WAV bytes for the audio element as a `Response`. ADPCM sources (every
+/// comfig.app sound) are decoded to PCM for the preview only; what gets
+/// installed is still the original file.
 #[tauri::command]
 pub async fn hitsound_bytes(pick: HitsoundPick) -> Result<tauri::ipc::Response, CommandError> {
-    let bytes = with_profile(move |root, profile_id| pick_bytes(&root, &profile_id, &pick)).await?;
+    let bytes = with_profile(move |root, profile_id| {
+        Ok(execs_core::preview_wav(&pick_bytes(
+            &root,
+            &profile_id,
+            &pick,
+        )?))
+    })
+    .await?;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// comfig.app's hits library (pinned index), for the browsable list.
+#[tauri::command]
+pub async fn comfig_hitsound_index(
+) -> Result<Vec<crate::hitsound_fetch::ComfigHitsound>, CommandError> {
+    blocking(|| Ok(crate::hitsound_fetch::fetch_comfig_index()?)).await
 }
 
 /// The stock hit/kill sound stems present in the user's sound VPK.
@@ -145,6 +164,10 @@ fn resolve_change(
                     HitsoundPick::File { name, .. } => HitsoundEntry {
                         name: name.clone(),
                         source: HitsoundSource::File,
+                    },
+                    HitsoundPick::Comfig { name, .. } => HitsoundEntry {
+                        name: name.clone(),
+                        source: HitsoundSource::Comfig,
                     },
                     HitsoundPick::Installed { .. } => {
                         return Err(CommandError::unknown(

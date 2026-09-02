@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -19,6 +19,9 @@ import {
   modsStatusLine,
   PRELOADER_CREDIT,
   PRELOADER_EXPLAINER,
+  REPAIR_POLL_MS,
+  REPAIR_TIMEOUT_MS,
+  repairComplete,
   summarizeReport,
   toggleName,
 } from "./lib/mods-ui";
@@ -32,6 +35,9 @@ export type ModsPaneProps = {
   onApply: (addons: string[], particleMods: string[]) => void;
   onToggleBypass: (enabled: boolean) => void;
   onRevert: () => void;
+  /** Start Steam's verify; the pane polls `onRefreshStatus` until it finishes. */
+  onRepair: () => Promise<void>;
+  onRefreshStatus: () => Promise<void>;
   onOpenRepo: () => void;
 };
 
@@ -46,6 +52,8 @@ export function ModsPane({
   onApply,
   onToggleBypass,
   onRevert,
+  onRepair,
+  onRefreshStatus,
   onOpenRepo,
 }: ModsPaneProps) {
   const { running, busy } = useAppStatus();
@@ -61,6 +69,44 @@ export function ModsPane({
 
   const locked = !useCanWrite();
   const canApply = modsApplyEnabled(payload, addons, particleMods);
+  const untracked = status?.untrackedModified ?? [];
+  // Steam's verify runs outside the app; while it does, poll the status and,
+  // once every stale file reads as stock again, put the selection back.
+  const [repair, setRepair] = useState<"idle" | "waiting" | "timeout" | "done">("idle");
+  const repairStarted = useRef(0);
+  const repairSelection = useRef<ModSelection>(installed);
+  useEffect(() => {
+    if (repair !== "waiting") {
+      return;
+    }
+    if (repairComplete(payload)) {
+      setRepair("done");
+      const { addons: wantAddons, particleMods: wantParticles } = repairSelection.current;
+      if (wantAddons.length > 0 || wantParticles.length > 0) {
+        onApply(wantAddons, wantParticles);
+      }
+      return;
+    }
+    if (Date.now() - repairStarted.current > REPAIR_TIMEOUT_MS) {
+      setRepair("timeout");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void onRefreshStatus().catch(() => {});
+    }, REPAIR_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [repair, payload, onApply, onRefreshStatus]);
+
+  async function startRepair() {
+    repairStarted.current = Date.now();
+    repairSelection.current = { addons, particleMods };
+    setRepair("waiting");
+    try {
+      await onRepair();
+    } catch {
+      setRepair("idle");
+    }
+  }
   const anythingInstalled =
     (status?.patchedFiles.length ?? 0) > 0 ||
     (status?.addons.length ?? 0) > 0 ||
@@ -131,16 +177,34 @@ export function ModsPane({
           Valve servers.
         </Alert>
       ) : null}
-      {status && status.untrackedModified.length > 0 ? (
-        <Alert tone="warn" testId="mods-untracked" className="mt-6">
-          {status.untrackedModified.length} particle{" "}
-          {status.untrackedModified.length === 1 ? "file is" : "files are"} modified inside
-          tf2_misc, but execs holds no stock copy for them — patches from an earlier install whose
-          tracking was lost, or from another tool. Their effects may point at materials that are no
-          longer installed, which floods the console with sprite-renderer warnings. Restore stock
-          files here first, then run <strong>Verify integrity of game files</strong> in Steam, then
-          apply your mods again.
-        </Alert>
+      {untracked.length > 0 || repair === "waiting" || repair === "timeout" ? (
+        <section data-testid="mods-repair" className="section">
+          <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+            <div className="min-w-0 max-w-[62ch]">
+              <h2 className="t-section">
+                {repair === "waiting"
+                  ? "Waiting for Steam to verify the game files"
+                  : `${untracked.length} particle ${untracked.length === 1 ? "file" : "files"} need a repair`}
+              </h2>
+              <p className="t-meta mt-1">
+                {repair === "waiting"
+                  ? "Steam is checking TF2 now. When it puts the stock files back, execs re-applies the mods you have selected. This can take a few minutes; keep the game closed."
+                  : repair === "timeout"
+                    ? "Steam has not finished yet. Leave it running and press Repair again once it is done, or press Apply to re-install your selection."
+                    : "These were patched by an earlier install whose tracking was lost, so execs has no stock copy to put back and they can reference materials that are no longer shipped — the sprite-renderer console flood. Only Steam holds the stock bytes: Repair asks Steam to verify TF2's files, then execs re-applies your selection on top."}
+              </p>
+            </div>
+            <button
+              type="button"
+              data-testid="mods-repair-button"
+              className="btn btn-primary"
+              disabled={locked || repair === "waiting"}
+              onClick={() => void startRepair()}
+            >
+              {repair === "waiting" ? "Verifying…" : "Repair with Steam"}
+            </button>
+          </div>
+        </section>
       ) : null}
       {status && !status.gameinfoFound ? (
         <Alert tone="error" testId="mods-no-gameinfo" className="mt-6">

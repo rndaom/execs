@@ -1,4 +1,85 @@
-import type { HudCatalogEntry, HudRecord, HudSchemaView, HudUiState } from "./bridge";
+import type { HudCatalogEntry, HudRecord, HudSchemaView, HudStat, HudUiState } from "./bridge";
+
+export type HudSort = "name" | "updated" | "downloads" | "views";
+
+export const HUD_SORTS: { id: HudSort; label: string }[] = [
+  { id: "name", label: "A to Z" },
+  { id: "updated", label: "Last updated" },
+  { id: "downloads", label: "Most downloads" },
+  { id: "views", label: "Most views" },
+];
+
+/**
+ * Order the catalog. Numbers come from tf2huds.dev and dates from comfig.app,
+ * neither of which knows every HUD, so the unknowns sink to the bottom in
+ * name order instead of pretending to be zero.
+ */
+export function sortHudCatalog(
+  entries: HudCatalogEntry[],
+  stats: Record<string, HudStat>,
+  sort: HudSort,
+): HudCatalogEntry[] {
+  const byName = (a: HudCatalogEntry, b: HudCatalogEntry) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+  const stat = (entry: HudCatalogEntry) => stats[entry.id.toLowerCase()] ?? stats[entry.id];
+  const sorted = [...entries];
+  switch (sort) {
+    case "updated":
+      sorted.sort((a, b) => {
+        const da = stat(a)?.updated ?? "";
+        const db = stat(b)?.updated ?? "";
+        return db.localeCompare(da) || byName(a, b);
+      });
+      break;
+    case "downloads":
+    case "views":
+      sorted.sort((a, b) => {
+        const na = stat(a)?.[sort] ?? -1;
+        const nb = stat(b)?.[sort] ?? -1;
+        return nb - na || byName(a, b);
+      });
+      break;
+    default:
+      sorted.sort(byName);
+  }
+  return sorted;
+}
+
+/** "398k downloads · updated Jan 2026", or null when nothing is known. */
+export function hudStatCopy(stat: HudStat | undefined): string | null {
+  if (!stat) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (typeof stat.downloads === "number") {
+    parts.push(`${compactCount(stat.downloads)} downloads`);
+  }
+  if (typeof stat.views === "number") {
+    parts.push(`${compactCount(stat.views)} views`);
+  }
+  if (stat.updated) {
+    parts.push(`updated ${monthYear(stat.updated)}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+export function compactCount(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+  }
+  return String(value);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function monthYear(iso: string): string {
+  const [year, month] = iso.split("-");
+  const index = Number(month) - 1;
+  return MONTHS[index] ? `${MONTHS[index]} ${year}` : iso;
+}
 
 export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
   {
