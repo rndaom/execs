@@ -24,7 +24,8 @@ pub struct HudSchema {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HudControl {
-    #[serde(rename = "Name")]
+    /// Empty on the entries of a combo box, which carry only a label and value.
+    #[serde(rename = "Name", default)]
     pub name: String,
     #[serde(rename = "Label", default)]
     pub label: String,
@@ -243,7 +244,69 @@ pub fn hud_cfg_stem(file_name: &str) -> String {
 }
 
 pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
-    serde_json::from_str(raw).map_err(|err| ProfileError::Io(err.to_string()))
+    serde_json::from_str(&strip_json_comments(raw)).map_err(|err| ProfileError::Io(err.to_string()))
+}
+
+/// Some TF2HUD.Editor schemas carry `//` and `/* */` comments, which strict
+/// JSON rejects. Comments outside string literals are blanked; strings are
+/// left alone so a URL with `//` in it survives.
+fn strip_json_comments(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    let mut out = String::with_capacity(raw.len());
+    let mut i = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if in_string {
+            out.push(c as char);
+            if escaped {
+                escaped = false;
+            } else if c == b'\\' {
+                escaped = true;
+            } else if c == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+        match c {
+            b'"' => {
+                in_string = true;
+                out.push('"');
+                i += 1;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'/') => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i += 2;
+            }
+            _ => {
+                // Non-ASCII bytes only ever appear inside strings in these
+                // files, but copying byte-wise keeps any that do not intact.
+                let ch_len = utf8_len(c);
+                out.push_str(&raw[i..(i + ch_len).min(bytes.len())]);
+                i += ch_len;
+            }
+        }
+    }
+    out
+}
+
+fn utf8_len(first: u8) -> usize {
+    match first {
+        0x00..=0x7F => 1,
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        _ => 4,
+    }
 }
 
 pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
@@ -1154,5 +1217,30 @@ mod tests {
         assert!(out.contains("\"xpos\"\t\t\"42\""), "{out}");
         // The key after the conditional must not have been consumed as a value.
         assert!(out.contains("\"ItemName\"\t\t\"health\""), "{out}");
+    }
+    #[test]
+    fn schema_comments_and_nameless_options_parse() {
+        let raw = r#"{
+            // General options
+            "Name": "kbnhud",
+            "Controls": {
+                "Look": [
+                    {
+                        "Name": "kb_style", "Label": "Style", "Type": "ComboBox",
+                        "Value": "a", /* default */
+                        "Options": [
+                            { "Label": "Plain", "Value": "a" },
+                            { "Label": "Fancy // not a comment", "Value": "b" }
+                        ]
+                    }
+                ]
+            }
+        }"#;
+        let schema = parse_hud_schema(raw).unwrap();
+        let control = &schema.controls["Look"][0];
+        let options = control.options.as_ref().unwrap();
+        assert_eq!(options.len(), 2);
+        assert_eq!(options[0].name, "");
+        assert_eq!(options[1].label, "Fancy // not a comment");
     }
 }

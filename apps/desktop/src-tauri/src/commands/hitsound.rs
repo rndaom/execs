@@ -205,22 +205,31 @@ fn installed_source(
         HitsoundKind::Kill => record.kill,
     }
     .ok_or_else(|| CommandError::unknown("Nothing is installed in that slot."))?;
+    // The installed bytes are the source whenever nothing was baked into them
+    // yet; only an already-boosted entry has to go back to where it came from.
+    let installed = || {
+        if entry.boost == 0 {
+            execs_core::stored_hitsound(&execs_core::profiles_dir(), profile_id, slot)
+        } else {
+            None
+        }
+    };
     let raw = match entry.source {
-        HitsoundSource::Community => crate::hitsound_fetch::fetch_community_wav(&entry.name)?,
-        HitsoundSource::Comfig => {
-            let hash = entry.hash.as_deref().ok_or_else(|| {
+        HitsoundSource::Community => crate::hitsound_fetch::fetch_community_wav(&entry.name)
+            .or_else(|err| installed().ok_or(CommandError::unknown(err)))?,
+        HitsoundSource::Comfig => match entry.hash.as_deref() {
+            Some(hash) => crate::hitsound_fetch::fetch_comfig_wav(hash)
+                .or_else(|err| installed().ok_or(CommandError::unknown(err)))?,
+            None => installed().ok_or_else(|| {
                 CommandError::unknown("Pick this sound from the library again to change its boost.")
-            })?;
-            crate::hitsound_fetch::fetch_comfig_wav(hash)?
-        }
-        HitsoundSource::File => {
-            let token = entry
-                .token
-                .as_deref()
-                .ok_or_else(|| CommandError::unknown("Pick the file again to change its boost."))?;
-            crate::hitsound_fetch::read_picked(token)
-                .map_err(|_| CommandError::unknown("Pick the file again to change its boost."))?
-        }
+            })?,
+        },
+        HitsoundSource::File => entry
+            .token
+            .as_deref()
+            .and_then(|token| crate::hitsound_fetch::read_picked(token).ok())
+            .or_else(installed)
+            .ok_or_else(|| CommandError::unknown("Pick the file again to change its boost."))?,
     };
     Ok((entry, raw))
 }
