@@ -95,5 +95,5 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - GameBanana's `Generic_LatestAdded` sort does not exist (`Generic_Newest` does); listings carry no download counts.
 - Linux clippy flags imports used only by `#[cfg(windows)]` tests: import inside the test fn.
 - Bash heredocs in the agent environment mangle backslashes; write patch scripts to a file first.
-- Never add AI co-author trailers to commits.
+- **Commits:** use the repo git identity (`Random`, not `Cursor Agent`). **Never add `Co-authored-by` trailers** — not for the owner, not for Cursor, not for any agent. At the start of every agent session run `git config --local core.hooksPath .githooks` (repo hook strips co-authors) **and** `chmod -x` the Cloud Agent file `commit-msg.cursor.co-author` under the VM's managed hooks dir. If a co-author line lands anyway, amend or rebase it out before push.
 - User-facing changes add a `CHANGELOG.md` `[Unreleased]` line in the same commit.

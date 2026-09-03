@@ -55,6 +55,13 @@ than vendoring it.
 User-facing changes add a line under `CHANGELOG.md` `[Unreleased]` in the
 same commit.
 
+## Commits
+
+Use your own git identity. Do not add `Co-authored-by` trailers for agents
+or tools. Cloud Agent runs may append one via a managed hook; run
+`git config --local core.hooksPath .githooks` (see `.githooks/commit-msg`)
+and disable that managed hook before committing. See `AGENTS.md` Gotchas.
+
 ## Releases
 
 The playbook is `docs/RELEASE.md`. In short: write the changelog section,

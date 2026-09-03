@@ -1,0 +1,8 @@
+#!/bin/sh
+# Strip Co-authored-by trailers (Cloud Agent VMs append these by default).
+# Enable for agent runs: git config --local core.hooksPath .githooks
+# Or per commit: git -c core.hooksPath=.githooks commit ...
+tmp="$(mktemp)"
+grep -vi '^co-authored-by:' "$1" >"$tmp" || true
+mv "$tmp" "$1"
+exit 0
