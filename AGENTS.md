@@ -38,6 +38,7 @@ Commands: `pnpm install`, `pnpm desktop:dev` (Tauri), `pnpm dev` (browser only, 
 ## Profiles
 
 - A profile = user cfg layer + `tf/cfg/config.cfg` + all of `tf/custom/` + launch options + records for HUD, crosshair, viewmodel, hitsounds and mods. Library at `profiles/<uuid>/` with `manifest.json` (per-file sha256), exclusive trees, `mastercomfig-base.vpk` shared by hash. Export/import is a zip.
+- There is no community hub and no profile uploads. Sharing is the export zip, sent however the player wants.
 - **Switch is exact replace, not merge.** Sources are validated before the Remove step, files are written atomically, the active id flips last; a failure after Remove clears the active id and the UI says re-apply. Previous exclusive files are removed only when the live hash still matches.
 - **Absorb** runs on boot and after TF2 quits: owned-file and `config.cfg` drift goes into the active profile automatically (Cloud copy dual-written); new or deleted packs prompt with Update (default), Restore removed, Keep. Keep is remembered in `ignored_packs`; Update clears it. Never silently roll the live folder back.
 - **Junk is never a pack:** `*.execs-part`, and Steam's own `tf/custom/readme.txt` and `workshop/`, are ignored everywhere. **Self-heal:** before classifying, absorb rewrites any manifest file missing from the live tree when its `.execs-part` sibling exists or the pack is app-owned (`execs-*`), deletes stray part files, and drops those keys from the ignore list (field incident: the dev app restarted mid-switch and left a half-written viewmodel pack).
