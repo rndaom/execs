@@ -37,6 +37,11 @@ export function updateCheckCopy(kind: UpdateCheckKind): string {
   return kind === "latest" ? "You're on the latest version." : "Could not check for updates.";
 }
 
+/** Pinned settings chrome is one 28px row; a second line is clipped. */
+export function updateCheckButtonLabel(checkMessage: string | null): string {
+  return checkMessage ?? CHECK_LABEL;
+}
+
 export function showUpdateBanner(update: AppUpdateInfo | null, dismissed: boolean): boolean {
   return update !== null && !dismissed;
 }

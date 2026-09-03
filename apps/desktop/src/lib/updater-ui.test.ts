@@ -9,6 +9,7 @@ import {
   PREVIEW_UPDATE_VERSION,
   showUpdateBanner,
   updateBannerCopy,
+  updateCheckButtonLabel,
   updateCheckCopy,
   updateProgressCopy,
 } from "./updater-ui";
@@ -43,6 +44,9 @@ describe("updater UI helpers", () => {
     expect(INSTALL_LABEL).toBe("Install");
     expect(LATER_LABEL).toBe("Later");
     expect(CHECK_LABEL).toBe("Check for updates");
+    expect(updateCheckButtonLabel(null)).toBe(CHECK_LABEL);
+    expect(updateCheckButtonLabel(updateCheckCopy("latest"))).toBe("You're on the latest version.");
+    expect(updateCheckButtonLabel(updateCheckCopy("error"))).toBe("Could not check for updates.");
   });
 
   it("seeds preview fixtures and leaves other chrome alone", () => {
