@@ -32,7 +32,7 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locke
 
 ## Ground rules
 
-`AGENTS.md` is the product spec. The rules under "Integrity line" are not
+`AGENTS.md` is the product spec. The rules under "Integrity rules" are not
 negotiable: the app writes only `tf/custom/`, `tf/cfg/overrides/` (or the
 vanilla user cfg files) and the Steam Cloud copy of `config.cfg`, never while
 the game is running, with the single documented exception for the Mods pane.
