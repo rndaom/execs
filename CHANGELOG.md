@@ -5,6 +5,16 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Mods and Viewmodels: sticky Apply bar no longer covers the last lines
+  of the pane.
+- Comfig: preset tiles stretch to the same height in each grid row.
+
+### Changed
+
+- Disclosure sections remember open/closed state per profile.
+
 ## [0.1.0] - 2026-09-03
 
 First public release.
