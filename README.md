@@ -13,7 +13,7 @@
   <a href="#bugs">Bugs</a>
 </p>
 
-![Comfig pane](docs/media/comfig.png)
+![execs in 28 seconds](docs/media/promo.gif)
 
 ## What it does
 

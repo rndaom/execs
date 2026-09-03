@@ -20,7 +20,7 @@ function renderGameplay() {
         transparentViewmodels: false,
         canUseComfigAddons: true,
         onToggleTransparentViewmodels: () => undefined,
-        onSave: () => undefined,
+        onSave: async () => undefined,
       }),
     ),
   );
@@ -47,8 +47,8 @@ function renderCrosshair(running = false, managedText?: string) {
             "cl_crosshair_blue 30",
           ].join("\n"),
         record: null,
-        onSaveStock: () => undefined,
-        onApply: () => undefined,
+        onSaveStock: async () => undefined,
+        onApply: async () => undefined,
         onRemove: () => undefined,
       }),
     ),
@@ -63,6 +63,10 @@ describe("crosshair settings placement", () => {
     expect(markup).not.toContain("stock-crosshair-settings");
     expect(markup).not.toContain("gameplay-crosshair-file");
     expect(markup).toContain('data-testid="gameplay-transparent-viewmodels"');
+    // Gameplay saves as you change it: no bar, no button, no lock message.
+    expect(markup).not.toContain('data-testid="gameplay-apply"');
+    expect(markup).not.toContain("Save gameplay");
+    expect(markup).not.toMatch(/data-testid="gameplay-fov"[^>]*disabled=""/);
   });
 
   it("places default crosshair controls before the custom crosshair builder", () => {
@@ -77,7 +81,6 @@ describe("crosshair settings placement", () => {
     expect(markup).toContain('data-testid="stock-crosshair-file-crosshair7"');
     expect(markup).not.toContain("<select");
     expect(markup).toContain('data-testid="crosshair-preview"');
-    expect(markup).toContain('data-testid="crosshair-apply"');
     expect(markup).toContain('data-testid="crosshair-color"');
   });
 
@@ -108,12 +111,24 @@ describe("crosshair settings placement", () => {
     expect(markup).toContain('data-testid="crosshair-slot-melee"');
   });
 
-  it("locks both stock and custom controls while TF2 is running", () => {
+  it("saves by itself, with no Apply button on either half", () => {
+    const markup = renderCrosshair();
+
+    expect(markup).not.toContain('data-testid="crosshair-apply"');
+    expect(markup).not.toContain('data-testid="stock-crosshair-apply"');
+    expect(markup).not.toContain("Install pack");
+    expect(markup).not.toContain("Save crosshair");
+  });
+
+  it("keeps the controls live while TF2 is running so a draft can be made", () => {
+    // The write lock defers the save (and the toast says so); it no longer
+    // takes the pictures and sliders away.
     const markup = renderCrosshair(true);
 
-    expect(markup).toMatch(/data-testid="stock-crosshair-file-default"[^>]*disabled=""/);
-    expect(markup).toMatch(/data-testid="stock-crosshair-file-crosshair3"[^>]*disabled=""/);
-    expect(markup).toMatch(/data-testid="stock-crosshair-apply"[^>]*disabled=""/);
-    expect(markup).toMatch(/data-testid="crosshair-apply"[^>]*disabled=""/);
+    expect(markup).toContain('data-testid="stock-crosshair-file-default"');
+    expect(markup).not.toMatch(/data-testid="stock-crosshair-file-default"[^>]*disabled=""/);
+    expect(markup).not.toMatch(/data-testid="stock-crosshair-file-crosshair3"[^>]*disabled=""/);
+    expect(markup).not.toMatch(/data-testid="stock-crosshair-scale"[^>]*disabled=""/);
+    expect(markup).not.toMatch(/data-testid="crosshair-color"[^>]*disabled=""/);
   });
 });

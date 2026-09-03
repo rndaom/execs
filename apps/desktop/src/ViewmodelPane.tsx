@@ -145,17 +145,19 @@ export function ViewmodelPane({
     }));
   }
 
+  // Building compiles with studiomdl, so this pane keeps its button — and with
+  // it the one vocabulary the automatic panes now put in the toast.
   const buildStatus = !canBuild
     ? "Building needs TF2's studiomdl (Windows only)"
     : running
-      ? "Close TF2 to build"
+      ? "Draft kept until TF2 closes"
       : draft.hidden.length === 0 && record
         ? "Nothing hidden — use Remove pack to restore stock"
         : draft.hidden.length === 0
           ? "Nothing hidden yet"
           : dirty || !builtPack
             ? "Unsaved changes"
-            : "Pack is up to date";
+            : "Up to date";
 
   const stageCaption =
     focusGroup === null

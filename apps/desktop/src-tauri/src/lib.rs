@@ -109,6 +109,7 @@ pub fn run() {
             commands::comfig::update_comfig_vpks,
             commands::comfig::import_comfig_custom,
             commands::launch::recommended_launch_options,
+            commands::launch::launch_tf2,
             commands::launch::get_profile_launch_options,
             commands::launch::set_profile_launch_options,
             commands::hud::get_hud_catalog,

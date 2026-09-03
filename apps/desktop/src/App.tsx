@@ -4,6 +4,7 @@ import { FinderPanel } from "./components/FinderPanel";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ToastProvider } from "./components/ui/Toast";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
 import { AppStatusProvider } from "./hooks/useAppStatus";
@@ -14,6 +15,7 @@ import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
 import type { Api } from "./lib/api";
+import { invokeErrorMessage } from "./lib/bridge";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
 import { previewSwitchStep } from "./lib/library-ui";
@@ -173,6 +175,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         profiles={profiles}
         progress={progress}
         draftName={draftName}
+        onLaunch={() => void api.launchTf2().catch((err) => setError(invokeErrorMessage(err)))}
         settings={
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout tab={settingsTab} onTab={setSettingsTab}>
@@ -207,36 +210,38 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         running: lock.running,
       }}
     >
-      <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
-        <WriteLockBanner running={lock.running} degraded={lock.degraded ?? progress.degraded} />
-        <UpdateBanner update={update} />
+      <ToastProvider>
+        <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
+          <WriteLockBanner running={lock.running} degraded={lock.degraded ?? progress.degraded} />
+          <UpdateBanner update={update} />
 
-        <main
-          className={`flex min-h-0 w-full flex-1 flex-col ${
-            settingsOpen
-              ? "items-stretch overflow-hidden"
-              : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
-          }`}
-        >
-          {install.screen === "ready" && install.confirmed ? (
-            renderReady(install.confirmed.path)
-          ) : (
-            <FinderPanel
-              scanning={install.scanning}
-              installs={install.installs}
-              selected={install.selected}
-              error={error}
-              canConfirm={confirmEnabled(install.selected, install.scanning || busy)}
-              busy={busy}
-              onSelect={install.select}
-              onBrowse={() => void install.browse()}
-              onConfirm={() => void install.confirm()}
-            />
-          )}
+          <main
+            className={`flex min-h-0 w-full flex-1 flex-col ${
+              settingsOpen
+                ? "items-stretch overflow-hidden"
+                : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
+            }`}
+          >
+            {install.screen === "ready" && install.confirmed ? (
+              renderReady(install.confirmed.path)
+            ) : (
+              <FinderPanel
+                scanning={install.scanning}
+                installs={install.installs}
+                selected={install.selected}
+                error={error}
+                canConfirm={confirmEnabled(install.selected, install.scanning || busy)}
+                busy={busy}
+                onSelect={install.select}
+                onBrowse={() => void install.browse()}
+                onConfirm={() => void install.confirm()}
+              />
+            )}
 
-          <AppFooter api={api} update={update} pinned={settingsOpen} />
-        </main>
-      </div>
+            <AppFooter api={api} update={update} pinned={settingsOpen} />
+          </main>
+        </div>
+      </ToastProvider>
     </AppStatusProvider>
   );
 }

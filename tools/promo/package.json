@@ -6,7 +6,7 @@
   "scripts": {
     "studio": "remotion studio",
     "render": "remotion render Promo out/execs-promo.mp4",
-    "render:gif": "remotion render Promo out/execs-promo.gif --codec=gif --every-nth-frame=2 --scale=0.6",
+    "render:gif": "remotion render PromoGif out/execs-promo.gif --codec=gif --every-nth-frame=1 --scale=0.4167",
     "still": "remotion still Promo out/poster.png --frame=90"
   },
   "dependencies": {

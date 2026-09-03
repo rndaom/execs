@@ -1,13 +1,12 @@
 import { useMemo } from "react";
-import { ApplyBar } from "./components/ui/ApplyBar";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
+import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   ALL_TRACERS_NOTE,
-  canApplyGameplay,
   clampGameplay,
   FLIP_VIEWMODELS_NOTE,
   FOV_MAX,
@@ -31,7 +30,8 @@ export type GameplayPaneProps = {
   /** Comfig-layer profile with official packages installed. */
   canUseComfigAddons: boolean;
   onToggleTransparentViewmodels: () => void;
-  onSave: (gameplayText: string) => void;
+  /** Resolves when the write settles; the toast reports it. */
+  onSave: (gameplayText: string) => Promise<unknown>;
 };
 
 export function GameplayPane({
@@ -46,36 +46,26 @@ export function GameplayPane({
 }: GameplayPaneProps) {
   const { running, busy } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
-  const locked = !canApplyGameplay(running, busy);
   const [draft, setDraft] = useSeededDraft(
     seeded,
     serializeGameplay,
     draftRecordKey(profileId, gameplayPath(layer)),
   );
   const dirty = gameplayDirty(draft, seeded);
+  // Everything here is a draft of one managed cfg, so nothing is disabled: the
+  // write lock defers the save, it does not take the sliders away.
+  const text = serializeGameplay(clampGameplay(draft));
+  useAutosave({ dirty, locked: running, token: text, save: () => onSave(text) });
+  // The addon toggle is not part of the draft: it is a comfig package write
+  // that has to wait for the queue like any other.
+  const addonLocked = running || busy;
 
   function patch(update: Partial<GameplaySettings>) {
     setDraft((current) => ({ ...current, ...update }));
   }
 
-  function onApply() {
-    if (locked) {
-      return;
-    }
-    const next = clampGameplay(draft);
-    setDraft(next);
-    onSave(serializeGameplay(next));
-  }
-
   return (
-    <form
-      data-testid="settings-gameplay"
-      className="min-w-0 text-left"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onApply();
-      }}
-    >
+    <section data-testid="settings-gameplay" className="min-w-0 text-left">
       <PaneHeader
         title="Gameplay"
         lede="Field of view and viewmodels."
@@ -91,7 +81,6 @@ export function GameplayPane({
           value={draft.fov_desired}
           min={FOV_MIN}
           max={FOV_MAX}
-          disabled={locked}
           suffix="°"
           onChange={(fov_desired) => patch({ fov_desired })}
         />
@@ -102,7 +91,6 @@ export function GameplayPane({
           value={draft.viewmodel_fov}
           min={FOV_MIN}
           max={FOV_MAX}
-          disabled={locked}
           suffix="°"
           onChange={(viewmodel_fov) => patch({ viewmodel_fov })}
         />
@@ -115,7 +103,6 @@ export function GameplayPane({
           testId="gameplay-draw-viewmodel"
           label="Draw viewmodel"
           checked={draft.r_drawviewmodel === 1}
-          disabled={locked}
           onChange={(next) => patch({ r_drawviewmodel: next ? 1 : 0 })}
         />
         <SwitchRow
@@ -124,7 +111,6 @@ export function GameplayPane({
           label="Min viewmodels"
           description="Compact weapon placement."
           checked={draft.tf_use_min_viewmodels === 1}
-          disabled={locked}
           onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
         />
       </fieldset>
@@ -140,7 +126,6 @@ export function GameplayPane({
               testId="gameplay-flip"
               label="Left-handed viewmodels"
               checked={draft.cl_flipviewmodels === 1}
-              disabled={locked}
               note={FLIP_VIEWMODELS_NOTE}
               onChange={(next) => patch({ cl_flipviewmodels: next ? 1 : 0 })}
             />
@@ -150,7 +135,7 @@ export function GameplayPane({
               label="Transparent viewmodels"
               description="Applies immediately."
               checked={transparentViewmodels}
-              disabled={locked || !canUseComfigAddons}
+              disabled={addonLocked || !canUseComfigAddons}
               note={
                 canUseComfigAddons
                   ? "Needs DirectX 9 and a HUD that supports it; turns off post-processing and anti-aliasing."
@@ -163,7 +148,6 @@ export function GameplayPane({
               testId="gameplay-tracers-fp"
               label="First-person tracers"
               checked={draft.r_drawtracers_firstperson === 1}
-              disabled={locked}
               onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
             />
             <SwitchRow
@@ -171,25 +155,13 @@ export function GameplayPane({
               testId="gameplay-tracers"
               label="All tracers"
               checked={draft.r_drawtracers === 1}
-              disabled={locked}
               note={ALL_TRACERS_NOTE}
               onChange={(next) => patch({ r_drawtracers: next ? 1 : 0 })}
             />
           </fieldset>
         </Disclosure>
       </section>
-
-      <ApplyBar
-        submit
-        testId="gameplay-apply"
-        running={running}
-        locked={locked}
-        dirty={dirty}
-        actionLabel="Save gameplay"
-        lockedLabel="Close TF2 to apply"
-        status={running ? "Draft kept until TF2 closes" : dirty ? "Unsaved changes" : "Saved"}
-      />
-    </form>
+    </section>
   );
 }
 
@@ -200,7 +172,6 @@ function SliderRow({
   value,
   min,
   max,
-  disabled,
   suffix = "",
   onChange,
 }: {
@@ -210,7 +181,6 @@ function SliderRow({
   value: number;
   min: number;
   max: number;
-  disabled: boolean;
   suffix?: string;
   onChange: (value: number) => void;
 }) {
@@ -233,7 +203,6 @@ function SliderRow({
         max={max}
         step={1}
         value={value}
-        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
         className="range mt-4 w-full"
       />

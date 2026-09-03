@@ -19,6 +19,7 @@ export function ReadyPanel({
   onSave,
   onCreateNew,
   onChangeInstall,
+  onLaunch,
 }: {
   path: string;
   profiles: ProfileLibraryState;
@@ -29,6 +30,7 @@ export function ReadyPanel({
   onSave: () => void;
   onCreateNew: () => void;
   onChangeInstall: () => void;
+  onLaunch: () => void;
 }) {
   const { error, busy, running } = useAppStatus();
   const controlsBusy = busy || progress.state.active;
@@ -39,6 +41,7 @@ export function ReadyPanel({
       <ReadyHeader
         path={path}
         running={running}
+        onLaunch={onLaunch}
         menu={
           <ProfileMenu
             library={library}

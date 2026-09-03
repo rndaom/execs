@@ -1,10 +1,11 @@
-import { Check, Copy } from "@phosphor-icons/react";
+import { Check, Copy, Play } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { formatInstallLabel } from "../../lib/finder-ui";
 
 /**
- * The app chrome: wordmark, profile switcher, install folder, game-running dot.
+ * The app chrome: wordmark, profile switcher, install folder, and either a
+ * Launch TF2 button or the game-running dot.
  *
  * The path collapses to its folder name — the full path stays in the `title`
  * and in the copy button — so the chrome stops being a wall of monospace.
@@ -13,10 +14,12 @@ export function ReadyHeader({
   path,
   running,
   menu,
+  onLaunch,
 }: {
   path: string;
   running: boolean;
   menu: ReactNode;
+  onLaunch: () => void;
 }) {
   const { feedback, copy } = useCopyFeedback();
 
@@ -54,13 +57,22 @@ export function ReadyHeader({
         </button>
       </div>
 
-      <div className="t-meta ml-auto flex shrink-0 items-center gap-2">
-        <span
-          className={`size-2 rounded-full ${running ? "bg-warn" : "bg-ink-faint"}`}
-          aria-hidden="true"
-        />
-        <span className="hidden sm:inline">{running ? "Game running" : "Game closed"}</span>
-      </div>
+      {running ? (
+        <div className="t-meta ml-auto flex shrink-0 items-center gap-2">
+          <span className="size-2 rounded-full bg-warn" aria-hidden="true" />
+          <span className="hidden sm:inline">Game running</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          data-testid="launch-tf2"
+          onClick={onLaunch}
+          className="btn btn-ghost ml-auto shrink-0 gap-1.5 text-[13px]"
+        >
+          <Play size={13} weight="fill" />
+          Launch TF2
+        </button>
+      )}
     </header>
   );
 }
