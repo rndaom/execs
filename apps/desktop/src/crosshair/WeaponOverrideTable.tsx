@@ -32,6 +32,7 @@ function slotLabel(slot: string): string {
  * freezing them, so the base-shape fallback keeps working.
  */
 export function WeaponOverrideTable({
+  profileId,
   draft,
   choices,
   classTab,
@@ -40,6 +41,7 @@ export function WeaponOverrideTable({
   onSelectClass,
   onChange,
 }: {
+  profileId: string | null;
   draft: CrosshairDraft;
   choices: CrosshairShape[];
   classTab: ClassTab;
@@ -57,6 +59,7 @@ export function WeaponOverrideTable({
 
   return (
     <Disclosure
+      profileId={profileId}
       storageKey="crosshair-overrides"
       summary={
         <span className="flex items-center gap-2">

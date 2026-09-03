@@ -342,7 +342,6 @@ export type HudSchemaSection = {
 
 export type HudSchemaView = {
   author: string;
-  supported: boolean;
   sections: HudSchemaSection[];
 };
 

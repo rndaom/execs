@@ -39,6 +39,8 @@ import {
 
 export type ModsPaneProps = {
   api: Api;
+  /** Active profile; disclosure state is remembered per profile. */
+  profileId: string | null;
   payload: PreloaderStatusPayload | null;
   catalog: ModsCatalog | null;
   /** The active profile's own packs; absent on an older backend. */
@@ -63,6 +65,7 @@ export type ModsPaneProps = {
 
 export function ModsPane({
   api,
+  profileId,
   payload,
   catalog,
   mods,
@@ -269,6 +272,7 @@ export function ModsPane({
 
       <PaneSection title="Browse GameBanana" id="mods-gamebanana">
         <Disclosure
+          profileId={profileId}
           storageKey="mods-gamebanana"
           summary="Search and install"
           testId="mods-gamebanana-disclosure"

@@ -232,6 +232,7 @@ export function CrosshairPane({
             />
 
             <WeaponOverrideTable
+              profileId={profileId}
               draft={draft}
               choices={shapeChoices}
               classTab={classTab}

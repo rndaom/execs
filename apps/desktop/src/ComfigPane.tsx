@@ -233,7 +233,7 @@ export function ComfigPane({
             </div>
           </div>
 
-          <div data-testid="comfig-preset" className="mt-4 grid content-start gap-3 sm:grid-cols-2">
+          <div data-testid="comfig-preset" className="mt-4 grid gap-3 sm:grid-cols-2">
             {visiblePresets.map((item) => (
               <OptionTile
                 key={item.id}
@@ -293,7 +293,12 @@ export function ComfigPane({
       </div>
 
       <section className="section" aria-labelledby="comfig-modules-heading">
-        <Disclosure storageKey="comfig-modules" summary="Fine-tune modules" testId="comfig-modules">
+        <Disclosure
+          profileId={detail?.id ?? null}
+          storageKey="comfig-modules"
+          summary="Fine-tune modules"
+          testId="comfig-modules"
+        >
           <div className="mt-2 flex flex-col gap-3 border-b border-edge sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 id="comfig-modules-heading" className="sr-only">

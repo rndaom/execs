@@ -1416,7 +1416,7 @@ mod tests {
     }
 
     /// Cross-validation against the reference corpus generated with cueki's
-    /// own pipeline (see design-qa.md). Run manually:
+    /// own pipeline. Run manually:
     /// `EXECS_PCF_CORPUS=<scratchpad> cargo test corpus_ -- --ignored`
     #[test]
     #[ignore = "needs the local reference corpus"]
