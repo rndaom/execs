@@ -10,7 +10,8 @@
   <a href="https://github.com/rndaom/execs/releases/latest"><b>Download</b></a> ·
   <a href="#install">Install</a> ·
   <a href="#files">Files</a> ·
-  <a href="#bugs">Bugs</a>
+  <a href="#bugs">Bugs</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ![execs in 28 seconds](docs/media/promo.gif)
@@ -39,7 +40,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 
 ## Install
 
-Download from the [latest release](https://github.com/rndaom/execs/releases/latest). Updates are offered in-app and install only when you click.
+Download from the [latest release](https://github.com/rndaom/execs/releases/latest). That published build is the only supported install; updates are offered in-app and install only when you click. What changed: [changelog](CHANGELOG.md).
 
 **Windows 10 or 11, 64-bit.** Run the `-setup.exe`. It installs per user, no admin needed. The installer is not code-signed yet, so Windows warns once:
 
@@ -79,7 +80,7 @@ If the game looks wrong afterwards, verify game files in Steam.
 
 ## Bugs
 
-[Open an issue](https://github.com/rndaom/execs/issues/new/choose). The footer of the app has **Report a bug** and **Copy diagnostics**. Questions go in [Discussions](https://github.com/rndaom/execs/discussions).
+[Open an issue](https://github.com/rndaom/execs/issues/new/choose). The footer of the app has **Report a bug** and **Copy diagnostics**. Questions go in [Discussions](https://github.com/rndaom/execs/discussions). A vulnerability that could write the wrong file belongs in [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Credits
 
@@ -97,4 +98,4 @@ Licenses and how each one is used: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Fan project, not affiliated with Valve Corporation. Team Fortress and Steam are trademarks of Valve Corporation.
 
-[Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
+[Contributing](CONTRIBUTING.md) · [Releases](docs/RELEASE.md) · [Security](SECURITY.md) · [MIT license](LICENSE)

@@ -2,6 +2,10 @@ name: Feature request
 description: Something execs should do that it does not do today.
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        A request is considered for a future monthly release. It is not a promise, and building from `main` is not a supported way to get it early.
   - type: textarea
     id: problem
     attributes:
@@ -13,5 +17,15 @@ body:
     id: proposal
     attributes:
       label: What would you like execs to do?
+    validations:
+      required: true
+  - type: dropdown
+    id: need
+    attributes:
+      label: How stuck are you without this?
+      options:
+        - Nice to have
+        - I have a workaround
+        - I cannot do this in execs today
     validations:
       required: true
