@@ -7,7 +7,7 @@
     "build": "pnpm --filter @execs/desktop build",
     "desktop": "pnpm --filter @execs/desktop tauri",
     "desktop:dev": "pnpm --filter @execs/desktop tauri dev",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && node --test scripts/release-notes.test.mjs",
     "test:core": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked",
     "check": "biome check ."
   },
