@@ -3,7 +3,7 @@ import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type { Api } from "../lib/api";
 import { openExternal } from "../lib/bridge";
 import { copyButtonLabel } from "../lib/copy-ui";
-import { appVersionCopy, CHECK_LABEL } from "../lib/updater-ui";
+import { appVersionCopy, updateCheckButtonLabel } from "../lib/updater-ui";
 
 const ISSUES_URL = "https://github.com/rndaom/execs/issues/new/choose";
 
@@ -62,7 +62,7 @@ export function AppFooter({
           disabled={update.progress !== null}
           className={`${LINK_CLASS} disabled:opacity-40`}
         >
-          {CHECK_LABEL}
+          {updateCheckButtonLabel(update.checkMessage)}
         </button>
         {" · "}
         <button
@@ -83,11 +83,6 @@ export function AppFooter({
           {copyButtonLabel(diagnostics.feedback, "Copy diagnostics")}
         </button>
       </p>
-      {update.checkMessage ? (
-        <p data-testid="app-update-check-message" className="t-meta">
-          {update.checkMessage}
-        </p>
-      ) : null}
       <p className={pinned ? "min-w-0 truncate text-[10px] text-ink-faint" : "t-meta"}>
         {pinned ? SHORT_DISCLAIMER : LONG_DISCLAIMER}
       </p>
