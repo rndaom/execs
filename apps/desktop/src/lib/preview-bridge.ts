@@ -621,6 +621,9 @@ export function createPreviewApi(state: PreviewState): Api {
       }
       return modsPayload;
     },
+    async launchTf2() {
+      // Steam is not reachable from the preview; the button is a no-op here.
+    },
     async repairGameFiles() {
       modsPayload = {
         ...modsPayload,

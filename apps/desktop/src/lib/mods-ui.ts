@@ -128,13 +128,13 @@ export function modsStatusLine(
   running: boolean,
 ): string {
   if (running) {
-    return "TF2 is open — game files cannot be patched";
+    return "Draft kept until TF2 closes";
   }
   if (status && !status.modsCached) {
     return "Download the mod library first";
   }
   if (selectionDirty(status, selection)) {
-    return "Selection differs from what's installed";
+    return "Unsaved changes";
   }
   if (status?.status.stale) {
     return "TF2 updated — re-apply to put these mods back";

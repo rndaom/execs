@@ -186,15 +186,15 @@ export function ComfigPane({
     onApplyModules(modules);
   }
 
+  // Saving is reported in the toast, once, for every pane — the header only
+  // carries the problems a save cannot fix.
   const statusProblem = running
     ? null
-    : busy
-      ? "Saving…"
-      : detail === null
-        ? "Loading…"
-        : !packagesInstalled
-          ? "Packages not installed"
-          : null;
+    : detail === null
+      ? "Loading…"
+      : !packagesInstalled
+        ? "Packages not installed"
+        : null;
 
   return (
     <section data-testid="settings-comfig" className="min-w-0 text-left">

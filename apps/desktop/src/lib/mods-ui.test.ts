@@ -180,9 +180,11 @@ describe("mods apply gating", () => {
     expect(modsStatusLine(uncached, selection(), false)).toContain("Download the mod library");
   });
 
-  it("says TF2 is open before anything else", () => {
-    expect(modsStatusLine(stale, INSTALLED, true)).toContain("TF2 is open");
+  it("says the draft is kept before anything else", () => {
+    // The same three lines every pane with a button now uses.
+    expect(modsStatusLine(stale, INSTALLED, true)).toBe("Draft kept until TF2 closes");
     expect(modsStatusLine(status, INSTALLED, false)).toBe("Up to date");
+    expect(modsStatusLine(status, selection(), false)).toBe("Unsaved changes");
   });
 });
 

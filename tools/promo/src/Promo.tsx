@@ -49,12 +49,16 @@ const BEATS = [
   },
 ] as const;
 
-const INTRO = 3.2 * PROMO_FPS;
-const HOOK = 3.6 * PROMO_FPS;
-const BEAT = 2.6 * PROMO_FPS;
-const OUTRO = 4.2 * PROMO_FPS;
+/** Scene lengths in frames for a given frame rate, so the GIF and the mp4 share one timeline. */
+export function timeline(fps: number) {
+  const intro = Math.round(3.2 * fps);
+  const hook = Math.round(3.6 * fps);
+  const beat = Math.round(2.6 * fps);
+  const outro = Math.round(4.2 * fps);
+  return { intro, hook, beat, outro, total: intro + hook + BEATS.length * beat + outro };
+}
 
-export const PROMO_DURATION_FRAMES = INTRO + HOOK + BEATS.length * BEAT + OUTRO;
+export const PROMO_DURATION_FRAMES = timeline(PROMO_FPS).total;
 
 function Wordmark({ size = 96, progress = 1 }: { size?: number; progress?: number }) {
   const dot = size * 0.34;
@@ -94,6 +98,7 @@ function Intro() {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const { intro: INTRO } = timeline(fps);
   const fade = interpolate(frame, [INTRO - 14, INTRO], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -131,6 +136,7 @@ const HOOK_WORDS = ["Configs.", "Binds.", "HUD.", "Crosshair.", "Viewmodels.", "
 function Hook() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const { hook: HOOK } = timeline(fps);
   const fade = interpolate(frame, [HOOK - 12, HOOK], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -181,6 +187,7 @@ function Beat({ shot, title, line }: (typeof BEATS)[number]) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 22, stiffness: 120 } });
+  const { beat: BEAT } = timeline(fps);
   const leave = interpolate(frame, [BEAT - 10, BEAT], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -309,6 +316,8 @@ function Outro() {
 }
 
 export function Promo() {
+  const { fps } = useVideoConfig();
+  const { intro: INTRO, hook: HOOK, beat: BEAT, outro: OUTRO } = timeline(fps);
   useEffect(() => {
     void loadInter();
   }, []);

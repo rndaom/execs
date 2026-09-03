@@ -1,11 +1,11 @@
 import { ArrowSquareOut, MagnifyingGlass, Play, Stop, UploadSimple } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
-import { ApplyBar } from "./components/ui/ApplyBar";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
-import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useAppStatus } from "./hooks/useAppStatus";
+import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import { forgetSoundUrl, soundKey, useSoundPlayer } from "./hooks/useSoundPlayer";
 import type { Api } from "./lib/api";
@@ -84,8 +84,7 @@ export function SoundsPane({
   layer,
   effective,
   managedText,
-  onSaveCvars,
-  onApply,
+  onSave,
   onRemove,
 }: {
   api: Api;
@@ -95,12 +94,21 @@ export function SoundsPane({
   layer: GameplayLayer;
   effective: Record<string, string>;
   managedText: string;
-  onSaveCvars: (gameplayText: string) => void;
-  onApply: (hit: HitsoundSlotChange, kill: HitsoundSlotChange) => void;
+  /**
+   * The cvars and, when the files changed, the sound pack — one write, so one
+   * toast. Resolves when it settles.
+   */
+  onSave: (
+    gameplayText: string,
+    pack: { hit: HitsoundSlotChange; kill: HitsoundSlotChange } | null,
+  ) => Promise<unknown>;
   onRemove: () => void;
 }) {
-  const { running } = useAppStatus();
-  const locked = !useCanWrite();
+  const { running, busy } = useAppStatus();
+  // Picking a sound is a draft; only removing the installed files waits on the
+  // lock and the queue.
+  const locked = false;
+  const removeLocked = running || busy;
   const cvars = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
   const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
   // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
@@ -212,27 +220,20 @@ export function SoundsPane({
     }
   }
 
-  function apply() {
-    if (locked || !dirty) {
-      return;
-    }
+  function save() {
     const next = clampGameplay(soundsToCvars(draft, cvars));
-    onSaveCvars(serializeGameplay(next));
-    if (needsPack) {
-      onApply(
-        slotChange("hit", draft.hit, record?.hit ?? null),
-        slotChange("kill", draft.kill, record?.kill ?? null),
-      );
-    }
+    return onSave(
+      serializeGameplay(next),
+      needsPack
+        ? {
+            hit: slotChange("hit", draft.hit, record?.hit ?? null),
+            kill: slotChange("kill", draft.kill, record?.kill ?? null),
+          }
+        : null,
+    );
   }
 
-  const status = running
-    ? "Draft kept until TF2 closes"
-    : dirty
-      ? needsPack
-        ? "Unsaved changes — writes sound files"
-        : "Unsaved changes"
-      : "Saved";
+  useAutosave({ dirty, locked: running, token: serializeSoundsDraft(draft), save });
 
   const stockAvailable = (entry: SoundLibraryEntry, kind: HitsoundKind) => {
     if (entry.source !== "stock" || stockStems === null) {
@@ -457,29 +458,20 @@ export function SoundsPane({
         . execs is not affiliated with either.
       </p>
 
-      <ApplyBar
-        status={status}
-        actionLabel="Save sounds"
-        lockedLabel="Close TF2 to save"
-        running={running}
-        locked={locked}
-        dirty={dirty}
-        testId="sounds-apply"
-        extra={
-          record ? (
-            <button
-              type="button"
-              data-testid="sounds-remove"
-              disabled={locked}
-              onClick={onRemove}
-              className="btn btn-ghost"
-            >
-              Remove sound files
-            </button>
-          ) : null
-        }
-        onApply={apply}
-      />
+      {record ? (
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4">
+          <p className="t-meta">Sound files are installed in this profile.</p>
+          <button
+            type="button"
+            data-testid="sounds-remove"
+            disabled={removeLocked}
+            onClick={onRemove}
+            className="btn btn-ghost"
+          >
+            Remove sound files
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

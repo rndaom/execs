@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  canApplyGameplay,
   clampGameplay,
   defaultGameplay,
   ensureAutoexecExecLine,
@@ -150,16 +149,5 @@ describe("autoexec exec line", () => {
     expect(ensureAutoexecExecLine("", GAMEPLAY_STEM, "comfig")).toBe(
       "exec overrides/execs_gameplay // execs:managed\n",
     );
-  });
-});
-
-describe("gameplay write-lock", () => {
-  // GameplayPane disables Apply via canApplyGameplay. Rust refuse_if_running
-  // is unchanged — this pane does not add a core write path.
-  it("disables apply when TF2 is running (pane only, no rust)", () => {
-    expect(canApplyGameplay(false, false)).toBe(true);
-    expect(canApplyGameplay(true, false)).toBe(false);
-    expect(canApplyGameplay(false, true)).toBe(false);
-    expect(canApplyGameplay(true, true)).toBe(false);
   });
 });

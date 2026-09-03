@@ -27,7 +27,7 @@ function renderHudPane(catalogLoading: boolean, catalogError: string | null): st
         onInstall: noop,
         onUpdate: noop,
         onMatch: noop,
-        onApplyOptions: noop,
+        onApplyOptions: async () => undefined,
         onImportArchive: noop,
         onImportFolder: noop,
       }),

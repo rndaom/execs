@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
+import { useToast } from "./components/ui/Toast";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
@@ -99,11 +100,14 @@ export function SettingsHost({
   onError: (message: string | null) => void;
 }) {
   const { error } = useAppStatus();
+  const toast = useToast();
   const [localBusy, setLocalBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [files, setFiles] = useState<CfgText[]>([]);
   const [comfig, setComfig] = useState<ComfigUiState>(defaultComfigState);
   const [launch, setLaunch] = useState(recommendedLaunchOptions);
+  /** What the profile actually holds — the pane's draft is diffed against it. */
+  const [launchSeed, setLaunchSeed] = useState(recommendedLaunchOptions);
   const [launchSaved, setLaunchSaved] = useState<{ sent: string; saved: string } | null>(null);
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
   const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
@@ -214,6 +218,7 @@ export function SettingsHost({
       return;
     }
     setLaunch(nextLaunch);
+    setLaunchSeed(nextLaunch);
   }
 
   async function reloadHud(refresh: boolean, showCatalogProgress = false) {
@@ -384,23 +389,38 @@ export function SettingsHost({
     };
   }, [api, tab, crosshairLibraryKey]);
 
-  async function runWrite(work: () => Promise<void>) {
+  /**
+   * The one write path: every pane's save, automatic or explicit, runs through
+   * here, so writes stay serialized behind the busy queue and the outcome is
+   * reported in exactly one place — the toast.
+   *
+   * `success` names the completion for panes that do something other than save
+   * ("Pack built"); `failure` carries their verb ("Could not apply").
+   */
+  async function runWrite(
+    work: () => Promise<void>,
+    copy?: { success?: string; failure?: string },
+  ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
     // because one is in flight silently dropped clicks the panes had already
     // applied optimistically. Only an *external* operation still blocks, and
     // it says so instead of no-oping.
     if (externalBusy) {
-      onError("Another change is still saving.");
-      return;
+      toast.failSave("another change is still saving", copy?.failure);
+      return false;
     }
     onError(null);
+    toast.startSave();
     try {
       await settingsBusyQueue.run(async () => {
         await work();
         await reload();
       });
+      toast.finishSave(copy?.success);
+      return true;
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Could not save that setting.");
+      toast.failSave(err, copy?.failure);
+      return false;
     }
   }
 
@@ -503,14 +523,20 @@ export function SettingsHost({
             });
           }}
           onUpdatePackages={() => {
-            void runWrite(async () => {
-              await api.updateComfigVpks();
-            });
+            void runWrite(
+              async () => {
+                await api.updateComfigVpks();
+              },
+              { success: "Packages up to date", failure: "Could not update" },
+            );
           }}
           onImportCustom={() => {
-            void runWrite(async () => {
-              await api.importComfigCustom();
-            });
+            void runWrite(
+              async () => {
+                await api.importComfigCustom();
+              },
+              { success: "comfig-custom imported", failure: "Could not import" },
+            );
           }}
         />
       );
@@ -550,11 +576,11 @@ export function SettingsHost({
               await api.setComfigAddons(addons);
             });
           }}
-          onSave={(gameplayText) => {
-            void runWrite(async () => {
+          onSave={(gameplayText) =>
+            runWrite(async () => {
               await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
-            });
-          }}
+            })
+          }
         />
       );
     }
@@ -578,43 +604,58 @@ export function SettingsHost({
               });
           }}
           onInstall={(id) => {
-            void runWrite(async () => {
-              await api.installHud(id);
-              await reloadHud(false);
-            });
+            void runWrite(
+              async () => {
+                await api.installHud(id);
+                await reloadHud(false);
+              },
+              { success: "HUD installed", failure: "Could not install" },
+            );
           }}
           onUpdate={() => {
-            void runWrite(async () => {
-              await api.updateHud();
-              await reloadHud(false);
-            });
+            void runWrite(
+              async () => {
+                await api.updateHud();
+                await reloadHud(false);
+              },
+              { success: "HUD updated", failure: "Could not update" },
+            );
           }}
           onMatch={(id) => {
-            void runWrite(async () => {
-              await api.matchHudCatalog(id);
-              await reloadHud(false);
-            });
+            void runWrite(
+              async () => {
+                await api.matchHudCatalog(id);
+                await reloadHud(false);
+              },
+              { failure: "Could not match" },
+            );
           }}
-          onApplyOptions={(options) => {
-            void runWrite(async () => {
+          onApplyOptions={(options) =>
+            runWrite(async () => {
               await api.applyHudOptions(options);
               await reloadHud(false);
-            });
-          }}
+            })
+          }
           onImportArchive={() => {
-            void runWrite(async () => {
-              // Cancelling the dialog is a no-op, not an error.
-              if (await api.importHudArchive()) {
-                await reloadHud(false);
-              }
-            });
+            void runWrite(
+              async () => {
+                // Cancelling the dialog is a no-op, not an error.
+                if (await api.importHudArchive()) {
+                  await reloadHud(false);
+                }
+              },
+              { success: "HUD imported", failure: "Could not import" },
+            );
           }}
           onImportFolder={() => {
-            void runWrite(async () => {
-              if (await api.importHudFolder()) {
-                await reloadHud(false);
-              }
-            });
+            void runWrite(
+              async () => {
+                if (await api.importHudFolder()) {
+                  await reloadHud(false);
+                }
+              },
+              { success: "HUD imported", failure: "Could not import" },
+            );
           }}
         />
       );
@@ -631,20 +672,23 @@ export function SettingsHost({
           stockSprites={stockSprites}
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
-          onSaveStock={(gameplayText) => {
-            void runWrite(async () => {
+          onSaveStock={(gameplayText) =>
+            runWrite(async () => {
               await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
-            });
-          }}
-          onApply={(shape, assignments, customRgba, color, library, design) => {
-            void runWrite(async () => {
+            })
+          }
+          onApply={(shape, assignments, customRgba, color, library, design) =>
+            runWrite(async () => {
               await api.applyCrosshairs(shape, assignments, customRgba, color, library, design);
-            });
-          }}
+            })
+          }
           onRemove={() => {
-            void runWrite(async () => {
-              await api.removeCrosshairs();
-            });
+            void runWrite(
+              async () => {
+                await api.removeCrosshairs();
+              },
+              { success: "Pack removed", failure: "Could not remove" },
+            );
           }}
         />
       );
@@ -657,19 +701,28 @@ export function SettingsHost({
           profileId={profileId}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
-            void runWrite(async () => {
-              await api.buildViewmodelPack(hidden, preload, hideMode);
-            });
+            void runWrite(
+              async () => {
+                await api.buildViewmodelPack(hidden, preload, hideMode);
+              },
+              { success: "Pack built", failure: "Could not build" },
+            );
           }}
           onImport={(preload) => {
-            void runWrite(async () => {
-              await api.importViewmodels(preload);
-            });
+            void runWrite(
+              async () => {
+                await api.importViewmodels(preload);
+              },
+              { success: "Pack imported", failure: "Could not import" },
+            );
           }}
           onRemove={() => {
-            void runWrite(async () => {
-              await api.removeViewmodels();
-            });
+            void runWrite(
+              async () => {
+                await api.removeViewmodels();
+              },
+              { success: "Pack removed", failure: "Could not remove" },
+            );
           }}
         />
       );
@@ -685,20 +738,23 @@ export function SettingsHost({
           layer={layer}
           effective={maps.effective}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
-          onSaveCvars={(gameplayText) => {
-            void runWrite(async () => {
+          // The cvars and the sound files are one change to the user, so they
+          // are one write: two would mean two toasts for one edit.
+          onSave={(gameplayText, pack) =>
+            runWrite(async () => {
               await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
-            });
-          }}
-          onApply={(hit, kill) => {
-            void runWrite(async () => {
-              await api.applyHitsounds(hit, kill);
-            });
-          }}
+              if (pack) {
+                await api.applyHitsounds(pack.hit, pack.kill);
+              }
+            })
+          }
           onRemove={() => {
-            void runWrite(async () => {
-              await api.removeHitsounds();
-            });
+            void runWrite(
+              async () => {
+                await api.removeHitsounds();
+              },
+              { success: "Sound files removed", failure: "Could not remove" },
+            );
           }}
         />
       );
@@ -728,17 +784,20 @@ export function SettingsHost({
               .finally(() => setModsLoading(false));
           }}
           onApply={(addons, particleMods, profileParticleMods) => {
-            void runWrite(async () => {
-              try {
-                setModsReport(
-                  await api.applyPreloaderMods(addons, particleMods, profileParticleMods),
-                );
-              } finally {
-                // A failed apply still restored the previous install
-                // backend-side; the pane must reflect that, not the stale state.
-                await refreshModsStatus().catch(() => {});
-              }
-            });
+            void runWrite(
+              async () => {
+                try {
+                  setModsReport(
+                    await api.applyPreloaderMods(addons, particleMods, profileParticleMods),
+                  );
+                } finally {
+                  // A failed apply still restored the previous install
+                  // backend-side; the pane must reflect that, not the stale state.
+                  await refreshModsStatus().catch(() => {});
+                }
+              },
+              { success: "Mods applied", failure: "Could not apply" },
+            );
           }}
           onToggleBypass={(enabled) => {
             void runWrite(async () => {
@@ -751,14 +810,17 @@ export function SettingsHost({
             });
           }}
           onRevert={() => {
-            void runWrite(async () => {
-              try {
-                await api.revertPreloader();
-                setModsReport(null);
-              } finally {
-                await refreshModsStatus().catch(() => {});
-              }
-            });
+            void runWrite(
+              async () => {
+                try {
+                  await api.revertPreloader();
+                  setModsReport(null);
+                } finally {
+                  await refreshModsStatus().catch(() => {});
+                }
+              },
+              { success: "Stock files restored", failure: "Could not restore" },
+            );
           }}
           onRepair={async () => {
             onError(null);
@@ -774,34 +836,46 @@ export function SettingsHost({
             void api.openExternal(PRELOADER_REPO_URL);
           }}
           onImportArchive={() => {
-            void runWrite(async () => {
-              // Cancelling the dialog is a no-op, not an error.
-              if (await api.importModArchive()) {
-                await refreshModsStatus().catch(() => {});
-              }
-            });
+            void runWrite(
+              async () => {
+                // Cancelling the dialog is a no-op, not an error.
+                if (await api.importModArchive()) {
+                  await refreshModsStatus().catch(() => {});
+                }
+              },
+              { success: "Mod imported", failure: "Could not import" },
+            );
           }}
           onImportFolder={() => {
-            void runWrite(async () => {
-              if (await api.importModFolder()) {
-                await refreshModsStatus().catch(() => {});
-              }
-            });
+            void runWrite(
+              async () => {
+                if (await api.importModFolder()) {
+                  await refreshModsStatus().catch(() => {});
+                }
+              },
+              { success: "Mod imported", failure: "Could not import" },
+            );
           }}
           onRemoveMod={(id) => {
-            void runWrite(async () => {
-              await api.removeMod(id);
-              // Removing a pack can take its particle sources with it.
-              await refreshModsStatus().catch(() => {});
-            });
+            void runWrite(
+              async () => {
+                await api.removeMod(id);
+                // Removing a pack can take its particle sources with it.
+                await refreshModsStatus().catch(() => {});
+              },
+              { success: "Mod removed", failure: "Could not remove" },
+            );
           }}
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
           onInstallGameBananaMod={async (id) => {
-            await runWrite(async () => {
-              await api.installGameBananaMod(id);
-              await refreshModsStatus().catch(() => {});
-            });
+            await runWrite(
+              async () => {
+                await api.installGameBananaMod(id);
+                await refreshModsStatus().catch(() => {});
+              },
+              { success: "Mod installed", failure: "Could not install" },
+            );
           }}
         />
       );
@@ -825,6 +899,7 @@ export function SettingsHost({
     return (
       <LaunchPane
         value={launch}
+        saved={launchSeed}
         steamWrite={steamWrite}
         lastSave={launchSaved}
         onChange={(next) => {
@@ -833,9 +908,10 @@ export function SettingsHost({
         }}
         onSave={() => {
           const sent = launch;
-          void runWrite(async () => {
+          return runWrite(async () => {
             const result = await api.setProfileLaunchOptions(sent);
             setLaunch(result.launchOptions);
+            setLaunchSeed(result.launchOptions);
             setLaunchSaved({ sent, saved: result.launchOptions });
             setSteamWrite(result.steamWrite);
           });

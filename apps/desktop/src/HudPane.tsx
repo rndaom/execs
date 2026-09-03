@@ -15,6 +15,7 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { Api } from "./lib/api";
 import {
@@ -90,7 +91,8 @@ export function HudPane({
   onInstall: (id: string) => void;
   onUpdate: () => void;
   onMatch: (id: string) => void;
-  onApplyOptions: (options: Record<string, string>) => void;
+  /** Resolves when the write settles; the toast reports it. */
+  onApplyOptions: (options: Record<string, string>) => Promise<unknown>;
   /** Install a HUD from a zip/7z or a folder on this computer. */
   onImportArchive: () => void;
   onImportFolder: () => void;
@@ -112,7 +114,15 @@ export function HudPane({
     [catalog, query, stats, sort],
   );
   const paged = paginateHudCatalog(filtered, page);
+  // The schema options are a draft of the HUD's own file: they autosave, so
+  // nothing in that block is disabled — the lock defers the write instead.
   const dirty = hudOptionsDirty(draft, seeded);
+  useAutosave({
+    dirty,
+    locked: running,
+    token: JSON.stringify(draft),
+    save: () => onApplyOptions(draft),
+  });
   const installedId = state.installed?.id ?? null;
   const installedLabel = installedHudLabel(state);
   // The active HUD's own art, when hud-db knows the entry — the hero shows
@@ -209,24 +219,11 @@ export function HudPane({
               testId="hud-options-disclosure"
               className="section"
             >
-              <form
-                data-testid="hud-options"
-                className="flex flex-col"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (locked || !dirty) {
-                    return;
-                  }
-                  onApplyOptions(draft);
-                }}
-              >
+              <div data-testid="hud-options" className="flex flex-col">
                 <div className="flex items-center justify-between gap-3 border-b border-edge pb-2">
                   <p className="t-meta">
                     {schema.author ? `Schema by ${schema.author}` : "Options"}
                   </p>
-                  <span className="t-meta text-ink-faint">
-                    {dirty ? "Unsaved changes" : "Saved"}
-                  </span>
                 </div>
                 <div className="grid gap-x-10 pt-1 lg:grid-cols-2">
                   {schema.sections.map((section) => (
@@ -244,7 +241,6 @@ export function HudPane({
                               <span>{control.label}</span>
                               <Switch
                                 checked={enabled}
-                                disabled={locked}
                                 label={control.label}
                                 testId={`hud-opt-${control.name}`}
                                 onChange={(next) =>
@@ -276,7 +272,6 @@ export function HudPane({
                                     label: choice.label,
                                   }))}
                                   value={value}
-                                  disabled={locked}
                                   onChange={(next) =>
                                     setDraft((current) => ({ ...current, [control.name]: next }))
                                   }
@@ -295,7 +290,6 @@ export function HudPane({
                                 id={`hud-opt-${control.name}`}
                                 data-testid={`hud-opt-${control.name}`}
                                 value={value}
-                                disabled={locked}
                                 onChange={(event) =>
                                   setDraft((current) => ({
                                     ...current,
@@ -333,7 +327,6 @@ export function HudPane({
                                 value={value}
                                 min={control.minimum}
                                 max={control.maximum}
-                                disabled={locked}
                                 onChange={(event) =>
                                   setDraft((current) => ({
                                     ...current,
@@ -379,7 +372,6 @@ export function HudPane({
                                 data-testid={`hud-opt-${control.name}`}
                                 type="color"
                                 value={rgbToHex(rgba.r, rgba.g, rgba.b)}
-                                disabled={locked}
                                 onChange={(event) => {
                                   const rgb = hexToRgb(event.target.value);
                                   if (!rgb) {
@@ -401,7 +393,6 @@ export function HudPane({
                                 min={0}
                                 max={255}
                                 value={rgba.a}
-                                disabled={locked}
                                 onChange={(event) =>
                                   setDraft((current) => ({
                                     ...current,
@@ -431,17 +422,7 @@ export function HudPane({
                     </fieldset>
                   ))}
                 </div>
-                <div className="flex items-center justify-end border-t border-edge pt-4">
-                  <button
-                    type="submit"
-                    data-testid="hud-apply"
-                    disabled={locked || !dirty}
-                    className="btn btn-primary"
-                  >
-                    {running ? "Close TF2 to apply" : "Apply options"}
-                  </button>
-                </div>
-              </form>
+              </div>
             </Disclosure>
           ) : state.installed && !state.schemaSupported ? (
             <p data-testid="hud-options-notes" className="t-meta section">

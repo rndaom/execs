@@ -1,14 +1,8 @@
-import { canWrite } from "./write-gate";
-
 export type SteamWriteStatus = "written" | "steam_open" | "no_account";
 
 /** The official mastercomfig set new and wizard profiles start from. */
 export function recommendedLaunchOptions(): string {
   return "-novid -nojoy -nosteamcontroller -nohltv -particles 1";
-}
-
-export function canEditLaunch(running: boolean, busy: boolean): boolean {
-  return canWrite(running, busy);
 }
 
 /**

@@ -1,11 +1,11 @@
-import { Check, CheckCircle, Copy, FloppyDisk, WarningCircle } from "@phosphor-icons/react";
+import { Check, CheckCircle, Copy, WarningCircle } from "@phosphor-icons/react";
 import { Alert } from "./components/ui/Alert";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
+import { useAutosave } from "./hooks/useAutosave";
 import { useCopyFeedback } from "./hooks/useCopyFeedback";
 import { copyButtonLabel } from "./lib/copy-ui";
 import {
-  canEditLaunch,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
   type SteamWriteStatus,
@@ -16,22 +16,32 @@ import {
 
 export function LaunchPane({
   value,
+  saved,
   steamWrite,
   lastSave,
   onChange,
   onSave,
 }: {
   value: string;
+  /** What the profile holds; the field is a draft of it. */
+  saved: string;
   steamWrite?: SteamWriteStatus | null;
   /** What was sent to the backend last save and what came back. */
   lastSave?: { sent: string; saved: string } | null;
   onChange: (value: string) => void;
-  onSave: () => void;
+  /** Resolves when the write settles; the toast reports it. */
+  onSave: () => Promise<unknown>;
 }) {
-  const { running, busy } = useAppStatus();
-  const canEdit = canEditLaunch(running, busy);
+  const { running } = useAppStatus();
   const status = steamWrite ? steamWriteCopy(steamWrite) : "";
   const { feedback, copy } = useCopyFeedback();
+  // Typing is a draft: the lock defers the write, it does not lock the field.
+  const { flush } = useAutosave({
+    dirty: value !== saved,
+    locked: running,
+    token: value,
+    save: onSave,
+  });
 
   // The backend strips these on save; flagging them as you type means the
   // textarea never silently changes under the user.
@@ -55,11 +65,11 @@ export function LaunchPane({
             data-testid="launch-options"
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            disabled={!canEdit}
+            onBlur={flush}
             aria-describedby={forbidden.length > 0 ? "launch-forbidden" : undefined}
             rows={8}
             spellCheck={false}
-            className={`surface mt-3 min-h-48 w-full resize-y bg-bg px-5 py-4 font-mono text-[13.5px] leading-7 text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-40 ${
+            className={`surface mt-3 min-h-48 w-full resize-y bg-bg px-5 py-4 font-mono text-[13.5px] leading-7 text-ink placeholder:text-ink-faint focus:outline-none ${
               forbidden.length > 0 ? "border-warn/70" : ""
             }`}
           />
@@ -91,29 +101,17 @@ export function LaunchPane({
               className="t-meta flex items-center gap-2"
             >
               {status ? <CheckCircle size={15} className="text-ok" weight="fill" /> : null}
-              {status || "Save, then copy into Steam if needed."}
+              {status || "Copy into Steam if it is open while you edit this."}
             </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                data-testid="launch-copy"
-                onClick={() => void copy(value)}
-                className={`btn btn-ghost ${feedback === "copied" ? "border-ok/60 text-ok" : ""}`}
-              >
-                {feedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
-                <span aria-live="polite">{copyButtonLabel(feedback)}</span>
-              </button>
-              <button
-                type="button"
-                data-testid="launch-save"
-                disabled={!canEdit}
-                onClick={onSave}
-                className="btn btn-primary"
-              >
-                <FloppyDisk size={15} weight="bold" />
-                Save
-              </button>
-            </div>
+            <button
+              type="button"
+              data-testid="launch-copy"
+              onClick={() => void copy(value)}
+              className={`btn btn-ghost ${feedback === "copied" ? "border-ok/60 text-ok" : ""}`}
+            >
+              {feedback === "copied" ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+              <span aria-live="polite">{copyButtonLabel(feedback)}</span>
+            </button>
           </div>
         </section>
 

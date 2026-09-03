@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useAppStatus } from "./hooks/useAppStatus";
+import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { StockCrosshairSprite } from "./lib/bridge";
 import {
@@ -35,7 +36,8 @@ export function StockCrosshairSettings({
   /** Real sprites from the user's game files; geometry fallback when null. */
   sprites?: Record<string, StockCrosshairSprite> | null;
   managedText: string;
-  onSave: (gameplayText: string) => void;
+  /** Resolves when the write settles; the toast reports it. */
+  onSave: (gameplayText: string) => Promise<unknown>;
 }) {
   const { running } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
@@ -47,20 +49,14 @@ export function StockCrosshairSettings({
     serializeGameplay,
     draftRecordKey(profileId, "stock-crosshair"),
   );
-  const locked = !useCanWrite();
   const dirty = gameplayDirty(draft, seeded);
+  // Nothing here is disabled: these are drafts of one managed cfg, and the
+  // write lock defers the save rather than taking the controls away.
+  const text = serializeGameplay(clampGameplay(draft));
+  useAutosave({ dirty, locked: running, token: text, save: () => onSave(text) });
 
   function patch(update: Partial<GameplaySettings>) {
     setDraft((current) => ({ ...current, ...update }));
-  }
-
-  function apply() {
-    if (locked) {
-      return;
-    }
-    const next = clampGameplay(draft);
-    setDraft(next);
-    onSave(serializeGameplay(next));
   }
 
   // TF2 tints the drawn crosshair by cl_crosshair_red/green/blue at full
@@ -73,14 +69,7 @@ export function StockCrosshairSettings({
   const renderedSize = stockCrosshairRenderedSize(draft.cl_crosshair_scale);
 
   return (
-    <form
-      data-testid="stock-crosshair-settings"
-      className="min-w-0"
-      onSubmit={(event) => {
-        event.preventDefault();
-        apply();
-      }}
-    >
+    <section data-testid="stock-crosshair-settings" className="min-w-0">
       {/* Lead with the decision: file, scale and colour on the left, the live
           preview pinned at 360px on the right. */}
       <div className="hero-row">
@@ -105,7 +94,7 @@ export function StockCrosshairSettings({
                       title={file === "" ? "Default / none" : STOCK_CROSSHAIR_LABELS[file]}
                       className={`thumb cursor-pointer focus-within:ring-2 focus-within:ring-brand ${
                         selected ? "thumb-selected" : ""
-                      } ${locked ? "thumb-disabled" : ""}`}
+                      }`}
                     >
                       <input
                         type="radio"
@@ -113,7 +102,6 @@ export function StockCrosshairSettings({
                         data-testid={`stock-crosshair-file-${file || "default"}`}
                         value={file}
                         checked={selected}
-                        disabled={locked}
                         onChange={() => patch({ cl_crosshair_file: file })}
                         className="sr-only"
                       />
@@ -154,7 +142,6 @@ export function StockCrosshairSettings({
               value={draft.cl_crosshair_scale}
               min={CROSSHAIR_SCALE_MIN}
               max={CROSSHAIR_SCALE_MAX}
-              disabled={locked}
               onChange={(cl_crosshair_scale) => patch({ cl_crosshair_scale })}
             />
 
@@ -174,7 +161,6 @@ export function StockCrosshairSettings({
                   value={draft.cl_crosshair_red}
                   min={COLOR_MIN}
                   max={COLOR_MAX}
-                  disabled={locked}
                   accentClass="range-red"
                   onChange={(cl_crosshair_red) => patch({ cl_crosshair_red })}
                 />
@@ -184,7 +170,6 @@ export function StockCrosshairSettings({
                   value={draft.cl_crosshair_green}
                   min={COLOR_MIN}
                   max={COLOR_MAX}
-                  disabled={locked}
                   accentClass="range-green"
                   onChange={(cl_crosshair_green) => patch({ cl_crosshair_green })}
                 />
@@ -194,7 +179,6 @@ export function StockCrosshairSettings({
                   value={draft.cl_crosshair_blue}
                   min={COLOR_MIN}
                   max={COLOR_MAX}
-                  disabled={locked}
                   accentClass="range-blue"
                   onChange={(cl_crosshair_blue) => patch({ cl_crosshair_blue })}
                 />
@@ -245,23 +229,7 @@ export function StockCrosshairSettings({
           </div>
         </div>
       </div>
-
-      {/* A plain row, not the sticky `ApplyBar`: this is a sub-section of the
-          Crosshair pane, and the pane's own ApplyBar already owns the bottom. */}
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4">
-        <p className="t-meta" aria-live="polite">
-          {dirty ? "Unsaved changes" : "Saved"}
-        </p>
-        <button
-          type="submit"
-          data-testid="stock-crosshair-apply"
-          disabled={locked || !dirty}
-          className="btn btn-primary"
-        >
-          {running ? "Close TF2 to save" : "Save crosshair"}
-        </button>
-      </div>
-    </form>
+    </section>
   );
 }
 
@@ -401,7 +369,6 @@ function StockSliderRow({
   value,
   min,
   max,
-  disabled,
   accentClass = "",
   note,
   onChange,
@@ -411,7 +378,6 @@ function StockSliderRow({
   value: number;
   min: number;
   max: number;
-  disabled: boolean;
   /** A `--color-*` token utility, never a raw hex. */
   accentClass?: string;
   note?: string;
@@ -435,7 +401,6 @@ function StockSliderRow({
         max={max}
         step={1}
         value={value}
-        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
         className={`range mt-3 w-full ${accentClass}`}
       />

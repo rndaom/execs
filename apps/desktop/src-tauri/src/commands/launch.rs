@@ -32,3 +32,15 @@ pub async fn set_profile_launch_options(
     })
     .await
 }
+
+/// Start TF2 through Steam. While the game is already running Steam just
+/// focuses it, so there is nothing to refuse here.
+#[tauri::command]
+pub async fn launch_tf2() -> Result<(), CommandError> {
+    super::shared::blocking(|| {
+        tauri_plugin_opener::open_url("steam://rungameid/440", None::<&str>).map_err(|err| {
+            CommandError::unknown(format!("Could not ask Steam to launch TF2 ({err})"))
+        })
+    })
+    .await
+}

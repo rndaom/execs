@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  canEditLaunch,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
   recommendedLaunchOptions,
@@ -15,13 +14,6 @@ const RECOMMENDED = "-novid -nojoy -nosteamcontroller -nohltv -particles 1";
 describe("launch UI helpers", () => {
   it("matches the Rust recommended set", () => {
     expect(recommendedLaunchOptions()).toBe(RECOMMENDED);
-  });
-
-  it("blocks edits while TF2 is running or busy", () => {
-    expect(canEditLaunch(false, false)).toBe(true);
-    expect(canEditLaunch(true, false)).toBe(false);
-    expect(canEditLaunch(false, true)).toBe(false);
-    expect(canEditLaunch(true, true)).toBe(false);
   });
 
   it("explains Steam write without asking them to quit", () => {

@@ -961,6 +961,11 @@ export async function repairGameFiles(): Promise<void> {
   return call<void>("repair_game_files");
 }
 
+/** Start TF2 through Steam (`steam://rungameid/440`). */
+export async function launchTf2(): Promise<void> {
+  return call<void>("launch_tf2");
+}
+
 // ---------------------------------------------------------------------------
 // App updater
 // ---------------------------------------------------------------------------

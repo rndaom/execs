@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ApplyBar } from "./components/ui/ApplyBar";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { CommunityPicker } from "./crosshair/CommunityPicker";
@@ -13,7 +12,8 @@ import {
   type ClassTab,
   WeaponOverrideTable,
 } from "./crosshair/WeaponOverrideTable";
-import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useAppStatus } from "./hooks/useAppStatus";
+import { useAutosave } from "./hooks/useAutosave";
 import type { CrosshairAssetPayload, CrosshairRecord, StockCrosshairSprite } from "./lib/bridge";
 import { isTauri } from "./lib/bridge";
 import { hexToRgb, rgbToHex } from "./lib/color";
@@ -59,7 +59,8 @@ export function CrosshairPane({
   /** Decoded previews of library crosshairs already in the installed pack. */
   packPreviews?: Record<string, StockCrosshairSprite> | null;
   managedText: string;
-  onSaveStock: (gameplayText: string) => void;
+  /** Both resolve when the write settles; the toast reports it. */
+  onSaveStock: (gameplayText: string) => Promise<unknown>;
   onApply: (
     shape: CrosshairShape,
     assignments: Record<string, string>,
@@ -67,11 +68,14 @@ export function CrosshairPane({
     color: CrosshairColor | null,
     library: Record<string, CrosshairAssetPayload>,
     design: string | null,
-  ) => void;
+  ) => Promise<unknown>;
   onRemove: () => void;
 }) {
-  const { running } = useAppStatus();
-  const locked = !useCanWrite();
+  const { running, busy } = useAppStatus();
+  // Nothing that feeds the pack is disabled — it is a draft, and the lock only
+  // defers the write. Removing the pack is a different kind of act and waits.
+  const locked = false;
+  const removeLocked = running || busy;
   const {
     draft,
     setDraft,
@@ -83,9 +87,10 @@ export function CrosshairPane({
     setImportedPng,
     libraryPayload,
   } = useCrosshairDraft(profileId, record, packPreviews);
-  // With no pack installed there is nothing to diff against: installing the
-  // shape on screen is itself the change.
-  const dirty = record === null || crosshairDraftDirty(draft, seeded);
+  // A pane the user only looked at must never write a pack on its own, so this
+  // is a plain diff: with nothing installed the seed is the default draft, and
+  // picking a shape is what makes it dirty.
+  const dirty = crosshairDraftDirty(draft, seeded);
   const [classTab, setClassTab] = useState<ClassTab>(ALL_CLASSES_TAB);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
@@ -106,6 +111,21 @@ export function CrosshairPane({
   const colorHex = draft.color
     ? rgbToHex(draft.color[0], draft.color[1], draft.color[2])
     : "#ffffff";
+
+  useAutosave({
+    dirty,
+    locked: running,
+    token: JSON.stringify(draft),
+    save: () =>
+      onApply(
+        draft.shape,
+        draft.assignments,
+        draft.customRgba ?? undefined,
+        draft.color,
+        libraryPayload(),
+        draft.design,
+      ),
+  });
 
   return (
     <section data-testid="settings-crosshair" className="min-w-0 text-left">
@@ -227,6 +247,21 @@ export function CrosshairPane({
           <p>{CROSSHAIR_CASUAL_COPY}</p>
           <p>{CROSSHAIR_STOCK_OVERRIDE_NOTE}</p>
         </div>
+
+        {record ? (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="t-meta">The pack is installed in this profile.</p>
+            <button
+              type="button"
+              data-testid="crosshair-remove"
+              disabled={removeLocked}
+              onClick={onRemove}
+              className="btn btn-ghost"
+            >
+              Remove pack
+            </button>
+          </div>
+        ) : null}
       </PaneSection>
 
       <p className="t-meta mt-8 text-ink-faint">
@@ -234,49 +269,6 @@ export function CrosshairPane({
         game. execs is not affiliated with Valve or Steam; Team Fortress 2 and its sprites are ©
         Valve Corporation.
       </p>
-
-      <ApplyBar
-        status={
-          locked
-            ? running
-              ? "Close TF2 to change crosshairs"
-              : "Finish the current task first"
-            : !dirty
-              ? "Saved"
-              : record
-                ? "Rewrites the installed pack"
-                : "Writes a new pack"
-        }
-        actionLabel={record ? "Update pack" : "Install pack"}
-        lockedLabel="Close TF2 to apply"
-        running={running}
-        locked={locked}
-        dirty={dirty}
-        testId="crosshair-apply"
-        extra={
-          record ? (
-            <button
-              type="button"
-              data-testid="crosshair-remove"
-              disabled={locked}
-              onClick={onRemove}
-              className="btn btn-ghost"
-            >
-              Remove pack
-            </button>
-          ) : null
-        }
-        onApply={() =>
-          onApply(
-            draft.shape,
-            draft.assignments,
-            draft.customRgba ?? undefined,
-            draft.color,
-            libraryPayload(),
-            draft.design,
-          )
-        }
-      />
 
       {/* Mounted only while open so each visit starts from the current draft
           (the designer seeds its params once) and from a clean search box. */}
