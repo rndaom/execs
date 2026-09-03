@@ -118,7 +118,12 @@ export function GameplayPane({
       <section className="section">
         {/* The engine refuses r_drawtracers on any live server, so it is not an
             "obvious toggle" — it and its neighbours live behind a disclosure. */}
-        <Disclosure storageKey="gameplay-advanced" summary="Advanced" testId="gameplay-advanced">
+        <Disclosure
+          profileId={profileId}
+          storageKey="gameplay-advanced"
+          summary="Advanced"
+          testId="gameplay-advanced"
+        >
           <fieldset className="min-w-0 md:max-w-xl">
             <legend className="sr-only">Advanced gameplay options</legend>
             <SwitchRow

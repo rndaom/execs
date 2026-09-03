@@ -212,8 +212,9 @@ export function HudPane({
             ) : null}
           </div>
 
-          {state.installed && schema?.supported ? (
+          {state.installed && state.schemaSupported && schema ? (
             <Disclosure
+              profileId={profileId}
               storageKey="hud-options"
               summary="HUD options"
               testId="hud-options-disclosure"

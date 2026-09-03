@@ -314,6 +314,7 @@ export function ViewmodelPane({
 
       <section className="section">
         <Disclosure
+          profileId={profileId}
           storageKey="viewmodel-pack"
           summary="Pack and preload"
           testId="viewmodel-pack-disclosure"

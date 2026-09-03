@@ -73,7 +73,6 @@ pub struct WriteSnippet {
 #[serde(rename_all = "camelCase")]
 pub struct HudSchemaView {
     pub author: String,
-    pub supported: bool,
     pub sections: Vec<HudSchemaSection>,
 }
 
@@ -321,7 +320,6 @@ pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
         .collect();
     HudSchemaView {
         author: schema.author.clone(),
-        supported: true,
         sections,
     }
 }

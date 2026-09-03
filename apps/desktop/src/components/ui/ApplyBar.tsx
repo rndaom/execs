@@ -51,7 +51,7 @@ export function ApplyBar({
         </div>
       </div>
       {/* The bar is sticky, so the scroll container needs the height back. */}
-      <div aria-hidden="true" className="h-4" />
+      <div aria-hidden="true" className="h-16" />
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { draftRecordKey } from "../../hooks/useSeededDraft";
 
 const PREFIX = "execs.disclosure.";
 
@@ -25,9 +26,10 @@ function writeStored(key: string, open: boolean) {
  * A section that folds away. Used for the secondary depth every pane keeps
  * behind its one real decision ("Fine-tune modules", "Advanced").
  *
- * Closed by default; the open state is remembered per pane in localStorage.
+ * Closed by default; the open state is remembered per profile in localStorage.
  */
 export function Disclosure({
+  profileId,
   storageKey,
   summary,
   defaultOpen = false,
@@ -36,6 +38,8 @@ export function Disclosure({
   onOpenChange,
   children,
 }: {
+  /** Active profile; a switch loads that profile's remembered state. */
+  profileId: string | null;
   /** Stable per-pane key, e.g. `comfig-modules`. */
   storageKey: string;
   summary: ReactNode;
@@ -50,9 +54,14 @@ export function Disclosure({
   onOpenChange?: (open: boolean) => void;
   children?: ReactNode;
 }) {
+  const scopedKey = draftRecordKey(profileId, storageKey);
   const [open, setOpen] = useState(() =>
-    typeof window === "undefined" ? defaultOpen : readStored(storageKey, defaultOpen),
+    typeof window === "undefined" ? defaultOpen : readStored(scopedKey, defaultOpen),
   );
+
+  useEffect(() => {
+    setOpen(readStored(scopedKey, defaultOpen));
+  }, [scopedKey, defaultOpen]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: report the state, not the callback's identity.
   useEffect(() => {
@@ -63,9 +72,9 @@ export function Disclosure({
     (event: React.SyntheticEvent<HTMLDetailsElement>) => {
       const next = event.currentTarget.open;
       setOpen(next);
-      writeStored(storageKey, next);
+      writeStored(scopedKey, next);
     },
-    [storageKey],
+    [scopedKey],
   );
 
   return (

@@ -118,7 +118,6 @@ export const PREVIEW_HUD_CATALOG: HudCatalogEntry[] = [
 
 export const PREVIEW_HUD_SCHEMA: HudSchemaView = {
   author: "raysfire",
-  supported: true,
   sections: [
     {
       name: "Colors",

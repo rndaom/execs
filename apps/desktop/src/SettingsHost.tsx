@@ -764,6 +764,7 @@ export function SettingsHost({
       return (
         <ModsPane
           api={api}
+          profileId={profileId}
           payload={modsPayload}
           catalog={modsCatalog}
           mods={detail?.mods ?? []}

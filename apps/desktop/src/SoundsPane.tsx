@@ -389,7 +389,12 @@ export function SoundsPane({
       </section>
 
       <section className="section">
-        <Disclosure storageKey="sounds-advanced" summary="Advanced" testId="sounds-advanced">
+        <Disclosure
+          profileId={profileId}
+          storageKey="sounds-advanced"
+          summary="Advanced"
+          testId="sounds-advanced"
+        >
           <div className="grid gap-x-12 gap-y-6 lg:grid-cols-2">
             {(["hit", "kill"] as const).map((kind) => (
               <fieldset key={kind} className="min-w-0">
