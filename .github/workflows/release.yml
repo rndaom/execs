@@ -67,7 +67,7 @@ jobs:
           projectPath: apps/desktop
           tagName: v__VERSION__
           releaseName: execs v__VERSION__
-          releaseBody: See the assets to download this version and install.
+          releaseBody: Changelog is filled in after both platforms build.
           # Draft until the publish job below has seen both platforms' assets
           # and a complete latest.json. A live release with a half-populated
           # updater manifest would push a broken update to the other platform.
@@ -75,10 +75,37 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
 
+  # Fails the train if CHANGELOG.md has no non-empty section for this version.
+  notes:
+    needs: [build]
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Write release notes from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          fi
+          tag="v${version}"
+          node scripts/release-notes.mjs "$version" > "$RUNNER_TEMP/notes.md"
+          gh release edit "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+
   # workflow_dispatch runs stay drafts on purpose: only a real version tag publishes.
   publish:
-    needs: [build]
-    if: ${{ github.event_name == 'push' && needs.build.result == 'success' }}
+    needs: [build, notes]
+    if: ${{ github.event_name == 'push' && needs.build.result == 'success' && needs.notes.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

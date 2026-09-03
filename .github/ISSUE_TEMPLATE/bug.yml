@@ -15,6 +15,23 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: regression
+    attributes:
+      label: Did this work in an earlier execs version?
+      options:
+        - "Yes — it broke after an update"
+        - "No — first time I tried this"
+        - First install of execs
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: last-good
+    attributes:
+      label: Last version that worked
+      description: Fill this in if it broke after an update. Shown in the footer.
+      placeholder: "0.1.0"
+  - type: dropdown
     id: os
     attributes:
       label: Operating system

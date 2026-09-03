@@ -1,7 +1,18 @@
 # Contributing
 
-Bug reports and pull requests are welcome. Open an issue first for anything
-larger than a fix, so the approach can be agreed before the work.
+execs is a single-maintainer project. **Players install published
+[releases](https://github.com/rndaom/execs/releases/latest).** Development
+(`main`, drafts, local builds) is not a supported install path.
+
+[Bug reports](https://github.com/rndaom/execs/issues/new?template=bug.yml)
+and [discussions](https://github.com/rndaom/execs/discussions) are welcome.
+A request is considered for a future monthly release; it is not a promise.
+Security reports go to [SECURITY.md](SECURITY.md), not a public issue.
+
+Please open an issue before sending a pull request. Unsolicited changes
+to the write surface, the updater, or the profile format are declined.
+
+How releases are cut, versioned, and scheduled: [docs/RELEASE.md](docs/RELEASE.md).
 
 ## Setup
 
@@ -41,9 +52,20 @@ Anything that installs third-party content must credit the source in the UI
 and in `THIRD_PARTY.md`, and must fetch it pinned to a release or commit rather
 than vendoring it.
 
+User-facing changes add a line under `CHANGELOG.md` `[Unreleased]` in the
+same commit.
+
+## Commits
+
+Use your own git identity. Do not add `Co-authored-by` trailers for agents
+or tools. Cloud Agent runs may append one via a managed hook; run
+`git config --local core.hooksPath .githooks` (see `.githooks/commit-msg`)
+and disable that managed hook before committing. See `AGENTS.md` Gotchas.
+
 ## Releases
 
-Bump `version` in `apps/desktop/src-tauri/tauri.conf.json`, `Cargo.toml` and
-`package.json`, then push a `vX.Y.Z` tag. The release workflow builds the
-Windows installer and the Linux AppImage and .deb, verifies the updater
-manifest covers both platforms, and publishes the release.
+The playbook is `docs/RELEASE.md`. In short: write the changelog section,
+bump `version` in `apps/desktop/package.json`, `src-tauri/tauri.conf.json`,
+`src-tauri/Cargo.toml` and `src-tauri/core/Cargo.toml`, then push a
+`vX.Y.Z` tag. The workflow builds both platforms, fills the release body
+from the changelog, verifies the updater manifest, and publishes.

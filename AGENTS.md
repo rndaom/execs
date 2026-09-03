@@ -12,6 +12,8 @@ apps/desktop/            Tauri app (the product)
 packages/cfglint/        Source cfg parser/linter (TS), used by the Files pane
 tools/promo/             Remotion promo video; outside the pnpm workspace (`pnpm install --ignore-workspace`)
 docs/media/              README screenshots and the promo GIF
+docs/RELEASE.md          Public vs dev, versioning, cadence, ship checklist
+CHANGELOG.md             User-facing notes; the release workflow reads this
 .github/workflows/       ci.yml (frontend, rust-linux, rust-windows), release.yml (tag → draft → verify → publish)
 ```
 
@@ -36,6 +38,7 @@ Commands: `pnpm install`, `pnpm desktop:dev` (Tauri), `pnpm dev` (browser only, 
 ## Profiles
 
 - A profile = user cfg layer + `tf/cfg/config.cfg` + all of `tf/custom/` + launch options + records for HUD, crosshair, viewmodel, hitsounds and mods. Library at `profiles/<uuid>/` with `manifest.json` (per-file sha256), exclusive trees, `mastercomfig-base.vpk` shared by hash. Export/import is a zip.
+- There is no community hub and no profile uploads. Sharing is the export zip, sent however the player wants.
 - **Switch is exact replace, not merge.** Sources are validated before the Remove step, files are written atomically, the active id flips last; a failure after Remove clears the active id and the UI says re-apply. Previous exclusive files are removed only when the live hash still matches.
 - **Absorb** runs on boot and after TF2 quits: owned-file and `config.cfg` drift goes into the active profile automatically (Cloud copy dual-written); new or deleted packs prompt with Update (default), Restore removed, Keep. Keep is remembered in `ignored_packs`; Update clears it. Never silently roll the live folder back.
 - **Junk is never a pack:** `*.execs-part`, and Steam's own `tf/custom/readme.txt` and `workshop/`, are ignored everywhere. **Self-heal:** before classifying, absorb rewrites any manifest file missing from the live tree when its `.execs-part` sibling exists or the pack is app-owned (`execs-*`), deletes stray part files, and drops those keys from the ignore list (field incident: the dev app restarted mid-switch and left a half-written viewmodel pack).
@@ -70,7 +73,15 @@ All fetched at runtime, pinned, credited in the UI, the README and `THIRD_PARTY.
 
 ## Updates and release
 
-In-app updater (Tauri updater plugin) against `https://github.com/rndaom/execs/releases/latest/download/latest.json`; check on launch and via the footer, install only on click, no telemetry. Windows NSIS per-user with `installMode: passive`, static MSVC CRT, `longPathAware` manifest; Linux AppImage (GStreamer bundled, self-updates) and `.deb` (first install only; the publish job strips it from `latest.json`). Release = bump `version` in `tauri.conf.json`, `Cargo.toml`, `package.json`, push `vX.Y.Z`; the workflow guards the version, builds both platforms into a draft, verifies both `latest.json` entries, then publishes. Signing: updater minisign key in CI secrets; installers are not Authenticode-signed yet (SignPath planned). Footer has Report a bug (issue forms) and Copy diagnostics (`get_diagnostics`).
+Playbook: `docs/RELEASE.md`. Users install published GitHub Releases only. `main`, Linear, and draft / `workflow_dispatch` builds are private development. No nightlies, no public prereleases, no "try this build."
+
+In-app updater (Tauri updater plugin) against `https://github.com/rndaom/execs/releases/latest/download/latest.json`; check on launch and via the footer, install only on click, no telemetry. Windows NSIS per-user with `installMode: passive`, static MSVC CRT, `longPathAware` manifest; Linux AppImage (GStreamer bundled, self-updates) and `.deb` (first install only; the publish job strips it from `latest.json`). Signing: updater minisign key in CI secrets; installers are not Authenticode-signed yet (SignPath planned). Footer has Report a bug (issue forms) and Copy diagnostics (`get_diagnostics`).
+
+Versioning is `0.Y.Z` until a yearly review promotes 1.0.0. Patch (`0.Y.Z+1`) is bugfixes only, anytime — same day for install, updater, data-loss, or write-lock breaks. Minor (`0.Y+1.0`) is the monthly train (first Thursday, skip if empty): at most three user-visible features, or one large feature that is the whole release; profile and write-surface changes stay additive. Breaking changes (write targets, unreadable profile/manifest, updater URL/key, dropped OS) need a minor and a `Breaking:` changelog line. Never a patch.
+
+Release = write `CHANGELOG.md` `## [X.Y.Z]`, bump `version` in `apps/desktop/package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/core/Cargo.toml`, push `vX.Y.Z`. The workflow guards the version, builds both platforms into a draft, sets the release body from the changelog (fails if that section is missing or empty), verifies both `latest.json` entries, then publishes.
+
+GitHub Issues and Discussions are the public inbox. Linear execs is the backlog. A public thread that becomes work gets a Linear issue labeled `from-github` (and `compat` when it touches profiles, the data dir, the write surface, or the updater). Do not keep a second backlog on GitHub. Every user-facing change adds its `[Unreleased]` changelog line in the same commit.
 
 ## Design system
 
@@ -84,4 +95,5 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - GameBanana's `Generic_LatestAdded` sort does not exist (`Generic_Newest` does); listings carry no download counts.
 - Linux clippy flags imports used only by `#[cfg(windows)]` tests: import inside the test fn.
 - Bash heredocs in the agent environment mangle backslashes; write patch scripts to a file first.
-- Never add AI co-author trailers to commits.
+- **Commits:** use the repo git identity (`Random`, not `Cursor Agent`). **Never add `Co-authored-by` trailers** — not for the owner, not for Cursor, not for any agent. At the start of every agent session run `git config --local core.hooksPath .githooks` (repo hook strips co-authors) **and** `chmod -x` the Cloud Agent file `commit-msg.cursor.co-author` under the VM's managed hooks dir. If a co-author line lands anyway, amend or rebase it out before push.
+- User-facing changes add a `CHANGELOG.md` `[Unreleased]` line in the same commit.
