@@ -26,6 +26,7 @@ import {
 } from "./bridge";
 import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
+import { editorPathFits, editorTextBytes } from "./files-limits";
 import {
   emptyHudState,
   PREVIEW_HUD_CATALOG,
@@ -119,6 +120,11 @@ export function createPreviewApi(state: PreviewState): Api {
   let hitsound: HitsoundRecord | null =
     state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
+  let lifecycle = {
+    launchingTf2: false,
+    steamVerification: false,
+    installingUpdate: false,
+  };
 
   /** Only packs that are still installed can offer particles. */
   function particleSources() {
@@ -205,9 +211,15 @@ export function createPreviewApi(state: PreviewState): Api {
     async getTf2WriteLock() {
       return { running: previewLocked(state) };
     },
+    async getLifecycleStatus() {
+      return lifecycle;
+    },
     async onTf2Running() {
       // The preview never changes lock state; the seed from `getTf2WriteLock`
       // is the whole story.
+      return () => {};
+    },
+    async onTf2LockUnavailable() {
       return () => {};
     },
 
@@ -275,13 +287,25 @@ export function createPreviewApi(state: PreviewState): Api {
       return detail();
     },
     async readProfileFile(path: string) {
+      if (!editorPathFits(path)) {
+        throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+      }
       const found = files.find((file) => file.path === path);
       if (!found) {
         throw notInPreview(`Reading ${path}`);
       }
+      if (editorTextBytes(found.text) === null) {
+        throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+      }
       return { path, text: found.text, sha256: "", binary: false };
     },
     async writeOwnedFile(path: string, text: string) {
+      if (!editorPathFits(path)) {
+        throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+      }
+      if (editorTextBytes(text) === null) {
+        throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+      }
       upsert(path, text);
       return requireDetail();
     },
@@ -573,6 +597,10 @@ export function createPreviewApi(state: PreviewState): Api {
     async getPreloaderStatus() {
       return { ...modsPayload, profileParticleSources: particleSources() };
     },
+    async recoverPreloader() {
+      modsPayload = { ...modsPayload, recoveryRequired: false };
+      return { ...modsPayload, profileParticleSources: particleSources() };
+    },
     async getDefaultMods() {
       return { cached: true, catalog: PREVIEW_MODS_CATALOG };
     },
@@ -624,11 +652,27 @@ export function createPreviewApi(state: PreviewState): Api {
     async launchTf2() {
       // Steam is not reachable from the preview; the button is a no-op here.
     },
+    async cancelTf2Launch() {
+      lifecycle = { ...lifecycle, launchingTf2: false };
+      return true;
+    },
     async repairGameFiles() {
+      lifecycle = { ...lifecycle, steamVerification: true };
       modsPayload = {
         ...modsPayload,
+        repairInProgress: true,
         status: { ...modsPayload.status, untrackedModified: [] },
       };
+    },
+    async completeGameFileRepair() {
+      lifecycle = { ...lifecycle, steamVerification: false };
+      modsPayload = { ...modsPayload, repairInProgress: false };
+      return true;
+    },
+    async cancelGameFileRepair() {
+      lifecycle = { ...lifecycle, steamVerification: false };
+      modsPayload = { ...modsPayload, repairInProgress: false };
+      return true;
     },
     async revertPreloader() {
       modsPayload = {
@@ -666,6 +710,7 @@ export function createPreviewApi(state: PreviewState): Api {
       return previewUpdate(state);
     },
     async installAppUpdate(onProgress) {
+      lifecycle = { ...lifecycle, installingUpdate: true };
       onProgress("downloading");
       onProgress("installing");
       onProgress("restarting");

@@ -5,14 +5,14 @@
 //! its SvelteKit data endpoint (about 170 HUDs). Both are read once a day and
 //! cached; a HUD absent from either simply has no number.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use execs_core::catalog_cache_dir;
-use serde::{Deserialize, Serialize};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::net;
+use crate::net::{self, RemoteSource, MIB};
 
 const COMFIG_LIST_BASE: &str = "https://comfig.app/huds";
 /// comfig.app lists twelve HUDs per page; 20 pages today, so 40 is a wide
@@ -20,6 +20,11 @@ const COMFIG_LIST_BASE: &str = "https://comfig.app/huds";
 const COMFIG_MAX_PAGES: usize = 40;
 const TF2HUDS_BASE: &str = "https://tf2huds.dev";
 const TF2HUDS_MAX_PAGES: usize = 40;
+const STATS_IDS_PER_PAGE_LIMIT: usize = 256;
+const STATS_IDS_TOTAL_LIMIT: usize = 1024;
+const TF2HUDS_RESPONSE_MAX_BYTES: u64 = 512 * 1024;
+const TF2HUDS_MAX_DATA_NODES: usize = 32;
+const TF2HUDS_MAX_VALUES_PER_NODE: usize = 8192;
 const STATS_WORKERS: usize = 8;
 /// How long a read that reached the end of both listings is served.
 const STATS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -33,6 +38,7 @@ const PARTIAL_STATS_TTL: Duration = Duration::from_secs(60 * 60);
 /// Past it the walks stop and hand back what they have, which is cached only
 /// briefly.
 const STATS_DEADLINE: Duration = Duration::from_secs(90);
+const STATS_CACHE_MAX_BYTES: u64 = 16 * MIB;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,8 +91,8 @@ struct Walk<T> {
 /// `(downloads, views)` per hud-db id.
 type Counts = BTreeMap<String, (u64, u64)>;
 
-fn cache_file() -> PathBuf {
-    catalog_cache_dir().join("stats-v1.json")
+fn cache_file(root: &std::path::Path) -> PathBuf {
+    root.join("hud-catalog").join("stats-v1.json")
 }
 
 fn now_secs() -> u64 {
@@ -100,12 +106,12 @@ fn now_secs() -> u64 {
 /// A failure on one source keeps the other's numbers; a failure on both
 /// keeps the stale cache rather than blanking every sort.
 pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, String> {
-    let cached = std::fs::read_to_string(cache_file())
-        .ok()
-        .and_then(|text| serde_json::from_str::<HudStatsCache>(&text).ok());
+    let now = now_secs();
+    let root = execs_core::try_execs_data_dir()?;
+    let cached = load_stats_cache(&root, now)?;
     if !refresh {
         if let Some(cache) = &cached {
-            if cache.is_fresh(now_secs()) {
+            if cache.is_fresh(now) {
                 return Ok(cache.stats.clone());
             }
         }
@@ -116,41 +122,108 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
     let counts = fetch_tf2huds_counts(&client, deadline);
     let complete = matches!(&updated, Ok(walk) if walk.complete)
         && matches!(&counts, Ok(walk) if walk.complete);
-    let (updated, counts) = match (updated, counts) {
-        (Err(err), Err(_)) => {
-            if let Some(cache) = cached {
-                return Ok(cache.stats);
-            }
-            return Err(err);
+    if let (Err(err), Err(_)) = (&updated, &counts) {
+        if let Some(cache) = cached {
+            return Ok(cache.stats);
         }
-        (updated, counts) => (
-            updated.map(|walk| walk.found).unwrap_or_default(),
-            counts.map(|walk| walk.found).unwrap_or_default(),
-        ),
-    };
-    let mut stats: BTreeMap<String, HudStat> = BTreeMap::new();
-    for (id, date) in updated {
-        stats.entry(id).or_default().updated = Some(date);
+        return Err(err.clone());
     }
-    for (id, (downloads, views)) in counts {
-        let stat = stats.entry(id).or_default();
-        stat.downloads = Some(downloads);
-        stat.views = Some(views);
-    }
+    let mut stats = cached
+        .as_ref()
+        .map(|cache| cache.stats.clone())
+        .unwrap_or_default();
+    merge_updated(&mut stats, updated);
+    merge_counts(&mut stats, counts);
+    stats.retain(|_, stat| {
+        stat.updated.is_some() || stat.downloads.is_some() || stat.views.is_some()
+    });
     // Only a refresh that read both sources to the end earns a day of TTL:
     // caching a walk the deadline cut short, or one whose source was down,
     // for that long would hold half the numbers back until tomorrow. It is
     // still cached for an hour, so a dead source costs one walk per hour
     // rather than one per pane load.
     let cache = HudStatsCache {
-        fetched_at: now_secs(),
+        fetched_at: now,
         stats: stats.clone(),
         complete,
     };
-    if let Ok(text) = serde_json::to_string(&cache) {
-        let _ = execs_core::hash::write_atomic(&cache_file(), text.as_bytes());
-    }
+    let text = serde_json::to_string(&cache).map_err(|err| err.to_string())?;
+    net::write_cache_file_within(&root, &cache_file(&root), text.as_bytes())
+        .map_err(|err| format!("Could not save HUD statistics ({err})."))?;
     Ok(stats)
+}
+
+fn load_stats_cache(root: &std::path::Path, now: u64) -> Result<Option<HudStatsCache>, String> {
+    let path = cache_file(root);
+    match std::fs::symlink_metadata(&path) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err.to_string()),
+        Ok(_) => {}
+    }
+    execs_core::hash::validate_file_within(root, &path).map_err(|err| err.to_string())?;
+    let cache = net::read_cache_file_capped(root, &path, STATS_CACHE_MAX_BYTES)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<HudStatsCache>(&bytes).ok());
+    let Some(cache) = cache else {
+        return Ok(None);
+    };
+    let valid = cache.fetched_at <= now.saturating_add(60 * 60)
+        && cache.stats.len() <= 4096
+        && cache.stats.iter().all(|(id, stat)| {
+            valid_stat_id(id)
+                && stat.updated.as_deref().is_none_or(|date| {
+                    date.len() == 10
+                        && date.bytes().enumerate().all(|(index, byte)| {
+                            if index == 4 || index == 7 {
+                                byte == b'-'
+                            } else {
+                                byte.is_ascii_digit()
+                            }
+                        })
+                })
+        });
+    if !valid {
+        return Ok(None);
+    }
+    Ok(Some(cache))
+}
+
+fn valid_stat_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_'
+        })
+}
+
+fn merge_updated(
+    stats: &mut BTreeMap<String, HudStat>,
+    source: Result<Walk<BTreeMap<String, String>>, String>,
+) {
+    let Ok(walk) = source else { return };
+    if walk.complete {
+        for stat in stats.values_mut() {
+            stat.updated = None;
+        }
+    }
+    for (id, date) in walk.found {
+        stats.entry(id).or_default().updated = Some(date);
+    }
+}
+
+fn merge_counts(stats: &mut BTreeMap<String, HudStat>, source: Result<Walk<Counts>, String>) {
+    let Ok(walk) = source else { return };
+    if walk.complete {
+        for stat in stats.values_mut() {
+            stat.downloads = None;
+            stat.views = None;
+        }
+    }
+    for (id, (downloads, views)) in walk.found {
+        let stat = stats.entry(id).or_default();
+        stat.downloads = Some(downloads);
+        stat.views = Some(views);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -163,23 +236,34 @@ fn fetch_comfig_updated(
 ) -> Result<Walk<BTreeMap<String, String>>, String> {
     let mut out = BTreeMap::new();
     let mut complete = true;
+    let mut reached_end = false;
     for page in 1..=COMFIG_MAX_PAGES {
         if Instant::now() >= deadline {
             complete = false;
             break;
         }
         let url = format!("{COMFIG_LIST_BASE}/{page}/");
-        let html = match net::get_text(client, &url) {
+        let html = match net::get_text_for(client, &url, RemoteSource::ComfigApp) {
             Ok(html) => html,
             // The first page failing is an outage; a later one is the end.
             Err(err) if page == 1 => return Err(err),
-            Err(_) => break,
+            Err(_) => {
+                complete = false;
+                break;
+            }
         };
         let found = parse_comfig_listing(&html);
+        if found.len() > STATS_IDS_PER_PAGE_LIMIT {
+            return Err("comfig.app returned too many HUDs on one page.".into());
+        }
         if found.is_empty() {
+            reached_end = true;
             break;
         }
         out.extend(found);
+        if out.len() > STATS_IDS_TOTAL_LIMIT {
+            return Err("comfig.app returned too many HUDs.".into());
+        }
     }
     // Pages that parse to nothing mean the listing's markup moved, not that
     // comfig.app has no dates. Failing keeps that out of the cache.
@@ -188,7 +272,7 @@ fn fetch_comfig_updated(
     }
     Ok(Walk {
         found: out,
-        complete,
+        complete: complete && reached_end,
     })
 }
 
@@ -196,11 +280,12 @@ fn fetch_comfig_updated(
 /// `href="/huds/page/<id>/"` followed by `Last updated <strong>Mon D, YYYY</strong>`.
 pub fn parse_comfig_listing(html: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
+    let mut seen = HashSet::new();
     let mut rest = html;
     while let Some(start) = rest.find("href=\"/huds/page/") {
         let after = &rest[start + "href=\"/huds/page/".len()..];
         let Some(end) = after.find('/') else { break };
-        let id = after[..end].to_string();
+        let id = after[..end].trim().to_ascii_lowercase();
         rest = &after[end..];
         // The date sits inside this card, before the next card's link.
         let card_end = rest.find("href=\"/huds/page/").unwrap_or(rest.len());
@@ -219,8 +304,11 @@ pub fn parse_comfig_listing(html: &str) -> Vec<(String, String)> {
             })
             .and_then(parse_month_day_year)
         {
-            if !id.is_empty() && !out.iter().any(|(seen, _)| seen == &id) {
+            if valid_stat_id(&id) && seen.insert(id.clone()) {
                 out.push((id, date));
+                if out.len() > STATS_IDS_PER_PAGE_LIMIT {
+                    break;
+                }
             }
         }
     }
@@ -267,14 +355,72 @@ fn parse_month_day_year(text: &str) -> Option<String> {
 /// values live at that index of the same array.
 #[derive(Debug, Deserialize)]
 struct SvelteData {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_svelte_nodes")]
     nodes: Vec<Option<SvelteNode>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct SvelteNode {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_svelte_values")]
     data: Vec<serde_json::Value>,
+}
+
+fn deserialize_svelte_nodes<'de, D>(deserializer: D) -> Result<Vec<Option<SvelteNode>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct NodesVisitor;
+    impl<'de> Visitor<'de> for NodesVisitor {
+        type Value = Vec<Option<SvelteNode>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a bounded SvelteKit nodes array")
+        }
+
+        fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut out = Vec::new();
+            while let Some(node) = sequence.next_element()? {
+                if out.len() >= TF2HUDS_MAX_DATA_NODES {
+                    return Err(de::Error::custom("too many SvelteKit data nodes"));
+                }
+                out.push(node);
+            }
+            Ok(out)
+        }
+    }
+    deserializer.deserialize_seq(NodesVisitor)
+}
+
+fn deserialize_svelte_values<'de, D>(deserializer: D) -> Result<Vec<serde_json::Value>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct ValuesVisitor;
+    impl<'de> Visitor<'de> for ValuesVisitor {
+        type Value = Vec<serde_json::Value>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a bounded SvelteKit devalue array")
+        }
+
+        fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut out = Vec::new();
+            while let Some(value) = sequence.next_element()? {
+                if out.len() >= TF2HUDS_MAX_VALUES_PER_NODE {
+                    return Err(de::Error::custom("too many SvelteKit devalue entries"));
+                }
+                out.push(value);
+            }
+            Ok(out)
+        }
+    }
+    deserializer.deserialize_seq(ValuesVisitor)
 }
 
 fn fetch_tf2huds_counts(
@@ -282,33 +428,50 @@ fn fetch_tf2huds_counts(
     deadline: Instant,
 ) -> Result<Walk<Counts>, String> {
     // 1. The listing pages give the site's own ids.
-    let mut ids: Vec<String> = Vec::new();
+    let mut ids = std::collections::BTreeSet::new();
     let mut complete = true;
+    let mut reached_end = false;
     for page in 1..=TF2HUDS_MAX_PAGES {
         if Instant::now() >= deadline {
             complete = false;
             break;
         }
         let url = format!("{TF2HUDS_BASE}/huds/__data.json?page={page}");
-        let text = match net::get_text(client, &url) {
+        let text = match net::get_text_for_limit(
+            client,
+            &url,
+            RemoteSource::Tf2Huds,
+            TF2HUDS_RESPONSE_MAX_BYTES,
+        ) {
             Ok(text) => text,
             Err(err) if page == 1 => return Err(err),
-            Err(_) => break,
+            Err(_) => {
+                complete = false;
+                break;
+            }
         };
         let found = tf2huds_list_ids(&text);
+        if found.len() > STATS_IDS_PER_PAGE_LIMIT {
+            return Err("tf2huds.dev returned too many HUDs on one page.".into());
+        }
         if found.is_empty() {
+            reached_end = true;
             break;
         }
         let before = ids.len();
-        for id in found {
-            if !ids.contains(&id) {
-                ids.push(id);
-            }
+        ids.extend(found);
+        if ids.len() > STATS_IDS_TOTAL_LIMIT {
+            return Err("tf2huds.dev returned too many HUDs.".into());
         }
         if ids.len() == before {
+            reached_end = true;
             break;
         }
     }
+    if ids.is_empty() {
+        return Err("tf2huds.dev listed no HUDs.".into());
+    }
+    let ids: Vec<_> = ids.into_iter().collect();
     // 2. One data call per HUD, in parallel; each carries its comfig id.
     let worker_count = STATS_WORKERS.min(ids.len().max(1));
     let chunk_size = ids.len().div_ceil(worker_count).max(1);
@@ -326,10 +489,17 @@ fn fetch_tf2huds_counts(
                             break;
                         }
                         let url = format!("{TF2HUDS_BASE}/hud/{id}/__data.json");
-                        if let Ok(text) = net::get_text(&client, &url) {
-                            if let Some(entry) = tf2huds_counts(&text) {
-                                found.push(entry);
-                            }
+                        match net::get_text_for_limit(
+                            &client,
+                            &url,
+                            RemoteSource::Tf2Huds,
+                            TF2HUDS_RESPONSE_MAX_BYTES,
+                        )
+                        .ok()
+                        .and_then(|text| tf2huds_counts(&text))
+                        {
+                            Some(entry) => found.push(entry),
+                            None => complete = false,
                         }
                     }
                     (found, complete)
@@ -353,7 +523,7 @@ fn fetch_tf2huds_counts(
     });
     Ok(Walk {
         found: out,
-        complete: complete && walked_all,
+        complete: complete && reached_end && walked_all,
     })
 }
 
@@ -383,6 +553,7 @@ fn devalue_lookup<'a>(
 /// value is a string and a `name` beside it.
 pub fn tf2huds_list_ids(text: &str) -> Vec<String> {
     let mut ids = Vec::new();
+    let mut seen = HashSet::new();
     for data in devalue_nodes(text) {
         for value in &data {
             let Some(object) = value.as_object() else {
@@ -392,8 +563,11 @@ pub fn tf2huds_list_ids(text: &str) -> Vec<String> {
                 continue;
             }
             if let Some(serde_json::Value::String(id)) = devalue_lookup(&data, object, "id") {
-                if !id.is_empty() && !ids.contains(id) {
+                if !id.is_empty() && id.len() <= 128 && seen.insert(id.clone()) {
                     ids.push(id.clone());
+                    if ids.len() > STATS_IDS_PER_PAGE_LIMIT {
+                        return ids;
+                    }
                 }
             }
         }
@@ -424,13 +598,26 @@ pub fn tf2huds_counts(text: &str) -> Option<(String, u64, u64)> {
 }
 
 fn comfig_page_id(url: &str) -> Option<String> {
-    let rest = url.split("/huds/page/").nth(1)?;
-    let id = rest
-        .split(['/', '?', '#'])
-        .next()?
-        .trim()
-        .to_ascii_lowercase();
-    if id.is_empty() {
+    let parsed = reqwest::Url::parse(url).ok()?;
+    if parsed.scheme() != "https"
+        || !matches!(parsed.host_str(), Some("comfig.app" | "www.comfig.app"))
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return None;
+    }
+    let mut path = parsed.path_segments()?;
+    if path.next()? != "huds" || path.next()? != "page" {
+        return None;
+    }
+    let id = path.next()?.trim().to_ascii_lowercase();
+    if id.is_empty()
+        || path.any(|part| !part.is_empty())
+        || !id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
         None
     } else {
         Some(id)
@@ -459,6 +646,21 @@ mod tests {
             Some("2025-09-03")
         );
         assert_eq!(parse_month_day_year("Yesterday"), None);
+    }
+
+    #[test]
+    fn comfig_listing_returns_only_an_overflow_sentinel() {
+        let html = (0..400)
+            .map(|index| {
+                format!(
+                    "<a href=\"/huds/page/hud-{index}/\">x</a><span>Last updated <strong>Jan 1, 2026</strong></span>"
+                )
+            })
+            .collect::<String>();
+        assert_eq!(
+            parse_comfig_listing(&html).len(),
+            STATS_IDS_PER_PAGE_LIMIT + 1
+        );
     }
 
     #[test]
@@ -500,5 +702,57 @@ mod tests {
         let orphan = r#"{"type":"data","nodes":[{"type":"data","data":[{"viewCount":1,"downloadCount":2,"comfigHudsUrl":3},5,6,null]}]}"#;
         assert_eq!(tf2huds_counts(orphan), None);
         assert_eq!(tf2huds_counts("not json"), None);
+        assert_eq!(
+            comfig_page_id("https://comfig.app.evil.test/huds/page/rayshud/"),
+            None
+        );
+    }
+
+    #[test]
+    fn tf2huds_devalue_arrays_are_bounded_during_deserialization() {
+        let values = std::iter::repeat_n("null", TF2HUDS_MAX_VALUES_PER_NODE + 1)
+            .collect::<Vec<_>>()
+            .join(",");
+        let document = format!(r#"{{"nodes":[{{"data":[{values}]}}]}}"#);
+        assert!(serde_json::from_str::<SvelteData>(&document).is_err());
+
+        let nodes = std::iter::repeat_n("null", TF2HUDS_MAX_DATA_NODES + 1)
+            .collect::<Vec<_>>()
+            .join(",");
+        let document = format!(r#"{{"nodes":[{nodes}]}}"#);
+        assert!(serde_json::from_str::<SvelteData>(&document).is_err());
+    }
+
+    #[test]
+    fn a_partial_or_failed_source_preserves_stale_fields_until_a_complete_walk() {
+        let mut stats = BTreeMap::from([(
+            "old".into(),
+            HudStat {
+                updated: Some("2025-01-01".into()),
+                downloads: Some(10),
+                views: Some(20),
+            },
+        )]);
+        merge_updated(
+            &mut stats,
+            Ok(Walk {
+                found: BTreeMap::from([("new".into(), "2026-01-01".into())]),
+                complete: false,
+            }),
+        );
+        merge_counts(&mut stats, Err("offline".into()));
+        assert_eq!(stats["old"].updated.as_deref(), Some("2025-01-01"));
+        assert_eq!(stats["old"].downloads, Some(10));
+
+        merge_updated(
+            &mut stats,
+            Ok(Walk {
+                found: BTreeMap::from([("new".into(), "2026-02-02".into())]),
+                complete: true,
+            }),
+        );
+        assert_eq!(stats["old"].updated, None);
+        assert_eq!(stats["old"].downloads, Some(10));
+        assert_eq!(stats["new"].updated.as_deref(), Some("2026-02-02"));
     }
 }

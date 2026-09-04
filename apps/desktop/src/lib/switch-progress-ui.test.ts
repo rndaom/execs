@@ -83,6 +83,28 @@ describe("switch progress presenter", () => {
     expect(state.active).toBe(true);
   });
 
+  it("retains completion detail while command completion drains the real steps", () => {
+    let state = run([
+      { type: "start" },
+      { type: "report", step: "cloud" },
+      {
+        type: "report",
+        step: "done",
+        detail: "Launch options remain saved to the profile and pending for Steam.",
+      },
+      { type: "complete" },
+      { type: "advance" },
+    ]);
+    expect(state).toMatchObject({
+      active: false,
+      visibleStep: "done",
+      completionDetail: "Launch options remain saved to the profile and pending for Steam.",
+    });
+
+    state = switchProgressPresenterReducer(state, { type: "dismiss" });
+    expect(state.completionDetail).toBeNull();
+  });
+
   it("cannot regress or reactivate after the drain finishes", () => {
     let state = run([
       { type: "start" },

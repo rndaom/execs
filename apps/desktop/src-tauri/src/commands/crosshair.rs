@@ -20,7 +20,7 @@ pub async fn apply_crosshairs(
     library: Option<BTreeMap<String, CrosshairAsset>>,
     design: Option<String>,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| {
         Ok(execs_core::apply_crosshairs(
             &root,
@@ -144,6 +144,6 @@ pub async fn get_stock_crosshair_sprites(
 pub async fn remove_crosshairs(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_profile(|root, profile_id| Ok(execs_core::remove_crosshairs(&root, &profile_id)?)).await
 }

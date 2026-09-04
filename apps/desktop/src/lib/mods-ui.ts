@@ -23,16 +23,55 @@ export const PRELOADER_REPO_URL = "https://github.com/cueki/casual-pre-loader";
 /** One-line explanation used at the top of the pane. */
 export const PRELOADER_EXPLAINER = "Custom content that survives Valve Casual's sv_pure.";
 
-/** How long the pane keeps polling for Steam's verify to finish. */
+/** Fast polling while Steam normally verifies, then a low-cost indefinite
+ * poll so a slow repair can never strand the process-wide maintenance gate. */
 export const REPAIR_POLL_MS = 5_000;
+export const REPAIR_SLOW_POLL_MS = 30_000;
 export const REPAIR_TIMEOUT_MS = 20 * 60_000;
+export type RepairState = "idle" | "waiting" | "timeout" | "confirming" | "done";
+
+export function repairPollDelay(state: RepairState): number | null {
+  if (state === "waiting") {
+    return REPAIR_POLL_MS;
+  }
+  if (state === "timeout") {
+    return REPAIR_SLOW_POLL_MS;
+  }
+  return null;
+}
+
+/** Reconcile an ambiguous IPC result with the backend's authoritative marker.
+ * A just-started request is exempt until it has had a chance to persist. */
+export function repairStateAfterBackendRead(
+  state: RepairState,
+  backendRepairInProgress: boolean,
+  startPending: boolean,
+): RepairState {
+  if (!startPending && !backendRepairInProgress && state !== "idle" && state !== "done") {
+    return "idle";
+  }
+  return state;
+}
+
+/** A persisted verification is never re-opened by a second command: its URI
+ * hand-off and completion must remain one serialized lifecycle. */
+export function repairActionDisabled(
+  running: boolean,
+  busy: boolean,
+  backendRepairInProgress: boolean,
+  state: RepairState,
+): boolean {
+  return (
+    running || busy || backendRepairInProgress || state === "waiting" || state === "confirming"
+  );
+}
 
 /**
- * Whether a repair has finished: every particle file execs could not restore
- * now reads as stock again. Steam's verify also puts back the files execs
- * patched itself, so the caller re-applies the selection afterwards.
+ * Whether a repair is ready for the user to confirm. A clean particle scan is
+ * necessary but not sufficient to release maintenance: Steam must also report
+ * completion and the backend must observe a stable quiescence interval.
  */
-export function repairComplete(status: PreloaderStatusPayload | null): boolean {
+export function repairReadyForConfirmation(status: PreloaderStatusPayload | null): boolean {
   return status !== null && status.status.untrackedModified.length === 0;
 }
 
@@ -115,7 +154,7 @@ export function modsApplyEnabled(
   status: PreloaderStatusPayload | null,
   selection: ModSelection,
 ): boolean {
-  if (!status?.modsCached) {
+  if (!status?.modsCached || status.recoveryRequired === true) {
     return false;
   }
   return selectionDirty(status, selection) || status.status.stale === true;
@@ -129,6 +168,9 @@ export function modsStatusLine(
 ): string {
   if (running) {
     return "Draft kept until TF2 closes";
+  }
+  if (status?.recoveryRequired) {
+    return "Finish interrupted recovery first";
   }
   if (status && !status.modsCached) {
     return "Download the mod library first";
@@ -193,7 +235,10 @@ export function modSourceLabel(source: ModSource): string {
 
 /** The page a pack came from, when it has one. */
 export function modSourceUrl(source: ModSource): string | null {
-  return source.kind === "gamebanana" ? source.url : null;
+  // Imported profile metadata is untrusted. Never pass its stored URL to the
+  // opener while labelling it as GameBanana; derive the canonical page from
+  // the numeric id Rust already deserialized instead.
+  return source.kind === "gamebanana" ? `https://gamebanana.com/mods/${source.id}` : null;
 }
 
 /** "Local · 12 MB" — where it came from, then how big it is. */
@@ -547,6 +592,7 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
   },
   modsCached: true,
   modsSizeBytes: 81_529_475,
+  repairInProgress: false,
   preloadLaunchInSteam: true,
   profilePreload: true,
   profileParticleSources: PREVIEW_PARTICLE_SOURCES,

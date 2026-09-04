@@ -42,7 +42,7 @@ pub async fn confirm_tf2_root(
     gate: tauri::State<'_, WriteGate>,
     path: String,
 ) -> Result<Tf2Install, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     blocking(move || {
         let root = execs_core::remember_tf2_root(Path::new(&path))?;
         Ok(Tf2Install {

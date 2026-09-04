@@ -8,7 +8,7 @@ import {
 } from "../lib/updater-ui";
 
 /** "Update available" strip. Later dismisses it for the session. */
-export function UpdateBanner({ update }: { update: AppUpdateState }) {
+export function UpdateBanner({ update, blocked }: { update: AppUpdateState; blocked: boolean }) {
   if (!showUpdateBanner(update.available, update.dismissed) || !update.available) {
     return null;
   }
@@ -27,6 +27,7 @@ export function UpdateBanner({ update }: { update: AppUpdateState }) {
             type="button"
             data-testid="app-update-install"
             onClick={() => void update.install()}
+            disabled={blocked}
             className="btn btn-primary"
           >
             {INSTALL_LABEL}

@@ -1,17 +1,16 @@
 //! First-party per-weapon VTF crosshairs. Reads the user's official VPK; never writes it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::apply::{
-    cfg_layer_from_files, detail_from_manifest, write_owned_file_to, ProfileDetail,
-    WriteOwnedOptions,
-};
+use crate::apply::{cfg_layer_from_files, detail_from_manifest, ProfileDetail};
+use crate::archive::read_regular_file_bounded_within;
+use crate::hash::{metadata_is_link, validate_dir_within};
 use crate::ice::{decrypt_weapon_ctx, encrypt_weapon_ctx};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, load_manifest, profiles_dir, remove_manifest_files_to, save_manifest,
-    CrosshairRecord, ProfileError,
+    exclusive_file_path, load_library_from, load_manifest, mutate_profile_files_to, profiles_dir,
+    CrosshairRecord, FileSource, ProfileError, ProfileLiveProjection, ProfileManifest,
 };
 use crate::surface::CfgLayer;
 use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
@@ -22,6 +21,16 @@ pub const CROSSHAIR_SIZE: u32 = 64;
 const THUMB_DIR: &str = "materials/vgui/replay/thumbnails";
 const IMAGE_FORMAT_BGRA8888: u32 = 12;
 const VTF_FLAGS: u32 = 0x0001 | 0x0004 | 0x0008 | 0x0100 | 0x0200 | 0x2000;
+const GAMEPLAY_VANILLA_PATH: &str = "tf/cfg/execs_gameplay.cfg";
+const GAMEPLAY_COMFIG_PATH: &str = "tf/cfg/overrides/execs_gameplay.cfg";
+const MAX_STORED_CROSSHAIR_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_GAMEPLAY_CFG_BYTES: u64 = 1024 * 1024;
+const MAX_LIVE_PACK_ENTRIES: usize = 20_000;
+const MAX_LIBRARY_ENTRIES: usize = 512;
+const MAX_ASSIGNMENTS: usize = 512;
+const MAX_LIBRARY_BYTES: usize = 32 * 1024 * 1024;
+const MAX_ASSIGNMENT_KEY_BYTES: usize = 128;
+const MAX_DESIGN_BYTES: usize = 256 * 1024;
 
 /// Procedurally rendered first-party shapes. "custom" is the imported PNG.
 const SHAPES: [&str; 6] = ["dot", "cross", "plus-gap", "circle", "t", "custom"];
@@ -96,6 +105,11 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let scripts = load_weapon_scripts(tf2_root)?;
     apply_crosshairs_with_scripts(
         profiles_dir,
@@ -108,7 +122,7 @@ where
         library,
         design,
         &scripts,
-        running_names,
+        running,
     )
 }
 
@@ -134,6 +148,8 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    validate_crosshair_request(assignments, custom_rgba, library, design)?;
     for name in library.keys() {
         if !valid_crosshair_name(name) {
             return Err(ProfileError::Io(format!(
@@ -171,6 +187,12 @@ where
     };
     let custom_source: Option<&[u8]> = custom_rgba.or(stored_custom.as_deref());
 
+    let mut community_names: BTreeSet<String> = library.keys().cloned().collect();
+    let mut community_bytes = library.values().try_fold(0usize, |total, asset| {
+        total
+            .checked_add(asset.bytes.len())
+            .ok_or_else(|| ProfileError::Io("The crosshair library byte count overflowed.".into()))
+    })?;
     let mut needed: BTreeMap<String, ResolvedAsset> = BTreeMap::new();
     for name in &referenced {
         if needed.contains_key(*name) {
@@ -181,6 +203,12 @@ where
         } else if let Some(asset) = library.get(*name) {
             resolve_library_asset(name, asset)?
         } else if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, name) {
+            account_recovered_library_asset(
+                name,
+                bytes.len(),
+                &mut community_names,
+                &mut community_bytes,
+            )?;
             ResolvedAsset::VtfVerbatim(bytes)
         } else {
             return Err(ProfileError::Io(format!(
@@ -204,22 +232,31 @@ where
     // gone. Recover them from the pack before it is torn down.
     let existing_manifest = load_manifest(profiles_dir, profile_id)?;
     if let Some(record) = &existing_manifest.crosshair {
+        if record.library.len() > MAX_LIBRARY_ENTRIES {
+            return Err(ProfileError::Io(format!(
+                "The stored crosshair library has more than {MAX_LIBRARY_ENTRIES} entries."
+            )));
+        }
         for name in record.library.keys() {
             if needed.contains_key(name) || SHAPES.contains(&name.as_str()) {
                 continue;
             }
             if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, name) {
+                account_recovered_library_asset(
+                    name,
+                    bytes.len(),
+                    &mut community_names,
+                    &mut community_bytes,
+                )?;
                 needed.insert(name.clone(), ResolvedAsset::VtfVerbatim(bytes));
             }
         }
     }
 
-    let previous = pack_paths(profiles_dir, profile_id)?;
-    if !previous.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &previous, &running)?;
-        remove_live_pack(tf2_root, EXECS_CROSSHAIRS_PACK)?;
-    }
-
+    // Prepare the complete replacement before touching the installed pack. A
+    // malformed Valve script must not turn a failed Apply into removal of the
+    // last working crosshair pack.
+    let mut prepared_files: Vec<(String, Vec<u8>)> = Vec::new();
     // Community VTFs keep their own dimensions; the weapon script must match.
     let mut dimensions: BTreeMap<String, (u32, u32)> = BTreeMap::new();
     for (name, asset) in &needed {
@@ -234,22 +271,14 @@ where
             }
         };
         let vmt = encode_vmt(name);
-        write_pack_file(
-            profiles_dir,
-            tf2_root,
-            profile_id,
-            &format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/{name}.vtf"),
-            &vtf,
-            &running,
-        )?;
-        write_pack_file(
-            profiles_dir,
-            tf2_root,
-            profile_id,
-            &format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/{name}.vmt"),
-            vmt.as_bytes(),
-            &running,
-        )?;
+        prepared_files.push((
+            format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/{name}.vtf"),
+            vtf,
+        ));
+        prepared_files.push((
+            format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/{name}.vmt"),
+            vmt.into_bytes(),
+        ));
     }
 
     // One weapon script our minimal VDF parser chokes on must not fail the
@@ -278,14 +307,10 @@ where
                 continue;
             }
         };
-        write_pack_file(
-            profiles_dir,
-            tf2_root,
-            profile_id,
-            &format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/scripts/{stem}.txt"),
-            patched.as_bytes(),
-            &running,
-        )?;
+        prepared_files.push((
+            format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/scripts/{stem}.txt"),
+            patched.into_bytes(),
+        ));
         patched_count += 1;
     }
     if patched_count == 0 && !skipped_scripts.is_empty() {
@@ -294,6 +319,10 @@ where
             skipped_scripts.len()
         )));
     }
+
+    let (gameplay_path, gameplay_bytes) =
+        prepare_empty_stock_crosshair(profiles_dir, profile_id, color)?;
+    refuse_untracked_live_pack_files(profiles_dir, tf2_root, profile_id, &existing_manifest)?;
 
     let library_record: BTreeMap<String, String> = needed
         .iter()
@@ -306,21 +335,195 @@ where
             (name.clone(), format.to_string())
         })
         .collect();
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    manifest.crosshair = Some(CrosshairRecord {
+    let previous = pack_paths(profiles_dir, profile_id)?;
+    let mut puts: Vec<(String, FileSource<'_>)> = prepared_files
+        .iter()
+        .map(|(path, bytes)| (path.clone(), FileSource::Bytes(bytes)))
+        .collect();
+    puts.push((gameplay_path, FileSource::Bytes(gameplay_bytes.as_slice())));
+    let record = CrosshairRecord {
         id: EXECS_CROSSHAIRS_PACK.into(),
         shape: shape.to_string(),
         assignments: assignments.clone(),
         color,
         library: library_record,
         design: design.map(|value| value.to_string()),
-    });
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
-    force_empty_stock_crosshair(profiles_dir, tf2_root, profile_id, color, &running)?;
-    Ok(detail_from_manifest(&load_manifest(
+    };
+    let manifest = mutate_profile_files_to(
         profiles_dir,
+        tf2_root,
         profile_id,
-    )?))
+        &puts,
+        &previous,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        move |manifest| {
+            manifest.crosshair = Some(record);
+            Ok(())
+        },
+    )?;
+    Ok(detail_from_manifest(&manifest))
+}
+
+fn validate_crosshair_request(
+    assignments: &BTreeMap<String, String>,
+    custom_rgba: Option<&[u8]>,
+    library: &BTreeMap<String, CrosshairAsset>,
+    design: Option<&str>,
+) -> Result<(), ProfileError> {
+    if assignments.len() > MAX_ASSIGNMENTS {
+        return Err(ProfileError::Io(format!(
+            "A crosshair pack may assign at most {MAX_ASSIGNMENTS} weapons."
+        )));
+    }
+    for weapon in assignments.keys() {
+        if weapon.is_empty()
+            || weapon.len() > MAX_ASSIGNMENT_KEY_BYTES
+            || weapon.chars().any(char::is_control)
+        {
+            return Err(ProfileError::Io(
+                "A crosshair weapon name is empty, too long, or contains a control character."
+                    .into(),
+            ));
+        }
+    }
+    if library.len() > MAX_LIBRARY_ENTRIES {
+        return Err(ProfileError::Io(format!(
+            "A crosshair library may contain at most {MAX_LIBRARY_ENTRIES} entries."
+        )));
+    }
+    if custom_rgba
+        .is_some_and(|pixels| pixels.len() != (CROSSHAIR_SIZE * CROSSHAIR_SIZE * 4) as usize)
+    {
+        return Err(ProfileError::Io(
+            "Custom crosshair pixels must be a 64×64 RGBA buffer.".into(),
+        ));
+    }
+    let mut total = 0usize;
+    for asset in library.values() {
+        total = total.checked_add(asset.bytes.len()).ok_or_else(|| {
+            ProfileError::Io("The crosshair library byte count overflowed.".into())
+        })?;
+        if total > MAX_LIBRARY_BYTES {
+            return Err(ProfileError::Io(format!(
+                "A crosshair library may contain at most {} MiB of assets.",
+                MAX_LIBRARY_BYTES / (1024 * 1024)
+            )));
+        }
+    }
+    if design.is_some_and(|value| value.len() > MAX_DESIGN_BYTES) {
+        return Err(ProfileError::Io(format!(
+            "A crosshair design may be at most {} KiB.",
+            MAX_DESIGN_BYTES / 1024
+        )));
+    }
+    Ok(())
+}
+
+fn account_recovered_library_asset(
+    name: &str,
+    bytes: usize,
+    names: &mut BTreeSet<String>,
+    total: &mut usize,
+) -> Result<(), ProfileError> {
+    if !names.insert(name.to_string()) {
+        return Ok(());
+    }
+    if names.len() > MAX_LIBRARY_ENTRIES {
+        return Err(ProfileError::Io(format!(
+            "A crosshair library may contain at most {MAX_LIBRARY_ENTRIES} entries."
+        )));
+    }
+    *total = total
+        .checked_add(bytes)
+        .ok_or_else(|| ProfileError::Io("The crosshair library byte count overflowed.".into()))?;
+    if *total > MAX_LIBRARY_BYTES {
+        return Err(ProfileError::Io(format!(
+            "A crosshair library may contain at most {} MiB of assets.",
+            MAX_LIBRARY_BYTES / (1024 * 1024)
+        )));
+    }
+    Ok(())
+}
+
+/// The app-owned directory must not turn untracked leftovers into active game
+/// content on a successful apply. Tracked files may be replaced by the
+/// transaction; unknown regular files and every link/junction are refused.
+fn refuse_untracked_live_pack_files(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    manifest: &ProfileManifest,
+) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() != Some(profile_id) {
+        return Ok(());
+    }
+    let dir = tf2_root
+        .join("tf")
+        .join("custom")
+        .join(EXECS_CROSSHAIRS_PACK);
+    let meta = match std::fs::symlink_metadata(&dir) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Ok(meta) => meta,
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    };
+    if metadata_is_link(&meta) || !meta.is_dir() {
+        return Err(ProfileError::Io(
+            "Refusing to traverse a linked or invalid live crosshair pack.".into(),
+        ));
+    }
+    let prefix = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/");
+    let tracked: BTreeSet<String> = manifest
+        .files
+        .iter()
+        .filter(|file| file.path.starts_with(&prefix))
+        .map(|file| file.path.to_ascii_lowercase())
+        .collect();
+    let mut pending = vec![dir];
+    let mut entries = 0usize;
+    while let Some(current) = pending.pop() {
+        validate_dir_within(tf2_root, &current).map_err(|err| ProfileError::Io(err.to_string()))?;
+        for entry in std::fs::read_dir(&current).map_err(|err| ProfileError::Io(err.to_string()))? {
+            let path = entry
+                .map_err(|err| ProfileError::Io(err.to_string()))?
+                .path();
+            let meta = std::fs::symlink_metadata(&path)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
+            entries = entries.saturating_add(1);
+            if entries > MAX_LIVE_PACK_ENTRIES {
+                return Err(ProfileError::Io(format!(
+                    "The live crosshair pack contains more than {MAX_LIVE_PACK_ENTRIES} entries."
+                )));
+            }
+            if metadata_is_link(&meta) {
+                return Err(ProfileError::Io(
+                    "Refusing to traverse a link or junction in the live crosshair pack.".into(),
+                ));
+            }
+            if meta.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !meta.is_file() {
+                return Err(ProfileError::Io(
+                    "The live crosshair pack contains an invalid entry.".into(),
+                ));
+            }
+            let rel = path
+                .strip_prefix(tf2_root)
+                .map_err(|_| ProfileError::InvalidPath)?
+                .to_string_lossy()
+                .replace('\\', "/")
+                .to_ascii_lowercase();
+            if !tracked.contains(&rel) && !rel.ends_with(crate::hash::PART_SUFFIX) {
+                return Err(ProfileError::Io(format!(
+                    "The live crosshair pack contains an untracked file: {rel}. Remove or save it before applying."
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn resolve_library_asset(
@@ -338,11 +541,20 @@ fn resolve_library_asset(
             Ok(ResolvedAsset::Rgba(asset.bytes.clone()))
         }
         CrosshairAssetFormat::Vtf => {
+            if asset.bytes.len() > MAX_STORED_CROSSHAIR_BYTES as usize {
+                return Err(ProfileError::Io(format!(
+                    "Crosshair {name} is larger than {} MiB.",
+                    MAX_STORED_CROSSHAIR_BYTES / (1024 * 1024)
+                )));
+            }
             if asset.bytes.len() < 80 || &asset.bytes[0..4] != b"VTF\0" {
                 return Err(ProfileError::Io(format!(
                     "Crosshair {name} is not a valid VTF file."
                 )));
             }
+            crate::vtf_read::decode_vtf_frame0(&asset.bytes).map_err(|err| {
+                ProfileError::Io(format!("Crosshair {name} is not a usable VTF file: {err}"))
+            })?;
             Ok(ResolvedAsset::VtfVerbatim(asset.bytes.clone()))
         }
     }
@@ -377,10 +589,13 @@ fn load_stored_pack_vtf(profiles_dir: &Path, profile_id: &str, name: &str) -> Op
     }
     let rel = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/{name}.vtf");
     let path = exclusive_file_path(profiles_dir, profile_id, &rel);
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = read_regular_file_bounded_within(profiles_dir, &path, MAX_STORED_CROSSHAIR_BYTES)
+        .ok()
+        .flatten()?;
     if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
         return None;
     }
+    crate::vtf_read::decode_vtf_frame0(&bytes).ok()?;
     Some(bytes)
 }
 
@@ -402,23 +617,24 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
-    // `remove_live_pack` below is unconditional, so the guard cannot live
-    // inside the `previous` branch: a manifest with no pack files (re-imported
-    // profile, partially-failed apply) would otherwise `remove_dir_all` the
-    // live folder while TF2 is running.
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    let current = load_manifest(profiles_dir, profile_id)?;
+    refuse_untracked_live_pack_files(profiles_dir, tf2_root, profile_id, &current)?;
     let previous = pack_paths(profiles_dir, profile_id)?;
-    if !previous.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &previous, &running)?;
-    }
-    remove_live_pack(tf2_root, EXECS_CROSSHAIRS_PACK)?;
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    manifest.crosshair = None;
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
-    Ok(detail_from_manifest(&load_manifest(
+    let manifest = mutate_profile_files_to(
         profiles_dir,
+        tf2_root,
         profile_id,
-    )?))
+        &[],
+        &previous,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |manifest| {
+            manifest.crosshair = None;
+            Ok(())
+        },
+    )?;
+    Ok(detail_from_manifest(&manifest))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -638,6 +854,11 @@ pub fn rgba_buffer_len(width: u32, height: u32) -> Option<usize> {
 }
 
 pub fn encode_vtf_bgra8888(bgra: &[u8], width: u32, height: u32) -> Result<Vec<u8>, ProfileError> {
+    if width == 0 || height == 0 || width > 1024 || height > 1024 {
+        return Err(ProfileError::Io(
+            "Crosshair VTF dimensions must be between 1 and 1024 pixels.".into(),
+        ));
+    }
     let expected = rgba_buffer_len(width, height)
         .ok_or_else(|| ProfileError::Io("Those crosshair dimensions are too large.".into()))?;
     if bgra.len() != expected {
@@ -678,13 +899,15 @@ pub fn encode_vmt(name: &str) -> String {
 fn load_stored_custom_rgba(profiles_dir: &Path, profile_id: &str) -> Option<Vec<u8>> {
     let rel = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/custom.vtf");
     let path = exclusive_file_path(profiles_dir, profile_id, &rel);
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = read_regular_file_bounded_within(profiles_dir, &path, MAX_STORED_CROSSHAIR_BYTES)
+        .ok()
+        .flatten()?;
     decode_vtf_bgra8888(&bytes, CROSSHAIR_SIZE, CROSSHAIR_SIZE)
 }
 
 /// Inverse of `encode_vtf_bgra8888` for the fixed-size VTFs this module writes.
 pub fn decode_vtf_bgra8888(bytes: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
-    let expected = 80 + (width * height * 4) as usize;
+    let expected = 80usize.checked_add(rgba_buffer_len(width, height)?)?;
     if bytes.len() < expected || &bytes[0..4] != b"VTF\0" {
         return None;
     }
@@ -783,55 +1006,42 @@ fn rgba_to_bgra(rgba: &[u8]) -> Vec<u8> {
     out
 }
 
-fn write_pack_file(
+fn prepare_empty_stock_crosshair(
     profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    rel: &str,
-    bytes: &[u8],
-    running: &[String],
-) -> Result<(), ProfileError> {
-    write_owned_file_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        rel,
-        bytes,
-        running.iter().cloned(),
-        WriteOwnedOptions::default(),
-    )?;
-    Ok(())
-}
-
-fn force_empty_stock_crosshair(
-    profiles_dir: &Path,
-    tf2_root: &Path,
     profile_id: &str,
     color: Option<[u8; 3]>,
-    running: &[String],
-) -> Result<(), ProfileError> {
+) -> Result<(String, Vec<u8>), ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let layer = cfg_layer_from_files(&manifest.files);
     let path = match layer {
-        CfgLayer::Comfig => "tf/cfg/overrides/execs_gameplay.cfg",
-        CfgLayer::Vanilla => "tf/cfg/execs_gameplay.cfg",
+        CfgLayer::Comfig => GAMEPLAY_COMFIG_PATH,
+        CfgLayer::Vanilla => GAMEPLAY_VANILLA_PATH,
     };
     let existing = exclusive_file_path(profiles_dir, profile_id, path);
     let text = if existing.is_file() {
-        std::fs::read_to_string(&existing).unwrap_or_default()
+        let bytes =
+            read_regular_file_bounded_within(profiles_dir, &existing, MAX_GAMEPLAY_CFG_BYTES)
+                .map_err(|err| {
+                    ProfileError::Io(format!(
+                        "Could not read the existing gameplay cfg before applying crosshairs: {}",
+                        err.message()
+                    ))
+                })?
+                .ok_or_else(|| {
+                    ProfileError::Io(format!(
+                        "The existing gameplay cfg is larger than {} MiB.",
+                        MAX_GAMEPLAY_CFG_BYTES / (1024 * 1024)
+                    ))
+                })?;
+        String::from_utf8(bytes)
+            .map_err(|_| ProfileError::Io("The existing gameplay cfg is not valid UTF-8.".into()))?
     } else {
         String::new()
     };
-    write_owned_file_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        path,
-        force_empty_crosshair_file(&text, color).as_bytes(),
-        running.iter().cloned(),
-        WriteOwnedOptions::default(),
-    )?;
-    Ok(())
+    Ok((
+        path.to_string(),
+        force_empty_crosshair_file(&text, color).into_bytes(),
+    ))
 }
 
 pub fn force_empty_crosshair_file(text: &str, color: Option<[u8; 3]>) -> String {
@@ -895,14 +1105,6 @@ fn pack_paths(profiles_dir: &Path, profile_id: &str) -> Result<Vec<String>, Prof
         .collect())
 }
 
-fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
-    let dir = tf2_root.join("tf").join("custom").join(pack);
-    if dir.is_dir() {
-        std::fs::remove_dir_all(&dir).map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    Ok(())
-}
-
 pub fn build_script_vpk(scripts: &BTreeMap<String, String>) -> Vec<u8> {
     let mut files = BTreeMap::new();
     for (name, body) in scripts {
@@ -954,6 +1156,32 @@ mod tests {
 
     fn cleanup(root: &Path) {
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    fn link_dir(target: &Path, link: &Path) {
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn link_dir(target: &Path, link: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .status()
+            .unwrap();
+        assert!(status.success(), "could not create test junction");
+    }
+
+    #[cfg(unix)]
+    fn unlink_dir(link: &Path) {
+        std::fs::remove_file(link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn unlink_dir(link: &Path) {
+        std::fs::remove_dir(link).unwrap();
     }
 
     fn sample_script() -> String {
@@ -1043,7 +1271,13 @@ mod tests {
         assert!(gameplay.contains("cl_crosshair_green 64"));
         assert!(gameplay.contains("cl_crosshair_blue 0"));
         remove_crosshairs_to(&root.join("profiles"), &tf2, &id, unlocked()).unwrap();
-        assert!(!tf2.join("tf/custom/execs-crosshairs").exists());
+        assert!(pack_paths(&root.join("profiles"), &id).unwrap().is_empty());
+        assert!(!tf2
+            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt")
+            .exists());
+        assert!(!tf2
+            .join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vtf")
+            .exists());
         cleanup(&root);
     }
 
@@ -1358,6 +1592,11 @@ cl_crosshair_blue 56
             .is_file());
 
         // Nothing patched at all is still an error.
+        let before_manifest = load_manifest(&root.join("profiles"), &id).unwrap();
+        let script_rel = "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt";
+        let before_live = std::fs::read(tf2.join(script_rel)).unwrap();
+        let before_stored =
+            std::fs::read(exclusive_file_path(&root.join("profiles"), &id, script_rel)).unwrap();
         let mut all_broken = BTreeMap::new();
         all_broken.insert(
             "scripts/tf_weapon_rocket.ctx".to_string(),
@@ -1381,6 +1620,15 @@ cl_crosshair_blue 56
             matches!(err, ProfileError::Io(ref msg) if msg.contains("None of the")),
             "{err:?}"
         );
+        assert_eq!(
+            load_manifest(&root.join("profiles"), &id).unwrap(),
+            before_manifest
+        );
+        assert_eq!(std::fs::read(tf2.join(script_rel)).unwrap(), before_live);
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&root.join("profiles"), &id, script_rel)).unwrap(),
+            before_stored
+        );
         cleanup(&root);
     }
 
@@ -1390,6 +1638,8 @@ cl_crosshair_blue 56
         // `(width * height * 4) as u32` would wrap here.
         assert_eq!(rgba_buffer_len(u32::MAX, u32::MAX), None);
         assert!(encode_vtf_bgra8888(&[], u32::MAX, u32::MAX).is_err());
+        assert!(encode_vtf_bgra8888(&vec![0; 65_536 * 4], 65_536, 1).is_err());
+        assert!(decode_vtf_bgra8888(&[], u32::MAX, u32::MAX).is_none());
     }
 
     /// `trim_end_matches` strips a suffix repeatedly, so `a.txt.txt` became `a`.
@@ -1472,8 +1722,8 @@ cl_crosshair_blue 56
         cleanup(&root);
     }
 
-    /// The live pack removal is unconditional, so an empty manifest must not
-    /// be a way past the write lock.
+    /// The action still takes the write lock even when there is no tracked
+    /// payload; untracked bytes are deliberately never deleted.
     #[test]
     fn remove_refuses_while_tf2_is_running_even_with_no_tracked_pack_files() {
         let (root, tf2, id) = setup();
@@ -1490,9 +1740,263 @@ cl_crosshair_blue 56
         assert!(matches!(err, ProfileError::GameRunning));
         assert!(live.join("stray.vmt").is_file(), "live pack must survive");
 
-        // With the game closed it still removes the folder.
-        remove_crosshairs_to(&root.join("profiles"), &tf2, &id, unlocked()).unwrap();
-        assert!(!live.exists());
+        // With the game closed, refuse the ambiguous app-owned collision
+        // rather than silently activating or deleting unknown bytes.
+        let err = remove_crosshairs_to(&root.join("profiles"), &tf2, &id, unlocked()).unwrap_err();
+        assert!(err.message().contains("untracked"), "{err:?}");
+        assert!(live.join("stray.vmt").is_file());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn remove_refuses_a_linked_live_pack_without_touching_its_target() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        std::fs::create_dir_all(tf2.join("tf/custom")).unwrap();
+        let rel = "tf/custom/execs-crosshairs/keep.vtf";
+        crate::profile::put_profile_files_to(
+            &profiles,
+            &tf2,
+            &id,
+            &[(rel.into(), FileSource::Bytes(b"owned"))],
+            unlocked(),
+        )
+        .unwrap();
+        let outside = root.join("outside-crosshair-pack");
+        std::fs::create_dir_all(&outside).unwrap();
+        let victim = outside.join("keep.vtf");
+        std::fs::write(&victim, b"outside").unwrap();
+        let link = tf2.join("tf").join("custom").join(EXECS_CROSSHAIRS_PACK);
+        link_dir(&outside, &link);
+
+        let err = remove_crosshairs_to(&profiles, &tf2, &id, unlocked()).unwrap_err();
+
+        assert!(err.message().contains("linked"), "{err:?}");
+        assert_eq!(std::fs::read(&victim).unwrap(), b"outside");
+        unlink_dir(&link);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn apply_rolls_back_payload_record_and_live_files_if_manifest_commit_fails() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            Some([1, 2, 3]),
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let vtf_rel = "tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/cross.vtf";
+        let old_live = std::fs::read(tf2.join(vtf_rel)).unwrap();
+        let old_profile = std::fs::read(exclusive_file_path(&profiles, &id, vtf_rel)).unwrap();
+        let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        std::fs::create_dir_all(&blocker).unwrap();
+
+        let err = apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "dot",
+            &BTreeMap::new(),
+            None,
+            Some([9, 8, 7]),
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(tf2.join(vtf_rel)).unwrap(), old_live);
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&profiles, &id, vtf_rel)).unwrap(),
+            old_profile
+        );
+        assert!(!tf2
+            .join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vtf")
+            .exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn remove_rolls_back_payload_and_record_if_manifest_commit_fails() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let script_rel = "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt";
+        let old_live = std::fs::read(tf2.join(script_rel)).unwrap();
+        let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        std::fs::create_dir_all(&blocker).unwrap();
+
+        let err = remove_crosshairs_to(&profiles, &tf2, &id, unlocked()).unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(tf2.join(script_rel)).unwrap(), old_live);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn stored_crosshair_and_gameplay_cfg_reads_are_bounded() {
+        let (root, _tf2, id) = setup();
+        let profiles = root.join("profiles");
+        let rel = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/oversized.vtf");
+        let stored = exclusive_file_path(&profiles, &id, &rel);
+        std::fs::create_dir_all(stored.parent().unwrap()).unwrap();
+        let mut oversized_vtf = encode_vtf_bgra8888(&vec![0; 64 * 64 * 4], 64, 64).unwrap();
+        oversized_vtf.resize(MAX_STORED_CROSSHAIR_BYTES as usize, 0);
+        std::fs::write(&stored, &oversized_vtf).unwrap();
+        assert_eq!(
+            stored_pack_crosshair(&profiles, &id, "oversized")
+                .unwrap()
+                .len(),
+            MAX_STORED_CROSSHAIR_BYTES as usize
+        );
+        oversized_vtf.push(0);
+        std::fs::write(&stored, oversized_vtf).unwrap();
+        assert!(stored_pack_crosshair(&profiles, &id, "oversized").is_none());
+
+        let gameplay = exclusive_file_path(&profiles, &id, GAMEPLAY_VANILLA_PATH);
+        std::fs::create_dir_all(gameplay.parent().unwrap()).unwrap();
+        std::fs::write(&gameplay, vec![b' '; MAX_GAMEPLAY_CFG_BYTES as usize]).unwrap();
+        assert!(prepare_empty_stock_crosshair(&profiles, &id, None).is_ok());
+        std::fs::write(&gameplay, vec![b' '; MAX_GAMEPLAY_CFG_BYTES as usize + 1]).unwrap();
+        let err = prepare_empty_stock_crosshair(&profiles, &id, None).unwrap_err();
+        assert!(err.message().contains("larger than 1 MiB"), "{err:?}");
+        cleanup(&root);
+    }
+
+    #[test]
+    fn direct_crosshair_payloads_have_cardinality_and_byte_caps() {
+        let mut too_many_assignments = BTreeMap::new();
+        for index in 0..=MAX_ASSIGNMENTS {
+            too_many_assignments.insert(format!("tf_weapon_{index}"), "dot".into());
+        }
+        let err = validate_crosshair_request(&too_many_assignments, None, &BTreeMap::new(), None)
+            .unwrap_err();
+        assert!(err.message().contains("at most 512"), "{err:?}");
+
+        let mut too_many_assets = BTreeMap::new();
+        for index in 0..=MAX_LIBRARY_ENTRIES {
+            too_many_assets.insert(
+                format!("asset{index}"),
+                CrosshairAsset {
+                    format: CrosshairAssetFormat::Vtf,
+                    bytes: vec![0; 80],
+                },
+            );
+        }
+        let err =
+            validate_crosshair_request(&BTreeMap::new(), None, &too_many_assets, None).unwrap_err();
+        assert!(err.message().contains("at most 512"), "{err:?}");
+
+        let mut too_large = BTreeMap::new();
+        for index in 0..3 {
+            too_large.insert(
+                format!("large{index}"),
+                CrosshairAsset {
+                    format: CrosshairAssetFormat::Vtf,
+                    bytes: vec![0; 11 * 1024 * 1024],
+                },
+            );
+        }
+        let err = validate_crosshair_request(&BTreeMap::new(), None, &too_large, None).unwrap_err();
+        assert!(err.message().contains("at most 32 MiB"), "{err:?}");
+
+        let oversized_pixels = vec![0; (CROSSHAIR_SIZE * CROSSHAIR_SIZE * 4) as usize + 1];
+        let err = validate_crosshair_request(
+            &BTreeMap::new(),
+            Some(&oversized_pixels),
+            &BTreeMap::new(),
+            None,
+        )
+        .unwrap_err();
+        assert!(err.message().contains("64×64 RGBA"), "{err:?}");
+
+        let mut names: BTreeSet<String> = (0..MAX_LIBRARY_ENTRIES)
+            .map(|index| format!("asset{index}"))
+            .collect();
+        let mut bytes = 0;
+        let err =
+            account_recovered_library_asset("one-too-many", 1, &mut names, &mut bytes).unwrap_err();
+        assert!(err.message().contains("at most 512"), "{err:?}");
+
+        let oversized = CrosshairAsset {
+            format: CrosshairAssetFormat::Vtf,
+            bytes: vec![0; MAX_STORED_CROSSHAIR_BYTES as usize + 1],
+        };
+        let err = resolve_library_asset("oversized", &oversized)
+            .err()
+            .expect("oversized VTF must be rejected");
+        assert!(err.message().contains("larger than 16 MiB"), "{err:?}");
+
+        let mut malformed = vec![0; 80];
+        malformed[0..4].copy_from_slice(b"VTF\0");
+        let malformed = CrosshairAsset {
+            format: CrosshairAssetFormat::Vtf,
+            bytes: malformed,
+        };
+        let err = resolve_library_asset("malformed", &malformed)
+            .err()
+            .expect("structurally invalid VTF must be rejected");
+        assert!(err.message().contains("not a usable VTF"), "{err:?}");
+    }
+
+    #[test]
+    fn apply_refuses_untracked_content_in_the_app_owned_pack() {
+        let (root, tf2, id) = setup();
+        let stray = tf2.join("tf/custom/execs-crosshairs/cfg/autoexec.cfg");
+        std::fs::create_dir_all(stray.parent().unwrap()).unwrap();
+        std::fs::write(&stray, b"quit\n").unwrap();
+        let before = load_manifest(&root.join("profiles"), &id).unwrap();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+
+        let err = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "dot",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("untracked"), "{err:?}");
+        assert_eq!(load_manifest(&root.join("profiles"), &id).unwrap(), before);
+        assert_eq!(std::fs::read(stray).unwrap(), b"quit\n");
         cleanup(&root);
     }
 

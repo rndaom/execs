@@ -11,6 +11,7 @@ pub mod hitsound;
 pub mod hud;
 pub mod launch;
 pub mod library;
+pub mod lifecycle;
 pub mod mods;
 pub mod preloader;
 pub mod shared;

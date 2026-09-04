@@ -36,4 +36,19 @@ describe("profile switch progress chrome", () => {
     expect(markup).toContain('data-fraction="1.000"');
     expect(markup.match(/data-done="true"/g)).toHaveLength(6);
   });
+
+  it("shows backend completion detail instead of dropping Steam sync status", () => {
+    const detail = "Launch options stayed saved to the profile; Steam sync is pending.";
+    const markup = renderToStaticMarkup(
+      createElement(SwitchProgressList, {
+        switchStep: "done",
+        active: false,
+        visible: true,
+        detail,
+      }),
+    );
+
+    expect(markup).toContain(detail);
+    expect(markup).not.toContain("All steps done");
+  });
 });

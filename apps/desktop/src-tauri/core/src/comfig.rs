@@ -2,19 +2,21 @@
 //!
 //! Network-free. Fetch GitHub Release bytes in the Tauri host, then call these.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::apply::{write_owned_file_to, ProfileDetail, WriteOwnedOptions};
+use crate::archive::read_regular_file_bounded_within;
 use crate::blob::blob_path;
+use crate::hash::{metadata_is_link, validate_dir_within};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, is_file_safe_rel_path, is_shared_file_name, is_shared_rel_path,
-    load_library_from, load_manifest, normalize_rel_path, profiles_dir, put_profile_files_to,
-    remove_manifest_files_to, FileSource, FileStorage, ProfileError, ProfileFile,
+    load_library_from, load_manifest, mutate_profile_files_to, normalize_rel_path, profiles_dir,
+    FileSource, FileStorage, ProfileError, ProfileFile, ProfileLiveProjection, ProfileManifest,
 };
 use crate::wizard::{
     file_name_for_rel, pick_release_asset, ComfigPreset, GitHubRelease, OfficialAddon, WizardAsset,
@@ -24,6 +26,7 @@ const SETUP_HOOK: &str = "tf/cfg/overrides/setup_hook.cfg";
 const MODULES_CFG: &str = "tf/cfg/overrides/modules.cfg";
 const BASE_VPK: &str = "tf/custom/mastercomfig-base.vpk";
 const CUSTOM_PREFIX: &str = "tf/custom/comfig-custom/";
+const MAX_COMFIG_CFG_BYTES: u64 = 1024 * 1024;
 
 const JUNK_NAMES: &[&str] = &[
     ".ds_store",
@@ -132,6 +135,35 @@ pub fn serialize_modules_cfg(modules: &BTreeMap<String, String>) -> String {
         text.push('\n');
     }
     text
+}
+
+const MAX_COMFIG_MODULES: usize = 256;
+const MAX_COMFIG_MODULE_NAME_BYTES: usize = 64;
+const MAX_COMFIG_MODULE_LEVEL_BYTES: usize = 64;
+
+fn validate_modules_cfg(modules: &BTreeMap<String, String>) -> Result<(), ProfileError> {
+    if modules.len() > MAX_COMFIG_MODULES {
+        return Err(ProfileError::Io(format!(
+            "A modules file may contain at most {MAX_COMFIG_MODULES} entries."
+        )));
+    }
+    for (name, level) in modules {
+        if name.len() > MAX_COMFIG_MODULE_NAME_BYTES || name != name.trim() || !is_module_name(name)
+        {
+            return Err(ProfileError::Io(format!(
+                "Invalid mastercomfig module name: {name:?}."
+            )));
+        }
+        if level.len() > MAX_COMFIG_MODULE_LEVEL_BYTES
+            || level != level.trim()
+            || !is_module_level(level)
+        {
+            return Err(ProfileError::Io(format!(
+                "Invalid level for mastercomfig module {name:?}."
+            )));
+        }
+    }
+    Ok(())
 }
 
 pub fn addon_from_rel_path(path: &str) -> Option<OfficialAddon> {
@@ -297,6 +329,7 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    validate_modules_cfg(modules)?;
     let text = serialize_modules_cfg(modules);
     write_owned_file_to(
         profiles_dir,
@@ -368,24 +401,21 @@ where
             remove.push(addon.rel_path());
         }
     }
-    if !remove.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &remove, &running)?;
-        remove_live_paths_if_active(profiles_dir, tf2_root, profile_id, &remove)?;
-    }
-
-    for (rel, asset) in install {
-        write_owned_file_to(
-            profiles_dir,
-            tf2_root,
-            profile_id,
-            &rel,
-            asset,
-            &running,
-            WriteOwnedOptions::default(),
-        )?;
-    }
-
-    profile_detail(profiles_dir, tf2_root, profile_id)
+    let puts: Vec<(String, FileSource<'_>)> = install
+        .into_iter()
+        .map(|(path, bytes)| (path, FileSource::Bytes(bytes)))
+        .collect();
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &puts,
+        &remove,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |_| Ok(()),
+    )?;
+    Ok(crate::apply::detail_from_manifest(&manifest))
 }
 
 pub fn import_comfig_custom(
@@ -428,22 +458,122 @@ where
     // manifest + index write for the whole folder, so nothing is buffered
     // and a failure on file 300 has not rewritten the manifest 299 times.
     let files = collect_import(source_dir, IMPORT_CAPS)?;
+    apply_collected_comfig_custom_to(profiles_dir, tf2_root, profile_id, &files, &running)
+}
+
+fn apply_collected_comfig_custom_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[(String, PathBuf, u64)],
+    running: &[String],
+) -> Result<ProfileDetail, ProfileError> {
     let batch: Vec<(String, FileSource<'_>)> = files
         .iter()
-        .map(|(rel, path)| (rel.clone(), FileSource::Path(path.as_path())))
+        .map(|(rel, path, expected_len)| {
+            (
+                rel.clone(),
+                FileSource::PathExact {
+                    path: path.as_path(),
+                    expected_len: *expected_len,
+                },
+            )
+        })
         .collect();
-    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, &running)?;
+    let current = load_manifest(profiles_dir, profile_id)?;
+    let previous: Vec<String> = current
+        .files
+        .iter()
+        .filter(|file| file.path.to_ascii_lowercase().starts_with(CUSTOM_PREFIX))
+        .map(|file| file.path.clone())
+        .collect();
+    refuse_untracked_live_comfig_custom(profiles_dir, tf2_root, profile_id, &current)?;
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &batch,
+        &previous,
+        ProfileLiveProjection::MirrorIfActive,
+        running,
+        |_| Ok(()),
+    )?;
+    Ok(crate::apply::detail_from_manifest(&manifest))
+}
 
+fn refuse_untracked_live_comfig_custom(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    manifest: &ProfileManifest,
+) -> Result<(), ProfileError> {
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() == Some(profile_id) {
-        for (rel, _) in &files {
-            let source = exclusive_file_path(profiles_dir, profile_id, rel);
-            let dest = crate::switch::live_path(tf2_root, rel);
-            crate::hash::copy_and_sha256(&source, &dest)
-                .map_err(|err| ProfileError::Io(err.to_string()))?;
+    if library.active_profile_id.as_deref() != Some(profile_id) {
+        return Ok(());
+    }
+    let dir = tf2_root.join("tf").join("custom").join("comfig-custom");
+    let meta = match fs::symlink_metadata(&dir) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Ok(meta) => meta,
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    };
+    if metadata_is_link(&meta) || !meta.is_dir() {
+        return Err(ProfileError::Io(
+            "Refusing to traverse a linked or invalid live comfig-custom folder.".into(),
+        ));
+    }
+    let tracked: BTreeSet<String> = manifest
+        .files
+        .iter()
+        .filter(|file| file.path.to_ascii_lowercase().starts_with(CUSTOM_PREFIX))
+        .map(|file| file.path.to_ascii_lowercase())
+        .collect();
+    let mut pending = vec![dir];
+    let mut entries = 0usize;
+    while let Some(current) = pending.pop() {
+        validate_dir_within(tf2_root, &current).map_err(|err| ProfileError::Io(err.to_string()))?;
+        for entry in fs::read_dir(&current).map_err(|err| ProfileError::Io(err.to_string()))? {
+            let path = entry
+                .map_err(|err| ProfileError::Io(err.to_string()))?
+                .path();
+            let meta =
+                fs::symlink_metadata(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
+            entries = entries.saturating_add(1);
+            if entries > IMPORT_CAPS.max_files {
+                return Err(ProfileError::Io(format!(
+                    "The live comfig-custom folder contains more than {} entries.",
+                    IMPORT_CAPS.max_files
+                )));
+            }
+            if metadata_is_link(&meta) {
+                return Err(ProfileError::Io(
+                    "Refusing to traverse a link or junction in the live comfig-custom folder."
+                        .into(),
+                ));
+            }
+            if meta.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !meta.is_file() {
+                return Err(ProfileError::Io(
+                    "The live comfig-custom folder contains an invalid entry.".into(),
+                ));
+            }
+            let rel = path
+                .strip_prefix(tf2_root)
+                .map_err(|_| ProfileError::InvalidPath)?
+                .to_string_lossy()
+                .replace('\\', "/")
+                .to_ascii_lowercase();
+            if !tracked.contains(&rel) && !rel.ends_with(crate::hash::PART_SUFFIX) {
+                return Err(ProfileError::Io(format!(
+                    "The live comfig-custom folder contains an untracked file: {rel}. Remove or save it before replacing the folder."
+                )));
+            }
         }
     }
-    profile_detail(profiles_dir, tf2_root, profile_id)
+    Ok(())
 }
 
 pub fn apply_official_vpk_bytes(
@@ -483,15 +613,72 @@ where
     if !is_official_vpk_rel(&path) {
         return Err(ProfileError::ForbiddenPath(path));
     }
-    write_owned_file_to(
+    let manifest = mutate_profile_files_to(
         profiles_dir,
         tf2_root,
         profile_id,
-        &path,
-        bytes,
+        &[(path, FileSource::Bytes(bytes))],
+        &[],
+        ProfileLiveProjection::MirrorIfActive,
         &running,
-        WriteOwnedOptions::default(),
+        |_| Ok(()),
+    )?;
+    Ok(crate::apply::detail_from_manifest(&manifest))
+}
+
+/// Apply every downloaded official VPK as one profile/live transaction. The
+/// updater fetches all bytes before calling this function, so a later bad path
+/// or failed write cannot leave only the first packages updated.
+pub fn apply_official_vpk_batch(
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[(String, Vec<u8>)],
+) -> Result<ProfileDetail, ProfileError> {
+    apply_official_vpk_batch_to(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        files,
+        live_process_names(),
     )
+}
+
+pub fn apply_official_vpk_batch_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[(String, Vec<u8>)],
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
+
+    let mut validated = Vec::with_capacity(files.len());
+    for (rel_path, bytes) in files {
+        let path = normalize_rel_path(rel_path)?;
+        if !is_official_vpk_rel(&path) {
+            return Err(ProfileError::ForbiddenPath(path));
+        }
+        validated.push((path, FileSource::Bytes(bytes.as_slice())));
+    }
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &validated,
+        &[],
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |_| Ok(()),
+    )?;
+    Ok(crate::apply::detail_from_manifest(&manifest))
 }
 
 fn is_official_vpk_rel(path: &str) -> bool {
@@ -538,15 +725,6 @@ fn find_asset<'a>(assets: &'a [WizardAsset<'a>], rel: &str) -> Option<&'a [u8]> 
     })
 }
 
-fn profile_detail(
-    profiles_dir: &Path,
-    _tf2_root: &Path,
-    profile_id: &str,
-) -> Result<ProfileDetail, ProfileError> {
-    let manifest = load_manifest(profiles_dir, profile_id)?;
-    Ok(crate::apply::detail_from_manifest(&manifest))
-}
-
 fn read_profile_text_from(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -574,35 +752,20 @@ fn read_profile_text(
     if !source.is_file() {
         return Ok(None);
     }
-    let bytes = fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))?;
-    Ok(String::from_utf8(bytes).ok())
-}
-
-fn remove_live_paths_if_active(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    paths: &[String],
-) -> Result<(), ProfileError> {
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() != Some(profile_id) {
-        return Ok(());
-    }
-    for rel in paths {
-        let dest = live_tf2_path(tf2_root, rel);
-        if dest.is_file() {
-            fs::remove_file(&dest).map_err(|err| ProfileError::Io(err.to_string()))?;
-        }
-    }
-    Ok(())
-}
-
-fn live_tf2_path(tf2_root: &Path, rel: &str) -> PathBuf {
-    let mut path = tf2_root.to_path_buf();
-    for part in rel.split('/') {
-        path.push(part);
-    }
-    path
+    let bytes = read_regular_file_bounded_within(profiles_dir, &source, MAX_COMFIG_CFG_BYTES)?
+        .ok_or_else(|| {
+            ProfileError::Io(format!(
+                "The stored mastercomfig cfg is larger than {} MiB: {}",
+                MAX_COMFIG_CFG_BYTES / (1024 * 1024),
+                file.path
+            ))
+        })?;
+    String::from_utf8(bytes).map(Some).map_err(|_| {
+        ProfileError::Io(format!(
+            "The stored mastercomfig cfg is not valid UTF-8: {}",
+            file.path
+        ))
+    })
 }
 
 /// A comfig-custom folder nested deeper than this is a symlink loop or a
@@ -628,12 +791,13 @@ const IMPORT_CAPS: ImportCaps = ImportCaps {
 };
 
 /// Every importable file under `source_dir` as `(profile rel path, source
-/// path)`, checked against `caps` by count and by declared size. No file
-/// contents are read here.
+/// path, preflighted length)`, checked against `caps` by count and by declared
+/// size. The length is carried into the streaming profile transaction, which
+/// refuses an early EOF or even one extra byte before publication.
 fn collect_import(
     source_dir: &Path,
     caps: ImportCaps,
-) -> Result<Vec<(String, PathBuf)>, ProfileError> {
+) -> Result<Vec<(String, PathBuf, u64)>, ProfileError> {
     let mut out = Vec::new();
     let mut total: u64 = 0;
     walk_import(source_dir, &[], 0, caps, &mut total, &mut out)?;
@@ -646,7 +810,7 @@ fn walk_import(
     depth: usize,
     caps: ImportCaps,
     total: &mut u64,
-    out: &mut Vec<(String, PathBuf)>,
+    out: &mut Vec<(String, PathBuf, u64)>,
 ) -> Result<(), ProfileError> {
     if depth >= IMPORT_MAX_DEPTH {
         return Err(ProfileError::Io(format!(
@@ -709,7 +873,7 @@ fn walk_import(
                 caps.max_total_bytes / MIB
             )));
         }
-        out.push((rel, path));
+        out.push((rel, path, len));
     }
     Ok(())
 }
@@ -724,7 +888,10 @@ fn is_junk_name(name: &str) -> bool {
 
 fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path)
-        .map(|meta| meta.file_type().is_symlink())
+        // Windows directory junctions are reparse points but do not report
+        // `FileType::is_symlink()`. Treat every link-like entry alike so a
+        // picked comfig-custom tree cannot recurse through a junction.
+        .map(|meta| metadata_is_link(&meta))
         .unwrap_or(false)
 }
 
@@ -739,6 +906,32 @@ mod tests {
 
     fn cleanup(dir: &Path) {
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    fn link_dir(target: &Path, link: &Path) {
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn link_dir(target: &Path, link: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .status()
+            .unwrap();
+        assert!(status.success(), "could not create test junction");
+    }
+
+    #[cfg(unix)]
+    fn unlink_dir(link: &Path) {
+        fs::remove_file(link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn unlink_dir(link: &Path) {
+        fs::remove_dir(link).unwrap();
     }
 
     fn unlocked() -> impl Iterator<Item = &'static str> {
@@ -757,6 +950,7 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         fs::create_dir_all(root.join("tf").join("cfg")).unwrap();
         fs::create_dir_all(root.join("tf").join("custom")).unwrap();
+        fs::write(root.join("tf/steam.inf"), "appID=440\n").unwrap();
         root
     }
 
@@ -837,6 +1031,81 @@ mod tests {
     }
 
     #[test]
+    fn stored_comfig_cfg_read_accepts_the_limit_and_rejects_one_byte_more() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        let mut exact = b"preset=low\n".to_vec();
+        exact.resize(MAX_COMFIG_CFG_BYTES as usize, b' ');
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            SETUP_HOOK,
+            &exact,
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            read_comfig_state_from(&profiles, &root, &id)
+                .unwrap()
+                .preset,
+            ComfigPreset::Low
+        );
+
+        exact.push(b' ');
+        std::fs::write(exclusive_file_path(&profiles, &id, SETUP_HOOK), exact).unwrap();
+        let err = read_comfig_state_from(&profiles, &root, &id).unwrap_err();
+        assert!(err.message().contains("larger than 1 MiB"), "{err:?}");
+
+        std::fs::write(exclusive_file_path(&profiles, &id, SETUP_HOOK), [0xff]).unwrap();
+        let err = read_comfig_state_from(&profiles, &root, &id).unwrap_err();
+        assert!(err.message().contains("not valid UTF-8"), "{err:?}");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn module_write_rejects_cfg_injection_without_changing_the_profile() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        let mut valid = BTreeMap::new();
+        valid.insert("texture_quality".into(), "high".into());
+        write_comfig_modules_to(&profiles, &root, &id, &valid, unlocked()).unwrap();
+        let before_manifest = load_manifest(&profiles, &id).unwrap();
+        let modules_path = exclusive_file_path(&profiles, &id, MODULES_CFG);
+        let before_text = fs::read_to_string(&modules_path).unwrap();
+
+        let mut injected = BTreeMap::new();
+        injected.insert("texture_quality".into(), "high\nquit".into());
+        let err =
+            write_comfig_modules_to(&profiles, &root, &id, &injected, unlocked()).unwrap_err();
+        assert!(err.message().contains("Invalid level"), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before_manifest);
+        assert_eq!(fs::read_to_string(modules_path).unwrap(), before_text);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn module_write_bounds_names_levels_and_entry_count() {
+        let mut modules = BTreeMap::new();
+        modules.insert("x".repeat(MAX_COMFIG_MODULE_NAME_BYTES + 1), "high".into());
+        assert!(validate_modules_cfg(&modules).is_err());
+
+        modules.clear();
+        modules.insert(
+            "texture".into(),
+            "x".repeat(MAX_COMFIG_MODULE_LEVEL_BYTES + 1),
+        );
+        assert!(validate_modules_cfg(&modules).is_err());
+
+        modules.clear();
+        for index in 0..=MAX_COMFIG_MODULES {
+            modules.insert(format!("module_{index}"), "high".into());
+        }
+        assert!(validate_modules_cfg(&modules).is_err());
+    }
+
+    #[test]
     fn addon_add_remove_updates_manifest_paths() {
         let dir = test_temp_dir();
         let (profiles, root, id) = fresh_profile(&dir);
@@ -875,6 +1144,82 @@ mod tests {
             .collect();
         assert!(!paths.contains(&rel));
         assert!(!root.join("tf/custom").join(addon.vpk_file_name()).is_file());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn official_batch_rejects_an_escaping_path_before_any_package_changes() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let victim = root.join("victim.vpk");
+        fs::write(&victim, b"outside custom").unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = apply_official_vpk_batch_to(
+            &profiles,
+            &root,
+            &id,
+            &[
+                (BASE_VPK.into(), b"new base".to_vec()),
+                ("tf/custom/../../victim.vpk".into(), b"bad".to_vec()),
+            ],
+            unlocked(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, ProfileError::InvalidPath));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!root.join("tf/custom/mastercomfig-base.vpk").exists());
+        assert_eq!(fs::read(victim).unwrap(), b"outside custom");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn addon_change_rolls_back_profile_live_files_and_manifest_together() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let old = OfficialAddon::NoTutorial;
+        let old_assets = [WizardAsset {
+            path: "tf/custom/mastercomfig-addon-no-tutorial.vpk",
+            bytes: b"old addon",
+        }];
+        set_comfig_addons_to(&profiles, &root, &id, &[old], &old_assets, unlocked()).unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let manifest_part = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        fs::create_dir_all(&manifest_part).unwrap();
+
+        let replacement = OfficialAddon::Lowmem;
+        let replacement_assets = [WizardAsset {
+            path: "tf/custom/mastercomfig-addon-lowmem.vpk",
+            bytes: b"new addon",
+        }];
+        let err = set_comfig_addons_to(
+            &profiles,
+            &root,
+            &id,
+            &[replacement],
+            &replacement_assets,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(
+            fs::read(root.join("tf/custom").join(old.vpk_file_name())).unwrap(),
+            b"old addon"
+        );
+        assert!(!root
+            .join("tf/custom")
+            .join(replacement.vpk_file_name())
+            .exists());
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, &old.rel_path())).unwrap(),
+            b"old addon"
+        );
+        assert!(!exclusive_file_path(&profiles, &id, &replacement.rel_path()).exists());
         cleanup(&dir);
     }
 
@@ -974,7 +1319,7 @@ mod tests {
         write_file(&fine.join("a.cfg"), "12345");
         write_file(&fine.join("sub/b.cfg"), "12345");
         let files = collect_import(&fine, caps).unwrap();
-        let mut rels: Vec<&str> = files.iter().map(|(rel, _)| rel.as_str()).collect();
+        let mut rels: Vec<&str> = files.iter().map(|(rel, _, _)| rel.as_str()).collect();
         rels.sort();
         assert_eq!(
             rels,
@@ -988,6 +1333,55 @@ mod tests {
             crate::hud::HUD_LIMITS.max_entries,
             "folder and archive imports share one ceiling"
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn folder_import_does_not_follow_a_nested_link_or_junction() {
+        let dir = test_temp_dir();
+        let source = dir.join("comfig-custom");
+        let outside = dir.join("outside");
+        write_file(&outside.join("autoexec.cfg"), "quit\n");
+        fs::create_dir_all(&source).unwrap();
+        let link = source.join("linked");
+        link_dir(&outside, &link);
+
+        let files = collect_import(&source, IMPORT_CAPS).unwrap();
+        assert!(files.is_empty());
+        unlink_dir(&link);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_source_that_grows_after_the_folder_scan_is_not_published() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let source = dir.join("comfig-custom");
+        let source_file = source.join("autoexec.cfg");
+        write_file(&source_file, "echo safe\n");
+        let files = collect_import(&source, IMPORT_CAPS).unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        // Simulate the picker source changing in the gap between the metadata
+        // walk and transaction staging. One byte beyond the exact scanned
+        // length must abort before either the library or live file appears.
+        let mut handle = fs::OpenOptions::new()
+            .append(true)
+            .open(&source_file)
+            .unwrap();
+        handle.write_all(b"x").unwrap();
+        handle.flush().unwrap();
+        let err = apply_collected_comfig_custom_to(&profiles, &root, &id, &files, &Vec::new())
+            .unwrap_err();
+        assert!(err.message().contains("validated length"), "{err:?}");
+
+        let rel = "tf/custom/comfig-custom/autoexec.cfg";
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!exclusive_file_path(&profiles, &id, rel).exists());
+        assert!(!root
+            .join(rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+            .exists());
         cleanup(&dir);
     }
 
@@ -1022,6 +1416,109 @@ mod tests {
         assert!(!paths
             .iter()
             .any(|path| path.to_ascii_lowercase().contains("ds_store")));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn custom_import_rolls_back_profile_and_live_files_if_manifest_commit_fails() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let source = dir.join("comfig-custom");
+        write_file(&source.join("autoexec.cfg"), "echo imported\n");
+        let before = load_manifest(&profiles, &id).unwrap();
+        let manifest_part = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        fs::create_dir_all(&manifest_part).unwrap();
+
+        let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+
+        let rel = "tf/custom/comfig-custom/autoexec.cfg";
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!exclusive_file_path(&profiles, &id, rel).exists());
+        assert!(!root
+            .join(rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+            .exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn custom_import_is_an_exact_replace_not_a_merge() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let first = dir.join("first-comfig-custom");
+        write_file(&first.join("old-only.cfg"), "echo old\n");
+        write_file(&first.join("same.cfg"), "echo first\n");
+        import_comfig_custom_to(&profiles, &root, &id, &first, unlocked()).unwrap();
+
+        let replacement = dir.join("replacement-comfig-custom");
+        write_file(&replacement.join("same.cfg"), "echo second\n");
+        write_file(&replacement.join("new-only.cfg"), "echo new\n");
+        import_comfig_custom_to(&profiles, &root, &id, &replacement, unlocked()).unwrap();
+
+        let old_rel = "tf/custom/comfig-custom/old-only.cfg";
+        let same_rel = "tf/custom/comfig-custom/same.cfg";
+        let new_rel = "tf/custom/comfig-custom/new-only.cfg";
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(!manifest.files.iter().any(|file| file.path == old_rel));
+        assert!(manifest.files.iter().any(|file| file.path == same_rel));
+        assert!(manifest.files.iter().any(|file| file.path == new_rel));
+        assert!(!exclusive_file_path(&profiles, &id, old_rel).exists());
+        assert!(!root
+            .join(old_rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+            .exists());
+        assert_eq!(
+            fs::read_to_string(root.join(same_rel.replace('/', std::path::MAIN_SEPARATOR_STR)))
+                .unwrap(),
+            "echo second\n"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn custom_import_refuses_untracked_live_content() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let stray = root.join("tf/custom/comfig-custom/cfg/autoexec.cfg");
+        write_file(&stray, "quit\n");
+        let source = dir.join("replacement-comfig-custom");
+        write_file(&source.join("safe.cfg"), "echo safe\n");
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
+
+        assert!(err.message().contains("untracked"), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(fs::read_to_string(stray).unwrap(), "quit\n");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn import_refuses_a_linked_live_parent_before_changing_the_profile() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let source = dir.join("source-comfig-custom");
+        write_file(&source.join("autoexec.cfg"), "echo imported\n");
+        let outside = dir.join("outside-comfig-custom");
+        fs::create_dir_all(&outside).unwrap();
+        let victim = outside.join("autoexec.cfg");
+        fs::write(&victim, b"outside").unwrap();
+        let link = root.join("tf").join("custom").join("comfig-custom");
+        link_dir(&outside, &link);
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
+
+        assert!(
+            err.message().contains("link") || err.message().contains("reparse"),
+            "{err:?}"
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(fs::read(&victim).unwrap(), b"outside");
+        unlink_dir(&link);
         cleanup(&dir);
     }
 
@@ -1077,6 +1574,45 @@ mod tests {
         let state = read_comfig_state_from(&profiles, &root, &id).unwrap();
         assert!(state.has_base_vpk);
         assert_eq!(state.addons, vec![OfficialAddon::Lowmem]);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn official_batch_rolls_back_every_package_if_manifest_commit_fails() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let addon = "tf/custom/mastercomfig-addon-lowmem.vpk";
+        let old = [
+            (BASE_VPK.into(), b"old base".to_vec()),
+            (addon.into(), b"old addon".to_vec()),
+        ];
+        apply_official_vpk_batch_to(&profiles, &root, &id, &old, unlocked()).unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let manifest_part = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        fs::create_dir_all(&manifest_part).unwrap();
+
+        let replacement = [
+            (BASE_VPK.into(), b"new base".to_vec()),
+            (addon.into(), b"new addon".to_vec()),
+        ];
+        let err = apply_official_vpk_batch_to(&profiles, &root, &id, &replacement, unlocked())
+            .unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(
+            fs::read(root.join("tf/custom/mastercomfig-base.vpk")).unwrap(),
+            b"old base"
+        );
+        assert_eq!(
+            fs::read(root.join(addon.replace('/', std::path::MAIN_SEPARATOR_STR))).unwrap(),
+            b"old addon"
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, addon)).unwrap(),
+            b"old addon"
+        );
         cleanup(&dir);
     }
 }

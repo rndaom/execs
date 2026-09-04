@@ -45,7 +45,7 @@ pub const NO_ELEMENT: u32 = 0xffff_ffff;
 
 /// Floats keep their raw bits so re-encoding is byte-exact; comparisons that
 /// need numeric semantics go through `f32::from_bits`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PcfValue {
     Element(u32),
     Integer(i32),
@@ -61,13 +61,13 @@ pub enum PcfValue {
     Array(Vec<PcfValue>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PcfAttr {
     pub type_code: u8,
     pub value: PcfValue,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PcfElement {
     pub type_name_index: u16,
     pub name: Vec<u8>,
@@ -127,6 +127,55 @@ struct Reader<'a> {
     pos: usize,
 }
 
+/// Raw size is not a decoded-memory budget: a boolean is one byte on disk but
+/// occupies a full enum slot in memory, and dictionary-backed names can be
+/// referenced thousands of times. Leave headroom for the shrink passes, which
+/// build temporary maps and encoded copies after decode.
+const MAX_DECODED_BYTES: usize = 64 * 1024 * 1024;
+const MAX_STRING_BYTES: usize = 64 * 1024;
+const MAX_ELEMENTS: usize = 100_000;
+const MAX_ATTRIBUTES: usize = 250_000;
+const MAX_ARRAY_ITEMS: usize = 500_000;
+
+struct DecodeBudget {
+    used: usize,
+}
+
+impl DecodeBudget {
+    fn new() -> Self {
+        Self { used: 0 }
+    }
+
+    fn charge(&mut self, bytes: usize, what: &str) -> Result<(), PcfError> {
+        self.used = self
+            .used
+            .checked_add(bytes)
+            .ok_or_else(|| PcfError(format!("Particle {what} size overflows.")))?;
+        if self.used > MAX_DECODED_BYTES {
+            return Err(PcfError(format!(
+                "Particle decoded {what} exceeds the {} MiB memory budget.",
+                MAX_DECODED_BYTES / (1024 * 1024)
+            )));
+        }
+        Ok(())
+    }
+}
+
+fn reserve<T>(
+    values: &mut Vec<T>,
+    count: usize,
+    budget: &mut DecodeBudget,
+    what: &str,
+) -> Result<(), PcfError> {
+    let bytes = count
+        .checked_mul(std::mem::size_of::<T>())
+        .ok_or_else(|| PcfError(format!("Particle {what} allocation overflows.")))?;
+    budget.charge(bytes, what)?;
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| PcfError(format!("Not enough memory for particle {what}.")))
+}
+
 impl<'a> Reader<'a> {
     fn take(&mut self, len: usize) -> Result<&'a [u8], PcfError> {
         let end = self
@@ -155,11 +204,22 @@ impl<'a> Reader<'a> {
         Ok(i32::from_le_bytes(self.take(4)?.try_into().unwrap()))
     }
 
-    fn cstring(&mut self) -> Result<Vec<u8>, PcfError> {
+    fn cstring(&mut self, budget: &mut DecodeBudget) -> Result<Vec<u8>, PcfError> {
         let start = self.pos;
         while self.pos < self.bytes.len() {
             if self.bytes[self.pos] == 0 {
-                let out = self.bytes[start..self.pos].to_vec();
+                let len = self.pos - start;
+                if len > MAX_STRING_BYTES {
+                    return Err(PcfError(format!(
+                        "Particle string is longer than {} KiB.",
+                        MAX_STRING_BYTES / 1024
+                    )));
+                }
+                budget.charge(len, "strings")?;
+                let mut out = Vec::new();
+                out.try_reserve_exact(len)
+                    .map_err(|_| PcfError("Not enough memory for a particle string.".into()))?;
+                out.extend_from_slice(&self.bytes[start..self.pos]);
                 self.pos += 1;
                 return Ok(out);
             }
@@ -182,15 +242,26 @@ fn min_encoded_len(type_code: u8) -> usize {
     }
 }
 
-fn read_value(reader: &mut Reader<'_>, type_code: u8) -> Result<PcfValue, PcfError> {
+fn read_value(
+    reader: &mut Reader<'_>,
+    type_code: u8,
+    budget: &mut DecodeBudget,
+) -> Result<PcfValue, PcfError> {
     if (ty::ELEMENT_ARRAY..=ty::MATRIX_ARRAY).contains(&type_code) {
         let count = reader.u32()? as usize;
+        if count > MAX_ARRAY_ITEMS {
+            return Err(PcfError(format!(
+                "Particle array contains more than {MAX_ARRAY_ITEMS} values."
+            )));
+        }
         let base = type_code - ty::ARRAY_BASE_OFFSET;
         // Cap the reserve by what the remaining bytes could actually hold.
         let remaining = reader.bytes.len() - reader.pos;
-        let mut items = Vec::with_capacity(count.min(remaining / min_encoded_len(base)));
+        let capacity = count.min(remaining / min_encoded_len(base));
+        let mut items = Vec::new();
+        reserve(&mut items, capacity, budget, "array values")?;
         for _ in 0..count {
-            items.push(read_value(reader, base)?);
+            items.push(read_value(reader, base, budget)?);
         }
         return Ok(PcfValue::Array(items));
     }
@@ -199,10 +270,20 @@ fn read_value(reader: &mut Reader<'_>, type_code: u8) -> Result<PcfValue, PcfErr
         ty::INTEGER => Ok(PcfValue::Integer(reader.i32()?)),
         ty::FLOAT => Ok(PcfValue::Float(reader.u32()?)),
         ty::BOOLEAN => Ok(PcfValue::Boolean(reader.u8()? != 0)),
-        ty::STRING => Ok(PcfValue::String(reader.cstring()?)),
+        ty::STRING => Ok(PcfValue::String(reader.cstring(budget)?)),
         ty::BINARY => {
             let len = reader.u32()? as usize;
-            Ok(PcfValue::Binary(reader.take(len)?.to_vec()))
+            if len > MAX_DECODED_BYTES {
+                return Err(PcfError("Particle binary value is too large.".into()));
+            }
+            budget.charge(len, "binary values")?;
+            let slice = reader.take(len)?;
+            let mut bytes = Vec::new();
+            bytes
+                .try_reserve_exact(len)
+                .map_err(|_| PcfError("Not enough memory for particle binary data.".into()))?;
+            bytes.extend_from_slice(slice);
+            Ok(PcfValue::Binary(bytes))
         }
         ty::COLOR => Ok(PcfValue::Color(reader.take(4)?.try_into().unwrap())),
         ty::VECTOR2 => Ok(PcfValue::Vector2([reader.u32()?, reader.u32()?])),
@@ -314,7 +395,8 @@ pub fn decode_pcf(bytes: &[u8]) -> Result<PcfFile, PcfError> {
         )));
     }
     let mut reader = Reader { bytes, pos: 0 };
-    let header = reader.cstring()?;
+    let mut budget = DecodeBudget::new();
+    let header = reader.cstring(&mut budget)?;
     let header = String::from_utf8_lossy(&header);
     let header = header
         .strip_suffix('\n')
@@ -326,23 +408,38 @@ pub fn decode_pcf(bytes: &[u8]) -> Result<PcfFile, PcfError> {
         .to_string();
 
     let string_count = reader.u16()? as usize;
-    let mut string_dictionary = Vec::with_capacity(string_count);
+    let mut string_dictionary = Vec::new();
+    reserve(
+        &mut string_dictionary,
+        string_count,
+        &mut budget,
+        "string dictionary",
+    )?;
     for _ in 0..string_count {
-        string_dictionary.push(reader.cstring()?);
+        string_dictionary.push(reader.cstring(&mut budget)?);
     }
 
     let element_count = reader.u32()? as usize;
-    if element_count > bytes.len() {
+    if element_count > MAX_ELEMENTS {
+        return Err(PcfError(format!(
+            "Particle file contains more than {MAX_ELEMENTS} elements."
+        )));
+    }
+    if element_count > (bytes.len() - reader.pos) / MIN_ELEMENT_BYTES {
         return Err(PcfError("Particle file is truncated.".into()));
     }
     // Each element is at least a u16 type index, a 1-byte empty name and a
     // 16-byte signature. Reserving `element_count` slots of ~72 bytes each let
     // a 10 MB file ask for ~700 MB; cap by what the bytes could actually hold.
     const MIN_ELEMENT_BYTES: usize = 19;
-    let mut elements = Vec::with_capacity(element_count.min(bytes.len() / MIN_ELEMENT_BYTES));
+    let mut elements = Vec::new();
+    reserve(&mut elements, element_count, &mut budget, "elements")?;
     for _ in 0..element_count {
         let type_name_index = reader.u16()?;
-        let name = reader.cstring()?;
+        if type_name_index as usize >= string_dictionary.len() {
+            return Err(PcfError("Element type name index is out of range.".into()));
+        }
+        let name = reader.cstring(&mut budget)?;
         let signature: [u8; 16] = reader.take(16)?.try_into().unwrap();
         elements.push(PcfElement {
             type_name_index,
@@ -352,29 +449,84 @@ pub fn decode_pcf(bytes: &[u8]) -> Result<PcfFile, PcfError> {
         });
     }
 
+    // Different dictionary slots may contain identical strings. Collapse those
+    // slots once so duplicate attribute semantics stay byte-name based without
+    // a linear scan through all attributes for every insertion.
+    let mut first_name: HashMap<&[u8], usize> = HashMap::new();
+    budget.charge(
+        string_dictionary
+            .len()
+            .checked_mul(std::mem::size_of::<(&[u8], usize)>())
+            .ok_or_else(|| PcfError("Particle dictionary lookup size overflows.".into()))?,
+        "dictionary lookup",
+    )?;
+    first_name
+        .try_reserve(string_dictionary.len())
+        .map_err(|_| PcfError("Not enough memory for particle dictionary lookup.".into()))?;
+    let mut canonical_names = Vec::new();
+    reserve(
+        &mut canonical_names,
+        string_dictionary.len(),
+        &mut budget,
+        "dictionary index",
+    )?;
+    for (index, name) in string_dictionary.iter().enumerate() {
+        let canonical = *first_name.entry(name.as_slice()).or_insert(index);
+        canonical_names.push(canonical);
+    }
+
+    let mut total_attributes = 0usize;
     for element in &mut elements {
         let attr_count = reader.u32()? as usize;
+        total_attributes = total_attributes
+            .checked_add(attr_count)
+            .ok_or_else(|| PcfError("Particle attribute count overflows.".into()))?;
+        if total_attributes > MAX_ATTRIBUTES {
+            return Err(PcfError(format!(
+                "Particle file contains more than {MAX_ATTRIBUTES} attributes."
+            )));
+        }
+        // Every attribute needs at least a u16 name, u8 type and one-byte
+        // boolean/string value. Reject impossible counts before reserving.
+        if attr_count > (bytes.len() - reader.pos) / 4 {
+            return Err(PcfError("Particle file is truncated.".into()));
+        }
+        reserve(
+            &mut element.attributes,
+            attr_count,
+            &mut budget,
+            "attributes",
+        )?;
+        budget.charge(
+            attr_count
+                .checked_mul(std::mem::size_of::<(usize, usize)>())
+                .ok_or_else(|| PcfError("Particle attribute index size overflows.".into()))?,
+            "attribute index",
+        )?;
+        let mut positions: HashMap<usize, usize> = HashMap::new();
+        positions
+            .try_reserve(attr_count)
+            .map_err(|_| PcfError("Not enough memory for particle attribute index.".into()))?;
         for _ in 0..attr_count {
             let name_index = reader.u16()? as usize;
             let name = string_dictionary
                 .get(name_index)
-                .ok_or_else(|| PcfError("Attribute name index is out of range.".into()))?
-                .clone();
+                .ok_or_else(|| PcfError("Attribute name index is out of range.".into()))?;
             let type_code = reader.u8()?;
-            let value = read_value(&mut reader, type_code)?;
+            let value = read_value(&mut reader, type_code, &mut budget)?;
             let attr = PcfAttr { type_code, value };
             // Duplicate names replace in place, keeping first position.
-            if let Some(slot) = element
-                .attributes
-                .iter_mut()
-                .find(|(existing, _)| *existing == name)
-            {
-                slot.1 = attr;
+            let canonical = canonical_names[name_index];
+            if let Some(position) = positions.get(&canonical).copied() {
+                element.attributes[position].1 = attr;
             } else {
-                element.attributes.push((name, attr));
+                budget.charge(name.len(), "attribute names")?;
+                element.attributes.push((name.clone(), attr));
+                positions.insert(canonical, element.attributes.len() - 1);
             }
         }
     }
+    drop(first_name);
 
     Ok(PcfFile {
         version,
@@ -565,13 +717,15 @@ fn cleanup_pass(pcf: &mut PcfFile) {
         .filter(|index| pcf.type_name(&pcf.elements[*index]) == TYPE_SYSTEM)
         .collect();
     let mut system_indices: HashMap<Vec<u8>, u32> = HashMap::new();
-    for &index in &system_positions {
-        let first_equal = system_positions
-            .iter()
-            .copied()
-            .find(|&candidate| pcf.elements[candidate] == pcf.elements[index])
-            .unwrap_or(index);
-        system_indices.insert(pcf.elements[index].name.clone(), first_equal as u32);
+    {
+        // Hash the complete structural value once. This preserves list.index()
+        // semantics (the first equal definition wins) without O(n^2) equality
+        // scans over attacker-controlled system definitions.
+        let mut first_equal: HashMap<&PcfElement, usize> = HashMap::new();
+        for &index in &system_positions {
+            let first = *first_equal.entry(&pcf.elements[index]).or_insert(index);
+            system_indices.insert(pcf.elements[index].name.clone(), first as u32);
+        }
     }
 
     for index in 0..pcf.elements.len() {
@@ -716,9 +870,9 @@ fn canonical_attr_key(element: &PcfElement) -> Vec<u8> {
 /// with more than one collected reference count as duplicates.
 fn find_duplicate_array_elements(pcf: &PcfFile) -> Vec<Vec<u32>> {
     let excluded: [&[u8]; 3] = [b"DmeElement", b"DmElement", TYPE_SYSTEM];
-    let mut group_order: Vec<Vec<u8>> = Vec::new();
-    let mut groups: HashMap<Vec<u8>, Vec<u32>> = HashMap::new();
-    let mut key_cache: HashMap<u32, Vec<u8>> = HashMap::new();
+    let mut groups: Vec<Vec<u32>> = Vec::new();
+    let mut groups_by_key: HashMap<Vec<u8>, usize> = HashMap::new();
+    let mut group_by_element: HashMap<u32, usize> = HashMap::new();
 
     for element in &pcf.elements {
         for (_, attr) in &element.attributes {
@@ -739,24 +893,30 @@ fn find_duplicate_array_elements(pcf: &PcfFile) -> Vec<Vec<u32>> {
                 if excluded.contains(&pcf.type_name(referenced)) {
                     continue;
                 }
-                let key = key_cache
-                    .entry(*index)
-                    .or_insert_with(|| canonical_attr_key(referenced))
-                    .clone();
-                let group = groups.entry(key.clone()).or_insert_with(|| {
-                    group_order.push(key);
-                    Vec::new()
-                });
-                group.push(*index);
+                let group_index = if let Some(group) = group_by_element.get(index).copied() {
+                    group
+                } else {
+                    let key = canonical_attr_key(referenced);
+                    let group = if let Some(group) = groups_by_key.get(key.as_slice()).copied() {
+                        group
+                    } else {
+                        let group = groups.len();
+                        groups.push(Vec::new());
+                        groups_by_key.insert(key, group);
+                        group
+                    };
+                    // Cache the group by element index too. Repeating one
+                    // reference then stays O(1), even when its canonical key
+                    // includes a large binary value.
+                    group_by_element.insert(*index, group);
+                    group
+                };
+                groups[group_index].push(*index);
             }
         }
     }
 
-    group_order
-        .into_iter()
-        .filter_map(|key| groups.remove(&key))
-        .filter(|group| group.len() > 1)
-        .collect()
+    groups.into_iter().filter(|group| group.len() > 1).collect()
 }
 
 fn unique_preserve_order(indices: &[u32]) -> Vec<u32> {
@@ -1211,9 +1371,8 @@ mod tests {
         assert!(err.0.contains("limit"), "{}", err.0);
     }
 
-    /// An array's count is the file's claim; the reserve is bounded by what
-    /// the remaining bytes could hold of that item type, and a claim past the
-    /// bytes fails on the read rather than on the allocation.
+    /// An array's count is the file's claim; an absurd absolute count is
+    /// rejected before either reserving decoded enums or walking the body.
     #[test]
     fn a_crafted_array_count_reserves_no_more_than_the_bytes_could_hold() {
         let mut bytes = PCF_HEADERS[1].as_bytes().to_vec();
@@ -1230,9 +1389,111 @@ mod tests {
         bytes.extend(&u32::MAX.to_le_bytes());
         bytes.extend(&[1u8; 8]);
         let err = decode_pcf(&bytes).unwrap_err();
-        assert!(err.0.contains("truncated"), "{}", err.0);
+        assert!(err.0.contains("array"), "{}", err.0);
         assert_eq!(min_encoded_len(ty::BOOLEAN), 1);
         assert_eq!(min_encoded_len(ty::MATRIX), 64);
+    }
+
+    fn pcf_prefix(dictionary: &[Vec<u8>], element_count: u32) -> Vec<u8> {
+        let mut bytes = PCF_HEADERS[1].as_bytes().to_vec();
+        bytes.extend(b"\n\0");
+        bytes.extend(&(dictionary.len() as u16).to_le_bytes());
+        for value in dictionary {
+            bytes.extend(value);
+            bytes.push(0);
+        }
+        bytes.extend(&element_count.to_le_bytes());
+        bytes
+    }
+
+    #[test]
+    fn oversized_dictionary_string_is_rejected_before_reference_amplification() {
+        let huge = vec![b'x'; MAX_STRING_BYTES + 1];
+        let bytes = pcf_prefix(&[huge], 0);
+        let err = decode_pcf(&bytes).unwrap_err();
+        assert!(err.0.contains("string"), "{}", err.0);
+    }
+
+    #[test]
+    fn total_attribute_count_has_an_absolute_budget() {
+        let mut bytes = pcf_prefix(&[b"DmeElement".to_vec()], 1);
+        bytes.extend(&0u16.to_le_bytes());
+        bytes.push(0);
+        bytes.extend(&[0; 16]);
+        bytes.extend(&((MAX_ATTRIBUTES as u32) + 1).to_le_bytes());
+        let err = decode_pcf(&bytes).unwrap_err();
+        assert!(err.0.contains("attributes"), "{}", err.0);
+    }
+
+    #[test]
+    fn array_item_count_is_rejected_before_reserving_decoded_enums() {
+        let mut bytes = pcf_prefix(&[b"DmeElement".to_vec(), b"values".to_vec()], 1);
+        bytes.extend(&0u16.to_le_bytes());
+        bytes.push(0);
+        bytes.extend(&[0; 16]);
+        bytes.extend(&1u32.to_le_bytes());
+        bytes.extend(&1u16.to_le_bytes());
+        bytes.push(ty::BOOLEAN + ty::ARRAY_BASE_OFFSET);
+        bytes.extend(&((MAX_ARRAY_ITEMS as u32) + 1).to_le_bytes());
+        let err = decode_pcf(&bytes).unwrap_err();
+        assert!(err.0.contains("array"), "{}", err.0);
+    }
+
+    #[test]
+    fn many_distinct_attributes_decode_without_quadratic_name_scans() {
+        const COUNT: usize = 4_000;
+        let mut dictionary = vec![b"DmeElement".to_vec()];
+        dictionary.extend((0..COUNT).map(|index| format!("a{index}").into_bytes()));
+        let mut bytes = pcf_prefix(&dictionary, 1);
+        bytes.extend(&0u16.to_le_bytes());
+        bytes.push(0);
+        bytes.extend(&[0; 16]);
+        bytes.extend(&(COUNT as u32).to_le_bytes());
+        for index in 0..COUNT {
+            bytes.extend(&((index + 1) as u16).to_le_bytes());
+            bytes.push(ty::BOOLEAN);
+            bytes.push(1);
+        }
+        let decoded = decode_pcf(&bytes).unwrap();
+        assert_eq!(decoded.elements[0].attributes.len(), COUNT);
+    }
+
+    #[test]
+    fn repeated_references_to_one_large_element_reuse_its_canonical_group() {
+        const REFERENCES: usize = 100_000;
+        let file = PcfFile {
+            version: PCF_HEADERS[1].to_string(),
+            string_dictionary: dict(&["DmeElement", "DmeParticleOperator"]),
+            elements: vec![
+                PcfElement {
+                    type_name_index: 0,
+                    name: b"root".to_vec(),
+                    signature: [0; 16],
+                    attributes: vec![(
+                        b"operators".to_vec(),
+                        PcfAttr {
+                            type_code: ty::ELEMENT_ARRAY,
+                            value: PcfValue::Array(vec![PcfValue::Element(1); REFERENCES]),
+                        },
+                    )],
+                },
+                PcfElement {
+                    type_name_index: 1,
+                    name: b"operator".to_vec(),
+                    signature: [1; 16],
+                    attributes: vec![(
+                        b"large".to_vec(),
+                        PcfAttr {
+                            type_code: ty::BINARY,
+                            value: PcfValue::Binary(vec![7; MAX_STRING_BYTES]),
+                        },
+                    )],
+                },
+            ],
+        };
+        let groups = find_duplicate_array_elements(&file);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].len(), REFERENCES);
     }
 
     /// Dictionary indices are u16 on the wire. `index as u16` truncated

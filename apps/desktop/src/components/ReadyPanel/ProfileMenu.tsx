@@ -18,6 +18,7 @@ export function ProfileMenu({
   draftName,
   running,
   controlsBusy,
+  recoveryTargetId,
   onDraftName,
   onSave,
   onSwitch,
@@ -30,6 +31,7 @@ export function ProfileMenu({
   draftName: string;
   running: boolean;
   controlsBusy: boolean;
+  recoveryTargetId: string | null;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onSwitch: (id: string) => void;
@@ -71,9 +73,14 @@ export function ProfileMenu({
     };
   }, []);
 
-  const canSave = library ? canSaveCurrent(library, running, draftName) && !controlsBusy : false;
+  const recoveryPending = recoveryTargetId !== null;
+  const canSave = library
+    ? canSaveCurrent(library, running, draftName) && !controlsBusy && !recoveryPending
+    : false;
   const showExport = library ? canExportProfile(library, running) : false;
-  const canImport = library ? canImportProfile(library, running) && !controlsBusy : false;
+  const canImport = library
+    ? canImportProfile(library, running) && !controlsBusy && !recoveryPending
+    : false;
   const showCreate = library ? canCreateNew(library) : false;
   const activeProfile = library?.profiles.find((profile) => profile.id === library.activeProfileId);
 
@@ -110,7 +117,7 @@ export function ProfileMenu({
               type="button"
               data-testid="create-new"
               onClick={onCreateNew}
-              disabled={controlsBusy || running}
+              disabled={controlsBusy || running || recoveryPending}
               title={running ? "Close TF2 to create a profile." : undefined}
               className="btn btn-primary"
             >
@@ -129,7 +136,11 @@ export function ProfileMenu({
           <ul className="mt-2 max-h-52 overflow-y-auto">
             {library.profiles.map((profile) => {
               const active = library.activeProfileId === profile.id;
-              const canSwitch = !active && !running && !controlsBusy;
+              const canSwitch =
+                !active &&
+                !running &&
+                !controlsBusy &&
+                (!recoveryPending || profile.id === recoveryTargetId);
               return (
                 <li
                   key={profile.id}
@@ -161,7 +172,7 @@ export function ProfileMenu({
                       title={`Export ${profile.name}`}
                       aria-label={`Export ${profile.name}`}
                       onClick={() => onExport(profile.id)}
-                      disabled={controlsBusy}
+                      disabled={controlsBusy || recoveryPending}
                       className="rounded-md p-1.5 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
                     >
                       <DownloadSimple size={16} />
@@ -189,7 +200,7 @@ export function ProfileMenu({
               value={draftName}
               onChange={(event) => onDraftName(event.target.value)}
               placeholder="Save current as…"
-              disabled={controlsBusy}
+              disabled={controlsBusy || recoveryPending}
               className="field min-w-0 flex-1 px-3 py-2 text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
             />
             <button type="submit" disabled={!canSave} className="btn btn-ghost">
@@ -212,7 +223,7 @@ export function ProfileMenu({
           <button
             type="button"
             onClick={onChangeInstall}
-            disabled={controlsBusy}
+            disabled={controlsBusy || recoveryPending}
             className="btn btn-ghost"
           >
             <FolderOpen size={15} />

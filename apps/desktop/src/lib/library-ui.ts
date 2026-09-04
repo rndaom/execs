@@ -16,6 +16,12 @@ export function libraryStatusCopy(library: ProfileLibrary): string {
   if (library.rootMismatch) {
     return "Profiles belong to another TF2 install.";
   }
+  if (library.pendingSwitchProfileId) {
+    const target = library.profiles.find(
+      (profile) => profile.id === library.pendingSwitchProfileId,
+    );
+    return `Switch to ${target?.name ?? "the pending profile"} to finish recovery.`;
+  }
   if (library.profiles.length === 0) {
     return "No profiles yet";
   }

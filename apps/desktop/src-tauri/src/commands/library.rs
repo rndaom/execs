@@ -4,12 +4,28 @@ use execs_core::{ProfileError, ProfileLibrary, SwitchProgress};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{blocking, with_root};
+use super::shared::{blocking, with_root, RootContext};
 use crate::error::CommandError;
 use crate::WriteGate;
 
+fn refuse_different_pending_target(
+    pending: Option<&str>,
+    requested: &str,
+) -> Result<(), CommandError> {
+    if pending.is_some_and(|pending| pending != requested) {
+        return Err(CommandError::new(
+            "RecoveryRequired",
+            "Re-apply the pending profile before switching to another one.",
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
-pub async fn get_profile_library() -> Result<ProfileLibrary, CommandError> {
+pub async fn get_profile_library(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_library_read().await?;
     blocking(|| {
         let confirmed = execs_core::remembered_tf2_root();
         Ok(execs_core::load_library(confirmed.as_deref())?)
@@ -21,7 +37,7 @@ pub async fn get_profile_library() -> Result<ProfileLibrary, CommandError> {
 pub async fn init_profile_library(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<ProfileLibrary, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_root(|root| Ok(execs_core::init_library(&root)?)).await
 }
 
@@ -30,7 +46,7 @@ pub async fn save_current_as(
     gate: tauri::State<'_, WriteGate>,
     name: String,
 ) -> Result<ProfileLibrary, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_root(move |root| Ok(execs_core::save_current_as(&root, &name)?)).await
 }
 
@@ -40,8 +56,12 @@ pub async fn switch_profile(
     app: AppHandle,
     id: String,
 ) -> Result<ProfileLibrary, CommandError> {
-    let _guard = gate.0.lock().await;
+    // This is the sole writer allowed through a durable pending-switch state:
+    // re-applying its recorded target is what completes recovery.
+    let _guard = gate.lock_for_switch().await?;
     with_root(move |root| {
+        let library = execs_core::load_library(Some(&root))?;
+        refuse_different_pending_target(library.pending_switch_profile_id.as_deref(), &id)?;
         Ok(execs_core::switch_profile_with_progress(
             &root,
             &id,
@@ -51,6 +71,19 @@ pub async fn switch_profile(
         )?)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::refuse_different_pending_target;
+
+    #[test]
+    fn only_the_recorded_profile_can_retry_an_interrupted_switch() {
+        assert!(refuse_different_pending_target(None, "next").is_ok());
+        assert!(refuse_different_pending_target(Some("next"), "next").is_ok());
+        let error = refuse_different_pending_target(Some("pending"), "other").unwrap_err();
+        assert_eq!(error.code, "RecoveryRequired");
+    }
 }
 
 /// Zip a profile to a path the user picks. The gate is taken once the save
@@ -63,7 +96,7 @@ pub async fn export_profile(
     id: String,
 ) -> Result<Option<String>, CommandError> {
     let for_name = id.clone();
-    let suggested = with_root(move |root| {
+    let (context, suggested) = with_root(move |root| {
         let library = execs_core::load_library(Some(&root))?;
         let name = library
             .profiles
@@ -71,7 +104,10 @@ pub async fn export_profile(
             .find(|profile| profile.id == for_name)
             .map(|profile| profile.name.clone())
             .ok_or(ProfileError::UnknownProfile)?;
-        Ok(execs_core::safe_zip_file_name(&name))
+        Ok((
+            RootContext::capture(&root),
+            execs_core::safe_zip_file_name(&name),
+        ))
     })
     .await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
@@ -93,10 +129,11 @@ pub async fn export_profile(
     if path.extension().is_none() {
         path.set_extension("zip");
     }
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     // Zipping a whole profile (all of tf/custom/) does not belong on the
     // async runtime's worker thread.
     with_root(move |root| {
+        context.ensure_current(&root)?;
         execs_core::export_profile(&root, &id, &path)?;
         Ok(Some(path.to_string_lossy().into_owned()))
     })
@@ -108,6 +145,7 @@ pub async fn import_profile(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
 ) -> Result<ProfileLibrary, CommandError> {
+    let context = with_root(|root| Ok(RootContext::capture(&root))).await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -119,12 +157,16 @@ pub async fn import_profile(
     .map_err(|err| CommandError::unknown(err.to_string()))?;
     // Take the gate only once the user has actually picked something: an open
     // dialog must not block the absorb path behind it.
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     let Some(picked) = picked else {
         return with_root(|root| Ok(execs_core::load_library(Some(&root))?)).await;
     };
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
-    with_root(move |root| Ok(execs_core::import_profile(&root, &path)?)).await
+    with_root(move |root| {
+        context.ensure_current(&root)?;
+        Ok(execs_core::import_profile(&root, &path)?)
+    })
+    .await
 }

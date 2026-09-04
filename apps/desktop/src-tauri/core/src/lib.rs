@@ -65,10 +65,11 @@ pub use hitsound::{
 pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
     extract_hud_archive, extract_hud_zip, hud_id_from_name, hud_tree_from_dir, hud_ui_state,
-    hud_zip_url, install_hud_pack, load_catalog_cache_from, load_hud_tree_from_profile,
-    match_hud_catalog, resolve_hud, save_catalog_cache_to, schema_file_name, schema_supported,
-    sync_hud_exec_lines, sync_hud_exec_lines_to, HudCatalogCache, HudCatalogEntry, HudInstallKind,
-    HudStatus, HudTree, HudUiState, SUPPORTED_SCHEMA_HUDS,
+    hud_zip_url, install_hud_pack, install_hud_pack_with_cfgs, load_catalog_cache_from,
+    load_hud_tree_from_profile, match_hud_catalog, resolve_hud, save_catalog_cache_to,
+    schema_file_name, schema_supported, sync_hud_exec_lines, sync_hud_exec_lines_to,
+    HudCatalogCache, HudCatalogEntry, HudInstallKind, HudStatus, HudTree, HudUiState,
+    SUPPORTED_SCHEMA_HUDS,
 };
 pub use hud_apply::{
     apply_hud_options, apply_hud_options_for_layer, hud_cfg_path, hud_cfg_stem, parse_hud_schema,
@@ -80,16 +81,17 @@ pub use launch::{
 };
 pub use mods::{
     install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,
-    mod_id_from_name, profile_particle_sources, remove_mod, ModContent, ModRecord, ModSource,
-    ParticleSource,
+    mod_id_from_name, profile_particle_sources, remove_mod, ModBatchBudget, ModContent, ModRecord,
+    ModSource, ParticleSource,
 };
 pub use process_lock::{
     is_tf2_running, os_description, refuse_if_running, refuse_if_running_among, write_lock_status,
     WriteLock, WriteLockError,
 };
 pub use profile::{
-    init_library, load_library, load_manifest, profiles_dir, save_current_as, CrosshairRecord,
-    HudRecord, HudSource, ProfileError, ProfileFile, ProfileLibrary, ProfileSummary,
+    init_library, load_library, load_manifest, profile_mutation_status_to, profiles_dir,
+    recover_all_profile_mutations_to, save_current_as, CrosshairRecord, HudRecord, HudSource,
+    ProfileError, ProfileFile, ProfileLibrary, ProfileMutationRecoveryState, ProfileSummary,
     ViewmodelRecord, ViewmodelSource,
 };
 pub use settings::{

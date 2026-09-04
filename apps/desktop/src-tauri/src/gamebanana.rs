@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::net::{self, MIB};
+use crate::net::{self, RemoteSource, MIB};
 
 pub const TF2_GAME_ID: u64 = 297;
 
@@ -24,6 +24,8 @@ const PAGE_SIZE: u32 = 20;
 
 const LIST_TTL: Duration = Duration::from_secs(10 * 60);
 const CATEGORY_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const CACHE_MAX_ENTRIES: usize = 128;
+const CACHE_MAX_BYTES: usize = 16 * MIB as usize;
 
 /// A mod archive ceiling matching the one core enforces on a pack.
 pub const MOD_MAX_BYTES: u64 = 512 * MIB;
@@ -342,18 +344,34 @@ fn record_to_mod(record: &RawRecord) -> GameBananaMod {
         updated_at: record.updated.unwrap_or(record.modified),
         added_at: record.added,
         thumb: record.preview.as_ref().and_then(thumb_url),
-        url: if record.profile_url.is_empty() {
-            format!("https://gamebanana.com/mods/{}", record.id)
-        } else {
-            record.profile_url.clone()
-        },
+        url: validated_mod_page(&record.profile_url, record.id)
+            .unwrap_or_else(|| format!("https://gamebanana.com/mods/{}", record.id)),
         mature: record.has_content_ratings,
     }
 }
 
 /// `https://gamebanana.com/mods/cats/7951` → `7951`.
 fn category_id_from_url(url: &str) -> Option<u64> {
-    url.trim_end_matches('/').rsplit('/').next()?.parse().ok()
+    let parsed = reqwest::Url::parse(url.trim()).ok()?;
+    if parsed.scheme() != "https"
+        || !matches!(
+            parsed.host_str(),
+            Some("gamebanana.com" | "www.gamebanana.com")
+        )
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return None;
+    }
+    let parts: Vec<_> = parsed
+        .path_segments()?
+        .filter(|part| !part.is_empty())
+        .collect();
+    match parts.as_slice() {
+        ["mods", "cats", id] => id.parse().ok(),
+        _ => None,
+    }
 }
 
 fn thumb_url(preview: &PreviewMedia) -> Option<String> {
@@ -369,7 +387,44 @@ fn thumb_url(preview: &PreviewMedia) -> Option<String> {
     if file.is_empty() {
         return None;
     }
-    Some(format!("{}/{file}", image.base_url.trim_end_matches('/')))
+    if file.contains(['\\', '\0']) {
+        return None;
+    }
+    let url = reqwest::Url::parse(&format!(
+        "{}/{}",
+        image.base_url.trim_end_matches('/'),
+        file.trim_start_matches('/')
+    ))
+    .ok()?;
+    (url.scheme() == "https"
+        && url.host_str() == Some("images.gamebanana.com")
+        && url.port().is_none()
+        && url.username().is_empty()
+        && url.password().is_none())
+    .then(|| url.to_string())
+}
+
+fn validated_mod_page(candidate: &str, expected_id: u64) -> Option<String> {
+    let parsed = reqwest::Url::parse(candidate.trim()).ok()?;
+    if parsed.scheme() != "https"
+        || !matches!(
+            parsed.host_str(),
+            Some("gamebanana.com" | "www.gamebanana.com")
+        )
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return None;
+    }
+    let mut segments = parsed.path_segments()?;
+    if segments.next()? != "mods" || segments.next()?.parse::<u64>().ok()? != expected_id {
+        return None;
+    }
+    if segments.any(|part| !part.is_empty()) {
+        return None;
+    }
+    Some(parsed.to_string())
 }
 
 /// TF2's root categories, minus the ones that are not a `tf/custom` pack this
@@ -412,20 +467,20 @@ pub fn is_excluded_category(name: &str) -> bool {
 /// rather than trusting a name passed across the bridge.
 pub fn mod_profile(id: u64) -> Result<GameBananaProfile, String> {
     let url = format!("{API}/Mod/{id}/ProfilePage");
-    let page: ProfilePage = net::get_json(&net::api_client()?, &url)
-        .map_err(|err| format!("Could not read that GameBanana mod ({err})"))?;
-    let id = if page.id == 0 { id } else { page.id };
+    let page: ProfilePage =
+        net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
+            .map_err(|err| format!("Could not read that GameBanana mod ({err})"))?;
+    if page.id != 0 && page.id != id {
+        return Err("GameBanana returned a different mod than the one requested.".into());
+    }
     Ok(GameBananaProfile {
         name: if page.name.is_empty() {
             format!("GameBanana mod {id}")
         } else {
             page.name
         },
-        url: if page.profile_url.is_empty() {
-            format!("https://gamebanana.com/mods/{id}")
-        } else {
-            page.profile_url
-        },
+        url: validated_mod_page(&page.profile_url, id)
+            .unwrap_or_else(|| format!("https://gamebanana.com/mods/{id}")),
         id,
     })
 }
@@ -465,15 +520,32 @@ const VPK_MAGIC: [u8; 4] = [0x34, 0x12, 0xAA, 0x55];
 
 /// `https://gamebanana.com/mods/461758` → `461758`.
 pub fn mod_id_from_url(url: &str) -> Option<u64> {
-    let rest = url.trim().trim_end_matches('/').rsplit("/mods/").next()?;
-    rest.split(['/', '?', '#']).next()?.parse().ok()
+    let parsed = reqwest::Url::parse(url.trim()).ok()?;
+    if parsed.scheme() != "https"
+        || !matches!(
+            parsed.host_str(),
+            Some("gamebanana.com" | "www.gamebanana.com")
+        )
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return None;
+    }
+    let mut segments = parsed.path_segments()?;
+    if segments.next()? != "mods" {
+        return None;
+    }
+    let id = segments.next()?.parse().ok()?;
+    (!segments.any(|part| !part.is_empty())).then_some(id)
 }
 
 /// The newest file on a mod's download page that this app can unpack.
 pub fn download_url(id: u64) -> Result<DownloadPick, String> {
     let url = format!("{API}/Mod/{id}/DownloadPage");
-    let page: DownloadPage = net::get_json(&net::api_client()?, &url)
-        .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
+    let page: DownloadPage =
+        net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
+            .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
     pick_file(page.files)
 }
 
@@ -488,7 +560,15 @@ pub fn download_url_for_page(page_url: &str) -> Result<String, String> {
 /// is only chosen when nothing else exists, and is refused with its own message
 /// at extraction.
 pub fn pick_file(mut files: Vec<DownloadFile>) -> Result<DownloadPick, String> {
-    files.retain(|file| !file.download_url.is_empty());
+    files = files
+        .into_iter()
+        .filter_map(|mut file| {
+            let validated =
+                net::validate_url_for(&file.download_url, RemoteSource::GameBananaDownload).ok()?;
+            file.download_url = validated.to_string();
+            Some(file)
+        })
+        .collect();
     files.sort_by_key(|file| std::cmp::Reverse(file.added));
     let unpackable = |name: &str| {
         let lower = name.to_ascii_lowercase();
@@ -534,23 +614,38 @@ fn fetch_json<T: serde::de::DeserializeOwned>(url: &str, ttl: Duration) -> Resul
             return Ok(parsed);
         }
     }
-    let body = net::get_text(&net::api_client()?, url)
+    let body = net::get_text_for(&net::api_client()?, url, RemoteSource::GameBananaApi)
         .map_err(|err| format!("Could not read GameBanana ({err})"))?;
     let parsed = serde_json::from_str(&body)
         .map_err(|err| format!("GameBanana returned something unexpected ({err})"))?;
     if let Ok(mut map) = cache().lock() {
-        // The map is keyed by URL and only ever holds list pages; a session that
-        // browses for hours would otherwise grow it without bound.
-        if map.len() > 128 {
-            map.clear();
+        // Keep both entry count and owned string bytes bounded. Evicting the
+        // oldest entry preserves recent back/forward navigation without a
+        // single oversized page or a long session retaining arbitrary memory.
+        while !map.is_empty()
+            && (map.len() >= CACHE_MAX_ENTRIES
+                || map.values().map(|entry| entry.body.len()).sum::<usize>() + body.len()
+                    > CACHE_MAX_BYTES)
+        {
+            if let Some(oldest) = map
+                .iter()
+                .min_by_key(|(_, entry)| entry.fetched)
+                .map(|(key, _)| key.clone())
+            {
+                map.remove(&oldest);
+            } else {
+                break;
+            }
         }
-        map.insert(
-            url.to_string(),
-            CacheEntry {
-                fetched: Instant::now(),
-                body,
-            },
-        );
+        if body.len() <= CACHE_MAX_BYTES {
+            map.insert(
+                url.to_string(),
+                CacheEntry {
+                    fetched: Instant::now(),
+                    body,
+                },
+            );
+        }
     }
     Ok(parsed)
 }
@@ -668,6 +763,11 @@ mod tests {
             Some(461758)
         );
         assert_eq!(mod_id_from_url("https://gamebanana.com/guis/25711"), None);
+        assert_eq!(mod_id_from_url("http://gamebanana.com/mods/461758"), None);
+        assert_eq!(
+            mod_id_from_url("https://gamebanana.com.evil.test/mods/461758"),
+            None
+        );
 
         let files = vec![
             DownloadFile {
@@ -705,6 +805,39 @@ mod tests {
         assert_eq!(pick.url, "https://gamebanana.com/dl/9");
         assert_eq!(pick.file_name, "x.rar");
         assert!(pick_file(Vec::new()).is_err());
+
+        let hostile = vec![DownloadFile {
+            file: "looks-safe.zip".into(),
+            download_url: "https://127.0.0.1/private.zip".into(),
+            added: 100,
+        }];
+        assert!(pick_file(hostile).is_err());
+    }
+
+    #[test]
+    fn untrusted_profile_and_thumbnail_metadata_is_not_exposed_to_the_ui() {
+        assert!(validated_mod_page("https://gamebanana.com/mods/7", 7).is_some());
+        assert!(validated_mod_page("https://gamebanana.com.evil.test/mods/7", 7).is_none());
+        assert!(validated_mod_page("http://gamebanana.com/mods/7", 7).is_none());
+        assert!(validated_mod_page("https://gamebanana.com/mods/8", 7).is_none());
+        assert_eq!(
+            category_id_from_url("https://gamebanana.com/mods/cats/7951"),
+            Some(7951)
+        );
+        assert_eq!(
+            category_id_from_url("https://gamebanana.com.evil.test/mods/cats/7951"),
+            None
+        );
+
+        let hostile = PreviewMedia {
+            images: vec![PreviewImage {
+                base_url: "https://evil.test/images".into(),
+                file: "x.jpg".into(),
+                file220: None,
+                file100: None,
+            }],
+        };
+        assert_eq!(thumb_url(&hostile), None);
     }
 
     #[test]

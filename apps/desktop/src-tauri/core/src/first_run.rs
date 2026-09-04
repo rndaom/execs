@@ -3,6 +3,7 @@
 //! Read-only. Never writes the game folder or the profile library.
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -10,9 +11,13 @@ use serde::{Deserialize, Serialize};
 use crate::cfg_script::gameplay_script_signature;
 use crate::launch::find_cloud_config;
 use crate::profile::ProfileError;
-use crate::surface::inventory_live_surface_with;
+use crate::surface::{inventory_live_surface_with, is_inventory_limit_error};
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
+/// Classification only needs to decide whether setup is pristine. A real TF2
+/// config is far smaller; anything beyond this is conservatively treated as
+/// existing customization instead of being loaded and amplified at startup.
+const MAX_CONFIG_COMPARE_BYTES: usize = 1024 * 1024;
 #[cfg(test)]
 const CONFIG_DEFAULT: &str = "tf/cfg/config_default.cfg";
 
@@ -39,12 +44,23 @@ pub fn classify_first_run_with(
     tf2_root: &Path,
     cloud_config: Option<&Path>,
 ) -> Result<FirstRunClass, ProfileError> {
-    let inventory = inventory_live_surface_with(tf2_root, cloud_config)?;
+    let inventory = match inventory_live_surface_with(tf2_root, cloud_config) {
+        Ok(inventory) => inventory,
+        Err(error) if is_inventory_limit_error(&error) => {
+            return Ok(FirstRunClass {
+                kind: FirstRunKind::Existing,
+                reasons: vec!["Could not safely inspect all existing customization".into()],
+            });
+        }
+        Err(error) => return Err(error),
+    };
     let mut reasons = Vec::new();
     let mut saw_custom = false;
     let mut saw_comfig = false;
     let mut saw_overrides = false;
     let mut saw_migrated = false;
+    let mut cfg_count = 0usize;
+    let mut first_cfg_name = None;
     let mut config_source = None;
 
     for entry in &inventory.entries {
@@ -67,8 +83,18 @@ pub fn classify_first_run_with(
             saw_migrated = true;
         }
         if dest.starts_with("tf/cfg/") {
-            push_unique(&mut reasons, format!("Found {}", file_name(dest)));
+            cfg_count = cfg_count.saturating_add(1);
+            first_cfg_name.get_or_insert_with(|| file_name(dest).to_string());
         }
+    }
+
+    if cfg_count == 1 {
+        push_unique(
+            &mut reasons,
+            format!("Found {}", first_cfg_name.unwrap_or_default()),
+        );
+    } else if cfg_count > 1 {
+        push_unique(&mut reasons, format!("Found {cfg_count} user config files"));
     }
 
     if saw_overrides {
@@ -99,27 +125,43 @@ pub fn classify_first_run_with(
 }
 
 fn config_cfg_reason(tf2_root: &Path, source: &Path) -> Result<Option<String>, ProfileError> {
-    // Only a bind signature is needed, and the engine happily writes non-UTF-8
-    // bytes into config.cfg (a Latin-1 `name`, say). Reading strictly here used
-    // to dead-end the entire first-run screen.
-    let live = read_lossy(source)?;
+    // The engine happily writes non-UTF-8 bytes into config.cfg (a Latin-1
+    // `name`, say). Reading strictly here used to dead-end the entire first-run
+    // screen, so compare a lossy command stream but preserve every command and
+    // its execution order.
+    let Some(live) = read_lossy_bounded(source) else {
+        return Ok(Some(
+            "Could not compare config.cfg to Valve defaults".into(),
+        ));
+    };
     let default_path = tf2_root.join("tf").join("cfg").join("config_default.cfg");
     if !default_path.is_file() {
         return Ok(Some(
             "Could not compare config.cfg to Valve defaults".into(),
         ));
     }
-    let default = read_lossy(&default_path)?;
-    if gameplay_script_signature(&live) == gameplay_script_signature(&default) {
+    let Some(default) = read_lossy_bounded(&default_path) else {
+        return Ok(Some(
+            "Could not compare config.cfg to Valve defaults".into(),
+        ));
+    };
+    if gameplay_script_signature(&live).eq(gameplay_script_signature(&default)) {
         Ok(None)
     } else {
-        Ok(Some("Binds differ from Valve defaults".into()))
+        Ok(Some("config.cfg differs from Valve defaults".into()))
     }
 }
 
-fn read_lossy(path: &Path) -> Result<String, ProfileError> {
-    let bytes = fs::read(path).map_err(|err| ProfileError::Io(err.to_string()))?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+fn read_lossy_bounded(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    file.take((MAX_CONFIG_COMPARE_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > MAX_CONFIG_COMPARE_BYTES {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn is_mastercomfig_vpk(name: &str) -> bool {
@@ -182,16 +224,11 @@ mod tests {
         fs::write(&config, &bytes).unwrap();
 
         let class = classify_first_run_with(&root, None).unwrap();
-        // The extra `name` line is not a bind change, so the signature still
-        // matches Valve's defaults and nothing is reported against config.cfg.
-        assert!(
-            !class
-                .reasons
-                .iter()
-                .any(|reason| reason.contains("config.cfg")),
-            "{:?}",
-            class.reasons
-        );
+        assert_eq!(class.kind, FirstRunKind::Existing);
+        assert!(class
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("config.cfg")));
         cleanup(&dir);
     }
 
@@ -207,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn unused_when_config_only_adds_host_cvars() {
+    fn existing_when_config_adds_or_changes_cvars() {
         let dir = crate::test_temp_dir();
         let root = stock_root(&dir);
         write_file(
@@ -215,7 +252,11 @@ mod tests {
             "unbindall\nbind w +forward\nbind s +back\nname Player\nvolume 1.0\n",
         );
         let class = classify_first_run_with(&root, None).unwrap();
-        assert_eq!(class.kind, FirstRunKind::Unused);
+        assert_eq!(class.kind, FirstRunKind::Existing);
+        assert!(class
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("config.cfg")));
         cleanup(&dir);
     }
 
@@ -289,7 +330,7 @@ mod tests {
         assert!(class
             .reasons
             .iter()
-            .any(|item| item.contains("Binds differ")));
+            .any(|item| item.contains("config.cfg differs")));
         cleanup(&dir);
     }
 
@@ -319,7 +360,83 @@ mod tests {
         assert!(class
             .reasons
             .iter()
-            .any(|item| item.contains("Binds differ")));
+            .any(|item| item.contains("config.cfg differs")));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn existing_when_repeated_commands_are_reordered_on_one_line() {
+        let dir = crate::test_temp_dir();
+        let root = stock_root(&dir);
+        write_file(
+            &root.join(CONFIG_DEFAULT),
+            "unbindall\nbind w +forward; bind w +back\n",
+        );
+        write_file(
+            &root.join(CONFIG_CFG),
+            "unbindall\nbind w +back; bind w +forward\n",
+        );
+
+        let class = classify_first_run_with(&root, None).unwrap();
+        assert_eq!(class.kind, FirstRunKind::Existing);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn oversized_config_is_existing_instead_of_loaded_or_rejected() {
+        let dir = crate::test_temp_dir();
+        let root = stock_root(&dir);
+        let config = root.join(CONFIG_CFG);
+        fs::write(&config, vec![b';'; MAX_CONFIG_COMPARE_BYTES + 1]).unwrap();
+
+        let class = classify_first_run_with(&root, None).unwrap();
+        assert_eq!(class.kind, FirstRunKind::Existing);
+        assert!(class
+            .reasons
+            .iter()
+            .any(|item| item.contains("Could not compare config.cfg")));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn over_limit_surface_is_existing_instead_of_a_first_run_dead_end() {
+        let dir = crate::test_temp_dir();
+        let root = stock_root(&dir);
+        let mut nested = root.join("tf/cfg");
+        const OVER_LIMIT_DEPTH: usize = 65;
+        for _ in 0..OVER_LIMIT_DEPTH {
+            nested.push("d");
+        }
+        write_file(&nested.join("deep.cfg"), "echo deep\n");
+
+        let class = classify_first_run_with(&root, None).unwrap();
+        assert_eq!(class.kind, FirstRunKind::Existing);
+        assert_eq!(
+            class.reasons,
+            ["Could not safely inspect all existing customization"]
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn many_unique_cfgs_produce_one_bounded_reason() {
+        let dir = crate::test_temp_dir();
+        let root = stock_root(&dir);
+        const CFG_COUNT: usize = 512;
+        for index in 0..CFG_COUNT {
+            write_file(
+                &root.join(format!("tf/cfg/custom-{index}.cfg")),
+                "echo custom\n",
+            );
+        }
+
+        let class = classify_first_run_with(&root, None).unwrap();
+        assert_eq!(class.kind, FirstRunKind::Existing);
+        assert!(class.reasons.len() <= 2, "{:?}", class.reasons);
+        assert!(class
+            .reasons
+            .iter()
+            .any(|reason| reason == "Found 512 user config files"));
         cleanup(&dir);
     }
 }

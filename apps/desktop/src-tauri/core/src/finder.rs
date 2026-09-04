@@ -6,11 +6,15 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::hash::{metadata_is_link, read_small_text_bounded};
 use crate::steam_inf::steam_inf_app_id;
 use crate::vdf::{installdir_from_acf, parse_vdf, steam_libraries, SteamLibrary};
 
 const DEFAULT_INSTALLDIR: &str = "Team Fortress 2";
 const TF2_APP: &str = "440";
+const MAX_STEAM_INF_BYTES: usize = 64 * 1024;
+const MAX_LIBRARYFOLDERS_BYTES: usize = 16 * 1024 * 1024;
+const MAX_APPMANIFEST_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tf2Install {
@@ -21,6 +25,7 @@ pub struct Tf2Install {
 pub enum Tf2RootError {
     MissingSteamInf,
     WrongApp { app_id: String },
+    InvalidPath { reason: String },
     Io(String),
 }
 
@@ -29,6 +34,7 @@ impl Tf2RootError {
         match self {
             Self::MissingSteamInf => "MissingSteamInf",
             Self::WrongApp { .. } => "WrongApp",
+            Self::InvalidPath { .. } => "InvalidPath",
             Self::Io(_) => "Io",
         }
     }
@@ -40,6 +46,9 @@ impl Tf2RootError {
             }
             Self::WrongApp { app_id } => {
                 format!("That install is not Team Fortress 2 (steam.inf app {app_id}, expected 440).")
+            }
+            Self::InvalidPath { reason } => {
+                format!("That TF2 folder cannot be used safely: {reason}")
             }
             Self::Io(err) => format!("Could not write settings: {err}"),
         }
@@ -118,9 +127,50 @@ pub fn normalize_tf2_root(picked: &Path) -> Result<PathBuf, Tf2RootError> {
         return Err(Tf2RootError::MissingSteamInf);
     };
 
-    let text = fs::read_to_string(&inf_path).map_err(|_| Tf2RootError::MissingSteamInf)?;
+    // Resolve each boundary separately. Validating only `root` accepts a
+    // decoy folder whose `tf` child is a symlink/junction to somewhere else;
+    // all later live paths would then cross the confirmed-root boundary.
+    let canonical_root = fs::canonicalize(&root).map_err(|_| Tf2RootError::MissingSteamInf)?;
+    let tf_path = canonical_root.join("tf");
+    if fs::symlink_metadata(&tf_path).is_ok_and(|meta| metadata_is_link(&meta)) {
+        return Err(Tf2RootError::InvalidPath {
+            reason: "its tf directory is a link or junction".into(),
+        });
+    }
+    let canonical_tf = fs::canonicalize(&tf_path).map_err(|_| Tf2RootError::MissingSteamInf)?;
+    if canonical_tf.parent() != Some(canonical_root.as_path()) {
+        return Err(Tf2RootError::InvalidPath {
+            reason: "its tf directory resolves outside the selected folder".into(),
+        });
+    }
+    let canonical_inf = fs::canonicalize(&inf_path).map_err(|_| Tf2RootError::MissingSteamInf)?;
+    if fs::symlink_metadata(&inf_path).is_ok_and(|meta| metadata_is_link(&meta)) {
+        return Err(Tf2RootError::InvalidPath {
+            reason: "tf/steam.inf is a link".into(),
+        });
+    }
+    if canonical_inf.parent() != Some(canonical_tf.as_path()) {
+        return Err(Tf2RootError::InvalidPath {
+            reason: "tf/steam.inf resolves outside the tf directory".into(),
+        });
+    }
+    if canonical_root.to_str().is_none() {
+        return Err(Tf2RootError::InvalidPath {
+            reason: "its path is not valid Unicode".into(),
+        });
+    }
+
+    let text = read_small_text_bounded(&canonical_inf, MAX_STEAM_INF_BYTES).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            Tf2RootError::MissingSteamInf
+        } else {
+            Tf2RootError::InvalidPath {
+                reason: format!("tf/steam.inf cannot be read safely ({err})"),
+            }
+        }
+    })?;
     match steam_inf_app_id(&text) {
-        Some(id) if id == TF2_APP => Ok(existing_canonical(&root).unwrap_or(root)),
+        Some(id) if id == TF2_APP => Ok(user_path(&canonical_root)),
         Some(id) => Err(Tf2RootError::WrongApp { app_id: id }),
         None => Err(Tf2RootError::WrongApp {
             app_id: "missing".into(),
@@ -151,7 +201,9 @@ pub fn scan_tf2_installs_in(steam_roots: &[PathBuf]) -> Vec<Tf2Install> {
                 read_installdir(&lib_path).unwrap_or_else(|| DEFAULT_INSTALLDIR.into());
             let root = lib_path.join("steamapps").join("common").join(installdir);
             if let Ok(valid) = normalize_tf2_root(&root) {
-                let key = valid.to_string_lossy().into_owned();
+                let Some(key) = valid.to_str().map(str::to_owned) else {
+                    continue;
+                };
                 if seen.insert(key.clone()) {
                     out.push(Tf2Install { path: key });
                 }
@@ -189,7 +241,8 @@ fn libraries_for_steam(steam: &Path) -> Vec<SteamLibrary> {
     }];
     let primary = steam.join("steamapps").join("libraryfolders.vdf");
     let fallback = steam.join("config").join("libraryfolders.vdf");
-    let text = fs::read_to_string(&primary).or_else(|_| fs::read_to_string(&fallback));
+    let text = read_small_text_bounded(&primary, MAX_LIBRARYFOLDERS_BYTES)
+        .or_else(|_| read_small_text_bounded(&fallback, MAX_LIBRARYFOLDERS_BYTES));
     if let Ok(text) = text {
         if let Ok(map) = parse_vdf(&text) {
             libs.extend(steam_libraries(&map));
@@ -208,7 +261,7 @@ fn library_has_tf2(parsed: &SteamLibrary, lib_path: &Path) -> bool {
 
 fn read_installdir(lib_path: &Path) -> Option<String> {
     let acf = lib_path.join("steamapps").join("appmanifest_440.acf");
-    installdir_from_acf(&fs::read_to_string(acf).ok()?)
+    installdir_from_acf(&read_small_text_bounded(&acf, MAX_APPMANIFEST_BYTES).ok()?)
 }
 
 #[cfg(windows)]
@@ -307,6 +360,22 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    #[cfg(unix)]
+    fn link_dir(target: &Path, link: &Path) {
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn link_dir(target: &Path, link: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/d", "/c", "mklink", "/j"])
+            .arg(link)
+            .arg(target)
+            .status()
+            .unwrap();
+        assert!(status.success(), "could not create test junction");
+    }
+
     #[test]
     fn normalizes_root_and_tf_folder() {
         let dir = crate::test_temp_dir();
@@ -346,6 +415,60 @@ mod tests {
             other => panic!("expected WrongApp, got {other:?}"),
         }
         assert_eq!(normalize_tf2_root(&dir), Err(Tf2RootError::MissingSteamInf));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rejects_oversized_steam_inf_without_loading_it() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let inf = root.join("tf/steam.inf");
+        fs::create_dir_all(inf.parent().unwrap()).unwrap();
+        fs::File::create(&inf)
+            .unwrap()
+            .set_len(MAX_STEAM_INF_BYTES as u64 + 1)
+            .unwrap();
+
+        let error = normalize_tf2_root(&root).unwrap_err();
+        assert!(matches!(error, Tf2RootError::InvalidPath { .. }));
+        assert!(
+            error.message().contains("safety limit"),
+            "{}",
+            error.message()
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rejects_a_tf_directory_that_resolves_outside_the_selected_root() {
+        let dir = crate::test_temp_dir();
+        let real = dir.join("real");
+        let decoy = dir.join("decoy");
+        tf2_tree(&real, "440");
+        fs::create_dir_all(&decoy).unwrap();
+        link_dir(&real.join("tf"), &decoy.join("tf"));
+
+        assert!(matches!(
+            normalize_tf2_root(&decoy),
+            Err(Tf2RootError::InvalidPath { .. })
+        ));
+        cleanup(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_root_that_cannot_round_trip_through_ipc() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let dir = crate::test_temp_dir();
+        let component = std::ffi::OsString::from_vec(b"tf2-\xff".to_vec());
+        let root = dir.join(component);
+        tf2_tree(&root, "440");
+
+        assert!(matches!(
+            normalize_tf2_root(&root),
+            Err(Tf2RootError::InvalidPath { .. })
+        ));
         cleanup(&dir);
     }
 
@@ -408,6 +531,27 @@ mod tests {
         );
         let found = scan_tf2_installs_in(&[steam]);
         assert_eq!(found.len(), 1);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn oversized_steam_vdf_files_are_ignored_without_materializing_them() {
+        let dir = crate::test_temp_dir();
+        let steam = dir.join("Steam");
+        let primary = steam.join("steamapps/libraryfolders.vdf");
+        fs::create_dir_all(primary.parent().unwrap()).unwrap();
+        fs::File::create(&primary)
+            .unwrap()
+            .set_len(MAX_LIBRARYFOLDERS_BYTES as u64 + 1)
+            .unwrap();
+        assert_eq!(libraries_for_steam(&steam).len(), 1);
+
+        let manifest = steam.join("steamapps/appmanifest_440.acf");
+        fs::File::create(&manifest)
+            .unwrap()
+            .set_len(MAX_APPMANIFEST_BYTES as u64 + 1)
+            .unwrap();
+        assert_eq!(read_installdir(&steam), None);
         cleanup(&dir);
     }
 }

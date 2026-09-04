@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 
 export type Tf2Install = {
   path: string;
@@ -7,6 +8,12 @@ export type Tf2Install = {
 
 export type WriteLock = {
   running: boolean;
+};
+
+export type LifecycleStatus = {
+  launchingTf2: boolean;
+  steamVerification: boolean;
+  installingUpdate: boolean;
 };
 
 export type ProfileSummary = {
@@ -23,6 +30,8 @@ export type ProfileLibrary = {
   tf2Root: string | null;
   confirmedRoot: string | null;
   activeProfileId: string | null;
+  /** Durable target awaiting a retry after an interrupted live switch. */
+  pendingSwitchProfileId?: string | null;
   profiles: ProfileSummary[];
 };
 
@@ -105,10 +114,19 @@ export async function getTf2WriteLock(): Promise<WriteLock> {
   return call<WriteLock>("tf2_write_lock");
 }
 
+export async function getLifecycleStatus(): Promise<LifecycleStatus> {
+  return call<LifecycleStatus>("get_lifecycle_status");
+}
+
 export async function onTf2Running(handler: (running: boolean) => void): Promise<UnlistenFn> {
   return listen<boolean>("tf2-running", (event) => {
     handler(event.payload);
   });
+}
+
+/** The backend process poller failed, so the UI must fail closed until it recovers. */
+export async function onTf2LockUnavailable(handler: () => void): Promise<UnlistenFn> {
+  return listen("tf2-lock-unavailable", handler);
 }
 
 export async function getProfileLibrary(): Promise<ProfileLibrary> {
@@ -318,6 +336,8 @@ export type HudUiState = {
   schemaSupported: boolean;
   catalogHash: string | null;
   updateAvailable: boolean;
+  /** The backend could not verify catalog-backed update state. */
+  catalogUnavailable?: boolean;
 };
 
 export type HudSchemaChoice = {
@@ -371,6 +391,9 @@ export async function getActiveProfileDetail(): Promise<ProfileDetail | null> {
 }
 
 export async function readProfileFile(path: string, id?: string): Promise<ProfileFileContent> {
+  if (!editorPathFits(path)) {
+    throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+  }
   return call<ProfileFileContent>("read_profile_file", { path, id: id ?? null });
 }
 
@@ -379,6 +402,15 @@ export async function writeOwnedFile(
   text: string,
   id?: string,
 ): Promise<ProfileDetail> {
+  if (!editorPathFits(path)) {
+    throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+  }
+  if (editorTextBytes(text) === null) {
+    throw new BridgeError(
+      `That cfg is larger than the ${FILES_EDITOR_MAX_FILE_BYTES / (1024 * 1024)} MiB editor limit.`,
+      "FileTooLarge",
+    );
+  }
   return call<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
 }
 
@@ -420,7 +452,7 @@ export async function importComfigCustom(id?: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("import_comfig_custom", { id: id ?? null });
 }
 
-export type SteamWriteStatus = "written" | "steam_open" | "no_account";
+export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
 
 export type SetLaunchResult = {
   launchOptions: string;
@@ -862,6 +894,10 @@ export type PreloaderStatusPayload = {
   status: PreloaderStatus;
   modsCached: boolean;
   modsSizeBytes: number;
+  /** Steam verification is active; all writes remain disabled until rechecked. */
+  repairInProgress?: boolean;
+  /** A durable preloader transaction is waiting for safe recovery. */
+  recoveryRequired?: boolean;
   /** Steam's stored TF2 launch options carry the preload exec. */
   preloadLaunchInSteam: boolean;
   /** The active profile carries the shared preload cfg (Casual preload on). */
@@ -922,6 +958,11 @@ export async function getPreloaderStatus(): Promise<PreloaderStatusPayload> {
   return call<PreloaderStatusPayload>("get_preloader_status");
 }
 
+/** Finish an interrupted preloader transaction without changing selection. */
+export async function recoverPreloader(): Promise<PreloaderStatusPayload> {
+  return call<PreloaderStatusPayload>("recover_preloader");
+}
+
 export async function getDefaultMods(): Promise<DefaultModsPayload> {
   return call<DefaultModsPayload>("get_default_mods");
 }
@@ -960,9 +1001,24 @@ export async function repairGameFiles(): Promise<void> {
   return call<void>("repair_game_files");
 }
 
+/** Recheck Steam verification state and release the maintenance gate once stock is restored. */
+export async function completeGameFileRepair(): Promise<boolean> {
+  return call<boolean>("complete_game_file_repair", { steamReportsComplete: true });
+}
+
+/** Cancel a verification lease only after the backend sees Steam and TF2 closed. */
+export async function cancelGameFileRepair(): Promise<boolean> {
+  return call<boolean>("cancel_game_file_repair");
+}
+
 /** Start TF2 through Steam (`steam://rungameid/440`). */
 export async function launchTf2(): Promise<void> {
   return call<void>("launch_tf2");
+}
+
+/** Release a pending launch after the user has cancelled it in Steam. */
+export async function cancelTf2Launch(): Promise<boolean> {
+  return call<boolean>("cancel_tf2_launch");
 }
 
 // ---------------------------------------------------------------------------
@@ -971,13 +1027,8 @@ export async function launchTf2(): Promise<void> {
 
 export type AppUpdateStep = "downloading" | "installing" | "restarting";
 
-/**
- * The handle `checkAppUpdate` found, kept so `installAppUpdate` installs the
- * exact release the banner advertised instead of re-checking and installing
- * whatever the feed says a moment later.
- */
-let pendingUpdate: Awaited<ReturnType<typeof import("@tauri-apps/plugin-updater").check>> | null =
-  null;
+/** Exact version the latest successful read-only check advertised. */
+let pendingUpdateVersion: string | null = null;
 
 export async function getAppVersion(): Promise<string> {
   const { getVersion } = await import("@tauri-apps/api/app");
@@ -996,32 +1047,32 @@ const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {
   const { check } = await import("@tauri-apps/plugin-updater");
   const update = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
-  pendingUpdate = update;
   if (!update) {
+    pendingUpdateVersion = null;
     return null;
   }
-  return { version: update.version, notes: update.body ?? null };
+  pendingUpdateVersion = update.version;
+  const info = { version: update.version, notes: update.body ?? null };
+  // The install command re-checks in Rust. Do not retain a renderer-owned
+  // resource handle whose mutating methods are intentionally denied by ACL.
+  await update.close().catch(() => {});
+  return info;
 }
 
 export async function installAppUpdate(onProgress: (step: AppUpdateStep) => void): Promise<void> {
-  const update = pendingUpdate;
-  if (!update) {
+  const expectedVersion = pendingUpdateVersion;
+  if (!expectedVersion) {
     throw new BridgeError("No update available.", "NoUpdate");
   }
   onProgress("downloading");
-  await update.downloadAndInstall((event) => {
-    if (event.event === "Finished") {
-      onProgress("installing");
-    } else {
-      onProgress("downloading");
+  const unlisten = await listen<AppUpdateStep>("app-update-progress", (event) => {
+    if (["downloading", "installing", "restarting"].includes(event.payload)) {
+      onProgress(event.payload);
     }
   });
-  onProgress("restarting");
-  // Windows (NSIS `installMode: passive`) hands off to the installer, which
-  // terminates and restarts the app itself — calling relaunch() here races it.
-  // The AppImage path on Linux does need the explicit restart.
-  if (typeof navigator !== "undefined" && navigator.userAgent.includes("Linux")) {
-    const { relaunch } = await import("@tauri-apps/plugin-process");
-    await relaunch();
+  try {
+    await call<void>("install_app_update", { expectedVersion });
+  } finally {
+    unlisten();
   }
 }

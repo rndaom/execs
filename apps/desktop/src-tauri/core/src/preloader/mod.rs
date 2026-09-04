@@ -9,6 +9,16 @@
 
 pub const PRELOADER_VPK: &str = "execs-preloader.vpk";
 pub const MISC_VPK: &str = "tf2_misc_dir.vpk";
+
+/// Preserve the structured command error even though the legacy preloader API
+/// returns strings for format/IO failures.
+pub fn is_game_running_error(message: &str) -> bool {
+    let locked = crate::process_lock::WriteLockError::GameRunning.message();
+    message == locked
+        || message
+            .strip_prefix(locked)
+            .is_some_and(|rest| rest.starts_with(';'))
+}
 /// Official archives holding the assets the pure whitelist trusts.
 pub const STOCK_VPKS: [&str; 3] = [
     "tf2_textures_dir.vpk",
@@ -69,18 +79,27 @@ mod catalog;
 mod gameinfo;
 mod pack;
 mod state;
+mod transaction;
 
 // The public API is exactly what `preloader.rs` exported before the split.
 pub use apply::{
-    apply_preloader_selection, preloader_status, rebuild_keep_lists, record_preload_profile,
-    revert_preloader, take_preload_profiles, PreloaderReport, PreloaderSelection, PreloaderStatus,
-    RevertReport,
+    apply_preloader_selection, apply_preloader_selection_with_sampler, forget_preload_profile,
+    preload_profiles, preloader_status, rebuild_keep_lists, record_preload_profile,
+    recover_pending_preloader, recover_pending_preloader_with_sampler, revert_preloader,
+    revert_preloader_with_sampler, take_preload_profiles, PreloaderReport, PreloaderSelection,
+    PreloaderStatus, RevertReport,
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{
-    gameinfo_bypass_state, restore_gameinfo_from_backup, set_gameinfo_bypass, GameinfoBypass,
+    gameinfo_bypass_state, restore_gameinfo_from_backup, restore_gameinfo_from_backup_with_sampler,
+    set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
 };
 pub use state::{preload_is_wanted, PatchedEntry, PreloaderState, SkipNotice};
+pub use transaction::{
+    preloader_transaction_status, prepare_preloader_steam_repair,
+    reconcile_preloader_after_steam_repair, reconcile_preloader_after_steam_repair_with_sampler,
+    PreloaderTransactionStatus,
+};
 
 #[cfg(test)]
 mod tests;

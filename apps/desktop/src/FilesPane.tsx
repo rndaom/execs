@@ -1,7 +1,14 @@
 import { useDeferredValue, useMemo, useState } from "react";
+import { Alert } from "./components/ui/Alert";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
+import {
+  editorTextBytes,
+  FILES_EDITOR_MAX_FILE_BYTES,
+  FILES_EDITOR_MAX_FILES,
+  FILES_EDITOR_MAX_TOTAL_BYTES,
+} from "./lib/files-limits";
 import {
   blockingFindingsForFile,
   type CfgFinding,
@@ -15,12 +22,15 @@ import {
 export function FilesPane({
   profileId,
   files,
+  limited,
   hudId,
   onSave,
 }: {
   /** The profile this draft belongs to; a switch discards it. */
   profileId: string | null;
   files: { path: string; text: string }[];
+  /** Some cfgs exceeded the editor's count or byte budget and were skipped. */
+  limited?: boolean;
   hudId: string | null;
   onSave: (path: string, text: string) => void;
 }) {
@@ -34,6 +44,7 @@ export function FilesPane({
   const selectedMeta = selected !== null ? cfgFileMeta(selected, hudId) : null;
   const source = files.find((file) => file.path === selected)?.text ?? "";
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [limitHitPath, setLimitHitPath] = useState<string | null>(null);
 
   const editable = selectedMeta?.editable ?? false;
   // A reload hands this pane a brand-new `files` array even when the bytes are
@@ -45,6 +56,8 @@ export function FilesPane({
     draftRecordKey(profileId, selected),
   );
   const dirty = selected !== null && editable && draft !== source;
+  const draftFits = editorTextBytes(draft) !== null;
+  const draftLimitHit = selected !== null && limitHitPath === selected;
 
   // Alias expansion in cfglint is expensive and the bundle can be dozens of
   // files: lint the settled text, not every keystroke.
@@ -72,13 +85,25 @@ export function FilesPane({
   const blockingElsewhere = strictFindings.filter(
     (finding) => finding.tier === "block" && !blockingHere.includes(finding),
   ).length;
-  const canSave = selected !== null && canSaveCfg(blockingHere, running, busy, dirty, editable);
+  const canSave =
+    selected !== null && draftFits && canSaveCfg(blockingHere, running, busy, dirty, editable);
 
   function handleSave() {
-    if (!selected || !canSaveCfg(blockingHere, running, busy, dirty, editable)) {
+    if (!selected || !draftFits || !canSaveCfg(blockingHere, running, busy, dirty, editable)) {
       return;
     }
     onSave(selected, draft);
+  }
+
+  function updateDraft(next: string) {
+    if (editorTextBytes(next) === null) {
+      // Do not copy an oversized paste into React state. Keep the previous
+      // draft intact and make the refusal visible instead of truncating it.
+      setLimitHitPath(selected);
+      return;
+    }
+    setLimitHitPath(null);
+    setDraft(next);
   }
 
   function requestPick(path: string) {
@@ -124,6 +149,14 @@ export function FilesPane({
           </span>
         }
       />
+
+      {limited ? (
+        <Alert tone="info" testId="files-limited">
+          Showing up to {FILES_EDITOR_MAX_FILES} cfg files and{" "}
+          {FILES_EDITOR_MAX_TOTAL_BYTES / (1024 * 1024)} MiB of text. Larger profile content stays
+          unchanged.
+        </Alert>
+      ) : null}
 
       <div className="grid min-w-0 items-stretch gap-3 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[14rem_minmax(0,1fr)_19rem]">
         <aside className="surface min-w-0 lg:min-h-[31rem]">
@@ -238,7 +271,7 @@ export function FilesPane({
                 data-testid="files-editor"
                 value={editable ? draft : source}
                 readOnly={running || !editable}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => updateDraft(event.target.value)}
                 spellCheck={false}
                 className="min-h-72 flex-1 resize-y border-0 bg-bg px-4 py-3 font-mono text-[13px] leading-6 text-ink outline-none transition-shadow focus:shadow-[inset_2px_0_0_var(--color-brand)] read-only:cursor-not-allowed read-only:text-ink-muted xl:min-h-[25rem]"
               />
@@ -248,9 +281,11 @@ export function FilesPane({
                     ? "Read-only while TF2 is running."
                     : !editable
                       ? `Provided by ${originLabel(selectedMeta?.origin)} — read-only.`
-                      : dirty
-                        ? "Unsaved changes"
-                        : "Saved"}
+                      : draftLimitHit || !draftFits
+                        ? `The edit was not applied because this editor is limited to ${FILES_EDITOR_MAX_FILE_BYTES / (1024 * 1024)} MiB.`
+                        : dirty
+                          ? "Unsaved changes"
+                          : "Saved"}
                 </p>
                 {editable ? (
                   <button

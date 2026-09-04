@@ -38,6 +38,13 @@ describe("library UI helpers", () => {
     expect(libraryStatusCopy({ ...ready, rootMismatch: true, usable: false })).toBe(
       "Profiles belong to another TF2 install.",
     );
+    expect(
+      libraryStatusCopy({
+        ...ready,
+        pendingSwitchProfileId: "a",
+        profiles: [{ id: "a", name: "Recovered", createdAt: "", updatedAt: "" }],
+      }),
+    ).toBe("Switch to Recovered to finish recovery.");
   });
 
   it("saves only when the library is usable and unlocked", () => {

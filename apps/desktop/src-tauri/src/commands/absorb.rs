@@ -10,7 +10,7 @@ use crate::WriteGate;
 pub async fn absorb_owned(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<AbsorbOwnedResult, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_root(|root| Ok(execs_core::absorb_owned(&root)?)).await
 }
 
@@ -19,6 +19,6 @@ pub async fn absorb_packs(
     gate: tauri::State<'_, WriteGate>,
     choice: PackChoice,
 ) -> Result<ProfileLibrary, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_root(move |root| Ok(execs_core::absorb_packs(&root, choice)?)).await
 }

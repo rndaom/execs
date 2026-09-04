@@ -137,7 +137,24 @@ export function useFirstRun(
         clear();
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not apply that setup.");
+        let message = err instanceof Error ? err.message : "Could not apply that setup.";
+        // Materialization commits the new profile before the live switch. If
+        // the game starts or the switch is interrupted after that boundary,
+        // deleting the profile would discard the only safe retry target (and
+        // is itself forbidden while TF2 runs). Refresh the library so it is
+        // visible and can be applied once the blocker is gone.
+        try {
+          const recovered = await api.getProfileLibrary();
+          if (recovered.profiles.length > (library?.profiles.length ?? 0)) {
+            setLibrary(recovered);
+            setCreating(false);
+            clear();
+            message = `${message} The new profile was saved; apply it again when ready.`;
+          }
+        } catch {
+          /* Preserve the original, more useful switch error. */
+        }
+        setError(message);
         progress.cancel();
         return false;
       } finally {
@@ -150,6 +167,7 @@ export function useFirstRun(
       busy,
       clear,
       creating,
+      library,
       preset,
       progress,
       running,

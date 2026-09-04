@@ -57,7 +57,10 @@ fn format_data_size(format: i32, width: u32, height: u32) -> Option<usize> {
 }
 
 fn mip_dimensions(width: u32, height: u32, mip: u32) -> (u32, u32) {
-    ((width >> mip).max(1), (height >> mip).max(1))
+    (
+        width.checked_shr(mip).unwrap_or(0).max(1),
+        height.checked_shr(mip).unwrap_or(0).max(1),
+    )
 }
 
 /// Decode frame 0 of the largest mip. Fails on unsupported formats rather than
@@ -72,16 +75,37 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
         return Err(format!("Unsupported VTF version {major}.{minor}."));
     }
     let header_size = read_u32(bytes, 12).ok_or("VTF header truncated.")? as usize;
+    // VTF 7.0/7.1 end after the low-resolution image dimensions. Version
+    // 7.2 adds depth, and 7.3 adds the fixed resource-dictionary prefix.
+    // Treat the declared header boundary as authoritative: accepting a zero
+    // or undersized header lets malformed files decode bytes from the header
+    // itself as image data.
+    let minimum_header_size = match minor {
+        0 | 1 => 64,
+        2 => 65,
+        _ => 80,
+    };
+    if header_size < minimum_header_size || header_size > bytes.len() {
+        return Err(format!(
+            "Invalid VTF header size {header_size} for version 7.{minor}."
+        ));
+    }
     let width = u32::from(read_u16(bytes, 16).ok_or("VTF header truncated.")?);
     let height = u32::from(read_u16(bytes, 18).ok_or("VTF header truncated.")?);
     let frames = read_u16(bytes, 24).ok_or("VTF header truncated.")?.max(1);
     let format = read_i32(bytes, 52).ok_or("VTF header truncated.")?;
-    let mip_count = u32::from(*bytes.get(56).ok_or("VTF header truncated.")?).max(1);
+    let mip_count = u32::from(*bytes.get(56).ok_or("VTF header truncated.")?);
     let low_res_format = read_i32(bytes, 57).ok_or("VTF header truncated.")?;
     let low_res_w = u32::from(*bytes.get(61).ok_or("VTF header truncated.")?);
     let low_res_h = u32::from(*bytes.get(62).ok_or("VTF header truncated.")?);
     if width == 0 || height == 0 || width > 1024 || height > 1024 {
         return Err(format!("Unsupported VTF dimensions {width}x{height}."));
+    }
+    let max_mip_count = u32::BITS - width.max(height).leading_zeros();
+    if mip_count == 0 || mip_count > max_mip_count {
+        return Err(format!(
+            "Invalid VTF mip count {mip_count} for {width}x{height}."
+        ));
     }
 
     // Where the high-res image data starts.
@@ -90,6 +114,13 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
         let resource_count = read_u32(bytes, 68).ok_or("VTF header truncated.")? as usize;
         if resource_count > 64 {
             return Err("VTF resource table is implausibly large.".into());
+        }
+        let resource_table_end = resource_count
+            .checked_mul(8)
+            .and_then(|size| 80usize.checked_add(size))
+            .ok_or("VTF resource table size overflowed.")?;
+        if resource_table_end > header_size {
+            return Err("VTF resource table extends beyond its header.".into());
         }
         let mut found = None;
         for index in 0..resource_count {
@@ -103,7 +134,11 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
                 break;
             }
         }
-        found.ok_or("VTF has no image resource.")?
+        let image_offset = found.ok_or("VTF has no image resource.")?;
+        if image_offset < header_size {
+            return Err("VTF image resource points inside its header.".into());
+        }
+        image_offset
     } else {
         let low_res_size = if low_res_format == FORMAT_NONE || low_res_w == 0 || low_res_h == 0 {
             0
@@ -111,7 +146,9 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
             format_data_size(low_res_format, low_res_w, low_res_h)
                 .ok_or_else(|| format!("Unsupported VTF thumbnail format {low_res_format}."))?
         };
-        header_size + low_res_size
+        header_size
+            .checked_add(low_res_size)
+            .ok_or("VTF image offset overflowed.")?
     };
 
     // Mips are stored smallest→largest; within a mip, frame-major. Skip every
@@ -121,12 +158,23 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
         let (mip_w, mip_h) = mip_dimensions(width, height, mip);
         let mip_size = format_data_size(format, mip_w, mip_h)
             .ok_or_else(|| format!("Unsupported VTF format {format}."))?;
-        offset += mip_size * frames as usize;
+        offset = offset
+            .checked_add(
+                mip_size
+                    .checked_mul(frames as usize)
+                    .ok_or("VTF mip data size overflowed.")?,
+            )
+            .ok_or("VTF image offset overflowed.")?;
     }
     let frame_size = format_data_size(format, width, height)
         .ok_or_else(|| format!("Unsupported VTF format {format}."))?;
     let data = bytes
-        .get(offset..offset + frame_size)
+        .get(
+            offset
+                ..offset
+                    .checked_add(frame_size)
+                    .ok_or("VTF image offset overflowed.")?,
+        )
         .ok_or("VTF image data truncated.")?;
 
     let rgba = match format {
@@ -428,5 +476,37 @@ mod tests {
         assert!(decode_vtf_frame0(b"nope").is_err());
         let bytes = header(2, 4, 4, 1, 99, 1, 80);
         assert!(decode_vtf_frame0(&bytes).is_err());
+    }
+
+    #[test]
+    fn rejects_zero_or_excessive_mip_counts_without_panicking() {
+        let zero = header(2, 4, 4, 1, FORMAT_BGRA8888, 0, 80);
+        assert!(decode_vtf_frame0(&zero).unwrap_err().contains("mip count"));
+
+        let excessive = header(2, 4, 4, 1, FORMAT_BGRA8888, u8::MAX, 80);
+        let result = std::panic::catch_unwind(|| decode_vtf_frame0(&excessive));
+        assert!(result.is_ok(), "malformed input must not panic");
+        assert!(result.unwrap().unwrap_err().contains("mip count"));
+    }
+
+    #[test]
+    fn rejects_an_undersized_declared_header() {
+        let mut bytes = header(2, 2, 2, 1, FORMAT_BGRA8888, 1, 80);
+        bytes[12..16].copy_from_slice(&0u32.to_le_bytes());
+        bytes.extend([0u8; 16]);
+        let err = decode_vtf_frame0(&bytes).unwrap_err();
+        assert!(err.contains("header size"), "{err}");
+    }
+
+    #[test]
+    fn rejects_a_resource_offset_inside_the_declared_header() {
+        let header_size = 96u32;
+        let mut bytes = header(3, 2, 2, 1, FORMAT_BGRA8888, 1, header_size);
+        bytes[68..72].copy_from_slice(&1u32.to_le_bytes());
+        bytes[80..83].copy_from_slice(&[0x30, 0x00, 0x00]);
+        bytes[84..88].copy_from_slice(&88u32.to_le_bytes());
+        bytes.extend([0u8; 16]);
+        let err = decode_vtf_frame0(&bytes).unwrap_err();
+        assert!(err.contains("inside its header"), "{err}");
     }
 }

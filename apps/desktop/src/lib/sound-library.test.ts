@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sameChoice } from "./hitsound-ui";
-import { repairComplete } from "./mods-ui";
+import { repairReadyForConfirmation } from "./mods-ui";
 import {
   comfigEntries,
   communityEntries,
@@ -92,8 +92,8 @@ describe("sound library", () => {
 });
 
 describe("repair flow", () => {
-  it("is complete only when no untracked particle files remain", () => {
-    expect(repairComplete(null)).toBe(false);
+  it("offers explicit confirmation only when no untracked particle files remain", () => {
+    expect(repairReadyForConfirmation(null)).toBe(false);
     const base = {
       modsCached: true,
       modsSizeBytes: 1,
@@ -111,9 +111,9 @@ describe("repair flow", () => {
         untrackedModified: ["particles/muzzle_flash.pcf"],
       },
     };
-    expect(repairComplete(base)).toBe(false);
-    expect(repairComplete({ ...base, status: { ...base.status, untrackedModified: [] } })).toBe(
-      true,
-    );
+    expect(repairReadyForConfirmation(base)).toBe(false);
+    expect(
+      repairReadyForConfirmation({ ...base, status: { ...base.status, untrackedModified: [] } }),
+    ).toBe(true);
   });
 });

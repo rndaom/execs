@@ -9,15 +9,21 @@ use crate::absorb::{
     absorb_added_packs_for_switch_to, absorb_owned_to, pack_key, write_config_cfg_dual_to,
     AbsorbOptions,
 };
-use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
-use crate::hash::{copy_and_sha256, sha256_file};
+use crate::hash::{
+    copy_verified_atomic_within, read_small_file_bounded, remove_dir_within,
+    remove_file_force_within, sha256_file, validate_dir_within, validate_file_within,
+    MAX_CFG_FILE_BYTES,
+};
 use crate::hud::{hud_packs, live_hud_keys};
 use crate::launch::LaunchWriteReason;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    clear_active_profile_to, exclusive_file_path, load_library_from, load_manifest, profiles_dir,
-    set_active_profile_to, FileStorage, ProfileError, ProfileFile, ProfileLibrary, ProfileManifest,
+    begin_switch_to, clear_launch_sync_pending_if_matches, exclusive_file_path,
+    is_profile_ownable_rel_path, is_shared_rel_path, load_library_from, load_manifest,
+    mark_launch_sync_pending, pending_switch_to, portable_path_key, profiles_dir,
+    recover_profile_mutation_to, set_active_profile_to, FileStorage, ProfileError, ProfileFile,
+    ProfileLibrary, ProfileManifest, SwitchCleanupFile,
 };
 use crate::surface::is_stock_custom_entry;
 
@@ -166,20 +172,39 @@ where
     {
         return Err(ProfileError::UnknownProfile);
     }
-    if library.active_profile_id.as_deref() == Some(profile_id) {
+    let pending = pending_switch_to(profiles_dir, tf2_root)?;
+    recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
+    let target = load_manifest(profiles_dir, profile_id)?;
+    if pending.is_none() && library.active_profile_id.as_deref() == Some(profile_id) {
+        let (steam_write, steam_write_error) = if target.launch_sync_pending {
+            let steam_roots = match options.steam_roots {
+                Some(roots) => roots.to_vec(),
+                None => crate::finder::discover_steam_roots(),
+            };
+            sync_switch_launch_options(
+                profiles_dir,
+                tf2_root,
+                profile_id,
+                &target.launch_options,
+                &steam_roots,
+                &running,
+            )
+        } else {
+            (Some(LaunchWriteReason::Written), None)
+        };
+        let library = load_library_from(profiles_dir, Some(tf2_root))?;
         progress(SwitchProgress::new(SwitchStep::Done));
         return Ok(SwitchOutcome {
             library,
-            steam_write: Some(LaunchWriteReason::Written),
-            steam_write_error: None,
+            steam_write,
+            steam_write_error,
         });
     }
 
-    let target = load_manifest(profiles_dir, profile_id)?;
     // Everything the target needs is checked before a single live file is
     // removed. A failure discovered mid-write leaves the old profile's files
     // deleted and the new ones half-written.
-    preflight_target(profiles_dir, &target)?;
+    preflight_target(profiles_dir, profile_id, &target)?;
 
     let live_huds = live_hud_keys(tf2_root);
     let previous = library.active_profile_id.clone();
@@ -209,17 +234,31 @@ where
     // previous switch was cut off: `interrupted_profile_id` names the profile
     // whose files were being removed, and finishing that removal is what
     // makes the retry an exact replace instead of a merge.
-    let remove_from = previous.clone().or_else(|| {
-        library
-            .interrupted_profile_id
-            .clone()
-            // Deleted since the failed switch: nothing left to remove for it.
-            .filter(|id| library.profiles.iter().any(|profile| &profile.id == id))
-    });
-    let mut result = match remove_from.as_deref() {
-        Some(active) => remove_unmodified_live(profiles_dir, tf2_root, active),
-        None => Ok(()),
-    };
+    let mut cleanup_profile_ids = pending
+        .map(|journal| journal.cleanup_profile_ids)
+        .unwrap_or_default();
+    if let Some(previous) = previous.clone() {
+        cleanup_profile_ids.push(previous);
+    }
+    if let Some(interrupted) = library.interrupted_profile_id.clone() {
+        cleanup_profile_ids.push(interrupted);
+    }
+    cleanup_profile_ids.push(profile_id.to_string());
+    cleanup_profile_ids.sort();
+    cleanup_profile_ids.dedup();
+
+    // This is the transaction boundary: after it succeeds, boot-time absorb
+    // sees no active profile and every possible partial source/target remains
+    // recorded for a deterministic retry.
+    let journal = begin_switch_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &cleanup_profile_ids,
+        live_process_names(),
+    )?;
+
+    let mut result = remove_unmodified_live(tf2_root, &journal.cleanup_files);
     if result.is_ok() {
         result = refuse_if_running_among(live_process_names()).map_err(ProfileError::from);
     }
@@ -232,32 +271,34 @@ where
         result = dual_write_target_config(tf2_root, profiles_dir, &target, &options);
     }
     if let Err(err) = result {
-        if let Some(interrupted) = remove_from.as_deref() {
-            let _ = clear_active_profile_to(profiles_dir, tf2_root, interrupted, &running);
-            return Err(mid_switch_error(&err));
-        }
-        return Err(err);
+        return Err(mid_switch_error(&err));
     }
 
+    // The target manifest is authoritative. Publish its retry marker before
+    // committing the active id; a crash or Steam/localconfig failure can then
+    // be repaired by an idempotent same-profile switch.
+    mark_launch_sync_pending(profiles_dir, tf2_root, profile_id, &running)
+        .map_err(|err| mid_switch_error(&err))?;
+    refuse_if_running_among(live_process_names())?;
+    set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)
+        .map_err(|err| mid_switch_error(&err))?;
     let steam_roots = match options.steam_roots {
         Some(roots) => roots.to_vec(),
         None => crate::finder::discover_steam_roots(),
     };
-    let (steam_write, steam_write_error) =
-        match crate::launch::write_launch_options_to_localconfig_from(
-            &steam_roots,
-            &target.launch_options,
-            &running,
-        ) {
-            Ok(result) => (Some(result.reason), None),
-            Err(err) => (None, Some(err.message())),
-        };
-
+    let (steam_write, steam_write_error) = sync_switch_launch_options(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &target.launch_options,
+        &steam_roots,
+        &running,
+    );
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
     progress(SwitchProgress::with_detail(
         SwitchStep::Done,
         launch_write_detail(steam_write, steam_write_error.as_deref()),
     ));
-    let library = set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)?;
     Ok(SwitchOutcome {
         library,
         steam_write,
@@ -265,7 +306,65 @@ where
     })
 }
 
+fn sync_switch_launch_options(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    launch_options: &str,
+    steam_roots: &[PathBuf],
+    running_names: &[String],
+) -> (Option<LaunchWriteReason>, Option<String>) {
+    match write_switch_launch_options(steam_roots, launch_options, running_names) {
+        Ok(result) => {
+            if result.reason == LaunchWriteReason::Written
+                && !matches!(
+                    clear_launch_sync_pending_if_matches(
+                        profiles_dir,
+                        tf2_root,
+                        profile_id,
+                        launch_options,
+                        running_names,
+                    ),
+                    Ok(true)
+                )
+            {
+                // Steam already has the correct value. Retain the durable
+                // pending marker and retry idempotently rather than making
+                // the completed profile switch look rolled back.
+                return (Some(LaunchWriteReason::WriteFailed), None);
+            }
+            (Some(result.reason), None)
+        }
+        Err(_) => (Some(LaunchWriteReason::WriteFailed), None),
+    }
+}
+
+#[cfg(not(test))]
+fn write_switch_launch_options(
+    steam_roots: &[PathBuf],
+    launch_options: &str,
+    _test_running: &[String],
+) -> Result<crate::launch::LaunchWriteResult, ProfileError> {
+    crate::launch::write_launch_options_to_localconfig(steam_roots, launch_options)
+}
+
+#[cfg(test)]
+fn write_switch_launch_options(
+    steam_roots: &[PathBuf],
+    launch_options: &str,
+    test_running: &[String],
+) -> Result<crate::launch::LaunchWriteResult, ProfileError> {
+    crate::launch::write_launch_options_to_localconfig_from(
+        steam_roots,
+        launch_options,
+        test_running,
+    )
+}
+
 fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -> String {
+    if let Some(error) = error {
+        return error.to_string();
+    }
     match reason {
         Some(LaunchWriteReason::Written) => "Launch options written to Steam.".into(),
         Some(LaunchWriteReason::SteamOpen) => {
@@ -275,10 +374,10 @@ fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -
         Some(LaunchWriteReason::NoAccount) => {
             "No Steam account config was found, so the launch options were not written.".into()
         }
-        None => format!(
-            "The launch options could not be written to Steam: {}",
-            error.unwrap_or("unknown error")
-        ),
+        Some(LaunchWriteReason::WriteFailed) => {
+            "Launch options are saved to the profile, but Steam sync is still pending.".into()
+        }
+        None => "Launch options are saved to the profile, but Steam sync is still pending.".into(),
     }
 }
 
@@ -291,14 +390,45 @@ fn mid_switch_error(err: &ProfileError) -> ProfileError {
 
 /// Validate the entire target manifest before the live tree is touched: every
 /// path inside the file-safe surface, every source file present.
-fn preflight_target(profiles_dir: &Path, target: &ProfileManifest) -> Result<(), ProfileError> {
+fn preflight_target(
+    profiles_dir: &Path,
+    profile_id: &str,
+    target: &ProfileManifest,
+) -> Result<(), ProfileError> {
+    if target.id != profile_id {
+        return Err(ProfileError::Io(
+            "profile manifest id does not match its library record".into(),
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
     for file in &target.files {
-        if !is_file_safe_rel_path(&file.path) {
+        if !is_profile_ownable_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
         }
-        if !target_source(profiles_dir, target, file).is_file() {
+        let key = portable_path_key(&file.path)?;
+        if !seen.insert(key) {
             return Err(ProfileError::Io(format!(
-                "Profile file missing: {}",
+                "Profile contains colliding paths: {}",
+                file.path
+            )));
+        }
+        if is_shared_rel_path(&file.path) != (file.storage == FileStorage::Shared) {
+            return Err(ProfileError::Io(format!(
+                "Profile file has invalid storage: {}",
+                file.path
+            )));
+        }
+        if file.sha256.len() != 64 || !file.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ProfileError::Io(format!(
+                "Profile file has invalid sha256: {}",
+                file.path
+            )));
+        }
+        let source = target_source(profiles_dir, target, file)?;
+        let actual = sha256_file(&source).map_err(|e| ProfileError::Io(e.to_string()))?;
+        if !actual.eq_ignore_ascii_case(&file.sha256) {
+            return Err(ProfileError::Io(format!(
+                "Profile file failed integrity verification: {}",
                 file.path
             )));
         }
@@ -306,11 +436,22 @@ fn preflight_target(profiles_dir: &Path, target: &ProfileManifest) -> Result<(),
     Ok(())
 }
 
-fn target_source(profiles_dir: &Path, target: &ProfileManifest, file: &ProfileFile) -> PathBuf {
-    match file.storage {
+fn target_source(
+    profiles_dir: &Path,
+    target: &ProfileManifest,
+    file: &ProfileFile,
+) -> Result<PathBuf, ProfileError> {
+    let source = match file.storage {
         FileStorage::Shared => blob_path(profiles_dir, &file.sha256),
         FileStorage::Exclusive => exclusive_file_path(profiles_dir, &target.id, &file.path),
-    }
+    };
+    validate_file_within(profiles_dir, &source).map_err(|err| {
+        ProfileError::Io(format!(
+            "Profile file is missing or unsafe ({}): {err}",
+            file.path
+        ))
+    })?;
+    Ok(source)
 }
 
 fn clone_options<'a>(options: &'a AbsorbOptions<'a>) -> AbsorbOptions<'a> {
@@ -321,22 +462,26 @@ fn clone_options<'a>(options: &'a AbsorbOptions<'a>) -> AbsorbOptions<'a> {
 }
 
 fn remove_unmodified_live(
-    profiles_dir: &Path,
     tf2_root: &Path,
-    profile_id: &str,
+    files: &[SwitchCleanupFile],
 ) -> Result<(), ProfileError> {
-    let manifest = load_manifest(profiles_dir, profile_id)?;
-    for file in &manifest.files {
+    for file in files {
+        if !is_profile_ownable_rel_path(&file.path) {
+            return Err(ProfileError::ForbiddenPath(file.path.clone()));
+        }
         for candidate in live_candidates(tf2_root, &file.path) {
             if !candidate.is_file() {
                 continue;
             }
+            crate::hash::validate_file_within(tf2_root, &candidate)
+                .map_err(|e| ProfileError::Io(e.to_string()))?;
             let hash = sha256_file(&candidate).map_err(|e| ProfileError::Io(e.to_string()))?;
             if hash == file.sha256 {
                 // Files extracted from some HUD and mod archives carry the
                 // read-only attribute; Windows refuses a plain remove on
                 // those, which used to fail the switch after preflight.
-                crate::hash::remove_file_force(&candidate)
+                refuse_if_running_among(live_process_names())?;
+                remove_file_force_within(tf2_root, &candidate)
                     .map_err(|e| ProfileError::Io(e.to_string()))?;
                 prune_empty_parents(&candidate, tf2_root);
             }
@@ -354,7 +499,7 @@ fn write_target_live(
     let preferred_hud = preferred_hud(target, live_huds);
     let extra_huds = extra_hud_packs(&target.files, preferred_hud.as_deref());
     for file in &target.files {
-        if !is_file_safe_rel_path(&file.path) {
+        if !is_profile_ownable_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
         }
         // Valve's own `tf/custom` entries and `.execs-part` leftovers are not
@@ -365,15 +510,11 @@ fn write_target_live(
             continue;
         }
         let dest_rel = rewrite_extra_hud_path(&file.path, &extra_huds);
-        let source = target_source(profiles_dir, target, file);
-        if !source.is_file() {
-            return Err(ProfileError::Io(format!(
-                "Profile file missing: {}",
-                file.path
-            )));
-        }
+        let source = target_source(profiles_dir, target, file)?;
         let dest = live_path(tf2_root, &dest_rel);
-        copy_and_sha256(&source, &dest).map_err(|e| ProfileError::Io(e.to_string()))?;
+        refuse_if_running_among(live_process_names())?;
+        copy_verified_atomic_within(tf2_root, &source, &dest, &file.sha256)
+            .map_err(|e| ProfileError::Io(e.to_string()))?;
     }
     Ok(())
 }
@@ -387,11 +528,15 @@ fn dual_write_target_config(
     let Some(file) = target.files.iter().find(|file| file.path == CONFIG_CFG) else {
         return Ok(());
     };
-    let source = exclusive_file_path(profiles_dir, &target.id, &file.path);
-    if !source.is_file() {
-        return Ok(());
+    let source = target_source(profiles_dir, target, file)?;
+    let bytes = read_small_file_bounded(&source, MAX_CFG_FILE_BYTES)
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
+    let actual = crate::hash::sha256_hex(&bytes);
+    if !actual.eq_ignore_ascii_case(&file.sha256) {
+        return Err(ProfileError::Io(
+            "Profile config.cfg failed integrity verification".into(),
+        ));
     }
-    let bytes = fs::read(&source).map_err(|e| ProfileError::Io(e.to_string()))?;
     let roots = match options.steam_roots {
         Some(roots) => roots.to_vec(),
         None => crate::finder::discover_steam_roots(),
@@ -485,7 +630,13 @@ pub(crate) fn only_game_caches(dir: &Path) -> bool {
     let mut saw_one = false;
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        let Ok(meta) = fs::symlink_metadata(&path) else {
+            return false;
+        };
+        if crate::hash::metadata_is_link(&meta) {
+            return false;
+        }
+        if meta.is_dir() {
             // A husk nests: oldhud/sound/sound.cache.
             if !only_game_caches(&path) {
                 return false;
@@ -494,15 +645,59 @@ pub(crate) fn only_game_caches(dir: &Path) -> bool {
             continue;
         }
         let name = entry.file_name();
-        let disposable = name
-            .to_str()
-            .is_some_and(|name| name.eq_ignore_ascii_case("sound.cache"));
+        let disposable = meta.is_file()
+            && name
+                .to_str()
+                .is_some_and(|name| name.eq_ignore_ascii_case("sound.cache"));
         if !disposable {
             return false;
         }
         saw_one = true;
     }
     saw_one
+}
+
+fn remove_game_cache_tree(dir: &Path, tf2_root: &Path) -> std::io::Result<()> {
+    validate_dir_within(tf2_root, dir)?;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let meta = fs::symlink_metadata(&path)?;
+        if crate::hash::metadata_is_link(&meta) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "refusing to traverse a linked cache path",
+            ));
+        }
+        if meta.is_dir() {
+            remove_game_cache_tree(&path, tf2_root)?;
+        } else if meta.is_file()
+            && entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.eq_ignore_ascii_case("sound.cache"))
+        {
+            refuse_if_running_among(live_process_names()).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "TF2 started while pruning profile files",
+                )
+            })?;
+            remove_file_force_within(tf2_root, &path)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "cache tree contains a non-cache entry",
+            ));
+        }
+    }
+    refuse_if_running_among(live_process_names()).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "TF2 started while pruning profile files",
+        )
+    })?;
+    remove_dir_within(tf2_root, dir)
 }
 
 pub(crate) fn prune_empty_parents(start: &Path, tf2_root: &Path) {
@@ -520,6 +715,9 @@ pub(crate) fn prune_empty_parents(start: &Path, tf2_root: &Path) {
         if stop.iter().any(|root| root == &dir) {
             break;
         }
+        if validate_dir_within(tf2_root, &dir).is_err() {
+            break;
+        }
         let empty = fs::read_dir(&dir)
             .ok()
             .is_some_and(|mut entries| entries.next().is_none());
@@ -529,12 +727,18 @@ pub(crate) fn prune_empty_parents(start: &Path, tf2_root: &Path) {
                 break;
             }
             let parent = dir.parent().map(Path::to_path_buf);
-            let _ = fs::remove_dir_all(&dir);
+            if remove_game_cache_tree(&dir, tf2_root).is_err() {
+                break;
+            }
             current = parent;
             continue;
         }
         let parent = dir.parent().map(Path::to_path_buf);
-        let _ = fs::remove_dir(&dir);
+        if refuse_if_running_among(live_process_names()).is_err()
+            || remove_dir_within(tf2_root, &dir).is_err()
+        {
+            break;
+        }
         current = parent;
     }
 }
@@ -737,6 +941,127 @@ mod tests {
     }
 
     #[test]
+    fn same_active_switch_retries_and_clears_pending_launch_sync() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let steam = dir.join("Steam");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        let a = save(&profiles, &root, "A");
+        crate::profile::set_manifest_launch_options(
+            &profiles,
+            &root,
+            &a,
+            "-novid -console".into(),
+            &unlocked().map(str::to_string),
+        )
+        .unwrap();
+        write_file(
+            &steam
+                .join("userdata")
+                .join("111")
+                .join("config")
+                .join("localconfig.vdf"),
+            &localconfig("-old"),
+        );
+
+        let mut steps = Vec::new();
+        let outcome = switch_profile_to_outcome(
+            &profiles,
+            &root,
+            &a,
+            unlocked(),
+            AbsorbOptions {
+                steam_roots: Some(std::slice::from_ref(&steam)),
+                ..no_steam()
+            },
+            |step| steps.push(step),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::Written));
+        assert_eq!(steps_of(&steps), vec![SwitchStep::Closed, SwitchStep::Done]);
+        assert_eq!(
+            crate::launch::read_launch_options_from(std::slice::from_ref(&steam)),
+            "-novid -console"
+        );
+        assert!(!load_manifest(&profiles, &a).unwrap().launch_sync_pending);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn full_switch_keeps_launch_sync_pending_until_same_active_retry() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let missing_steam = dir.join("missing-steam");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        let _a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
+        crate::profile::set_manifest_launch_options(
+            &profiles,
+            &root,
+            &b,
+            "-console".into(),
+            &unlocked().map(str::to_string),
+        )
+        .unwrap();
+
+        let switched = switch_profile_to_outcome(
+            &profiles,
+            &root,
+            &b,
+            unlocked(),
+            AbsorbOptions {
+                steam_roots: Some(std::slice::from_ref(&missing_steam)),
+                ..no_steam()
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(switched.steam_write, Some(LaunchWriteReason::NoAccount));
+        assert_eq!(
+            switched.library.active_profile_id.as_deref(),
+            Some(b.as_str())
+        );
+        assert!(load_manifest(&profiles, &b).unwrap().launch_sync_pending);
+
+        let steam = dir.join("Steam");
+        write_file(
+            &steam
+                .join("userdata")
+                .join("111")
+                .join("config")
+                .join("localconfig.vdf"),
+            &localconfig("-old"),
+        );
+        let retried = switch_profile_to_outcome(
+            &profiles,
+            &root,
+            &b,
+            unlocked(),
+            AbsorbOptions {
+                steam_roots: Some(std::slice::from_ref(&steam)),
+                ..no_steam()
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(retried.steam_write, Some(LaunchWriteReason::Written));
+        assert_eq!(
+            crate::launch::read_launch_options_from(std::slice::from_ref(&steam)),
+            "-console"
+        );
+        assert!(!load_manifest(&profiles, &b).unwrap().launch_sync_pending);
+        cleanup(&dir);
+    }
+
+    #[test]
     fn switch_replaces_surface_and_keeps_official_files() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
@@ -817,7 +1142,16 @@ mod tests {
         write_live(&root.join("tf/custom/pack/a.txt"), "user-changed\n");
         write_live(&root.join("tf/custom/stray/extra.txt"), "stray\n");
 
-        remove_unmodified_live(&profiles, &root, &a).unwrap();
+        let files: Vec<SwitchCleanupFile> = load_manifest(&profiles, &a)
+            .unwrap()
+            .files
+            .into_iter()
+            .map(|file| SwitchCleanupFile {
+                path: file.path,
+                sha256: file.sha256,
+            })
+            .collect();
+        remove_unmodified_live(&root, &files).unwrap();
         assert_eq!(
             fs::read(root.join("tf/custom/pack/a.txt")).unwrap(),
             b"user-changed\n"
@@ -1025,6 +1359,51 @@ mod tests {
     }
 
     #[test]
+    fn a_corrupt_target_source_fails_before_remove() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        write_live(&root.join("tf/custom/ahud/info.vdf"), "hud-a\n");
+        let a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
+        fs::write(
+            exclusive_file_path(&profiles, &b, "tf/cfg/config.cfg"),
+            b"tampered",
+        )
+        .unwrap();
+
+        let mut steps = Vec::new();
+        let err = switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |step| {
+            steps.push(step)
+        })
+        .unwrap_err();
+        assert!(err.message().contains("integrity verification"), "{err:?}");
+        assert!(!steps.iter().any(|step| step.step == SwitchStep::Remove));
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"binds-a\n"
+        );
+        assert_eq!(
+            fs::read(root.join("tf/custom/ahud/info.vdf")).unwrap(),
+            b"hud-a\n"
+        );
+        assert_eq!(
+            load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id
+                .as_deref(),
+            Some(a.as_str())
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
     fn a_failure_after_the_remove_step_clears_the_active_profile() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
@@ -1063,6 +1442,82 @@ mod tests {
         assert_eq!(
             library.active_profile_id, None,
             "a half-replaced live tree must not stay pointed at the old profile"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn active_commit_failure_keeps_a_durable_snapshot_and_never_emits_done() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        let _a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
+        let index_part = crate::hash::part_path(&crate::profile::index_file(&profiles));
+        let mut steps = Vec::new();
+        let err = switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |step| {
+            if step.step == SwitchStep::Cloud {
+                fs::create_dir_all(&index_part).unwrap();
+            }
+            steps.push(step);
+        })
+        .unwrap_err();
+
+        assert!(err.message().contains("mid-switch"), "{err:?}");
+        assert!(!steps.iter().any(|step| step.step == SwitchStep::Done));
+        let library = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(library.active_profile_id, None);
+        assert_eq!(
+            library.pending_switch_profile_id.as_deref(),
+            Some(b.as_str())
+        );
+        let pending = pending_switch_to(&profiles, &root).unwrap().unwrap();
+        assert!(pending.cleanup_files.iter().any(|file| {
+            file.path == "tf/cfg/config.cfg" && file.sha256 == crate::hash::sha256_hex(b"binds-b\n")
+        }));
+
+        // Even if B changes while recovery is pending, the immutable journal
+        // still knows how to remove bytes written by the failed attempt.
+        fs::remove_dir_all(&index_part).unwrap();
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &b,
+            "tf/cfg/config.cfg",
+            b"binds-b-new\n",
+            unlocked(),
+        )
+        .unwrap();
+        let mut active_at_done = false;
+        switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |step| {
+            if step.step == SwitchStep::Done {
+                active_at_done = load_library_from(&profiles, Some(&root))
+                    .unwrap()
+                    .active_profile_id
+                    .as_deref()
+                    == Some(b.as_str());
+            }
+        })
+        .unwrap();
+        assert!(
+            active_at_done,
+            "Done must follow the durable active-id commit"
+        );
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"binds-b-new\n"
+        );
+        assert_eq!(
+            load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .pending_switch_profile_id,
+            None
         );
         cleanup(&dir);
     }
