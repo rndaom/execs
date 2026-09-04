@@ -92,6 +92,7 @@ struct ZipPayload {
     blobs: HashMap<String, PathBuf>,
     creator: bool,
     skipped_files: usize,
+    import_notes: Vec<String>,
 }
 
 /// Removes the staging tree when the import returns, however it returns.
@@ -228,6 +229,7 @@ where
 
     let staging = StagingDir::create(profiles_dir)?;
     let mut payload = read_import_zip(zip_path, profiles_dir, &staging.path, review)?;
+    creator::seed_default_config(&mut payload, tf2_root, profiles_dir, &staging.path)?;
     let trust_creator = payload.creator && review.is_some_and(|review| review.creator);
     validate_payload_with_trust(&mut payload, trust_creator)?;
 
@@ -559,6 +561,7 @@ fn read_zip_payload(
         blobs,
         creator: false,
         skipped_files: 0,
+        import_notes: Vec::new(),
     })
 }
 
@@ -1453,11 +1456,116 @@ mod tests {
     }
 
     #[test]
+    fn split_creator_bundle_combines_custom_trees_and_seeds_clean_settings() {
+        let dir = crate::test_temp_dir().join(random_token());
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let zip = dir.join("split.zip");
+        write_raw_zip(
+            &zip,
+            &[
+                ("Scripts/cfg/autoexec.cfg", b"sensitivity 2.5\n"),
+                ("Mods/Sound/tf/custom/stuff/UI/hitsound.wav", b"audio"),
+                (
+                    "Mods/Surface/tf/custom/stuff/scripts/surfaceproperties.txt",
+                    b"surface",
+                ),
+                ("Mods/stock/tf/custom/workshop/UI/hitsound.wav", b"stock"),
+                ("Mods/Launch Options.txt", b"-w [your width] -dxlevel 98"),
+                ("Mods/Alternatives/poke/models/model.mdl", b"optional"),
+                ("Mods/Transparent/transparent.zip", b"nested optional zip"),
+            ],
+        );
+        let before = snapshot_tree(&root);
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &zip, unlocked()).unwrap();
+        assert_eq!(review.files, 4);
+        assert_eq!(review.skipped_files, 4);
+        assert_eq!(review.notes.len(), 2);
+        let library =
+            import_profile_with_review(&profiles, &root, &zip, unlocked(), Some(&review)).unwrap();
+        let id = &library.profiles[0].id;
+        let manifest = load_manifest(&profiles, id).unwrap();
+        assert!(manifest.launch_options.is_empty());
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/cfg/config.cfg")).unwrap(),
+            fs::read(root.join("tf/cfg/config_default.cfg")).unwrap()
+        );
+        assert_ne!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/cfg/config.cfg")).unwrap(),
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap()
+        );
+        assert!(manifest
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/execs-hitsounds/sound/ui/hitsound.wav"));
+        assert!(manifest
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/stuff/scripts/surfaceproperties.txt"));
+        assert_eq!(snapshot_tree(&root), before);
+        assert!(library.active_profile_id.is_none());
+
+        for entries in [
+            vec![
+                ("One/custom/pack/file.txt", b"one".as_slice()),
+                ("Two/custom/pack/FILE.txt", b"two".as_slice()),
+            ],
+            vec![
+                ("One/custom/stuff/UI/hitsound.wav", b"one".as_slice()),
+                (
+                    "Two/custom/execs-hitsounds/sound/ui/hitsound.wav",
+                    b"two".as_slice(),
+                ),
+            ],
+            vec![
+                ("One/cfg/autoexec.cfg", b"one".as_slice()),
+                ("Two/cfg/other.cfg", b"two".as_slice()),
+            ],
+        ] {
+            write_raw_zip(&zip, &entries);
+            assert!(
+                creator::inspect_profile_import_from(&profiles, &root, &zip, unlocked()).is_err()
+            );
+            assert_eq!(
+                load_library_from(&profiles, Some(&root))
+                    .unwrap()
+                    .profiles
+                    .len(),
+                1
+            );
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn creator_without_config_requires_readable_defaults_before_publication() {
+        let dir = crate::test_temp_dir().join(random_token());
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        let zip = dir.join("scripts.zip");
+        write_raw_zip(&zip, &[("Scripts/cfg/autoexec.cfg", b"echo hi")]);
+        let err =
+            creator::inspect_profile_import_from(&profiles, &root, &zip, unlocked()).unwrap_err();
+        assert!(err.message().contains("config_default.cfg"));
+        assert!(load_library_from(&profiles, Some(&root))
+            .unwrap()
+            .profiles
+            .is_empty());
+        cleanup(&dir);
+    }
+
+    #[test]
     fn creator_commands_require_review_and_approval_is_bound_to_zip_bytes() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");
         let root = dir.join("tf2");
         let path = dir.join("creator.zip");
+        write_live(
+            &root.join("tf/cfg/config_default.cfg"),
+            "unbindall\nbind w +forward\n",
+        );
         let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\n";
         write_raw_zip(&path, &[("/", b""), ("cfg/overrides/autoexec.cfg", cfg)]);
         assert!(import_profile_from(&profiles, &root, &path, unlocked())
@@ -1514,7 +1622,7 @@ mod tests {
             ],
             vec![
                 ("one/cfg/autoexec.cfg", b"echo one"),
-                ("two/custom/mod.vpk", b"two"),
+                ("two/cfg/other.cfg", b"echo two"),
             ],
             vec![("custom/mod.zip", b"nested")],
             vec![("README.txt", b"no profile files")],
@@ -1553,7 +1661,10 @@ mod tests {
     fn local_creator_zip_import_and_switch() {
         let path =
             PathBuf::from(std::env::var_os("EXECS_CREATOR_ZIP").expect("set EXECS_CREATOR_ZIP"));
-        let dir = crate::test_temp_dir();
+        // A fresh, short root avoids stale PID reuse and the Win32 path limit
+        // of the test executable (which has no desktop longPathAware manifest).
+        let dir = std::env::temp_dir().join(format!("execs-{}", &random_token()[..12]));
+        fs::create_dir(&dir).unwrap();
         let profiles = dir.join("execs/profiles");
         let root = dir.join("tf2");
         seed_live(&root);
@@ -1702,6 +1813,10 @@ mod tests {
     }
 
     fn seed_live(root: &Path) {
+        write_live(
+            &root.join("tf/cfg/config_default.cfg"),
+            "unbindall\nbind w +forward\n",
+        );
         write_live(
             &root.join("tf/cfg/overrides/autoexec.cfg"),
             "fov_desired 90\n",
@@ -2462,6 +2577,7 @@ mod tests {
         let mut payload = ZipPayload {
             creator: false,
             skipped_files: 0,
+            import_notes: Vec::new(),
             manifest: ProfileZipManifest {
                 schema: ZIP_SCHEMA,
                 name: "Too many".into(),

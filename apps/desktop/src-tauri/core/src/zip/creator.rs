@@ -10,6 +10,7 @@ pub struct ProfileImportReview {
     pub skipped_files: usize,
     pub creator: bool,
     pub warnings: Vec<String>,
+    pub notes: Vec<String>,
     // Approval belongs to these exact bytes, never just to a mutable pathname.
     pub(super) sha256: String,
 }
@@ -39,6 +40,7 @@ where
     let sha256 = sha256_file(zip_path).map_err(io_err)?;
     let staging = StagingDir::create(profiles)?;
     let mut payload = read_profile_zip(zip_path, profiles, &staging.path)?;
+    seed_default_config(&mut payload, tf2_root, profiles, &staging.path)?;
     // Trust can waive command-policy findings, never paths, parser
     // limits or corrupt archives. Native exports retain strict validation.
     if payload.creator {
@@ -78,6 +80,7 @@ where
         skipped_files: payload.skipped_files,
         creator: payload.creator,
         warnings,
+        notes: payload.import_notes,
         sha256,
     })
 }
@@ -105,7 +108,8 @@ pub(super) fn read_creator_zip(
     staging: &Path,
 ) -> Result<ZipPayload, ProfileError> {
     let mut entries = Vec::new();
-    let mut roots = HashSet::new();
+    let mut cfg_roots = HashSet::new();
+    let mut has_surface = false;
     let mut path_bytes = 0usize;
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(zip_invalid)?;
@@ -145,16 +149,19 @@ pub(super) fn read_creator_zip(
             .map(|position| {
                 let root = parts[..position].join("/");
                 let dest = format!("tf/{}", parts[position..].join("/"));
-                roots.insert(root);
+                if parts[position].eq_ignore_ascii_case("cfg") {
+                    cfg_roots.insert(root.to_lowercase());
+                }
+                has_surface = true;
                 dest
             });
         entries.push((index, name, mapped));
     }
-    if roots.len() != 1 {
-        return Err(invalid_zip(if roots.is_empty() {
+    if !has_surface || cfg_roots.len() > 1 {
+        return Err(invalid_zip(if !has_surface {
             "Choose an execs profile ZIP or a creator ZIP containing cfg/ or custom/."
         } else {
-            "This ZIP contains multiple config folders. Zip just one creator's cfg/ and custom/ together."
+            "This ZIP contains multiple cfg folders. Choose one config before importing. Separate custom folders can be combined when their files do not conflict."
         }));
     }
 
@@ -184,6 +191,7 @@ pub(super) fn read_creator_zip(
         blobs: HashMap::new(),
         creator: true,
         skipped_files: 0,
+        import_notes: Vec::new(),
     };
     let mut seen = HashSet::new();
     let mut total = 0u64;
@@ -192,14 +200,32 @@ pub(super) fn read_creator_zip(
             payload.skipped_files += 1;
             continue;
         };
-        let dest = normalize_rel_path(&mapped)?;
-        // Creator downloads often contain engine .scr/.txt files and caches.
-        // Only the profile-owned cfg layer and custom content are imported.
+        let mut dest = normalize_rel_path(&mapped)?;
+        // Filter the source before any relocation: a workshop or backup file
+        // must not become profile-owned merely by having a sound filename.
         if !is_profile_ownable_rel_path(&dest)
             || (dest.starts_with("tf/cfg/") && !has_extension(&dest, "cfg"))
         {
             payload.skipped_files += 1;
             continue;
+        }
+        // Older packs put UI/hitsound.wav immediately inside a custom pack.
+        // Source requires sound/ui; move only these two unambiguous sound names.
+        if let Some(rest) = dest.strip_prefix("tf/custom/") {
+            let parts: Vec<_> = rest.split('/').collect();
+            if parts.len() == 3
+                && parts[1].eq_ignore_ascii_case("ui")
+                && matches!(
+                    parts[2].to_ascii_lowercase().as_str(),
+                    "hitsound.wav" | "killsound.wav"
+                )
+            {
+                let sound = parts[2].to_ascii_lowercase();
+                payload.import_notes.push(format!(
+                    "Moved {name} to sound/ui/{sound} so TF2 can play it."
+                ));
+                dest = format!("tf/custom/execs-hitsounds/sound/ui/{sound}");
+            }
         }
         if is_zip_file_name(&dest) {
             return Err(invalid_zip("nested zips are not allowed"));
@@ -246,4 +272,54 @@ pub(super) fn read_creator_zip(
         ));
     }
     Ok(payload)
+}
+
+pub(super) fn seed_default_config(
+    payload: &mut ZipPayload,
+    tf2_root: &Path,
+    staging_root: &Path,
+    staging: &Path,
+) -> Result<(), ProfileError> {
+    const CONFIG: &str = "tf/cfg/config.cfg";
+    if !payload.creator
+        || payload
+            .manifest
+            .files
+            .iter()
+            .any(|file| file.path.eq_ignore_ascii_case(CONFIG))
+    {
+        return Ok(());
+    }
+    let bytes = crate::archive::read_regular_file_bounded_within(
+        tf2_root,
+        &tf2_root.join("tf/cfg/config_default.cfg"),
+        MAX_IMPORTED_CFG_BYTES as u64,
+    )
+    .map_err(|_| {
+        invalid_zip("Valve config_default.cfg is missing or unreadable in this TF2 install.")
+    })?
+    .ok_or_else(|| invalid_zip("Valve config_default.cfg is too large to import."))?;
+    let total = payload
+        .exclusive
+        .values()
+        .chain(payload.blobs.values())
+        .try_fold(0u64, |total, path| {
+            Ok::<_, ProfileError>(total.saturating_add(fs::metadata(path).map_err(io_err)?.len()))
+        })?;
+    if total.saturating_add(bytes.len() as u64) > MAX_TOTAL_UNCOMPRESSED {
+        return Err(invalid_zip("This profile exceeds the import size limit."));
+    }
+    let staged = staging.join("default-config");
+    crate::hash::write_atomic_within(staging_root, &staged, &bytes).map_err(io_err)?;
+    payload.exclusive.insert(CONFIG.into(), staged);
+    payload.manifest.files.push(ProfileFile {
+        path: CONFIG.into(),
+        sha256: sha256_hex(&bytes),
+        storage: FileStorage::Exclusive,
+    });
+    payload.import_notes.push(
+        "No config.cfg was supplied. Start with TF2's default settings plus the creator's scripts."
+            .into(),
+    );
+    Ok(())
 }

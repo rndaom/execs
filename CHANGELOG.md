@@ -12,6 +12,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Profiles: creator bundles with separate Scripts/cfg and mod custom folders
+  now import together. Missing config.cfg starts from TF2 defaults, and legacy
+  hitsounds directly under UI are placed in sound/ui so they play.
 - Profiles: import results stay visible after settings refresh; successful
   imports offer a button to switch to the new profile.
 - Profiles: unreadable custom files stop a save or switch without removing

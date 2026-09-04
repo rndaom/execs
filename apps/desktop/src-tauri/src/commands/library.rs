@@ -205,9 +205,13 @@ pub async fn import_profile(
 
 fn creator_import_message(review: &execs_core::ProfileImportReview) -> String {
     let mut message = format!(
-        "Create a new profile named \"{}\" with {} cfg and custom files.\n\nYour current profile stays active. Choose the new profile to switch to it.\n\n{} auxiliary, protected or cache files will be left out. No launch options were included.",
+        "Create a new profile named \"{}\" with {} cfg and custom files.\n\nYour current profile stays active. Choose the new profile to switch to it.\n\n{} files outside the supported cfg/custom layout, auxiliary files or caches will be left out. Optional mod variants, nested archives and launch-option instructions remain in the source ZIP. Launch options are left empty.",
         review.name, review.files, review.skipped_files,
     );
+    for note in review.notes.iter().take(6) {
+        message.push_str("\n\n");
+        message.extend(note.chars().take(500));
+    }
     if !review.warnings.is_empty() {
         message.push_str("\n\nConfig checks flagged these commands (first finding per file):");
         for warning in review.warnings.iter().take(6) {
