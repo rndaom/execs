@@ -5,8 +5,15 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- Profiles: import creator config ZIPs containing cfg and custom folders as
+  a new profile, with a review before keeping the creator's cfg commands.
+
 ### Fixed
 
+- Profiles: import results stay visible after settings refresh; successful
+  imports offer a button to switch to the new profile.
 - Profiles: unreadable custom files stop a save or switch without removing
   their saved copies; retry once the files are available again.
 - Profiles: changing only a file or folder's capitalization preserves its

@@ -603,6 +603,7 @@ fn seven_z_dictionary_size(method: &[u8], properties: &[u8]) -> Result<Option<u6
 enum CfgScanMode {
     Imported,
     SecretsOnly,
+    TrustedImport,
 }
 
 /// Enforce the hostile-config subset of cfglint at the backend trust boundary.
@@ -610,6 +611,12 @@ enum CfgScanMode {
 /// invoking the import commands directly.
 pub fn validate_imported_cfg(path: &str, bytes: &[u8]) -> Result<(), ProfileError> {
     scan_cfg(path, bytes, CfgScanMode::Imported)
+}
+
+/// Explicitly reviewed creator cfgs are kept verbatim. Parser budgets still
+/// apply; export continues to refuse credentials in these local imports.
+pub(crate) fn validate_trusted_cfg(path: &str, bytes: &[u8]) -> Result<(), ProfileError> {
+    scan_cfg(path, bytes, CfgScanMode::TrustedImport)
 }
 
 /// Export refuses credentials rather than silently sharing them. Other
@@ -722,11 +729,12 @@ fn check_cfg_command(
     let value = command.get(1).map(|value| value.to_ascii_lowercase());
     let engine_top = engine_managed && top_level;
 
-    if name == "password"
-        || matches!(
-            name.as_str(),
-            "rcon" | "rcon_address" | "rcon_password" | "rcon_port"
-        )
+    if mode != CfgScanMode::TrustedImport
+        && (name == "password"
+            || matches!(
+                name.as_str(),
+                "rcon" | "rcon_address" | "rcon_password" | "rcon_port"
+            ))
     {
         let archived_unset = name == "password"
             && engine_top
@@ -741,7 +749,7 @@ fn check_cfg_command(
         }
         return Ok(());
     }
-    if mode == CfgScanMode::SecretsOnly {
+    if mode != CfgScanMode::Imported {
         if matches!(name.as_str(), "bind" | "alias") && command.len() > 2 {
             scan_cfg_payload(
                 path,
@@ -1572,6 +1580,22 @@ mod tests {
         let err =
             validate_imported_cfg("tf/cfg/overrides/tokens.cfg", tokens.as_bytes()).unwrap_err();
         assert!(err.message().contains("too many tokens"), "{err:?}");
+    }
+
+    #[test]
+    fn explicit_creator_trust_preserves_commands_but_not_parser_budget_exceptions() {
+        let path = "tf/cfg/config.cfg";
+        let bytes = b"password saved-server-password\nbind f \"rcon_password saved-admin-password\"\nsv_cheats 1\n";
+        assert!(validate_imported_cfg(path, bytes).is_err());
+        validate_trusted_cfg(path, bytes).unwrap();
+        assert!(validate_cfg_has_no_secrets(path, bytes).is_err());
+        assert!(validate_trusted_cfg(path, b"echo\0bad").is_err());
+        assert!(validate_trusted_cfg(path, &[0xff]).is_err());
+        assert!(validate_trusted_cfg(path, &vec![b';'; MAX_CFG_SEGMENTS + 1]).is_err());
+        assert!(
+            validate_trusted_cfg(path, "x ".repeat(MAX_CFG_TOKENS_PER_COMMAND + 1).as_bytes())
+                .is_err()
+        );
     }
 
     #[test]

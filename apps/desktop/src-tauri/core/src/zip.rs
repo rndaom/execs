@@ -30,6 +30,9 @@ use crate::profile::{
 };
 use crate::vpk::read_vpk_dir_file_filtered;
 
+mod creator;
+pub use creator::{import_reviewed_profile, inspect_profile_import, ProfileImportReview};
+
 pub const ZIP_SCHEMA: u32 = 1;
 pub const ZIP_MANIFEST_NAME: &str = "execs-profile.json";
 
@@ -87,6 +90,8 @@ struct ZipPayload {
     manifest: ProfileZipManifest,
     exclusive: HashMap<String, PathBuf>,
     blobs: HashMap<String, PathBuf>,
+    creator: bool,
+    skipped_files: usize,
 }
 
 /// Removes the staging tree when the import returns, however it returns.
@@ -196,6 +201,20 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    import_profile_with_review(profiles_dir, tf2_root, zip_path, running_names, None)
+}
+
+fn import_profile_with_review<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    zip_path: &Path,
+    running_names: I,
+    review: Option<&ProfileImportReview>,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
@@ -208,8 +227,9 @@ where
     }
 
     let staging = StagingDir::create(profiles_dir)?;
-    let mut payload = read_profile_zip(zip_path, profiles_dir, &staging.path)?;
-    validate_payload(&mut payload)?;
+    let mut payload = read_import_zip(zip_path, profiles_dir, &staging.path, review)?;
+    let trust_creator = payload.creator && review.is_some_and(|review| review.creator);
+    validate_payload_with_trust(&mut payload, trust_creator)?;
 
     let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(payload.manifest.files.len());
     for file in &payload.manifest.files {
@@ -373,12 +393,58 @@ fn read_profile_zip(
     staging_root: &Path,
     staging: &Path,
 ) -> Result<ZipPayload, ProfileError> {
+    read_import_zip(zip_path, staging_root, staging, None)
+}
+
+fn read_import_zip(
+    zip_path: &Path,
+    staging_root: &Path,
+    staging: &Path,
+    review: Option<&ProfileImportReview>,
+) -> Result<ZipPayload, ProfileError> {
     let file = fs::File::open(zip_path).map_err(io_err)?;
-    let mut archive = ZipArchive::new(file).map_err(zip_invalid)?;
+    let mut file = file;
+    if let Some(review) = review {
+        if sha256_reader(&mut file).map_err(io_err)? != review.sha256 {
+            return Err(invalid_zip(
+                "The ZIP changed after review. Choose it again.",
+            ));
+        }
+        file.rewind().map_err(io_err)?;
+    }
+    let mut verification = file.try_clone().map_err(io_err)?;
+    let archive = ZipArchive::new(file).map_err(zip_invalid)?;
+    let payload = read_zip_payload(archive, zip_path, staging_root, staging)?;
+    if let Some(review) = review {
+        verification.rewind().map_err(io_err)?;
+        if sha256_reader(&mut verification).map_err(io_err)? != review.sha256 {
+            return Err(invalid_zip(
+                "The ZIP changed during import. Choose it again.",
+            ));
+        }
+    }
+    Ok(payload)
+}
+
+fn read_zip_payload(
+    mut archive: ZipArchive<fs::File>,
+    zip_path: &Path,
+    staging_root: &Path,
+    staging: &Path,
+) -> Result<ZipPayload, ProfileError> {
     if archive.len() > MAX_PROFILE_ZIP_ENTRIES {
         return Err(invalid_zip(format!(
             "profile zip has more than {MAX_PROFILE_ZIP_ENTRIES} entries"
         )));
+    }
+
+    // A native export always keeps its strict schema and validation, including
+    // when malformed. Never reinterpret it as a creator archive on failure.
+    if !archive
+        .file_names()
+        .any(|name| name.replace('\\', "/").trim_start_matches("./") == ZIP_MANIFEST_NAME)
+    {
+        return creator::read_creator_zip(archive, zip_path, staging_root, staging);
     }
 
     let mut manifest = None;
@@ -491,6 +557,8 @@ fn read_profile_zip(
         manifest,
         exclusive,
         blobs,
+        creator: false,
+        skipped_files: 0,
     })
 }
 
@@ -627,6 +695,13 @@ fn classify_zip_entry(raw: &str) -> Result<Option<ZipRole>, ProfileError> {
 }
 
 fn validate_payload(payload: &mut ZipPayload) -> Result<(), ProfileError> {
+    validate_payload_with_trust(payload, false)
+}
+
+fn validate_payload_with_trust(
+    payload: &mut ZipPayload,
+    trust_creator: bool,
+) -> Result<(), ProfileError> {
     if payload.manifest.name.trim().is_empty()
         || payload.manifest.name.chars().count() > MAX_PROFILE_NAME_CHARS
         || payload.manifest.name.chars().any(char::is_control)
@@ -688,7 +763,7 @@ fn validate_payload(payload: &mut ZipPayload) -> Result<(), ProfileError> {
             if sha256_file(staged).map_err(io_err)? != hash {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
-            validate_imported_profile_file(&path, staged)?;
+            validate_imported_profile_file(&path, staged, trust_creator)?;
             required_blobs.insert(hash);
         } else {
             if file.storage != FileStorage::Exclusive {
@@ -701,7 +776,7 @@ fn validate_payload(payload: &mut ZipPayload) -> Result<(), ProfileError> {
             if sha256_file(staged).map_err(io_err)? != file.sha256.to_ascii_lowercase() {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
-            validate_imported_profile_file(&path, staged)?;
+            validate_imported_profile_file(&path, staged, trust_creator)?;
             required_exclusive.insert(path);
         }
     }
@@ -720,10 +795,19 @@ fn validate_payload(payload: &mut ZipPayload) -> Result<(), ProfileError> {
     Ok(())
 }
 
-fn validate_imported_profile_file(path: &str, staged: &Path) -> Result<(), ProfileError> {
+fn validate_imported_profile_file(
+    path: &str,
+    staged: &Path,
+    trust_creator: bool,
+) -> Result<(), ProfileError> {
+    let validate_cfg = if trust_creator {
+        crate::archive::validate_trusted_cfg
+    } else {
+        validate_imported_cfg
+    };
     if has_extension(path, "cfg") {
         let bytes = read_cfg_for_scan(staged, path)?;
-        validate_imported_cfg(path, &bytes)?;
+        validate_cfg(path, &bytes)?;
     } else if has_extension(path, "vpk") {
         // Old profiles may carry opaque `.vpk`-named files that TF2 simply
         // ignores. Preserve only that narrow compatibility: once the file has
@@ -744,7 +828,7 @@ fn validate_imported_profile_file(path: &str, staged: &Path) -> Result<(), Profi
                 invalid_zip(format!("invalid imported VPK {path}: {}", err.message()))
             })?;
         for (entry, bytes) in cfgs.files {
-            validate_imported_cfg(&format!("{path}/{entry}"), &bytes)?;
+            validate_cfg(&format!("{path}/{entry}"), &bytes)?;
         }
     }
     Ok(())
@@ -1266,6 +1350,276 @@ mod tests {
   "files": []
 }
 "#;
+
+    #[test]
+    fn creator_zip_import_preserves_files_and_switches_only_when_requested() {
+        for prefix in ["", "tf/", "Creator config/tf/", "Creator config/"] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("execs/profiles");
+            let root = dir.join("Team Fortress 2");
+            seed_live(&root);
+            let saved = save_current_as_to(
+                &profiles,
+                &root,
+                "Main",
+                unlocked(),
+                SaveCurrentOptions::default(),
+            )
+            .unwrap();
+            let before_live = snapshot_tree(&root);
+            let before_library = snapshot_tree(&profiles);
+            let zip_path = dir.join("Creator config.zip");
+            let entries: Vec<_> = [
+                (
+                    "cfg/config.cfg",
+                    b"unbindall\nbind w +forward\npassword 0\n".as_slice(),
+                ),
+                (
+                    "cfg/overrides/autoexec.cfg",
+                    b"sensitivity 2.5\nexec overrides/binds\n".as_slice(),
+                ),
+                ("cfg/overrides/binds.cfg", b"bind space +jump\n".as_slice()),
+                ("custom/hud/info.vdf", b"hud\n".as_slice()),
+                ("custom/hud/resource/ui/test.res", b"layout\n".as_slice()),
+                (
+                    "custom/damage/sound/ui/hitsound.wav",
+                    b"creator audio".as_slice(),
+                ),
+                (
+                    "custom/mastercomfig-base.vpk",
+                    b"opaque legacy vpk".as_slice(),
+                ),
+                ("custom/low.vpk.sound.cache", b"cache".as_slice()),
+                ("custom/execs-preloader.vpk", b"global".as_slice()),
+                ("custom/workshop/stock.vpk", b"stock".as_slice()),
+                ("cfg/settings.scr", b"engine".as_slice()),
+            ]
+            .into_iter()
+            .map(|(path, bytes)| (format!("{prefix}{path}"), bytes))
+            .collect();
+            let borrowed: Vec<_> = entries
+                .iter()
+                .map(|(path, bytes)| (path.as_str(), *bytes))
+                .collect();
+            write_raw_zip(&zip_path, &borrowed);
+            let review =
+                creator::inspect_profile_import_from(&profiles, &root, &zip_path, unlocked())
+                    .unwrap();
+            assert!(review.creator);
+            assert_eq!(review.name, "Creator config");
+            assert_eq!(review.files, 7);
+            assert_eq!(review.skipped_files, 4);
+            assert!(review.warnings.is_empty());
+            // Inspection/cancel leaves both the library and live files intact.
+            assert_eq!(snapshot_tree(&profiles), before_library);
+            assert_eq!(snapshot_tree(&root), before_live);
+            let imported =
+                import_profile_with_review(&profiles, &root, &zip_path, unlocked(), Some(&review))
+                    .unwrap();
+            assert_eq!(imported.profiles.len(), 2);
+            assert_eq!(imported.active_profile_id, saved.active_profile_id);
+            assert_eq!(snapshot_tree(&root), before_live);
+            let id = &imported
+                .profiles
+                .iter()
+                .find(|p| Some(&p.id) != saved.active_profile_id.as_ref())
+                .unwrap()
+                .id;
+            let manifest = load_manifest(&profiles, id).unwrap();
+            assert_eq!(manifest.files.len(), 7);
+            assert!(manifest.launch_options.is_empty());
+            assert!(manifest
+                .files
+                .iter()
+                .any(|f| f.storage == FileStorage::Shared));
+            let no_steam = Vec::new();
+            crate::switch::switch_profile_to(
+                &profiles,
+                &root,
+                id,
+                unlocked(),
+                crate::absorb::AbsorbOptions {
+                    steam_roots: Some(&no_steam),
+                    ..Default::default()
+                },
+                |_| {},
+            )
+            .unwrap();
+            for file in &manifest.files {
+                assert_eq!(sha256_file(&root.join(&file.path)).unwrap(), file.sha256);
+            }
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn creator_commands_require_review_and_approval_is_bound_to_zip_bytes() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        let path = dir.join("creator.zip");
+        let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\n";
+        write_raw_zip(&path, &[("/", b""), ("cfg/overrides/autoexec.cfg", cfg)]);
+        assert!(import_profile_from(&profiles, &root, &path, unlocked())
+            .unwrap_err()
+            .message()
+            .contains("sv_cheats"));
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        assert_eq!(review.warnings.len(), 1);
+        assert!(review.warnings[0].contains("sv_cheats"));
+        let imported =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &imported.profiles[0].id,
+                "tf/cfg/overrides/autoexec.cfg"
+            ))
+            .unwrap(),
+            cfg
+        );
+        assert!(export_profile_to(
+            &profiles,
+            &root,
+            &imported.profiles[0].id,
+            &dir.join("export.zip")
+        )
+        .is_err());
+        let before = snapshot_tree(&profiles);
+        write_raw_zip(&path, &[("cfg/autoexec.cfg", b"sensitivity 4\n")]);
+        assert!(
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review))
+                .unwrap_err()
+                .message()
+                .contains("changed after review")
+        );
+        assert_eq!(snapshot_tree(&profiles), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn creator_review_never_waives_archive_integrity() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        let path = dir.join("creator.zip");
+        let cases: Vec<Vec<(&str, &[u8])>> = vec![
+            vec![("../cfg/autoexec.cfg", b"echo bad")],
+            vec![("/cfg/autoexec.cfg", b"echo bad")],
+            vec![("cfg/../autoexec.cfg", b"echo bad")],
+            vec![
+                ("cfg/autoexec.cfg", b"echo one"),
+                ("cfg/AUTOEXEC.cfg", b"echo two"),
+            ],
+            vec![
+                ("one/cfg/autoexec.cfg", b"echo one"),
+                ("two/custom/mod.vpk", b"two"),
+            ],
+            vec![("custom/mod.zip", b"nested")],
+            vec![("README.txt", b"no profile files")],
+            vec![("cfg/autoexec.cfg", b"echo\0bad")],
+            vec![
+                ("execs-profile.json", b"broken native manifest"),
+                ("cfg/autoexec.cfg", b"echo hi"),
+            ],
+        ];
+        for entries in cases {
+            write_raw_zip(&path, &entries);
+            assert!(
+                creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).is_err(),
+                "{entries:?}"
+            );
+            assert!(load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .profiles
+                .is_empty());
+            assert!(!profiles.join(IMPORT_STAGING_DIR).exists());
+        }
+        write_raw_zip(&path, &[("cfg/autoexec.cfg", b"echo hi")]);
+        assert_eq!(
+            creator::inspect_profile_import_from(&profiles, &root, &path, [tf2_name()])
+                .unwrap_err()
+                .code(),
+            "GameRunning"
+        );
+        cleanup(&dir);
+    }
+
+    /// Run against a user's archive without redistributing their content or
+    /// touching their real installation/library. Set EXECS_CREATOR_ZIP explicitly.
+    #[test]
+    #[ignore = "requires a local creator ZIP via EXECS_CREATOR_ZIP"]
+    fn local_creator_zip_import_and_switch() {
+        let path =
+            PathBuf::from(std::env::var_os("EXECS_CREATOR_ZIP").expect("set EXECS_CREATOR_ZIP"));
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let before = snapshot_tree(&root);
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        eprintln!("Review: {review:?}");
+        assert!(review.creator);
+        let imported =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        assert_eq!(imported.profiles.len(), 2);
+        assert_eq!(imported.active_profile_id, saved.active_profile_id);
+        assert_eq!(snapshot_tree(&root), before);
+        let id = &imported
+            .profiles
+            .iter()
+            .find(|p| Some(&p.id) != saved.active_profile_id.as_ref())
+            .unwrap()
+            .id;
+        let manifest = load_manifest(&profiles, id).unwrap();
+        assert_eq!(manifest.files.len(), review.files);
+        let no_steam = Vec::new();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            id,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                steam_roots: Some(&no_steam),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap();
+        for file in &manifest.files {
+            assert_eq!(
+                sha256_file(&root.join(&file.path)).unwrap(),
+                file.sha256,
+                "{}",
+                file.path
+            );
+        }
+        // Returning to the original profile restores its cfg and custom files.
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            saved.active_profile_id.as_ref().unwrap(),
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                steam_roots: Some(&no_steam),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(snapshot_tree(&root), before);
+        cleanup(&dir);
+    }
 
     /// The importer must not `read_to_end` every entry into RAM before a single
     /// byte is validated: a deflate bomb OOM-kills the app.
@@ -2106,6 +2460,8 @@ mod tests {
             storage: FileStorage::Exclusive,
         };
         let mut payload = ZipPayload {
+            creator: false,
+            skipped_files: 0,
             manifest: ProfileZipManifest {
                 schema: ZIP_SCHEMA,
                 name: "Too many".into(),

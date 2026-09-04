@@ -2,7 +2,7 @@
 
 use execs_core::{ProfileError, ProfileLibrary, SwitchProgress};
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
 use super::shared::{blocking, with_root, RootContext};
 use crate::error::CommandError;
@@ -146,8 +146,10 @@ pub async fn import_profile(
     app: AppHandle,
 ) -> Result<ProfileLibrary, CommandError> {
     let context = with_root(|root| Ok(RootContext::capture(&root))).await?;
+    let picker_app = app.clone();
     let picked = tauri::async_runtime::spawn_blocking(move || {
-        app.dialog()
+        picker_app
+            .dialog()
             .file()
             .set_title("Import profile")
             .add_filter("Zip", &["zip"])
@@ -157,16 +159,68 @@ pub async fn import_profile(
     .map_err(|err| CommandError::unknown(err.to_string()))?;
     // Take the gate only once the user has actually picked something: an open
     // dialog must not block the absorb path behind it.
-    let _guard = gate.lock_for_write().await?;
     let Some(picked) = picked else {
+        let _guard = gate.lock_for_library_read().await?;
         return with_root(|root| Ok(execs_core::load_library(Some(&root))?)).await;
     };
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let inspect_path = path.clone();
+    let (context, review) = {
+        let _guard = gate.lock_for_write().await?;
+        with_root(move |root| {
+            context.ensure_current(&root)?;
+            let review = execs_core::inspect_profile_import(&root, &inspect_path)?;
+            Ok((context, review))
+        })
+        .await?
+    };
+    if review.creator {
+        let message = creator_import_message(&review);
+        let accepted = tauri::async_runtime::spawn_blocking(move || {
+            app.dialog()
+                .message(message)
+                .title("Import creator config")
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                    "Trust and import".into(),
+                    "Cancel".into(),
+                ))
+                .blocking_show()
+        })
+        .await
+        .map_err(|err| CommandError::unknown(err.to_string()))?;
+        if !accepted {
+            let _guard = gate.lock_for_library_read().await?;
+            return with_root(|root| Ok(execs_core::load_library(Some(&root))?)).await;
+        }
+    }
+    let _guard = gate.lock_for_write().await?;
     with_root(move |root| {
         context.ensure_current(&root)?;
-        Ok(execs_core::import_profile(&root, &path)?)
+        Ok(execs_core::import_reviewed_profile(&root, &path, &review)?)
     })
     .await
+}
+
+fn creator_import_message(review: &execs_core::ProfileImportReview) -> String {
+    let mut message = format!(
+        "Create a new profile named \"{}\" with {} cfg and custom files.\n\nYour current profile stays active. Choose the new profile to switch to it.\n\n{} auxiliary, protected or cache files will be left out. No launch options were included.",
+        review.name, review.files, review.skipped_files,
+    );
+    if !review.warnings.is_empty() {
+        message.push_str("\n\nConfig checks flagged these commands (first finding per file):");
+        for warning in review.warnings.iter().take(6) {
+            message.push_str("\n\n");
+            message.extend(warning.chars().take(500));
+        }
+        if review.warnings.len() > 6 {
+            message.push_str(&format!(
+                "\n\nAnd {} more files.",
+                review.warnings.len() - 6
+            ));
+        }
+    }
+    message.push_str("\n\nThe imported cfg commands are kept unchanged and run when TF2 loads them. Saved server credentials, if flagged above, are kept too; exporting a profile with credentials is blocked. Import only if you trust this creator.");
+    message
 }

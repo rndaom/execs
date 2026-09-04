@@ -90,6 +90,49 @@ export function ReadyPanel({
         </div>
       ) : null}
 
+      {profiles.importError ? (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center gap-3 border-b border-error/50 bg-error/10 px-5 py-2 text-ink"
+        >
+          <p className="t-body flex-1">{profiles.importError}</p>
+          <button type="button" className="btn btn-ghost" onClick={profiles.dismissImport}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {profiles.importing ? (
+        <div
+          role="status"
+          className="t-body shrink-0 border-b border-edge px-5 py-2 text-ink-muted"
+        >
+          Importing profile…
+        </div>
+      ) : profiles.importedProfile ? (
+        <div
+          role="status"
+          className="flex shrink-0 flex-wrap items-center gap-3 border-b border-edge px-5 py-2"
+        >
+          <p className="t-body">Imported {profiles.importedProfile.name} as a new profile.</p>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={controlsBusy || running || recoveryTargetId !== null}
+            onClick={() => {
+              if (profiles.importedProfile) {
+                void profiles.switchProfile(profiles.importedProfile.id);
+              }
+            }}
+          >
+            Switch to profile
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={profiles.dismissImport}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <PackPrompt
         delta={running || profiles.packPromptDeferred ? null : profiles.packPrompt}
         busy={busy}

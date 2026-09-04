@@ -112,7 +112,8 @@ pub use wizard::{
     GitHubAsset, GitHubRelease, OfficialAddon, StartFrom, WizardAsset, WizardResult, WizardSpec,
 };
 pub use zip::{
-    export_profile, export_profile_to, import_profile, import_profile_from, safe_zip_file_name,
+    export_profile, export_profile_to, import_profile, import_profile_from,
+    import_reviewed_profile, inspect_profile_import, safe_zip_file_name, ProfileImportReview,
 };
 
 #[cfg(test)]

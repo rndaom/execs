@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Api } from "../lib/api";
-import type { AbsorbDelta, PackChoice, ProfileLibrary, Tf2Install } from "../lib/bridge";
+import type {
+  AbsorbDelta,
+  PackChoice,
+  ProfileLibrary,
+  ProfileSummary,
+  Tf2Install,
+} from "../lib/bridge";
 import {
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
   hasPackChanges,
+  newlyImportedProfile,
 } from "../lib/library-ui";
 import type { SwitchProgressController } from "./useSwitchProgress";
 
@@ -23,6 +30,10 @@ export type ProfileLibraryState = {
   onBindSyncHandled: (request: number) => void;
   saveCurrent: (name: string) => Promise<boolean>;
   importProfile: () => Promise<void>;
+  importing: boolean;
+  importError: string | null;
+  importedProfile: ProfileSummary | null;
+  dismissImport: () => void;
   exportProfile: (id: string) => Promise<void>;
   switchProfile: (id: string) => Promise<void>;
   answerPackPrompt: (choice: PackChoice) => Promise<void>;
@@ -55,6 +66,9 @@ export function useProfileLibrary(
   const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
   const [packPromptDeferred, setPackPromptDeferred] = useState(false);
   const [absorbNonce, setAbsorbNonce] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importedProfile, setImportedProfile] = useState<ProfileSummary | null>(null);
 
   // Load the library for a confirmed root.
   useEffect(() => {
@@ -164,12 +178,20 @@ export function useProfileLibrary(
       return;
     }
     setError(null);
+    setImportedProfile(null);
+    setImportError(null);
+    setImporting(true);
     setBusy(true);
     try {
-      setLibrary(await api.importProfile());
+      const next = await api.importProfile();
+      setLibrary(next);
+      setImportedProfile(newlyImportedProfile(library, next));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not import that profile.");
+      // Settings reloads clear the shared error after absorb. Keep this result
+      // until dismissed or retried so a failed import cannot flash and vanish.
+      setImportError(err instanceof Error ? err.message : "Could not import that profile.");
     } finally {
+      setImporting(false);
       setBusy(false);
     }
   }, [api, library, running, setError, setBusy]);
@@ -204,6 +226,7 @@ export function useProfileLibrary(
       setBusy(true);
       try {
         setLibrary(await api.switchProfile(id));
+        setImportedProfile(null);
         progress.complete();
         // Re-offer whatever the user deferred: the delta outlived the switch.
         setPackPromptDeferred(false);
@@ -248,6 +271,8 @@ export function useProfileLibrary(
     setPackPromptDeferred(false);
     setBindSyncRequest(null);
     setAbsorbNonce(0);
+    setImportedProfile(null);
+    setImportError(null);
   }, []);
 
   const onBindSyncHandled = useCallback((request: number) => {
@@ -264,6 +289,13 @@ export function useProfileLibrary(
     onBindSyncHandled,
     saveCurrent,
     importProfile,
+    importing,
+    importError,
+    importedProfile,
+    dismissImport: () => {
+      setImportedProfile(null);
+      setImportError(null);
+    },
     exportProfile,
     switchProfile,
     answerPackPrompt,
