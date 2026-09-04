@@ -581,7 +581,7 @@ pub fn resolve_hud(manifest: &ProfileManifest) -> Option<HudStatus> {
     packs.sort();
     Some(HudStatus {
         record: HudRecord {
-            id: packs.into_iter().next()?,
+            id: packs.into_iter().next()?.to_ascii_lowercase(),
             hash: None,
             source: HudSource::Local,
             options: BTreeMap::new(),
@@ -874,7 +874,7 @@ pub fn load_hud_tree_from_profile(
 /// manifest keeps the folder as it was on disk (`tf/custom/RaysHUD/...` after
 /// an absorb), and a case-sensitive prefix strip saw zero files there.
 fn hud_file_rel<'a>(path: &'a str, hud_id: &str) -> Option<&'a str> {
-    if pack_key(path)? != hud_id.to_ascii_lowercase() {
+    if !pack_key(path)?.eq_ignore_ascii_case(hud_id) {
         return None;
     }
     let rest = path.strip_prefix("tf/custom/")?;
@@ -885,9 +885,8 @@ fn hud_file_rel<'a>(path: &'a str, hud_id: &str) -> Option<&'a str> {
 /// The folder name the manifest uses for the HUD `hud_id`, as spelled in its
 /// paths. `None` when the profile carries no files for that HUD.
 pub fn manifest_hud_folder(files: &[ProfileFile], hud_id: &str) -> Option<String> {
-    let wanted = hud_id.to_ascii_lowercase();
     files.iter().find_map(|file| {
-        if pack_key(&file.path)? != wanted {
+        if !pack_key(&file.path)?.eq_ignore_ascii_case(hud_id) {
             return None;
         }
         let rest = file.path.strip_prefix("tf/custom/")?;

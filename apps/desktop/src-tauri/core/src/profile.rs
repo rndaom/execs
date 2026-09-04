@@ -16,7 +16,7 @@ use crate::hash::{
     copy_and_sha256_exact_within, copy_and_sha256_within, copy_verified_atomic_within,
     move_dir_no_replace_within, move_file_within, read_small_text_bounded, remove_dir_within,
     remove_file_force_within, sha256_file, sha256_file_exact, sha256_hex, validate_dir_within,
-    validate_file_within, write_atomic_within,
+    validate_file_within, validate_write_target_within, write_atomic_within,
 };
 use crate::launch::{find_cloud_config, read_launch_options, sanitize_launch_options};
 use crate::process_lock::{live_process_names, refuse_if_running_among, WriteLockError};
@@ -2121,7 +2121,11 @@ fn snapshot_live_change(
             }
             Some(hash)
         }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            validate_write_target_within(tf2_root, &live)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
+            None
+        }
         Err(err) => return Err(ProfileError::Io(err.to_string())),
     };
     if new_sha256.is_none() && old_sha256.is_none() {

@@ -320,6 +320,78 @@ fn validate_existing_parent_within(root: &Path, path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Validate a prospective file destination without creating any of its
+/// missing parent directories. Existing ancestors must be ordinary
+/// directories beneath `root`, and an existing destination must be a regular
+/// file. This lets transaction preparation reject a linked live path before a
+/// durable recovery journal is published.
+pub fn validate_write_target_within(root: &Path, path: &Path) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| invalid_path("destination has no parent"))?;
+    let rel = parent
+        .strip_prefix(root)
+        .map_err(|_| invalid_path("destination escapes its allowed root"))?;
+    let root_meta = match fs::symlink_metadata(root) {
+        Ok(meta) => meta,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            if rel
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_)))
+            {
+                return Ok(());
+            }
+            return Err(invalid_path("destination contains a non-normal component"));
+        }
+        Err(err) => return Err(err),
+    };
+    if metadata_is_link(&root_meta) || !root_meta.is_dir() {
+        return Err(invalid_path("allowed root is a link or non-directory"));
+    }
+    let canonical_root = fs::canonicalize(root)?;
+    let mut current = root.to_path_buf();
+    let mut ancestor_missing = false;
+    for component in rel.components() {
+        use std::path::Component;
+        let Component::Normal(component) = component else {
+            return Err(invalid_path("destination contains a non-normal component"));
+        };
+        current.push(component);
+        if ancestor_missing {
+            continue;
+        }
+        match fs::symlink_metadata(&current) {
+            Ok(meta) => {
+                if metadata_is_link(&meta) || !meta.is_dir() {
+                    return Err(invalid_path(format!(
+                        "refusing to traverse a link or non-directory: {}",
+                        current.display()
+                    )));
+                }
+                let resolved = fs::canonicalize(&current)?;
+                if !resolved.starts_with(&canonical_root) {
+                    return Err(invalid_path(format!(
+                        "destination resolves outside its allowed root: {}",
+                        current.display()
+                    )));
+                }
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => ancestor_missing = true,
+            Err(err) => return Err(err),
+        }
+    }
+
+    match fs::symlink_metadata(path) {
+        Ok(meta) if metadata_is_link(&meta) || !meta.is_file() => Err(invalid_path(format!(
+            "refusing to replace a link or non-file: {}",
+            path.display()
+        ))),
+        Ok(_) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
 fn prepare_part(part: &Path) -> io::Result<File> {
     match fs::symlink_metadata(part) {
         Ok(meta) if metadata_is_link(&meta) || meta.is_dir() => {
@@ -977,6 +1049,19 @@ mod tests {
     }
 
     #[test]
+    fn write_target_validation_allows_missing_parents_without_creating_them() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        let destination = root.join("missing/tree/file.bin");
+
+        validate_write_target_within(&root, &destination).unwrap();
+
+        assert!(!root.join("missing").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn verified_copy_never_publishes_a_hash_mismatch() {
         let dir = crate::test_temp_dir();
         let src = dir.join("source.bin");
@@ -1015,6 +1100,24 @@ mod tests {
         assert_eq!(
             std::fs::read(outside.join("victim.txt")).unwrap(),
             b"outside"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_target_validation_refuses_a_linked_parent() {
+        use std::os::unix::fs::symlink;
+
+        let dir = crate::test_temp_dir();
+        let root = dir.join("root");
+        let outside = dir.join("outside");
+        std::fs::create_dir_all(root.join("tf/custom")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, root.join("tf/custom/pack")).unwrap();
+
+        assert!(
+            validate_write_target_within(&root, &root.join("tf/custom/pack/file.bin")).is_err()
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
