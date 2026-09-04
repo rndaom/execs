@@ -7,6 +7,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Profiles: unreadable custom files stop a save or switch without removing
+  their saved copies; retry once the files are available again.
+- Profiles: changing only a file or folder's capitalization preserves its
+  contents and no longer leaves it behind when switching profiles.
+- Mods: GameBanana's All and search results exclude unsupported categories,
+  and installation checks the category before downloading a pack.
 - Backend: interrupted profile, HUD, Comfig, crosshair, viewmodel, sound,
   and Casual-preloader changes now recover as complete transactions instead
   of leaving a partly replaced live setup.

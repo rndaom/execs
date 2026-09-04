@@ -4180,7 +4180,7 @@ where
     refuse_if_running_among(running_names).map_err(Into::into)
 }
 
-fn source_file_len(path: &Path) -> Result<u64, ProfileError> {
+pub(crate) fn source_file_len(path: &Path) -> Result<u64, ProfileError> {
     let file = fs::File::open(path).map_err(|err| ProfileError::Io(err.to_string()))?;
     let metadata = file
         .metadata()

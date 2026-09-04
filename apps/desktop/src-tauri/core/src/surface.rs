@@ -589,11 +589,16 @@ fn collect_custom(
     budget: &mut InventoryBudget,
 ) -> Result<(), ProfileError> {
     let dir = tf2_root.join("tf").join("custom");
-    if !dir.exists() {
+    if !dir
+        .try_exists()
+        .map_err(|err| ProfileError::Io(err.to_string()))?
+    {
         return Ok(());
     }
+    // An incomplete custom scan must not become a partial capture or an
+    // absorb deletion. Junk/global entries are still deliberately excluded.
     walk_tree(
-        &dir, tf2_root, dests, skipped, visited, budget, false, false, true, 0,
+        &dir, tf2_root, dests, skipped, visited, budget, true, false, true, 0,
     )?;
     // Not "skipped" — the global pack is deliberately install-wide and the
     // stock entries belong to Valve or to an interrupted write of ours, so
@@ -751,10 +756,29 @@ fn walk_tree(
             budget.skip(skipped, dest_rel_or_display(tf2_root, &path));
             continue;
         }
+        if is_global_custom_file(&dest_rel_or_display(tf2_root, &path)) {
+            continue;
+        }
         if is_symlink(&path) || !is_within_root(&path, tf2_root) {
             return Err(ProfileError::InvalidPath);
         }
-        if path.is_dir() {
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(err) if critical => {
+                return Err(ProfileError::Io(format!(
+                    "Could not read {} ({err})",
+                    path.display()
+                )));
+            }
+            Err(err) => {
+                budget.skip(
+                    skipped,
+                    format!("{} ({err})", dest_rel_or_display(tf2_root, &path)),
+                );
+                continue;
+            }
+        };
+        if metadata.is_dir() {
             walk_tree(
                 &path,
                 tf2_root,
@@ -769,7 +793,7 @@ fn walk_tree(
             )?;
             continue;
         }
-        if path.is_file() {
+        if metadata.is_file() {
             take_file(
                 tf2_root, &path, None, dests, skipped, budget, critical, staging,
             )?;
