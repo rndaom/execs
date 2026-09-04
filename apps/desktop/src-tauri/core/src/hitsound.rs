@@ -34,6 +34,18 @@ pub const HITSOUND_MAX_BYTES: usize = 8 * 1024 * 1024;
 const SUPPORTED_RATES: [u32; 3] = [11025, 22050, 44100];
 const TARGET_RATE: u32 = 44100;
 
+/// The band of header sample rates this app believes. Real audio lives in
+/// 8–192 kHz; a header claiming 8 Hz is a corrupt or hostile file, and the
+/// resampler would try to expand it by thousands of times (an 8 MB file at
+/// "8 Hz" asks for tens of gigabytes and aborts the process).
+const MIN_SAMPLE_RATE: u32 = 8_000;
+const MAX_SAMPLE_RATE: u32 = 192_000;
+
+/// Longest clip this app converts. A hit sound is a fraction of a second;
+/// 30 s of stereo 16-bit 44.1 kHz is 5.3 MB, inside [`HITSOUND_MAX_BYTES`],
+/// so nothing that auditions is refused later at apply.
+const MAX_HITSOUND_SECONDS: u64 = 30;
+
 const WAVE_FORMAT_PCM: u16 = 1;
 const WAVE_FORMAT_ADPCM: u16 = 2;
 const WAVE_FORMAT_IEEE_FLOAT: u16 = 3;
@@ -128,7 +140,15 @@ pub struct HitsoundRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WavInfo {
+    /// The effective format: WAVE_FORMAT_EXTENSIBLE unwrapped to its
+    /// sub-format, so the decoders know what the samples are.
     pub format_tag: u16,
+    /// The tag as written in the file. The Source mixer dispatches on this
+    /// one and knows only PCM and MS-ADPCM, so an extensible-wrapped PCM file
+    /// (`format_tag` 1, `raw_format_tag` 0xFFFE) plays nothing until it is
+    /// rewritten with a plain header.
+    #[serde(skip)]
+    pub raw_format_tag: u16,
     pub channels: u16,
     pub sample_rate: u32,
     pub bits_per_sample: u16,
@@ -216,6 +236,7 @@ fn effective_tag(fmt: &[u8]) -> u16 {
 pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
     let chunks = wav_chunks(bytes)?;
     let fmt = chunks.fmt;
+    let raw_format_tag = read_u16(fmt, 0).unwrap_or(0);
     let format_tag = effective_tag(fmt);
     let channels = read_u16(fmt, 2).unwrap_or(0);
     let sample_rate = read_u32(fmt, 4).unwrap_or(0);
@@ -223,6 +244,11 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
     let bits_per_sample = read_u16(fmt, 14).unwrap_or(0);
     if channels == 0 || sample_rate == 0 {
         return Err("That WAV has no channels or no sample rate.".into());
+    }
+    if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&sample_rate) {
+        return Err(format!(
+            "That WAV's header says {sample_rate} Hz. This app accepts {MIN_SAMPLE_RATE} to {MAX_SAMPLE_RATE} Hz — re-export it at 44100 Hz."
+        ));
     }
     let data_bytes = chunks.data.len();
     // Byte rate is the honest way to time compressed data; fall back to the
@@ -238,6 +264,7 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
         .min(u32::MAX as u64) as u32;
     Ok(WavInfo {
         format_tag,
+        raw_format_tag,
         channels,
         sample_rate,
         bits_per_sample,
@@ -246,10 +273,12 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
     })
 }
 
-/// Whether the engine plays this file as-is.
+/// Whether the engine plays this file as-is. The raw tag must be plain PCM
+/// or MS-ADPCM: the mixer never unwraps WAVE_FORMAT_EXTENSIBLE, so such a
+/// file has to be rewritten even when its samples already qualify.
 pub fn wav_is_engine_ready(info: &WavInfo) -> bool {
     let rate_ok = SUPPORTED_RATES.contains(&info.sample_rate);
-    let format_ok = match info.format_tag {
+    let format_ok = match info.raw_format_tag {
         WAVE_FORMAT_PCM => matches!(info.bits_per_sample, 8 | 16),
         WAVE_FORMAT_ADPCM => true,
         _ => false,
@@ -257,9 +286,10 @@ pub fn wav_is_engine_ready(info: &WavInfo) -> bool {
     rate_ok && format_ok && (1..=2).contains(&info.channels)
 }
 
-/// Bytes TF2 will play: the input verbatim when it already qualifies, or a
-/// 16-bit 44.1 kHz PCM re-encode of any PCM/float WAV that does not. ADPCM
-/// at an unsupported rate cannot be decoded here and is refused.
+/// Bytes TF2 will play: the input's own samples under a clean header when it
+/// already qualifies, or a 16-bit 44.1 kHz PCM re-encode of any PCM/float WAV
+/// that does not. ADPCM at an unsupported rate cannot be decoded here and is
+/// refused.
 pub fn prepare_hitsound_wav(bytes: &[u8]) -> Result<(Vec<u8>, WavInfo), String> {
     if bytes.len() > HITSOUND_MAX_BYTES {
         return Err(format!(
@@ -272,11 +302,38 @@ pub fn prepare_hitsound_wav(bytes: &[u8]) -> Result<(Vec<u8>, WavInfo), String> 
         return Err("That WAV is empty.".into());
     }
     if wav_is_engine_ready(&info) {
-        return Ok((bytes.to_vec(), info));
+        let chunks = wav_chunks(bytes)?;
+        let clean = rebuild_wav(chunks.fmt, chunks.data);
+        let clean_info = inspect_wav(&clean)?;
+        return Ok((clean, clean_info));
     }
     let converted = convert_to_pcm16(bytes, &info, 1.0)?;
     let converted_info = inspect_wav(&converted)?;
     Ok((converted, converted_info))
+}
+
+/// `RIFF` / `fmt ` / `data` and nothing else, the sample bytes untouched.
+/// Editors leave `cue `, `smpl` and `LIST` chunks behind, and the engine
+/// reads a cue point as a loop start — the classic "my hit sound repeats"
+/// report — so an installed file never carries anything but those two
+/// chunks. A file that was already just those two comes out byte-identical.
+fn rebuild_wav(fmt: &[u8], data: &[u8]) -> Vec<u8> {
+    let fmt_pad = fmt.len() & 1;
+    let data_pad = data.len() & 1;
+    let riff_len = 4 + 8 + fmt.len() + fmt_pad + 8 + data.len() + data_pad;
+    let mut out = Vec::with_capacity(8 + riff_len);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(riff_len as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVE");
+    out.extend_from_slice(b"fmt ");
+    out.extend_from_slice(&(fmt.len() as u32).to_le_bytes());
+    out.extend_from_slice(fmt);
+    out.resize(out.len() + fmt_pad, 0);
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    out.extend_from_slice(data);
+    out.resize(out.len() + data_pad, 0);
+    out
 }
 
 /// Like [`prepare_hitsound_wav`], then louder by `boost_db` with a soft
@@ -317,42 +374,53 @@ pub fn prepare_hitsound_wav_boosted(
 fn convert_to_pcm16(bytes: &[u8], info: &WavInfo, gain: f32) -> Result<Vec<u8>, String> {
     let chunks = wav_chunks(bytes)?;
     let channels = usize::from(info.channels);
-    let mut frames = decode_frames(chunks.data, info)?;
-    if frames.is_empty() {
+    let mut samples = decode_frames(chunks.data, info)?;
+    if samples.is_empty() {
         return Err("That WAV is empty.".into());
     }
     if gain > 1.0 {
-        for frame in &mut frames {
-            for sample in frame.iter_mut() {
-                *sample = (*sample * gain).tanh();
-            }
+        for sample in &mut samples {
+            *sample = (*sample * gain).tanh();
         }
     }
     // Keep mono as mono and fold anything wider than stereo down to stereo:
     // the engine's spatial-stereo prefix only knows one or two channels.
     let out_channels = channels.min(2);
-    let mut folded: Vec<Vec<f32>> = (0..out_channels)
-        .map(|_| Vec::with_capacity(frames.len()))
-        .collect();
-    for frame in &frames {
-        for (channel, sink) in folded.iter_mut().enumerate() {
-            sink.push(frame[channel]);
-        }
-    }
     let rate = if SUPPORTED_RATES.contains(&info.sample_rate) {
         info.sample_rate
     } else {
         TARGET_RATE
     };
-    let resampled: Vec<Vec<f32>> = folded
-        .into_iter()
-        .map(|samples| resample_linear(&samples, info.sample_rate, rate))
+    let resampled: Vec<Vec<f32>> = (0..out_channels)
+        .map(|channel| {
+            let lane: Vec<f32> = samples
+                .iter()
+                .skip(channel)
+                .step_by(channels)
+                .copied()
+                .collect();
+            resample_linear(&lane, info.sample_rate, rate)
+        })
         .collect();
     Ok(encode_pcm16(&resampled, rate))
 }
 
-/// Interleaved frames as f32 in [-1, 1], one Vec per frame.
-fn decode_frames(data: &[u8], info: &WavInfo) -> Result<Vec<Vec<f32>>, String> {
+/// Refuse a clip longer than [`MAX_HITSOUND_SECONDS`] before anything is
+/// allocated for it. Resampling keeps the duration, so checking the input
+/// frames at the input rate bounds the output too.
+fn refuse_if_too_long(frames: usize, rate: u32) -> Result<(), String> {
+    if frames as u64 > MAX_HITSOUND_SECONDS * u64::from(rate) {
+        let seconds = (frames as u64).div_ceil(u64::from(rate.max(1)));
+        return Err(format!(
+            "That WAV is about {seconds} seconds long. A hit sound is a fraction of a second; this app converts up to {MAX_HITSOUND_SECONDS} seconds."
+        ));
+    }
+    Ok(())
+}
+
+/// Interleaved samples as f32 in [-1, 1], `channels` per frame, one flat
+/// allocation for the whole clip.
+fn decode_frames(data: &[u8], info: &WavInfo) -> Result<Vec<f32>, String> {
     let channels = usize::from(info.channels);
     let bits = usize::from(info.bits_per_sample);
     let sample_bytes = bits / 8;
@@ -388,18 +456,20 @@ fn decode_frames(data: &[u8], info: &WavInfo) -> Result<Vec<Vec<f32>>, String> {
         }
     };
     let frame_bytes = sample_bytes * channels;
-    let mut frames = Vec::with_capacity(data.len() / frame_bytes.max(1));
+    let frame_count = data.len() / frame_bytes;
+    refuse_if_too_long(frame_count, info.sample_rate)?;
+    let mut samples = Vec::with_capacity(frame_count * channels);
     for frame in data.chunks_exact(frame_bytes) {
-        let mut samples = Vec::with_capacity(channels);
         for channel in 0..channels {
             let at = channel * sample_bytes;
             samples.push(decode(&frame[at..at + sample_bytes]).clamp(-1.0, 1.0));
         }
-        frames.push(samples);
     }
-    Ok(frames)
+    Ok(samples)
 }
 
+/// `from` and `to` are both inside the accepted rate band and the clip is
+/// already length-checked, so the output is at most a few million samples.
 fn resample_linear(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
     if from == to || samples.len() < 2 {
         return samples.to_vec();
@@ -463,6 +533,9 @@ const ADPCM_COEFFS: [(i32, i32); 7] = [
 const ADPCM_ADAPT: [i32; 16] = [
     230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230,
 ];
+/// Largest step the decoder keeps: the biggest `delta` whose product with the
+/// largest adaptation factor still fits an i32 (ffmpeg's `INT_MAX / 768`).
+const ADPCM_MAX_DELTA: i32 = i32::MAX / 768;
 
 /// A copy of `bytes` the webview can play. The engine takes 4-bit MS-ADPCM
 /// (every comfig.app sound is one) but browser audio elements do not, so
@@ -540,7 +613,11 @@ fn decode_ms_adpcm(bytes: &[u8], info: &WavInfo) -> Result<Vec<u8>, String> {
             out[ch].push(sample as f32 / 32768.0);
             sample2[ch] = sample1[ch];
             sample1[ch] = sample;
-            delta[ch] = ((ADPCM_ADAPT[usize::from(nibble)] * delta[ch]) >> 8).max(16);
+            // Widen for the multiply and pin the step, as ffmpeg does: a run
+            // of large nibbles otherwise grows `delta` past i32 in about a
+            // dozen samples (a debug panic, wrapped garbage in release).
+            let next = (i64::from(ADPCM_ADAPT[usize::from(nibble)]) * i64::from(delta[ch])) >> 8;
+            delta[ch] = next.clamp(16, i64::from(ADPCM_MAX_DELTA)) as i32;
             ch += 1;
             if ch == channels {
                 ch = 0;
@@ -1051,6 +1128,10 @@ mod tests {
     }
 
     fn adpcm_wav(channels: u16, blocks: usize, nibble: u8) -> Vec<u8> {
+        adpcm_wav_with_delta(channels, blocks, nibble, 16)
+    }
+
+    fn adpcm_wav_with_delta(channels: u16, blocks: usize, nibble: u8, delta: i16) -> Vec<u8> {
         let block_align: u16 = 7 * channels + 8 * channels;
         let samples_per_block: u16 = 2 + 16;
         let mut fmt = Vec::new();
@@ -1067,7 +1148,7 @@ mod tests {
             // predictor 0: coef (256, 0) → predicted = sample1
             data.resize(data.len() + usize::from(channels), 0u8);
             for _ in 0..channels {
-                data.extend_from_slice(&16i16.to_le_bytes()); // delta
+                data.extend_from_slice(&delta.to_le_bytes());
             }
             for _ in 0..channels {
                 data.extend_from_slice(&1000i16.to_le_bytes()); // sample1
@@ -1183,5 +1264,175 @@ mod tests {
         assert!(peak(&loud) < 32767, "soft clip never pins to full scale");
         assert_eq!(clamp_boost_db(7), 6);
         assert_eq!(clamp_boost_db(40), 12);
+    }
+
+    /// A header claiming 8 Hz used to go through the resampler, which asked
+    /// for `samples * 44100 / 8` floats — an allocation failure, and those
+    /// abort the process rather than panic.
+    #[test]
+    fn an_absurd_header_rate_is_refused_not_resampled() {
+        let err = prepare_hitsound_wav(&pcm_wav(8, 1, 16, 1000)).unwrap_err();
+        assert!(err.contains("8 Hz"), "{err}");
+        assert!(inspect_wav(&pcm_wav(7_999, 1, 16, 10)).is_err());
+        assert!(inspect_wav(&pcm_wav(192_001, 1, 16, 10)).is_err());
+        assert!(inspect_wav(&pcm_wav(8_000, 1, 16, 10)).is_ok());
+        assert!(inspect_wav(&pcm_wav(192_000, 1, 16, 10)).is_ok());
+        // The boosted path inspects the same header.
+        let err = prepare_hitsound_wav_boosted(&pcm_wav(8, 1, 16, 1000), 6).unwrap_err();
+        assert!(err.contains("8 Hz"), "{err}");
+    }
+
+    /// An honest low-rate, 8-bit file can be small on disk and huge once
+    /// resampled to 16-bit 44.1 kHz. Refuse by duration before decoding so
+    /// nothing that auditions is refused later at apply for its size.
+    #[test]
+    fn an_over_long_clip_is_refused_before_conversion() {
+        let too_long = pcm_wav(8_000, 1, 8, 8_000 * 31);
+        assert!(too_long.len() < HITSOUND_MAX_BYTES);
+        let err = prepare_hitsound_wav(&too_long).unwrap_err();
+        assert!(err.contains("31 seconds"), "{err}");
+        let err = prepare_hitsound_wav_boosted(&too_long, 6).unwrap_err();
+        assert!(err.contains("seconds"), "{err}");
+
+        let at_the_limit = pcm_wav(8_000, 1, 8, 8_000 * 30);
+        let (out, info) = prepare_hitsound_wav(&at_the_limit).unwrap();
+        assert_eq!(info.sample_rate, 44100);
+        assert!(
+            out.len() <= HITSOUND_MAX_BYTES,
+            "a clip under the duration cap always fits the apply size cap"
+        );
+    }
+
+    fn extensible_pcm_wav(channels: u16, frames: usize) -> Vec<u8> {
+        let block = channels * 2;
+        let mut fmt = Vec::new();
+        fmt.extend_from_slice(&WAVE_FORMAT_EXTENSIBLE.to_le_bytes());
+        fmt.extend_from_slice(&channels.to_le_bytes());
+        fmt.extend_from_slice(&44100u32.to_le_bytes());
+        fmt.extend_from_slice(&(44100 * u32::from(block)).to_le_bytes());
+        fmt.extend_from_slice(&block.to_le_bytes());
+        fmt.extend_from_slice(&16u16.to_le_bytes());
+        fmt.extend_from_slice(&22u16.to_le_bytes()); // cbSize
+        fmt.extend_from_slice(&16u16.to_le_bytes()); // valid bits
+        fmt.extend_from_slice(&3u32.to_le_bytes()); // channel mask
+                                                    // KSDATAFORMAT_SUBTYPE_PCM: the tag in the first two bytes.
+        fmt.extend_from_slice(&[
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38,
+            0x9B, 0x71,
+        ]);
+        let mut data = Vec::new();
+        for frame in 0..frames {
+            for _ in 0..channels {
+                let value = ((frame % 100) as f32 / 100.0) * 2.0 - 1.0;
+                data.extend_from_slice(&((value * 32767.0) as i16).to_le_bytes());
+            }
+        }
+        let mut out = Vec::new();
+        out.extend_from_slice(b"RIFF");
+        out.extend_from_slice(&((4 + 8 + fmt.len() + 8 + data.len()) as u32).to_le_bytes());
+        out.extend_from_slice(b"WAVE");
+        out.extend_from_slice(b"fmt ");
+        out.extend_from_slice(&(fmt.len() as u32).to_le_bytes());
+        out.extend_from_slice(&fmt);
+        out.extend_from_slice(b"data");
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        out.extend_from_slice(&data);
+        out
+    }
+
+    /// The Source mixer dispatches on the raw format tag and knows only PCM
+    /// and MS-ADPCM, so an extensible-wrapped 16-bit 44.1 kHz file — exactly
+    /// what modern editors export — played nothing when written verbatim.
+    #[test]
+    fn extensible_pcm_is_rewritten_with_a_plain_header() {
+        let wav = extensible_pcm_wav(2, 441);
+        let info = inspect_wav(&wav).unwrap();
+        assert_eq!(info.format_tag, WAVE_FORMAT_PCM);
+        assert_eq!(info.raw_format_tag, WAVE_FORMAT_EXTENSIBLE);
+        assert!(!wav_is_engine_ready(&info));
+
+        let (out, out_info) = prepare_hitsound_wav(&wav).unwrap();
+        assert_ne!(out, wav);
+        assert_eq!(out_info.raw_format_tag, WAVE_FORMAT_PCM);
+        assert_eq!(out_info.format_tag, WAVE_FORMAT_PCM);
+        assert_eq!(out_info.sample_rate, 44100);
+        assert_eq!(out_info.bits_per_sample, 16);
+        assert_eq!(out_info.channels, 2);
+        assert_eq!(out_info.data_bytes, info.data_bytes);
+        assert!(wav_is_engine_ready(&out_info));
+        assert_eq!(read_u16(&out, 20), Some(WAVE_FORMAT_PCM), "raw tag on disk");
+
+        let (boosted, boosted_info) = prepare_hitsound_wav_boosted(&wav, 6).unwrap();
+        assert_eq!(boosted_info.raw_format_tag, WAVE_FORMAT_PCM);
+        assert!(wav_is_engine_ready(&inspect_wav(&boosted).unwrap()));
+    }
+
+    /// A run of the largest nibble triples `delta` every sample; from a
+    /// header delta of 32767 that overflowed i32 within a dozen samples.
+    #[test]
+    fn adpcm_step_growth_never_overflows() {
+        let wav = adpcm_wav_with_delta(1, 2, 8, i16::MAX);
+        let decoded = preview_wav(&wav);
+        let info = inspect_wav(&decoded).unwrap();
+        assert_eq!(
+            info.format_tag, WAVE_FORMAT_PCM,
+            "decoded, not passed through"
+        );
+        assert_eq!(info.data_bytes, 2 * 18 * 2);
+        let at = decoded.len() - info.data_bytes;
+        let samples: Vec<i16> = decoded[at..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
+            .collect();
+        // Every nibble pushes down by 8 × delta: after each block's two
+        // header samples the signal pins to the floor and stays there
+        // instead of wrapping back positive.
+        for block in samples.as_chunks::<18>().0 {
+            assert_eq!(&block[..2], &[500, 1000], "{samples:?}");
+            assert!(block[2..].iter().all(|s| *s <= -32767), "{samples:?}");
+        }
+        // The stereo variant walks the same path for both channels.
+        let _ = preview_wav(&adpcm_wav_with_delta(2, 3, 8, i16::MAX));
+        assert_eq!(ADPCM_MAX_DELTA, 2_796_202);
+    }
+
+    /// Editors leave `cue ` and `smpl` chunks in exports; the engine treats
+    /// a cue point as a loop start. Even a file whose format qualifies is
+    /// rewritten to fmt + data with its sample bytes untouched.
+    #[test]
+    fn an_engine_ready_file_is_rewritten_with_only_fmt_and_data() {
+        let clean = pcm_wav(44100, 1, 16, 100);
+        let mut cued = Vec::new();
+        cued.extend_from_slice(&clean[..36]); // RIFF … fmt chunk
+        cued.extend_from_slice(b"cue ");
+        cued.extend_from_slice(&28u32.to_le_bytes());
+        cued.extend_from_slice(&1u32.to_le_bytes()); // one cue point
+        cued.extend_from_slice(&[0u8; 24]);
+        cued.extend_from_slice(&clean[36..]); // data chunk
+        cued.extend_from_slice(b"LIST");
+        cued.extend_from_slice(&4u32.to_le_bytes());
+        cued.extend_from_slice(b"INFO");
+        let riff_len = (cued.len() - 8) as u32;
+        cued[4..8].copy_from_slice(&riff_len.to_le_bytes());
+        assert!(wav_is_engine_ready(&inspect_wav(&cued).unwrap()));
+
+        let (out, info) = prepare_hitsound_wav(&cued).unwrap();
+        assert_eq!(out, clean, "same samples, only fmt and data");
+        assert!(wav_is_engine_ready(&info));
+        assert!(!out.windows(4).any(|w| w == b"cue "));
+
+        // ADPCM with an odd-length trailing chunk is rebuilt the same way.
+        let adpcm = adpcm_wav(1, 2, 0);
+        let mut tagged = adpcm.clone();
+        tagged.extend_from_slice(b"smpl");
+        tagged.extend_from_slice(&3u32.to_le_bytes());
+        tagged.extend_from_slice(&[1, 2, 3, 0]);
+        let riff_len = (tagged.len() - 8) as u32;
+        tagged[4..8].copy_from_slice(&riff_len.to_le_bytes());
+        let (out, info) = prepare_hitsound_wav(&tagged).unwrap();
+        assert_eq!(out, adpcm);
+        assert_eq!(info.raw_format_tag, WAVE_FORMAT_ADPCM);
     }
 }
