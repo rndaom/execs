@@ -250,62 +250,51 @@ pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
 /// JSON rejects. Comments outside string literals are blanked; strings are
 /// left alone so a URL with `//` in it survives.
 fn strip_json_comments(raw: &str) -> String {
-    let bytes = raw.as_bytes();
     let mut out = String::with_capacity(raw.len());
-    let mut i = 0;
+    let mut chars = raw.chars().peekable();
     let mut in_string = false;
     let mut escaped = false;
-    while i < bytes.len() {
-        let c = bytes[i];
+    while let Some(c) = chars.next() {
         if in_string {
-            out.push(c as char);
+            // Whole chars, never bytes: pushing a byte `as char` turned an
+            // `é` inside a label into two Latin-1 characters.
+            out.push(c);
             if escaped {
                 escaped = false;
-            } else if c == b'\\' {
+            } else if c == '\\' {
                 escaped = true;
-            } else if c == b'"' {
+            } else if c == '"' {
                 in_string = false;
             }
-            i += 1;
             continue;
         }
         match c {
-            b'"' => {
+            '"' => {
                 in_string = true;
                 out.push('"');
-                i += 1;
             }
-            b'/' if bytes.get(i + 1) == Some(&b'/') => {
-                while i < bytes.len() && bytes[i] != b'\n' {
-                    i += 1;
+            '/' if chars.peek() == Some(&'/') => {
+                for next in chars.by_ref() {
+                    if next == '\n' {
+                        out.push('\n');
+                        break;
+                    }
                 }
             }
-            b'/' if bytes.get(i + 1) == Some(&b'*') => {
-                i += 2;
-                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-                    i += 1;
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut last = '\0';
+                for next in chars.by_ref() {
+                    if last == '*' && next == '/' {
+                        break;
+                    }
+                    last = next;
                 }
-                i += 2;
             }
-            _ => {
-                // Non-ASCII bytes only ever appear inside strings in these
-                // files, but copying byte-wise keeps any that do not intact.
-                let ch_len = utf8_len(c);
-                out.push_str(&raw[i..(i + ch_len).min(bytes.len())]);
-                i += ch_len;
-            }
+            _ => out.push(c),
         }
     }
     out
-}
-
-fn utf8_len(first: u8) -> usize {
-    match first {
-        0x00..=0x7F => 1,
-        0xC0..=0xDF => 2,
-        0xE0..=0xEF => 3,
-        _ => 4,
-    }
 }
 
 pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
@@ -1240,5 +1229,26 @@ mod tests {
         assert_eq!(options.len(), 2);
         assert_eq!(options[0].name, "");
         assert_eq!(options[1].label, "Fancy // not a comment");
+    }
+
+    /// Non-ASCII inside a string value used to be pushed byte by byte as
+    /// Latin-1 chars, so `é` came out as mojibake.
+    #[test]
+    fn stripping_comments_keeps_non_ascii_strings_intact() {
+        let raw = "{ // café\n \"Label\": \"Santé — 100%\", /* naïve */ \"Value\": \"ü\" }";
+        let stripped = strip_json_comments(raw);
+        assert_eq!(
+            stripped,
+            "{ \n \"Label\": \"Santé — 100%\",  \"Value\": \"ü\" }"
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&stripped).unwrap();
+        assert_eq!(parsed["Label"], "Santé — 100%");
+        assert_eq!(parsed["Value"], "ü");
+        // An escaped quote does not end the string; a `//` after it is still
+        // string content.
+        assert_eq!(
+            strip_json_comments(r#"{"a": "x\"//y", "b": 1} // tail"#),
+            r#"{"a": "x\"//y", "b": 1} "#
+        );
     }
 }
