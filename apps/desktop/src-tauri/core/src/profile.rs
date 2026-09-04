@@ -52,7 +52,7 @@ thread_local! {
 /// Every long-running profile transaction re-samples through this boundary.
 /// The test-only override is thread-local so parallel tests cannot authorize
 /// or block one another.
-fn profile_live_process_names() -> Vec<String> {
+pub(crate) fn profile_live_process_names() -> Vec<String> {
     #[cfg(test)]
     {
         let sampled = TEST_PROFILE_PROCESS_SAMPLER.with(|slot| {
@@ -309,6 +309,9 @@ pub struct ProfileManifest {
     /// them, remove them, and offer their particles to the preloader.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mods: Vec<crate::mods::ModRecord>,
+    /// Desired preloader mods. None denotes a legacy profile, not inheritance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preloader: Option<crate::preloader::PreloaderSelection>,
     /// Pack keys the user chose to Keep out of the profile. Without this the
     /// same prompt returns on every boot and after every TF2 quit until they
     /// pick Update. Cleared by an Update.
@@ -1149,6 +1152,7 @@ where
             viewmodel: None,
             hitsound: None,
             mods: Vec::new(),
+            preloader: None,
             ignored_packs: Vec::new(),
             cloud_sync_pending: false,
         };
@@ -1300,6 +1304,7 @@ where
             )
         })
         .collect();
+    let captured_preloader = crate::preloader::selection_for_snapshot(profiles_dir)?;
     if let Some(profile_id) = reusable_empty_profile(profiles_dir, &index) {
         let captured_name = name.clone();
         mutate_profile_files_impl(
@@ -1314,6 +1319,7 @@ where
             &running,
             move |manifest| {
                 manifest.name = captured_name;
+                manifest.preloader = captured_preloader;
                 manifest.launch_options = launch;
                 // Save-current reads these options from the Steam state it is
                 // capturing; no external projection is outstanding.
@@ -1332,6 +1338,7 @@ where
         true,
         &running,
         move |manifest| {
+            manifest.preloader = captured_preloader;
             manifest.launch_options = launch;
             manifest.launch_sync_pending = false;
             Ok(())
@@ -1960,6 +1967,9 @@ fn merge_profile_index_delta(
 }
 
 fn validate_manifest_files(manifest: &ProfileManifest) -> Result<(), ProfileError> {
+    if let Some(selection) = &manifest.preloader {
+        selection.validate()?;
+    }
     if manifest.files.len() > MAX_PROFILE_FILES {
         return Err(ProfileError::Io(
             "Profile manifest contains too many files.".into(),

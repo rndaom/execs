@@ -5,8 +5,24 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- Profiles: app-themed import review with archive-reading and saving progress,
+  expandable config findings, and a direct switch action after import.
+
+- Profiles: import creator config ZIPs containing cfg and custom folders as
+  a new profile, with a review before keeping the creator's cfg commands.
+
 ### Fixed
 
+- Profiles: switching now replaces shared preloader textures and particle mods
+  with the target profile's selections, so creator imports do not inherit them.
+
+- Profiles: creator bundles with separate Scripts/cfg and mod custom folders
+  now import together. Missing config.cfg starts from TF2 defaults, and legacy
+  hitsounds directly under UI are placed in sound/ui so they play.
+- Profiles: import results stay visible after settings refresh; successful
+  imports offer a button to switch to the new profile.
 - Profiles: unreadable custom files stop a save or switch without removing
   their saved copies; retry once the files are available again.
 - Profiles: changing only a file or folder's capitalization preserves its

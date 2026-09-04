@@ -3,6 +3,7 @@ import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
 import { libraryStatusCopy } from "../../lib/library-ui";
+import { ProfileImportDialog } from "../ProfileImportDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
@@ -90,8 +91,29 @@ export function ReadyPanel({
         </div>
       ) : null}
 
+      {profiles.importError ? (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center gap-3 border-b border-error/50 bg-error/10 px-5 py-2 text-ink"
+        >
+          <p className="t-body flex-1">{profiles.importError}</p>
+          <button type="button" className="btn btn-ghost" onClick={profiles.dismissImport}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      <ProfileImportDialog profiles={profiles} running={running} />
+
       <PackPrompt
-        delta={running || profiles.packPromptDeferred ? null : profiles.packPrompt}
+        delta={
+          running ||
+          profiles.importing ||
+          profiles.importStage === "done" ||
+          profiles.packPromptDeferred
+            ? null
+            : profiles.packPrompt
+        }
         busy={busy}
         onChoice={(choice) => void profiles.answerPackPrompt(choice)}
         onDefer={profiles.deferPackPrompt}

@@ -213,7 +213,13 @@ export function ProfileMenu({
           <button
             type="button"
             data-testid="profile-import"
-            onClick={onImport}
+            onClick={() => {
+              if (detailsRef.current) {
+                detailsRef.current.open = false;
+              }
+              summaryRef.current?.focus();
+              onImport();
+            }}
             disabled={!canImport}
             className="btn btn-ghost"
           >

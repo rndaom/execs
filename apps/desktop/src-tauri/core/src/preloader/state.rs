@@ -360,6 +360,9 @@ pub struct PreloaderState {
     pub vpk_mtime_ms: u128,
     #[serde(default)]
     pub addons: Vec<String>,
+    /// Profile whose selection is currently projected into the shared pack.
+    #[serde(default)]
+    pub selection_profile: Option<String>,
     #[serde(default)]
     pub particle_mods: Vec<String>,
     /// Ids of the active profile's own mods whose particles are installed, so

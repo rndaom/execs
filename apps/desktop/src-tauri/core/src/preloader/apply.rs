@@ -25,6 +25,7 @@ use super::pack::{
     is_excluded_addon_file, relocate_model_materials, scrub_ignorez, stock_entry_tables,
     stock_shadowing_paths, synthesize_missing_vmts,
 };
+use super::profiles::ProfileContext;
 use super::state::{
     adopt_orphaned_snapshots, discover_orphaned_snapshots_readonly, is_stock,
     live_file_exists_within, load_state, load_state_for_snapshot_recovery, misc_vpk_path,
@@ -217,13 +218,14 @@ fn decode_baseline(
 /// byte-for-byte live. The write phase intentionally repeats some cheap
 /// validation to close races, but every deterministic archive/CRC failure is
 /// discovered here before A's restore begins.
-fn prepare_preloader_selection(
+pub(super) fn prepare_preloader_selection(
     tf2_root: &Path,
     data_dir: &Path,
     zip_path: &Path,
     selection: &PreloaderSelection,
     state: &PreloaderState,
     entries: &BTreeMap<String, VpkEntryLocation>,
+    profile: Option<&ProfileContext>,
 ) -> Result<BTreeSet<String>, String> {
     let catalog = read_mods_catalog(zip_path)?;
     for name in &selection.addons {
@@ -240,7 +242,8 @@ fn prepare_preloader_selection(
             return Err(format!("Unknown particle mod: {name}"));
         }
     }
-    let profile_mods = resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods)?;
+    let profile_mods =
+        resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods, profile)?;
     let untracked = untracked_modified_particles(&misc_vpk_path(tf2_root), entries, state)?;
     if !untracked.is_empty() {
         return Err(format_unresolved(
@@ -285,7 +288,9 @@ fn prepare_preloader_selection(
         }
     }
     if let Some((profile_id, sources)) = &profile_mods {
-        let profiles = profiles_dir();
+        let profiles = profile
+            .map(|p| p.profiles.clone())
+            .unwrap_or_else(profiles_dir);
         for source in sources {
             for pcf in &source.pcf_files {
                 let bytes = read_mod_pcf(&profiles, profile_id, &source.mod_id, pcf)
@@ -505,10 +510,12 @@ pub fn apply_preloader_selection_with_sampler(
         running_names,
         process_sampler,
         &|| Ok(()),
+        None,
     )
 }
 
-fn apply_preloader_selection_transactional(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn apply_preloader_selection_transactional(
     tf2_root: &Path,
     data_dir: &Path,
     zip_path: &Path,
@@ -516,6 +523,7 @@ fn apply_preloader_selection_transactional(
     running_names: &[String],
     process_sampler: &dyn Fn() -> Vec<String>,
     before_final_state_save: &dyn Fn() -> Result<(), String>,
+    profile: Option<&ProfileContext>,
 ) -> Result<PreloaderReport, String> {
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     recover_transaction(tf2_root, data_dir, running_names, process_sampler)?;
@@ -540,6 +548,7 @@ fn apply_preloader_selection_transactional(
         selection,
         &existing_state,
         &entries,
+        profile,
     )?;
     touched_entries.extend(existing_state.patched.keys().cloned());
 
@@ -553,6 +562,7 @@ fn apply_preloader_selection_transactional(
         running_names,
         process_sampler,
         before_final_state_save,
+        profile,
     );
     match applied {
         Ok(report) => {
@@ -583,6 +593,7 @@ fn apply_preloader_selection_transactional(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_preloader_selection_inner(
     tf2_root: &Path,
     data_dir: &Path,
@@ -591,6 +602,7 @@ fn apply_preloader_selection_inner(
     running_names: &[String],
     process_sampler: &dyn Fn() -> Vec<String>,
     before_final_state_save: &dyn Fn() -> Result<(), String>,
+    profile: Option<&ProfileContext>,
 ) -> Result<PreloaderReport, String> {
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let vpk_path = misc_vpk_path(tf2_root);
@@ -637,7 +649,8 @@ fn apply_preloader_selection_inner(
     }
     // Same rule for the profile's own mods: an id the caller passes that no
     // longer names an installed mod fails here, before anything is touched.
-    let profile_mods = resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods)?;
+    let profile_mods =
+        resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods, profile)?;
 
     // Record the current length now, after validation so a refused selection
     // leaves the "game updated" hint alone, and before the first write so
@@ -747,7 +760,9 @@ fn apply_preloader_selection_inner(
     // The profile's own mods are queued after the library's, so a mod the user
     // brought in wins a file the library also supplies.
     if let Some((profile_id, sources)) = &profile_mods {
-        let profiles = profiles_dir();
+        let profiles = profile
+            .map(|p| p.profiles.clone())
+            .unwrap_or_else(profiles_dir);
         for source in sources {
             for pcf in &source.pcf_files {
                 let bytes = match read_mod_pcf(&profiles, profile_id, &source.mod_id, pcf) {
@@ -1156,6 +1171,7 @@ fn apply_preloader_selection_inner(
     state.particle_mods = selection.particle_mods.clone();
     state.profile_particle_mods = selection.profile_particle_mods.clone();
     state.skipped = report.skipped.clone();
+    state.selection_profile = profile.map(|p| p.id.clone());
     before_final_state_save()?;
     save_state(data_dir, &state)?;
 
@@ -1182,6 +1198,7 @@ pub(crate) fn apply_preloader_selection_with_final_state_hook(
         running_names,
         process_sampler,
         before_final_state_save,
+        None,
     )
 }
 
@@ -1191,15 +1208,22 @@ pub(crate) fn apply_preloader_selection_with_final_state_hook(
 fn resolve_profile_particle_mods(
     tf2_root: &Path,
     ids: &[String],
+    profile: Option<&ProfileContext>,
 ) -> Result<Option<(String, Vec<ParticleSource>)>, String> {
     if ids.is_empty() {
         return Ok(None);
     }
-    let profiles = profiles_dir();
+    let profiles = profile
+        .map(|p| p.profiles.clone())
+        .unwrap_or_else(profiles_dir);
     let library = load_library_from(&profiles, Some(tf2_root)).map_err(|err| err.message())?;
-    let profile_id = library.active_profile_id.ok_or(
-        "Save or switch to a profile before using its own mods as particle sources.".to_string(),
-    )?;
+    let profile_id = profile
+        .map(|p| p.id.clone())
+        .or(library.active_profile_id)
+        .ok_or(
+            "Save or switch to a profile before using its own mods as particle sources."
+                .to_string(),
+        )?;
     let available =
         profile_particle_sources_from(&profiles, &profile_id).map_err(|err| err.message())?;
     let mut resolved = Vec::with_capacity(ids.len());
@@ -1474,7 +1498,7 @@ mod selection_tests {
                 .unwrap();
         assert!(selection.profile_particle_mods.is_empty());
         assert_eq!(
-            resolve_profile_particle_mods(Path::new("no/such/root"), &[]).unwrap(),
+            resolve_profile_particle_mods(Path::new("no/such/root"), &[], None).unwrap(),
             None
         );
     }

@@ -83,6 +83,224 @@ fn fake_root() -> (std::path::PathBuf, std::path::PathBuf) {
     (root, data)
 }
 
+#[test]
+fn profile_projection_replaces_addons_and_particles_then_restores_the_previous_profile() {
+    let (root, data) = fake_root();
+    let zip = fake_mods_zip(&data.parent().unwrap().join("game"));
+    let source = ProfileContext {
+        profiles: data.join("profiles"),
+        id: "source".into(),
+    };
+    let imported = ProfileContext {
+        profiles: data.join("profiles"),
+        id: "imported".into(),
+    };
+    let selected = PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: vec![],
+    };
+    let directory = std::fs::read(root.join("tf").join(MISC_VPK)).unwrap();
+    let stock = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    apply_profile_preloader(&root, &data, &zip, &selected, &source, &[], &Vec::new).unwrap();
+    let source_pack = std::fs::read(root.join("tf/custom").join(PRELOADER_VPK)).unwrap();
+    let source_particles = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    assert_ne!(source_particles, stock);
+
+    apply_profile_preloader(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &imported,
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        stock
+    );
+    let empty = load_state(&data).unwrap();
+    assert!(empty.addons.is_empty() && empty.particle_mods.is_empty() && empty.patched.is_empty());
+    assert_eq!(empty.selection_profile.as_deref(), Some("imported"));
+
+    apply_profile_preloader(&root, &data, &zip, &selected, &source, &[], &Vec::new).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/custom").join(PRELOADER_VPK)).unwrap(),
+        source_pack
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        source_particles
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(),
+        directory
+    );
+    assert_eq!(
+        load_state(&data).unwrap().selection_profile.as_deref(),
+        Some("source")
+    );
+}
+
+#[test]
+fn failed_profile_projection_restores_the_previous_owner_and_bytes() {
+    let (root, data) = fake_root();
+    let zip = fake_mods_zip(&root);
+    let source = ProfileContext {
+        profiles: data.join("profiles"),
+        id: "source".into(),
+    };
+    let imported = ProfileContext {
+        profiles: data.join("profiles"),
+        id: "imported".into(),
+    };
+    let selected = PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        ..Default::default()
+    };
+    apply_profile_preloader(&root, &data, &zip, &selected, &source, &[], &Vec::new).unwrap();
+    let before = std::fs::read(root.join("tf/custom").join(PRELOADER_VPK)).unwrap();
+    super::apply::apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &[],
+        &Vec::new,
+        &|| Err("injected commit failure".into()),
+        Some(&imported),
+    )
+    .unwrap_err();
+    assert_eq!(
+        std::fs::read(root.join("tf/custom").join(PRELOADER_VPK)).unwrap(),
+        before
+    );
+    assert_eq!(
+        load_state(&data).unwrap().selection_profile.as_deref(),
+        Some("source")
+    );
+}
+
+#[test]
+fn switching_to_imported_profile_clears_global_mods_and_preserves_the_legacy_selection() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let library = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Previous",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let previous = library.active_profile_id.unwrap();
+        let library = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Imported",
+            Vec::<String>::new(),
+        )
+        .unwrap();
+        let imported = library
+            .profiles
+            .iter()
+            .find(|p| p.name == "Imported")
+            .unwrap()
+            .id
+            .clone();
+        let zip = fake_mods_zip(&root);
+        let chosen = PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            ..Default::default()
+        };
+        apply_preloader_selection_with_sampler(&root, &data, &zip, &chosen, &[], &Vec::new)
+            .unwrap();
+        record_preload_profile(&data, &previous).unwrap();
+        let switched = crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &imported,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(
+            switched.active_profile_id.as_deref(),
+            Some(imported.as_str())
+        );
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+        assert!(load_state(&data).unwrap().addons.is_empty());
+        assert_eq!(
+            crate::profile::load_manifest(&profiles, &previous)
+                .unwrap()
+                .preloader,
+            Some(chosen)
+        );
+        assert!(crate::profile::load_manifest(&profiles, &imported)
+            .unwrap()
+            .preloader
+            .unwrap_or_default()
+            .is_empty());
+
+        // A missing library for the old selection fails before changing B.
+        let err = crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &previous,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap_err();
+        assert!(err.message().contains("Download the default mod library"));
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id
+                .as_deref(),
+            Some(imported.as_str())
+        );
+        // Repair an already-active import without overwriting game-saved cfg drift.
+        apply_preloader_selection_with_sampler(
+            &root,
+            &data,
+            &zip,
+            &PreloaderSelection {
+                addons: vec!["Flat Look".into()],
+                ..Default::default()
+            },
+            &[],
+            &Vec::new,
+        )
+        .unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 9\n").unwrap();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &imported,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+        assert_eq!(
+            std::fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"sensitivity 9\n"
+        );
+    });
+}
+
 #[cfg(unix)]
 fn link_dir(target: &Path, link: &Path) {
     std::os::unix::fs::symlink(target, link).unwrap();

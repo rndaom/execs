@@ -104,13 +104,14 @@ impl WriteGate {
     pub async fn lock_for_write(
         &self,
     ) -> Result<tokio::sync::MutexGuard<'_, ()>, error::CommandError> {
-        let guard = self.lock_for_switch().await?;
+        let guard = self.lock_for_interrupted_recovery().await?;
         // A failed switch leaves the live tree deliberately unowned until the
         // recorded target is re-applied. UI disabling is not an authority
         // boundary: every IPC writer must refuse that state too. The switch
         // command alone uses `lock_for_switch` directly so it can recover.
         tauri::async_runtime::spawn_blocking(|| {
             if let Some(root) = execs_core::remembered_tf2_root() {
+                commands::shared::prepare_normal_write(&root)?;
                 commands::shared::refuse_pending_switch(&root)?;
             }
             Ok::<(), error::CommandError>(())
@@ -124,13 +125,11 @@ impl WriteGate {
         &self,
     ) -> Result<tokio::sync::MutexGuard<'_, ()>, error::CommandError> {
         let guard = self.lock_for_interrupted_recovery().await?;
-        // Unlike a pending profile switch, a half-finished preloader
-        // transaction may have already changed an official VPK. Switching
-        // profiles cannot repair that state and must stay closed. Valid
-        // generic profile journals are recovered under this same serializer.
+        // A pending switch may contain a preloader projection journal. Roll
+        // that projection back before retrying the switch under this gate.
         tauri::async_runtime::spawn_blocking(|| {
             if let Some(root) = execs_core::remembered_tf2_root() {
-                commands::shared::prepare_normal_write(&root)?;
+                commands::shared::prepare_profile_switch(&root)?;
             }
             Ok::<(), error::CommandError>(())
         })
@@ -660,6 +659,8 @@ pub fn run() {
             commands::library::switch_profile,
             commands::library::export_profile,
             commands::library::import_profile,
+            commands::library::confirm_profile_import,
+            commands::library::cancel_profile_import,
             commands::absorb::absorb_owned,
             commands::absorb::absorb_packs,
             commands::first_run::classify_first_run,
@@ -732,6 +733,7 @@ pub fn run() {
         ])
         .setup(move |app| {
             app.manage(write_gate);
+            app.manage(commands::library::PendingProfileImport::default());
             app.manage(HitsoundCacheGate::default());
             if let Some(token) = restored_launch {
                 spawn_launch_monitor(token, data_dir);
