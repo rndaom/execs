@@ -7,6 +7,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Profiles: app-themed import review with archive-reading and saving progress,
+  expandable config findings, and a direct switch action after import.
+
 - Profiles: import creator config ZIPs containing cfg and custom folders as
   a new profile, with a review before keeping the creator's cfg commands.
 

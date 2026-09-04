@@ -119,6 +119,7 @@ export function createPreviewApi(state: PreviewState): Api {
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
   let hitsound: HitsoundRecord | null =
     state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
+  let importReadingHandler: (() => void) | null = null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
   let lifecycle = {
     launchingTf2: false,
@@ -260,9 +261,34 @@ export function createPreviewApi(state: PreviewState): Api {
     async exportProfile() {
       return null;
     },
-    async importProfile() {
-      return addProfile(`Imported ${(library?.profiles.length ?? 0) + 1}`, false);
+    async onProfileImportReading(handler) {
+      importReadingHandler = handler;
+      return () => {
+        importReadingHandler = null;
+      };
     },
+    async importProfile() {
+      importReadingHandler?.();
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      return {
+        token: "preview-import",
+        name: "bunstiecfgcustom",
+        files: 236,
+        skippedFiles: 16,
+        creator: true,
+        notes: [],
+        warnings: [
+          "tf/cfg/config.cfg contains 'password', which may expose a server credential and cannot be shared.",
+          "tf/custom/low.vpk/cfg/comfig/comfig.cfg contains 'alias kill'.",
+          "tf/cfg/overrides/autoexec.cfg contains 'sv_cheats'.",
+        ],
+      };
+    },
+    async confirmProfileImport() {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      return addProfile("bunstiecfgcustom", false);
+    },
+    async cancelProfileImport() {},
 
     // --- first run ----------------------------------------------------------
     async classifyFirstRun() {

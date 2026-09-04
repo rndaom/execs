@@ -3,6 +3,7 @@ import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
 import { libraryStatusCopy } from "../../lib/library-ui";
+import { ProfileImportDialog } from "../ProfileImportDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
@@ -102,39 +103,17 @@ export function ReadyPanel({
         </div>
       ) : null}
 
-      {profiles.importing ? (
-        <div
-          role="status"
-          className="t-body shrink-0 border-b border-edge px-5 py-2 text-ink-muted"
-        >
-          Importing profile…
-        </div>
-      ) : profiles.importedProfile ? (
-        <div
-          role="status"
-          className="flex shrink-0 flex-wrap items-center gap-3 border-b border-edge px-5 py-2"
-        >
-          <p className="t-body">Imported {profiles.importedProfile.name} as a new profile.</p>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={controlsBusy || running || recoveryTargetId !== null}
-            onClick={() => {
-              if (profiles.importedProfile) {
-                void profiles.switchProfile(profiles.importedProfile.id);
-              }
-            }}
-          >
-            Switch to profile
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={profiles.dismissImport}>
-            Dismiss
-          </button>
-        </div>
-      ) : null}
+      <ProfileImportDialog profiles={profiles} running={running} />
 
       <PackPrompt
-        delta={running || profiles.packPromptDeferred ? null : profiles.packPrompt}
+        delta={
+          running ||
+          profiles.importing ||
+          profiles.importStage === "done" ||
+          profiles.packPromptDeferred
+            ? null
+            : profiles.packPrompt
+        }
         busy={busy}
         onChoice={(choice) => void profiles.answerPackPrompt(choice)}
         onDefer={profiles.deferPackPrompt}

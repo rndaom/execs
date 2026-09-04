@@ -660,6 +660,8 @@ pub fn run() {
             commands::library::switch_profile,
             commands::library::export_profile,
             commands::library::import_profile,
+            commands::library::confirm_profile_import,
+            commands::library::cancel_profile_import,
             commands::absorb::absorb_owned,
             commands::absorb::absorb_packs,
             commands::first_run::classify_first_run,
@@ -732,6 +734,7 @@ pub fn run() {
         ])
         .setup(move |app| {
             app.manage(write_gate);
+            app.manage(commands::library::PendingProfileImport::default());
             app.manage(HitsoundCacheGate::default());
             if let Some(token) = restored_launch {
                 spawn_launch_monitor(token, data_dir);

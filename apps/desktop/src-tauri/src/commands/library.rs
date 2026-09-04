@@ -2,7 +2,7 @@
 
 use execs_core::{ProfileError, ProfileLibrary, SwitchProgress};
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{blocking, with_root, RootContext};
 use crate::error::CommandError;
@@ -140,11 +140,38 @@ pub async fn export_profile(
     .await
 }
 
+/// The review and source path remain in the backend. The renderer can only
+/// accept the single-use token, never substitute its own trusted review.
+#[derive(Default)]
+pub struct PendingProfileImport(tokio::sync::Mutex<Option<(String, PendingImport)>>);
+
+struct PendingImport {
+    context: RootContext,
+    path: std::path::PathBuf,
+    review: execs_core::ProfileImportReview,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportReview {
+    token: String,
+    name: String,
+    files: usize,
+    skipped_files: usize,
+    creator: bool,
+    warnings: Vec<String>,
+    notes: Vec<String>,
+}
+
 #[tauri::command]
 pub async fn import_profile(
     gate: tauri::State<'_, WriteGate>,
+    pending: tauri::State<'_, PendingProfileImport>,
     app: AppHandle,
-) -> Result<ProfileLibrary, CommandError> {
+) -> Result<Option<ImportReview>, CommandError> {
+    // Serialize pick/review requests; a new picker invalidates an old review.
+    let mut slot = pending.0.lock().await;
+    *slot = None;
     let context = with_root(|root| Ok(RootContext::capture(&root))).await?;
     let picker_app = app.clone();
     let picked = tauri::async_runtime::spawn_blocking(move || {
@@ -157,74 +184,113 @@ pub async fn import_profile(
     })
     .await
     .map_err(|err| CommandError::unknown(err.to_string()))?;
-    // Take the gate only once the user has actually picked something: an open
-    // dialog must not block the absorb path behind it.
     let Some(picked) = picked else {
-        let _guard = gate.lock_for_library_read().await?;
-        return with_root(|root| Ok(execs_core::load_library(Some(&root))?)).await;
+        return Ok(None);
     };
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let _ = app.emit("profile-import-reading", ());
     let inspect_path = path.clone();
-    let (context, review) = {
-        let _guard = gate.lock_for_write().await?;
-        with_root(move |root| {
-            context.ensure_current(&root)?;
-            let review = execs_core::inspect_profile_import(&root, &inspect_path)?;
-            Ok((context, review))
-        })
-        .await?
+    let _guard = gate.lock_for_write().await?;
+    let (context, review) = with_root(move |root| {
+        context.ensure_current(&root)?;
+        let review = execs_core::inspect_profile_import(&root, &inspect_path)?;
+        Ok((context, review))
+    })
+    .await?;
+    let token = execs_core::hash::random_token();
+    let response = ImportReview {
+        token: token.clone(),
+        name: review.name.clone(),
+        files: review.files,
+        skipped_files: review.skipped_files,
+        creator: review.creator,
+        warnings: review.warnings.clone(),
+        notes: review.notes.clone(),
     };
-    if review.creator {
-        let message = creator_import_message(&review);
-        let accepted = tauri::async_runtime::spawn_blocking(move || {
-            app.dialog()
-                .message(message)
-                .title("Import creator config")
-                .buttons(MessageDialogButtons::OkCancelCustom(
-                    "Trust and import".into(),
-                    "Cancel".into(),
-                ))
-                .blocking_show()
-        })
-        .await
-        .map_err(|err| CommandError::unknown(err.to_string()))?;
-        if !accepted {
-            let _guard = gate.lock_for_library_read().await?;
-            return with_root(|root| Ok(execs_core::load_library(Some(&root))?)).await;
-        }
+    *slot = Some((
+        token,
+        PendingImport {
+            context,
+            path,
+            review,
+        },
+    ));
+    Ok(Some(response))
+}
+
+fn take_review<T>(slot: &mut Option<(String, T)>, token: &str) -> Result<T, CommandError> {
+    if slot.as_ref().is_none_or(|(stored, _)| stored != token) {
+        return Err(CommandError::new(
+            "ImportReviewExpired",
+            "Choose the ZIP again to review this import.",
+        ));
     }
+    slot.take()
+        .map(|(_, review)| review)
+        .ok_or_else(|| CommandError::unknown("Import review is missing."))
+}
+
+fn cancel_review<T>(slot: &mut Option<(String, T)>, token: &str) {
+    if slot.as_ref().is_some_and(|(stored, _)| stored == token) {
+        *slot = None;
+    }
+}
+
+#[tauri::command]
+pub async fn confirm_profile_import(
+    gate: tauri::State<'_, WriteGate>,
+    pending: tauri::State<'_, PendingProfileImport>,
+    token: String,
+) -> Result<ProfileLibrary, CommandError> {
+    let review = take_review(&mut *pending.0.lock().await, &token)?;
     let _guard = gate.lock_for_write().await?;
     with_root(move |root| {
-        context.ensure_current(&root)?;
-        Ok(execs_core::import_reviewed_profile(&root, &path, &review)?)
+        review.context.ensure_current(&root)?;
+        Ok(execs_core::import_reviewed_profile(
+            &root,
+            &review.path,
+            &review.review,
+        )?)
     })
     .await
 }
 
-fn creator_import_message(review: &execs_core::ProfileImportReview) -> String {
-    let mut message = format!(
-        "Create a new profile named \"{}\" with {} cfg and custom files.\n\nYour current profile stays active. Choose the new profile to switch to it.\n\n{} files outside the supported cfg/custom layout, auxiliary files or caches will be left out. Optional mod variants, nested archives and launch-option instructions remain in the source ZIP. Launch options are left empty.",
-        review.name, review.files, review.skipped_files,
-    );
-    for note in review.notes.iter().take(6) {
-        message.push_str("\n\n");
-        message.extend(note.chars().take(500));
+#[tauri::command]
+pub async fn cancel_profile_import(
+    pending: tauri::State<'_, PendingProfileImport>,
+    token: String,
+) -> Result<(), CommandError> {
+    let mut slot = pending.0.lock().await;
+    cancel_review(&mut *slot, &token);
+    Ok(())
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::{cancel_review, take_review};
+
+    #[test]
+    fn approval_is_single_use_and_wrong_tokens_preserve_the_pending_review() {
+        let mut slot = Some(("reviewed-zip".into(), "backend-owned bytes"));
+        assert_eq!(
+            take_review(&mut slot, "forged").unwrap_err().code,
+            "ImportReviewExpired"
+        );
+        assert_eq!(
+            take_review(&mut slot, "reviewed-zip").unwrap(),
+            "backend-owned bytes"
+        );
+        assert!(take_review(&mut slot, "reviewed-zip").is_err());
     }
-    if !review.warnings.is_empty() {
-        message.push_str("\n\nConfig checks flagged these commands (first finding per file):");
-        for warning in review.warnings.iter().take(6) {
-            message.push_str("\n\n");
-            message.extend(warning.chars().take(500));
-        }
-        if review.warnings.len() > 6 {
-            message.push_str(&format!(
-                "\n\nAnd {} more files.",
-                review.warnings.len() - 6
-            ));
-        }
+
+    #[test]
+    fn cancelling_an_old_dialog_does_not_discard_a_new_review() {
+        let mut slot = Some(("new-review".into(), "new bytes"));
+        cancel_review(&mut slot, "old-review");
+        assert!(slot.is_some());
+        cancel_review(&mut slot, "new-review");
+        assert!(take_review(&mut slot, "new-review").is_err());
     }
-    message.push_str("\n\nThe imported cfg commands are kept unchanged and run when TF2 loads them. Saved server credentials, if flagged above, are kept too; exporting a profile with credentials is blocked. Import only if you trust this creator.");
-    message
 }

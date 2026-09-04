@@ -45,6 +45,7 @@ Commands: `pnpm install`, `pnpm desktop:dev` (Tauri), `pnpm dev` (browser only, 
 - Custom inventory fails on unreadable files or directories instead of inferring deletion. Absorb commits additions and removals together, matches full manifest paths without case sensitivity on Windows, and refuses live paths that collide under portable profile identity on any platform.
 - **Junk is never a pack:** `*.execs-part`, and Steam's own `tf/custom/readme.txt` and `workshop/`, are ignored everywhere. **Self-heal:** before classifying, absorb rewrites any manifest file missing from the live tree when its `.execs-part` sibling exists or the pack is app-owned (`execs-*`), deletes stray part files, and drops those keys from the ignore list (field incident: the dev app restarted mid-switch and left a half-written viewmodel pack).
 - Global, not profile-owned: `tf/custom/execs-preloader.vpk` (`GLOBAL_CUSTOM_FILES` in `surface.rs`).
+- Profile ZIP imports use the themed review modal and real read/review/save progress. The backend retains the source path and exact-byte review behind a single-use token; confirmation rechecks the root, write lock and ZIP hash. Cancelling a review writes no profile.
 - The switch progress panel shows only real steps (game closed → pack current → remove → write → Cloud → done), paced to a minimum display time; never invented steps or percentages.
 
 ## First run

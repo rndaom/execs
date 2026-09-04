@@ -192,8 +192,30 @@ export async function exportProfile(id: string): Promise<string | null> {
   return call<string | null>("export_profile", { id });
 }
 
-export async function importProfile(): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("import_profile");
+export type ProfileImportReview = {
+  token: string;
+  name: string;
+  files: number;
+  skippedFiles: number;
+  creator: boolean;
+  warnings: string[];
+  notes: string[];
+};
+
+export async function importProfile(): Promise<ProfileImportReview | null> {
+  return call<ProfileImportReview | null>("import_profile");
+}
+
+export async function confirmProfileImport(token: string): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("confirm_profile_import", { token });
+}
+
+export async function cancelProfileImport(token: string): Promise<void> {
+  return call<void>("cancel_profile_import", { token });
+}
+
+export async function onProfileImportReading(handler: () => void): Promise<UnlistenFn> {
+  return listen("profile-import-reading", handler);
 }
 
 export type FirstRunKind = "unused" | "existing";
