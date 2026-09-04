@@ -1,5 +1,6 @@
 //! The Sounds pane: hit and kill sounds.
 
+use execs_core::hitsound::HITSOUND_MAX_BYTES;
 use execs_core::{
     HitsoundChange, HitsoundEntry, HitsoundKind, HitsoundSource, ProfileDetail, WavInfo,
 };
@@ -7,9 +8,12 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{blocking, with_profile, with_root};
+use super::shared::{blocking, refuse_oversize_file, with_profile, with_root};
 use crate::error::CommandError;
 use crate::WriteGate;
+
+/// What a picked WAV past the engine cap is told, before and after reading.
+const HITSOUND_TOO_LARGE: &str = "That file is too large for a hit sound (8 MB limit).";
 
 /// One sound the pane can audition or install.
 #[derive(Debug, Clone, Deserialize)]
@@ -118,11 +122,12 @@ pub async fn pick_hitsound_file(app: AppHandle) -> Result<Option<PickedHitsound>
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "sound.wav".into());
+        // Refused by its size on disk before it is read whole; the same
+        // sentence guards the bytes below for a file that grew in between.
+        refuse_oversize_file(&path, HITSOUND_MAX_BYTES as u64, HITSOUND_TOO_LARGE)?;
         let raw = std::fs::read(&path).map_err(|err| CommandError::unknown(err.to_string()))?;
-        if raw.len() > execs_core::hitsound::HITSOUND_MAX_BYTES {
-            return Err(CommandError::unknown(
-                "That file is too large for a hit sound (8 MB limit).",
-            ));
+        if raw.len() > HITSOUND_MAX_BYTES {
+            return Err(CommandError::unknown(HITSOUND_TOO_LARGE));
         }
         let (wav, info) = execs_core::prepare_hitsound_wav(&raw)?;
         let converted = wav != raw;
