@@ -735,7 +735,9 @@ fn live_by_manifest_spelling(
             .into_iter()
             .map(|(path, source)| {
                 let key = portable_path_key(&path)?;
-                let path = spellings.get(&key).map_or(path, |spelling| (*spelling).clone());
+                let path = spellings
+                    .get(&key)
+                    .map_or(path, |spelling| (*spelling).clone());
                 Ok((path, source))
             })
             .collect::<Result<_, ProfileError>>()?;
