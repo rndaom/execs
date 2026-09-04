@@ -15,6 +15,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Profiles: switching now replaces shared preloader textures and particle mods
+  with the target profile's selections, so creator imports do not inherit them.
+
 - Profiles: creator bundles with separate Scripts/cfg and mod custom folders
   now import together. Missing config.cfg starts from TF2 defaults, and legacy
   hitsounds directly under UI are placed in sound/ui so they play.

@@ -398,15 +398,30 @@ pub async fn apply_preloader_mods(
             // strand both recovery domains at once.
             recover_pending_profile_mutations(&root)?;
         }
-        let report = execs_core::preloader::apply_preloader_selection_with_sampler(
+        execs_core::preloader::capture_installed_selections(
+            &execs_core::profiles_dir(),
+            &root,
+            &initial_names,
+        )?;
+        let profile = execs_core::preloader::ProfileContext {
+            profiles: execs_core::profiles_dir(),
+            id: active_profile_id(&root)?,
+        };
+        let report = execs_core::preloader::apply_profile_preloader(
             &root,
             &execs_core::execs_data_dir(),
             &zip,
             &selection,
+            &profile,
             &initial_names,
             &execs_core::process_lock::live_process_names,
         )
         .map_err(CommandError::preloader)?;
+        execs_core::preloader::capture_installed_selections(
+            &execs_core::profiles_dir(),
+            &root,
+            &initial_names,
+        )?;
         Ok(report)
     })
     .await
@@ -576,6 +591,10 @@ pub async fn revert_preloader(
         }
         let mut failures = Vec::new();
         for profile_id in profiles {
+            if let Err(err) = execs_core::preloader::clear_saved_profile_selection(&execs_core::profiles_dir(), &root, &profile_id, &initial_names) {
+                failures.push(format!("{profile_id}: {}", err.message()));
+                continue;
+            }
             match execs_core::remove_profile_preload_if_unused(&root, &profile_id) {
                 Ok(()) => {
                     if let Err(err) =
@@ -667,7 +686,7 @@ mod tests {
             .map(|offset| ensure + offset)
             .unwrap();
         let apply = source[recover..]
-            .find("apply_preloader_selection_with_sampler")
+            .find("apply_profile_preloader")
             .map(|offset| recover + offset)
             .unwrap();
 

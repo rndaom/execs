@@ -185,6 +185,7 @@ pub(super) fn read_creator_zip(
             viewmodel: None,
             hitsound: None,
             mods: Vec::new(),
+            preloader: Some(crate::preloader::PreloaderSelection::default()),
             ignored_packs: Vec::new(),
         },
         exclusive: HashMap::new(),

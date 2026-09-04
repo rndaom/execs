@@ -17,7 +17,8 @@ use crate::hash::{
 };
 use crate::hud::{hud_packs, live_hud_keys};
 use crate::launch::LaunchWriteReason;
-use crate::process_lock::{live_process_names, refuse_if_running_among};
+use crate::process_lock::refuse_if_running_among;
+use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
     begin_switch_to, clear_launch_sync_pending_if_matches, exclusive_file_path,
     is_profile_ownable_rel_path, is_shared_rel_path, load_library_from, load_manifest,
@@ -174,8 +175,20 @@ where
     }
     let pending = pending_switch_to(profiles_dir, tf2_root)?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
+    if pending.is_none() {
+        crate::preloader::capture_installed_selections(profiles_dir, tf2_root, &running)?;
+    }
     let target = load_manifest(profiles_dir, profile_id)?;
+    preflight_target(profiles_dir, profile_id, &target)?;
+    let preloader =
+        crate::preloader::prepare_profile_preloader(profiles_dir, tf2_root, profile_id)?;
     if pending.is_none() && library.active_profile_id.as_deref() == Some(profile_id) {
+        // Reconcile only the shared projection on a same-profile retry; live
+        // cfg drift must not be overwritten from a pre-absorb manifest.
+        if let Some(preloader) = &preloader {
+            progress(SwitchProgress::new(SwitchStep::Write));
+            preloader.apply(tf2_root, &running)?;
+        }
         let (steam_write, steam_write_error) = if target.launch_sync_pending {
             let steam_roots = match options.steam_roots {
                 Some(roots) => roots.to_vec(),
@@ -200,11 +213,6 @@ where
             steam_write_error,
         });
     }
-
-    // Everything the target needs is checked before a single live file is
-    // removed. A failure discovered mid-write leaves the old profile's files
-    // deleted and the new ones half-written.
-    preflight_target(profiles_dir, profile_id, &target)?;
 
     let live_huds = live_hud_keys(tf2_root);
     let previous = library.active_profile_id.clone();
@@ -265,6 +273,11 @@ where
     if result.is_ok() {
         progress(SwitchProgress::new(SwitchStep::Write));
         result = write_target_live(profiles_dir, tf2_root, &target, &live_huds);
+    }
+    if result.is_ok() {
+        if let Some(preloader) = &preloader {
+            result = preloader.apply(tf2_root, &running);
+        }
     }
     if result.is_ok() {
         progress(SwitchProgress::new(SwitchStep::Cloud));

@@ -6,10 +6,9 @@ use std::path::PathBuf;
 
 use crate::net::{self, RemoteSource, Verify};
 
-const MODS_RELEASE: &str = "v1.7.1";
+use execs_core::preloader::{MODS_RELEASE, MODS_SHA256};
 const MODS_URL: &str =
     "https://github.com/cueki/casual-pre-loader/releases/download/v1.7.1/mods.zip";
-const MODS_SHA256: &str = "bd132d03eda6db17544cb43b5b4b57dc94e0cb91d1ab3de9571faabfce235388";
 /// ~81.5 MB — the UI warns before the first download.
 pub const MODS_SIZE_BYTES: u64 = 81_529_475;
 

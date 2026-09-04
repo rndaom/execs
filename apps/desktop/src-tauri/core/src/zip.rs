@@ -79,6 +79,8 @@ struct ProfileZipManifest {
     hitsound: Option<crate::hitsound::HitsoundRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     mods: Vec<ModRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preloader: Option<crate::preloader::PreloaderSelection>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     ignored_packs: Vec<String>,
 }
@@ -186,7 +188,10 @@ pub fn export_profile_to(
     {
         return Err(ProfileError::UnknownProfile);
     }
-    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    if let Some(selection) = crate::preloader::selection_for_export(profiles_dir, profile_id)? {
+        manifest.preloader = Some(selection);
+    }
     write_profile_zip(profiles_dir, profile_id, &manifest, zip_path)
 }
 
@@ -256,6 +261,7 @@ where
     let viewmodel = payload.manifest.viewmodel.clone();
     let hitsound = payload.manifest.hitsound.clone();
     let mods = payload.manifest.mods.clone();
+    let preloader = payload.manifest.preloader.clone().unwrap_or_default();
     let ignored_packs = payload.manifest.ignored_packs.clone();
     create_populated_profile_to(
         profiles_dir,
@@ -274,6 +280,7 @@ where
             manifest.viewmodel = viewmodel;
             manifest.hitsound = hitsound;
             manifest.mods = mods;
+            manifest.preloader = Some(preloader);
             manifest.ignored_packs = ignored_packs;
             Ok(())
         },
@@ -307,6 +314,7 @@ fn write_profile_zip(
         viewmodel: manifest.viewmodel.clone(),
         hitsound: manifest.hitsound.clone(),
         mods: manifest.mods.clone(),
+        preloader: manifest.preloader.clone(),
         ignored_packs: manifest.ignored_packs.clone(),
     };
     make_metadata_portable(&mut zip_manifest);
@@ -842,6 +850,9 @@ fn validate_imported_metadata(
     exclusive: &HashMap<String, PathBuf>,
     blobs: &HashMap<String, PathBuf>,
 ) -> Result<(), ProfileError> {
+    if let Some(selection) = &manifest.preloader {
+        selection.validate()?;
+    }
     if let Some(hud) = &manifest.hud {
         let sanitized = crate::hud::sanitize_hud_id(&hud.id)?;
         if sanitized != hud.id {
@@ -1956,6 +1967,7 @@ mod tests {
             viewmodel: None,
             hitsound: None,
             mods: Vec::new(),
+            preloader: None,
             ignored_packs: Vec::new(),
         };
         let json = serde_json::to_vec(&manifest).unwrap();
@@ -2521,6 +2533,11 @@ mod tests {
             installed_at: "2026-09-04T00:00:00Z".into(),
         });
         manifest.ignored_packs = vec!["kept-pack".into()];
+        manifest.preloader = Some(crate::preloader::PreloaderSelection {
+            addons: vec!["Flat Textures v1".into()],
+            particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: vec!["my-mod".into()],
+        });
         manifest.hitsound = Some(crate::hitsound::HitsoundRecord {
             hit: Some(crate::hitsound::HitsoundEntry {
                 name: "My picked sound".into(),
@@ -2544,6 +2561,7 @@ mod tests {
             .id
             .clone();
         let imported = load_manifest(&profiles, &imported_id).unwrap();
+        assert_eq!(imported.preloader, manifest.preloader);
         assert_eq!(imported.mods.len(), 1);
         assert_eq!(imported.mods[0].id, "my-mod");
         assert_eq!(imported.mods[0].files, 1);
@@ -2590,6 +2608,7 @@ mod tests {
                 viewmodel: None,
                 hitsound: None,
                 mods: Vec::new(),
+                preloader: None,
                 ignored_packs: Vec::new(),
             },
             exclusive: HashMap::new(),

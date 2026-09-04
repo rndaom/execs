@@ -283,3 +283,25 @@ pub fn active_manifest(
         profile_id,
     )?)
 }
+
+/// A switch may leave its own preloader projection journal before publishing
+/// the target id. Recover that projection first, then retry the pending switch.
+pub fn prepare_profile_switch(root: &Path) -> Result<(), CommandError> {
+    if execs_core::load_library(Some(root))?
+        .pending_switch_profile_id
+        .is_none()
+    {
+        return prepare_normal_write(root);
+    }
+    prepare_preloader_recovery(root)?;
+    if preloader_recovery_required(root)? {
+        execs_core::refuse_if_running()?;
+        execs_core::preloader::recover_pending_preloader(
+            root,
+            &execs_core::execs_data_dir(),
+            &execs_core::process_lock::live_process_names(),
+        )
+        .map_err(CommandError::preloader)?;
+    }
+    Ok(())
+}
