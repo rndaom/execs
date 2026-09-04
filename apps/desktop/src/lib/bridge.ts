@@ -989,9 +989,13 @@ export function getDiagnostics(): Promise<string> {
   return call<string>("get_diagnostics");
 }
 
+/** How long the update feed gets to answer before the footer says so; the
+ * plugin has no default, so a stalled connection would hang the check. */
+const UPDATE_CHECK_TIMEOUT_MS = 15_000;
+
 export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {
   const { check } = await import("@tauri-apps/plugin-updater");
-  const update = await check();
+  const update = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
   pendingUpdate = update;
   if (!update) {
     return null;
