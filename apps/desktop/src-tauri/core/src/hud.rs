@@ -14,9 +14,9 @@ use crate::apply::{
 use crate::archive::{extract_archive, extract_zip, read_dir_entries, ArchiveLimits};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, load_library_from, load_manifest, profiles_dir, put_exclusive_file_to,
-    remove_manifest_files_to, save_manifest, HudRecord, HudSource, ProfileError, ProfileFile,
-    ProfileManifest,
+    exclusive_file_path, is_file_safe_rel_path, load_library_from, load_manifest,
+    normalize_rel_path, profiles_dir, put_profile_files_to, remove_manifest_files_to,
+    save_manifest, FileSource, HudRecord, HudSource, ProfileError, ProfileFile, ProfileManifest,
 };
 use crate::settings::execs_data_dir;
 use crate::vdf::{parse_vdf, VdfValue};
@@ -57,6 +57,22 @@ impl HudTree {
         } else {
             false
         }
+    }
+
+    /// `get` without caring about ASCII case. HUD authors spell `Info.vdf`
+    /// and `Resource/UI` however they like; the game does not care and neither
+    /// should detection.
+    pub fn get_ignore_case(&self, path: &str) -> Option<&[u8]> {
+        let wanted = normalize_hud_rel(path);
+        self.files
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(&wanted))
+            .map(|(_, bytes)| bytes.as_slice())
+    }
+
+    /// The root `info.vdf`, however it is capitalized.
+    pub fn info_vdf(&self) -> Option<&[u8]> {
+        self.get_ignore_case("info.vdf")
     }
 }
 
@@ -165,8 +181,31 @@ pub fn is_hud_marker(rel: &str) -> bool {
     after == "info.vdf" || after.starts_with("resource/ui/")
 }
 
+/// A folder is a HUD when it carries `info.vdf` or `resource/ui/`, spelled in
+/// any case: `Info.vdf` and `Resource/UI` are common, and on Linux a
+/// case-sensitive `join("info.vdf")` misses them.
 pub fn is_hud_dir(path: &Path) -> bool {
-    path.join("info.vdf").is_file() || path.join("resource").join("ui").is_dir()
+    if dir_entry_ignore_case(path, "info.vdf").is_some_and(|file| file.is_file()) {
+        return true;
+    }
+    dir_entry_ignore_case(path, "resource")
+        .filter(|dir| dir.is_dir())
+        .and_then(|dir| dir_entry_ignore_case(&dir, "ui"))
+        .is_some_and(|dir| dir.is_dir())
+}
+
+/// The path of `dir/<name>` with whatever ASCII case it has on disk.
+fn dir_entry_ignore_case(dir: &Path, name: &str) -> Option<PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    entries
+        .flatten()
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(name)
+        })
+        .map(|entry| entry.path())
 }
 
 pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
@@ -197,6 +236,11 @@ pub struct LiveHud {
     pub key: String,
 }
 
+/// Every HUD folder in `tf/custom/`, one entry per on-disk spelling. `foo`
+/// and `-foo` (or `RaysHUD` and `rayshud` on Linux) share a key but are
+/// different folders, and each needs handling: deduping on key in directory
+/// order used to keep whichever came first — `-foo` sorts before `foo` on
+/// NTFS — so the mounted `foo` was dropped and never dashed.
 pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
     let custom = tf2_root.join("tf").join("custom");
     let Ok(entries) = fs::read_dir(&custom) else {
@@ -213,20 +257,26 @@ pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
             .strip_prefix('-')
             .unwrap_or(name.as_str())
             .to_ascii_lowercase();
-        if key.is_empty() || huds.iter().any(|hud| hud.key == key) {
+        if key.is_empty() {
             continue;
         }
         huds.push(LiveHud { name, key });
     }
+    // Enabled folders first so a caller that stops at the first match per key
+    // sees the one the game actually mounts.
+    huds.sort_by_key(|hud| hud.name.starts_with('-'));
     huds
 }
 
-/// Just the identities, for callers comparing against a manifest.
+/// Just the identities, deduped, for callers comparing against a manifest.
 pub fn live_hud_keys(tf2_root: &Path) -> Vec<String> {
-    live_hud_names(tf2_root)
-        .into_iter()
-        .map(|hud| hud.key)
-        .collect()
+    let mut keys: Vec<String> = Vec::new();
+    for hud in live_hud_names(tf2_root) {
+        if !keys.contains(&hud.key) {
+            keys.push(hud.key);
+        }
+    }
+    keys
 }
 
 pub fn schema_supported(id: &str) -> bool {
@@ -433,15 +483,12 @@ fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, Profile
     for (path, data) in stripped {
         tree.insert(path, data);
     }
-    if tree.get("info.vdf").is_none() {
+    let Some(info) = tree.info_vdf() else {
         return Err(ProfileError::Io(
             "That archive is not a HUD (missing info.vdf at the root).".into(),
         ));
-    }
-    let ui_version = tree
-        .get("info.vdf")
-        .and_then(|bytes| std::str::from_utf8(bytes).ok())
-        .and_then(parse_ui_version);
+    };
+    let ui_version = std::str::from_utf8(info).ok().and_then(parse_ui_version);
     Ok(ExtractedHud { tree, ui_version })
 }
 
@@ -536,10 +583,20 @@ where
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let id = sanitize_hud_id(&record.id)?;
-    if tree.get("info.vdf").is_none() {
+    if tree.info_vdf().is_none() {
         return Err(ProfileError::Io(
             "That zip is not a HUD (missing info.vdf at the root).".into(),
         ));
+    }
+    // Every destination is checked before the old HUD is touched: a bad entry
+    // name must fail here, not after the previous HUD is already gone.
+    let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(tree.files.len());
+    for (rel, bytes) in &tree.files {
+        let path = normalize_rel_path(&format!("tf/custom/{id}/{rel}"))?;
+        if !is_file_safe_rel_path(&path) {
+            return Err(ProfileError::ForbiddenPath(path));
+        }
+        batch.push((path, FileSource::Bytes(bytes)));
     }
 
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
@@ -555,11 +612,12 @@ where
     if !remove.is_empty() {
         remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &remove, &running)?;
     }
+    // The previous HUD's option cfgs mean nothing to the new files. Callers
+    // that apply options write the new set right after this returns.
+    remove_stale_hud_cfgs(profiles_dir, tf2_root, profile_id, &[], &running)?;
 
-    for (rel, bytes) in &tree.files {
-        let dest = format!("tf/custom/{id}/{rel}");
-        put_exclusive_file_to(profiles_dir, tf2_root, profile_id, &dest, bytes, &running)?;
-    }
+    // One manifest + index write for the whole tree instead of one per file.
+    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, &running)?;
 
     manifest = load_manifest(profiles_dir, profile_id)?;
     let mut stored = record;
@@ -630,10 +688,9 @@ pub fn load_hud_tree_from_profile(
     hud_id: &str,
 ) -> Result<HudTree, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    let prefix = format!("tf/custom/{hud_id}/");
     let mut tree = HudTree::default();
     for file in &manifest.files {
-        let Some(rel) = file.path.strip_prefix(&prefix) else {
+        let Some(rel) = hud_file_rel(&file.path, hud_id) else {
             continue;
         };
         let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
@@ -646,6 +703,32 @@ pub fn load_hud_tree_from_profile(
         ));
     }
     Ok(tree)
+}
+
+/// `rel` inside the HUD folder when `path` belongs to the HUD `hud_id`,
+/// matched by identity rather than spelling: the id is lowercased but a
+/// manifest keeps the folder as it was on disk (`tf/custom/RaysHUD/...` after
+/// an absorb), and a case-sensitive prefix strip saw zero files there.
+fn hud_file_rel<'a>(path: &'a str, hud_id: &str) -> Option<&'a str> {
+    if pack_key(path)? != hud_id.to_ascii_lowercase() {
+        return None;
+    }
+    let rest = path.strip_prefix("tf/custom/")?;
+    let (_, rel) = rest.split_once('/')?;
+    (!rel.is_empty()).then_some(rel)
+}
+
+/// The folder name the manifest uses for the HUD `hud_id`, as spelled in its
+/// paths. `None` when the profile carries no files for that HUD.
+pub fn manifest_hud_folder(files: &[ProfileFile], hud_id: &str) -> Option<String> {
+    let wanted = hud_id.to_ascii_lowercase();
+    files.iter().find_map(|file| {
+        if pack_key(&file.path)? != wanted {
+            return None;
+        }
+        let rest = file.path.strip_prefix("tf/custom/")?;
+        Some(rest.split('/').next()?.to_string())
+    })
 }
 
 pub fn write_hud_tree_files_to<I, S>(
@@ -729,6 +812,11 @@ where
     let status = resolve_hud(&manifest)
         .ok_or_else(|| ProfileError::Io("Install a HUD before saving options.".into()))?;
     let mut tree = load_hud_tree_from_profile(profiles_dir, profile_id, &status.record.id)?;
+    // Write back into the folder the manifest already spells, not the
+    // lowercased id: `RaysHUD/` and `rayshud/` are two entries on disk on
+    // Linux and two manifest paths everywhere.
+    let folder = manifest_hud_folder(&manifest.files, &status.record.id)
+        .unwrap_or_else(|| status.record.id.clone());
     let layer = crate::apply::cfg_layer_from_files(&manifest.files);
     let applied = crate::hud_apply::apply_hud_options_for_layer(
         &mut tree,
@@ -750,7 +838,7 @@ where
         profiles_dir,
         tf2_root,
         profile_id,
-        &status.record.id,
+        &folder,
         &tree,
         &applied.cfg_writes,
         &running,
@@ -792,6 +880,17 @@ pub fn sync_hud_exec_lines_to(
         crate::surface::CfgLayer::Vanilla => "tf/cfg/autoexec.cfg",
     };
     let existing = match read_profile_file_from(profiles_dir, tf2_root, profile_id, rel) {
+        // A non-UTF-8 autoexec is not an empty one: treating it as empty
+        // would replace the user's file with a single exec line. With nothing
+        // to add it is left exactly as it is.
+        Ok(content) if content.binary => {
+            if stems.is_empty() {
+                return Ok(());
+            }
+            return Err(ProfileError::Io(format!(
+                "{rel} is not a text file, so HUD option exec lines cannot be added to it."
+            )));
+        }
         Ok(content) => content.text.unwrap_or_default(),
         // Not in the manifest yet: start from an empty autoexec.
         Err(ProfileError::InvalidPath) => String::new(),
@@ -859,23 +958,28 @@ fn apply_hud_replace_live(
     for pack in previous {
         remove_live_pack(tf2_root, pack)?;
     }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let key = new_id.to_ascii_lowercase();
+    // The folder about to be written, as the manifest spells it.
+    let folder = manifest_hud_folder(&manifest.files, &key).unwrap_or_else(|| key.clone());
     for live in live_hud_names(tf2_root) {
-        if live.key != new_id.to_ascii_lowercase() {
+        // Same identity, different spelling (`RaysHUD` next to the `rayshud`
+        // being written) would leave two HUD folders mounted on Linux.
+        if live.key != key || live.name != folder {
             dash_live_hud(tf2_root, &live)?;
         }
     }
-    let manifest = load_manifest(profiles_dir, profile_id)?;
-    let prefix = format!("tf/custom/{new_id}/");
     for file in &manifest.files {
-        if !file.path.starts_with(&prefix) {
+        if hud_file_rel(&file.path, &key).is_none() {
             continue;
         }
         let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
         let dest = live_path(tf2_root, &file.path);
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
-        }
-        fs::copy(&source, &dest).map_err(|err| ProfileError::Io(err.to_string()))?;
+        // Temp + rename: a plain copy cut off mid-way leaves a truncated .res
+        // with no part-file sibling, which the next absorb would ingest over
+        // the good library copy.
+        crate::hash::copy_and_sha256(&source, &dest)
+            .map_err(|err| ProfileError::Io(err.to_string()))?;
     }
     Ok(())
 }
@@ -926,9 +1030,21 @@ fn is_managed_hud_cfg(path: &str) -> bool {
             .is_some_and(|name| name.starts_with(crate::hud_apply::HUD_CFG_PREFIX))
 }
 
+/// Remove every live folder whose identity is `pack`, however it is spelled
+/// or dashed on disk. `pack` is a lowercased key; on Linux `join(pack)` would
+/// miss the `RaysHUD` folder it names.
 fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
-    for name in [pack.to_string(), format!("-{pack}")] {
-        let dir = tf2_root.join("tf").join("custom").join(name);
+    let custom = tf2_root.join("tf").join("custom");
+    let Ok(entries) = fs::read_dir(&custom) else {
+        return Ok(());
+    };
+    let wanted = pack.to_ascii_lowercase();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if pack_key(&format!("tf/custom/{name}")).as_deref() != Some(wanted.as_str()) {
+            continue;
+        }
+        let dir = entry.path();
         if dir.is_dir() {
             fs::remove_dir_all(&dir).map_err(|err| ProfileError::Io(err.to_string()))?;
         }
@@ -1143,7 +1259,7 @@ mod tests {
         assert!(!HudInstallKind::None.installable());
     }
     use crate::apply::WriteOwnedOptions;
-    use crate::profile::{create_profile_record_to, set_active_profile_to};
+    use crate::profile::{create_profile_record_to, put_exclusive_file_to, set_active_profile_to};
     use crate::test_temp_dir;
     use std::io::{Cursor, Write};
     use zip::write::SimpleFileOptions;
@@ -1673,6 +1789,441 @@ mod tests {
                 .map(String::as_str),
             Some("true")
         );
+        cleanup(&dir);
+    }
+
+    fn active_profile(dir: &Path) -> (PathBuf, PathBuf, String) {
+        let profiles = dir.join("execs").join("profiles");
+        let root = tf2_root(dir);
+        create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
+            .id
+            .clone();
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        (profiles, root, id)
+    }
+
+    fn rays_tree() -> HudTree {
+        let mut tree = HudTree::default();
+        tree.insert("info.vdf", info_vdf().to_vec());
+        tree.insert("resource/ui/hudlayout.res", b"new\n".to_vec());
+        tree
+    }
+
+    fn rays_record() -> HudRecord {
+        HudRecord {
+            id: "rayshud".into(),
+            hash: Some("abc123".into()),
+            source: HudSource::HudDb,
+            options: BTreeMap::new(),
+        }
+    }
+
+    /// A manually installed `tf/custom/RaysHUD/` absorbed into the profile
+    /// resolves as `rayshud`, and "Apply options" must find its files: the
+    /// prefix strip was case-sensitive, so it found none.
+    #[test]
+    fn hud_tree_from_profile_matches_by_key_not_folder_spelling() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        for (rel, bytes) in [
+            ("tf/custom/RaysHUD/info.vdf", info_vdf()),
+            (
+                "tf/custom/RaysHUD/resource/ui/hudlayout.res",
+                b"x\n".as_slice(),
+            ),
+            ("tf/custom/otherpack/materials/a.vmt", b"vmt\n".as_slice()),
+        ] {
+            put_exclusive_file_to(&profiles, &root, &id, rel, bytes, unlocked()).unwrap();
+        }
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(resolve_hud(&manifest).unwrap().record.id, "rayshud");
+        assert_eq!(
+            manifest_hud_folder(&manifest.files, "rayshud").as_deref(),
+            Some("RaysHUD")
+        );
+        assert_eq!(manifest_hud_folder(&manifest.files, "budhud"), None);
+        assert_eq!(
+            hud_file_rel("tf/custom/RaysHUD/resource/ui/hudlayout.res", "rayshud"),
+            Some("resource/ui/hudlayout.res")
+        );
+        assert_eq!(hud_file_rel("tf/custom/otherpack/a.vmt", "rayshud"), None);
+        assert_eq!(hud_file_rel("tf/custom/RaysHUD", "rayshud"), None);
+
+        let tree = load_hud_tree_from_profile(&profiles, &id, "rayshud").unwrap();
+        assert_eq!(tree.files.len(), 2);
+        assert_eq!(
+            tree.get("resource/ui/hudlayout.res"),
+            Some(b"x\n".as_slice())
+        );
+        cleanup(&dir);
+    }
+
+    /// Saving options for an absorbed `RaysHUD` must write back into the
+    /// folder the manifest spells, not open a second `rayshud/` entry.
+    #[test]
+    fn schema_options_write_into_the_manifest_folder_spelling() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let colors = b"\"Scheme\"\n{\n\t\"Colors\"\n\t{\n\t\t\"bh_Health_Buff\"\t\t\"255 0 0 255\"\n\t}\n}\n";
+        for (rel, bytes) in [
+            ("tf/custom/RaysHUD/info.vdf", info_vdf()),
+            (
+                "tf/custom/RaysHUD/resource/clientscheme_colors.res",
+                colors.as_slice(),
+            ),
+        ] {
+            put_exclusive_file_to(&profiles, &root, &id, rel, bytes, unlocked()).unwrap();
+        }
+        let schema = crate::hud_apply::parse_hud_schema(
+            r##"{
+  "Author": "Test",
+  "Controls": {
+    "Colors": [
+      {
+        "Name": "bh_Health_Buff",
+        "Type": "ColorPicker",
+        "Value": "0 153 255 255",
+        "Files": {
+          "resource/clientscheme_colors.res": {
+            "Scheme": { "Colors": { "bh_Health_Buff": "$value" } }
+          }
+        }
+      }
+    ]
+  }
+}"##,
+        )
+        .unwrap();
+        let mut options = BTreeMap::new();
+        options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
+        // The inferred HUD has no record yet; give it one so options persist.
+        match_hud_catalog_to(&profiles, &root, &id, "rayshud", None, unlocked()).unwrap();
+        apply_schema_options_to(&profiles, &root, &id, &schema, options, unlocked()).unwrap();
+
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        let paths: Vec<&str> = manifest
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .filter(|path| path.starts_with("tf/custom/"))
+            .collect();
+        assert!(
+            paths
+                .iter()
+                .all(|path| path.starts_with("tf/custom/RaysHUD/")),
+            "{paths:?}"
+        );
+        let written = fs::read_to_string(exclusive_file_path(
+            &profiles,
+            &id,
+            "tf/custom/RaysHUD/resource/clientscheme_colors.res",
+        ))
+        .unwrap();
+        assert!(written.contains("0 153 255 255"), "{written}");
+        cleanup(&dir);
+    }
+
+    /// Catalog Update on a profile whose HUD was absorbed as `RaysHUD`: the
+    /// live folder with the same identity but another spelling must not stay
+    /// mounted next to the fresh `rayshud/`. Exercises `remove_live_pack` by
+    /// key on Linux; on Windows the two names are one folder and the result
+    /// is the same.
+    #[test]
+    fn install_replaces_a_live_folder_that_differs_only_in_case() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/custom/RaysHUD/info.vdf",
+            b"old\n",
+            unlocked(),
+        )
+        .unwrap();
+        let custom = root.join("tf").join("custom");
+        fs::create_dir_all(custom.join("RaysHUD")).unwrap();
+        fs::write(custom.join("RaysHUD").join("info.vdf"), b"old\n").unwrap();
+
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+
+        let live = live_hud_names(&root);
+        assert_eq!(live.len(), 1, "{live:?}");
+        assert_eq!(live[0].name, "rayshud");
+        assert_eq!(
+            fs::read(custom.join("rayshud").join("info.vdf")).unwrap(),
+            info_vdf()
+        );
+        assert!(!custom.join("-RaysHUD").exists());
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest
+            .files
+            .iter()
+            .all(|file| !file.path.starts_with("tf/custom/RaysHUD/")));
+        cleanup(&dir);
+    }
+
+    /// A stray `RaysHUD` the profile never absorbed shares the new HUD's key
+    /// but not its folder: it is dashed, not left mounted.
+    #[test]
+    fn install_dashes_a_stray_folder_that_shares_the_key() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let custom = root.join("tf").join("custom");
+        fs::create_dir_all(custom.join("RaysHUD")).unwrap();
+        fs::write(custom.join("RaysHUD").join("info.vdf"), b"stray\n").unwrap();
+
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+
+        assert!(custom.join("-RaysHUD").is_dir());
+        assert_eq!(
+            fs::read(custom.join("rayshud").join("info.vdf")).unwrap(),
+            info_vdf()
+        );
+        let mounted: Vec<LiveHud> = live_hud_names(&root)
+            .into_iter()
+            .filter(|hud| !hud.name.starts_with('-'))
+            .collect();
+        assert_eq!(mounted.len(), 1, "{mounted:?}");
+        cleanup(&dir);
+    }
+
+    /// Live HUD files land through temp + rename: no `.execs-part` sibling
+    /// survives and the bytes match the library copy.
+    #[test]
+    fn install_writes_live_files_atomically() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let live = root.join("tf/custom/rayshud/resource/ui/hudlayout.res");
+        assert_eq!(fs::read(&live).unwrap(), b"new\n");
+        assert!(!crate::hash::part_path(&live).exists());
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/rayshud/resource/ui/hudlayout.res"
+            ))
+            .unwrap(),
+            b"new\n"
+        );
+        cleanup(&dir);
+    }
+
+    /// `-foo` sorts before `foo` on NTFS. Deduping on key kept the dashed
+    /// copy and dropped the mounted one, so it was never dashed.
+    #[test]
+    fn live_hud_names_keep_every_spelling_and_the_enabled_one_is_dashed() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let custom = root.join("tf").join("custom");
+        for name in ["-foo", "foo"] {
+            fs::create_dir_all(custom.join(name)).unwrap();
+            fs::write(custom.join(name).join("info.vdf"), info_vdf()).unwrap();
+        }
+        let huds = live_hud_names(&root);
+        assert_eq!(huds.len(), 2, "{huds:?}");
+        assert_eq!(huds[0].name, "foo");
+        assert_eq!(huds[1].name, "-foo");
+        assert_eq!(live_hud_keys(&root), vec!["foo".to_string()]);
+
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!custom.join("foo").exists());
+        assert!(custom.join("-foo").is_dir());
+        assert!(custom.join("rayshud").is_dir());
+        cleanup(&dir);
+    }
+
+    /// Every destination is validated before the previous HUD is removed, so
+    /// a bad entry name leaves the profile exactly as it was.
+    #[test]
+    fn install_refuses_a_bad_entry_before_removing_the_old_hud() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/custom/oldhud/info.vdf",
+            b"old\n",
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let mut escaping = rays_tree();
+        escaping.insert("../evil.res", b"nope\n".to_vec());
+        let err = install_hud_pack_to(&profiles, &root, &id, &escaping, rays_record(), unlocked())
+            .unwrap_err();
+        assert_eq!(err, ProfileError::InvalidPath);
+
+        let mut forbidden = rays_tree();
+        forbidden.insert("steam.inf", b"appID=1\n".to_vec());
+        let err = install_hud_pack_to(&profiles, &root, &id, &forbidden, rays_record(), unlocked())
+            .unwrap_err();
+        assert!(matches!(err, ProfileError::ForbiddenPath(_)), "{err:?}");
+
+        let after = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after.files, before.files);
+        assert!(exclusive_file_path(&profiles, &id, "tf/custom/oldhud/info.vdf").is_file());
+        assert!(!root.join("tf/custom/rayshud").exists());
+        cleanup(&dir);
+    }
+
+    /// A non-UTF-8 autoexec is not an empty one. Adding exec lines is refused
+    /// with a clear error; with nothing to add it is left untouched.
+    #[test]
+    fn sync_hud_exec_lines_refuses_a_binary_autoexec() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let binary: &[u8] = &[0xff, 0xfe, 0x00, 0x80, b'x'];
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/cfg/autoexec.cfg",
+            binary,
+            unlocked(),
+        )
+        .unwrap();
+        let stems = vec!["execs_hud_minmode".to_string()];
+        let err = sync_hud_exec_lines_to(&profiles, &root, &id, &stems, &[]).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("not a text file")),
+            "{err:?}"
+        );
+        sync_hud_exec_lines_to(&profiles, &root, &id, &[], &[]).unwrap();
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, "tf/cfg/autoexec.cfg")).unwrap(),
+            binary
+        );
+        cleanup(&dir);
+    }
+
+    /// `Info.vdf` and `Resource/UI` are HUDs too, in a folder, an archive and
+    /// a tree handed to install.
+    #[test]
+    fn hud_detection_ignores_ascii_case() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let by_info = dir.join("ByInfo");
+        fs::create_dir_all(&by_info).unwrap();
+        fs::write(by_info.join("Info.vdf"), info_vdf()).unwrap();
+        assert!(is_hud_dir(&by_info));
+        let by_ui = dir.join("ByUi");
+        fs::create_dir_all(by_ui.join("Resource").join("UI")).unwrap();
+        assert!(is_hud_dir(&by_ui));
+        let neither = dir.join("Neither");
+        fs::create_dir_all(neither.join("materials")).unwrap();
+        assert!(!is_hud_dir(&neither));
+        assert!(!is_hud_dir(&dir.join("missing")));
+
+        let bytes = zip_bytes(&[
+            ("wrapper/Info.vdf", info_vdf()),
+            ("wrapper/Resource/UI/hudlayout.res", b"hud\n"),
+        ]);
+        let extracted = extract_hud_zip(&bytes).unwrap();
+        assert_eq!(extracted.ui_version, Some(3));
+        assert_eq!(extracted.tree.info_vdf(), Some(info_vdf()));
+        assert_eq!(extracted.tree.get("info.vdf"), None);
+
+        let detail = install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &extracted.tree,
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        assert!(detail
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/rayshud/Info.vdf"));
+        assert!(is_hud_dir(&root.join("tf/custom/rayshud")));
+        cleanup(&dir);
+    }
+
+    /// Installing a HUD prunes the previous HUD's managed option cfgs from the
+    /// profile and the live tree; whoever applies options writes the new set.
+    #[test]
+    fn install_prunes_stale_hud_option_cfgs() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/cfg/execs_hud_old.cfg",
+            b"cl_hud_minmode 1\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/cfg/autoexec.cfg",
+            b"bind f +duck\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        assert!(root.join("tf/cfg/execs_hud_old.cfg").is_file());
+
+        let detail = install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!detail
+            .files
+            .iter()
+            .any(|file| file.path == "tf/cfg/execs_hud_old.cfg"));
+        assert!(detail
+            .files
+            .iter()
+            .any(|file| file.path == "tf/cfg/autoexec.cfg"));
+        assert!(!root.join("tf/cfg/execs_hud_old.cfg").exists());
+        assert!(root.join("tf/cfg/autoexec.cfg").is_file());
         cleanup(&dir);
     }
 }
