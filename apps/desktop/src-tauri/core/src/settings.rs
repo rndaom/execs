@@ -112,6 +112,14 @@ pub fn save_settings_to(file: &Path, settings: &Settings) -> Result<(), String> 
     let parent = file
         .parent()
         .ok_or_else(|| "The settings path has no parent directory.".to_string())?;
+    let platform_base = parent
+        .parent()
+        .ok_or_else(|| "The settings path has no platform data directory.".to_string())?;
+    // The absolute AppData/XDG base comes from the OS environment and may be
+    // absent on a fresh Linux account. Build that trusted base hierarchy, but
+    // create the final `execs` component separately so a link at the app-owned
+    // boundary is still rejected below.
+    std::fs::create_dir_all(platform_base).map_err(|err| err.to_string())?;
     match std::fs::symlink_metadata(parent) {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             // Create only the final app directory. A concurrent link at that
@@ -205,6 +213,25 @@ mod tests {
         fs::remove_file(root.join("tf").join("steam.inf")).unwrap();
         assert_eq!(remembered_tf2_root_from(&file), None);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_creates_a_missing_platform_data_hierarchy() {
+        let dir = crate::test_temp_dir();
+        let file = dir
+            .join("new-platform-base")
+            .join("execs")
+            .join("settings.json");
+        save_settings_to(
+            &file,
+            &Settings {
+                schema: SETTINGS_SCHEMA,
+                tf2_root: "/not/used/by-this-write-test".into(),
+            },
+        )
+        .unwrap();
+        assert!(file.is_file());
+        assert!(load_settings_from(&file).is_some());
     }
 
     #[test]
