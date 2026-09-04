@@ -4,7 +4,7 @@
 //! New or deleted `tf/custom/` packs wait for an Update / Keep choice.
 //! Never rolls the live game folder back to an old snapshot.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -19,9 +19,9 @@ use crate::hash::{
 use crate::launch::{cloud_config_path_from, find_cloud_config, find_cloud_config_from};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    is_profile_ownable_rel_path, load_library_from, load_manifest, profiles_dir,
-    put_exclusive_files_from_paths_to, recover_profile_mutation_to, remove_manifest_files_to,
-    ProfileError, ProfileFile, ProfileLibrary,
+    is_profile_ownable_rel_path, load_library_from, load_manifest, mutate_profile_files_to,
+    portable_path_key, profiles_dir, recover_profile_mutation_to, source_file_len, FileSource,
+    ProfileError, ProfileFile, ProfileLibrary, ProfileLiveProjection,
 };
 use crate::surface::{
     inventory_live_surface_for_absorb, is_stock_custom_entry, is_stock_custom_pack,
@@ -187,23 +187,15 @@ where
     if config_cfg_absorbed && !pending_cloud_sync {
         set_cloud_sync_pending(profiles_dir, tf2_root, &profile_id, true, &running)?;
     }
-    put_live_files(
+    absorb_live_files(
         profiles_dir,
         tf2_root,
         &profile_id,
         &classified.delta.owned_changed,
+        &classified.delta.owned_missing,
         &classified.live,
         &running,
     )?;
-    if !classified.delta.owned_missing.is_empty() {
-        remove_manifest_files_to(
-            profiles_dir,
-            tf2_root,
-            &profile_id,
-            &classified.delta.owned_missing,
-            &running,
-        )?;
-    }
 
     // Only when config.cfg actually drifted. Unconditionally rewriting it put a
     // fresh mtime on a Steam Cloud file on every single boot.
@@ -319,23 +311,21 @@ where
         .flat_map(|pack| classified.pack_live_files.get(pack).into_iter().flatten())
         .cloned()
         .collect();
-    put_live_files(
-        profiles_dir,
-        tf2_root,
-        &profile_id,
-        &added,
-        &classified.live,
-        &running,
-    )?;
     let mut remove = Vec::new();
     for pack in &classified.delta.packs_removed {
         if let Some(paths) = classified.pack_manifest_files.get(pack) {
             remove.extend(paths.iter().cloned());
         }
     }
-    if !remove.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, &profile_id, &remove, &running)?;
-    }
+    absorb_live_files(
+        profiles_dir,
+        tf2_root,
+        &profile_id,
+        &added,
+        &remove,
+        &classified.live,
+        &running,
+    )?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
@@ -375,11 +365,12 @@ where
         .flat_map(|pack| classified.pack_live_files.get(pack).into_iter().flatten())
         .cloned()
         .collect();
-    put_live_files(
+    absorb_live_files(
         profiles_dir,
         tf2_root,
         &profile_id,
         &added,
+        &[],
         &classified.live,
         &running,
     )
@@ -557,7 +548,7 @@ fn classify(
         .iter()
         .map(|file| file.path.clone())
         .collect();
-    let live = live_by_manifest_spelling(inventory.entries, &manifest_paths);
+    let live = live_by_manifest_spelling(inventory.entries, &manifest_paths)?;
     // Hoisted: rebuilding these inside the per-file loops is O(live × manifest)
     // string clones, and absorb runs on boot and after every TF2 quit.
     let manifest_packs_present = manifest_pack_keys(&manifest.files);
@@ -682,7 +673,7 @@ fn classify(
 fn live_by_manifest_spelling(
     entries: Vec<crate::surface::InventoryEntry>,
     manifest_paths: &BTreeSet<String>,
-) -> HashMap<String, PathBuf> {
+) -> Result<HashMap<String, PathBuf>, ProfileError> {
     let mut manifest_first_segment: BTreeMap<String, String> = BTreeMap::new();
     for path in manifest_paths {
         if let (Some(pack), Some(first)) = (pack_key(path), custom_first_segment(path)) {
@@ -720,7 +711,36 @@ fn live_by_manifest_spelling(
             live.insert(target, entry.source);
         }
     }
-    live
+    // Portable profiles cannot represent two case-distinct paths, even on
+    // Linux. Refuse an ambiguous scan instead of replacing one with the other.
+    let mut identities = HashSet::new();
+    for path in live.keys() {
+        if !identities.insert(portable_path_key(path)?) {
+            return Err(ProfileError::Io(format!(
+                "TF2's customization contains colliding profile paths: {path}"
+            )));
+        }
+    }
+    // On Windows a case-only rename is still the same file. Reconcile every
+    // component, after the disabled-pack mapping, so it cannot become a put
+    // followed by a removal of the same portable identity. Linux keeps the
+    // actual spelling; its rename is committed as one addition/removal batch.
+    #[cfg(windows)]
+    {
+        let spellings = manifest_paths
+            .iter()
+            .map(|path| Ok((portable_path_key(path)?, path)))
+            .collect::<Result<HashMap<_, _>, ProfileError>>()?;
+        live = live
+            .into_iter()
+            .map(|(path, source)| {
+                let key = portable_path_key(&path)?;
+                let path = spellings.get(&key).map_or(path, |spelling| (*spelling).clone());
+                Ok((path, source))
+            })
+            .collect::<Result<_, ProfileError>>()?;
+    }
+    Ok(live)
 }
 
 /// The folder name directly under `tf/custom/`, as spelled.
@@ -767,13 +787,14 @@ fn resolve_inventory_cloud(options: &AbsorbOptions<'_>) -> Option<PathBuf> {
     None
 }
 
-/// Absorb a set of live files into the profile with a single manifest + index
-/// write, rather than one full rewrite of both per file.
-fn put_live_files<I, S>(
+/// Absorb additions and removals in one recoverable library transaction. A
+/// case-only rename on Linux has the same portable identity on both sides.
+fn absorb_live_files<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     paths: &[String],
+    remove_paths: &[String],
     live: &HashMap<String, PathBuf>,
     running: I,
 ) -> Result<(), ProfileError>
@@ -781,14 +802,32 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let batch: Vec<(String, PathBuf)> = paths
+    let batch: Vec<(String, FileSource<'_>)> = paths
         .iter()
-        .filter_map(|path| live.get(path).map(|source| (path.clone(), source.clone())))
-        .collect();
-    if batch.is_empty() {
+        .map(|path| {
+            let source = live.get(path).ok_or(ProfileError::InvalidPath)?;
+            Ok((
+                path.clone(),
+                FileSource::PathExact {
+                    path: source,
+                    expected_len: source_file_len(source)?,
+                },
+            ))
+        })
+        .collect::<Result<_, ProfileError>>()?;
+    if batch.is_empty() && remove_paths.is_empty() {
         return Ok(());
     }
-    put_exclusive_files_from_paths_to(profiles_dir, tf2_root, profile_id, &batch, running)?;
+    mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &batch,
+        remove_paths,
+        ProfileLiveProjection::LibraryOnly,
+        running,
+        |_| Ok(()),
+    )?;
     Ok(())
 }
 
@@ -861,7 +900,8 @@ mod tests {
     use super::*;
     use crate::hash::sha256_hex;
     use crate::profile::{
-        exclusive_file_path, load_manifest, save_current_as_to, SaveCurrentOptions,
+        exclusive_file_path, load_manifest, remove_manifest_files_to, save_current_as_to,
+        SaveCurrentOptions,
     };
     use std::io::Write;
 

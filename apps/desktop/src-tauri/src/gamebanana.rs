@@ -185,6 +185,16 @@ struct ProfilePage {
     name: String,
     #[serde(rename = "_sProfileUrl", default)]
     profile_url: String,
+    #[serde(rename = "_aRootCategory", default)]
+    root_category: Option<CategoryRow>,
+    #[serde(rename = "_aGame", default)]
+    game: Option<GameRow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GameRow {
+    #[serde(rename = "_idRow")]
+    id: u64,
 }
 
 /// Name and page URL for one mod, for the record a new install writes.
@@ -268,6 +278,7 @@ fn page_from(
         .filter(|record| record.model.is_empty() || record.model == "Mod")
         .map(record_to_mod)
         .filter(|record| category.is_none_or_matches(record))
+        .filter(|record| is_installable_category(&record.category))
         .filter(|record| include_mature || !record.mature)
         .collect();
     // A search narrowed to one model reports `_nRecordCount` as GameBanana's own
@@ -450,7 +461,7 @@ pub fn categories() -> Result<Vec<GameBananaCategory>, String> {
     let raw: Vec<RawCategory> = fetch_json(&url, CATEGORY_TTL)?;
     Ok(raw
         .into_iter()
-        .filter(|category| !is_excluded_category(&category.name))
+        .filter(|category| is_installable_category(&category.name))
         .map(|category| GameBananaCategory {
             id: category.id,
             name: category.name,
@@ -463,15 +474,37 @@ pub fn is_excluded_category(name: &str) -> bool {
     EXCLUDED_CATEGORIES.contains(&lower.as_str())
 }
 
+fn is_installable_category(name: &str) -> bool {
+    !name.trim().is_empty() && !is_excluded_category(name)
+}
+
 /// Name and page URL, so an install can record what the user actually chose
 /// rather than trusting a name passed across the bridge.
 pub fn mod_profile(id: u64) -> Result<GameBananaProfile, String> {
-    let url = format!("{API}/Mod/{id}/ProfilePage");
+    // ProfilePage exposes the immediate category (e.g. Training or HUDs),
+    // not its root. Request the root explicitly so descendants cannot bypass
+    // the same install policy applied to All and search results.
+    let url =
+        format!("{API}/Mod/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aGame");
     let page: ProfilePage =
         net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
             .map_err(|err| format!("Could not read that GameBanana mod ({err})"))?;
-    if page.id != 0 && page.id != id {
+    profile_from(page, id)
+}
+
+fn profile_from(page: ProfilePage, id: u64) -> Result<GameBananaProfile, String> {
+    if page.id != id {
         return Err("GameBanana returned a different mod than the one requested.".into());
+    }
+    if page.game.as_ref().map(|game| game.id) != Some(TF2_GAME_ID) {
+        return Err("That GameBanana mod is not listed for Team Fortress 2.".into());
+    }
+    let category = page
+        .root_category
+        .as_ref()
+        .ok_or("Could not verify that mod's GameBanana category. Try again later.")?;
+    if !is_installable_category(&category.name) {
+        return Err("That GameBanana category cannot be installed from the Mods pane.".into());
     }
     Ok(GameBananaProfile {
         name: if page.name.is_empty() {
@@ -753,6 +786,86 @@ mod tests {
     }
 
     #[test]
+    fn all_and_search_hide_excluded_roots_without_shortening_pagination() {
+        for client_sorted in [false, true] {
+            let mut records = Vec::new();
+            for (i, root) in [
+                "Maps",
+                "GUIs",
+                "Decal Tool",
+                "Prefabs",
+                "Serverside Weapons",
+                "Skins",
+                "Effects",
+                "",
+            ]
+            .iter()
+            .enumerate()
+            {
+                records.push(serde_json::json!({
+                    "_idRow": i + 1,
+                    "_sModelName": "Mod",
+                    "_aRootCategory": { "_sName": root },
+                    "_aCategory": { "_sName": "Child category" },
+                    "_bHasContentRatings": i == 6
+                }));
+            }
+            let response = serde_json::json!({
+                "_aMetadata": { "_nRecordCount": 100, "_nPerpage": 15, "_bIsComplete": false },
+                "_aRecords": records
+            });
+            for mature in [false, true] {
+                let page = page_from(
+                    serde_json::from_value(response.clone()).unwrap(),
+                    None,
+                    "likes",
+                    client_sorted,
+                    mature,
+                );
+                assert_eq!(
+                    page.records.iter().map(|r| r.id).collect::<Vec<_>>(),
+                    if mature { vec![6, 7] } else { vec![6] }
+                );
+                assert_eq!(page.total, 100);
+                assert_eq!(page.per_page, 15);
+                assert!(
+                    !page.complete,
+                    "filtered rows do not mean the next API page is empty"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn direct_installs_validate_the_root_category_and_game() {
+        let valid = serde_json::json!({
+            "_idRow": 7, "_sName": "A skin", "_aGame": { "_idRow": 297 },
+            "_aCategory": { "_sName": "Child category" },
+            "_aRootCategory": { "_sName": "Skins" }
+        });
+        let profile = profile_from(serde_json::from_value(valid.clone()).unwrap(), 7).unwrap();
+        assert_eq!(profile.name, "A skin");
+        assert_eq!(profile.url, "https://gamebanana.com/mods/7");
+        for name in EXCLUDED_CATEGORIES.into_iter().chain([""]) {
+            let mut page = valid.clone();
+            page["_aRootCategory"]["_sName"] = name.into();
+            assert!(
+                profile_from(serde_json::from_value(page).unwrap(), 7).is_err(),
+                "{name}"
+            );
+        }
+        for field in ["_aRootCategory", "_aGame"] {
+            let mut page = valid.clone();
+            page.as_object_mut().unwrap().remove(field);
+            assert!(profile_from(serde_json::from_value(page).unwrap(), 7).is_err());
+        }
+        let mut other_game = valid.clone();
+        other_game["_aGame"]["_idRow"] = 1.into();
+        assert!(profile_from(serde_json::from_value(other_game).unwrap(), 7).is_err());
+        assert!(profile_from(serde_json::from_value(valid).unwrap(), 8).is_err());
+    }
+
+    #[test]
     fn the_newest_unpackable_file_wins_and_a_vpk_counts() {
         assert_eq!(
             mod_id_from_url("https://gamebanana.com/mods/461758"),
@@ -868,6 +981,10 @@ mod tests {
     fn smoke_the_live_api() {
         let page = search_mods("", "downloads", None, 1, false).unwrap();
         assert!(!page.records.is_empty());
+        assert!(page
+            .records
+            .iter()
+            .all(|r| is_installable_category(&r.category)));
         for record in page.records.iter().take(3) {
             println!(
                 "#{} {:?} by {:?} [{} / {}] likes={} views={} downloads={:?} thumb={:?} url={}",
@@ -903,5 +1020,9 @@ mod tests {
 
         let profile = mod_profile(page.records[0].id).unwrap();
         println!("profile: {profile:?}");
+        // These are a Training map and a HUD: their immediate categories
+        // are children of the excluded Maps and GUIs roots.
+        assert!(mod_profile(74812).unwrap_err().contains("category"));
+        assert!(mod_profile(26852).unwrap_err().contains("category"));
     }
 }
