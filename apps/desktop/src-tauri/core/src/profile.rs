@@ -103,6 +103,13 @@ pub struct LibraryIndex {
     pub schema: u32,
     pub tf2_root: String,
     pub active_profile_id: Option<String>,
+    /// The profile a switch was removing from the live tree when it failed.
+    /// `active_profile_id` is cleared at that point so absorb cannot swallow
+    /// the half-replaced tree; this remembers whose files still need removing,
+    /// so the retry finishes the Remove step instead of merging two profiles.
+    /// Additive: an index without it loads, and an older app ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupted_profile_id: Option<String>,
     pub profiles: Vec<ProfileSummary>,
 }
 
@@ -217,6 +224,10 @@ pub struct ProfileLibrary {
     pub tf2_root: Option<String>,
     pub confirmed_root: Option<String>,
     pub active_profile_id: Option<String>,
+    /// See `LibraryIndex::interrupted_profile_id`. `None` unless a switch was
+    /// cut off after its Remove step began.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupted_profile_id: Option<String>,
     pub profiles: Vec<ProfileSummary>,
 }
 
@@ -483,10 +494,9 @@ where
     let mut index = usable_index(profiles_dir, tf2_root)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     let dest = exclusive_file_path(profiles_dir, profile_id, &path);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| ProfileError::Io(e.to_string()))?;
-    }
-    fs::write(&dest, bytes).map_err(|e| ProfileError::Io(e.to_string()))?;
+    // Atomic: a crash mid-write would otherwise leave a truncated library
+    // copy under the *old* hash, and the next switch would put it live.
+    crate::hash::write_atomic(&dest, bytes).map_err(|e| ProfileError::Io(e.to_string()))?;
     let hash = sha256_hex(bytes);
     upsert_file(
         &mut manifest,
@@ -758,6 +768,8 @@ where
         return Err(ProfileError::UnknownProfile);
     }
     index.active_profile_id = Some(profile_id.to_string());
+    // A completed switch has finished any Remove step a failed one left.
+    index.interrupted_profile_id = None;
     write_json(&index_file(profiles_dir), &index)?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
@@ -765,10 +777,12 @@ where
 /// Point the index at no profile at all. Used when a switch fails after the
 /// live tree has already been part-emptied: leaving `activeProfileId` on the
 /// old profile makes the next auto-absorb swallow the half-replaced tree into
-/// it and destroy it.
+/// it and destroy it. `interrupted_profile_id` records whose files the failed
+/// switch was removing, so the retry can finish that step.
 pub fn clear_active_profile_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
+    interrupted_profile_id: &str,
     running_names: I,
 ) -> Result<ProfileLibrary, ProfileError>
 where
@@ -778,6 +792,7 @@ where
     refuse_writes(running_names)?;
     let mut index = usable_index(profiles_dir, tf2_root)?;
     index.active_profile_id = None;
+    index.interrupted_profile_id = Some(interrupted_profile_id.to_string());
     write_json(&index_file(profiles_dir), &index)?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
@@ -824,8 +839,16 @@ pub fn load_manifest(
     profiles_dir: &Path,
     profile_id: &str,
 ) -> Result<ProfileManifest, ProfileError> {
-    let text = fs::read_to_string(manifest_file(profiles_dir, profile_id))
-        .map_err(|_| ProfileError::UnknownProfile)?;
+    // Only a missing file means "not in the library". A sharing violation or
+    // permission error mid-switch used to read as UnknownProfile, which sent
+    // the user hunting for a profile that was there all along.
+    let text = fs::read_to_string(manifest_file(profiles_dir, profile_id)).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            ProfileError::UnknownProfile
+        } else {
+            ProfileError::Io(format!("Could not read the profile manifest: {err}"))
+        }
+    })?;
     let mut manifest: ProfileManifest =
         serde_json::from_str(&text).map_err(|e| ProfileError::Io(e.to_string()))?;
     if manifest.schema != LIBRARY_SCHEMA {
@@ -949,6 +972,7 @@ fn init_unlocked(profiles_dir: &Path, tf2_root: &Path) -> Result<LibraryIndex, P
                 schema: LIBRARY_SCHEMA,
                 tf2_root: user_path_string(tf2_root),
                 active_profile_id: None,
+                interrupted_profile_id: None,
                 profiles: Vec::new(),
             };
             write_json(&index_file(profiles_dir), &index)?;
@@ -997,6 +1021,7 @@ fn library_from_index(
             tf2_root: Some(index.tf2_root),
             confirmed_root: confirmed,
             active_profile_id: index.active_profile_id,
+            interrupted_profile_id: index.interrupted_profile_id,
             profiles: index.profiles,
         }
     } else {
@@ -1007,6 +1032,7 @@ fn library_from_index(
             tf2_root: Some(index.tf2_root),
             confirmed_root: confirmed,
             active_profile_id: None,
+            interrupted_profile_id: None,
             profiles: Vec::new(),
         }
     }
@@ -1020,6 +1046,7 @@ fn empty_library(initialized: bool, usable: bool, confirmed: Option<String>) -> 
         tf2_root: None,
         confirmed_root: confirmed,
         active_profile_id: None,
+        interrupted_profile_id: None,
         profiles: Vec::new(),
     }
 }
@@ -1084,11 +1111,14 @@ fn referenced_shared_hashes(
 ) -> Result<HashSet<String>, ProfileError> {
     let mut hashes = HashSet::new();
     for profile in &index.profiles {
-        if let Ok(manifest) = load_manifest(profiles_dir, &profile.id) {
-            for file in manifest.files {
-                if file.storage == FileStorage::Shared {
-                    hashes.insert(file.sha256);
-                }
+        // A manifest that cannot be read right now (antivirus lock, transient
+        // I/O error) still references its blobs. Skipping it would let the
+        // GC below delete a base VPK that profile needs, so the error aborts
+        // the GC instead — the blobs stay until the next successful pass.
+        let manifest = load_manifest(profiles_dir, &profile.id)?;
+        for file in manifest.files {
+            if file.storage == FileStorage::Shared {
+                hashes.insert(file.sha256);
             }
         }
     }

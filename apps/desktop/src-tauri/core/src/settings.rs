@@ -75,11 +75,10 @@ pub fn load_settings_from(file: &Path) -> Option<Settings> {
 }
 
 pub fn save_settings_to(file: &Path, settings: &Settings) -> Result<(), String> {
-    if let Some(parent) = file.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    fs::write(file, format!("{json}\n")).map_err(|e| e.to_string())
+    // Atomic: a truncated settings.json reads as "no TF2 folder confirmed"
+    // and sends the user back through first run.
+    crate::hash::write_atomic(file, format!("{json}\n").as_bytes()).map_err(|e| e.to_string())
 }
 
 /// Re-validates `steam.inf`. A moved or non-440 root is treated as unconfirmed.

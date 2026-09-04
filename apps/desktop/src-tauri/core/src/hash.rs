@@ -102,19 +102,71 @@ pub fn part_path(dest: &Path) -> PathBuf {
     dest.with_file_name(name)
 }
 
-/// Rename `from` over `to`. Windows refuses a rename onto an existing file, so
-/// fall back to removing the destination first.
+/// How many times a rename is retried before giving up. Antivirus scanners
+/// hold a just-written file open for a few milliseconds; five tries spread
+/// over ~750 ms cover that without stalling a 3,000-file HUD noticeably.
+const RENAME_ATTEMPTS: u32 = 5;
+const RENAME_BACKOFF: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// Rename `from` over `to`, replacing it.
+///
+/// `fs::rename` replaces an existing destination on every platform we ship
+/// (Windows uses `MOVEFILE_REPLACE_EXISTING`). What it does *not* survive is
+/// a transient sharing violation from an antivirus scanner holding `from` or
+/// `to` open, or a read-only destination on Windows. Both are retried; the
+/// read-only bit is cleared first, since the caller has already decided the
+/// file is ours to overwrite.
+///
+/// The destination is never deleted to make room: an earlier version did
+/// exactly that as a fallback, and a rename that failed for a transient
+/// reason then failed again after the delete — leaving neither the old file
+/// nor the new one. For `profiles/index.json` that is the whole library.
 pub fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
-    match fs::rename(from, to) {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            if to.exists() {
-                fs::remove_file(to)?;
-                fs::rename(from, to)
-            } else {
-                Err(err)
+    let mut last = None;
+    for attempt in 0..RENAME_ATTEMPTS {
+        match fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(err) => {
+                if err.kind() == io::ErrorKind::NotFound && !from.exists() {
+                    return Err(err);
+                }
+                if err.kind() == io::ErrorKind::PermissionDenied {
+                    let _ = clear_readonly(to);
+                }
+                last = Some(err);
             }
         }
+        if attempt + 1 < RENAME_ATTEMPTS {
+            std::thread::sleep(RENAME_BACKOFF * (attempt + 1));
+        }
+    }
+    Err(last.unwrap_or_else(|| io::Error::other("rename failed")))
+}
+
+/// Drop the read-only attribute so `path` can be replaced or removed. Files
+/// extracted from some HUD and mod archives carry it; the hash check that
+/// precedes every removal has already proven the file is ours.
+pub fn clear_readonly(path: &Path) -> io::Result<()> {
+    let meta = fs::metadata(path)?;
+    let mut perms = meta.permissions();
+    if !perms.readonly() {
+        return Ok(());
+    }
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    fs::set_permissions(path, perms)
+}
+
+/// `fs::remove_file` that also succeeds on a read-only file (Windows refuses
+/// those outright).
+pub fn remove_file_force(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
+            clear_readonly(path)?;
+            fs::remove_file(path)
+        }
+        Err(err) => Err(err),
     }
 }
 
@@ -254,6 +306,55 @@ mod tests {
         write_atomic(&dest, b"{}").unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), b"{}");
         assert!(!part_path(&dest).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_atomic_replaces_a_read_only_destination() {
+        let dir = crate::test_temp_dir();
+        let dest = dir.join("locked.cfg");
+        std::fs::write(&dest, b"old").unwrap();
+        let mut perms = std::fs::metadata(&dest).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(true);
+        std::fs::set_permissions(&dest, perms).unwrap();
+
+        write_atomic(&dest, b"new").unwrap();
+
+        assert_eq!(std::fs::read(&dest).unwrap(), b"new");
+        assert!(!part_path(&dest).exists());
+        let _ = clear_readonly(&dest);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_replace_keeps_the_old_destination() {
+        // The part file is missing, so the rename can never succeed. The
+        // destination must survive untouched — an earlier fallback deleted it.
+        let dir = crate::test_temp_dir();
+        let dest = dir.join("index.json");
+        std::fs::write(&dest, b"{\"profiles\":[]}").unwrap();
+        let missing = part_path(&dest);
+
+        assert!(replace_file(&missing, &dest).is_err());
+
+        assert_eq!(std::fs::read(&dest).unwrap(), b"{\"profiles\":[]}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn remove_file_force_handles_the_read_only_bit() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("ro.vpk");
+        std::fs::write(&file, b"x").unwrap();
+        let mut perms = std::fs::metadata(&file).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(true);
+        std::fs::set_permissions(&file, perms).unwrap();
+
+        remove_file_force(&file).unwrap();
+
+        assert!(!file.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

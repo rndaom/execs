@@ -19,7 +19,9 @@ use crate::profile::{
     load_library_from, load_manifest, profiles_dir, put_exclusive_files_from_paths_to,
     remove_manifest_files_to, ProfileError, ProfileFile, ProfileLibrary,
 };
-use crate::surface::{inventory_live_surface_with, is_stock_custom_entry, is_stock_custom_pack};
+use crate::surface::{
+    inventory_live_surface_for_absorb, is_stock_custom_entry, is_stock_custom_pack,
+};
 use crate::switch::{live_candidates, live_path};
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
@@ -315,6 +317,52 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+/// The pack step of a profile switch: take the packs the user added into the
+/// profile being left, and nothing more.
+///
+/// A switch used to run the equivalent of answering **Update** to a prompt
+/// the user had not seen: packs missing from the live tree were deleted from
+/// the library, and every pack they had answered Keep for was absorbed and
+/// then removed by the switch. The UI, meanwhile, promised the deferred
+/// prompt would be re-offered. Here, removed packs keep their library copy
+/// (they are not live, so the Remove step has nothing to do with them and the
+/// next switch back writes them out again), and `ignored_packs` stays as the
+/// user left it. Added packs must be absorbed: they are not in the old
+/// manifest, so the Remove step would leave them live next to the target's.
+pub fn absorb_added_packs_for_switch_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    running_names: I,
+    options: AbsorbOptions<'_>,
+) -> Result<(), ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running = collect_running(running_names);
+    refuse_if_running_among(&running)?;
+    let Some(profile_id) = active_profile_id(profiles_dir, tf2_root)? else {
+        return Ok(());
+    };
+    repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
+    let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    let added: Vec<String> = classified
+        .delta
+        .packs_added
+        .iter()
+        .flat_map(|pack| classified.pack_live_files.get(pack).into_iter().flatten())
+        .cloned()
+        .collect();
+    put_live_files(
+        profiles_dir,
+        tf2_root,
+        &profile_id,
+        &added,
+        &classified.live,
+        &running,
+    )
+}
+
 /// Put back live files an interrupted write left missing, before the delta is
 /// read off the live tree.
 ///
@@ -464,17 +512,14 @@ fn classify(
     options: &AbsorbOptions<'_>,
 ) -> Result<Classified, ProfileError> {
     let cloud = resolve_inventory_cloud(options);
-    let inventory = inventory_live_surface_with(tf2_root, cloud.as_deref())?;
-    let mut live = HashMap::new();
-    for entry in inventory.entries {
-        live.insert(entry.dest_rel, entry.source);
-    }
+    let inventory = inventory_live_surface_for_absorb(tf2_root, cloud.as_deref())?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let manifest_paths: BTreeSet<String> = manifest
         .files
         .iter()
         .map(|file| file.path.clone())
         .collect();
+    let live = live_by_manifest_spelling(inventory.entries, &manifest_paths);
     // Hoisted: rebuilding these inside the per-file loops is O(live × manifest)
     // string clones, and absorb runs on boot and after every TF2 quit.
     let manifest_packs_present = manifest_pack_keys(&manifest.files);
@@ -581,6 +626,76 @@ fn classify(
     })
 }
 
+/// The live tree keyed by the spelling the manifest uses for each pack.
+///
+/// A pack is the same pack whether its folder is `hud` or `-hud` (the Source
+/// disable prefix), and on Windows whether it is `RaysHUD` or `rayshud`. The
+/// switch itself writes a profile's second HUD as `-hud` while the manifest
+/// keeps `hud`; matched by exact path, the next absorb read that as "hud was
+/// deleted, -hud is new", removed the library copy and re-added it under the
+/// disabled name — and the following switch wrote both HUDs disabled. Keying
+/// live files by the manifest's spelling makes the folder name a live-only
+/// detail: the library copy keeps the manifest path, and the twin's bytes are
+/// what get hashed against it.
+///
+/// When both spellings are live at once (a user keeping `hud` and `-hud`
+/// side by side), the one matching the manifest keeps its key and the other
+/// stays under its own name, exactly as before.
+fn live_by_manifest_spelling(
+    entries: Vec<crate::surface::InventoryEntry>,
+    manifest_paths: &BTreeSet<String>,
+) -> HashMap<String, PathBuf> {
+    let mut manifest_first_segment: BTreeMap<String, String> = BTreeMap::new();
+    for path in manifest_paths {
+        if let (Some(pack), Some(first)) = (pack_key(path), custom_first_segment(path)) {
+            manifest_first_segment
+                .entry(pack)
+                .or_insert_with(|| first.to_string());
+        }
+    }
+    let mut live: HashMap<String, PathBuf> = HashMap::new();
+    let mut rekeyed = Vec::new();
+    for entry in entries {
+        let target = pack_key(&entry.dest_rel)
+            .and_then(|pack| manifest_first_segment.get(&pack))
+            .and_then(|spelling| {
+                let first = custom_first_segment(&entry.dest_rel)?;
+                if first == spelling {
+                    return None;
+                }
+                let rest = &entry.dest_rel["tf/custom/".len() + first.len()..];
+                Some(format!("tf/custom/{spelling}{rest}"))
+            });
+        match target {
+            Some(target) => rekeyed.push((target, entry)),
+            None => {
+                live.insert(entry.dest_rel, entry.source);
+            }
+        }
+    }
+    for (target, entry) in rekeyed {
+        // Exact spellings win: never shadow a live file that already carries
+        // the manifest's own name.
+        if live.contains_key(&target) {
+            live.insert(entry.dest_rel, entry.source);
+        } else {
+            live.insert(target, entry.source);
+        }
+    }
+    live
+}
+
+/// The folder name directly under `tf/custom/`, as spelled.
+fn custom_first_segment(rel: &str) -> Option<&str> {
+    let rest = rel.strip_prefix("tf/custom/")?;
+    let first = rest.split('/').next()?;
+    if first.is_empty() {
+        None
+    } else {
+        Some(first)
+    }
+}
+
 fn manifest_pack_keys(files: &[ProfileFile]) -> BTreeSet<String> {
     files
         .iter()
@@ -655,11 +770,11 @@ fn dual_write_config(
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
 }
 
+/// Live `config.cfg` and its Steam Cloud copy. Atomic like every other write
+/// that matters: a truncated `config.cfg` is the one the game loads, and a
+/// truncated Cloud copy is the one Steam syncs up.
 fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ProfileError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| ProfileError::Io(e.to_string()))?;
-    }
-    fs::write(path, bytes).map_err(|e| ProfileError::Io(e.to_string()))
+    write_atomic(path, bytes).map_err(|e| ProfileError::Io(e.to_string()))
 }
 
 #[cfg(test)]
@@ -742,10 +857,15 @@ mod tests {
         library.profiles[0].id.clone()
     }
 
+    /// Never `steam_roots: None` in a test: that discovers the developer's
+    /// real Steam install, and every dual write then lands in their actual
+    /// Steam Cloud `config.cfg` (and the launch-options path in their real
+    /// `localconfig.vdf`). An empty slice means "no Steam here".
     fn opts<'a>(steam: Option<&'a [PathBuf]>) -> AbsorbOptions<'a> {
+        static NO_STEAM: [PathBuf; 0] = [];
         AbsorbOptions {
             cloud_config: None,
-            steam_roots: steam,
+            steam_roots: Some(steam.unwrap_or(&NO_STEAM)),
         }
     }
 
@@ -969,6 +1089,97 @@ mod tests {
             b"new\n"
         );
         assert!(root.join("tf/custom/new/pack.txt").is_file());
+        cleanup(&dir);
+    }
+
+    /// The switch writes a profile's second HUD as `-hud` while the manifest
+    /// keeps `hud`. Matched by exact path, the next absorb deleted the library
+    /// copy of `hud` and re-added it as `-hud`; a later switch then wrote both
+    /// HUDs disabled.
+    #[test]
+    fn a_disabled_twin_keeps_the_manifest_spelling_and_its_library_copy() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/hud/info.vdf"), "hud\n");
+        write_live(&root.join("tf/custom/hud/resource/ui/a.res"), "a\n");
+        let id = save_main(&profiles, &root);
+        fs::rename(root.join("tf/custom/hud"), root.join("tf/custom/-hud")).unwrap();
+        // Edited and added while the pack sat disabled.
+        write_live(&root.join("tf/custom/-hud/resource/ui/a.res"), "a2\n");
+        write_live(&root.join("tf/custom/-hud/resource/ui/b.res"), "b\n");
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert!(result.delta.owned_missing.is_empty(), "{:?}", result.delta);
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        let paths: Vec<&str> = manifest.files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"tf/custom/hud/info.vdf"));
+        assert!(paths.contains(&"tf/custom/hud/resource/ui/b.res"));
+        assert!(
+            !paths.iter().any(|p| p.starts_with("tf/custom/-hud/")),
+            "{paths:?}"
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/hud/resource/ui/a.res"
+            ))
+            .unwrap(),
+            b"a2\n"
+        );
+        assert!(exclusive_file_path(&profiles, &id, "tf/custom/hud/info.vdf").is_file());
+        cleanup(&dir);
+    }
+
+    /// Migration of `tf/cfg/user/` is a Save-current decision. Re-applying it
+    /// on every absorb copied the same legacy file into every profile.
+    #[test]
+    fn absorb_does_not_migrate_legacy_user_cfgs_into_the_profile() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/cfg/overrides/modules.cfg"), "x\n");
+        write_live(&root.join("tf/cfg/user/autoexec.cfg"), "legacy\n");
+        let id = save_main(&profiles, &root);
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(
+            manifest
+                .files
+                .iter()
+                .any(|f| f.path == "tf/cfg/overrides/autoexec.cfg"),
+            "save-current migrates the legacy file once"
+        );
+        // A profile that never had that file (created fresh, or switched to).
+        remove_manifest_files_to(
+            &profiles,
+            &root,
+            &id,
+            &["tf/cfg/overrides/autoexec.cfg".to_string()],
+            unlocked(),
+        )
+        .unwrap();
+
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+
+        assert!(
+            !result
+                .delta
+                .owned_changed
+                .iter()
+                .any(|p| p.contains("autoexec")),
+            "{:?}",
+            result.delta
+        );
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(!manifest
+            .files
+            .iter()
+            .any(|f| f.path == "tf/cfg/overrides/autoexec.cfg"));
         cleanup(&dir);
     }
 

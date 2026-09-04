@@ -116,6 +116,27 @@ pub fn inventory_live_surface_with(
     tf2_root: &Path,
     cloud_config: Option<&Path>,
 ) -> Result<LiveInventory, ProfileError> {
+    inventory_live_surface_opts(tf2_root, cloud_config, true)
+}
+
+/// The live surface as absorb sees it: what is actually at each profile
+/// path, with **no** legacy migration. Migrating `tf/cfg/user/` and
+/// `tf/cfg/app/` into the profile is a one-time decision made by Save
+/// current as… and first run; re-applying it on every absorb copied the same
+/// legacy `autoexec.cfg` into every profile the user ever switched to, since
+/// the source file stays where it is (we never write `tf/cfg/user/`).
+pub fn inventory_live_surface_for_absorb(
+    tf2_root: &Path,
+    cloud_config: Option<&Path>,
+) -> Result<LiveInventory, ProfileError> {
+    inventory_live_surface_opts(tf2_root, cloud_config, false)
+}
+
+fn inventory_live_surface_opts(
+    tf2_root: &Path,
+    cloud_config: Option<&Path>,
+    migrate_legacy: bool,
+) -> Result<LiveInventory, ProfileError> {
     let layer = detect_layer(tf2_root);
     let mut dests = BTreeMap::new();
     let mut skipped = Vec::new();
@@ -129,22 +150,24 @@ pub fn inventory_live_surface_with(
         collect_vanilla_cfgs(tf2_root, &mut dests, &mut skipped, true)?;
     }
     collect_custom(tf2_root, &mut dests, &mut skipped, &mut visited)?;
-    collect_migrate(
-        tf2_root,
-        layer,
-        "user",
-        &mut dests,
-        &mut skipped,
-        &mut visited,
-    )?;
-    collect_migrate(
-        tf2_root,
-        layer,
-        "app",
-        &mut dests,
-        &mut skipped,
-        &mut visited,
-    )?;
+    if migrate_legacy {
+        collect_migrate(
+            tf2_root,
+            layer,
+            "user",
+            &mut dests,
+            &mut skipped,
+            &mut visited,
+        )?;
+        collect_migrate(
+            tf2_root,
+            layer,
+            "app",
+            &mut dests,
+            &mut skipped,
+            &mut visited,
+        )?;
+    }
 
     Ok(LiveInventory {
         layer,

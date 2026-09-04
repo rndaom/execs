@@ -739,7 +739,10 @@ mod tests {
             &root,
             &result.profile_id,
             None::<&str>,
-            AbsorbOptions::default(),
+            AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            },
             |_| {},
         )
         .unwrap();
