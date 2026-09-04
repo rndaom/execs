@@ -227,10 +227,18 @@ pub struct SteamLibrary {
     pub apps: HashSet<String>,
 }
 
+/// Deepest object nesting the parser follows. `parse_value` and
+/// `parse_pairs_until_end` recurse once per `{`, and the blocking pool's
+/// 2 MiB stack overflows (killing the process, not a panic) at a few
+/// thousand levels — a 24 KB `info.vdf` of open braces is enough. No real
+/// Valve file nests past a dozen.
+const MAX_DEPTH: usize = 64;
+
 pub fn parse_vdf(input: &str) -> Result<VdfMap, String> {
     let mut parser = Parser {
         chars: input.chars().collect(),
         i: 0,
+        depth: 0,
     };
     let map = parser.parse_pairs_until_end(false)?;
     parser.skip_ws_and_comments();
@@ -291,6 +299,9 @@ fn is_index_key(key: &str) -> bool {
 struct Parser {
     chars: Vec<char>,
     i: usize,
+    /// Objects currently open, so a runaway file fails instead of overflowing
+    /// the stack.
+    depth: usize,
 }
 
 impl Parser {
@@ -393,7 +404,13 @@ impl Parser {
         self.skip_ws_and_comments();
         if self.peek() == Some('{') {
             self.bump();
-            let obj = self.parse_pairs_until_end(true)?;
+            if self.depth >= MAX_DEPTH {
+                return Err("VDF nested too deep".into());
+            }
+            self.depth += 1;
+            let obj = self.parse_pairs_until_end(true);
+            self.depth -= 1;
+            let obj = obj?;
             self.skip_ws_and_comments();
             if self.bump() != Some('}') {
                 return Err("expected } closing VDF object".into());
@@ -752,5 +769,57 @@ mod tests {
             Some("[unterminated")
         );
         assert_eq!(parsed.get("b").and_then(VdfValue::as_str), Some("2"));
+    }
+
+    /// A 24 KB `info.vdf` of open braces overflowed the blocking pool's
+    /// 2 MiB stack in release and killed the process. Nesting is bounded.
+    #[test]
+    fn runaway_nesting_is_an_error_not_a_stack_overflow() {
+        let depth = 10_000;
+        let mut text = String::new();
+        for _ in 0..depth {
+            text.push_str("\"k\" {\n");
+        }
+        text.push_str("\"leaf\" \"1\"\n");
+        for _ in 0..depth {
+            text.push_str("}\n");
+        }
+        let err = parse_vdf(&text).unwrap_err();
+        assert_eq!(err, "VDF nested too deep");
+
+        // The same shape without a closing side fails the same way, not with
+        // "unterminated".
+        let open_only = "\"k\" {\n".repeat(depth);
+        assert_eq!(parse_vdf(&open_only).unwrap_err(), "VDF nested too deep");
+
+        // Exactly MAX_DEPTH levels still parse; one more does not.
+        let nested = |levels: usize| {
+            let mut text = String::new();
+            for _ in 0..levels {
+                text.push_str("\"k\" {\n");
+            }
+            text.push_str("\"leaf\" \"1\"\n");
+            for _ in 0..levels {
+                text.push_str("}\n");
+            }
+            text
+        };
+        let mut value = parse_vdf(&nested(MAX_DEPTH)).unwrap();
+        for _ in 0..MAX_DEPTH {
+            let inner = value.get("k").and_then(VdfValue::as_obj).unwrap().clone();
+            value = inner;
+        }
+        assert_eq!(value.get("leaf").and_then(VdfValue::as_str), Some("1"));
+        assert_eq!(
+            parse_vdf(&nested(MAX_DEPTH + 1)).unwrap_err(),
+            "VDF nested too deep"
+        );
+
+        // Siblings do not count toward depth: many shallow objects are fine.
+        let mut wide = String::new();
+        for i in 0..1_000 {
+            wide.push_str(&format!("\"k{i}\" {{ \"a\" {{ \"b\" \"1\" }} }}\n"));
+        }
+        assert!(parse_vdf(&wide).is_ok());
     }
 }
