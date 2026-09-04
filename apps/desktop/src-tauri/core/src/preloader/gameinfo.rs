@@ -137,7 +137,9 @@ pub(crate) fn refresh_gameinfo_backup(
 }
 
 /// Put the pristine gameinfo.txt back from the app-data backup. Returns false
-/// when there is no backup or the file already matches it.
+/// when there is no backup or the file already matches it; refuses a backup
+/// that is not a gameinfo file at all, since writing that over the game's
+/// copy is exactly the damage this exists to repair.
 pub fn restore_gameinfo_from_backup(
     tf2_root: &Path,
     data_dir: &Path,
@@ -148,13 +150,21 @@ pub fn restore_gameinfo_from_backup(
     let Ok(pristine) = std::fs::read(&backup) else {
         return Ok(false);
     };
+    if find_bytes(&pristine, b"\"GameInfo\"").is_none() {
+        return Err(
+            "The gameinfo.txt backup is not a GameInfo file; refusing to restore from it. \
+             Verify game files in Steam to get the stock file back."
+                .into(),
+        );
+    }
     let path = gameinfo_path(tf2_root);
     if std::fs::read(&path).is_ok_and(|current| current == pristine) {
         return Ok(false);
     }
     // Re-check right before the write into the official file.
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
-    std::fs::write(&path, &pristine)
+    // Atomic: a truncated gameinfo.txt means TF2 does not start at all.
+    crate::hash::write_atomic(&path, &pristine)
         .map_err(|err| format!("Could not restore gameinfo.txt: {err}"))?;
     Ok(true)
 }

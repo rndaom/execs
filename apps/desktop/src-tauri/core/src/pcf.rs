@@ -169,12 +169,26 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// The fewest bytes one value of `type_code` takes on the wire; what an
+/// array's reservation is bounded by, since a count is the file's claim.
+fn min_encoded_len(type_code: u8) -> usize {
+    match type_code {
+        ty::BOOLEAN | ty::STRING => 1,
+        ty::VECTOR2 => 8,
+        ty::VECTOR3 => 12,
+        ty::VECTOR4 => 16,
+        ty::MATRIX => 64,
+        _ => 4,
+    }
+}
+
 fn read_value(reader: &mut Reader<'_>, type_code: u8) -> Result<PcfValue, PcfError> {
     if (ty::ELEMENT_ARRAY..=ty::MATRIX_ARRAY).contains(&type_code) {
         let count = reader.u32()? as usize;
         let base = type_code - ty::ARRAY_BASE_OFFSET;
-        // Cap the reserve: count comes from the file and each item is ≥1 byte.
-        let mut items = Vec::with_capacity(count.min(reader.bytes.len() - reader.pos));
+        // Cap the reserve by what the remaining bytes could actually hold.
+        let remaining = reader.bytes.len() - reader.pos;
+        let mut items = Vec::with_capacity(count.min(remaining / min_encoded_len(base)));
         for _ in 0..count {
             items.push(read_value(reader, base)?);
         }
@@ -286,7 +300,19 @@ fn write_value(out: &mut Vec<u8>, type_code: u8, value: &PcfValue) -> Result<(),
     }
 }
 
+/// Hard ceiling on what the decoder will look at. The biggest stock particle
+/// file is a few MiB; a crafted one past this could only be after the ~72×
+/// memory amplification of, say, a boolean array.
+pub const MAX_PCF_BYTES: usize = 32 * 1024 * 1024;
+
 pub fn decode_pcf(bytes: &[u8]) -> Result<PcfFile, PcfError> {
+    if bytes.len() > MAX_PCF_BYTES {
+        return Err(PcfError(format!(
+            "Particle file is {} bytes; the limit is {} MiB.",
+            bytes.len(),
+            MAX_PCF_BYTES / (1024 * 1024)
+        )));
+    }
     let mut reader = Reader { bytes, pos: 0 };
     let header = reader.cstring()?;
     let header = String::from_utf8_lossy(&header);
@@ -1172,6 +1198,41 @@ mod tests {
                                                // The file is far too short for that many elements, so decoding fails —
                                                // the point is that it fails instead of trying to allocate first.
         assert!(decode_pcf(&bytes).is_err());
+    }
+
+    /// Nothing legitimate comes near the cap, and past it the decoder would
+    /// only be amplifying a crafted file.
+    #[test]
+    fn a_particle_file_past_the_hard_cap_is_refused_before_parsing() {
+        let mut bytes = PCF_HEADERS[1].as_bytes().to_vec();
+        bytes.extend(b"\n\0");
+        bytes.resize(MAX_PCF_BYTES + 1, 0);
+        let err = decode_pcf(&bytes).unwrap_err();
+        assert!(err.0.contains("limit"), "{}", err.0);
+    }
+
+    /// An array's count is the file's claim; the reserve is bounded by what
+    /// the remaining bytes could hold of that item type, and a claim past the
+    /// bytes fails on the read rather than on the allocation.
+    #[test]
+    fn a_crafted_array_count_reserves_no_more_than_the_bytes_could_hold() {
+        let mut bytes = PCF_HEADERS[1].as_bytes().to_vec();
+        bytes.extend(b"\n\0");
+        bytes.extend(&1u16.to_le_bytes());
+        bytes.extend(b"flags\0");
+        bytes.extend(&1u32.to_le_bytes()); // one element
+        bytes.extend(&0u16.to_le_bytes());
+        bytes.extend(b"root\0");
+        bytes.extend(&[0u8; 16]);
+        bytes.extend(&1u32.to_le_bytes()); // one attribute
+        bytes.extend(&0u16.to_le_bytes());
+        bytes.push(ty::BOOLEAN + ty::ARRAY_BASE_OFFSET);
+        bytes.extend(&u32::MAX.to_le_bytes());
+        bytes.extend(&[1u8; 8]);
+        let err = decode_pcf(&bytes).unwrap_err();
+        assert!(err.0.contains("truncated"), "{}", err.0);
+        assert_eq!(min_encoded_len(ty::BOOLEAN), 1);
+        assert_eq!(min_encoded_len(ty::MATRIX), 64);
     }
 
     /// Dictionary indices are u16 on the wire. `index as u16` truncated
