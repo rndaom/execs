@@ -450,6 +450,19 @@ pub struct DownloadFile {
     pub added: u64,
 }
 
+/// The file chosen off a mod's download page. `_sDownloadUrl` is an opaque
+/// `https://gamebanana.com/dl/<id>` with no extension in it, so the name the
+/// author uploaded rides alongside — it is the only way to tell a bare VPK
+/// from an archive before the bytes arrive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadPick {
+    pub url: String,
+    pub file_name: String,
+}
+
+/// The first four bytes of every VPK, v1 or v2: `0x55AA1234` little-endian.
+const VPK_MAGIC: [u8; 4] = [0x34, 0x12, 0xAA, 0x55];
+
 /// `https://gamebanana.com/mods/461758` → `461758`.
 pub fn mod_id_from_url(url: &str) -> Option<u64> {
     let rest = url.trim().trim_end_matches('/').rsplit("/mods/").next()?;
@@ -457,23 +470,24 @@ pub fn mod_id_from_url(url: &str) -> Option<u64> {
 }
 
 /// The newest file on a mod's download page that this app can unpack.
-pub fn download_url(id: u64) -> Result<String, String> {
+pub fn download_url(id: u64) -> Result<DownloadPick, String> {
     let url = format!("{API}/Mod/{id}/DownloadPage");
     let page: DownloadPage = net::get_json(&net::api_client()?, &url)
         .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
     pick_file(page.files)
 }
 
-/// Same, from a mod page URL (how hud-db spells a GameBanana entry).
+/// Same, from a mod page URL (how hud-db spells a GameBanana entry). A HUD is
+/// always an archive, so only the URL matters here.
 pub fn download_url_for_page(page_url: &str) -> Result<String, String> {
     let id = mod_id_from_url(page_url).ok_or("That GameBanana link has no mod id.")?;
-    download_url(id)
+    Ok(download_url(id)?.url)
 }
 
 /// Prefer the newest archive this app can open — zip, 7z, or a bare VPK. A RAR
 /// is only chosen when nothing else exists, and is refused with its own message
 /// at extraction.
-pub fn pick_file(mut files: Vec<DownloadFile>) -> Result<String, String> {
+pub fn pick_file(mut files: Vec<DownloadFile>) -> Result<DownloadPick, String> {
     files.retain(|file| !file.download_url.is_empty());
     files.sort_by_key(|file| std::cmp::Reverse(file.added));
     let unpackable = |name: &str| {
@@ -485,18 +499,17 @@ pub fn pick_file(mut files: Vec<DownloadFile>) -> Result<String, String> {
         .find(|file| unpackable(&file.file))
         .or_else(|| files.first())
         .ok_or("That GameBanana page lists no files.")?;
-    Ok(chosen.download_url.clone())
+    Ok(DownloadPick {
+        url: chosen.download_url.clone(),
+        file_name: chosen.file.clone(),
+    })
 }
 
-/// The chosen file's name, so the caller can tell a bare VPK from an archive.
-pub fn download_file_name(url: &str) -> String {
-    url.split(['?', '#'])
-        .next()
-        .unwrap_or(url)
-        .rsplit('/')
-        .next()
-        .unwrap_or("")
-        .to_string()
+/// Whether a downloaded file is a bare VPK rather than an archive: by the
+/// uploaded name, or by the VPK signature when the name says nothing (an
+/// upload renamed by its author, or a listing with the extension stripped).
+pub fn is_bare_vpk(file_name: &str, bytes: &[u8]) -> bool {
+    bytes.starts_with(&VPK_MAGIC) || file_name.to_ascii_lowercase().ends_with(".vpk")
 }
 
 // ---------------------------------------------------------------------------
@@ -673,23 +686,39 @@ mod tests {
                 added: 20,
             },
         ];
-        assert_eq!(pick_file(files).unwrap(), "https://gamebanana.com/dl/2");
+        // The pick carries the uploaded name: the URL alone is an opaque id,
+        // so it is the only thing that says "this is a bare VPK".
+        assert_eq!(
+            pick_file(files).unwrap(),
+            DownloadPick {
+                url: "https://gamebanana.com/dl/2".into(),
+                file_name: "middle.vpk".into(),
+            }
+        );
 
         let only_rar = vec![DownloadFile {
             file: "x.rar".into(),
             download_url: "https://gamebanana.com/dl/9".into(),
             added: 1,
         }];
-        assert_eq!(pick_file(only_rar).unwrap(), "https://gamebanana.com/dl/9");
+        let pick = pick_file(only_rar).unwrap();
+        assert_eq!(pick.url, "https://gamebanana.com/dl/9");
+        assert_eq!(pick.file_name, "x.rar");
         assert!(pick_file(Vec::new()).is_err());
+    }
 
-        assert_eq!(
-            download_file_name("https://gamebanana.com/dl/1234?x=1"),
-            "1234"
-        );
-        assert_eq!(
-            download_file_name("https://files.example/Cool.vpk"),
-            "Cool.vpk"
+    #[test]
+    fn a_bare_vpk_is_told_apart_by_name_or_by_signature() {
+        let vpk = [0x34, 0x12, 0xAA, 0x55, 2, 0, 0, 0];
+        let zip = b"PK\x03\x04rest";
+        assert!(is_bare_vpk("Cool.VPK", zip), "the name alone is enough");
+        assert!(is_bare_vpk("1234", &vpk), "the signature alone is enough");
+        assert!(is_bare_vpk("", &vpk));
+        assert!(!is_bare_vpk("1234", zip));
+        assert!(!is_bare_vpk("mod.zip", b"PK"));
+        assert!(
+            !is_bare_vpk("x", &[0x34, 0x12]),
+            "a short body is not a VPK"
         );
     }
 

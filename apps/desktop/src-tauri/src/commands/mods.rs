@@ -6,14 +6,14 @@
 
 use std::path::{Path, PathBuf};
 
-use execs_core::mods::{ModContent, ModSource};
+use execs_core::mods::{ModContent, ModSource, MAX_MOD_BYTES};
 use execs_core::ProfileDetail;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{blocking, with_profile};
+use super::shared::{archive_too_large, blocking, refuse_oversize_file, with_profile};
 use crate::error::CommandError;
-use crate::gamebanana::{self, GameBananaCategory, GameBananaPage};
+use crate::gamebanana::{self, GameBananaCategory, GameBananaPage, GameBananaProfile};
 use crate::WriteGate;
 
 /// Install everything the user picked, and report the profile as it ends up.
@@ -45,9 +45,11 @@ fn packs_from_file(path: &Path) -> Result<Vec<(String, ModContent)>, CommandErro
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
     if name.to_ascii_lowercase().ends_with(".vpk") {
+        // Core probes the VPK's size on disk before reading it.
         let (name, content) = execs_core::mods::mod_content_from_vpk_file(path)?;
         return Ok(vec![(name, content)]);
     }
+    refuse_oversize_file(path, MAX_MOD_BYTES, archive_too_large(MAX_MOD_BYTES))?;
     let bytes = std::fs::read(path).map_err(|err| CommandError::unknown(err.to_string()))?;
     if bytes.starts_with(b"Rar!") {
         return Err(CommandError::unknown(
@@ -177,28 +179,23 @@ pub async fn gamebanana_mod_categories() -> Result<Vec<GameBananaCategory>, Comm
 /// The name and page URL on the record come from `Mod/{id}/ProfilePage` rather
 /// than from the caller, so what a profile says it carries is what GameBanana
 /// says it is.
+///
+/// The download (up to 512 MiB) happens before the write gate is taken, so an
+/// autosave or absorb is not queued behind a slow link; the running-game
+/// check comes first so the user hears "close TF2" before the transfer, not
+/// after it.
 #[tauri::command]
 pub async fn install_gamebanana_mod(
     gate: tauri::State<'_, WriteGate>,
     id: u64,
 ) -> Result<ProfileDetail, CommandError> {
+    let (profile, packs) = with_profile(move |_root, _profile_id| {
+        execs_core::refuse_if_running()?;
+        fetch_gamebanana_mod(id)
+    })
+    .await?;
     let _guard = gate.0.lock().await;
     with_profile(move |root, profile_id| {
-        let profile = gamebanana::mod_profile(id)?;
-        let url = gamebanana::download_url(id)?;
-        let bytes = crate::net::download_bytes(&url, gamebanana::MOD_MAX_BYTES)?;
-        let file_name = gamebanana::download_file_name(&url);
-        let packs = if file_name.to_ascii_lowercase().ends_with(".vpk") {
-            vec![(profile.name.clone(), ModContent::Vpk(bytes))]
-        } else {
-            // The mod's own title names the pack; the file name on GameBanana's
-            // CDN is usually an opaque id.
-            let mut packs = execs_core::mods::mod_content_from_archive(&profile.name, &bytes)?;
-            if packs.len() == 1 {
-                packs[0].0 = profile.name.clone();
-            }
-            packs
-        };
         install_all(
             &root,
             &profile_id,
@@ -210,4 +207,58 @@ pub async fn install_gamebanana_mod(
         )
     })
     .await
+}
+
+/// The network half of a GameBanana install: the mod's own record, and its
+/// newest file read into packs.
+fn fetch_gamebanana_mod(
+    id: u64,
+) -> Result<(GameBananaProfile, Vec<(String, ModContent)>), CommandError> {
+    let profile = gamebanana::mod_profile(id)?;
+    let pick = gamebanana::download_url(id)?;
+    let bytes = crate::net::download_bytes(&pick.url, gamebanana::MOD_MAX_BYTES)?;
+    let packs = packs_from_download(&profile.name, &pick.file_name, bytes)?;
+    Ok((profile, packs))
+}
+
+/// A bare VPK goes in verbatim; anything else is unpacked as an archive. The
+/// uploaded name decides, and the VPK signature decides when the name does
+/// not — GameBanana's download URL carries no extension at all.
+fn packs_from_download(
+    mod_name: &str,
+    file_name: &str,
+    bytes: Vec<u8>,
+) -> Result<Vec<(String, ModContent)>, CommandError> {
+    if gamebanana::is_bare_vpk(file_name, &bytes) {
+        return Ok(vec![(mod_name.to_string(), ModContent::Vpk(bytes))]);
+    }
+    // The mod's own title names the pack; the file name on GameBanana's
+    // CDN is usually an opaque id.
+    let mut packs = execs_core::mods::mod_content_from_archive(mod_name, &bytes)?;
+    if packs.len() == 1 {
+        packs[0].0 = mod_name.to_string();
+    }
+    Ok(packs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_gamebanana_download_becomes_a_vpk_pack_by_name_or_signature() {
+        let vpk = vec![0x34, 0x12, 0xAA, 0x55, 1, 0, 0, 0, 0, 0, 0, 0];
+        // The opaque `dl/<id>` name says nothing; the signature still wins.
+        let packs = packs_from_download("Cool Skin", "1234", vpk.clone()).unwrap();
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].0, "Cool Skin");
+        assert!(matches!(&packs[0].1, ModContent::Vpk(bytes) if *bytes == vpk));
+
+        let packs = packs_from_download("Cool Skin", "cool_skin.vpk", vec![0u8; 4]).unwrap();
+        assert!(matches!(packs[0].1, ModContent::Vpk(_)));
+
+        // Neither a VPK nor an archive: the archive reader's own refusal.
+        let err = packs_from_download("Cool Skin", "1234", b"not an archive".to_vec()).unwrap_err();
+        assert!(!err.message.is_empty());
+    }
 }
