@@ -53,8 +53,15 @@ pub async fn switch_profile(
     .await
 }
 
+/// Zip a profile to a path the user picks. The gate is taken once the save
+/// dialog returns, so the zip reads a library no write is changing under it;
+/// an open dialog must not block the absorb path behind it.
 #[tauri::command]
-pub async fn export_profile(app: AppHandle, id: String) -> Result<Option<String>, CommandError> {
+pub async fn export_profile(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+    id: String,
+) -> Result<Option<String>, CommandError> {
     let for_name = id.clone();
     let suggested = with_root(move |root| {
         let library = execs_core::load_library(Some(&root))?;
@@ -86,6 +93,7 @@ pub async fn export_profile(app: AppHandle, id: String) -> Result<Option<String>
     if path.extension().is_none() {
         path.set_extension("zip");
     }
+    let _guard = gate.0.lock().await;
     // Zipping a whole profile (all of tf/custom/) does not belong on the
     // async runtime's worker thread.
     with_root(move |root| {

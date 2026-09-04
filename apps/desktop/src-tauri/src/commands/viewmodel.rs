@@ -2,17 +2,23 @@
 
 use std::path::{Path, PathBuf};
 
+use execs_core::mods::MAX_MOD_BYTES;
 use execs_core::ProfileDetail;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{blocking, confirmed_root, with_profile};
+use super::shared::{blocking, confirmed_root, refuse_oversize_file, vpk_too_large, with_profile};
 use crate::error::CommandError;
 use crate::WriteGate;
 
 /// Build a Yttrium-style pack: fetch the animation sources, hide the chosen
 /// groups, compile with TF2's own studiomdl in an isolated staging dir, and
 /// install the resulting VPK like an import.
+///
+/// The animations download happens before the write gate is taken, so an
+/// autosave is not queued behind it; the running-game check comes first so
+/// the user hears "close TF2" before the transfer rather than after the
+/// compile. Core re-checks under the gate before it writes.
 #[tauri::command]
 pub async fn build_viewmodel_pack(
     gate: tauri::State<'_, WriteGate>,
@@ -20,11 +26,15 @@ pub async fn build_viewmodel_pack(
     preload: bool,
     hide_mode: Option<String>,
 ) -> Result<ProfileDetail, CommandError> {
+    let zip = with_profile(|_root, _profile_id| {
+        execs_core::refuse_if_running()?;
+        Ok(crate::viewmodel_fetch::fetch_animations_zip()?)
+    })
+    .await?;
     let _guard = gate.0.lock().await;
     with_profile(move |root, profile_id| {
         let hidden_set: std::collections::BTreeSet<String> = hidden.into_iter().collect();
         let mode = execs_core::ViewmodelHideMode::from_str_or_default(hide_mode.as_deref());
-        let zip = crate::viewmodel_fetch::fetch_animations_zip()?;
         let studiomdl = studiomdl_path(&root);
         // The core builder owns this dir: it empties it on entry and on every
         // exit path, so nothing is left to clean up here.
@@ -87,7 +97,6 @@ pub async fn import_viewmodels(
     })
     .await
     .map_err(|err| CommandError::unknown(err.to_string()))?;
-    let _guard = gate.0.lock().await;
     let Some(picked) = picked else {
         // Cancelling the picker is a no-op, not an error.
         return blocking(|| {
@@ -100,8 +109,12 @@ pub async fn import_viewmodels(
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
+    let _guard = gate.0.lock().await;
     // Reading a whole VPK and installing it is blocking work.
     with_profile(move |root, profile_id| {
+        // A viewmodel pack is a `tf/custom` pack like any mod; same ceiling,
+        // checked on disk before the file is read whole.
+        refuse_oversize_file(&path, MAX_MOD_BYTES, vpk_too_large(MAX_MOD_BYTES))?;
         let bytes = std::fs::read(&path).map_err(|err| CommandError::unknown(err.to_string()))?;
         Ok(execs_core::import_viewmodel_vpk(
             &root,

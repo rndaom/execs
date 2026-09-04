@@ -123,7 +123,9 @@ pub async fn download_default_mods() -> Result<DefaultModsPayload, CommandError>
 
 /// Apply a mod selection: restore previous patches, patch the selected
 /// particle files into tf2_misc, pack addon content into tf/custom, and turn
-/// the gameinfo bypass on. Refused while the game is running.
+/// the gameinfo bypass on. Refused while the game is running — checked
+/// before the 81 MB library download, which runs outside the write gate so
+/// an autosave is not queued behind it.
 #[tauri::command]
 pub async fn apply_preloader_mods(
     gate: tauri::State<'_, WriteGate>,
@@ -131,10 +133,13 @@ pub async fn apply_preloader_mods(
     particle_mods: Vec<String>,
     profile_particle_mods: Option<Vec<String>>,
 ) -> Result<PreloaderReport, CommandError> {
+    let zip = with_root(|_root| {
+        execs_core::refuse_if_running()?;
+        Ok(crate::mods_fetch::ensure_mods_zip()?)
+    })
+    .await?;
     let _guard = gate.0.lock().await;
     with_root(move |root| {
-        execs_core::refuse_if_running()?;
-        let zip = crate::mods_fetch::ensure_mods_zip()?;
         let selection = execs_core::preloader::PreloaderSelection {
             addons,
             particle_mods,

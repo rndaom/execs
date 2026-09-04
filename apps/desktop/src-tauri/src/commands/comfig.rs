@@ -52,24 +52,48 @@ pub async fn set_comfig_modules(
     .await
 }
 
+/// The VPKs an addon set needs that the profile does not carry yet.
+fn missing_addon_assets(state: &ComfigState, addons: &[OfficialAddon]) -> Vec<String> {
+    addons
+        .iter()
+        .filter(|addon| !state.addons.contains(addon))
+        .map(|addon| addon.rel_path())
+        .collect()
+}
+
+/// The release VPKs are downloaded before the write gate is taken, so an
+/// autosave is not queued behind them; the running-game check comes first
+/// so the user hears "close TF2" before the transfer. Core re-checks under
+/// the gate. Should the profile change between the download and the gate,
+/// whatever is still missing is fetched again under it, so the write sees
+/// exactly what it would have before.
 #[tauri::command]
 pub async fn set_comfig_addons(
     gate: tauri::State<'_, WriteGate>,
     addons: Vec<OfficialAddon>,
 ) -> Result<ProfileDetail, CommandError> {
+    let wanted = addons.clone();
+    let owned = with_profile(move |root, profile_id| {
+        execs_core::refuse_if_running()?;
+        let state = execs_core::read_comfig_state(&root, &profile_id)?;
+        let needed = missing_addon_assets(&state, &wanted);
+        if needed.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(crate::comfig_fetch::fetch_official_assets(&needed)?)
+    })
+    .await?;
     let _guard = gate.0.lock().await;
     with_profile(move |root, profile_id| {
         let state = execs_core::read_comfig_state(&root, &profile_id)?;
-        let needed: Vec<String> = addons
-            .iter()
-            .filter(|addon| !state.addons.contains(addon))
-            .map(|addon| addon.rel_path())
+        let mut owned = owned;
+        let still_missing: Vec<String> = missing_addon_assets(&state, &addons)
+            .into_iter()
+            .filter(|rel| !owned.iter().any(|(path, _)| path == rel))
             .collect();
-        let owned = if needed.is_empty() {
-            Vec::new()
-        } else {
-            crate::comfig_fetch::fetch_official_assets(&needed)?
-        };
+        if !still_missing.is_empty() {
+            owned.extend(crate::comfig_fetch::fetch_official_assets(&still_missing)?);
+        }
         let assets: Vec<WizardAsset<'_>> = owned
             .iter()
             .map(|(path, bytes)| WizardAsset { path, bytes })
@@ -84,15 +108,21 @@ pub async fn set_comfig_addons(
     .await
 }
 
+/// Same shape: the whole release is downloaded before the gate, and every
+/// package is applied under it.
 #[tauri::command]
 pub async fn update_comfig_vpks(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
-    with_profile(|root, profile_id| {
+    let owned = with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
         let state = execs_core::read_comfig_state(&root, &profile_id)?;
         let rels = execs_core::official_package_rel_paths(&state.addons);
-        let owned = crate::comfig_fetch::fetch_official_assets(&rels)?;
+        Ok(crate::comfig_fetch::fetch_official_assets(&rels)?)
+    })
+    .await?;
+    let _guard = gate.0.lock().await;
+    with_profile(move |root, profile_id| {
         let mut last = None;
         for (rel, bytes) in &owned {
             last = Some(execs_core::apply_official_vpk_bytes(
