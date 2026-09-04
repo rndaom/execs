@@ -21,11 +21,17 @@ const COMFIG_MAX_PAGES: usize = 40;
 const TF2HUDS_BASE: &str = "https://tf2huds.dev";
 const TF2HUDS_MAX_PAGES: usize = 40;
 const STATS_WORKERS: usize = 8;
+/// How long a read that reached the end of both listings is served.
 const STATS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+/// How long a read the deadline cut short, or one whose source was down, is
+/// served before the next HUD pane load tries again. Never caching it meant
+/// every pane load re-walked ~200 requests for up to 90 s while comfig.app
+/// was down or its markup had moved.
+const PARTIAL_STATS_TTL: Duration = Duration::from_secs(60 * 60);
 /// Wall clock for one whole refresh. Both walks are paginated and tf2huds.dev
 /// adds a call per HUD, so a slow day could otherwise run for many minutes.
-/// Past it the walks stop and hand back what they have, which is used but not
-/// cached.
+/// Past it the walks stop and hand back what they have, which is cached only
+/// briefly.
 const STATS_DEADLINE: Duration = Duration::from_secs(90);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +51,27 @@ pub struct HudStat {
 pub struct HudStatsCache {
     pub fetched_at: u64,
     pub stats: BTreeMap<String, HudStat>,
+    /// Both walks reached the end of their listings. Caches written before
+    /// this field existed were only ever written when that was true.
+    #[serde(default = "default_true")]
+    pub complete: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl HudStatsCache {
+    /// Whether the cache is young enough to serve: a day for a whole read,
+    /// an hour for a partial one.
+    fn is_fresh(&self, now: u64) -> bool {
+        let ttl = if self.complete {
+            STATS_TTL
+        } else {
+            PARTIAL_STATS_TTL
+        };
+        now.saturating_sub(self.fetched_at) < ttl.as_secs()
+    }
 }
 
 /// What one source's walk gathered, and whether it reached the end of the
@@ -78,7 +105,7 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
         .and_then(|text| serde_json::from_str::<HudStatsCache>(&text).ok());
     if !refresh {
         if let Some(cache) = &cached {
-            if now_secs().saturating_sub(cache.fetched_at) < STATS_TTL.as_secs() {
+            if cache.is_fresh(now_secs()) {
                 return Ok(cache.stats.clone());
             }
         }
@@ -112,18 +139,16 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
     }
     // Only a refresh that read both sources to the end earns a day of TTL:
     // caching a walk the deadline cut short, or one whose source was down,
-    // would hold half the numbers back until tomorrow.
-    if complete {
-        let cache = HudStatsCache {
-            fetched_at: now_secs(),
-            stats: stats.clone(),
-        };
-        if let Some(parent) = cache_file().parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Ok(text) = serde_json::to_string(&cache) {
-            let _ = std::fs::write(cache_file(), text);
-        }
+    // for that long would hold half the numbers back until tomorrow. It is
+    // still cached for an hour, so a dead source costs one walk per hour
+    // rather than one per pane load.
+    let cache = HudStatsCache {
+        fetched_at: now_secs(),
+        stats: stats.clone(),
+        complete,
+    };
+    if let Ok(text) = serde_json::to_string(&cache) {
+        let _ = execs_core::hash::write_atomic(&cache_file(), text.as_bytes());
     }
     Ok(stats)
 }
@@ -434,6 +459,32 @@ mod tests {
             Some("2025-09-03")
         );
         assert_eq!(parse_month_day_year("Yesterday"), None);
+    }
+
+    #[test]
+    fn a_partial_read_is_served_for_an_hour_and_a_whole_one_for_a_day() {
+        let whole = HudStatsCache {
+            fetched_at: 1_000_000,
+            stats: BTreeMap::new(),
+            complete: true,
+        };
+        let partial = HudStatsCache {
+            complete: false,
+            ..whole.clone()
+        };
+        let hour = 60 * 60;
+        assert!(whole.is_fresh(1_000_000 + 23 * hour));
+        assert!(!whole.is_fresh(1_000_000 + 25 * hour));
+        assert!(partial.is_fresh(1_000_000 + hour / 2));
+        assert!(!partial.is_fresh(1_000_000 + 2 * hour));
+
+        // A cache from before the flag existed was only written when complete.
+        let old: HudStatsCache =
+            serde_json::from_str(r#"{"fetchedAt":5,"stats":{"rayshud":{"views":3}}}"#).unwrap();
+        assert!(old.complete);
+        assert_eq!(old.stats["rayshud"].views, Some(3));
+        let json = serde_json::to_value(&partial).unwrap();
+        assert_eq!(json["complete"], false);
     }
 
     #[test]

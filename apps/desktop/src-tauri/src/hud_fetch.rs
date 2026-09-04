@@ -1,8 +1,10 @@
 //! Fetch hud-db catalog entries and pinned HUD zips. Core stays network-free.
 
+use std::path::Path;
+
+use execs_core::hud::catalog_cache_file;
 use execs_core::{
-    catalog_cache_dir, catalog_entry_from_json, load_catalog_cache_from, save_catalog_cache_to,
-    schema_file_name, HudCatalogCache, HudCatalogEntry, HudInstallKind,
+    catalog_cache_dir, catalog_entry_from_json, schema_file_name, HudCatalogEntry, HudInstallKind,
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,8 +25,9 @@ const RAW_SCHEMA_BASE: &str = "https://raw.githubusercontent.com/CriticalFlaw/TF
 const CATALOG_WORKERS: usize = 12;
 
 /// HUD repos are big (budhud is ~200 MB unpacked) but nothing legitimate on
-/// hud-db approaches this.
-const HUD_ZIP_MAX_BYTES: u64 = 512 * MIB;
+/// hud-db approaches this. Also the ceiling on an imported archive: a file
+/// past it on disk cannot unpack to less.
+pub const HUD_ZIP_MAX_BYTES: u64 = 512 * MIB;
 
 #[derive(Debug, Deserialize)]
 struct GitTree {
@@ -39,36 +42,74 @@ struct GitTreeEntry {
     kind: String,
 }
 
+/// The catalog cache on disk: core's `HudCatalogCache` shape (same file,
+/// same keys, so core can still read it) plus how many documents the run
+/// that produced it failed to fetch. A refresh tolerates a minority of
+/// failures so one 429 does not cost the user the other 199 HUDs, but the
+/// result is then a partial catalog under the tree's SHA — and a later
+/// refresh must not take that SHA match as "nothing to do".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CatalogCache {
+    tree_sha: String,
+    entries: Vec<HudCatalogEntry>,
+    /// Caches written before this field existed load as complete: at the
+    /// time, a partial run was indistinguishable from a whole one anyway.
+    #[serde(default)]
+    failures: usize,
+}
+
+impl CatalogCache {
+    /// Whether the cache can stand in for a fresh read of the same tree.
+    fn covers(&self, tree_sha: &str) -> bool {
+        self.tree_sha == tree_sha && !self.entries.is_empty() && self.failures == 0
+    }
+}
+
+fn load_catalog_cache(dir: &Path) -> Option<CatalogCache> {
+    let text = std::fs::read_to_string(catalog_cache_file(dir)).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn save_catalog_cache(dir: &Path, cache: &CatalogCache) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(cache).map_err(|err| err.to_string())?;
+    execs_core::hash::write_atomic(&catalog_cache_file(dir), format!("{json}\n").as_bytes())
+        .map_err(|err| err.to_string())
+}
+
 pub fn load_or_fetch_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, String> {
     let dir = catalog_cache_dir();
+    let cached = load_catalog_cache(&dir);
     if !refresh {
-        if let Some(cache) = load_catalog_cache_from(&dir) {
+        if let Some(cache) = cached {
             return Ok(cache.entries);
         }
     }
     let client = net::api_client()?;
     let tree: GitTree =
         net::get_json(&client, TREE_URL).map_err(|err| format!("Could not read hud-db ({err})"))?;
-    if let Some(cache) = load_catalog_cache_from(&dir) {
-        if cache.tree_sha == tree.sha && !cache.entries.is_empty() {
+    // A whole cache of the same tree is the same catalog: the documents are
+    // addressed by that SHA. A partial one is re-read so Refresh repairs it.
+    if let Some(cache) = cached {
+        if cache.covers(&tree.sha) {
             return Ok(cache.entries);
         }
     }
     let documents = catalog_documents(&tree.tree);
-    let mut entries = fetch_catalog_entries(&client, &documents)?;
+    let (mut entries, failures) = fetch_catalog_entries(&client, &documents)?;
     entries.sort_by(|a, b| {
         a.name
             .to_ascii_lowercase()
             .cmp(&b.name.to_ascii_lowercase())
     });
-    save_catalog_cache_to(
+    save_catalog_cache(
         &dir,
-        &HudCatalogCache {
+        &CatalogCache {
             tree_sha: tree.sha,
             entries: entries.clone(),
+            failures,
         },
-    )
-    .map_err(|err| err.message())?;
+    )?;
     Ok(entries)
 }
 
@@ -91,13 +132,14 @@ fn catalog_documents(tree: &[GitTreeEntry]) -> Vec<(String, String)> {
 /// A refresh fans ~200 requests at raw.githubusercontent.com across 12
 /// workers, so a single 429 or timeout is likely. Losing one document must
 /// not cost the user the other 199 — failures are skipped and counted, and
-/// only a majority failure is treated as "the refresh did not work".
+/// only a majority failure is treated as "the refresh did not work". The
+/// count rides back with the entries so the cache knows it is partial.
 fn fetch_catalog_entries(
     client: &reqwest::blocking::Client,
     documents: &[(String, String)],
-) -> Result<Vec<HudCatalogEntry>, String> {
+) -> Result<(Vec<HudCatalogEntry>, usize), String> {
     if documents.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), 0));
     }
     let worker_count = CATALOG_WORKERS.min(documents.len());
     let chunk_size = documents.len().div_ceil(worker_count);
@@ -148,7 +190,7 @@ fn fetch_catalog_entries(
             documents.len()
         ));
     }
-    Ok(entries)
+    Ok((entries, failures))
 }
 
 pub fn catalog_entry(id: &str) -> Result<HudCatalogEntry, String> {
@@ -273,11 +315,8 @@ pub fn fetch_hud_album(album: &str) -> Result<Vec<AlbumImage>, String> {
         }
     }
     let images = fetch_album_uncached(album)?;
-    if let Some(parent) = cache.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     if let Ok(text) = serde_json::to_string(&images) {
-        let _ = std::fs::write(&cache, text);
+        let _ = execs_core::hash::write_atomic(&cache, text.as_bytes());
     }
     Ok(images)
 }
@@ -457,10 +496,9 @@ pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
             err.message()
         )
     })?;
-    if let Some(parent) = cache.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(&cache, &text);
+    // Atomic: the validity check above is what a half-written file would
+    // otherwise fail on every start.
+    let _ = execs_core::hash::write_atomic(&cache, text.as_bytes());
     Ok(text)
 }
 
@@ -575,6 +613,80 @@ mod tests {
                 "https://raw.githubusercontent.com/o/r/screenshots/sub/menu.jpg",
             ]
         );
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("execs-hud-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn entry(id: &str) -> HudCatalogEntry {
+        catalog_entry_from_json(
+            id,
+            r#"{"name":"Rays","author":"r","repo":"https://github.com/o/r","hash":"abc"}"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_partial_catalog_cache_never_stands_in_for_a_refresh() {
+        let whole = CatalogCache {
+            tree_sha: "sha1".into(),
+            entries: vec![entry("rayshud")],
+            failures: 0,
+        };
+        assert!(whole.covers("sha1"));
+        assert!(!whole.covers("sha2"), "a new tree is a new catalog");
+
+        // 49% of documents failed: tolerated, used, but not "done".
+        let partial = CatalogCache {
+            failures: 90,
+            ..whole.clone()
+        };
+        assert!(!partial.covers("sha1"));
+
+        let empty = CatalogCache {
+            entries: Vec::new(),
+            ..whole
+        };
+        assert!(!empty.covers("sha1"));
+    }
+
+    #[test]
+    fn the_catalog_cache_round_trips_and_reads_core_shaped_files() {
+        let dir = temp_dir("catalog-cache");
+        // A file written before `failures` existed (core's own shape).
+        let old = execs_core::HudCatalogCache {
+            tree_sha: "sha1".into(),
+            entries: vec![entry("rayshud")],
+        };
+        std::fs::write(
+            catalog_cache_file(&dir),
+            serde_json::to_string(&old).unwrap(),
+        )
+        .unwrap();
+        let loaded = load_catalog_cache(&dir).unwrap();
+        assert_eq!(loaded.failures, 0, "an old cache loads as complete");
+        assert!(loaded.covers("sha1"));
+
+        let partial = CatalogCache {
+            tree_sha: "sha2".into(),
+            entries: vec![entry("budhud")],
+            failures: 3,
+        };
+        save_catalog_cache(&dir, &partial).unwrap();
+        assert_eq!(load_catalog_cache(&dir).unwrap(), partial);
+        // Core still reads the same file, and the write left no part file.
+        let by_core = execs_core::load_catalog_cache_from(&dir).unwrap();
+        assert_eq!(by_core.tree_sha, "sha2");
+        assert_eq!(by_core.entries.len(), 1);
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|item| item.unwrap().file_name())
+            .collect();
+        assert_eq!(left.len(), 1, "{left:?}");
     }
 
     #[test]
