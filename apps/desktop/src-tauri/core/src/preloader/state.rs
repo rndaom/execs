@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::sha256_hex;
+use crate::hash::{sha256_hex, write_atomic};
 use crate::vpk::{crc32, patch_vpk_entry, read_vpk_entry, VpkEntryLocation};
 
 use super::{MISC_VPK, PRELOADER_VPK};
@@ -29,6 +29,83 @@ pub(crate) fn state_path(data_dir: &Path) -> PathBuf {
 /// was orphaned and never restored.
 pub(crate) fn snapshot_path(data_dir: &Path, rel: &str) -> PathBuf {
     originals_dir(data_dir).join(sha256_hex(rel.as_bytes()))
+}
+
+/// The sidecar that makes a snapshot self-describing: `<hash>.json` beside
+/// `<hash>`, carrying the rel the hash was made from and what the bytes are.
+pub(crate) fn sidecar_path(data_dir: &Path, rel: &str) -> PathBuf {
+    originals_dir(data_dir).join(format!("{}.json", sha256_hex(rel.as_bytes())))
+}
+
+/// What a snapshot file holds, written beside it at snapshot time. `state.json`
+/// is the index, but a crash in the middle of writing it (or a user deleting
+/// it) must not turn pristine snapshots into unexplained files: from the
+/// sidecar alone the tracking can be rebuilt and every byte put back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SnapshotSidecar {
+    pub rel: String,
+    pub original_sha256: String,
+    pub size: u64,
+    /// Whether the bytes hashed to the directory's stock CRC when taken.
+    pub pristine: bool,
+}
+
+/// Write a snapshot and its sidecar, both atomically, sidecar last so a
+/// sidecar on disk always describes a complete snapshot.
+pub(crate) fn write_snapshot(
+    data_dir: &Path,
+    rel: &str,
+    bytes: &[u8],
+    pristine: bool,
+) -> Result<(), String> {
+    write_atomic(&snapshot_path(data_dir, rel), bytes)
+        .map_err(|err| format!("Could not snapshot {rel}: {err}"))?;
+    let sidecar = SnapshotSidecar {
+        rel: rel.to_string(),
+        original_sha256: sha256_hex(bytes),
+        size: bytes.len() as u64,
+        pristine,
+    };
+    let json = serde_json::to_vec_pretty(&sidecar).map_err(|err| err.to_string())?;
+    write_atomic(&sidecar_path(data_dir, rel), &json)
+        .map_err(|err| format!("Could not describe the snapshot of {rel}: {err}"))
+}
+
+/// Delete a snapshot the restore has consumed, sidecar included.
+pub(crate) fn remove_snapshot(data_dir: &Path, rel: &str) {
+    let _ = std::fs::remove_file(snapshot_path(data_dir, rel));
+    let _ = std::fs::remove_file(sidecar_path(data_dir, rel));
+}
+
+/// Clear the snapshot folder of what cannot matter (torn `.execs-part`
+/// writes, sidecars whose snapshot is gone) and remove it once it is empty.
+/// A snapshot still there is one no restore could explain, and it stays: it
+/// may be the only copy of a stock file.
+pub(crate) fn tidy_originals_dir(data_dir: &Path) {
+    let dir = originals_dir(data_dir);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        let torn = name.ends_with(crate::hash::PART_SUFFIX);
+        let orphan_sidecar = name
+            .strip_suffix(".json")
+            .is_some_and(|stem| !dir.join(stem).is_file());
+        if torn || orphan_sidecar {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    // Fails while anything is left, which is the point.
+    let _ = std::fs::remove_dir(&dir);
+}
+
+fn is_hashed_name(name: &str) -> bool {
+    name.len() == 64 && name.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// Where a snapshot written before the sha256 naming would live. The adopt
@@ -146,11 +223,12 @@ pub(crate) fn load_state(data_dir: &Path) -> PreloaderState {
         .unwrap_or_default()
 }
 
+/// Atomic, like every file that matters: state.json is the index of which
+/// official entries hold our bytes, and a truncated index is what turns
+/// pristine snapshots into files nothing knows how to use.
 pub(crate) fn save_state(data_dir: &Path, state: &PreloaderState) -> Result<(), String> {
-    std::fs::create_dir_all(preloader_dir(data_dir))
-        .map_err(|err| format!("Could not prepare the preloader folder: {err}"))?;
     let json = serde_json::to_vec_pretty(state).map_err(|err| err.to_string())?;
-    std::fs::write(state_path(data_dir), json)
+    write_atomic(&state_path(data_dir), &json)
         .map_err(|err| format!("Could not save preloader state: {err}"))
 }
 
@@ -207,22 +285,41 @@ pub fn preload_is_wanted(data_dir: &Path, tf2_root: &Path) -> bool {
             .is_file()
 }
 
-/// Snapshots left behind by an interrupted run may not be tracked in state
-/// (the crash hit between the snapshot write and the state save). Adopt them
-/// so the restore pass puts their pristine bytes back; entries that turn out
-/// not to belong are dropped again when the restore cannot match them.
-pub(crate) fn adopt_orphaned_snapshots(data_dir: &Path, state: &mut PreloaderState) {
+/// Snapshots on disk that state does not track — the crash hit between the
+/// snapshot write and the state save, or state.json itself was lost — are
+/// adopted so the restore pass puts their pristine bytes back. Entries that
+/// turn out not to belong are dropped again when the restore cannot match
+/// them. Returns how many were adopted.
+///
+/// Three ways to know what a snapshot is, tried in order: the sidecar written
+/// beside it; failing that, the archive's own entry list (`entries`), since a
+/// snapshot is named by the hash of its rel; and for a file from a build that
+/// mangled `/` to `__`, the name itself (migrated to the hashed name here).
+/// A hashed snapshot none of these explain is left exactly where it is.
+pub(crate) fn adopt_orphaned_snapshots(
+    data_dir: &Path,
+    state: &mut PreloaderState,
+    entries: Option<&BTreeMap<String, VpkEntryLocation>>,
+) -> usize {
     let Ok(dir) = std::fs::read_dir(originals_dir(data_dir)) else {
-        return;
+        return 0;
     };
-    // Snapshots written by an older build are named by the `__` mangling, so
-    // their rel can still be read back off the file name. Migrate them to the
-    // hashed name as they are adopted.
     let tracked_files: BTreeSet<PathBuf> = state
         .patched
         .keys()
         .map(|rel| snapshot_path(data_dir, rel))
         .collect();
+    // Which particle rel each hashed name would stand for, from the archive.
+    let rels_by_hash: BTreeMap<String, &String> = entries
+        .map(|entries| {
+            entries
+                .keys()
+                .filter(|rel| rel.starts_with("particles/") && rel.ends_with(".pcf"))
+                .map(|rel| (sha256_hex(rel.as_bytes()), rel))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut adopted = 0;
     for file in dir.flatten() {
         let path = file.path();
         if tracked_files.contains(&path) {
@@ -231,23 +328,57 @@ pub(crate) fn adopt_orphaned_snapshots(data_dir: &Path, state: &mut PreloaderSta
         let Some(name) = file.file_name().to_str().map(|name| name.to_string()) else {
             continue;
         };
-        // A hashed name carries no rel, so it can only be adopted through the
-        // state entry that points at it — which the check above already found.
-        if name.len() == 64 && name.bytes().all(|b| b.is_ascii_hexdigit()) {
-            continue;
-        }
-        let rel = name.replace("__", "/");
-        if state.patched.contains_key(&rel) {
+        if name.ends_with(".json") || name.ends_with(crate::hash::PART_SUFFIX) {
             continue;
         }
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
         let sha = sha256_hex(&bytes);
-        if std::fs::write(snapshot_path(data_dir, &rel), &bytes).is_err() {
+        let (rel, pristine) = if is_hashed_name(&name) {
+            let from_sidecar = std::fs::read(path.with_extension("json"))
+                .ok()
+                .and_then(|json| serde_json::from_slice::<SnapshotSidecar>(&json).ok())
+                .filter(|sidecar| {
+                    sha256_hex(sidecar.rel.as_bytes()) == name
+                        && sidecar.original_sha256 == sha
+                        && sidecar.size == bytes.len() as u64
+                })
+                .map(|sidecar| (sidecar.rel, sidecar.pristine));
+            let from_archive = || {
+                let rel = *rels_by_hash.get(&name)?;
+                let entry = entries?.get(rel)?;
+                Some((rel.clone(), is_stock(&bytes, entry)))
+            };
+            let Some(found) = from_sidecar.or_else(from_archive) else {
+                continue;
+            };
+            found
+        } else {
+            // Written by an older build under the `__` mangling.
+            let rel = name.replace("__", "/");
+            if state.patched.contains_key(&rel) {
+                continue;
+            }
+            // Judged by the directory when it is at hand; otherwise the restore
+            // only applies the CRC test to snapshots that claimed to be stock.
+            let pristine = entries
+                .and_then(|entries| entries.get(&rel))
+                .is_some_and(|entry| is_stock(&bytes, entry));
+            if write_snapshot(data_dir, &rel, &bytes, pristine).is_err() {
+                continue;
+            }
+            let _ = std::fs::remove_file(&path);
+            (rel, pristine)
+        };
+        if state.patched.contains_key(&rel) {
             continue;
         }
-        let _ = std::fs::remove_file(&path);
+        // A snapshot the archive explained has no sidecar yet; give it one so
+        // the next recovery does not depend on the archive being there.
+        if !sidecar_path(data_dir, &rel).is_file() {
+            let _ = write_snapshot(data_dir, &rel, &bytes, pristine);
+        }
         state.patched.insert(
             rel.clone(),
             PatchedEntry {
@@ -257,12 +388,12 @@ pub(crate) fn adopt_orphaned_snapshots(data_dir: &Path, state: &mut PreloaderSta
                 // wrote, so the restore below cannot verify it.
                 patched_sha256: String::new(),
                 rel,
-                // Not checked against the directory here; the restore only
-                // applies the CRC test to snapshots that claimed to be stock.
-                pristine: false,
+                pristine,
             },
         );
+        adopted += 1;
     }
+    adopted
 }
 
 /// Restore tracked entries from their snapshots, one at a time, persisting
@@ -304,14 +435,14 @@ pub(crate) fn restore_patched_entries(
         let Some(entry) = entries.get(&rel) else {
             failures.push(format!("{rel}: no longer in {MISC_VPK}"));
             state.patched.remove(&rel);
-            let _ = std::fs::remove_file(&snapshot);
+            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         };
         if entry.length as usize != original.len() {
             failures.push(format!("{rel}: stock size changed (game update)"));
             state.patched.remove(&rel);
-            let _ = std::fs::remove_file(&snapshot);
+            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         }
@@ -326,7 +457,7 @@ pub(crate) fn restore_patched_entries(
         // Steam's verify): nothing to write, and the snapshot has done its job.
         if is_stock(&current, entry) {
             state.patched.remove(&rel);
-            let _ = std::fs::remove_file(&snapshot);
+            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         }
@@ -348,14 +479,14 @@ pub(crate) fn restore_patched_entries(
                  the old snapshot was discarded — verify game files in Steam"
             ));
             state.patched.remove(&rel);
-            let _ = std::fs::remove_file(&snapshot);
+            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         }
         match patch_vpk_entry(&vpk_path, entry, &original) {
             Ok(()) => {
                 state.patched.remove(&rel);
-                let _ = std::fs::remove_file(&snapshot);
+                remove_snapshot(data_dir, &rel);
             }
             Err(err) => {
                 failures.push(format!("{rel}: {}", err.message()));

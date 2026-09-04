@@ -163,9 +163,10 @@ fn valid_token(token: &str) -> bool {
 
 pub fn stash_picked(wav: &[u8]) -> Result<String, String> {
     let token = execs_core::hash::random_token();
-    let dir = picked_dir();
-    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
-    std::fs::write(dir.join(format!("{token}.wav")), wav).map_err(|err| err.to_string())?;
+    // Atomic: Apply reads the stash back by token, and a file cut off
+    // mid-write would install as a truncated WAV.
+    execs_core::hash::write_atomic(&picked_dir().join(format!("{token}.wav")), wav)
+        .map_err(|err| err.to_string())?;
     Ok(token)
 }
 

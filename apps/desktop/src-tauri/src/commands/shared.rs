@@ -57,6 +57,40 @@ pub async fn with_profile<T: Send + 'static>(
     .await
 }
 
+/// Refuse a user-picked file by its size on disk before it is read whole.
+/// The archive and VPK readers in core cap what they unpack, but only once
+/// the bytes are already in memory; a 4 GB pick would be loaded first and
+/// refused second. `too_large` is the sentence the later check would use.
+pub fn refuse_oversize_file(
+    path: &Path,
+    max_bytes: u64,
+    too_large: impl Into<String>,
+) -> Result<(), CommandError> {
+    let len = std::fs::metadata(path)
+        .map_err(|err| CommandError::unknown(err.to_string()))?
+        .len();
+    if len > max_bytes {
+        return Err(CommandError::unknown(too_large));
+    }
+    Ok(())
+}
+
+/// Core's wording for an archive past its unpack ceiling.
+pub fn archive_too_large(max_bytes: u64) -> String {
+    format!(
+        "That archive unpacks to more than {} MiB; refusing to unpack it.",
+        max_bytes / (1024 * 1024)
+    )
+}
+
+/// Core's wording for a VPK past the pack ceiling.
+pub fn vpk_too_large(max_bytes: u64) -> String {
+    format!(
+        "That VPK is larger than {} MiB; refusing to install it.",
+        max_bytes / (1024 * 1024)
+    )
+}
+
 /// The active profile's manifest — five commands open with exactly this.
 pub fn active_manifest(
     profile_id: &str,

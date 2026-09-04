@@ -13,8 +13,8 @@ use crate::blob::blob_path;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, is_file_safe_rel_path, is_shared_file_name, is_shared_rel_path,
-    load_library_from, load_manifest, normalize_rel_path, profiles_dir, remove_manifest_files_to,
-    FileStorage, ProfileError, ProfileFile,
+    load_library_from, load_manifest, normalize_rel_path, profiles_dir, put_profile_files_to,
+    remove_manifest_files_to, FileSource, FileStorage, ProfileError, ProfileFile,
 };
 use crate::wizard::{
     file_name_for_rel, pick_release_asset, ComfigPreset, GitHubRelease, OfficialAddon, WizardAsset,
@@ -423,21 +423,26 @@ where
             "Pick a comfig-custom folder to import.".into(),
         ));
     }
-    // Walk and write in one pass: buffering every file's bytes first held the
-    // whole folder in RAM before a single write happened.
-    let mut wrote = |rel: &str, bytes: &[u8]| -> Result<(), ProfileError> {
-        write_owned_file_to(
-            profiles_dir,
-            tf2_root,
-            profile_id,
-            rel,
-            bytes,
-            &running,
-            WriteOwnedOptions::default(),
-        )?;
-        Ok(())
-    };
-    walk_import(source_dir, &[], 0, &mut wrote)?;
+    // The walk collects paths, not bytes, under the same caps as an archive
+    // import; the batch then copies each file straight from disk with one
+    // manifest + index write for the whole folder, so nothing is buffered
+    // and a failure on file 300 has not rewritten the manifest 299 times.
+    let files = collect_import(source_dir, IMPORT_CAPS)?;
+    let batch: Vec<(String, FileSource<'_>)> = files
+        .iter()
+        .map(|(rel, path)| (rel.clone(), FileSource::Path(path.as_path())))
+        .collect();
+    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, &running)?;
+
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() == Some(profile_id) {
+        for (rel, _) in &files {
+            let source = exclusive_file_path(profiles_dir, profile_id, rel);
+            let dest = crate::switch::live_path(tf2_root, rel);
+            crate::hash::copy_and_sha256(&source, &dest)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
+        }
+    }
     profile_detail(profiles_dir, tf2_root, profile_id)
 }
 
@@ -604,11 +609,44 @@ fn live_tf2_path(tf2_root: &Path, rel: &str) -> PathBuf {
 /// crafted tree, not something a user hand-made.
 const IMPORT_MAX_DEPTH: usize = 32;
 
+const MIB: u64 = 1024 * 1024;
+
+/// What a comfig-custom folder import will take before it gives up: the same
+/// ceilings as a HUD or mod archive. The folder is whatever the user pointed
+/// at, and without a cap a stray Steam library inside it is read whole.
+#[derive(Debug, Clone, Copy)]
+struct ImportCaps {
+    max_files: usize,
+    max_file_bytes: u64,
+    max_total_bytes: u64,
+}
+
+const IMPORT_CAPS: ImportCaps = ImportCaps {
+    max_files: 20_000,
+    max_file_bytes: 64 * MIB,
+    max_total_bytes: 512 * MIB,
+};
+
+/// Every importable file under `source_dir` as `(profile rel path, source
+/// path)`, checked against `caps` by count and by declared size. No file
+/// contents are read here.
+fn collect_import(
+    source_dir: &Path,
+    caps: ImportCaps,
+) -> Result<Vec<(String, PathBuf)>, ProfileError> {
+    let mut out = Vec::new();
+    let mut total: u64 = 0;
+    walk_import(source_dir, &[], 0, caps, &mut total, &mut out)?;
+    Ok(out)
+}
+
 fn walk_import(
     dir: &Path,
     rel_parts: &[String],
     depth: usize,
-    out: &mut impl FnMut(&str, &[u8]) -> Result<(), ProfileError>,
+    caps: ImportCaps,
+    total: &mut u64,
+    out: &mut Vec<(String, PathBuf)>,
 ) -> Result<(), ProfileError> {
     if depth >= IMPORT_MAX_DEPTH {
         return Err(ProfileError::Io(format!(
@@ -629,7 +667,7 @@ fn walk_import(
         if path.is_dir() {
             let mut next = rel_parts.to_vec();
             next.push(name);
-            walk_import(&path, &next, depth + 1, out)?;
+            walk_import(&path, &next, depth + 1, caps, total, out)?;
             continue;
         }
         if !path.is_file() {
@@ -649,8 +687,29 @@ fn walk_import(
         if !is_file_safe_rel_path(&rel) || is_shared_rel_path(&rel) {
             continue;
         }
-        let bytes = fs::read(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
-        out(&rel, &bytes)?;
+        if out.len() >= caps.max_files {
+            return Err(ProfileError::Io(format!(
+                "comfig-custom has more than {} files; refusing to import it.",
+                caps.max_files
+            )));
+        }
+        let len = fs::metadata(&path)
+            .map_err(|err| ProfileError::Io(err.to_string()))?
+            .len();
+        if len > caps.max_file_bytes {
+            return Err(ProfileError::Io(format!(
+                "{rel} is larger than {} MiB; refusing to import it.",
+                caps.max_file_bytes / MIB
+            )));
+        }
+        *total += len;
+        if *total > caps.max_total_bytes {
+            return Err(ProfileError::Io(format!(
+                "comfig-custom holds more than {} MiB; refusing to import it.",
+                caps.max_total_bytes / MIB
+            )));
+        }
+        out.push((rel, path));
     }
     Ok(())
 }
@@ -869,6 +928,66 @@ mod tests {
 
         let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
         assert!(matches!(err, ProfileError::Io(ref msg) if msg.contains("folders deep")));
+        cleanup(&dir);
+    }
+
+    /// The folder walk stops at the same ceilings an archive import has: by
+    /// file count, by single file size, and by total size — before any bytes
+    /// are read.
+    #[test]
+    fn import_refuses_a_folder_past_the_caps() {
+        let dir = test_temp_dir();
+        let caps = ImportCaps {
+            max_files: 2,
+            max_file_bytes: 8,
+            max_total_bytes: 12,
+        };
+
+        let too_many = dir.join("many");
+        for name in ["a.cfg", "b.cfg", "c.cfg"] {
+            write_file(&too_many.join(name), "x");
+        }
+        let err = collect_import(&too_many, caps).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("more than 2 files")),
+            "{err:?}"
+        );
+
+        let too_big = dir.join("big");
+        write_file(&too_big.join("huge.cfg"), "123456789");
+        let err = collect_import(&too_big, caps).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("larger than")),
+            "{err:?}"
+        );
+
+        let too_much = dir.join("total");
+        write_file(&too_much.join("a.cfg"), "1234567");
+        write_file(&too_much.join("b.cfg"), "1234567");
+        let err = collect_import(&too_much, caps).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref msg) if msg.contains("holds more than")),
+            "{err:?}"
+        );
+
+        let fine = dir.join("fine");
+        write_file(&fine.join("a.cfg"), "12345");
+        write_file(&fine.join("sub/b.cfg"), "12345");
+        let files = collect_import(&fine, caps).unwrap();
+        let mut rels: Vec<&str> = files.iter().map(|(rel, _)| rel.as_str()).collect();
+        rels.sort();
+        assert_eq!(
+            rels,
+            vec![
+                "tf/custom/comfig-custom/a.cfg",
+                "tf/custom/comfig-custom/sub/b.cfg"
+            ]
+        );
+        assert_eq!(
+            IMPORT_CAPS.max_files,
+            crate::hud::HUD_LIMITS.max_entries,
+            "folder and archive imports share one ceiling"
+        );
         cleanup(&dir);
     }
 

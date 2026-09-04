@@ -21,6 +21,16 @@ pub struct VpkArchive {
     pub files: BTreeMap<String, Vec<u8>>,
 }
 
+/// Valve's placeholder for "no folder" and "no extension" in the directory
+/// tree: an empty string there would read as the end of the group, so the
+/// writer emits a single space and the reader maps it back to nothing.
+const NONE_MARKER: &str = " ";
+
+/// Materialized bytes a read may produce beyond twice what is on disk. Entries
+/// in the directory tree may overlap, so a crafted file with fifty entries each
+/// covering the whole data region would otherwise allocate fifty copies of it.
+const MATERIALIZE_HEADROOM: u64 = 1024 * 1024;
+
 pub fn read_vpk_dir_file(path: &Path) -> Result<VpkArchive, VpkError> {
     let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
     read_vpk(&bytes, Some(path), None)
@@ -41,11 +51,73 @@ pub fn read_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkArchive, VpkError> {
     read_vpk(bytes, None, None)
 }
 
-fn read_vpk(
-    bytes: &[u8],
-    dir_path: Option<&Path>,
-    keep: Option<&dyn Fn(&str) -> bool>,
-) -> Result<VpkArchive, VpkError> {
+/// What a validate-only pass learned about a single-file VPK.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VpkSummary {
+    pub files: usize,
+    /// Sum of every entry's stored length. Overlapping entries count twice, so
+    /// this may exceed the file size; it is what a full read would allocate.
+    pub bytes: u64,
+}
+
+/// Check a single-file VPK the way `read_vpk_dir_bytes` would, without copying
+/// a single entry body: header, tree, every entry inside the data region, no
+/// split-archive references, and no more overlap between entries than a full
+/// read would tolerate. The cheap gate for a pack the user is importing.
+pub fn validate_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkSummary, VpkError> {
+    let mut summary = VpkSummary::default();
+    let budget = materialize_budget(bytes.len() as u64);
+    walk_vpk_tree(bytes, &mut |entry| {
+        let length = entry.length as usize;
+        if length > 0 {
+            if entry.archive_index != DIR_ARCHIVE {
+                return Err(VpkError(
+                    "Refusing an in-memory split VPK (need the *_dir.vpk path).".into(),
+                ));
+            }
+            let start = entry.data_base + entry.offset as usize;
+            let end = start.saturating_add(length);
+            if end > bytes.len() {
+                return Err(VpkError("VPK file data is truncated.".into()));
+            }
+        }
+        summary.files += 1;
+        charge(&mut summary.bytes, budget, entry.preload.len() + length)?;
+        Ok(())
+    })?;
+    Ok(summary)
+}
+
+/// Twice what is on disk, plus headroom. Anything past that is entries
+/// overlapping each other, never a real pack.
+fn materialize_budget(on_disk: u64) -> u64 {
+    on_disk
+        .saturating_mul(2)
+        .saturating_add(MATERIALIZE_HEADROOM)
+}
+
+/// One directory-tree entry as the walker hands it out: where its bytes live,
+/// nothing copied yet.
+struct RawEntry<'a> {
+    rel: String,
+    crc: u32,
+    /// Byte offset of the CRC field inside the directory bytes.
+    crc_pos: u64,
+    preload: &'a [u8],
+    archive_index: u16,
+    offset: u32,
+    length: u32,
+    /// Absolute offset of the post-tree data region in the directory bytes.
+    data_base: usize,
+}
+
+/// Parse the header and walk the extension / folder / name tree, calling
+/// `visit` once per entry. Every reader goes through here so the bounds checks
+/// on the tree are written once. Returns where the tree ends.
+fn walk_vpk_tree<'a>(
+    bytes: &'a [u8],
+    visit: &mut dyn FnMut(RawEntry<'a>) -> Result<(), VpkError>,
+) -> Result<usize, VpkError> {
     if bytes.len() < 12 {
         return Err(VpkError("VPK header is too short.".into()));
     }
@@ -56,27 +128,21 @@ fn read_vpk(
     }
     let version = read_u32(&mut cur)?;
     let tree_size = read_u32(&mut cur)? as usize;
-    let header_size = match version {
+    let header_size: usize = match version {
         1 => 12,
         2 => {
             if bytes.len() < 28 {
                 return Err(VpkError("VPK v2 header is too short.".into()));
             }
-            let _file_data = read_u32(&mut cur)?;
-            let _archive_md5 = read_u32(&mut cur)?;
-            let _other_md5 = read_u32(&mut cur)?;
-            let _signature = read_u32(&mut cur)?;
+            cur.set_position(28);
             28
         }
         _ => return Err(VpkError(format!("unsupported VPK version {version}"))),
     };
-    let tree_end = header_size + tree_size;
+    let tree_end = header_size.saturating_add(tree_size);
     if bytes.len() < tree_end {
         return Err(VpkError("VPK directory tree is truncated.".into()));
     }
-    let data_base = tree_end;
-    let mut archives: BTreeMap<u16, std::fs::File> = BTreeMap::new();
-    let mut files = BTreeMap::new();
     while cur.position() < tree_end as u64 {
         let ext = read_cstring(&mut cur, tree_end)?;
         if ext.is_empty() {
@@ -95,82 +161,137 @@ fn read_vpk(
                 if cur.position() as usize + 18 > tree_end {
                     return Err(VpkError("VPK entry is truncated.".into()));
                 }
-                let _crc = read_u32(&mut cur)?;
+                let crc_pos = cur.position();
+                let crc = read_u32(&mut cur)?;
                 let preload_len = read_u16(&mut cur)? as usize;
                 let archive_index = read_u16(&mut cur)?;
-                let offset = read_u32(&mut cur)? as usize;
-                let length = read_u32(&mut cur)? as usize;
+                let offset = read_u32(&mut cur)?;
+                let length = read_u32(&mut cur)?;
                 let term = read_u16(&mut cur)?;
                 if term != 0xffff {
                     return Err(VpkError("VPK entry terminator missing.".into()));
                 }
-                if (cur.position() as usize) + preload_len > tree_end {
+                let preload_start = cur.position() as usize;
+                let preload_end = preload_start.saturating_add(preload_len);
+                if preload_end > tree_end {
                     return Err(VpkError("VPK preload is truncated.".into()));
                 }
-                let mut preload = vec![0u8; preload_len];
-                cur.read_exact(&mut preload)
-                    .map_err(|err| VpkError(err.to_string()))?;
-                let rel = if path == " " || path.is_empty() {
-                    format!("{name}.{ext}")
+                let preload = &bytes[preload_start..preload_end];
+                cur.set_position(preload_end as u64);
+                let file = if ext == NONE_MARKER {
+                    name
                 } else {
-                    format!("{path}/{name}.{ext}")
+                    format!("{name}.{ext}")
+                };
+                let rel = if path == NONE_MARKER || path.is_empty() {
+                    file
+                } else {
+                    format!("{path}/{file}")
                 };
                 if rel.contains("..") {
                     return Err(VpkError("Refusing a VPK path that escapes.".into()));
                 }
-                let rel = rel.replace('\\', "/");
-                if let Some(keep) = keep {
-                    if !keep(&rel) {
-                        continue;
-                    }
-                }
-                let mut body = preload;
-                if length > 0 {
-                    if archive_index == DIR_ARCHIVE {
-                        let start = data_base + offset;
-                        let end = start.saturating_add(length);
-                        if end > bytes.len() {
-                            return Err(VpkError("VPK file data is truncated.".into()));
-                        }
-                        body.extend_from_slice(&bytes[start..end]);
-                    } else {
-                        let Some(dir_path) = dir_path else {
-                            return Err(VpkError(
-                                "Refusing an in-memory split VPK (need the *_dir.vpk path).".into(),
-                            ));
-                        };
-                        if let std::collections::btree_map::Entry::Vacant(e) =
-                            archives.entry(archive_index)
-                        {
-                            let sibling = sibling_archive_path(dir_path, archive_index)?;
-                            let opened = std::fs::File::open(&sibling)
-                                .map_err(|err| VpkError(err.to_string()))?;
-                            e.insert(opened);
-                        }
-                        let archive = archives.get_mut(&archive_index).expect("archive opened");
-                        let end = (offset as u64).saturating_add(length as u64);
-                        let available = archive
-                            .metadata()
-                            .map_err(|err| VpkError(err.to_string()))?
-                            .len();
-                        if end > available {
-                            return Err(VpkError("VPK archive data is truncated.".into()));
-                        }
-                        archive
-                            .seek(SeekFrom::Start(offset as u64))
-                            .map_err(|err| VpkError(err.to_string()))?;
-                        let mut chunk = vec![0u8; length];
-                        archive
-                            .read_exact(&mut chunk)
-                            .map_err(|err| VpkError(err.to_string()))?;
-                        body.extend_from_slice(&chunk);
-                    }
-                }
-                files.insert(rel, body);
+                visit(RawEntry {
+                    rel: rel.replace('\\', "/"),
+                    crc,
+                    crc_pos,
+                    preload,
+                    archive_index,
+                    offset,
+                    length,
+                    data_base: tree_end,
+                })?;
             }
         }
     }
+    Ok(tree_end)
+}
+
+fn read_vpk(
+    bytes: &[u8],
+    dir_path: Option<&Path>,
+    keep: Option<&dyn Fn(&str) -> bool>,
+) -> Result<VpkArchive, VpkError> {
+    let mut archives: BTreeMap<u16, std::fs::File> = BTreeMap::new();
+    let mut files = BTreeMap::new();
+    // The directory bytes up front, each sibling archive as it is opened.
+    let mut budget = materialize_budget(bytes.len() as u64);
+    let mut materialized: u64 = 0;
+    walk_vpk_tree(bytes, &mut |entry| {
+        if let Some(keep) = keep {
+            if !keep(&entry.rel) {
+                return Ok(());
+            }
+        }
+        let length = entry.length as usize;
+        let mut body = entry.preload.to_vec();
+        if length > 0 {
+            if entry.archive_index == DIR_ARCHIVE {
+                let start = entry.data_base + entry.offset as usize;
+                let end = start.saturating_add(length);
+                if end > bytes.len() {
+                    return Err(VpkError("VPK file data is truncated.".into()));
+                }
+                charge(&mut materialized, budget, length)?;
+                body.extend_from_slice(&bytes[start..end]);
+            } else {
+                let Some(dir_path) = dir_path else {
+                    return Err(VpkError(
+                        "Refusing an in-memory split VPK (need the *_dir.vpk path).".into(),
+                    ));
+                };
+                if let std::collections::btree_map::Entry::Vacant(e) =
+                    archives.entry(entry.archive_index)
+                {
+                    let sibling = sibling_archive_path(dir_path, entry.archive_index)?;
+                    let opened =
+                        std::fs::File::open(&sibling).map_err(|err| VpkError(err.to_string()))?;
+                    let len = opened
+                        .metadata()
+                        .map_err(|err| VpkError(err.to_string()))?
+                        .len();
+                    budget = budget.saturating_add(len.saturating_mul(2));
+                    e.insert(opened);
+                }
+                let archive = archives
+                    .get_mut(&entry.archive_index)
+                    .expect("archive opened");
+                let end = u64::from(entry.offset).saturating_add(length as u64);
+                let available = archive
+                    .metadata()
+                    .map_err(|err| VpkError(err.to_string()))?
+                    .len();
+                if end > available {
+                    return Err(VpkError("VPK archive data is truncated.".into()));
+                }
+                charge(&mut materialized, budget, length)?;
+                archive
+                    .seek(SeekFrom::Start(u64::from(entry.offset)))
+                    .map_err(|err| VpkError(err.to_string()))?;
+                let mut chunk = vec![0u8; length];
+                archive
+                    .read_exact(&mut chunk)
+                    .map_err(|err| VpkError(err.to_string()))?;
+                body.extend_from_slice(&chunk);
+            }
+        }
+        files.insert(entry.rel, body);
+        Ok(())
+    })?;
     Ok(VpkArchive { files })
+}
+
+/// Account `length` bytes against the materialization budget before they are
+/// allocated. An allocation failure aborts the process, so the check has to
+/// come first.
+fn charge(materialized: &mut u64, budget: u64, length: usize) -> Result<(), VpkError> {
+    *materialized = materialized.saturating_add(length as u64);
+    if *materialized > budget {
+        return Err(VpkError(
+            "VPK entries overlap far beyond the archive's size; refusing to load it.".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// Where one entry's bytes live, plus where its CRC sits in the directory
@@ -199,88 +320,23 @@ impl VpkEntryLocation {
 /// Map every entry to its physical location without reading any file bodies.
 pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
     let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
-    if bytes.len() < 12 {
-        return Err(VpkError("VPK header is too short.".into()));
-    }
-    let mut cur = Cursor::new(bytes.as_slice());
-    let signature = read_u32(&mut cur)?;
-    if signature != SIGNATURE {
-        return Err(VpkError("Not a VPK archive.".into()));
-    }
-    let version = read_u32(&mut cur)?;
-    let tree_size = read_u32(&mut cur)? as usize;
-    let header_size = match version {
-        1 => 12,
-        2 => {
-            if bytes.len() < 28 {
-                return Err(VpkError("VPK v2 header is too short.".into()));
-            }
-            cur.set_position(28);
-            28
-        }
-        _ => return Err(VpkError(format!("unsupported VPK version {version}"))),
-    };
-    let tree_end = header_size + tree_size;
-    if bytes.len() < tree_end {
-        return Err(VpkError("VPK directory tree is truncated.".into()));
-    }
     let mut entries = BTreeMap::new();
-    while cur.position() < tree_end as u64 {
-        let ext = read_cstring(&mut cur, tree_end)?;
-        if ext.is_empty() {
-            break;
-        }
-        loop {
-            let path_part = read_cstring(&mut cur, tree_end)?;
-            if path_part.is_empty() {
-                break;
-            }
-            loop {
-                let name = read_cstring(&mut cur, tree_end)?;
-                if name.is_empty() {
-                    break;
-                }
-                if cur.position() as usize + 18 > tree_end {
-                    return Err(VpkError("VPK entry is truncated.".into()));
-                }
-                let crc_pos = cur.position();
-                let crc = read_u32(&mut cur)?;
-                let preload_len = read_u16(&mut cur)?;
-                let archive_index = read_u16(&mut cur)?;
-                let offset = read_u32(&mut cur)?;
-                let length = read_u32(&mut cur)?;
-                let term = read_u16(&mut cur)?;
-                if term != 0xffff {
-                    return Err(VpkError("VPK entry terminator missing.".into()));
-                }
-                if (cur.position() as usize) + preload_len as usize > tree_end {
-                    return Err(VpkError("VPK preload is truncated.".into()));
-                }
-                cur.set_position(cur.position() + u64::from(preload_len));
-                let rel = if path_part == " " || path_part.is_empty() {
-                    format!("{name}.{ext}")
-                } else {
-                    format!("{path_part}/{name}.{ext}")
-                };
-                if rel.contains("..") {
-                    return Err(VpkError("Refusing a VPK path that escapes.".into()));
-                }
-                entries.insert(
-                    rel.replace('\\', "/"),
-                    VpkEntryLocation {
-                        rel: rel.replace('\\', "/"),
-                        crc,
-                        crc_pos,
-                        preload_len,
-                        archive_index,
-                        offset,
-                        length,
-                        data_base: tree_end as u64,
-                    },
-                );
-            }
-        }
-    }
+    walk_vpk_tree(&bytes, &mut |entry| {
+        entries.insert(
+            entry.rel.clone(),
+            VpkEntryLocation {
+                rel: entry.rel,
+                crc: entry.crc,
+                crc_pos: entry.crc_pos,
+                preload_len: entry.preload.len() as u16,
+                archive_index: entry.archive_index,
+                offset: entry.offset,
+                length: entry.length,
+                data_base: entry.data_base as u64,
+            },
+        );
+        Ok(())
+    })?;
     Ok(entries)
 }
 
@@ -447,27 +503,81 @@ pub fn write_vpk_v1(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
     out
 }
 
+/// Why `rel` cannot go into a pack this writer builds, or `None` when it can.
+///
+/// The tree stores extension, folder and name as NUL-terminated strings and
+/// reads an empty one as the end of a group, so a dotfile (`materials/.foo`,
+/// empty name) or a trailing-dot name (empty extension) would end the group
+/// early and corrupt every entry after it. OS and VCS droppings are refused
+/// outright: they never belong in a pack the game loads.
+pub fn unwritable_reason(rel: &str) -> Option<&'static str> {
+    let normalized = rel.replace('\\', "/");
+    if normalized.is_empty() {
+        return Some("has no path");
+    }
+    let mut segments = normalized.split('/').peekable();
+    let mut file = "";
+    while let Some(segment) = segments.next() {
+        if segment.is_empty() {
+            return Some("has an empty folder segment");
+        }
+        if crate::archive::is_junk_name(segment) {
+            return Some("is an OS or VCS junk file");
+        }
+        if segments.peek().is_none() {
+            file = segment;
+        }
+    }
+    if file.starts_with("._") {
+        return Some("is an OS or VCS junk file");
+    }
+    match file.rfind('.') {
+        Some(0) => Some("has no file name before its extension"),
+        Some(idx) if idx + 1 == file.len() => Some("ends with a dot"),
+        _ => None,
+    }
+}
+
+/// Split a pack path into the tree's `(folder, name, extension)` triple, with
+/// [`NONE_MARKER`] standing in for a missing folder or extension. Source
+/// lowercases every lookup, so the path is lowercased here once rather than
+/// relying on each caller to have done it.
+fn split_pack_path(rel: &str) -> Option<(String, String, String)> {
+    if unwritable_reason(rel).is_some() {
+        return None;
+    }
+    let normalized = rel.replace('\\', "/").to_ascii_lowercase();
+    let (path, file) = match normalized.rfind('/') {
+        Some(idx) => (&normalized[..idx], &normalized[idx + 1..]),
+        None => (NONE_MARKER, normalized.as_str()),
+    };
+    let (name, ext) = match file.rfind('.') {
+        Some(idx) => (&file[..idx], &file[idx + 1..]),
+        None => (file, NONE_MARKER),
+    };
+    Some((path.to_string(), name.to_string(), ext.to_string()))
+}
+
 /// The directory tree and file-data blob both versions share: entries grouped
 /// extension/path/name, data offsets relative to the end of the tree.
+///
+/// Paths are lowercased, and entries [`unwritable_reason`] refuses are left
+/// out rather than written as a tree the reader would misparse. Callers that
+/// need to report them check first — `write_vpk_v2` itself stays infallible
+/// for the packs whose paths this app mints.
 fn build_vpk_tree(files: &BTreeMap<String, Vec<u8>>) -> (Vec<u8>, Vec<u8>) {
     let mut grouped: BTreeMap<String, BTreeMap<String, BTreeMap<String, Vec<u8>>>> =
         BTreeMap::new();
     for (rel, bytes) in files {
-        let normalized = rel.replace('\\', "/");
-        let (path, file) = match normalized.rfind('/') {
-            Some(idx) => (&normalized[..idx], &normalized[idx + 1..]),
-            None => (" ", normalized.as_str()),
-        };
-        let (name, ext) = match file.rfind('.') {
-            Some(idx) => (&file[..idx], &file[idx + 1..]),
-            None => (file, " "),
+        let Some((path, name, ext)) = split_pack_path(rel) else {
+            continue;
         };
         grouped
-            .entry(ext.to_string())
+            .entry(ext)
             .or_default()
-            .entry(path.to_string())
+            .entry(path)
             .or_default()
-            .insert(name.to_string(), bytes.clone());
+            .insert(name, bytes.clone());
     }
 
     let mut tree = Vec::new();
@@ -669,5 +779,150 @@ mod tests {
         files.insert("scripts/../steam.inf".into(), b"no".to_vec());
         let bytes = write_vpk_v1(&files);
         assert!(read_vpk_dir_bytes(&bytes).is_err());
+    }
+
+    /// A v1 directory whose tree holds `count` entries that all point at the
+    /// same `body` in the data region. Every entry is in bounds, so only the
+    /// sum of what a read would copy tells it apart from a real pack.
+    fn overlapping_vpk(count: usize, body: &[u8]) -> Vec<u8> {
+        let mut tree = Vec::new();
+        write_cstring(&mut tree, "vtf");
+        write_cstring(&mut tree, "materials");
+        for index in 0..count {
+            write_cstring(&mut tree, &format!("tex{index}"));
+            tree.extend_from_slice(&crc32(body).to_le_bytes());
+            tree.extend_from_slice(&0u16.to_le_bytes());
+            tree.extend_from_slice(&DIR_ARCHIVE.to_le_bytes());
+            tree.extend_from_slice(&0u32.to_le_bytes());
+            tree.extend_from_slice(&(body.len() as u32).to_le_bytes());
+            tree.extend_from_slice(&0xffffu16.to_le_bytes());
+        }
+        tree.push(0);
+        tree.push(0);
+        tree.push(0);
+        let mut out = Vec::new();
+        out.extend_from_slice(&SIGNATURE.to_le_bytes());
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        out.extend_from_slice(&tree);
+        out.extend_from_slice(body);
+        out
+    }
+
+    /// Entries may overlap in a real pack (deduplicated textures), but a
+    /// crafted directory can point fifty entries at one data region and make
+    /// a 512 MiB file materialize 25 GiB. Both readers stop at the budget,
+    /// before the allocation that would abort the process.
+    #[test]
+    fn overlapping_entries_far_past_the_file_size_are_refused_before_allocating() {
+        let body = vec![0xabu8; 256 * 1024];
+        // 40 entries × 256 KiB = 10 MiB against a budget of 2 × 256 KiB + 1 MiB.
+        let bytes = overlapping_vpk(40, &body);
+        let err = read_vpk_dir_bytes(&bytes).unwrap_err();
+        assert!(err.0.contains("overlap"), "{}", err.0);
+        let err = validate_vpk_dir_bytes(&bytes).unwrap_err();
+        assert!(err.0.contains("overlap"), "{}", err.0);
+
+        // Modest overlap is a real layout and still reads.
+        let bytes = overlapping_vpk(3, &body);
+        let summary = validate_vpk_dir_bytes(&bytes).unwrap();
+        assert_eq!(summary.files, 3);
+        assert_eq!(summary.bytes, 3 * body.len() as u64);
+        assert_eq!(read_vpk_dir_bytes(&bytes).unwrap().files.len(), 3);
+    }
+
+    /// The validate pass is a pure bounds check: a truncated body, a split
+    /// reference and a bad terminator all fail exactly as a read would.
+    #[test]
+    fn validate_reports_what_a_read_would_refuse() {
+        let mut files = BTreeMap::new();
+        files.insert("materials/a.vmt".to_string(), b"hello".to_vec());
+        let bytes = write_vpk_v2(&files);
+        assert_eq!(validate_vpk_dir_bytes(&bytes).unwrap().files, 1);
+
+        let truncated = &bytes[..bytes.len() - 60];
+        assert!(validate_vpk_dir_bytes(truncated).is_err());
+        assert!(read_vpk_dir_bytes(truncated).is_err());
+        assert!(validate_vpk_dir_bytes(b"not a vpk").is_err());
+    }
+
+    /// The tree reads an empty string as the end of a group, so a dotfile or
+    /// a trailing-dot name used to write a lone NUL that ended the group early
+    /// and corrupted every entry after it. Those are left out; the rest of the
+    /// pack round-trips, lowercased the way the engine looks paths up.
+    #[test]
+    fn junk_and_unwritable_names_are_left_out_and_paths_are_lowercased() {
+        let mut files = BTreeMap::new();
+        for rel in [
+            "materials/.DS_Store",
+            "materials/a/.hidden",
+            "materials/a/dangling.",
+            "materials/a/Thumbs.db",
+            "materials/a/._resource.vmt",
+            "materials/a/desktop.ini",
+            "__MACOSX/materials/a/x.vmt",
+        ] {
+            files.insert(rel.to_string(), b"junk".to_vec());
+        }
+        files.insert("materials/a/good.vmt".to_string(), b"one".to_vec());
+        files.insert("Materials/B/Upper.VMT".to_string(), b"two".to_vec());
+        files.insert("readme".to_string(), b"three".to_vec());
+        files.insert("materials/a/zed.vtf".to_string(), b"four".to_vec());
+
+        for bytes in [write_vpk_v2(&files), write_vpk_v1(&files)] {
+            let archive = read_vpk_dir_bytes(&bytes).unwrap();
+            let keys: Vec<&String> = archive.files.keys().collect();
+            assert_eq!(
+                keys,
+                vec![
+                    "materials/a/good.vmt",
+                    "materials/a/zed.vtf",
+                    "materials/b/upper.vmt",
+                    "readme"
+                ],
+                "{keys:?}"
+            );
+            assert_eq!(archive.files["materials/a/good.vmt"], b"one");
+            assert_eq!(archive.files["materials/b/upper.vmt"], b"two");
+            assert_eq!(archive.files["readme"], b"three");
+            assert_eq!(archive.files["materials/a/zed.vtf"], b"four");
+        }
+
+        assert_eq!(unwritable_reason("materials/a/good.vmt"), None);
+        assert_eq!(unwritable_reason("readme"), None);
+        assert!(unwritable_reason("materials/.DS_Store").is_some());
+        assert!(unwritable_reason("materials/a/.hidden").is_some());
+        assert!(unwritable_reason("materials/a/dangling.").is_some());
+        assert!(unwritable_reason("materials/a/._resource.vmt").is_some());
+        assert!(unwritable_reason("materials//a.vmt").is_some());
+        assert!(unwritable_reason("").is_some());
+    }
+
+    /// Valve's own directories spell "no extension" as a single space; the
+    /// reader must give such an entry back without a trailing dot.
+    #[test]
+    fn a_space_extension_reads_back_as_no_extension() {
+        let mut tree = Vec::new();
+        let payload = b"license";
+        write_cstring(&mut tree, " ");
+        write_cstring(&mut tree, " ");
+        write_cstring(&mut tree, "readme");
+        tree.extend_from_slice(&crc32(payload).to_le_bytes());
+        tree.extend_from_slice(&0u16.to_le_bytes());
+        tree.extend_from_slice(&DIR_ARCHIVE.to_le_bytes());
+        tree.extend_from_slice(&0u32.to_le_bytes());
+        tree.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        tree.extend_from_slice(&0xffffu16.to_le_bytes());
+        tree.push(0);
+        tree.push(0);
+        tree.push(0);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&SIGNATURE.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&tree);
+        bytes.extend_from_slice(payload);
+        let archive = read_vpk_dir_bytes(&bytes).unwrap();
+        assert_eq!(archive.files.get("readme").unwrap(), payload);
     }
 }

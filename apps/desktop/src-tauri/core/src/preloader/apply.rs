@@ -24,9 +24,9 @@ use super::pack::{
     stock_shadowing_paths, synthesize_missing_vmts,
 };
 use super::state::{
-    adopt_orphaned_snapshots, is_stock, load_state, misc_vpk_path, originals_dir,
-    restore_patched_entries, save_state, snapshot_path, untracked_modified_particles,
-    vpk_fingerprint, PatchedEntry, SkipNotice, UNTRACKED_REASON,
+    adopt_orphaned_snapshots, is_stock, load_state, misc_vpk_path, restore_patched_entries,
+    save_state, sidecar_path, snapshot_path, tidy_originals_dir, untracked_modified_particles,
+    vpk_fingerprint, write_snapshot, PatchedEntry, SkipNotice, UNTRACKED_REASON,
 };
 use super::{
     catalog::read_mods_catalog, DUPLICATE_EFFECT_FILES, DX8_TWIN_STEMS, MISC_VPK, PRELOADER_VPK,
@@ -81,6 +81,21 @@ pub(crate) fn decode_vanilla(
         .ok_or_else(|| format!("{rel} is missing from {MISC_VPK}"))?;
     let bytes = read_vpk_entry(&misc_vpk_path(tf2_root), entry).map_err(|err| err.message())?;
     decode_pcf(&bytes).map_err(|err| format!("{rel}: {}", err.0))
+}
+
+/// Ceiling on a mod's raw particle file before it is decoded at all: the
+/// largest `particles/*.pcf` the stock archive holds. Decoding amplifies a
+/// crafted file many times over (a boolean array is a byte per item on disk
+/// and ~72 in memory), and the mod library and profile packs accept files up
+/// to 512 MiB; nothing bigger than every stock slot could fit one, shrink or
+/// no shrink.
+fn largest_stock_particle(entries: &BTreeMap<String, VpkEntryLocation>) -> usize {
+    entries
+        .iter()
+        .filter(|(rel, _)| rel.starts_with("particles/") && rel.ends_with(".pcf"))
+        .map(|(_, entry)| entry.length as usize)
+        .max()
+        .unwrap_or(0)
 }
 
 /// Root systems each rebuild file may keep: roots whose only home is that
@@ -149,10 +164,6 @@ pub fn apply_preloader_selection(
     if !state.patched.is_empty() && state.vpk_len != 0 && state.vpk_len != fingerprint {
         report.baseline_reset = true;
     }
-    // Record the current length up front so state saved mid-install already
-    // carries the right baseline for a crash-recovery run.
-    state.vpk_len = fingerprint;
-    save_state(data_dir, &state)?;
 
     let entries = map_vpk_entries(&vpk_path).map_err(|err| err.message())?;
 
@@ -181,7 +192,14 @@ pub fn apply_preloader_selection(
     // official VPK: the caller checked before an 81 MB download.
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
 
-    adopt_orphaned_snapshots(data_dir, &mut state);
+    // Record the current length now, after validation so a refused selection
+    // leaves the "game updated" hint alone, and before the first write so
+    // state saved mid-install already carries the right baseline for a
+    // crash-recovery run.
+    state.vpk_len = fingerprint;
+    save_state(data_dir, &state)?;
+
+    adopt_orphaned_snapshots(data_dir, &mut state, Some(&entries));
     for failure in restore_patched_entries(tf2_root, data_dir, &mut state, &entries)? {
         report.skipped.push(SkipNotice {
             file: failure.clone(),
@@ -191,12 +209,18 @@ pub fn apply_preloader_selection(
     }
     // Nothing from the old selection is installed any more. Record that now,
     // so a failure later in this run cannot leave state.json advertising mods
-    // the restore pass just removed.
+    // the restore pass just removed — and take the previous pack off disk for
+    // the same reason, since state no longer claims what it carried.
     state.addons.clear();
     state.particle_mods.clear();
     state.profile_particle_mods.clear();
     state.skipped.clear();
     save_state(data_dir, &state)?;
+    let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
+    if custom_vpk.exists() {
+        std::fs::remove_file(&custom_vpk)
+            .map_err(|err| format!("Could not remove the previous {PRELOADER_VPK}: {err}"))?;
+    }
 
     let mut archive = zip_archive(zip_path)?;
 
@@ -212,6 +236,8 @@ pub fn apply_preloader_selection(
             let Some(file) = path.strip_prefix(&prefix) else {
                 continue;
             };
+            // The engine looks paths up lowercased; so does every slot below.
+            let file = file.to_ascii_lowercase();
             if file.contains('/') || !file.ends_with(".pcf") || entry.is_dir() {
                 continue;
             }
@@ -337,6 +363,7 @@ pub fn apply_preloader_selection(
         )?)
     };
 
+    let stock_ceiling = largest_stock_particle(&entries);
     for item in work.values() {
         let rel = format!("particles/{}", item.target);
         let skip = |reason: String, report: &mut PreloaderReport| {
@@ -347,6 +374,17 @@ pub fn apply_preloader_selection(
             });
         };
 
+        if item.bytes.len() > stock_ceiling {
+            skip(
+                format!(
+                    "is {} bytes, larger than any stock particle file ({} bytes); not decoded",
+                    item.bytes.len(),
+                    stock_ceiling
+                ),
+                &mut report,
+            );
+            continue;
+        }
         let decoded = match decode_pcf(&item.bytes) {
             Ok(decoded) => decoded,
             Err(err) => {
@@ -428,14 +466,17 @@ pub fn apply_preloader_selection(
                 // finish. If stock bytes have since appeared in place (Steam's
                 // verify), they beat whatever the snapshot holds.
                 if current_is_stock && !patched.pristine {
-                    std::fs::write(&snapshot, &current)
-                        .map_err(|err| format!("Could not snapshot {target_rel}: {err}"))?;
+                    write_snapshot(data_dir, &target_rel, &current, true)?;
                     patched.original_sha256 = sha256_hex(&current);
                     patched.pristine = true;
+                } else if !sidecar_path(data_dir, &target_rel).is_file() {
+                    // A snapshot from before sidecars existed: describe it now
+                    // so it can be recognised without state.json.
+                    if let Ok(existing) = std::fs::read(&snapshot) {
+                        write_snapshot(data_dir, &target_rel, &existing, patched.pristine)?;
+                    }
                 }
             } else {
-                std::fs::create_dir_all(originals_dir(data_dir))
-                    .map_err(|err| format!("Could not prepare snapshots: {err}"))?;
                 // A snapshot left behind by an interrupted run holds the
                 // pristine bytes while the entry itself may already carry a
                 // patch — an existing snapshot of the right size beats the
@@ -446,16 +487,15 @@ pub fn apply_preloader_selection(
                     .filter(|existing| existing.len() == entry.length as usize);
                 let (original, pristine) = if current_is_stock {
                     (current, true)
-                } else if let Some(existing) = existing.clone() {
+                } else if let Some(existing) = existing {
                     let pristine = is_stock(&existing, entry);
                     (existing, pristine)
                 } else {
                     (current, false)
                 };
-                if existing.as_deref() != Some(original.as_slice()) {
-                    std::fs::write(&snapshot, &original)
-                        .map_err(|err| format!("Could not snapshot {target_rel}: {err}"))?;
-                }
+                // Written even when the bytes already match: the sidecar is
+                // what lets a later run recognise the snapshot on its own.
+                write_snapshot(data_dir, &target_rel, &original, pristine)?;
                 if !pristine {
                     // The entry was modified before execs ever touched it.
                     // Patching goes ahead (refusing would leave the foreign
@@ -512,15 +552,20 @@ pub fn apply_preloader_selection(
             let Some(inner) = path.strip_prefix(prefix) else {
                 continue;
             };
-            if inner.is_empty() || inner.contains("..") || !allow(inner) {
+            // Lowercased once here: the engine looks paths up that way, the
+            // pack writer stores them that way, and every check below (stock
+            // shadowing, relocation, synthesis) compares against lowercase
+            // stock paths.
+            let inner = inner.to_ascii_lowercase();
+            if inner.is_empty() || inner.contains("..") || !allow(&inner) {
                 continue;
             }
             let mut bytes = Vec::with_capacity(entry.size() as usize);
             entry
                 .read_to_end(&mut bytes)
                 .map_err(|err| format!("Could not read {path}: {err}"))?;
-            scrub_ignorez(inner, &mut bytes);
-            custom.insert(inner.to_string(), bytes);
+            scrub_ignorez(&inner, &mut bytes);
+            custom.insert(inner, bytes);
         }
         Ok(())
     };
@@ -574,6 +619,15 @@ pub fn apply_preloader_selection(
         });
     }
 
+    // A texture with no material beside it is a checkerboard in game, so give
+    // every orphan one. This runs before relocation: the stock material it
+    // borrows lives at the texture's original path, and a synthesized one
+    // picks its shader from that path too.
+    let synthesized = synthesize_missing_vmts(&stock_tables, &mut custom);
+    if synthesized > 0 {
+        report.synthesized_vmts = synthesized;
+    }
+
     // Model materials cannot serve from their stock paths, so move them under
     // the console/ root and repoint the models that reference them.
     let relocated = relocate_model_materials(&mut custom);
@@ -581,14 +635,6 @@ pub fn apply_preloader_selection(
         report.relocated_model_materials = relocated;
     }
 
-    // A texture with no material beside it is a checkerboard in game, so give
-    // every orphan one before the pack is sealed.
-    let synthesized = synthesize_missing_vmts(&stock_tables, &mut custom);
-    if synthesized > 0 {
-        report.synthesized_vmts = synthesized;
-    }
-
-    let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
     if custom.is_empty() {
         let _ = std::fs::remove_file(&custom_vpk);
     } else {
@@ -679,7 +725,6 @@ pub fn revert_preloader(
     let mut state = load_state(data_dir);
     let vpk_path = misc_vpk_path(tf2_root);
 
-    adopt_orphaned_snapshots(data_dir, &mut state);
     // A resized VPK is not a reason to skip the restore: every entry is
     // judged against the directory's stock CRC (stock already in place →
     // untracked; our patch still there → snapshot written back; stock content
@@ -689,6 +734,7 @@ pub fn revert_preloader(
     } else {
         None
     };
+    adopt_orphaned_snapshots(data_dir, &mut state, entries.as_ref());
     if let (false, Some(entries)) = (state.patched.is_empty(), &entries) {
         // Re-check right before the first write into the official VPK.
         refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
@@ -718,12 +764,13 @@ pub fn revert_preloader(
         report.custom_vpk_removed = true;
     }
 
-    // Snapshots for entries that failed to restore stay on disk so the next
-    // attempt can finish; only a fully-clean revert clears everything.
+    // The restore deleted exactly the snapshots it consumed. Whatever is still
+    // there — entries that failed to restore, or a snapshot nothing could
+    // explain — stays for the next attempt; the folder goes only once empty.
+    tidy_originals_dir(data_dir);
     if state.patched.is_empty() {
-        let _ = std::fs::remove_dir_all(originals_dir(data_dir));
         state.vpk_len = 0;
-    } else {
+    } else if vpk_path.is_file() {
         state.vpk_len = vpk_fingerprint(&vpk_path)?;
     }
     state.addons.clear();
@@ -776,16 +823,25 @@ pub struct PreloaderStatus {
 }
 
 pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderStatus, String> {
-    let state = load_state(data_dir);
+    let mut state = load_state(data_dir);
     let gameinfo = gameinfo_bypass_state(tf2_root)?;
     let vpk_path = misc_vpk_path(tf2_root);
+    let entries = map_vpk_entries(&vpk_path).ok();
+    // Tracking that a torn state.json lost is rebuilt from the snapshots, so
+    // the status names the patched entries instead of calling them stale
+    // patches nothing can restore.
+    // A status call stays a read: what was rebuilt is reported either way,
+    // and the next apply or revert adopts again if this save did not land.
+    if adopt_orphaned_snapshots(data_dir, &mut state, entries.as_ref()) > 0 {
+        let _ = save_state(data_dir, &state);
+    }
     // Only a resized VPK signals a game update; mtime drifts from our own
     // patch writes.
     let stale = !state.patched.is_empty()
         && vpk_fingerprint(&vpk_path)
             .map(|fingerprint| state.vpk_len != 0 && state.vpk_len != fingerprint)
             .unwrap_or(true);
-    let untracked_modified = map_vpk_entries(&vpk_path)
+    let untracked_modified = entries
         .map(|entries| untracked_modified_particles(&vpk_path, &entries, &state))
         .unwrap_or_default();
     Ok(PreloaderStatus {

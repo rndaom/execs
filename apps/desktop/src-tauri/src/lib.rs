@@ -78,6 +78,16 @@ fn timestamp() -> String {
 pub fn run() {
     install_panic_logger();
     tauri::Builder::default()
+        // Registered first, as the plugin requires. Two instances share one
+        // profile library and one live tree with no cross-process lock; the
+        // second one's boot absorb would delete the first one's in-flight
+        // `.execs-part` files mid-switch. A second launch focuses the window.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())

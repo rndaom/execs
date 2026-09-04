@@ -18,6 +18,10 @@ const SEVEN_ZIP_MAGIC: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
 
 const MIB: u64 = 1024 * 1024;
 
+/// How deep a folder import descends. A real HUD or mod is a handful of
+/// levels; anything deeper is a loop through a junction or a runaway tree.
+const MAX_DIR_DEPTH: usize = 32;
+
 /// What an import will unpack before it gives up. The bytes come off the
 /// network or a path the user picked, and the whole archive is held in memory
 /// while it is read, so without a ceiling a zip bomb (or a merely enormous
@@ -186,8 +190,13 @@ pub fn read_dir_entries(
     }
     let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
     let mut total: u64 = 0;
-    let mut stack = vec![(dir.to_path_buf(), String::new())];
-    while let Some((path, rel)) = stack.pop() {
+    let mut stack = vec![(dir.to_path_buf(), String::new(), 0usize)];
+    while let Some((path, rel, depth)) = stack.pop() {
+        if depth >= MAX_DIR_DEPTH {
+            return Err(ProfileError::Io(format!(
+                "That folder is nested more than {MAX_DIR_DEPTH} folders deep; refusing to import it."
+            )));
+        }
         let entries = fs::read_dir(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -200,8 +209,13 @@ pub fn read_dir_entries(
                 format!("{rel}/{name}")
             };
             let child = entry.path();
+            // A symlink or junction is never followed: it can point anywhere
+            // (a drive root, a loop) and `is_dir` / `metadata` would follow it.
+            if is_symlink(&child) {
+                continue;
+            }
             if child.is_dir() {
-                stack.push((child, child_rel));
+                stack.push((child, child_rel, depth + 1));
                 continue;
             }
             if !child.is_file() {
@@ -231,6 +245,12 @@ pub fn read_dir_entries(
         }
     }
     Ok(raw)
+}
+
+fn is_symlink(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
 }
 
 /// `Ok(None)` for an entry the junk filter drops; an error for one whose name
@@ -362,6 +382,54 @@ mod tests {
             "{}",
             err.message()
         );
+    }
+
+    /// A folder nested past the cap is refused rather than walked forever.
+    #[test]
+    fn folder_import_stops_at_the_depth_cap() {
+        let dir = crate::test_temp_dir();
+        let mut deep = dir.join("pack");
+        for index in 0..(MAX_DIR_DEPTH + 1) {
+            deep = deep.join(format!("d{index}"));
+        }
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("x.res"), b"x").unwrap();
+        let err = read_dir_entries(&dir.join("pack"), limits()).unwrap_err();
+        assert!(err.message().contains("folders deep"), "{}", err.message());
+
+        // One level under the cap still imports.
+        let mut shallow = dir.join("ok");
+        for index in 0..(MAX_DIR_DEPTH - 1) {
+            shallow = shallow.join(format!("d{index}"));
+        }
+        fs::create_dir_all(&shallow).unwrap();
+        fs::write(shallow.join("y.res"), b"y").unwrap();
+        let entries = read_dir_entries(&dir.join("ok"), limits()).unwrap();
+        assert_eq!(entries.len(), 1);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A symlink inside the folder is skipped, whether it points at a file
+    /// or at a directory (a loop back to the root would otherwise recurse).
+    #[cfg(unix)]
+    #[test]
+    fn folder_import_does_not_follow_symlinks() {
+        let dir = crate::test_temp_dir();
+        let pack = dir.join("pack");
+        fs::create_dir_all(pack.join("materials")).unwrap();
+        fs::write(pack.join("materials/a.vmt"), b"vmt").unwrap();
+        fs::write(dir.join("outside.txt"), b"secret").unwrap();
+        std::os::unix::fs::symlink(dir.join("outside.txt"), pack.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(&pack, pack.join("loop")).unwrap();
+        let entries = read_dir_entries(&pack, limits()).unwrap();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|(rel, _)| rel.as_str())
+                .collect::<Vec<_>>(),
+            vec!["materials/a.vmt"]
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

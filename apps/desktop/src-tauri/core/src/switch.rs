@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::absorb::{
-    absorb_owned_to, absorb_packs_to, pack_key, write_config_cfg_dual_to, AbsorbOptions, PackChoice,
+    absorb_added_packs_for_switch_to, absorb_owned_to, pack_key, write_config_cfg_dual_to,
+    AbsorbOptions,
 };
 use crate::apply::is_file_safe_rel_path;
 use crate::blob::blob_path;
@@ -185,23 +186,43 @@ where
     progress(SwitchProgress::new(SwitchStep::Pack));
     if previous.is_some() {
         absorb_owned_to(profiles_dir, tf2_root, &running, clone_options(&options))?;
-        absorb_packs_to(
+        absorb_added_packs_for_switch_to(
             profiles_dir,
             tf2_root,
-            PackChoice::Update,
             &running,
             clone_options(&options),
         )?;
     }
 
+    // The lock was sampled when the switch began. A multi-gigabyte mods
+    // profile takes a while to absorb, and the game may have been launched
+    // in the meantime: re-read the process table before the first live
+    // removal and again before the first live write.
+    refuse_if_running_among(live_process_names())?;
+
     progress(SwitchProgress::new(SwitchStep::Remove));
     // From here on the live tree is mid-rebuild: the index must not be left
     // pointing at a profile whose files are gone, or the next auto-absorb
     // swallows the half-replaced tree into it and destroys it.
-    let mut result = match previous.as_deref() {
+    //
+    // With no active profile there is still a Remove step to run when a
+    // previous switch was cut off: `interrupted_profile_id` names the profile
+    // whose files were being removed, and finishing that removal is what
+    // makes the retry an exact replace instead of a merge.
+    let remove_from = previous.clone().or_else(|| {
+        library
+            .interrupted_profile_id
+            .clone()
+            // Deleted since the failed switch: nothing left to remove for it.
+            .filter(|id| library.profiles.iter().any(|profile| &profile.id == id))
+    });
+    let mut result = match remove_from.as_deref() {
         Some(active) => remove_unmodified_live(profiles_dir, tf2_root, active),
         None => Ok(()),
     };
+    if result.is_ok() {
+        result = refuse_if_running_among(live_process_names()).map_err(ProfileError::from);
+    }
     if result.is_ok() {
         progress(SwitchProgress::new(SwitchStep::Write));
         result = write_target_live(profiles_dir, tf2_root, &target, &live_huds);
@@ -211,8 +232,8 @@ where
         result = dual_write_target_config(tf2_root, profiles_dir, &target, &options);
     }
     if let Err(err) = result {
-        if previous.is_some() {
-            let _ = clear_active_profile_to(profiles_dir, tf2_root, &running);
+        if let Some(interrupted) = remove_from.as_deref() {
+            let _ = clear_active_profile_to(profiles_dir, tf2_root, interrupted, &running);
             return Err(mid_switch_error(&err));
         }
         return Err(err);
@@ -312,7 +333,11 @@ fn remove_unmodified_live(
             }
             let hash = sha256_file(&candidate).map_err(|e| ProfileError::Io(e.to_string()))?;
             if hash == file.sha256 {
-                fs::remove_file(&candidate).map_err(|e| ProfileError::Io(e.to_string()))?;
+                // Files extracted from some HUD and mod archives carry the
+                // read-only attribute; Windows refuses a plain remove on
+                // those, which used to fail the switch after preflight.
+                crate::hash::remove_file_force(&candidate)
+                    .map_err(|e| ProfileError::Io(e.to_string()))?;
                 prune_empty_parents(&candidate, tf2_root);
             }
         }
@@ -560,6 +585,18 @@ mod tests {
         assert!(pack.join("sound/sound.cache").is_file());
     }
 
+    /// Never `AbsorbOptions::default()` in a test: `steam_roots: None`
+    /// discovers the developer's real Steam install, and the dual write and
+    /// launch-options write then land in their actual Steam Cloud
+    /// `config.cfg` and `localconfig.vdf`. An empty slice means no Steam.
+    fn no_steam() -> AbsorbOptions<'static> {
+        static NO_STEAM: [PathBuf; 0] = [];
+        AbsorbOptions {
+            cloud_config: None,
+            steam_roots: Some(&NO_STEAM),
+        }
+    }
+
     fn unlocked() -> [&'static str; 1] {
         ["bash"]
     }
@@ -680,7 +717,7 @@ mod tests {
             unlocked(),
             AbsorbOptions {
                 steam_roots: Some(std::slice::from_ref(&steam)),
-                ..AbsorbOptions::default()
+                ..no_steam()
             },
             |step| steps.push(step),
         )
@@ -728,14 +765,9 @@ mod tests {
         );
 
         let mut steps = Vec::new();
-        let library = switch_profile_to(
-            &profiles,
-            &root,
-            &b,
-            unlocked(),
-            AbsorbOptions::default(),
-            |step| steps.push(step),
-        )
+        let library = switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |step| {
+            steps.push(step)
+        })
         .unwrap();
         assert_eq!(library.active_profile_id.as_deref(), Some(b.as_str()));
         assert_eq!(
@@ -817,24 +849,8 @@ mod tests {
                 ("tf/custom/plain/note.txt", b"plain\n"),
             ],
         );
-        switch_profile_to(
-            &profiles,
-            &root,
-            &plain,
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap();
-        switch_profile_to(
-            &profiles,
-            &root,
-            &both,
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap();
+        switch_profile_to(&profiles, &root, &plain, unlocked(), no_steam(), |_| {}).unwrap();
+        switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
 
         assert!(root.join("tf/custom/ahud/info.vdf").is_file());
         assert!(root.join("tf/custom/-zhud/info.vdf").is_file());
@@ -857,25 +873,9 @@ mod tests {
             "Plain",
             &[("tf/cfg/config.cfg", b"unbindall\n")],
         );
-        switch_profile_to(
-            &profiles,
-            &root,
-            &plain,
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap();
+        switch_profile_to(&profiles, &root, &plain, unlocked(), no_steam(), |_| {}).unwrap();
         write_live(&root.join("tf/custom/zhud/info.vdf"), "z\n");
-        switch_profile_to(
-            &profiles,
-            &root,
-            &both,
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap();
+        switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
 
         assert!(root.join("tf/custom/zhud/info.vdf").is_file());
         assert!(root.join("tf/custom/-ahud/info.vdf").is_file());
@@ -945,25 +945,11 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         write_live(&root.join("tf/cfg/config.cfg"), "x\n");
         let a = save(&profiles, &root, "A");
-        let err = switch_profile_to(
-            &profiles,
-            &root,
-            &a,
-            [tf2_name()],
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap_err();
+        let err =
+            switch_profile_to(&profiles, &root, &a, [tf2_name()], no_steam(), |_| {}).unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
-        let err = switch_profile_to(
-            &profiles,
-            &root,
-            "missing",
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap_err();
+        let err = switch_profile_to(&profiles, &root, "missing", unlocked(), no_steam(), |_| {})
+            .unwrap_err();
         assert_eq!(err, ProfileError::UnknownProfile);
         cleanup(&dir);
     }
@@ -976,14 +962,9 @@ mod tests {
         write_live(&root.join("tf/cfg/config.cfg"), "x\n");
         let a = save(&profiles, &root, "A");
         let mut steps = Vec::new();
-        let library = switch_profile_to(
-            &profiles,
-            &root,
-            &a,
-            unlocked(),
-            AbsorbOptions::default(),
-            |step| steps.push(step),
-        )
+        let library = switch_profile_to(&profiles, &root, &a, unlocked(), no_steam(), |step| {
+            steps.push(step)
+        })
         .unwrap();
         assert_eq!(library.active_profile_id.as_deref(), Some(a.as_str()));
         assert_eq!(steps_of(&steps), vec![SwitchStep::Closed, SwitchStep::Done]);
@@ -1017,14 +998,9 @@ mod tests {
         );
 
         let mut steps = Vec::new();
-        let err = switch_profile_to(
-            &profiles,
-            &root,
-            &b,
-            unlocked(),
-            AbsorbOptions::default(),
-            |step| steps.push(step),
-        )
+        let err = switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |step| {
+            steps.push(step)
+        })
         .unwrap_err();
 
         assert!(err.message().contains("tf/custom/alt/note.txt"), "{err:?}");
@@ -1076,15 +1052,8 @@ mod tests {
         // after the remove step, exactly like an AV lock or a full disk.
         fs::create_dir_all(root.join("tf/custom/alt/note.txt/blocker")).unwrap();
 
-        let err = switch_profile_to(
-            &profiles,
-            &root,
-            &b,
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap_err();
+        let err =
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap_err();
 
         assert!(err.message().contains("mid-switch"), "{err:?}");
         // A's files are gone from the live tree. If the index still named A,
@@ -1095,6 +1064,133 @@ mod tests {
             library.active_profile_id, None,
             "a half-replaced live tree must not stay pointed at the old profile"
         );
+        cleanup(&dir);
+    }
+
+    /// A switch used to answer Update to a prompt the user never saw: a pack
+    /// missing from the live tree was deleted from the old profile's library
+    /// and its Keep list was wiped. The pack step now takes only what was
+    /// added; a removed pack comes back when the user switches back.
+    #[test]
+    fn switching_away_keeps_a_removed_packs_library_copy_and_the_keep_list() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        write_live(&root.join("tf/custom/old/pack.txt"), "old\n");
+        let a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[("tf/cfg/config.cfg", b"binds-b\n")],
+        );
+        // The user kept `extra` out of the profile, then deleted `old`, and
+        // switched without answering the prompt about it.
+        write_live(&root.join("tf/custom/extra/note.txt"), "extra\n");
+        crate::absorb::absorb_packs_to(
+            &profiles,
+            &root,
+            crate::absorb::PackChoice::Keep,
+            unlocked(),
+            no_steam(),
+        )
+        .unwrap();
+        fs::remove_dir_all(root.join("tf/custom/old")).unwrap();
+        write_live(&root.join("tf/custom/new/pack.txt"), "new\n");
+
+        switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap();
+
+        let manifest = load_manifest(&profiles, &a).unwrap();
+        assert!(
+            manifest
+                .files
+                .iter()
+                .any(|f| f.path == "tf/custom/old/pack.txt"),
+            "the removed pack must keep its library copy"
+        );
+        assert!(
+            exclusive_file_path(&profiles, &a, "tf/custom/old/pack.txt").is_file(),
+            "the removed pack's bytes must survive the switch"
+        );
+        assert!(
+            manifest
+                .files
+                .iter()
+                .any(|f| f.path == "tf/custom/new/pack.txt"),
+            "an added pack is absorbed so it does not leak into B"
+        );
+        assert!(
+            !root.join("tf/custom/new").exists(),
+            "and then removed from the live tree"
+        );
+        assert_eq!(manifest.ignored_packs, vec!["extra".to_string()]);
+        assert!(
+            root.join("tf/custom/extra/note.txt").is_file(),
+            "Keep means keep"
+        );
+
+        // Switching back writes the removed pack out again: exact replace.
+        switch_profile_to(&profiles, &root, &a, unlocked(), no_steam(), |_| {}).unwrap();
+        assert_eq!(
+            fs::read(root.join("tf/custom/old/pack.txt")).unwrap(),
+            b"old\n"
+        );
+        cleanup(&dir);
+    }
+
+    /// With no active profile a switch had nothing to remove, so the retry
+    /// after a failed switch merged the two profiles' packs. The index now
+    /// remembers whose Remove step was cut off.
+    #[test]
+    fn a_retry_after_a_failed_switch_finishes_the_remove_step() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "binds-a\n");
+        write_live(&root.join("tf/custom/ahud/info.vdf"), "a\n");
+        write_live(&root.join("tf/custom/ahud/resource/ui/z.res"), "z\n");
+        let a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[
+                ("tf/cfg/config.cfg", b"binds-b\n"),
+                ("tf/custom/alt/note.txt", b"alt\n"),
+            ],
+        );
+        // Fail the write step after the removal of `ahud` began but before
+        // every file went: block B's write.
+        fs::create_dir_all(root.join("tf/custom/alt/note.txt/blocker")).unwrap();
+        // ... and make one of A's files un-removable by hashing differently.
+        write_live(
+            &root.join("tf/custom/ahud/resource/ui/z.res"),
+            "edited-after\n",
+        );
+        let err =
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap_err();
+        assert!(err.message().contains("mid-switch"), "{err:?}");
+        let library = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(library.active_profile_id, None);
+        assert_eq!(library.interrupted_profile_id.as_deref(), Some(a.as_str()));
+
+        // The pack step absorbed the edit into A before the failure, so the
+        // live file now hashes as A's again. Unblock and retry.
+        fs::remove_dir_all(root.join("tf/custom/alt/note.txt")).unwrap();
+        switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap();
+
+        assert!(
+            !root.join("tf/custom/ahud").exists(),
+            "the retry must finish removing A's files instead of merging"
+        );
+        assert_eq!(
+            fs::read(root.join("tf/custom/alt/note.txt")).unwrap(),
+            b"alt\n"
+        );
+        let library = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(library.active_profile_id.as_deref(), Some(b.as_str()));
+        assert_eq!(library.interrupted_profile_id, None);
         cleanup(&dir);
     }
 
@@ -1126,15 +1222,8 @@ mod tests {
         )
         .unwrap();
 
-        let err = switch_profile_to(
-            &profiles,
-            &root,
-            &b,
-            unlocked(),
-            AbsorbOptions::default(),
-            |_| {},
-        )
-        .unwrap_err();
+        let err =
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap_err();
         assert_eq!(
             err,
             ProfileError::ForbiddenPath("bin/x64/client.dll".into())

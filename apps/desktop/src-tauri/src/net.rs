@@ -35,6 +35,16 @@ const CHUNK: usize = 64 * 1024;
 
 pub const MIB: u64 = 1024 * 1024;
 
+/// Ceiling on a text or JSON document. The largest one the app reads is
+/// GitHub's recursive hud-db tree (a few hundred KB); a listing page or an
+/// API answer that runs past this is not what we asked for.
+const API_MAX_BYTES: u64 = 8 * MIB;
+
+/// The most a `Content-Length` claim is allowed to reserve up front. The
+/// header is unauthenticated input: a server saying "512 MiB" must not have
+/// the app allocate that before a byte arrives.
+const RESERVE_MAX: usize = 16 * MIB as usize;
+
 /// What a pinned download must be before we trust it — checked on a cache hit
 /// *and* after a fresh download, so a corrupted or tampered cache file is
 /// re-fetched instead of served.
@@ -80,25 +90,39 @@ pub fn request_error(err: reqwest::Error) -> String {
     }
 }
 
-/// GET a small text document with the API timeout policy.
+/// GET a small text document with the API timeout policy. The body is read
+/// under `API_MAX_BYTES`, never buffered whole on the server's say-so.
 pub fn get_text(client: &reqwest::blocking::Client, url: &str) -> Result<String, String> {
-    let response = client.get(url).send().map_err(request_error)?;
+    let mut response = client.get(url).send().map_err(request_error)?;
     if !response.status().is_success() {
         return Err(format!("Could not download {url} ({})", response.status()));
     }
-    response.text().map_err(|err| err.to_string())
+    let hint = response.content_length();
+    let bytes = read_capped(&mut response, API_MAX_BYTES, hint)?;
+    Ok(text_from_bytes(bytes))
 }
 
-/// GET a JSON document with the API timeout policy.
+/// GET a JSON document with the API timeout policy, under the same ceiling.
 pub fn get_json<T: serde::de::DeserializeOwned>(
     client: &reqwest::blocking::Client,
     url: &str,
 ) -> Result<T, String> {
-    let response = client.get(url).send().map_err(request_error)?;
+    let mut response = client.get(url).send().map_err(request_error)?;
     if !response.status().is_success() {
         return Err(format!("Could not read {url} ({})", response.status()));
     }
-    response.json().map_err(|err| err.to_string())
+    let hint = response.content_length();
+    let bytes = read_capped(&mut response, API_MAX_BYTES, hint)?;
+    serde_json::from_slice(&bytes).map_err(|err| err.to_string())
+}
+
+/// Every host this app reads text from serves UTF-8; a stray byte becomes
+/// U+FFFD rather than failing a whole catalog document.
+fn text_from_bytes(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(err) => String::from_utf8_lossy(err.as_bytes()).into_owned(),
+    }
 }
 
 fn too_large(max_bytes: u64) -> String {
@@ -122,7 +146,7 @@ fn read_capped(
             return Err(too_large(max_bytes));
         }
     }
-    let reserve = hint.unwrap_or(0).min(max_bytes) as usize;
+    let reserve = (hint.unwrap_or(0).min(max_bytes) as usize).min(RESERVE_MAX);
     let mut out = Vec::with_capacity(reserve);
     let mut chunk = vec![0u8; CHUNK];
     loop {
@@ -178,10 +202,9 @@ fn download_pinned_with(
     if !verify.accepts(&bytes) {
         return Err("The download failed verification.".into());
     }
-    if let Some(parent) = cache_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(cache_path, &bytes);
+    // Atomic, so a crash mid-write leaves the old cache file (or none) rather
+    // than a truncated one that fails verification on every later start.
+    let _ = execs_core::hash::write_atomic(cache_path, &bytes);
     Ok(bytes)
 }
 
@@ -297,5 +320,49 @@ mod tests {
         let body = vec![3u8; CHUNK * 2 + 17];
         let read = read_capped(&mut body.as_slice(), MIB, Some(body.len() as u64)).unwrap();
         assert_eq!(read, body);
+    }
+
+    #[test]
+    fn a_content_length_claim_cannot_reserve_past_the_ceiling() {
+        // A server claiming 400 MiB under a 512 MiB cap must not have the
+        // app allocate 400 MiB before the first byte arrives.
+        let body = vec![1u8; 64];
+        let read = read_capped(&mut body.as_slice(), 512 * MIB, Some(400 * MIB)).unwrap();
+        assert_eq!(read, body);
+        assert!(
+            read.capacity() <= RESERVE_MAX,
+            "reserved {} bytes",
+            read.capacity()
+        );
+    }
+
+    #[test]
+    fn text_documents_are_capped_like_downloads() {
+        let body = vec![b'a'; (API_MAX_BYTES + 1) as usize];
+        let err = read_capped(&mut body.as_slice(), API_MAX_BYTES, None).unwrap_err();
+        assert!(err.contains("larger than"), "{err}");
+        assert_eq!(text_from_bytes(b"caf\xc3\xa9".to_vec()), "café");
+        assert_eq!(text_from_bytes(b"caf\xe9".to_vec()), "caf\u{FFFD}");
+    }
+
+    #[test]
+    fn the_download_cache_is_written_through_a_part_file() {
+        let dir = temp_dir("atomic-cache");
+        let cache = dir.join("nested").join("pinned.bin");
+        let bytes = download_pinned_with(
+            "https://example.invalid/x",
+            &cache,
+            Verify::Magic(b"VTF\0"),
+            1024,
+            |_, _| Ok(b"VTF\0fresh".to_vec()),
+        )
+        .unwrap();
+        assert_eq!(bytes, b"VTF\0fresh");
+        assert_eq!(std::fs::read(&cache).unwrap(), b"VTF\0fresh");
+        let left: Vec<_> = std::fs::read_dir(cache.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(left, vec!["pinned.bin"], "no part file may be left behind");
     }
 }

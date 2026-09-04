@@ -53,6 +53,13 @@ pub(crate) fn scrub_ignorez(rel: &str, bytes: &mut [u8]) {
 /// here is not measured against the stock file at its original path.
 pub(crate) const RELOCATE_PREFIX: &str = "console";
 
+/// `rel` ends with `ext` in any letter case. Mods name files however they
+/// like; the engine looks them up lowercased.
+pub(crate) fn has_ext(rel: &str, ext: &str) -> bool {
+    let (rel, ext) = (rel.as_bytes(), ext.as_bytes());
+    rel.len() >= ext.len() && rel[rel.len() - ext.len()..].eq_ignore_ascii_case(ext)
+}
+
 /// Move the materials a staged model owns under [`RELOCATE_PREFIX`] and point
 /// the model at the new location, keeping its original path as a fallback so
 /// anything the mod does not ship still resolves to stock.
@@ -63,7 +70,7 @@ pub(crate) const RELOCATE_PREFIX: &str = "console";
 pub(crate) fn relocate_model_materials(custom: &mut BTreeMap<String, Vec<u8>>) -> usize {
     let models: Vec<String> = custom
         .iter()
-        .filter(|(rel, bytes)| rel.ends_with(".mdl") && crate::mdl::is_mdl(bytes))
+        .filter(|(rel, bytes)| has_ext(rel, ".mdl") && crate::mdl::is_mdl(bytes))
         .map(|(rel, _)| rel.clone())
         .collect();
     if models.is_empty() {
@@ -126,7 +133,7 @@ pub(crate) fn relocate_model_materials(custom: &mut BTreeMap<String, Vec<u8>>) -
         .collect();
     let moved_textures: BTreeSet<String> = moves
         .iter()
-        .filter(|(from, _)| from.ends_with(".vtf"))
+        .filter(|(from, _)| has_ext(from, ".vtf"))
         .map(|(from, _)| from.clone())
         .collect();
 
@@ -135,7 +142,7 @@ pub(crate) fn relocate_model_materials(custom: &mut BTreeMap<String, Vec<u8>>) -
         let Some(bytes) = custom.remove(from) else {
             continue;
         };
-        let bytes = if from.ends_with(".vmt") {
+        let bytes = if has_ext(from, ".vmt") {
             match String::from_utf8(bytes) {
                 Ok(text) => rewrite_vmt_refs(&text, &moved_textures).into_bytes(),
                 Err(err) => err.into_bytes(),
@@ -212,8 +219,8 @@ pub(crate) fn synthesize_missing_vmts(
 ) -> usize {
     let orphans: Vec<String> = custom
         .keys()
-        .filter(|rel| rel.starts_with("materials/") && rel.ends_with(".vtf"))
-        .map(|rel| format!("{}.vmt", rel.trim_end_matches(".vtf")))
+        .filter(|rel| rel.starts_with("materials/") && has_ext(rel, ".vtf"))
+        .map(|rel| format!("{}.vmt", &rel[..rel.len() - ".vtf".len()]))
         .filter(|vmt| !custom.contains_key(vmt))
         .collect();
     if orphans.is_empty() {
@@ -234,12 +241,15 @@ pub(crate) fn synthesize_missing_vmts(
 }
 
 /// Minimal material for a texture with no stock counterpart. Model materials
-/// are lit per-vertex; world surfaces take lightmaps.
+/// are lit per-vertex; world surfaces take lightmaps. A model material that
+/// has already moved under [`RELOCATE_PREFIX`] is still a model material.
 pub(crate) fn default_vmt(vmt: &str) -> Vec<u8> {
     let texture = vmt
         .trim_start_matches("materials/")
         .trim_end_matches(".vmt");
-    let shader = if vmt.starts_with("materials/models/") {
+    let shader = if vmt.starts_with("materials/models/")
+        || vmt.starts_with(&format!("materials/{RELOCATE_PREFIX}/models/"))
+    {
         "VertexLitGeneric"
     } else {
         "LightmappedGeneric"

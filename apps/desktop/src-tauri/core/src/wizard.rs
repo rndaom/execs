@@ -247,43 +247,67 @@ where
         .map(|profile| profile.id.clone())
         .ok_or(ProfileError::UnknownProfile)?;
 
-    put_exclusive_file_to(
+    // The record exists from here on. A failure filling it (a missing
+    // official VPK, most often) must not leave an empty profile in the
+    // library, so the record is removed again before the error goes out.
+    if let Err(err) = fill_wizard_profile(
         profiles_dir,
         tf2_root,
         &profile_id,
-        CONFIG_CFG,
+        spec,
         &config,
+        assets,
+        &options,
         &running,
+    ) {
+        let _ =
+            crate::profile::remove_profile_record_to(profiles_dir, tf2_root, &profile_id, &running);
+        return Err(err);
+    }
+
+    Ok(WizardResult {
+        library: load_library_from(profiles_dir, Some(tf2_root))?,
+        profile_id,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fill_wizard_profile(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    spec: &WizardSpec,
+    config: &[u8],
+    assets: &[WizardAsset<'_>],
+    options: &WizardOptions<'_>,
+    running: &[String],
+) -> Result<(), ProfileError> {
+    put_exclusive_file_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        CONFIG_CFG,
+        config,
+        running,
     )?;
 
     let hook = format!("preset={}\n", spec.preset.alias());
     put_exclusive_file_to(
         profiles_dir,
         tf2_root,
-        &profile_id,
+        profile_id,
         SETUP_HOOK,
         hook.as_bytes(),
-        &running,
+        running,
     )?;
 
-    put_required_assets(profiles_dir, tf2_root, &profile_id, spec, assets, &running)?;
+    put_required_assets(profiles_dir, tf2_root, profile_id, spec, assets, running)?;
 
     let launch = match options.launch_options {
         Some(raw) => sanitize_launch_options(raw),
         None => recommended_launch_options(),
     };
-    crate::profile::set_manifest_launch_options(
-        profiles_dir,
-        tf2_root,
-        &profile_id,
-        launch,
-        &running,
-    )?;
-
-    Ok(WizardResult {
-        library: load_library_from(profiles_dir, Some(tf2_root))?,
-        profile_id,
-    })
+    crate::profile::set_manifest_launch_options(profiles_dir, tf2_root, profile_id, launch, running)
 }
 
 fn put_required_assets<I, S>(
@@ -699,6 +723,10 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, ProfileError::Io(message) if message.contains("mastercomfig-base")));
+        // The record created before the failure is gone again: no orphan
+        // profile with an empty manifest in the library.
+        let library = load_library_from(&dir.join("profiles"), Some(&root)).unwrap();
+        assert!(library.profiles.is_empty(), "{:?}", library.profiles);
         cleanup(&dir);
     }
 
@@ -739,7 +767,10 @@ mod tests {
             &root,
             &result.profile_id,
             None::<&str>,
-            AbsorbOptions::default(),
+            AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            },
             |_| {},
         )
         .unwrap();

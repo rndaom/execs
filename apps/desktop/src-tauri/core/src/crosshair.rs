@@ -496,6 +496,11 @@ pub fn decode_weapon_scripts(
     files: &BTreeMap<String, Vec<u8>>,
 ) -> Result<BTreeMap<String, String>, ProfileError> {
     let mut out = BTreeMap::new();
+    // A script that neither reads as KeyValues nor ICE-decrypts is skipped,
+    // not fatal: one stray entry in a modified `tf2_misc_dir.vpk` must not
+    // take every crosshair with it. Only an archive with nothing usable
+    // fails, and then the first failure says why.
+    let mut failures: Vec<String> = Vec::new();
     for (path, bytes) in files {
         let lower = path.replace('\\', "/").to_ascii_lowercase();
         if !lower.starts_with("scripts/tf_weapon_") {
@@ -504,14 +509,21 @@ pub fn decode_weapon_scripts(
         if !(lower.ends_with(".ctx") || lower.ends_with(".txt")) {
             continue;
         }
-        let text = decode_weapon_bytes(bytes)
-            .map_err(|err| ProfileError::Io(format!("Could not read {path}: {err}")))?;
-        out.insert(path.clone(), text);
+        match decode_weapon_bytes(bytes) {
+            Ok(text) => {
+                out.insert(path.clone(), text);
+            }
+            Err(err) => failures.push(format!("Could not read {path}: {err}")),
+        }
     }
     if out.is_empty() {
-        return Err(ProfileError::Io(
-            "No tf_weapon scripts were found in the local TF2 VPK.".into(),
-        ));
+        return Err(ProfileError::Io(match failures.first() {
+            Some(first) => format!(
+                "No tf_weapon script in the local TF2 VPK could be read ({} failed). {first}",
+                failures.len()
+            ),
+            None => "No tf_weapon scripts were found in the local TF2 VPK.".into(),
+        }));
     }
     Ok(out)
 }
@@ -1502,5 +1514,48 @@ cl_crosshair_blue 56
         let archive = read_vpk_dir_bytes(&vpk).unwrap();
         let decoded = decode_weapon_scripts(&archive.files).unwrap();
         assert!(decoded.values().any(|text| text.contains("Scattergun")));
+    }
+
+    /// One stray script in a modified `tf2_misc_dir.vpk` used to fail the
+    /// whole decode and block crosshairs entirely. It is skipped; only an
+    /// archive with nothing readable is an error.
+    #[test]
+    fn a_script_that_will_not_decode_is_skipped_not_fatal() {
+        let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        files.insert(
+            "scripts/tf_weapon_scattergun.ctx".into(),
+            encrypt_weapon_ctx(sample_script().as_bytes()),
+        );
+        files.insert(
+            "scripts/tf_weapon_bat.txt".into(),
+            sample_script().replace("Scattergun", "Bat").into_bytes(),
+        );
+        // Neither KeyValues nor anything that ICE-decrypts to KeyValues.
+        files.insert(
+            "scripts/tf_weapon_broken.ctx".into(),
+            vec![0xFF, 0xFE, 0x00, 0x01, 0x80, 0x7F, 0x13, 0x37],
+        );
+        let decoded = decode_weapon_scripts(&files).unwrap();
+        assert_eq!(decoded.len(), 2, "{:?}", decoded.keys());
+        assert!(decoded["scripts/tf_weapon_scattergun.ctx"].contains("Scattergun"));
+        assert!(decoded["scripts/tf_weapon_bat.txt"].contains("Bat"));
+        assert!(!decoded.contains_key("scripts/tf_weapon_broken.ctx"));
+
+        // Nothing usable at all still fails, and says what went wrong.
+        let mut only_broken: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        only_broken.insert(
+            "scripts/tf_weapon_broken.ctx".into(),
+            files["scripts/tf_weapon_broken.ctx"].clone(),
+        );
+        only_broken.insert("scripts/tf_weapon_worse.ctx".into(), vec![0u8; 8]);
+        let err = decode_weapon_scripts(&only_broken).unwrap_err();
+        let message = err.message();
+        assert!(message.contains("2 failed"), "{message}");
+        assert!(message.contains("tf_weapon_broken.ctx"), "{message}");
+
+        // No weapon scripts at all keeps the original wording.
+        let none: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        let err = decode_weapon_scripts(&none).unwrap_err();
+        assert!(err.message().contains("No tf_weapon scripts were found"));
     }
 }

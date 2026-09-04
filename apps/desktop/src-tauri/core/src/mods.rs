@@ -23,7 +23,7 @@ use crate::profile::{
     ProfileError, ProfileFile, ProfileManifest,
 };
 use crate::switch::{only_game_caches, prune_empty_parents};
-use crate::vpk::{read_vpk_dir_bytes, read_vpk_dir_file_filtered};
+use crate::vpk::{read_vpk_dir_file_filtered, validate_vpk_dir_bytes};
 
 /// One pack's ceiling, and the ceiling on a whole archive: a mod is held in
 /// memory while it is read and copied, and nothing legitimate on GameBanana
@@ -184,18 +184,24 @@ pub fn mod_content_from_vpk_file(path: &Path) -> Result<(String, ModContent), Pr
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    if let Some(prefix) = name
-        .to_ascii_lowercase()
-        .strip_suffix("_dir.vpk")
-        .map(str::to_string)
-    {
-        let parent = path.parent().unwrap_or(Path::new("."));
+    let lower = name.to_ascii_lowercase();
+    let parent = path.parent().unwrap_or(Path::new("."));
+    if let Some(prefix) = lower.strip_suffix("_dir.vpk") {
         if parent.join(format!("{prefix}_000.vpk")).is_file() {
             return Err(ProfileError::Io(MULTI_PART_VPK.into()));
         }
     }
+    // The other half of a split set: `skin_001.vpk` picked beside its
+    // `skin_dir.vpk`. On its own, that name is an ordinary pack.
+    if let Some(prefix) = split_part_prefix(&lower) {
+        if parent.join(format!("{prefix}_dir.vpk")).is_file() {
+            return Err(ProfileError::Io(MULTI_PART_VPK.into()));
+        }
+    }
     let bytes = fs::read(path).map_err(|err| ProfileError::Io(err.to_string()))?;
-    read_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
+    // Bounds-check the tree without materializing a body: a crafted directory
+    // can make a full read allocate many times the file.
+    validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
     Ok((vpk_pack_name(&name), ModContent::Vpk(bytes)))
 }
 
@@ -247,20 +253,36 @@ fn under_root(entries: Vec<(String, Vec<u8>)>, root: &str) -> Vec<(String, Vec<u
         .collect()
 }
 
+/// A split set is only a split set when both halves are there: `big_000.vpk`
+/// beside `big_dir.vpk`. A lone `skin_001.vpk` is just a pack whose author
+/// numbered it, and installs like any other.
 fn refuse_multi_part<'a>(names: impl Iterator<Item = &'a str>) -> Result<(), ProfileError> {
-    for name in names {
-        let file = name.rsplit('/').next().unwrap_or(name).to_ascii_lowercase();
-        let Some(stem) = file.strip_suffix(".vpk") else {
+    let names: BTreeSet<String> = names
+        .map(|name| name.replace('\\', "/").to_ascii_lowercase())
+        .collect();
+    for name in &names {
+        let (dir, file) = name.rsplit_once('/').unwrap_or(("", name));
+        let Some(prefix) = split_part_prefix(file) else {
             continue;
         };
-        let Some((_, tail)) = stem.rsplit_once('_') else {
-            continue;
+        let dir_file = if dir.is_empty() {
+            format!("{prefix}_dir.vpk")
+        } else {
+            format!("{dir}/{prefix}_dir.vpk")
         };
-        if tail.len() == 3 && tail.bytes().all(|byte| byte.is_ascii_digit()) {
+        if names.contains(&dir_file) {
             return Err(ProfileError::Io(MULTI_PART_VPK.into()));
         }
     }
     Ok(())
+}
+
+/// `big` for a lowercased `big_000.vpk`; `None` for any other file name.
+fn split_part_prefix(file: &str) -> Option<&str> {
+    let stem = file.strip_suffix(".vpk")?;
+    let (prefix, tail) = stem.rsplit_once('_')?;
+    (!prefix.is_empty() && tail.len() == 3 && tail.bytes().all(|byte| byte.is_ascii_digit()))
+        .then_some(prefix)
 }
 
 fn has_extension(rel: &str, ext: &str) -> bool {
@@ -455,7 +477,7 @@ where
 
     let (pack, files) = match content {
         ModContent::Vpk(bytes) => {
-            read_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
+            validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
             (
                 format!("{id}.vpk"),
                 vec![(format!("tf/custom/{id}.vpk"), bytes)],
@@ -864,6 +886,87 @@ mod tests {
         let split = zip_bytes(&[("pack/big_dir.vpk", &vpk), ("pack/big_000.vpk", &vpk)]);
         let err = mod_content_from_archive("big.zip", &split).unwrap_err();
         assert!(err.message().contains("multi-part"), "{}", err.message());
+
+        // A numbered name with no `_dir.vpk` beside it is an ordinary pack.
+        let numbered = zip_bytes(&[("pack/skin_001.vpk", &vpk), ("pack/skin_002.vpk", &vpk)]);
+        let packs = mod_content_from_archive("skins.zip", &numbered).unwrap();
+        let names: Vec<&str> = packs.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, vec!["skin_001", "skin_002"]);
+    }
+
+    /// The same rule for a picked file: `skin_000.vpk` alone installs, the
+    /// same file beside its `skin_dir.vpk` is half of a split set.
+    #[test]
+    fn a_picked_numbered_vpk_is_refused_only_beside_its_directory_file() {
+        let root = test_temp_dir();
+        let mut files = BTreeMap::new();
+        files.insert("materials/a.vmt".to_string(), b"vmt".to_vec());
+        let vpk = write_vpk_v1(&files);
+        let numbered = root.join("skin_000.vpk");
+        fs::write(&numbered, &vpk).unwrap();
+        let (name, content) = mod_content_from_vpk_file(&numbered).unwrap();
+        assert_eq!(name, "skin_000");
+        assert!(matches!(content, ModContent::Vpk(_)));
+
+        fs::write(root.join("skin_dir.vpk"), &vpk).unwrap();
+        let err = mod_content_from_vpk_file(&numbered).unwrap_err();
+        assert!(err.message().contains("multi-part"), "{}", err.message());
+        let err = mod_content_from_vpk_file(&root.join("skin_dir.vpk")).unwrap_err();
+        assert!(err.message().contains("multi-part"), "{}", err.message());
+        cleanup(&root);
+    }
+
+    /// Import validation walks the directory tree without copying a body, so
+    /// a crafted VPK whose entries overlap into gigabytes is refused with a
+    /// message instead of aborting the process on allocation.
+    #[test]
+    fn a_vpk_whose_entries_overlap_into_gigabytes_is_refused_on_import() {
+        let root = test_temp_dir();
+        let body = vec![0x11u8; 256 * 1024];
+        let mut tree = Vec::new();
+        let cstr = |tree: &mut Vec<u8>, s: &str| {
+            tree.extend_from_slice(s.as_bytes());
+            tree.push(0);
+        };
+        cstr(&mut tree, "vtf");
+        cstr(&mut tree, "materials");
+        for index in 0..64 {
+            cstr(&mut tree, &format!("t{index}"));
+            tree.extend_from_slice(&crate::vpk::crc32(&body).to_le_bytes());
+            tree.extend_from_slice(&0u16.to_le_bytes());
+            tree.extend_from_slice(&0x7fffu16.to_le_bytes());
+            tree.extend_from_slice(&0u32.to_le_bytes());
+            tree.extend_from_slice(&(body.len() as u32).to_le_bytes());
+            tree.extend_from_slice(&0xffffu16.to_le_bytes());
+        }
+        tree.extend_from_slice(&[0, 0, 0]);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&0x55aa_1234u32.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&tree);
+        bytes.extend_from_slice(&body);
+
+        let picked = root.join("crafted.vpk");
+        fs::write(&picked, &bytes).unwrap();
+        let err = mod_content_from_vpk_file(&picked).unwrap_err();
+        assert!(err.message().contains("overlap"), "{}", err.message());
+
+        let (profile_root, profiles, tf2, id) = setup();
+        let err = install_mod_to(
+            &profiles,
+            &tf2,
+            &id,
+            "crafted.vpk",
+            ModContent::Vpk(bytes),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("overlap"), "{}", err.message());
+        assert!(!tf2.join("tf/custom/crafted.vpk").exists());
+        cleanup(&profile_root);
+        cleanup(&root);
     }
 
     #[test]

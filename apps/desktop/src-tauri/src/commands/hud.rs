@@ -8,8 +8,11 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{active_manifest, blocking, with_profile};
+use super::shared::{
+    active_manifest, archive_too_large, blocking, refuse_oversize_file, with_profile,
+};
 use crate::error::CommandError;
+use crate::hud_fetch::HUD_ZIP_MAX_BYTES;
 use crate::WriteGate;
 
 #[tauri::command]
@@ -66,13 +69,22 @@ pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
     .await
 }
 
+/// The HUD zip (up to 512 MiB) is downloaded before the write gate is taken,
+/// so an autosave or absorb is not queued behind a slow link; the
+/// running-game check comes first so the user hears "close TF2" before the
+/// transfer, not after it. Core re-checks under the gate before it writes.
 #[tauri::command]
 pub async fn install_hud(
     gate: tauri::State<'_, WriteGate>,
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
+    let fetched = with_profile(move |_root, _profile_id| {
+        execs_core::refuse_if_running()?;
+        fetch_hud_from_catalog(&id)
+    })
+    .await?;
     let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| install_hud_from_catalog(&root, &profile_id, &id, false))
+    with_profile(move |root, profile_id| install_fetched_hud(&root, &profile_id, fetched, false))
         .await
 }
 
@@ -105,6 +117,13 @@ pub async fn import_hud_archive(
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
+        // Refused by its size on disk before it is read whole: a file past
+        // the unpack ceiling cannot unpack to less.
+        refuse_oversize_file(
+            &path,
+            HUD_ZIP_MAX_BYTES,
+            archive_too_large(HUD_ZIP_MAX_BYTES),
+        )?;
         let bytes = std::fs::read(&path).map_err(|err| CommandError::unknown(err.to_string()))?;
         let extracted = execs_core::extract_hud_archive(&bytes)?;
         Ok(Some(install_local_hud(
@@ -178,10 +197,17 @@ fn install_local_hud(
     Ok(execs_core::get_active_profile_detail(root)?.unwrap_or(detail))
 }
 
+/// Pair a local HUD record with its hud-db entry. The catalog read may hit
+/// the network; the manifest write under it takes the gate like every other
+/// profile write.
 #[tauri::command]
-pub async fn match_hud_catalog(id: String) -> Result<ProfileDetail, CommandError> {
+pub async fn match_hud_catalog(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+) -> Result<ProfileDetail, CommandError> {
+    let entry = blocking(move || Ok(crate::hud_fetch::catalog_entry(&id)?)).await?;
+    let _guard = gate.0.lock().await;
     with_profile(move |root, profile_id| {
-        let entry = crate::hud_fetch::catalog_entry(&id)?;
         Ok(execs_core::match_hud_catalog(
             &root,
             &profile_id,
@@ -192,16 +218,21 @@ pub async fn match_hud_catalog(id: String) -> Result<ProfileDetail, CommandError
     .await
 }
 
+/// Same shape as `install_hud`: the download runs before the gate, the
+/// install under it, and the options the record already carries survive.
 #[tauri::command]
 pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
-    with_profile(|root, profile_id| {
+    let fetched = with_profile(|_root, profile_id| {
+        execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
         let status = execs_core::resolve_hud(&manifest)
             .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
-        install_hud_from_catalog(&root, &profile_id, &status.record.id, true)
+        fetch_hud_from_catalog(&status.record.id)
     })
-    .await
+    .await?;
+    let _guard = gate.0.lock().await;
+    with_profile(move |root, profile_id| install_fetched_hud(&root, &profile_id, fetched, true))
+        .await
 }
 
 #[tauri::command]
@@ -246,12 +277,14 @@ pub async fn apply_hud_options(
     .await
 }
 
-fn install_hud_from_catalog(
-    root: &Path,
-    profile_id: &str,
-    id: &str,
-    preserve_options: bool,
-) -> Result<ProfileDetail, CommandError> {
+/// A catalog HUD with its archive already extracted: the network half of an
+/// install, done before the write gate is taken.
+struct FetchedHud {
+    entry: HudCatalogEntry,
+    tree: execs_core::HudTree,
+}
+
+fn fetch_hud_from_catalog(id: &str) -> Result<FetchedHud, CommandError> {
     let entry = crate::hud_fetch::catalog_entry(id)?;
     if !entry.install.installable() {
         return Err(CommandError::unknown(
@@ -260,7 +293,21 @@ fn install_hud_from_catalog(
     }
     let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
     let extracted = execs_core::extract_hud_archive(&bytes)?;
-    let mut tree = extracted.tree;
+    Ok(FetchedHud {
+        entry,
+        tree: extracted.tree,
+    })
+}
+
+/// The disk half: apply the record's options to the tree, install the pack,
+/// write the option cfgs and their exec lines.
+fn install_fetched_hud(
+    root: &Path,
+    profile_id: &str,
+    fetched: FetchedHud,
+    preserve_options: bool,
+) -> Result<ProfileDetail, CommandError> {
+    let FetchedHud { entry, mut tree } = fetched;
     let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id)?;
     let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);
     let mut options = BTreeMap::new();

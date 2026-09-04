@@ -98,6 +98,7 @@ pub fn import_viewmodel_vpk(
     let steam_roots = discover_steam_roots();
     import_viewmodel_vpk_to_with_launch(
         &profiles_dir(),
+        &crate::settings::execs_data_dir(),
         tf2_root,
         profile_id,
         vpk_bytes,
@@ -131,6 +132,7 @@ pub fn install_built_viewmodel_pack(
     let steam_roots = discover_steam_roots();
     import_viewmodel_vpk_to_with_launch(
         &profiles_dir(),
+        &crate::settings::execs_data_dir(),
         tf2_root,
         profile_id,
         vpk_bytes,
@@ -146,6 +148,7 @@ pub fn install_built_viewmodel_pack(
 #[allow(clippy::too_many_arguments)]
 pub fn import_viewmodel_vpk_to<I, S>(
     profiles_dir: &Path,
+    data_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     vpk_bytes: &[u8],
@@ -160,6 +163,7 @@ where
 {
     import_viewmodel_vpk_to_with_launch(
         profiles_dir,
+        data_dir,
         tf2_root,
         profile_id,
         vpk_bytes,
@@ -175,6 +179,7 @@ where
 #[allow(clippy::too_many_arguments)]
 fn import_viewmodel_vpk_to_with_launch<I, J, S, T>(
     profiles_dir: &Path,
+    data_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
     vpk_bytes: &[u8],
@@ -201,7 +206,15 @@ where
         .collect();
     read_vpk_dir_bytes(vpk_bytes).map_err(|err| ProfileError::Io(err.message()))?;
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
-    let previous = pack_files(profiles_dir, profile_id)?;
+    // Importing without preload must not strip the shared cfg and launch
+    // token out from under the mods preloader — the same guard `remove` and
+    // `set_viewmodel_preload` carry. With preload on, the cfg is rewritten
+    // below either way.
+    let keep_preload = !preload && preload_is_wanted(data_dir, tf2_root);
+    let mut previous = pack_files(profiles_dir, profile_id)?;
+    if keep_preload {
+        previous.retain(|file| !is_preload_path(&file.path));
+    }
     if !previous.is_empty() {
         let paths: Vec<String> = previous.iter().map(|file| file.path.clone()).collect();
         remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &paths, &running)?;
@@ -216,15 +229,17 @@ where
         running.iter().cloned(),
         WriteOwnedOptions::default(),
     )?;
-    set_preload_state(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        preload,
-        &running,
-        &steam,
-        steam_roots,
-    )?;
+    if !keep_preload {
+        set_preload_state(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            preload,
+            &running,
+            &steam,
+            steam_roots,
+        )?;
+    }
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     manifest.viewmodel = Some(ViewmodelRecord {
         id: EXECS_VIEWMODELS_PACK.into(),
@@ -719,6 +734,7 @@ mod tests {
         let vpk = write_vpk_v1(&files);
         let detail = import_viewmodel_vpk_to(
             &profiles,
+            &no_mods(&root),
             &tf2,
             &id,
             &vpk,
@@ -764,6 +780,7 @@ mod tests {
         files.insert("models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
+            &no_mods(&root),
             &tf2,
             &id,
             &write_vpk_v1(&files),
@@ -805,6 +822,7 @@ mod tests {
         files.insert("models/a.mdl".into(), b"x".to_vec());
         let detail = import_viewmodel_vpk_to(
             &profiles,
+            &no_mods(&root),
             &tf2,
             &id,
             &write_vpk_v1(&files),
@@ -831,6 +849,7 @@ mod tests {
         files.insert("models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to_with_launch(
             &profiles,
+            &no_mods(&root),
             &tf2,
             &id,
             &write_vpk_v1(&files),
@@ -854,6 +873,7 @@ mod tests {
         files.insert("models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
+            &no_mods(&root),
             &tf2,
             &id,
             &write_vpk_v1(&files),
@@ -902,6 +922,7 @@ mod tests {
         files.insert("models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
+            &data,
             &tf2,
             &id,
             &write_vpk_v1(&files),
@@ -935,6 +956,66 @@ mod tests {
             set_viewmodel_preload_to(&profiles, &data, &tf2, &id, false, unlocked()).unwrap();
         assert!(live_preload.is_file());
         assert!(detail.launch_options.contains("execs_preload"));
+
+        // Nor must importing a pack with preload off — whether it is the
+        // first import or a re-import over a pack that had preload on.
+        for preload_was in [false, true] {
+            if preload_was {
+                import_viewmodel_vpk_to(
+                    &profiles,
+                    &data,
+                    &tf2,
+                    &id,
+                    &write_vpk_v1(&files),
+                    true,
+                    ViewmodelSource::Imported,
+                    BTreeMap::new(),
+                    unlocked(),
+                )
+                .unwrap();
+                assert!(live_preload.is_file());
+            }
+            let detail = import_viewmodel_vpk_to(
+                &profiles,
+                &data,
+                &tf2,
+                &id,
+                &write_vpk_v1(&files),
+                false,
+                ViewmodelSource::Imported,
+                BTreeMap::new(),
+                unlocked(),
+            )
+            .unwrap();
+            assert!(!detail.viewmodel.as_ref().unwrap().preload);
+            assert!(tf2.join(EXECS_VIEWMODELS_VPK).is_file());
+            assert!(
+                live_preload.is_file(),
+                "import with preload off (was {preload_was}) must keep the shared cfg"
+            );
+            assert!(detail.launch_options.contains("execs_preload"));
+            assert!(load_manifest(&profiles, &id)
+                .unwrap()
+                .files
+                .iter()
+                .any(|file| is_preload_path(&file.path)));
+        }
+
+        // Without the mods preloader, the same import does take it away.
+        let detail = import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &write_vpk_v1(&files),
+            false,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!live_preload.exists());
+        assert!(!detail.launch_options.contains("execs_preload"));
         cleanup(&root);
     }
 
@@ -945,6 +1026,7 @@ mod tests {
         files.insert("models/a.mdl".into(), b"x".to_vec());
         let err = import_viewmodel_vpk_to(
             &profiles,
+            &no_mods(&root),
             &tf2,
             &id,
             &write_vpk_v1(&files),
