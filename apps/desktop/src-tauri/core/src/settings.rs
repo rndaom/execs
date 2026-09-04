@@ -323,12 +323,13 @@ mod tests {
         )
         .unwrap();
 
+        let normalized = normalize_tf2_root(&root).unwrap();
         assert_eq!(
             remembered_tf2_root_from(&file).as_deref(),
-            Some(root.as_path())
+            Some(normalized.as_path())
         );
         let migrated = load_settings_from(&file).unwrap();
-        assert_eq!(migrated.tf2_root, root.to_string_lossy());
+        assert_eq!(migrated.tf2_root, user_path_string(&normalized));
         assert!(!fs::read_to_string(&file).unwrap().contains(r"\\?\"));
         let _ = fs::remove_dir_all(&dir);
     }
