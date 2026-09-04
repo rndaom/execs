@@ -8,12 +8,33 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{blocking, refuse_oversize_file, with_profile, with_root};
+use super::shared::{blocking, read_bounded_file, with_profile, with_root, ActiveContext};
 use crate::error::CommandError;
-use crate::WriteGate;
+use crate::{HitsoundCacheGate, WriteGate};
 
 /// What a picked WAV past the engine cap is told, before and after reading.
 const HITSOUND_TOO_LARGE: &str = "That file is too large for a hit sound (8 MB limit).";
+const ABANDONED_PICK_MAX_AGE: std::time::Duration =
+    std::time::Duration::from_secs(7 * 24 * 60 * 60);
+
+fn gc_picked_for_library(root: &std::path::Path) -> Result<(), CommandError> {
+    let library = execs_core::load_library(Some(root))?;
+    let mut referenced = Vec::new();
+    for profile in library.profiles {
+        let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile.id)?;
+        let Some(record) = manifest.hitsound else {
+            continue;
+        };
+        referenced.extend(
+            [record.hit, record.kill]
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| entry.token),
+        );
+    }
+    crate::hitsound_fetch::gc_picked(&referenced, ABANDONED_PICK_MAX_AGE)?;
+    Ok(())
+}
 
 /// One sound the pane can audition or install.
 #[derive(Debug, Clone, Deserialize)]
@@ -27,7 +48,7 @@ pub enum HitsoundPick {
     Installed { slot: HitsoundKind },
     /// One of the engine's own sounds, by file stem, from the user's VPK.
     Stock { stem: String },
-    /// A comfig.app hits-library entry by content hash.
+    /// A comfig.app hits-library entry by its opaque 128-hex object id.
     Comfig { hash: String, name: String },
 }
 
@@ -101,7 +122,10 @@ pub struct PickedHitsound {
 /// Let the user choose a WAV, prepare it for the engine, and stash it for
 /// auditioning and a later Apply. Cancelling the dialog returns `None`.
 #[tauri::command]
-pub async fn pick_hitsound_file(app: AppHandle) -> Result<Option<PickedHitsound>, CommandError> {
+pub async fn pick_hitsound_file(
+    app: AppHandle,
+    cache_gate: tauri::State<'_, HitsoundCacheGate>,
+) -> Result<Option<PickedHitsound>, CommandError> {
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -117,21 +141,28 @@ pub async fn pick_hitsound_file(app: AppHandle) -> Result<Option<PickedHitsound>
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
-    blocking(move || {
+    let (name, wav, info, converted) = blocking(move || {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "sound.wav".into());
         // Refused by its size on disk before it is read whole; the same
         // sentence guards the bytes below for a file that grew in between.
-        refuse_oversize_file(&path, HITSOUND_MAX_BYTES as u64, HITSOUND_TOO_LARGE)?;
-        let raw = std::fs::read(&path).map_err(|err| CommandError::unknown(err.to_string()))?;
-        if raw.len() > HITSOUND_MAX_BYTES {
-            return Err(CommandError::unknown(HITSOUND_TOO_LARGE));
-        }
+        let raw = read_bounded_file(&path, HITSOUND_MAX_BYTES as u64, HITSOUND_TOO_LARGE)?;
         let (wav, info) = execs_core::prepare_hitsound_wav(&raw)?;
         let converted = wav != raw;
+        Ok((name, wav, info, converted))
+    })
+    .await?;
+    // A concurrent Apply may hold an old picked token while it resolves and
+    // commits its manifest reference. Stash and sweep under that same cache
+    // lock so neither side can delete the other's in-flight source.
+    let _cache_guard = cache_gate.0.lock().await;
+    blocking(move || {
         let token = crate::hitsound_fetch::stash_picked(&wav)?;
+        if let Some(root) = execs_core::remembered_tf2_root() {
+            let _ = gc_picked_for_library(&root);
+        }
         Ok(Some(PickedHitsound {
             token,
             name,
@@ -242,14 +273,30 @@ fn installed_source(
 #[tauri::command]
 pub async fn apply_hitsounds(
     gate: tauri::State<'_, WriteGate>,
+    cache_gate: tauri::State<'_, HitsoundCacheGate>,
     hit: HitsoundSlotChange,
     kill: HitsoundSlotChange,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| {
+    // Keep every picked source alive until the profile manifest names it.
+    // This cache-only lock may span a remote fetch, but never blocks unrelated
+    // profile writes; all commands that take both locks use cache -> write.
+    let _cache_guard = cache_gate.0.lock().await;
+    let (context, hit, kill) = with_profile(move |root, profile_id| {
+        execs_core::refuse_if_running()?;
+        let context = ActiveContext::capture(&root, &profile_id);
         let hit = resolve_change(&root, &profile_id, hit)?;
         let kill = resolve_change(&root, &profile_id, kill)?;
-        Ok(execs_core::apply_hitsounds(&root, &profile_id, hit, kill)?)
+        Ok((context, hit, kill))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        let detail = execs_core::apply_hitsounds(&root, &profile_id, hit, kill)?;
+        // Cache cleanup is post-commit and retryable; it must never make a
+        // successful sound install look rolled back to the renderer.
+        let _ = gc_picked_for_library(&root);
+        Ok(detail)
     })
     .await
 }
@@ -257,7 +304,14 @@ pub async fn apply_hitsounds(
 #[tauri::command]
 pub async fn remove_hitsounds(
     gate: tauri::State<'_, WriteGate>,
+    cache_gate: tauri::State<'_, HitsoundCacheGate>,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
-    with_profile(|root, profile_id| Ok(execs_core::remove_hitsounds(&root, &profile_id)?)).await
+    let _cache_guard = cache_gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(|root, profile_id| {
+        let detail = execs_core::remove_hitsounds(&root, &profile_id)?;
+        let _ = gc_picked_for_library(&root);
+        Ok(detail)
+    })
+    .await
 }

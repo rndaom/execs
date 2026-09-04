@@ -13,6 +13,8 @@ export type SwitchProgressPresenterState = {
   /** Keeps the final checklist visible without keeping the app write-locked. */
   visible: boolean;
   visibleStep: SwitchStep | null;
+  /** Backend detail attached to the real Done event (for example Steam sync pending). */
+  completionDetail: string | null;
   /** Reported stages waiting for their minimum display slot. */
   queue: SwitchStep[];
   /** The backend command resolved; drain the queue, then show done. */
@@ -21,7 +23,7 @@ export type SwitchProgressPresenterState = {
 
 export type SwitchProgressPresenterAction =
   | { type: "start" }
-  | { type: "report"; step: SwitchStep }
+  | { type: "report"; step: SwitchStep; detail?: string | null }
   | { type: "advance" }
   | { type: "complete" }
   | { type: "dismiss" }
@@ -32,6 +34,7 @@ export function idleSwitchProgress(): SwitchProgressPresenterState {
     active: false,
     visible: false,
     visibleStep: null,
+    completionDetail: null,
     queue: [],
     backendDone: false,
   };
@@ -76,6 +79,7 @@ export function switchProgressPresenterReducer(
         active: false,
         visible: true,
         visibleStep: "done",
+        completionDetail: state.completionDetail,
         queue: [],
         backendDone: true,
       };
@@ -83,8 +87,15 @@ export function switchProgressPresenterReducer(
     return state;
   }
 
+  // A Done report carries the external-sync outcome. It is not itself proof
+  // that the command promise resolved, so retain its copy without terminating
+  // or skipping the paced queue.
+  if (action.step === "done") {
+    return state.visible && action.detail ? { ...state, completionDetail: action.detail } : state;
+  }
+
   // report
-  if (!state.active || action.step === "done") {
+  if (!state.active) {
     return state;
   }
   const nextIndex = switchStepIndex(action.step);

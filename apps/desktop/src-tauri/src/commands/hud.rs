@@ -9,7 +9,7 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{
-    active_manifest, archive_too_large, blocking, refuse_oversize_file, with_profile,
+    active_manifest, archive_too_large, blocking, read_bounded_file, with_profile, ActiveContext,
 };
 use crate::error::CommandError;
 use crate::hud_fetch::HUD_ZIP_MAX_BYTES;
@@ -78,14 +78,27 @@ pub async fn install_hud(
     gate: tauri::State<'_, WriteGate>,
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
-    let fetched = with_profile(move |_root, _profile_id| {
+    let (context, initial_hud, fetched) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
-        fetch_hud_from_catalog(&id)
+        let manifest = active_manifest(&profile_id)?;
+        Ok((
+            ActiveContext::capture(&root, &profile_id),
+            manifest.hud,
+            fetch_hud_from_catalog(&id, false)?,
+        ))
     })
     .await?;
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| install_fetched_hud(&root, &profile_id, fetched, false))
-        .await
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
+            &profile_id,
+            initial_hud.as_ref(),
+            "The installed HUD changed while that download was running. Try again.",
+        )?;
+        install_fetched_hud(&root, &profile_id, fetched, false)
+    })
+    .await
 }
 
 /// Install a HUD the user has on disk as a zip or 7z. The folder name comes
@@ -96,6 +109,12 @@ pub async fn import_hud_archive(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
 ) -> Result<Option<ProfileDetail>, CommandError> {
+    let (context, initial_hud) = with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
+        let manifest = active_manifest(&profile_id)?;
+        Ok((ActiveContext::capture(&root, &profile_id), manifest.hud))
+    })
+    .await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -111,27 +130,31 @@ pub async fn import_hud_archive(
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| {
+    // Reading and unpacking a user-controlled archive can take seconds. Keep
+    // it outside the write gate, then verify the initiating profile before
+    // publishing the fully owned tree.
+    let (name, tree) = blocking(move || {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // Refused by its size on disk before it is read whole: a file past
-        // the unpack ceiling cannot unpack to less.
-        refuse_oversize_file(
+        let bytes = read_bounded_file(
             &path,
             HUD_ZIP_MAX_BYTES,
             archive_too_large(HUD_ZIP_MAX_BYTES),
         )?;
-        let bytes = std::fs::read(&path).map_err(|err| CommandError::unknown(err.to_string()))?;
-        let extracted = execs_core::extract_hud_archive(&bytes)?;
-        Ok(Some(install_local_hud(
-            &root,
+        Ok((name, execs_core::extract_hud_archive(&bytes)?.tree))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
             &profile_id,
-            &name,
-            extracted.tree,
-        )?))
+            initial_hud.as_ref(),
+            "The installed HUD changed while that archive was being read. Try again.",
+        )?;
+        Ok(Some(install_local_hud(&root, &profile_id, &name, tree)?))
     })
     .await
 }
@@ -143,6 +166,12 @@ pub async fn import_hud_folder(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
 ) -> Result<Option<ProfileDetail>, CommandError> {
+    let (context, initial_hud) = with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
+        let manifest = active_manifest(&profile_id)?;
+        Ok((ActiveContext::capture(&root, &profile_id), manifest.hud))
+    })
+    .await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -157,19 +186,23 @@ pub async fn import_hud_folder(
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| {
+    let (name, tree) = blocking(move || {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let extracted = execs_core::hud_tree_from_dir(&path)?;
-        Ok(Some(install_local_hud(
-            &root,
+        Ok((name, execs_core::hud_tree_from_dir(&path)?.tree))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
             &profile_id,
-            &name,
-            extracted.tree,
-        )?))
+            initial_hud.as_ref(),
+            "The installed HUD changed while that folder was being read. Try again.",
+        )?;
+        Ok(Some(install_local_hud(&root, &profile_id, &name, tree)?))
     })
     .await
 }
@@ -181,7 +214,7 @@ fn install_local_hud(
     tree: execs_core::HudTree,
 ) -> Result<ProfileDetail, CommandError> {
     let id = execs_core::hud_id_from_name(name);
-    let detail = execs_core::install_hud_pack(
+    Ok(execs_core::install_hud_pack_with_cfgs(
         root,
         profile_id,
         &tree,
@@ -191,10 +224,8 @@ fn install_local_hud(
             source: execs_core::HudSource::Local,
             options: BTreeMap::new(),
         },
-    )?;
-    // A replaced catalog HUD may have left its option cfgs behind.
-    execs_core::sync_hud_exec_lines(root, profile_id, &[])?;
-    Ok(execs_core::get_active_profile_detail(root)?.unwrap_or(detail))
+        &[],
+    )?)
 }
 
 /// Pair a local HUD record with its hud-db entry. The catalog read may hit
@@ -205,9 +236,23 @@ pub async fn match_hud_catalog(
     gate: tauri::State<'_, WriteGate>,
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
-    let entry = blocking(move || Ok(crate::hud_fetch::catalog_entry(&id)?)).await?;
-    let _guard = gate.0.lock().await;
+    let (context, initial_hud, entry) = with_profile(move |root, profile_id| {
+        let manifest = active_manifest(&profile_id)?;
+        Ok((
+            ActiveContext::capture(&root, &profile_id),
+            manifest.hud,
+            crate::hud_fetch::catalog_entry(&id)?,
+        ))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
+            &profile_id,
+            initial_hud.as_ref(),
+            "The installed HUD changed while the catalog was loading. Try again.",
+        )?;
         Ok(execs_core::match_hud_catalog(
             &root,
             &profile_id,
@@ -222,17 +267,33 @@ pub async fn match_hud_catalog(
 /// install under it, and the options the record already carries survive.
 #[tauri::command]
 pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDetail, CommandError> {
-    let fetched = with_profile(|_root, profile_id| {
+    let (context, initial_hud, fetched) = with_profile(|root, profile_id| {
         execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
         let status = execs_core::resolve_hud(&manifest)
             .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
-        fetch_hud_from_catalog(&status.record.id)
+        Ok((
+            ActiveContext::capture(&root, &profile_id),
+            status.record.clone(),
+            fetch_hud_from_catalog(
+                &status.record.id,
+                execs_core::schema_supported(&status.record.id)
+                    && !status.record.options.is_empty(),
+            )?,
+        ))
     })
     .await?;
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| install_fetched_hud(&root, &profile_id, fetched, true))
-        .await
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
+            &profile_id,
+            Some(&initial_hud),
+            "The installed HUD changed while its update was downloading. Try again.",
+        )?;
+        install_fetched_hud(&root, &profile_id, fetched, true)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -257,16 +318,31 @@ pub async fn apply_hud_options(
     gate: tauri::State<'_, WriteGate>,
     options: BTreeMap<String, String>,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| {
+    let (context, initial_hud, schema) = with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
+        let initial_hud = manifest.hud.clone();
         let status = execs_core::resolve_hud(&manifest)
             .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
         if !execs_core::schema_supported(&status.record.id) {
             return Err(CommandError::unknown("This HUD has no in-app options."));
         }
         let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
-        let schema = execs_core::parse_hud_schema(&raw)?;
+        Ok((
+            ActiveContext::capture(&root, &profile_id),
+            initial_hud,
+            execs_core::parse_hud_schema(&raw)?,
+        ))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
+            &profile_id,
+            initial_hud.as_ref(),
+            "The installed HUD changed while its options were loading. Try again.",
+        )?;
         Ok(execs_core::apply_schema_options(
             &root,
             &profile_id,
@@ -277,14 +353,28 @@ pub async fn apply_hud_options(
     .await
 }
 
+fn ensure_hud_unchanged(
+    profile_id: &str,
+    expected: Option<&execs_core::HudRecord>,
+    message: &str,
+) -> Result<(), CommandError> {
+    let current = active_manifest(profile_id)?;
+    if current.hud.as_ref() == expected {
+        Ok(())
+    } else {
+        Err(CommandError::new("ProfileChanged", message))
+    }
+}
+
 /// A catalog HUD with its archive already extracted: the network half of an
 /// install, done before the write gate is taken.
 struct FetchedHud {
     entry: HudCatalogEntry,
     tree: execs_core::HudTree,
+    schema: Option<execs_core::HudSchema>,
 }
 
-fn fetch_hud_from_catalog(id: &str) -> Result<FetchedHud, CommandError> {
+fn fetch_hud_from_catalog(id: &str, include_schema: bool) -> Result<FetchedHud, CommandError> {
     let entry = crate::hud_fetch::catalog_entry(id)?;
     if !entry.install.installable() {
         return Err(CommandError::unknown(
@@ -293,9 +383,16 @@ fn fetch_hud_from_catalog(id: &str) -> Result<FetchedHud, CommandError> {
     }
     let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
     let extracted = execs_core::extract_hud_archive(&bytes)?;
+    let schema = if include_schema {
+        let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
+        Some(execs_core::parse_hud_schema(&raw)?)
+    } else {
+        None
+    };
     Ok(FetchedHud {
         entry,
         tree: extracted.tree,
+        schema,
     })
 }
 
@@ -307,8 +404,23 @@ fn install_fetched_hud(
     fetched: FetchedHud,
     preserve_options: bool,
 ) -> Result<ProfileDetail, CommandError> {
-    let FetchedHud { entry, mut tree } = fetched;
+    let FetchedHud {
+        entry,
+        mut tree,
+        schema,
+    } = fetched;
     let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), profile_id)?;
+    if preserve_options
+        && manifest
+            .hud
+            .as_ref()
+            .is_none_or(|record| record.id != entry.id)
+    {
+        return Err(CommandError::new(
+            "ProfileChanged",
+            "The installed HUD changed while its update was downloading. Try again.",
+        ));
+    }
     let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);
     let mut options = BTreeMap::new();
     if preserve_options {
@@ -317,17 +429,18 @@ fn install_fetched_hud(
         }
     }
     let mut cfg_writes = Vec::new();
-    let mut exec_stems = Vec::new();
     if execs_core::schema_supported(&entry.id) && !options.is_empty() {
-        let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
-        let schema = execs_core::parse_hud_schema(&raw)?;
+        let schema = schema.ok_or_else(|| {
+            CommandError::unknown(
+                "The HUD options changed while the download was running. Try again.",
+            )
+        })?;
         let applied = execs_core::apply_hud_options_for_layer(
             &mut tree, &schema, &entry.id, &options, layer,
         )?;
         cfg_writes = applied.cfg_writes;
-        exec_stems = applied.exec_stems;
     }
-    let detail = execs_core::install_hud_pack(
+    Ok(execs_core::install_hud_pack_with_cfgs(
         root,
         profile_id,
         &tree,
@@ -337,18 +450,8 @@ fn install_fetched_hud(
             source: execs_core::HudSource::HudDb,
             options,
         },
-    )?;
-    let cfg_writes_written = cfg_writes.len();
-    for (path, bytes) in cfg_writes {
-        execs_core::write_owned_file(root, profile_id, &path, &bytes)?;
-    }
-    // A replaced HUD drops the previous HUD's option cfgs from autoexec; a HUD
-    // with options gets its execs_hud_* lines so the WriteCfg files actually run.
-    execs_core::sync_hud_exec_lines(root, profile_id, &exec_stems)?;
-    if exec_stems.is_empty() && cfg_writes_written == 0 {
-        return Ok(detail);
-    }
-    Ok(execs_core::get_active_profile_detail(root)?.unwrap_or(detail))
+        &cfg_writes,
+    )?)
 }
 
 #[cfg(test)]

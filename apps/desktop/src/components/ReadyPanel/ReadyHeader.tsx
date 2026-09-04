@@ -13,13 +13,19 @@ import { formatInstallLabel } from "../../lib/finder-ui";
 export function ReadyHeader({
   path,
   running,
+  launching,
+  disabled,
   menu,
   onLaunch,
+  onCancelLaunch,
 }: {
   path: string;
   running: boolean;
+  launching: boolean;
+  disabled: boolean;
   menu: ReactNode;
   onLaunch: () => void;
+  onCancelLaunch: () => void;
 }) {
   const { feedback, copy } = useCopyFeedback();
 
@@ -66,11 +72,15 @@ export function ReadyHeader({
         <button
           type="button"
           data-testid="launch-tf2"
-          onClick={onLaunch}
+          onClick={launching ? onCancelLaunch : onLaunch}
+          disabled={launching ? false : disabled}
           className="btn btn-ghost ml-auto shrink-0 gap-1.5 text-[13px]"
+          title={
+            launching ? "Cancel only after cancelling the launch and closing Steam" : undefined
+          }
         >
           <Play size={13} weight="fill" />
-          Launch TF2
+          {launching ? "Cancel launch wait" : "Launch TF2"}
         </button>
       )}
     </header>

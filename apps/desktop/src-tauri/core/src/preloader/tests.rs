@@ -15,7 +15,7 @@ use super::*;
 use crate::pcf::{PcfAttr, PcfElement, PcfValue, PCF_HEADERS};
 use crate::test_temp_dir;
 use crate::vpk::read_vpk_dir_file;
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 
 fn tiny_pcf(system: &str, radius: f32) -> Vec<u8> {
     let file = PcfFile {
@@ -81,6 +81,39 @@ fn fake_root() -> (std::path::PathBuf, std::path::PathBuf) {
     });
     write_split_vpk(&root.join("tf").join(MISC_VPK), &files);
     (root, data)
+}
+
+#[cfg(unix)]
+fn link_dir(target: &Path, link: &Path) {
+    std::os::unix::fs::symlink(target, link).unwrap();
+}
+
+#[cfg(windows)]
+fn link_dir(target: &Path, link: &Path) {
+    let status = std::process::Command::new("cmd")
+        .args(["/d", "/c", "mklink", "/j"])
+        .arg(link)
+        .arg(target)
+        .status()
+        .unwrap();
+    assert!(status.success(), "could not create test junction");
+}
+
+#[cfg(unix)]
+fn unlink_dir(link: &Path) {
+    std::fs::remove_file(link).unwrap();
+}
+
+#[cfg(windows)]
+fn unlink_dir(link: &Path) {
+    std::fs::remove_dir(link).unwrap();
+}
+
+fn assert_link_refusal(error: &str) {
+    assert!(
+        error.contains("link") || error.contains("reparse"),
+        "expected a linked-path refusal, got: {error}"
+    );
 }
 
 /// A split VPK like the real tf2_misc: entries in the `_dir.vpk` tree,
@@ -180,6 +213,67 @@ fn fake_mods_zip(dir: &Path) -> std::path::PathBuf {
     path
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct InstalledBytes {
+    gameinfo: Vec<u8>,
+    misc_dir: Vec<u8>,
+    misc_data: Vec<u8>,
+    custom: Option<Vec<u8>>,
+    state: Option<Vec<u8>>,
+    gameinfo_backup: Option<Vec<u8>>,
+    originals: BTreeMap<String, Vec<u8>>,
+}
+
+fn optional_bytes(path: &Path) -> Option<Vec<u8>> {
+    std::fs::read(path).ok()
+}
+
+fn installed_bytes(root: &Path, data: &Path) -> InstalledBytes {
+    let originals = std::fs::read_dir(originals_dir(data))
+        .map(|entries| {
+            entries
+                .map(|entry| {
+                    let entry = entry.unwrap();
+                    (
+                        entry.file_name().to_string_lossy().into_owned(),
+                        std::fs::read(entry.path()).unwrap(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    InstalledBytes {
+        gameinfo: std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        misc_dir: std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(),
+        misc_data: std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        custom: optional_bytes(&root.join("tf/custom").join(PRELOADER_VPK)),
+        state: optional_bytes(&state_path(data)),
+        gameinfo_backup: optional_bytes(&gameinfo_backup_path(data)),
+        originals,
+    }
+}
+
+fn corrupt_zip_payload(path: &Path, name: &str) {
+    let file = std::fs::File::open(path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let entry = archive.by_name(name).unwrap();
+    let at = entry.data_start() + entry.compressed_size() / 2;
+    drop(entry);
+    drop(archive);
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+    file.seek(SeekFrom::Start(at)).unwrap();
+    let mut byte = [0u8; 1];
+    file.read_exact(&mut byte).unwrap();
+    byte[0] ^= 0x80;
+    file.seek(SeekFrom::Start(at)).unwrap();
+    file.write_all(&byte).unwrap();
+}
+
 #[test]
 fn gameinfo_toggle_roundtrips() {
     let (root, data) = fake_root();
@@ -199,6 +293,122 @@ fn gameinfo_toggle_roundtrips() {
     );
     assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
     assert_eq!(std::fs::read(root.join("tf/gameinfo.txt")).unwrap(), before);
+}
+
+#[test]
+fn gameinfo_reads_and_writes_refuse_a_linked_tf_parent() {
+    let dir = test_temp_dir();
+    let root = dir.join("game");
+    let data = dir.join("data");
+    let outside = dir.join("outside-tf");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let outside_gameinfo = outside.join("gameinfo.txt");
+    let pristine = b"\"GameInfo\"\n{\n\ttype multiplayer_only\n}\n";
+    std::fs::write(&outside_gameinfo, pristine).unwrap();
+    link_dir(&outside, &root.join("tf"));
+
+    let err = gameinfo_bypass_state(&root).unwrap_err();
+    assert_link_refusal(&err);
+    let err = set_gameinfo_bypass(&root, &data, true, &[]).unwrap_err();
+    assert_link_refusal(&err);
+    assert_eq!(std::fs::read(&outside_gameinfo).unwrap(), pristine);
+    assert!(!gameinfo_backup_path(&data).exists());
+
+    unlink_dir(&root.join("tf"));
+}
+
+#[test]
+fn preloader_pack_reads_writes_and_removals_refuse_a_linked_custom_parent() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let custom = root.join("tf").join("custom");
+    let outside = root.parent().unwrap().join("outside-custom");
+    std::fs::remove_dir(&custom).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let outside_pack = outside.join(PRELOADER_VPK);
+    std::fs::write(&outside_pack, b"outside must survive").unwrap();
+    link_dir(&outside, &custom);
+
+    let selection = PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        particle_mods: Vec::new(),
+        profile_particle_mods: Vec::new(),
+    };
+    let err = apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap_err();
+    assert_link_refusal(&err);
+    assert_eq!(
+        std::fs::read(&outside_pack).unwrap(),
+        b"outside must survive"
+    );
+
+    let err = preloader_status(&root, &data).unwrap_err();
+    assert_link_refusal(&err);
+    let err = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert_link_refusal(&err);
+    assert_eq!(
+        std::fs::read(&outside_pack).unwrap(),
+        b"outside must survive"
+    );
+
+    unlink_dir(&custom);
+}
+
+#[test]
+fn all_preloader_app_data_mutations_refuse_a_linked_preloader_parent() {
+    let (root, data) = fake_root();
+    let outside = root.parent().unwrap().join("outside-preloader-data");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(outside.join("apply-transaction")).unwrap();
+    let victim = outside.join("victim.txt");
+    std::fs::write(&victim, b"outside must survive").unwrap();
+    link_dir(&outside, &data.join("preloader"));
+    let live_before = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+
+    let error = save_state(&data, &PreloaderState::default()).unwrap_err();
+    assert_link_refusal(&error);
+    let error = set_gameinfo_bypass(&root, &data, true, &[]).unwrap_err();
+    assert_link_refusal(&error);
+    let error = recover_pending_preloader(&root, &data, &[]).unwrap_err();
+    assert_link_refusal(&error);
+
+    assert_eq!(std::fs::read(&victim).unwrap(), b"outside must survive");
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        live_before
+    );
+    assert!(!outside.join("state.json").exists());
+    assert!(!outside.join("gameinfo.original.txt").exists());
+    unlink_dir(&data.join("preloader"));
+}
+
+#[test]
+fn gameinfo_status_does_not_create_a_missing_tf_parent() {
+    let dir = test_temp_dir();
+    let root = dir.join("game");
+    std::fs::create_dir(&root).unwrap();
+
+    assert_eq!(
+        gameinfo_bypass_state(&root).unwrap(),
+        GameinfoBypass {
+            found: false,
+            enabled: false,
+        }
+    );
+    assert!(!root.join("tf").exists());
+}
+
+#[test]
+fn preloader_status_does_not_create_a_missing_custom_directory() {
+    let (root, data) = fake_root();
+    let custom = root.join("tf").join("custom");
+    std::fs::remove_dir(&custom).unwrap();
+
+    let status = preloader_status(&root, &data).unwrap();
+    assert!(!status.custom_vpk_present);
+    assert!(!custom.exists());
+    assert!(!preload_is_wanted(&data, &root).unwrap());
+    assert!(!custom.exists());
 }
 
 fn running_names() -> Vec<String> {
@@ -275,6 +485,19 @@ fn gameinfo_toggles_only_the_first_type_line() {
     // Reverting puts the first line back and leaves the example commented.
     assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
     assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn gameinfo_does_not_toggle_prefixes_or_lines_with_extra_tokens() {
+    let (root, data) = fake_root();
+    let path = root.join("tf/gameinfo.txt");
+    let before = b"\"GameInfo\"\n{\n\ttype multiplayer_only_extra\n\ttype multiplayer_only / not-a-comment\n}\n".to_vec();
+    std::fs::write(&path, &before).unwrap();
+
+    let err = set_gameinfo_bypass(&root, &data, true, &[]).unwrap_err();
+    assert!(err.contains("expected GameInfo"), "{err}");
+    assert_eq!(std::fs::read(path).unwrap(), before);
+    assert!(!gameinfo_backup_path(&data).exists());
 }
 
 /// After a TF2 update replaces gameinfo.txt while the bypass is off, the
@@ -356,6 +579,130 @@ fn preloader_writes_refuse_while_tf2_runs_and_touch_nothing() {
     assert!(root.join("tf/custom").join(PRELOADER_VPK).is_file());
 }
 
+#[test]
+fn gameinfo_rechecks_a_fresh_process_sample_at_the_write_boundary() {
+    let (root, data) = fake_root();
+    let path = root.join("tf/gameinfo.txt");
+    let before = std::fs::read(&path).unwrap();
+    let sample = || running_names();
+
+    let err = set_gameinfo_bypass_with_sampler(&root, &data, true, &[], &sample).unwrap_err();
+    assert!(super::is_game_running_error(&err), "{err}");
+    assert_eq!(std::fs::read(path).unwrap(), before);
+}
+
+#[test]
+fn an_already_bypassed_gameinfo_without_a_pristine_backup_is_refused() {
+    let (root, data) = fake_root();
+    let path = root.join("tf/gameinfo.txt");
+    let bypassed = b"\"GameInfo\"\n{\n\t//type multiplayer_only\n}\n".to_vec();
+    std::fs::write(&path, &bypassed).unwrap();
+
+    let err = set_gameinfo_bypass(&root, &data, true, &[]).unwrap_err();
+    assert!(err.contains("no pristine backup"), "{err}");
+    assert_eq!(std::fs::read(path).unwrap(), bypassed);
+    assert!(!gameinfo_backup_path(&data).exists());
+}
+
+#[test]
+fn malformed_gameinfo_status_is_an_error_not_a_clean_disabled_state() {
+    let (root, _data) = fake_root();
+    std::fs::write(root.join("tf/gameinfo.txt"), b"not a GameInfo file").unwrap();
+    let err = gameinfo_bypass_state(&root).unwrap_err();
+    assert!(err.contains("expected GameInfo"), "{err}");
+}
+
+#[test]
+fn particle_patch_rechecks_the_process_at_its_live_write_boundary() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let sibling = root.join("tf/tf2_misc_000.vpk");
+    let sibling_before = std::fs::read(&sibling).unwrap();
+    let gameinfo = root.join("tf/gameinfo.txt");
+    let gameinfo_before = std::fs::read(&gameinfo).unwrap();
+    let sample = || running_names();
+
+    let err = apply_preloader_selection_with_sampler(
+        &root,
+        &data,
+        &zip_path,
+        &blue_water(),
+        &[],
+        &sample,
+    )
+    .unwrap_err();
+    assert!(super::is_game_running_error(&err), "{err}");
+    assert_eq!(std::fs::read(sibling).unwrap(), sibling_before);
+    assert_eq!(std::fs::read(gameinfo).unwrap(), gameinfo_before);
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    // Snapshot/state deliberately precede the official write. A retry can
+    // now observe stock in place and consume this recovery record safely.
+    assert_eq!(load_state(&data).unwrap().patched.len(), 1);
+}
+
+#[test]
+fn custom_pack_write_rechecks_the_process_at_its_live_write_boundary() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let gameinfo = root.join("tf/gameinfo.txt");
+    let gameinfo_before = std::fs::read(&gameinfo).unwrap();
+    let sample = || running_names();
+    let selection = PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        particle_mods: Vec::new(),
+        profile_particle_mods: Vec::new(),
+    };
+
+    let err =
+        apply_preloader_selection_with_sampler(&root, &data, &zip_path, &selection, &[], &sample)
+            .unwrap_err();
+    assert!(super::is_game_running_error(&err), "{err}");
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    assert_eq!(std::fs::read(gameinfo).unwrap(), gameinfo_before);
+    assert!(load_state(&data).unwrap().addons.is_empty());
+}
+
+#[test]
+fn restore_rechecks_the_process_and_keeps_support_for_a_retry() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let sibling = root.join("tf/tf2_misc_000.vpk");
+    let sibling_before = std::fs::read(&sibling).unwrap();
+    let sample = || running_names();
+
+    let err = revert_preloader_with_sampler(&root, &data, &[], &sample).unwrap_err();
+    assert!(super::is_game_running_error(&err), "{err}");
+    assert_eq!(std::fs::read(sibling).unwrap(), sibling_before);
+    assert_eq!(load_state(&data).unwrap().particle_mods, vec!["Blue Water"]);
+    assert!(gameinfo_bypass_state(&root).unwrap().enabled);
+    assert!(root.join("tf/custom").join(PRELOADER_VPK).is_file());
+}
+
+#[test]
+fn status_never_treats_an_unreadable_sibling_as_clean() {
+    let (root, data) = fake_root();
+    std::fs::remove_file(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let err = preloader_status(&root, &data).unwrap_err();
+    assert!(err.contains("Could not verify particles/"), "{err}");
+}
+
+#[test]
+fn patch_refuses_a_directory_mapping_that_changed_after_inspection() {
+    let (root, _data) = fake_root();
+    let path = root.join("tf").join(MISC_VPK);
+    let entries = map_vpk_entries(&path).unwrap();
+    let old = entries.get("particles/water.pcf").unwrap().clone();
+    let mut files = BTreeMap::new();
+    let mut replacement_stock = tiny_pcf("water_effect", 11.0);
+    replacement_stock.resize(old.length as usize, b' ');
+    files.insert("particles/water.pcf".to_string(), replacement_stock);
+    write_split_vpk(&path, &files);
+
+    let err = crate::vpk::patch_vpk_entry(&path, &old, &vec![0; old.length as usize]).unwrap_err();
+    assert!(err.0.contains("changed location or CRC"), "{}", err.0);
+}
+
 /// An unknown id must fail before the restore pass has uninstalled the
 /// selection the user still has.
 #[test]
@@ -416,10 +763,10 @@ fn unknown_addon_fails_before_anything_is_restored() {
     );
 }
 
-/// A hard failure after the restore pass used to leave the previous
-/// `execs-preloader.vpk` on disk while state said nothing was installed.
+/// A hard failure after the restore pass must roll the previous selection all
+/// the way back, including its support pack and logical state.
 #[test]
-fn a_failure_after_the_restore_pass_leaves_no_stale_pack_behind() {
+fn a_failure_after_the_restore_pass_restores_the_previous_pack_and_state() {
     let (root, data) = fake_root();
     let zip_path = fake_mods_zip(root.parent().unwrap());
     let vpk_path = root.join("tf").join(MISC_VPK);
@@ -439,41 +786,39 @@ fn a_failure_after_the_restore_pass_leaves_no_stale_pack_behind() {
     let err = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap_err();
     assert!(err.contains("disguise.pcf"), "{err}");
 
-    assert!(
-        !custom_vpk.exists(),
-        "the previous pack must not outlive its state"
-    );
+    assert!(custom_vpk.exists(), "the previous pack must be rolled back");
     let status = preloader_status(&root, &data).unwrap();
-    assert!(status.particle_mods.is_empty());
+    assert_eq!(status.particle_mods, vec!["Blue Water"]);
     assert!(status.addons.is_empty());
 }
 
-/// Restore stock files with the archive gone (a reinstall in progress) still
-/// puts gameinfo.txt back and drops the pack, and still records that nothing
-/// is installed — it used to fail on the fingerprint after the gameinfo write.
+/// With the archive gone (a reinstall in progress), Restore cannot prove the
+/// patched entries are stock. It must fail before removing the bypass, support
+/// pack, selection, or recovery snapshots.
 #[test]
-fn revert_without_the_archive_still_clears_the_rest() {
+fn revert_without_the_archive_keeps_everything_needed_for_a_retry() {
     let (root, data) = fake_root();
     let zip_path = fake_mods_zip(root.parent().unwrap());
     let gameinfo_before = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
 
     apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
-    let vpk_len = load_state(&data).vpk_len;
+    let vpk_len = load_state(&data).unwrap().vpk_len;
     std::fs::remove_file(root.join("tf").join(MISC_VPK)).unwrap();
     std::fs::remove_file(root.join("tf").join("tf2_misc_000.vpk")).unwrap();
 
-    let report = revert_preloader(&root, &data, &[]).unwrap();
-    assert!(report.gameinfo_restored);
-    assert!(report.custom_vpk_removed);
-    assert!(report.restored_files.is_empty());
+    let bypassed_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    assert_ne!(bypassed_gameinfo, gameinfo_before);
+    let err = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(err.contains("Could not verify"), "{err}");
     assert_eq!(
         std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
-        gameinfo_before
+        bypassed_gameinfo
     );
-    let state = load_state(&data);
-    assert!(state.particle_mods.is_empty());
-    // The patches are still tracked, with their snapshots, for when the
-    // archive is back; the hint keeps the length they were taken against.
+    assert!(root.join("tf/custom").join(PRELOADER_VPK).is_file());
+    let state = load_state(&data).unwrap();
+    assert_eq!(state.particle_mods, vec!["Blue Water"]);
+    // The patches stay tracked, with their snapshots, for when the archive is
+    // back; the hint keeps the length they were taken against.
     assert_eq!(state.patched.len(), 2);
     assert_eq!(state.vpk_len, vpk_len);
     assert!(snapshot_path(&data, "particles/water.pcf").is_file());
@@ -483,7 +828,7 @@ fn revert_without_the_archive_still_clears_the_rest() {
 #[test]
 fn preload_is_wanted_tracks_installed_mods() {
     let (root, data) = fake_root();
-    assert!(!preload_is_wanted(&data, &root));
+    assert!(!preload_is_wanted(&data, &root).unwrap());
 
     let zip_path = fake_mods_zip(root.parent().unwrap());
     apply_preloader_selection(
@@ -498,14 +843,35 @@ fn preload_is_wanted_tracks_installed_mods() {
         &[],
     )
     .unwrap();
-    assert!(preload_is_wanted(&data, &root));
+    assert!(preload_is_wanted(&data, &root).unwrap());
 
     revert_preloader(&root, &data, &[]).unwrap();
-    assert!(!preload_is_wanted(&data, &root));
+    assert!(!preload_is_wanted(&data, &root).unwrap());
 
     // A stray pack on disk alone is enough.
     std::fs::write(root.join("tf/custom").join(PRELOADER_VPK), b"vpk").unwrap();
-    assert!(preload_is_wanted(&data, &root));
+    assert!(preload_is_wanted(&data, &root).unwrap());
+}
+
+#[test]
+fn preload_profile_cleanup_is_acknowledged_one_success_at_a_time() {
+    let (_root, data) = fake_root();
+    record_preload_profile(&data, "profile-a").unwrap();
+    record_preload_profile(&data, "profile-b").unwrap();
+    record_preload_profile(&data, "profile-a").unwrap();
+    assert_eq!(
+        preload_profiles(&data).unwrap(),
+        vec!["profile-a", "profile-b"]
+    );
+
+    forget_preload_profile(&data, "profile-a").unwrap();
+    assert_eq!(preload_profiles(&data).unwrap(), vec!["profile-b"]);
+    // A failed profile cleanup would omit this acknowledgement; its id stays
+    // durable for the next command retry.
+    assert_eq!(
+        load_state(&data).unwrap().preload_profiles,
+        vec!["profile-b"]
+    );
 }
 
 #[test]
@@ -856,12 +1222,493 @@ fn apply_patches_and_revert_restores() {
     assert!(status.patched_files.is_empty());
 }
 
+#[test]
+fn corrupt_replacement_payload_leaves_the_installed_selection_byte_exact() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    let selection_a = PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: Vec::new(),
+    };
+    apply_preloader_selection(&root, &data, &zip_path, &selection_a, &[]).unwrap();
+    let before = installed_bytes(&root, &data);
+
+    corrupt_zip_payload(
+        &zip_path,
+        "mods/particles/Blue Water/actual_particles/water.pcf",
+    );
+    let error = apply_preloader_selection(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: Vec::new(),
+            particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("Could not read") || error.contains("checksum"),
+        "{error}"
+    );
+    assert_eq!(installed_bytes(&root, &data), before);
+    assert!(!data.join("preloader/apply-transaction").exists());
+}
+
+#[test]
+fn final_state_failure_rolls_the_installed_selection_back_byte_exact() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let before = installed_bytes(&root, &data);
+
+    let error = apply_preloader_selection_with_final_state_hook(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &Vec::new,
+        &|| Err("injected final state failure".into()),
+    )
+    .unwrap_err();
+    assert!(error.contains("injected final state failure"), "{error}");
+    assert_eq!(installed_bytes(&root, &data), before);
+    assert!(!data.join("preloader/apply-transaction").exists());
+}
+
+#[test]
+fn reopen_recovers_a_final_state_crash_to_the_exact_previous_selection() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let before = installed_bytes(&root, &data);
+    let block_rollback = std::cell::Cell::new(false);
+    let sample = || {
+        if block_rollback.get() {
+            running_names()
+        } else {
+            Vec::new()
+        }
+    };
+    let fail_at_commit = || {
+        block_rollback.set(true);
+        Err("injected crash before final state".into())
+    };
+
+    let error = apply_preloader_selection_with_final_state_hook(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &sample,
+        &fail_at_commit,
+    )
+    .unwrap_err();
+    assert!(error.contains("recovery remains pending"), "{error}");
+    assert!(data
+        .join("preloader/apply-transaction/intent.json")
+        .is_file());
+
+    block_rollback.set(false);
+    assert!(recover_pending_preloader_with_sampler(&root, &data, &[], &sample).unwrap());
+    assert_eq!(installed_bytes(&root, &data), before);
+    assert!(!data.join("preloader/apply-transaction").exists());
+}
+
+#[test]
+fn a_published_committed_marker_is_not_rolled_back_on_sync_ambiguity() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let intent_syncs = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&intent_syncs);
+
+    let report = crate::hash::with_sync_parent_fault(
+        move |path| path.ends_with("intent.json") && seen.fetch_add(1, Ordering::SeqCst) == 1,
+        || {
+            apply_preloader_selection(
+                &root,
+                &data,
+                &zip_path,
+                &PreloaderSelection {
+                    addons: vec!["Flat Look".into()],
+                    particle_mods: Vec::new(),
+                    profile_particle_mods: Vec::new(),
+                },
+                &[],
+            )
+        },
+    )
+    .unwrap();
+    assert_eq!(report.addons_installed, vec!["Flat Look"]);
+    assert!(report.particle_mods_installed.is_empty());
+    let state = load_state(&data).unwrap();
+    assert_eq!(state.addons, vec!["Flat Look"]);
+    assert!(state.particle_mods.is_empty());
+    assert!(!data.join("preloader/apply-transaction").exists());
+}
+
+#[test]
+fn recovery_refuses_a_same_size_archive_entry_from_a_new_game_version() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let block_rollback = std::cell::Cell::new(false);
+    let sample = || {
+        if block_rollback.get() {
+            running_names()
+        } else {
+            Vec::new()
+        }
+    };
+    let fail_at_commit = || {
+        block_rollback.set(true);
+        Err("leave prepared journal".into())
+    };
+    apply_preloader_selection_with_final_state_hook(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &sample,
+        &fail_at_commit,
+    )
+    .unwrap_err();
+    assert!(data
+        .join("preloader/apply-transaction/intent.json")
+        .is_file());
+
+    let old_entries = map_vpk_entries(&root.join("tf").join(MISC_VPK)).unwrap();
+    let mut replacement = BTreeMap::new();
+    for (rel, entry) in &old_entries {
+        let mut bytes = tiny_pcf(
+            if rel.ends_with("disguise.pcf") {
+                "spy_smoke"
+            } else {
+                "water_effect"
+            },
+            17.0,
+        );
+        bytes.resize(entry.length as usize, b' ');
+        replacement.insert(rel.clone(), bytes);
+    }
+    write_split_vpk(&root.join("tf").join(MISC_VPK), &replacement);
+    let new_dir = std::fs::read(root.join("tf").join(MISC_VPK)).unwrap();
+    let new_data = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+
+    block_rollback.set(false);
+    let error = recover_pending_preloader_with_sampler(&root, &data, &[], &sample).unwrap_err();
+    assert!(error.contains("archive mapping changed"), "{error}");
+    assert_eq!(
+        std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(),
+        new_dir
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        new_data
+    );
+    assert!(data
+        .join("preloader/apply-transaction/intent.json")
+        .is_file());
+    assert_eq!(
+        preloader_transaction_status(&root, &data).unwrap(),
+        PreloaderTransactionStatus::Prepared
+    );
+}
+
+#[test]
+fn verified_current_stock_reconciles_a_mapping_changed_preloader_transaction() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let selection_a_custom = std::fs::read(root.join("tf/custom").join(PRELOADER_VPK)).ok();
+    let block_rollback = std::cell::Cell::new(false);
+    let sample = || {
+        if block_rollback.get() {
+            running_names()
+        } else {
+            Vec::new()
+        }
+    };
+    let fail_at_commit = || {
+        block_rollback.set(true);
+        Err("leave prepared journal".into())
+    };
+    apply_preloader_selection_with_final_state_hook(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &sample,
+        &fail_at_commit,
+    )
+    .unwrap_err();
+
+    let before_incomplete_repair = installed_bytes(&root, &data);
+    let error = reconcile_preloader_after_steam_repair_with_sampler(&root, &data, &[], &sample)
+        .unwrap_err();
+    assert!(error.contains("gameinfo.txt"), "{error}");
+    assert_eq!(installed_bytes(&root, &data), before_incomplete_repair);
+    assert_eq!(
+        preloader_transaction_status(&root, &data).unwrap(),
+        PreloaderTransactionStatus::Prepared
+    );
+
+    let old_entries = map_vpk_entries(&root.join("tf").join(MISC_VPK)).unwrap();
+    let mut replacement = BTreeMap::new();
+    for (rel, entry) in &old_entries {
+        let mut bytes = tiny_pcf(
+            if rel.ends_with("disguise.pcf") {
+                "spy_smoke"
+            } else {
+                "water_effect"
+            },
+            17.0,
+        );
+        bytes.resize(entry.length as usize, b' ');
+        replacement.insert(rel.clone(), bytes);
+    }
+    write_split_vpk(&root.join("tf").join(MISC_VPK), &replacement);
+    std::fs::write(
+        root.join("tf/gameinfo.txt"),
+        b"\"GameInfo\"\n{\n\ttype multiplayer_only\n}\n",
+    )
+    .unwrap();
+
+    assert!(prepare_preloader_steam_repair(&root, &data).unwrap());
+    // Starting/cancelling verification never discards a Prepared marker.
+    assert_eq!(
+        preloader_transaction_status(&root, &data).unwrap(),
+        PreloaderTransactionStatus::Prepared
+    );
+    block_rollback.set(false);
+    assert!(
+        reconcile_preloader_after_steam_repair_with_sampler(&root, &data, &[], &sample).unwrap()
+    );
+    assert_eq!(
+        preloader_transaction_status(&root, &data).unwrap(),
+        PreloaderTransactionStatus::None
+    );
+    let repaired = preloader_status(&root, &data).unwrap();
+    assert!(repaired.stale);
+    assert_eq!(repaired.particle_mods, vec!["Blue Water"]);
+    assert_eq!(
+        std::fs::read(root.join("tf/custom").join(PRELOADER_VPK)).ok(),
+        selection_a_custom
+    );
+
+    let reapplied = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    assert!(!reapplied.patched_files.is_empty());
+    assert!(!preloader_status(&root, &data).unwrap().stale);
+}
+
+#[test]
+fn invalid_late_original_name_refuses_recovery_before_any_live_mutation() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let block_rollback = std::cell::Cell::new(false);
+    let sample = || {
+        if block_rollback.get() {
+            running_names()
+        } else {
+            Vec::new()
+        }
+    };
+    let fail_at_commit = || {
+        block_rollback.set(true);
+        Err("leave prepared journal".into())
+    };
+    apply_preloader_selection_with_final_state_hook(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &sample,
+        &fail_at_commit,
+    )
+    .unwrap_err();
+    let intent_path = data.join("preloader/apply-transaction/intent.json");
+    let mut intent: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&intent_path).unwrap()).unwrap();
+    intent["originals"][0]["name"] = serde_json::Value::String("../escape".into());
+    std::fs::write(&intent_path, serde_json::to_vec_pretty(&intent).unwrap()).unwrap();
+    let before = installed_bytes(&root, &data);
+
+    block_rollback.set(false);
+    let error = recover_pending_preloader_with_sampler(&root, &data, &[], &sample).unwrap_err();
+    assert!(error.contains("invalid snapshot name"), "{error}");
+    assert_eq!(installed_bytes(&root, &data), before);
+    assert!(intent_path.is_file());
+}
+
+#[test]
+fn oversized_state_and_gameinfo_inputs_fail_closed_without_unbounded_reads() {
+    let (root, data) = fake_root();
+    let state = state_path(&data);
+    std::fs::create_dir_all(state.parent().unwrap()).unwrap();
+    std::fs::File::create(&state)
+        .unwrap()
+        .set_len(4 * 1024 * 1024 + 1)
+        .unwrap();
+    let error = load_state(&data).unwrap_err();
+    assert!(error.contains("safety limit"), "{error}");
+
+    let gameinfo = root.join("tf/gameinfo.txt");
+    std::fs::File::create(&gameinfo)
+        .unwrap()
+        .set_len(4 * 1024 * 1024 + 1)
+        .unwrap();
+    let error = gameinfo_bypass_state(&root).unwrap_err();
+    assert!(error.contains("safety limit"), "{error}");
+}
+
+#[test]
+fn crafted_non_particle_state_cannot_authorize_an_official_archive_write() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let directory = misc_vpk_path(&root);
+    let sibling = root.join("tf/tf2_misc_000.vpk");
+    let before_directory = std::fs::read(&directory).unwrap();
+    let before_sibling = std::fs::read(&sibling).unwrap();
+
+    let mut state = load_state(&data).unwrap();
+    let rel = "materials/console/execs_should_never_write.vmt".to_string();
+    state.patched.insert(
+        rel.clone(),
+        PatchedEntry {
+            owner: "crafted".into(),
+            original_sha256: "0".repeat(64),
+            patched_sha256: "1".repeat(64),
+            rel,
+            pristine: true,
+        },
+    );
+    std::fs::write(
+        state_path(&data),
+        serde_json::to_vec_pretty(&state).unwrap(),
+    )
+    .unwrap();
+
+    let error = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(error.contains("unsafe patched entry"), "{error}");
+    assert_eq!(std::fs::read(&directory).unwrap(), before_directory);
+    assert_eq!(std::fs::read(&sibling).unwrap(), before_sibling);
+}
+
+#[test]
+fn oversized_gameinfo_backup_and_particle_snapshot_are_rejected() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+
+    std::fs::File::create(gameinfo_backup_path(&data))
+        .unwrap()
+        .set_len(4 * 1024 * 1024 + 1)
+        .unwrap();
+    let error = set_gameinfo_bypass(&root, &data, true, &[]).unwrap_err();
+    assert!(error.contains("safety limit"), "{error}");
+
+    std::fs::File::create(snapshot_path(&data, "particles/water.pcf"))
+        .unwrap()
+        .set_len(crate::pcf::MAX_PCF_BYTES as u64 + 1)
+        .unwrap();
+    let error = preloader_status(&root, &data).unwrap_err();
+    assert!(error.contains("safety limit"), "{error}");
+}
+
+#[test]
+fn oversized_transaction_backup_is_rejected_before_recovery_writes() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let block_rollback = std::cell::Cell::new(false);
+    let sample = || {
+        if block_rollback.get() {
+            running_names()
+        } else {
+            Vec::new()
+        }
+    };
+    let fail_at_commit = || {
+        block_rollback.set(true);
+        Err("leave prepared journal".into())
+    };
+    apply_preloader_selection_with_final_state_hook(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: Vec::new(),
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &sample,
+        &fail_at_commit,
+    )
+    .unwrap_err();
+    let transaction = data.join("preloader/apply-transaction");
+    let entry_backup = std::fs::read_dir(&transaction)
+        .unwrap()
+        .map(Result::unwrap)
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("entry-"))
+        .unwrap()
+        .path();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&entry_backup)
+        .unwrap()
+        .set_len(crate::pcf::MAX_PCF_BYTES as u64 + 1)
+        .unwrap();
+    let live_before = installed_bytes(&root, &data);
+
+    block_rollback.set(false);
+    let error = recover_pending_preloader_with_sampler(&root, &data, &[], &sample).unwrap_err();
+    assert!(error.contains("wrong size"), "{error}");
+    assert_eq!(installed_bytes(&root, &data), live_before);
+    assert!(transaction.join("intent.json").is_file());
+}
+
 /// An interrupted apply can leave patched entries with state.json saying
 /// nothing is patched. The pristine snapshots on disk must survive the
-/// retry (never re-snapshotted from modded bytes) so revert still reaches
-/// stock files.
+/// retry (never re-snapshotted from modded bytes). Without the saved hash of
+/// the patch, recovery must keep both live bytes and snapshots for Steam
+/// verification instead of guessing that it is safe to write stock bytes.
 #[test]
-fn interrupted_apply_cannot_clobber_snapshots() {
+fn interrupted_apply_cannot_clobber_or_trust_unmatched_snapshots() {
     let (root, data) = fake_root();
     let zip_path = fake_mods_zip(root.parent().unwrap());
     let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
@@ -876,17 +1723,29 @@ fn interrupted_apply_cannot_clobber_snapshots() {
 
     // Simulate the crash: patches and snapshots exist, but tracking was
     // lost before the state save.
-    let mut state = load_state(&data);
+    let mut state = load_state(&data).unwrap();
     assert!(!state.patched.is_empty());
     state.patched.clear();
     save_state(&data, &state).unwrap();
+    let patched_sibling = std::fs::read(&sibling_path).unwrap();
 
-    // Retrying must adopt the orphaned snapshots instead of snapshotting
-    // the currently-modded bytes as "stock".
-    apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap();
-    let report = revert_preloader(&root, &data, &[]).unwrap();
-    assert!(report.failures.is_empty(), "{:?}", report.failures);
-    assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
+    let error = apply_preloader_selection(&root, &data, &zip_path, &selection, &[]).unwrap_err();
+    assert!(error.contains("cannot prove"), "{error}");
+    assert_eq!(std::fs::read(&sibling_path).unwrap(), patched_sibling);
+    assert_ne!(patched_sibling, pristine_sibling);
+    assert!(!originals_listing(&data).is_empty());
+}
+
+#[test]
+fn particle_snapshots_keep_preload_wanted_when_state_is_missing() {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    assert!(originals_dir(&data).is_dir());
+
+    std::fs::remove_file(state_path(&data)).unwrap();
+
+    assert!(preload_is_wanted(&data, &root).unwrap());
 }
 
 fn originals_listing(data: &Path) -> Vec<String> {
@@ -904,10 +1763,10 @@ fn originals_listing(data: &Path) -> Vec<String> {
 /// A crash in the middle of writing state.json used to truncate it, which
 /// loaded as "nothing patched" and let Restore delete every pristine snapshot
 /// while the patches stayed in the archive. The save is atomic now, and even
-/// a torn file loses nothing: each snapshot carries a sidecar that says what
-/// it is, so the status knows the entries and Restore puts every byte back.
+/// a torn file loses nothing: status can identify the entries, but restore
+/// keeps the live bytes and snapshots because the patch hashes are gone.
 #[test]
-fn a_torn_state_file_loses_no_tracking_and_restore_puts_every_byte_back() {
+fn a_torn_state_file_reports_recovery_without_authorizing_archive_writes() {
     let (root, data) = fake_root();
     let zip_path = fake_mods_zip(root.parent().unwrap());
     let vpk_path = root.join("tf").join(MISC_VPK);
@@ -916,6 +1775,8 @@ fn a_torn_state_file_loses_no_tracking_and_restore_puts_every_byte_back() {
     let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
     apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let patched_dir = std::fs::read(&vpk_path).unwrap();
+    let patched_sibling = std::fs::read(&sibling_path).unwrap();
     assert!(!snapshot_path(&data, "particles/water.pcf")
         .with_extension("execs-part")
         .exists());
@@ -926,8 +1787,12 @@ fn a_torn_state_file_loses_no_tracking_and_restore_puts_every_byte_back() {
     let json = std::fs::read(&state_file).unwrap();
     std::fs::write(&state_file, &json[..json.len() / 2]).unwrap();
     assert!(
-        load_state(&data).patched.is_empty(),
-        "the torn file loads as empty"
+        load_state(&data).is_err(),
+        "a torn state file must not authorize an empty-state mutation"
+    );
+    assert!(
+        preload_is_wanted(&data, &root).is_err(),
+        "viewmodel mutations must fail closed while state is corrupt"
     );
 
     let status = preloader_status(&root, &data).unwrap();
@@ -944,32 +1809,40 @@ fn a_torn_state_file_loses_no_tracking_and_restore_puts_every_byte_back() {
         "{:?}",
         status.untracked_modified
     );
-    assert!(load_state(&data).patched["particles/water.pcf"].pristine);
-
-    let report = revert_preloader(&root, &data, &[]).unwrap();
-    assert!(report.failures.is_empty(), "{:?}", report.failures);
-    assert_eq!(report.restored_files.len(), 2);
-    assert_eq!(std::fs::read(&vpk_path).unwrap(), pristine_dir);
-    assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
     assert!(
-        originals_listing(&data).is_empty(),
+        load_state(&data).is_err(),
+        "status must not overwrite state.json while the UI polls it"
+    );
+
+    let error = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(error.contains("cannot prove"), "{error}");
+    assert_eq!(std::fs::read(&vpk_path).unwrap(), patched_dir);
+    assert_eq!(std::fs::read(&sibling_path).unwrap(), patched_sibling);
+    assert_eq!(
+        patched_dir, pristine_dir,
+        "the directory VPK is never written"
+    );
+    assert_ne!(patched_sibling, pristine_sibling);
+    assert!(
+        !originals_listing(&data).is_empty(),
         "{:?}",
         originals_listing(&data)
     );
-    assert!(!originals_dir(&data).exists());
+    assert!(originals_dir(&data).is_dir());
 }
 
 /// Snapshots written before sidecars existed carry nothing but their hashed
 /// name. The archive still explains them: the name is the hash of an entry
 /// path, and the directory's CRC says whether the bytes are stock.
 #[test]
-fn a_snapshot_without_a_sidecar_is_recognised_from_the_archive() {
+fn a_snapshot_without_a_sidecar_is_reported_but_not_trusted_for_restore() {
     let (root, data) = fake_root();
     let zip_path = fake_mods_zip(root.parent().unwrap());
     let sibling_path = root.join("tf").join("tf2_misc_000.vpk");
     let pristine_sibling = std::fs::read(&sibling_path).unwrap();
 
     apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
+    let patched_sibling = std::fs::read(&sibling_path).unwrap();
     for rel in ["particles/water.pcf", "particles/water_dx80.pcf"] {
         std::fs::remove_file(sidecar_path(&data, rel)).unwrap();
     }
@@ -978,18 +1851,19 @@ fn a_snapshot_without_a_sidecar_is_recognised_from_the_archive() {
     let status = preloader_status(&root, &data).unwrap();
     assert_eq!(status.patched_files.len(), 2, "{:?}", status.patched_files);
     assert!(
-        load_state(&data).patched["particles/water.pcf"].pristine,
-        "judged by the directory CRC"
+        load_state(&data).is_err(),
+        "status reports recovery without replacing corrupt state"
     );
     assert!(
-        sidecar_path(&data, "particles/water.pcf").is_file(),
-        "adoption writes the sidecar it found missing"
+        !sidecar_path(&data, "particles/water.pcf").exists(),
+        "status must not write a missing sidecar"
     );
 
-    let report = revert_preloader(&root, &data, &[]).unwrap();
-    assert!(report.failures.is_empty(), "{:?}", report.failures);
-    assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
-    assert!(originals_listing(&data).is_empty());
+    let error = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(error.contains("cannot prove"), "{error}");
+    assert_eq!(std::fs::read(&sibling_path).unwrap(), patched_sibling);
+    assert_ne!(patched_sibling, pristine_sibling);
+    assert!(!originals_listing(&data).is_empty());
 }
 
 /// Restore deletes exactly the snapshots it consumed. A file nothing can
@@ -1021,7 +1895,7 @@ fn an_unexplained_snapshot_survives_restore_and_torn_writes_do_not() {
     let report = revert_preloader(&root, &data, &[]).unwrap();
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!(std::fs::read(&sibling_path).unwrap(), pristine_sibling);
-    assert!(load_state(&data).patched.is_empty());
+    assert!(load_state(&data).unwrap().patched.is_empty());
     assert_eq!(
         originals_listing(&data),
         vec![stranger.file_name().unwrap().to_str().unwrap().to_string()]
@@ -1276,7 +2150,7 @@ fn fingerprint_covers_the_sibling_archives() {
 /// while the real snapshot was orphaned and never restored.
 #[test]
 fn snapshot_names_are_hashed_and_legacy_names_migrate() {
-    let (_root, data) = fake_root();
+    let (root, data) = fake_root();
     let rel = "particles/blue__water.pcf";
     let hashed = snapshot_path(&data, rel);
     assert_eq!(
@@ -1292,7 +2166,8 @@ fn snapshot_names_are_hashed_and_legacy_names_migrate() {
     std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
     std::fs::write(&legacy, b"pristine").unwrap();
     let mut state = PreloaderState::default();
-    adopt_orphaned_snapshots(&data, &mut state, None);
+    let entries = map_vpk_entries(&misc_vpk_path(&root)).unwrap();
+    adopt_orphaned_snapshots(&data, &mut state, Some(&entries));
 
     let entry = state
         .patched
@@ -1329,7 +2204,7 @@ fn restore_refuses_an_entry_the_game_replaced_in_place() {
     )
     .unwrap();
 
-    let state = load_state(&data);
+    let state = load_state(&data).unwrap();
     let (rel, tracked) = state.patched.iter().next().expect("something was patched");
     assert!(
         !tracked.patched_sha256.is_empty(),
@@ -1344,15 +2219,12 @@ fn restore_refuses_an_entry_the_game_replaced_in_place() {
     let replacement = vec![b'Z'; entry.length as usize];
     crate::vpk::patch_vpk_entry(&vpk_path, entry, &replacement).unwrap();
 
-    let report = revert_preloader(&root, &data, &[]).unwrap();
     assert!(
-        report
-            .failures
-            .iter()
-            .any(|failure| failure.contains("replaced this entry")),
-        "expected a refusal, got {:?}",
-        report.failures
+        preloader_status(&root, &data).unwrap().stale,
+        "same-size content replacement must be visible in status"
     );
+    let err = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(err.contains("replaced this entry"), "{err}");
     // Fresh game data is left exactly as it was, and the snapshot is kept.
     let after = crate::vpk::read_vpk_entry(&vpk_path, entry).unwrap();
     assert_eq!(after, replacement);
@@ -1360,6 +2232,11 @@ fn restore_refuses_an_entry_the_game_replaced_in_place() {
         std::fs::read(snapshot_path(&data, rel)).unwrap(),
         snapshot_before
     );
+    let kept = load_state(&data).unwrap();
+    assert!(kept.patched.contains_key(rel));
+    assert_eq!(kept.particle_mods, vec!["Blue Water"]);
+    assert!(gameinfo_bypass_state(&root).unwrap().enabled);
+    assert!(root.join("tf/custom").join(PRELOADER_VPK).is_file());
 }
 
 /// "Uncheck everything, Apply" must not leave an edited official file behind
@@ -1448,7 +2325,7 @@ fn a_resized_vpk_restores_tracked_patches_instead_of_discarding_them() {
         &std::fs::read(&sibling_path).unwrap()[..pristine_sibling.len()],
         &pristine_sibling[..]
     );
-    assert!(load_state(&data).patched.is_empty());
+    assert!(load_state(&data).unwrap().patched.is_empty());
     // Every snapshot was consumed by the restore (the folder itself may stay).
     let leftover = std::fs::read_dir(originals_dir(&data))
         .map(|dir| dir.count())
@@ -1463,17 +2340,14 @@ fn a_resized_vpk_restores_tracked_patches_instead_of_discarding_them() {
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!(report.restored_files.len(), 2);
     assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
-    assert!(load_state(&data).patched.is_empty());
+    assert!(load_state(&data).unwrap().patched.is_empty());
 }
 
-/// An entry that was already modified when execs first patched it (an
-/// earlier install whose tracking was lost, or another tool) is never
-/// mistaken for stock: the snapshot is recorded as non-pristine, the report
-/// says so, and Restore honestly puts back what was there while still
-/// flagging the file. Once stock bytes reappear (Steam's verify), the next
-/// install snapshots them and Restore reaches stock again.
+/// An entry already modified before execs touches it is never accepted as a
+/// carrier or snapshotted as stock. The whole apply is refused until Steam's
+/// verification puts stock bytes back.
 #[test]
-fn an_entry_modified_before_execs_touched_it_is_reported_and_reverts_to_what_was_there() {
+fn an_entry_modified_before_execs_touched_it_blocks_apply_until_repaired() {
     let (root, data) = fake_root();
     let zip_path = fake_mods_zip(root.parent().unwrap());
     let vpk_path = root.join("tf").join(MISC_VPK);
@@ -1484,37 +2358,14 @@ fn an_entry_modified_before_execs_touched_it_is_reported_and_reverts_to_what_was
     );
     assert!(!entry_is_stock(&vpk_path, "particles/water.pcf"));
 
-    let report = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
-    let notice = report
-        .skipped
-        .iter()
-        .find(|notice| notice.file == "particles/water.pcf")
-        .expect("the foreign patch is reported");
-    assert!(
-        notice.reason.contains("already modified"),
-        "{}",
-        notice.reason
-    );
-    assert!(
-        !report
-            .skipped
-            .iter()
-            .any(|notice| notice.file == "particles/water_dx80.pcf"),
-        "the twin was stock and must not be flagged: {:?}",
-        report.skipped
-    );
-    let state = load_state(&data);
-    assert!(!state.patched["particles/water.pcf"].pristine);
-    assert!(state.patched["particles/water_dx80.pcf"].pristine);
-
-    let report = revert_preloader(&root, &data, &[]).unwrap();
+    let err = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap_err();
+    assert!(err.contains("repair the game through Steam"), "{err}");
+    assert!(err.contains("particles/water.pcf"), "{err}");
     assert_eq!(entry_bytes(&vpk_path, "particles/water.pcf"), foreign);
     assert!(entry_is_stock(&vpk_path, "particles/water_dx80.pcf"));
-    // What came back is not stock, and the revert says so instead of
-    // reporting a clean restore.
-    assert_eq!(report.failures.len(), 1, "{:?}", report.failures);
-    assert!(report.failures[0].starts_with("particles/water.pcf:"));
-    assert!(report.failures[0].contains("no snapshot"));
+    assert!(load_state(&data).unwrap().patched.is_empty());
+    assert!(!gameinfo_bypass_state(&root).unwrap().enabled);
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
 
     // Steam's verify puts stock bytes back; the next install sees them.
     overwrite_entry(
@@ -1525,7 +2376,7 @@ fn an_entry_modified_before_execs_touched_it_is_reported_and_reverts_to_what_was
     assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
     let report = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
     assert!(report.skipped.is_empty(), "{:?}", report.skipped);
-    assert!(load_state(&data).patched["particles/water.pcf"].pristine);
+    assert!(load_state(&data).unwrap().patched["particles/water.pcf"].pristine);
     let report = revert_preloader(&root, &data, &[]).unwrap();
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
@@ -1533,8 +2384,8 @@ fn an_entry_modified_before_execs_touched_it_is_reported_and_reverts_to_what_was
 
 /// A patched particle file execs holds no snapshot for is a stale patch
 /// nothing here can undo — and, when its materials are gone, the source of
-/// the "unimplemented sprite renderer" console flood. Status, the apply
-/// report and the revert report all have to name it.
+/// the "unimplemented sprite renderer" console flood. Status names it, while
+/// apply and revert fail until the user repairs the official archive.
 #[test]
 fn stale_patches_execs_does_not_track_are_reported_everywhere() {
     let (root, data) = fake_root();
@@ -1551,31 +2402,17 @@ fn stale_patches_execs_does_not_track_are_reported_everywhere() {
         vec!["particles/disguise.pcf".to_string()]
     );
 
-    let report = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap();
-    let notice = report
-        .skipped
-        .iter()
-        .find(|notice| notice.file == "particles/disguise.pcf")
-        .expect("the stale patch is reported");
-    assert!(notice.reason.contains("no snapshot"), "{}", notice.reason);
-    // Our own, tracked patches are not confused with stale ones.
-    assert!(
-        !report
-            .skipped
-            .iter()
-            .any(|notice| notice.file.starts_with("particles/water")),
-        "{:?}",
-        report.skipped
-    );
+    let err = apply_preloader_selection(&root, &data, &zip_path, &blue_water(), &[]).unwrap_err();
+    assert!(err.contains("particles/disguise.pcf"), "{err}");
+    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
+    assert!(load_state(&data).unwrap().particle_mods.is_empty());
     assert_eq!(
         preloader_status(&root, &data).unwrap().untracked_modified,
         vec!["particles/disguise.pcf".to_string()]
     );
 
-    let report = revert_preloader(&root, &data, &[]).unwrap();
-    assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
-    assert_eq!(report.failures.len(), 1, "{:?}", report.failures);
-    assert!(report.failures[0].starts_with("particles/disguise.pcf:"));
+    let err = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(err.contains("particles/disguise.pcf"), "{err}");
 }
 
 /// After Steam's verify (or an update) has already put stock bytes back,
@@ -1598,7 +2435,7 @@ fn restore_untracks_an_entry_that_already_holds_stock_bytes() {
 
     let report = revert_preloader(&root, &data, &[]).unwrap();
     assert!(report.failures.is_empty(), "{:?}", report.failures);
-    assert!(load_state(&data).patched.is_empty());
+    assert!(load_state(&data).unwrap().patched.is_empty());
     assert!(!snapshot_path(&data, "particles/water.pcf").exists());
     assert!(entry_is_stock(&vpk_path, "particles/water.pcf"));
 }
@@ -1633,16 +2470,13 @@ fn a_pristine_snapshot_the_game_outdated_is_discarded_not_written_back() {
     // ...and our patch is still sitting there.
     overwrite_entry(&vpk_path, "particles/water.pcf", &patched);
 
-    let report = revert_preloader(&root, &data, &[]).unwrap();
     assert!(
-        report
-            .failures
-            .iter()
-            .any(|failure| failure.starts_with("particles/water.pcf:")
-                && failure.contains("discarded")),
-        "{:?}",
-        report.failures
+        preloader_status(&root, &data).unwrap().stale,
+        "a same-size stock CRC change must be detected"
     );
+    let err = revert_preloader(&root, &data, &[]).unwrap_err();
+    assert!(err.contains("particles/water.pcf:"), "{err}");
+    assert!(err.contains("discarded"), "{err}");
     assert_eq!(
         entry_bytes(&vpk_path, "particles/water.pcf"),
         patched,
@@ -1650,8 +2484,13 @@ fn a_pristine_snapshot_the_game_outdated_is_discarded_not_written_back() {
     );
     assert!(!snapshot_path(&data, "particles/water.pcf").exists());
     assert!(!load_state(&data)
+        .unwrap()
         .patched
         .contains_key("particles/water.pcf"));
     // The twin, whose stock content did not change, was restored normally.
     assert!(entry_is_stock(&vpk_path, "particles/water_dx80.pcf"));
+    let kept = load_state(&data).unwrap();
+    assert_eq!(kept.particle_mods, vec!["Blue Water"]);
+    assert!(gameinfo_bypass_state(&root).unwrap().enabled);
+    assert!(root.join("tf/custom").join(PRELOADER_VPK).is_file());
 }

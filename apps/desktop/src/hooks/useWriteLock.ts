@@ -28,7 +28,15 @@ export function useWriteLock(api: Api): WriteLockState {
 
   useEffect(() => {
     let cancelled = false;
-    let stop: (() => void) | null = null;
+    const stops: Array<() => void> = [];
+
+    function failClosed(message: string) {
+      setDegraded(message);
+      // Once the lock source is unavailable, enablement cannot be based on the
+      // last sample. Treat the surface as locked and let Rust remain the final
+      // authority for any already-issued command.
+      setRunning(true);
+    }
 
     function observe(next: boolean) {
       if (shouldAbsorbOnLockChange(lastRunning.current, next)) {
@@ -47,7 +55,7 @@ export function useWriteLock(api: Api): WriteLockState {
       })
       .catch(() => {
         if (!cancelled) {
-          setDegraded("Could not read the TF2 write lock — close the game before saving.");
+          failClosed("Could not read the TF2 write lock — writes are disabled for safety.");
         }
       });
 
@@ -58,21 +66,38 @@ export function useWriteLock(api: Api): WriteLockState {
           unlisten();
           return;
         }
-        stop = unlisten;
+        stops.push(unlisten);
       })
       .catch(() => {
         if (!cancelled) {
-          // A silent failure here leaves every pane enabled while the backend
-          // refuses each write — say so instead of looking broken.
-          setDegraded(
-            "execs cannot watch TF2 — the read-only banner will not appear. Close the game before saving.",
-          );
+          failClosed("execs cannot watch TF2 — writes are disabled for safety.");
+        }
+      });
+
+    api
+      .onTf2LockUnavailable(() => {
+        if (!cancelled) {
+          failClosed("execs can no longer watch TF2 — writes are disabled for safety.");
+        }
+      })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+          return;
+        }
+        stops.push(unlisten);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          failClosed("execs cannot watch the TF2 lock health — writes are disabled for safety.");
         }
       });
 
     return () => {
       cancelled = true;
-      stop?.();
+      for (const stop of stops) {
+        stop();
+      }
     };
   }, [api]);
 

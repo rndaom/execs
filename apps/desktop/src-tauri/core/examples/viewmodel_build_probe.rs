@@ -27,8 +27,14 @@ fn main() {
     let mode_arg = std::env::var("EXECS_HIDE_MODE").ok();
     let mode = execs_core::ViewmodelHideMode::from_str_or_default(mode_arg.as_deref());
     println!("hide mode: {}", mode.as_str());
+    let staging_root = staging.parent().expect("staging dir needs a parent");
     match execs_core::viewmodel_build::build_viewmodel_pack_vpk(
-        &zip, &hidden, mode, &studiomdl, staging,
+        &zip,
+        &hidden,
+        mode,
+        &studiomdl,
+        staging_root,
+        staging,
     ) {
         Ok(vpk) => {
             println!("OK in {:?} — vpk bytes: {}", started.elapsed(), vpk.len());

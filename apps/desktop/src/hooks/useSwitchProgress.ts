@@ -44,7 +44,7 @@ export function useSwitchProgress(
     let stop: (() => void) | null = null;
     api
       .onSwitchProgress((progress) => {
-        dispatch({ type: "report", step: progress.step });
+        dispatch({ type: "report", step: progress.step, detail: progress.detail });
       })
       .then((unlisten) => {
         if (cancelled) {

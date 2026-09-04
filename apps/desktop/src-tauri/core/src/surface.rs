@@ -43,6 +43,133 @@ const JUNK_NAMES: &[&str] = &[
 
 const SKIP_CFG_DIRS: &[&str] = &["user", "app", "overrides"];
 
+// Keep the live-tree walk within the same order of magnitude as an imported
+// profile. These count every visited directory entry (including junk), not
+// only accepted files, so a wide tree cannot consume unbounded time or memory.
+const MAX_SURFACE_ENTRIES: usize = 40_000;
+const MAX_SURFACE_FILES: usize = 20_000;
+const MAX_SURFACE_PATH_BYTES: usize = 8 * 1024 * 1024;
+const MAX_SURFACE_PATH_DEPTH: usize = 64;
+const MAX_SKIPPED_ENTRIES: usize = 256;
+const MAX_SKIPPED_BYTES: usize = 64 * 1024;
+const SURFACE_LIMIT_PREFIX: &str = "TF2's customization tree has ";
+const SKIPPED_OMITTED: &str = "Additional skipped paths were omitted";
+
+#[derive(Debug, Clone, Copy)]
+struct InventoryLimits {
+    entries: usize,
+    files: usize,
+    path_bytes: usize,
+    depth: usize,
+    skipped_entries: usize,
+    skipped_bytes: usize,
+}
+
+const INVENTORY_LIMITS: InventoryLimits = InventoryLimits {
+    entries: MAX_SURFACE_ENTRIES,
+    files: MAX_SURFACE_FILES,
+    path_bytes: MAX_SURFACE_PATH_BYTES,
+    depth: MAX_SURFACE_PATH_DEPTH,
+    skipped_entries: MAX_SKIPPED_ENTRIES,
+    skipped_bytes: MAX_SKIPPED_BYTES,
+};
+
+#[derive(Debug)]
+struct InventoryBudget {
+    limits: InventoryLimits,
+    entries: usize,
+    path_bytes: usize,
+    skipped_bytes: usize,
+    skipped_truncated: bool,
+}
+
+impl InventoryBudget {
+    fn new(limits: InventoryLimits) -> Self {
+        Self {
+            limits,
+            entries: 0,
+            path_bytes: 0,
+            skipped_bytes: 0,
+            skipped_truncated: false,
+        }
+    }
+
+    fn enter_dir(&self, depth: usize) -> Result<(), ProfileError> {
+        if depth > self.limits.depth {
+            return Err(surface_limit_error("too many nested directories"));
+        }
+        Ok(())
+    }
+
+    fn visit_entry(&mut self, tf2_root: &Path, path: &Path) -> Result<(), ProfileError> {
+        self.entries = self
+            .entries
+            .checked_add(1)
+            .ok_or_else(|| surface_limit_error("too many directory entries"))?;
+        if self.entries > self.limits.entries {
+            return Err(surface_limit_error("too many directory entries"));
+        }
+        let relative = path.strip_prefix(tf2_root).unwrap_or(path);
+        self.path_bytes = self
+            .path_bytes
+            .checked_add(relative.as_os_str().as_encoded_bytes().len())
+            .ok_or_else(|| surface_limit_error("too much path data"))?;
+        if self.path_bytes > self.limits.path_bytes {
+            return Err(surface_limit_error("too much path data"));
+        }
+        Ok(())
+    }
+
+    fn record_file(&mut self, dest: &str, current_files: usize) -> Result<(), ProfileError> {
+        if current_files >= self.limits.files {
+            return Err(surface_limit_error("too many profile files"));
+        }
+        if dest.split('/').count() > self.limits.depth {
+            return Err(surface_limit_error("a profile path is nested too deeply"));
+        }
+        self.path_bytes = self
+            .path_bytes
+            .checked_add(dest.len())
+            .ok_or_else(|| surface_limit_error("too much path data"))?;
+        if self.path_bytes > self.limits.path_bytes {
+            return Err(surface_limit_error("too much path data"));
+        }
+        Ok(())
+    }
+
+    fn skip(&mut self, skipped: &mut Vec<String>, reason: String) {
+        if self.skipped_truncated {
+            return;
+        }
+        let next_bytes = self.skipped_bytes.checked_add(reason.len());
+        if skipped.len() + 1 >= self.limits.skipped_entries
+            || next_bytes.is_none_or(|bytes| bytes > self.limits.skipped_bytes)
+        {
+            self.skipped_truncated = true;
+            let marker_bytes = self.skipped_bytes.checked_add(SKIPPED_OMITTED.len());
+            if skipped.len() < self.limits.skipped_entries
+                && marker_bytes.is_some_and(|bytes| bytes <= self.limits.skipped_bytes)
+            {
+                self.skipped_bytes = marker_bytes.unwrap_or(self.limits.skipped_bytes);
+                skipped.push(SKIPPED_OMITTED.into());
+            }
+            return;
+        }
+        self.skipped_bytes = next_bytes.unwrap_or(self.limits.skipped_bytes);
+        skipped.push(reason);
+    }
+}
+
+fn surface_limit_error(reason: &str) -> ProfileError {
+    ProfileError::Io(format!(
+        "{SURFACE_LIMIT_PREFIX}{reason}; refusing to build a partial profile."
+    ))
+}
+
+pub(crate) fn is_inventory_limit_error(error: &ProfileError) -> bool {
+    matches!(error, ProfileError::Io(message) if message.starts_with(SURFACE_LIMIT_PREFIX))
+}
+
 /// Files under `tf/custom/` the app owns for the whole install rather than
 /// per profile. The preloader's addon pack pairs with particle patches inside
 /// the official VPKs, which are global too — letting a profile claim it would
@@ -137,19 +264,53 @@ fn inventory_live_surface_opts(
     cloud_config: Option<&Path>,
     migrate_legacy: bool,
 ) -> Result<LiveInventory, ProfileError> {
-    let layer = detect_layer(tf2_root);
+    inventory_live_surface_opts_with_limits(
+        tf2_root,
+        cloud_config,
+        migrate_legacy,
+        INVENTORY_LIMITS,
+    )
+}
+
+fn inventory_live_surface_opts_with_limits(
+    tf2_root: &Path,
+    cloud_config: Option<&Path>,
+    migrate_legacy: bool,
+    limits: InventoryLimits,
+) -> Result<LiveInventory, ProfileError> {
+    let layer = detect_layer(tf2_root, limits)?;
     let mut dests = BTreeMap::new();
     let mut skipped = Vec::new();
     let mut visited = HashSet::new();
+    let mut budget = InventoryBudget::new(limits);
 
-    collect_config_cfg(tf2_root, cloud_config, &mut dests, &mut skipped, true)?;
+    collect_config_cfg(
+        tf2_root,
+        cloud_config,
+        &mut dests,
+        &mut skipped,
+        &mut budget,
+        true,
+    )?;
     if layer == CfgLayer::Comfig {
-        collect_overrides(tf2_root, &mut dests, &mut skipped, &mut visited)?;
-        collect_root_user_cfgs(tf2_root, &mut dests, &mut skipped, true)?;
+        collect_overrides(
+            tf2_root,
+            &mut dests,
+            &mut skipped,
+            &mut visited,
+            &mut budget,
+        )?;
+        collect_root_user_cfgs(tf2_root, &mut dests, &mut skipped, &mut budget, true)?;
     } else {
-        collect_vanilla_cfgs(tf2_root, &mut dests, &mut skipped, true)?;
+        collect_vanilla_cfgs(tf2_root, &mut dests, &mut skipped, &mut budget, true)?;
     }
-    collect_custom(tf2_root, &mut dests, &mut skipped, &mut visited)?;
+    collect_custom(
+        tf2_root,
+        &mut dests,
+        &mut skipped,
+        &mut visited,
+        &mut budget,
+    )?;
     if migrate_legacy {
         collect_migrate(
             tf2_root,
@@ -158,6 +319,7 @@ fn inventory_live_surface_opts(
             &mut dests,
             &mut skipped,
             &mut visited,
+            &mut budget,
         )?;
         collect_migrate(
             tf2_root,
@@ -166,6 +328,7 @@ fn inventory_live_surface_opts(
             &mut dests,
             &mut skipped,
             &mut visited,
+            &mut budget,
         )?;
     }
 
@@ -176,19 +339,24 @@ fn inventory_live_surface_opts(
     })
 }
 
-fn detect_layer(tf2_root: &Path) -> CfgLayer {
-    if tf2_root.join("tf").join("cfg").join("overrides").is_dir() {
-        return CfgLayer::Comfig;
+fn detect_layer(tf2_root: &Path, limits: InventoryLimits) -> Result<CfgLayer, ProfileError> {
+    let overrides = tf2_root.join("tf").join("cfg").join("overrides");
+    if !is_symlink(&overrides) && is_within_root(&overrides, tf2_root) && overrides.is_dir() {
+        return Ok(CfgLayer::Comfig);
     }
     let custom = tf2_root.join("tf").join("custom");
-    if let Ok(entries) = fs::read_dir(&custom) {
-        for entry in entries.flatten() {
-            if is_mastercomfig_vpk(&entry.file_name().to_string_lossy()) {
-                return CfgLayer::Comfig;
+    if !is_symlink(&custom) && is_within_root(&custom, tf2_root) {
+        if let Ok(entries) = fs::read_dir(&custom) {
+            let mut budget = InventoryBudget::new(limits);
+            for entry in entries.flatten() {
+                budget.visit_entry(tf2_root, &entry.path())?;
+                if entry.file_name().to_str().is_some_and(is_mastercomfig_vpk) {
+                    return Ok(CfgLayer::Comfig);
+                }
             }
         }
     }
-    CfgLayer::Vanilla
+    Ok(CfgLayer::Vanilla)
 }
 
 fn is_mastercomfig_vpk(name: &str) -> bool {
@@ -201,6 +369,7 @@ fn collect_config_cfg(
     cloud_config: Option<&Path>,
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
+    budget: &mut InventoryBudget,
     critical: bool,
 ) -> Result<(), ProfileError> {
     let live = tf2_root.join("tf").join("cfg").join("config.cfg");
@@ -211,6 +380,7 @@ fn collect_config_cfg(
             Some("tf/cfg/config.cfg"),
             dests,
             skipped,
+            budget,
             critical,
             false,
         );
@@ -223,6 +393,7 @@ fn collect_config_cfg(
                 Some("tf/cfg/config.cfg"),
                 dests,
                 skipped,
+                budget,
                 critical,
                 false,
             );
@@ -236,23 +407,30 @@ fn collect_overrides(
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
     visited: &mut HashSet<PathBuf>,
+    budget: &mut InventoryBudget,
 ) -> Result<(), ProfileError> {
     let dir = tf2_root.join("tf").join("cfg").join("overrides");
     if !dir.exists() {
         return Ok(());
     }
-    walk_tree(&dir, tf2_root, dests, skipped, visited, true, false)
+    walk_tree(
+        &dir, tf2_root, dests, skipped, visited, budget, true, false, false, 0,
+    )
 }
 
 fn collect_root_user_cfgs(
     tf2_root: &Path,
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
+    budget: &mut InventoryBudget,
     critical: bool,
 ) -> Result<(), ProfileError> {
     let cfg = tf2_root.join("tf").join("cfg");
     if !cfg.is_dir() {
         return Ok(());
+    }
+    if is_symlink(&cfg) || !is_within_root(&cfg, tf2_root) {
+        return Err(ProfileError::InvalidPath);
     }
     let entries = match fs::read_dir(&cfg) {
         Ok(entries) => entries,
@@ -260,7 +438,7 @@ fn collect_root_user_cfgs(
             return if critical {
                 Err(ProfileError::Io(err.to_string()))
             } else {
-                skipped.push(format!("tf/cfg ({err})"));
+                budget.skip(skipped, format!("tf/cfg ({err})"));
                 Ok(())
             };
         }
@@ -272,19 +450,25 @@ fn collect_root_user_cfgs(
                 if critical {
                     return Err(ProfileError::Io(err.to_string()));
                 }
-                skipped.push(format!("tf/cfg ({err})"));
+                budget.skip(skipped, format!("tf/cfg ({err})"));
                 continue;
             }
         };
         let path = entry.path();
+        budget.visit_entry(tf2_root, &path)?;
         if !path.is_file() {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().into_owned();
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| ProfileError::InvalidPath)?;
         if !is_user_cfg(&name) {
             continue;
         }
-        take_file(tf2_root, &path, None, dests, skipped, critical, false)?;
+        take_file(
+            tf2_root, &path, None, dests, skipped, budget, critical, false,
+        )?;
     }
     Ok(())
 }
@@ -293,14 +477,50 @@ fn collect_vanilla_cfgs(
     tf2_root: &Path,
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
+    budget: &mut InventoryBudget,
     critical: bool,
 ) -> Result<(), ProfileError> {
     let cfg = tf2_root.join("tf").join("cfg");
     if !cfg.is_dir() {
         return Ok(());
     }
-    collect_root_user_cfgs(tf2_root, dests, skipped, critical)?;
-    let entries = match fs::read_dir(&cfg) {
+    let mut visited = HashSet::new();
+    walk_vanilla_cfgs(
+        &cfg,
+        tf2_root,
+        dests,
+        skipped,
+        &mut visited,
+        budget,
+        critical,
+        0,
+    )
+}
+
+// Keep the walk's mutable security state explicit at each recursive call.
+#[allow(clippy::too_many_arguments)]
+fn walk_vanilla_cfgs(
+    dir: &Path,
+    tf2_root: &Path,
+    dests: &mut BTreeMap<String, InventoryEntry>,
+    skipped: &mut Vec<String>,
+    visited: &mut HashSet<PathBuf>,
+    budget: &mut InventoryBudget,
+    critical: bool,
+    depth: usize,
+) -> Result<(), ProfileError> {
+    budget.enter_dir(depth)?;
+    if is_symlink(dir) {
+        return Err(ProfileError::InvalidPath);
+    }
+    let Some(canon) = canonicalize_if_within(dir, tf2_root) else {
+        return Err(ProfileError::InvalidPath);
+    };
+    if !visited.insert(canon) {
+        return Ok(());
+    }
+
+    let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(err) => {
             return if critical {
@@ -310,32 +530,52 @@ fn collect_vanilla_cfgs(
             };
         }
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if !path.is_dir() || is_skip_cfg_dir(&name) || is_junk_name(&name) {
-            continue;
-        }
-        let children = match fs::read_dir(&path) {
-            Ok(children) => children,
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
             Err(err) => {
                 if critical {
                     return Err(ProfileError::Io(err.to_string()));
                 }
-                skipped.push(format!("tf/cfg/{name} ({err})"));
+                budget.skip(
+                    skipped,
+                    format!("{} ({err})", dest_rel_or_display(tf2_root, dir)),
+                );
                 continue;
             }
         };
-        for child in children.flatten() {
-            let child_path = child.path();
-            if !child_path.is_file() {
-                continue;
+        let path = entry.path();
+        budget.visit_entry(tf2_root, &path)?;
+        if is_symlink(&path) || !is_within_root(&path, tf2_root) {
+            return Err(ProfileError::InvalidPath);
+        }
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| ProfileError::InvalidPath)?;
+        if is_junk_name(&name) {
+            budget.skip(skipped, dest_rel_or_display(tf2_root, &path));
+            continue;
+        }
+        if path.is_dir() {
+            if !is_skip_cfg_dir(&name) {
+                walk_vanilla_cfgs(
+                    &path,
+                    tf2_root,
+                    dests,
+                    skipped,
+                    visited,
+                    budget,
+                    critical,
+                    depth.saturating_add(1),
+                )?;
             }
-            let child_name = child.file_name().to_string_lossy().into_owned();
-            if !is_user_cfg(&child_name) {
-                continue;
-            }
-            take_file(tf2_root, &child_path, None, dests, skipped, critical, false)?;
+            continue;
+        }
+        if path.is_file() && is_user_cfg(&name) {
+            take_file(
+                tf2_root, &path, None, dests, skipped, budget, critical, false,
+            )?;
         }
     }
     Ok(())
@@ -346,12 +586,15 @@ fn collect_custom(
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
     visited: &mut HashSet<PathBuf>,
+    budget: &mut InventoryBudget,
 ) -> Result<(), ProfileError> {
     let dir = tf2_root.join("tf").join("custom");
     if !dir.exists() {
         return Ok(());
     }
-    walk_tree(&dir, tf2_root, dests, skipped, visited, false, false)?;
+    walk_tree(
+        &dir, tf2_root, dests, skipped, visited, budget, false, false, true, 0,
+    )?;
     // Not "skipped" — the global pack is deliberately install-wide and the
     // stock entries belong to Valve or to an interrupted write of ours, so
     // neither is a problem to report and neither leaves a trace in the profile.
@@ -366,16 +609,28 @@ fn collect_migrate(
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
     visited: &mut HashSet<PathBuf>,
+    budget: &mut InventoryBudget,
 ) -> Result<(), ProfileError> {
     let dir = tf2_root.join("tf").join("cfg").join(kind);
     if !dir.is_dir() {
         return Ok(());
     }
     let mut migrated = BTreeMap::new();
-    walk_tree(&dir, tf2_root, &mut migrated, skipped, visited, false, true)?;
+    walk_tree(
+        &dir,
+        tf2_root,
+        &mut migrated,
+        skipped,
+        visited,
+        budget,
+        false,
+        true,
+        false,
+        0,
+    )?;
     for (_, entry) in migrated {
         let Some(inner) = strip_cfg_kind_prefix(&entry.dest_rel, kind) else {
-            skipped.push(entry.dest_rel);
+            budget.skip(skipped, entry.dest_rel);
             continue;
         };
         let dest = migrate_dest(layer, kind, &inner, |path| dests.contains_key(path));
@@ -385,6 +640,7 @@ fn collect_migrate(
             Some(&dest),
             dests,
             skipped,
+            budget,
             false,
             false,
         )?;
@@ -428,24 +684,28 @@ fn migrate_dest(
 /// `staging` walks a directory whose own layout is not itself file-safe
 /// (`tf/cfg/user/`), collecting entries that `collect_migrate` immediately
 /// re-destines. Every staged entry is re-gated by the second `take_file`.
+// Keep the walk's mutable security state explicit at each recursive call.
+#[allow(clippy::too_many_arguments)]
 fn walk_tree(
     dir: &Path,
     tf2_root: &Path,
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
     visited: &mut HashSet<PathBuf>,
+    budget: &mut InventoryBudget,
     critical: bool,
     staging: bool,
+    skip_stock_top_level: bool,
+    depth: usize,
 ) -> Result<(), ProfileError> {
-    if let Some(canon) = canonicalize_if_within(dir, tf2_root) {
-        if !visited.insert(canon) {
-            return Ok(());
-        }
-    } else if is_symlink(dir) {
-        skipped.push(format!(
-            "escaped symlink: {}",
-            dest_rel_or_display(tf2_root, dir)
-        ));
+    budget.enter_dir(depth)?;
+    if is_symlink(dir) {
+        return Err(ProfileError::InvalidPath);
+    }
+    let Some(canon) = canonicalize_if_within(dir, tf2_root) else {
+        return Err(ProfileError::InvalidPath);
+    };
+    if !visited.insert(canon) {
         return Ok(());
     }
 
@@ -455,7 +715,10 @@ fn walk_tree(
             return if critical {
                 Err(ProfileError::Io(err.to_string()))
             } else {
-                skipped.push(format!("{} ({err})", dest_rel_or_display(tf2_root, dir)));
+                budget.skip(
+                    skipped,
+                    format!("{} ({err})", dest_rel_or_display(tf2_root, dir)),
+                );
                 Ok(())
             };
         }
@@ -468,56 +731,89 @@ fn walk_tree(
                 if critical {
                     return Err(ProfileError::Io(err.to_string()));
                 }
-                skipped.push(format!("{} ({err})", dest_rel_or_display(tf2_root, dir)));
+                budget.skip(
+                    skipped,
+                    format!("{} ({err})", dest_rel_or_display(tf2_root, dir)),
+                );
                 continue;
             }
         };
         let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if is_junk_name(&name) {
-            skipped.push(dest_rel_or_display(tf2_root, &path));
+        budget.visit_entry(tf2_root, &path)?;
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| ProfileError::InvalidPath)?;
+        if skip_stock_top_level && depth == 0 && is_stock_custom_pack(&name) {
             continue;
         }
-        if is_symlink(&path) && !is_within_root(&path, tf2_root) {
-            skipped.push(format!(
-                "escaped symlink: {}",
-                dest_rel_or_display(tf2_root, &path)
-            ));
+        if is_junk_name(&name) {
+            budget.skip(skipped, dest_rel_or_display(tf2_root, &path));
             continue;
+        }
+        if is_symlink(&path) || !is_within_root(&path, tf2_root) {
+            return Err(ProfileError::InvalidPath);
         }
         if path.is_dir() {
-            walk_tree(&path, tf2_root, dests, skipped, visited, critical, staging)?;
+            walk_tree(
+                &path,
+                tf2_root,
+                dests,
+                skipped,
+                visited,
+                budget,
+                critical,
+                staging,
+                false,
+                depth.saturating_add(1),
+            )?;
             continue;
         }
         if path.is_file() {
-            take_file(tf2_root, &path, None, dests, skipped, critical, staging)?;
+            take_file(
+                tf2_root, &path, None, dests, skipped, budget, critical, staging,
+            )?;
         }
     }
     Ok(())
 }
 
+// Keeping validation inputs separate makes each caller's trust boundary visible.
+#[allow(clippy::too_many_arguments)]
 fn take_file(
     tf2_root: &Path,
     source: &Path,
     dest_rel: Option<&str>,
     dests: &mut BTreeMap<String, InventoryEntry>,
     skipped: &mut Vec<String>,
+    budget: &mut InventoryBudget,
     critical: bool,
     staging: bool,
 ) -> Result<(), ProfileError> {
+    // Cloud config is the only intentional external source. Every implicit
+    // surface path, and every explicit path lexically rooted at TF2, must still
+    // resolve beneath that root and must not be a linked final component.
+    if (dest_rel.is_none() || source.starts_with(tf2_root))
+        && (is_symlink(source) || !is_within_root(source, tf2_root))
+    {
+        return Err(ProfileError::InvalidPath);
+    }
     let dest = match dest_rel {
         Some(dest) => normalize_rel_path(dest)?,
         None => match dest_rel_from_root(tf2_root, source) {
             Ok(dest) => dest,
             Err(_) => {
-                skipped.push(source.display().to_string());
+                budget.skip(skipped, source.display().to_string());
                 return Ok(());
             }
         },
     };
     let dest = canonicalize_shared_dest(dest);
+    if is_global_custom_file(&dest) || is_stock_custom_entry(&dest) {
+        return Ok(());
+    }
     if is_junk_name(file_name(&dest)) || (!staging && !is_file_safe_rel_path(&dest)) {
-        skipped.push(dest);
+        budget.skip(skipped, dest);
         return Ok(());
     }
     if dests.contains_key(&dest) {
@@ -530,7 +826,7 @@ fn take_file(
                 source.display()
             )));
         }
-        skipped.push(dest);
+        budget.skip(skipped, dest);
         return Ok(());
     }
     if File::open(source).is_err() {
@@ -540,9 +836,10 @@ fn take_file(
                 source.display()
             )));
         }
-        skipped.push(dest);
+        budget.skip(skipped, dest);
         return Ok(());
     }
+    budget.record_file(&dest, dests.len())?;
     dests.insert(
         dest.clone(),
         InventoryEntry {
@@ -557,7 +854,8 @@ fn dest_rel_from_root(tf2_root: &Path, path: &Path) -> Result<String, ProfileErr
     let rel = path
         .strip_prefix(tf2_root)
         .map_err(|_| ProfileError::InvalidPath)?;
-    normalize_rel_path(&rel.to_string_lossy().replace('\\', "/"))
+    let rel = rel.to_str().ok_or(ProfileError::InvalidPath)?;
+    normalize_rel_path(&rel.replace('\\', "/"))
 }
 
 fn dest_rel_or_display(tf2_root: &Path, path: &Path) -> String {
@@ -754,7 +1052,7 @@ mod tests {
         assert!(paths.contains(&"tf/cfg/binds.cfg"));
         assert!(paths.contains(&"tf/cfg/extra/net.cfg"));
         assert!(paths.contains(&"tf/custom/hud/resource/ui/hudlayout.res"));
-        assert!(!paths.iter().any(|path| path.contains("too_far")));
+        assert!(paths.contains(&"tf/cfg/extra/deep/too_far.cfg"));
         assert!(!paths.iter().any(|path| path.contains("config_default")));
         assert!(!paths.iter().any(|path| path.contains("video.txt")));
         assert!(!paths.iter().any(|path| path.contains("steam.inf")));
@@ -862,9 +1160,95 @@ mod tests {
         cleanup(&dir);
     }
 
+    #[test]
+    fn rejects_an_ordinary_tree_deeper_than_the_surface_limit() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let mut nested = root.join("tf/cfg");
+        for _ in 0..=MAX_SURFACE_PATH_DEPTH {
+            nested.push("d");
+        }
+        write_file(&nested.join("deep.cfg"), "echo deep\n");
+
+        let error = inventory_live_surface(&root).unwrap_err();
+        assert!(is_inventory_limit_error(&error), "{error:?}");
+        assert!(matches!(
+            error,
+            ProfileError::Io(message) if message.contains("too many nested directories")
+        ));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rejects_an_ordinary_tree_wider_than_the_entry_limit() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        for index in 0..5 {
+            write_file(
+                &root.join(format!("tf/cfg/user-{index}.cfg")),
+                "echo wide\n",
+            );
+        }
+        let limits = InventoryLimits {
+            entries: 4,
+            ..INVENTORY_LIMITS
+        };
+
+        let error = inventory_live_surface_opts_with_limits(&root, None, true, limits).unwrap_err();
+        assert!(matches!(
+            error,
+            ProfileError::Io(message) if message.contains("too many directory entries")
+        ));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rejects_accumulated_path_data_over_the_limit() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        write_file(
+            &root.join("tf/cfg/a-deliberately-long-config-name.cfg"),
+            "echo path bytes\n",
+        );
+        let limits = InventoryLimits {
+            path_bytes: 16,
+            ..INVENTORY_LIMITS
+        };
+
+        let error = inventory_live_surface_opts_with_limits(&root, None, true, limits).unwrap_err();
+        assert!(matches!(
+            error,
+            ProfileError::Io(message) if message.contains("too much path data")
+        ));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn skipped_diagnostics_are_bounded() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        for index in 0..10 {
+            write_file(&root.join(format!("tf/cfg/junk-{index}.bak")), "junk\n");
+        }
+        let limits = InventoryLimits {
+            skipped_entries: 4,
+            skipped_bytes: 1024,
+            ..INVENTORY_LIMITS
+        };
+
+        let inventory = inventory_live_surface_opts_with_limits(&root, None, true, limits).unwrap();
+        assert_eq!(inventory.skipped.len(), limits.skipped_entries);
+        assert_eq!(
+            inventory.skipped.last().map(String::as_str),
+            Some(SKIPPED_OMITTED)
+        );
+        assert!(inventory.skipped.iter().map(String::len).sum::<usize>() <= limits.skipped_bytes);
+        cleanup(&dir);
+    }
+
     #[cfg(unix)]
     #[test]
-    fn skips_symlinks_that_escape_the_root() {
+    fn rejects_symlinks_that_escape_the_root() {
         let dir = crate::test_temp_dir();
         let root = dir.join("Team Fortress 2");
         fs::create_dir_all(root.join("tf/custom")).unwrap();
@@ -873,14 +1257,47 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("tf/custom/escape.txt")).unwrap();
         write_file(&root.join("tf/custom/ok.txt"), "ok\n");
 
-        let inventory = inventory_live_surface(&root).unwrap();
-        let paths = dests(&inventory);
-        assert!(paths.contains(&"tf/custom/ok.txt"));
-        assert!(!paths.iter().any(|path| path.contains("escape")));
-        assert!(inventory
-            .skipped
-            .iter()
-            .any(|item| item.contains("escaped symlink")));
+        assert_eq!(
+            inventory_live_surface(&root).unwrap_err(),
+            ProfileError::InvalidPath
+        );
+        cleanup(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_an_escaped_ancestor_instead_of_walking_through_it() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let outside_tf = dir.join("outside-tf");
+        write_file(&outside_tf.join("custom/pack/file.txt"), "outside\n");
+        fs::create_dir_all(&root).unwrap();
+        std::os::unix::fs::symlink(&outside_tf, root.join("tf")).unwrap();
+
+        assert_eq!(
+            inventory_live_surface(&root).unwrap_err(),
+            ProfileError::InvalidPath
+        );
+        cleanup(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_non_unicode_surface_names_instead_of_colliding_them() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let invalid = std::ffi::OsString::from_vec(b"pack-\xff.cfg".to_vec());
+        write_file(
+            &root.join("tf/custom").join(invalid),
+            "unsafe to key lossily\n",
+        );
+
+        assert_eq!(
+            inventory_live_surface(&root).unwrap_err(),
+            ProfileError::InvalidPath
+        );
         cleanup(&dir);
     }
 }

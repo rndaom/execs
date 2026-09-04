@@ -8,22 +8,28 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use crate::absorb::pack_key;
 use crate::apply::{detail_from_manifest, ProfileDetail};
-use crate::archive::{extract_archive, read_dir_entries, ArchiveLimits};
-use crate::hash::{sha256_file, write_atomic};
+use crate::archive::{
+    extract_archive, read_dir_entries, read_regular_file_bounded, read_regular_file_bounded_within,
+    validate_imported_cfg, ArchiveLimits,
+};
+use crate::pcf::MAX_PCF_BYTES;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, is_file_safe_rel_path, load_library_from, load_manifest, profiles_dir,
-    put_profile_files_to, remove_manifest_files_to, save_manifest, utc_rfc3339, FileSource,
-    ProfileError, ProfileFile, ProfileManifest,
+    exclusive_file_path, is_profile_ownable_rel_path, load_library_from, load_manifest,
+    mutate_profile_files_to, portable_path_key, profiles_dir, utc_rfc3339, FileSource,
+    ProfileError, ProfileLiveProjection, ProfileManifest,
 };
-use crate::switch::{only_game_caches, prune_empty_parents};
-use crate::vpk::{read_vpk_dir_file_filtered, validate_vpk_dir_bytes};
+use crate::switch::{live_path, prune_empty_parents};
+use crate::vpk::{
+    map_vpk_entries, read_vpk_dir_bytes_filtered, read_vpk_dir_file_filtered_bounded,
+    validate_vpk_dir_bytes,
+};
 
 /// One pack's ceiling, and the ceiling on a whole archive: a mod is held in
 /// memory while it is read and copied, and nothing legitimate on GameBanana
@@ -91,11 +97,61 @@ pub enum ModContent {
     Tree(Vec<(String, Vec<u8>)>),
 }
 
+/// Incremental aggregate guard for a multi-select before the caller retains
+/// another prepared pack in memory. Commands should call `add` immediately
+/// after parsing each individually bounded selection and before pushing it
+/// into their batch.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ModBatchBudget {
+    files: usize,
+    bytes: u64,
+}
+
+impl ModBatchBudget {
+    pub fn add(&mut self, content: &ModContent) -> Result<(), ProfileError> {
+        let files = content.file_count();
+        if files == 0 {
+            return Err(ProfileError::Io("That mod has no files.".into()));
+        }
+        self.files = self
+            .files
+            .checked_add(files)
+            .ok_or_else(|| ProfileError::Io("Too many mod files were selected.".into()))?;
+        if self.files > MAX_MOD_ENTRIES {
+            return Err(ProfileError::Io(format!(
+                "The selected mods contain more than {MAX_MOD_ENTRIES} files; refusing to install them."
+            )));
+        }
+        let bytes = content.byte_len()?;
+        self.bytes = self.bytes.checked_add(bytes).ok_or_else(|| {
+            ProfileError::Io("The selected mods are too large to install.".into())
+        })?;
+        if self.bytes > MAX_MOD_BYTES {
+            return Err(ProfileError::Io(format!(
+                "The selected mods are larger than {} MiB in total; refusing to install them.",
+                MAX_MOD_BYTES / (1024 * 1024)
+            )));
+        }
+        Ok(())
+    }
+}
+
 impl ModContent {
     fn file_count(&self) -> usize {
         match self {
             Self::Vpk(_) => 1,
             Self::Tree(entries) => entries.len(),
+        }
+    }
+
+    fn byte_len(&self) -> Result<u64, ProfileError> {
+        match self {
+            Self::Vpk(bytes) => Ok(bytes.len() as u64),
+            Self::Tree(entries) => entries.iter().try_fold(0u64, |total, (_, bytes)| {
+                total.checked_add(bytes.len() as u64).ok_or_else(|| {
+                    ProfileError::Io("The selected mods are too large to install.".into())
+                })
+            }),
         }
     }
 }
@@ -126,19 +182,21 @@ pub fn mod_content_from_archive(
         return Err(ProfileError::Io("That archive is empty.".into()));
     }
 
-    let vpks: Vec<&(String, Vec<u8>)> = entries
+    let vpk_names: Vec<&str> = entries
         .iter()
         .filter(|(rel, _)| has_extension(rel, "vpk"))
+        .map(|(rel, _)| rel.as_str())
         .collect();
-    if !vpks.is_empty() {
-        refuse_multi_part(vpks.iter().map(|(rel, _)| rel.as_str()))?;
-        return Ok(vpks
+    if !vpk_names.is_empty() {
+        refuse_multi_part(vpk_names.into_iter())?;
+        return Ok(entries
             .into_iter()
-            .map(|(rel, bytes)| (vpk_pack_name(rel), ModContent::Vpk(bytes.clone())))
+            .filter(|(rel, _)| has_extension(rel, "vpk"))
+            .map(|(rel, bytes)| (vpk_pack_name(&rel), ModContent::Vpk(bytes)))
             .collect());
     }
 
-    let Some(root) = content_root(&entries, usize::MAX) else {
+    let Some(root) = content_root(&entries, usize::MAX)? else {
         return Err(ProfileError::Io(NO_TF2_CONTENT.into()));
     };
     Ok(vec![(
@@ -158,7 +216,7 @@ pub fn mod_content_from_dir(dir: &Path) -> Result<(String, ModContent), ProfileE
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let Some(root) = content_root(&entries, 1) else {
+    let Some(root) = content_root(&entries, 1)? else {
         return Err(ProfileError::Io(NO_TF2_CONTENT.into()));
     };
     Ok((
@@ -171,15 +229,6 @@ pub fn mod_content_from_dir(dir: &Path) -> Result<(String, ModContent), ProfileE
 /// `_dir.vpk` was picked, and installing it without its `_000.vpk` siblings
 /// gives the game a directory pointing at data that is not there.
 pub fn mod_content_from_vpk_file(path: &Path) -> Result<(String, ModContent), ProfileError> {
-    let meta = path
-        .metadata()
-        .map_err(|err| ProfileError::Io(err.to_string()))?;
-    if meta.len() > MAX_MOD_BYTES {
-        return Err(ProfileError::Io(format!(
-            "That VPK is larger than {} MiB; refusing to install it.",
-            MAX_MOD_BYTES / (1024 * 1024)
-        )));
-    }
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -198,7 +247,12 @@ pub fn mod_content_from_vpk_file(path: &Path) -> Result<(String, ModContent), Pr
             return Err(ProfileError::Io(MULTI_PART_VPK.into()));
         }
     }
-    let bytes = fs::read(path).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let Some(bytes) = read_regular_file_bounded(path, MAX_MOD_BYTES)? else {
+        return Err(ProfileError::Io(format!(
+            "That VPK is larger than {} MiB; refusing to install it.",
+            MAX_MOD_BYTES / (1024 * 1024)
+        )));
+    };
     // Bounds-check the tree without materializing a body: a crafted directory
     // can make a full read allocate many times the file.
     validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
@@ -214,8 +268,13 @@ const MULTI_PART_VPK: &str =
 /// The shallowest folder that directly holds a content root, as a prefix
 /// (`""` when the archive is already rooted there). `max_depth` bounds how many
 /// wrapper folders may sit above it.
-fn content_root(entries: &[(String, Vec<u8>)], max_depth: usize) -> Option<String> {
-    let mut best: Option<(usize, String)> = None;
+fn content_root(
+    entries: &[(String, Vec<u8>)],
+    max_depth: usize,
+) -> Result<Option<String>, ProfileError> {
+    let mut best_depth = None;
+    let mut candidates = BTreeSet::new();
+    let mut selected = None;
     for (rel, _) in entries {
         let parts: Vec<&str> = rel.split('/').collect();
         // The last segment is the file name, so a content root can only be one
@@ -228,15 +287,39 @@ fn content_root(entries: &[(String, Vec<u8>)], max_depth: usize) -> Option<Strin
             if !MOD_CONTENT_ROOTS.contains(&segment.as_str()) {
                 continue;
             }
-            let candidate = (depth, parts[..depth].join("/"));
-            match &best {
-                Some(current) if *current <= candidate => {}
-                _ => best = Some(candidate),
+            let candidate = parts[..depth].join("/");
+            match best_depth {
+                Some(current) if current < depth => {}
+                Some(current) if current == depth => {
+                    let key = candidate.to_ascii_lowercase();
+                    if !candidates.insert(key)
+                        && selected
+                            .as_deref()
+                            .is_some_and(|selected| selected != candidate)
+                    {
+                        return Err(ProfileError::Io(
+                            "That archive contains wrapper folders whose names collide on Windows."
+                                .into(),
+                        ));
+                    }
+                }
+                _ => {
+                    best_depth = Some(depth);
+                    candidates.clear();
+                    candidates.insert(candidate.to_ascii_lowercase());
+                    selected = Some(candidate);
+                }
             }
             break;
         }
     }
-    best.map(|(_, prefix)| prefix)
+    if candidates.len() > 1 {
+        return Err(ProfileError::Io(
+            "That archive contains multiple peer TF2 content roots; split it into one mod per folder before importing it."
+                .into(),
+        ));
+    }
+    Ok(selected)
 }
 
 fn under_root(entries: Vec<(String, Vec<u8>)>, root: &str) -> Vec<(String, Vec<u8>)> {
@@ -434,12 +517,28 @@ pub fn install_mod(
     content: ModContent,
     source: ModSource,
 ) -> Result<ProfileDetail, ProfileError> {
-    install_mod_to(
+    install_mods(
+        tf2_root,
+        profile_id,
+        vec![(name.to_string(), content)],
+        source,
+    )
+}
+
+/// Install every pack selected in one operation. All VPKs, paths and aggregate
+/// budgets are validated before the first profile or live file is written, so
+/// a bad later pack cannot leave earlier selections half-installed.
+pub fn install_mods(
+    tf2_root: &Path,
+    profile_id: &str,
+    packs: Vec<(String, ModContent)>,
+    source: ModSource,
+) -> Result<ProfileDetail, ProfileError> {
+    install_mods_to(
         &profiles_dir(),
         tf2_root,
         profile_id,
-        name,
-        content,
+        packs,
         source,
         live_process_names(),
     )
@@ -459,80 +558,151 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    install_mods_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        vec![(name.to_string(), content)],
+        source,
+        running_names,
+    )
+}
+
+#[derive(Debug)]
+struct PlannedMod {
+    record: ModRecord,
+    files: Vec<(String, Vec<u8>)>,
+}
+
+/// Testable/custom-library form of [`install_mods`]. The aggregate ceiling is
+/// deliberately the same as one archive: the command holds all selected packs
+/// in memory at once, so applying the limit independently to each file picker
+/// would make a multi-select an easy memory-exhaustion path.
+#[allow(clippy::too_many_arguments)]
+pub fn install_mods_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    packs: Vec<(String, ModContent)>,
+    source: ModSource,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
-    if content.file_count() == 0 {
-        return Err(ProfileError::Io("That mod has no files.".into()));
+    if packs.is_empty() {
+        return Err(ProfileError::Io("No mods were selected.".into()));
+    }
+    if packs.len() > MAX_MOD_ENTRIES {
+        return Err(ProfileError::Io(
+            "Too many mod packs were selected at once.".into(),
+        ));
     }
 
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    let display = display_name(name);
-    let id = unique_mod_id(
-        &mod_id_from_name(&display),
-        &taken_pack_identities(tf2_root, &manifest),
-    );
+    let mut taken = taken_pack_identities(tf2_root, &manifest);
+    let mut planned = Vec::with_capacity(packs.len());
+    let mut selection_budget = ModBatchBudget::default();
+    let mut aggregate_paths = BTreeSet::new();
 
-    let (pack, files) = match content {
-        ModContent::Vpk(bytes) => {
-            validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
-            (
-                format!("{id}.vpk"),
-                vec![(format!("tf/custom/{id}.vpk"), bytes)],
-            )
+    for (name, content) in packs {
+        selection_budget.add(&content)?;
+
+        let display = display_name(&name);
+        let id = unique_mod_id(&mod_id_from_name(&display), &taken);
+        taken.insert(pack_identity(&id));
+
+        let (pack, files) = match content {
+            ModContent::Vpk(bytes) => {
+                validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
+                let cfgs = read_vpk_dir_bytes_filtered(&bytes, &|path| has_extension(path, "cfg"))
+                    .map_err(|err| ProfileError::Io(err.message()))?;
+                for (path, cfg) in cfgs.files {
+                    validate_imported_cfg(&format!("tf/custom/{id}.vpk/{path}"), &cfg)?;
+                }
+                (
+                    format!("{id}.vpk"),
+                    vec![(format!("tf/custom/{id}.vpk"), bytes)],
+                )
+            }
+            ModContent::Tree(entries) => (
+                id.clone(),
+                entries
+                    .into_iter()
+                    .map(|(rel, bytes)| (format!("tf/custom/{id}/{rel}"), bytes))
+                    .collect::<Vec<_>>(),
+            ),
+        };
+
+        let bytes_total = files.iter().try_fold(0u64, |total, (_, bytes)| {
+            total.checked_add(bytes.len() as u64).ok_or_else(|| {
+                ProfileError::Io("The selected mods are too large to install.".into())
+            })
+        })?;
+        for (rel, _) in &files {
+            if !is_profile_ownable_rel_path(rel) {
+                return Err(ProfileError::ForbiddenPath(rel.clone()));
+            }
+            let key = portable_path_key(rel)?;
+            if !aggregate_paths.insert(key) {
+                return Err(ProfileError::Io(format!(
+                    "The selected mods contain colliding file paths: {rel}"
+                )));
+            }
         }
-        ModContent::Tree(entries) => (
-            id.clone(),
-            entries
-                .into_iter()
-                .map(|(rel, bytes)| (format!("tf/custom/{id}/{rel}"), bytes))
-                .collect::<Vec<_>>(),
-        ),
-    };
-
-    let bytes_total: u64 = files.iter().map(|(_, bytes)| bytes.len() as u64).sum();
-    if bytes_total > MAX_MOD_BYTES {
-        return Err(ProfileError::Io(format!(
-            "That mod is larger than {} MiB; refusing to install it.",
-            MAX_MOD_BYTES / (1024 * 1024)
-        )));
-    }
-    for (rel, _) in &files {
-        if !is_file_safe_rel_path(rel) {
-            return Err(ProfileError::ForbiddenPath(rel.clone()));
+        for (rel, bytes) in &files {
+            if has_extension(rel, "cfg") {
+                validate_imported_cfg(rel, bytes)?;
+            }
         }
+
+        planned.push(PlannedMod {
+            record: ModRecord {
+                name: if display.is_empty() {
+                    id.clone()
+                } else {
+                    display
+                },
+                id,
+                source: source.clone(),
+                pack,
+                files: files.len(),
+                bytes: bytes_total,
+                installed_at: utc_rfc3339(),
+            },
+            files,
+        });
     }
 
-    // One batched manifest/index write for the whole pack instead of one per
-    // file; the record below is a second, small write.
-    let batch: Vec<(String, FileSource<'_>)> = files
+    // One recoverable transaction commits payload, records, and (for the
+    // active profile) exact live bytes together. Because every plan above is
+    // complete, this is the first write.
+    let batch: Vec<(String, FileSource<'_>)> = planned
         .iter()
+        .flat_map(|plan| plan.files.iter())
         .map(|(rel, bytes)| (rel.clone(), FileSource::Bytes(bytes.as_slice())))
         .collect();
-    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, &running)?;
-    copy_to_live_if_active(profiles_dir, tf2_root, profile_id, &files)?;
-
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    manifest.mods.push(ModRecord {
-        name: if display.is_empty() {
-            id.clone()
-        } else {
-            display
-        },
-        id,
-        source,
-        pack,
-        files: files.len(),
-        bytes: bytes_total,
-        installed_at: utc_rfc3339(),
-    });
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
-    Ok(detail_from_manifest(&load_manifest(
+    let records: Vec<ModRecord> = planned.iter().map(|plan| plan.record.clone()).collect();
+    let manifest = mutate_profile_files_to(
         profiles_dir,
+        tf2_root,
         profile_id,
-    )?))
+        &batch,
+        &[],
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        move |manifest| {
+            manifest.mods.extend(records);
+            Ok(())
+        },
+    )?;
+    Ok(detail_from_manifest(&manifest))
 }
 
 pub fn remove_mod(
@@ -573,23 +743,34 @@ where
         .cloned()
         .ok_or_else(|| ProfileError::Io("That mod is not installed on this profile.".into()))?;
 
-    let files = pack_files(&manifest, &record.pack);
-    remove_live_pack_files(profiles_dir, tf2_root, profile_id, &record.pack, &files)?;
-    let paths: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
-    if !paths.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &paths, &running)?;
-    }
-
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    manifest.mods.retain(|entry| entry.id != id);
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
-    Ok(detail_from_manifest(&load_manifest(
+    let paths: Vec<String> = pack_files(&manifest, &record.pack)
+        .into_iter()
+        .map(|file| file.path)
+        .collect();
+    let id = id.to_string();
+    let manifest = mutate_profile_files_to(
         profiles_dir,
+        tf2_root,
         profile_id,
-    )?))
+        &[],
+        &paths,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        move |manifest| {
+            manifest.mods.retain(|entry| entry.id != id);
+            Ok(())
+        },
+    )?;
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() == Some(profile_id) {
+        for path in &paths {
+            prune_empty_parents(&live_path(tf2_root, path), tf2_root);
+        }
+    }
+    Ok(detail_from_manifest(&manifest))
 }
 
-fn pack_files(manifest: &ProfileManifest, pack: &str) -> Vec<ProfileFile> {
+fn pack_files(manifest: &ProfileManifest, pack: &str) -> Vec<crate::profile::ProfileFile> {
     let exact = format!("tf/custom/{pack}");
     let prefix = format!("tf/custom/{pack}/");
     manifest
@@ -598,82 +779,6 @@ fn pack_files(manifest: &ProfileManifest, pack: &str) -> Vec<ProfileFile> {
         .filter(|file| file.path == exact || file.path.starts_with(&prefix))
         .cloned()
         .collect()
-}
-
-fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
-    let mut path = tf2_root.to_path_buf();
-    for part in rel.split('/') {
-        path.push(part);
-    }
-    path
-}
-
-fn copy_to_live_if_active(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    files: &[(String, Vec<u8>)],
-) -> Result<(), ProfileError> {
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() != Some(profile_id) {
-        return Ok(());
-    }
-    for (rel, bytes) in files {
-        let dest = live_path(tf2_root, rel);
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
-        }
-        write_atomic(&dest, bytes).map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    Ok(())
-}
-
-/// Take the pack out of the live folder the way a profile switch does: only
-/// files whose bytes still hash to what the profile recorded, so a file the
-/// user edited by hand is left where it is rather than silently discarded.
-fn remove_live_pack_files(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    pack: &str,
-    files: &[ProfileFile],
-) -> Result<(), ProfileError> {
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() != Some(profile_id) {
-        return Ok(());
-    }
-    for file in files {
-        for candidate in live_candidates(tf2_root, &file.path) {
-            if !candidate.is_file() {
-                continue;
-            }
-            let hash = sha256_file(&candidate).map_err(|err| ProfileError::Io(err.to_string()))?;
-            if hash != file.sha256 {
-                continue;
-            }
-            fs::remove_file(&candidate).map_err(|err| ProfileError::Io(err.to_string()))?;
-            prune_empty_parents(&candidate, tf2_root);
-        }
-    }
-    // TF2 drops a `sound.cache` into every folder it scans, so an emptied pack
-    // folder is a husk holding one regenerable file.
-    for name in [pack.to_string(), format!("-{pack}")] {
-        let dir = tf2_root.join("tf").join("custom").join(name);
-        if dir.is_dir() && only_game_caches(&dir) {
-            let _ = fs::remove_dir_all(&dir);
-        }
-    }
-    Ok(())
-}
-
-fn live_candidates(tf2_root: &Path, rel: &str) -> Vec<PathBuf> {
-    let mut out = vec![live_path(tf2_root, rel)];
-    if let Some(rest) = rel.strip_prefix("tf/custom/") {
-        if !rest.starts_with('-') {
-            out.push(live_path(tf2_root, &format!("tf/custom/-{rest}")));
-        }
-    }
-    out
 }
 
 // ---------------------------------------------------------------------------
@@ -736,11 +841,12 @@ fn pack_pcf_files(
     if !source.is_file() {
         return Ok(Vec::new());
     }
-    let archive = read_vpk_dir_file_filtered(&source, &|entry| is_root_particle(entry))
-        .map_err(|err| ProfileError::Io(err.message()))?;
-    let mut names: Vec<String> = archive
-        .files
+    crate::hash::validate_file_within(profiles_dir, &source)
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    let entries = map_vpk_entries(&source).map_err(|err| ProfileError::Io(err.message()))?;
+    let mut names: Vec<String> = entries
         .keys()
+        .filter(|entry| is_root_particle(entry))
         .filter_map(|entry| entry.strip_prefix("particles/"))
         .map(str::to_string)
         .collect();
@@ -766,6 +872,9 @@ pub fn read_mod_pcf(
     mod_id: &str,
     pcf: &str,
 ) -> Result<Option<Vec<u8>>, ProfileError> {
+    if pcf.contains(['/', '\\']) || !is_pcf(pcf) {
+        return Ok(None);
+    }
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let Some(record) = manifest.mods.iter().find(|record| record.id == mod_id) else {
         return Ok(None);
@@ -776,10 +885,21 @@ pub fn read_mod_pcf(
             return Ok(None);
         }
         let source = exclusive_file_path(profiles_dir, profile_id, &rel);
-        return match fs::read(&source) {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(_) => Ok(None),
-        };
+        match fs::symlink_metadata(&source) {
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => return Err(ProfileError::Io(err.to_string())),
+            Ok(_) => {}
+        }
+        return read_regular_file_bounded_within(profiles_dir, &source, MAX_PCF_BYTES as u64)?
+            .map_or_else(
+                || {
+                    Err(ProfileError::Io(format!(
+                        "{rel} is larger than {} MiB and cannot be used as a particle source.",
+                        MAX_PCF_BYTES / (1024 * 1024)
+                    )))
+                },
+                |bytes| Ok(Some(bytes)),
+            );
     }
     let source = exclusive_file_path(
         profiles_dir,
@@ -789,9 +909,16 @@ pub fn read_mod_pcf(
     if !source.is_file() {
         return Ok(None);
     }
+    crate::hash::validate_file_within(profiles_dir, &source)
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
     let wanted = format!("particles/{pcf}");
-    let archive = read_vpk_dir_file_filtered(&source, &|entry| entry == wanted)
-        .map_err(|err| ProfileError::Io(err.message()))?;
+    let archive = read_vpk_dir_file_filtered_bounded(
+        &source,
+        &|entry| entry == wanted,
+        MAX_PCF_BYTES as u64,
+        MAX_PCF_BYTES as u64,
+    )
+    .map_err(|err| ProfileError::Io(err.message()))?;
     Ok(archive.files.into_values().next())
 }
 
@@ -803,6 +930,7 @@ mod tests {
     use crate::vpk::write_vpk_v1;
     use std::collections::BTreeMap;
     use std::io::{Cursor, Write};
+    use std::path::PathBuf;
     use zip::write::SimpleFileOptions;
     use zip::{CompressionMethod, ZipWriter};
 
@@ -916,6 +1044,23 @@ mod tests {
         cleanup(&root);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_picked_vpk_symlink_is_never_followed() {
+        use std::os::unix::fs::symlink;
+
+        let root = test_temp_dir();
+        let mut files = BTreeMap::new();
+        files.insert("materials/a.vmt".to_string(), b"vmt".to_vec());
+        let target = root.join("outside.vpk");
+        fs::write(&target, write_vpk_v1(&files)).unwrap();
+        let picked = root.join("picked.vpk");
+        symlink(&target, &picked).unwrap();
+        let err = mod_content_from_vpk_file(&picked).unwrap_err();
+        assert!(err.message().contains("linked"), "{err:?}");
+        cleanup(&root);
+    }
+
     /// Import validation walks the directory tree without copying a body, so
     /// a crafted VPK whose entries overlap into gigabytes is refused with a
     /// message instead of aborting the process on allocation.
@@ -982,6 +1127,20 @@ mod tests {
         // cfg-only and resource-only packs are HUDs or configs, and still install.
         let cfg_only = zip_bytes(&[("wrapper/cfg/autoexec.cfg", b"echo hi\n")]);
         assert!(mod_content_from_archive("cfgs.zip", &cfg_only).is_ok());
+    }
+
+    #[test]
+    fn archives_with_peer_content_roots_are_refused_instead_of_dropping_one() {
+        let bytes = zip_bytes(&[
+            ("Red/materials/a.vmt", b"red"),
+            ("Blue/models/a.mdl", b"blue"),
+        ]);
+        let err = mod_content_from_archive("bundle.zip", &bytes).unwrap_err();
+        assert!(
+            err.message().contains("multiple peer TF2 content roots"),
+            "{}",
+            err.message()
+        );
     }
 
     #[test]
@@ -1057,6 +1216,98 @@ mod tests {
     }
 
     #[test]
+    fn loose_particle_sources_stop_at_the_pcf_limit() {
+        let (root, profiles, tf2, id) = setup();
+        install_mod_to(
+            &profiles,
+            &tf2,
+            &id,
+            "Bounded particles",
+            ModContent::Tree(vec![("particles/test.pcf".into(), b"pcf".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap();
+        let source = exclusive_file_path(
+            &profiles,
+            &id,
+            "tf/custom/bounded-particles/particles/test.pcf",
+        );
+        let file = fs::OpenOptions::new().write(true).open(&source).unwrap();
+        file.set_len(MAX_PCF_BYTES as u64).unwrap();
+        drop(file);
+        assert_eq!(
+            read_mod_pcf(&profiles, &id, "bounded-particles", "test.pcf")
+                .unwrap()
+                .unwrap()
+                .len(),
+            MAX_PCF_BYTES
+        );
+
+        let file = fs::OpenOptions::new().write(true).open(&source).unwrap();
+        file.set_len(MAX_PCF_BYTES as u64 + 1).unwrap();
+        drop(file);
+        let err = read_mod_pcf(&profiles, &id, "bounded-particles", "test.pcf").unwrap_err();
+        assert!(err.message().contains("larger"), "{}", err.message());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn a_multi_pack_selection_is_prevalidated_before_any_write() {
+        let (root, profiles, tf2, id) = setup();
+        let packs = vec![
+            (
+                "Good".into(),
+                ModContent::Tree(vec![("materials/a.vmt".into(), b"vmt".to_vec())]),
+            ),
+            (
+                "Hostile".into(),
+                ModContent::Tree(vec![(
+                    "cfg/autoexec.cfg".into(),
+                    b"bind mouse1 \"connect bad.example\"\n".to_vec(),
+                )]),
+            ),
+        ];
+        let err =
+            install_mods_to(&profiles, &tf2, &id, packs, ModSource::Local, unlocked()).unwrap_err();
+        assert!(err.message().contains("connect"), "{}", err.message());
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest.mods.is_empty());
+        assert!(manifest.files.is_empty());
+        assert!(!tf2.join("tf/custom/good").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn a_valid_multi_pack_selection_is_recorded_together() {
+        let (root, profiles, tf2, id) = setup();
+        let detail = install_mods_to(
+            &profiles,
+            &tf2,
+            &id,
+            vec![
+                (
+                    "Same".into(),
+                    ModContent::Tree(vec![("materials/a.vmt".into(), b"a".to_vec())]),
+                ),
+                (
+                    "Same".into(),
+                    ModContent::Tree(vec![("models/b.mdl".into(), b"b".to_vec())]),
+                ),
+            ],
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap();
+        assert_eq!(detail.mods.len(), 2);
+        assert_eq!(detail.mods[0].pack, "same");
+        assert_eq!(detail.mods[1].pack, "same-2");
+        assert!(tf2.join("tf/custom/same/materials/a.vmt").is_file());
+        assert!(tf2.join("tf/custom/same-2/models/b.mdl").is_file());
+        cleanup(&root);
+    }
+
+    #[test]
     fn a_vpk_pack_installs_as_one_file_and_lists_its_particles() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
@@ -1111,6 +1362,67 @@ mod tests {
         fs::write(&live, b"user drift").unwrap();
         remove_mod_to(&profiles, &tf2, &id, "drifty", unlocked()).unwrap();
         assert_eq!(fs::read(&live).unwrap(), b"user drift");
+        cleanup(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn live_mod_writes_and_removals_refuse_linked_parents() {
+        use std::os::unix::fs::symlink;
+
+        let (root, profiles, tf2, id) = setup();
+        let before_install = load_manifest(&profiles, &id).unwrap();
+        let custom = tf2.join("tf/custom");
+        let outside_write = root.join("outside-write");
+        fs::create_dir_all(&outside_write).unwrap();
+        fs::remove_dir(&custom).unwrap();
+        symlink(&outside_write, &custom).unwrap();
+
+        let err = install_mod_to(
+            &profiles,
+            &tf2,
+            &id,
+            "Linked",
+            ModContent::Tree(vec![("materials/a.vmt".into(), b"new".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("link"), "{err:?}");
+        assert!(!outside_write.join("linked/materials/a.vmt").exists());
+        let after_install = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after_install.files, before_install.files);
+        assert_eq!(after_install.mods, before_install.mods);
+
+        fs::remove_file(&custom).unwrap();
+        fs::create_dir_all(&custom).unwrap();
+        install_mod_to(
+            &profiles,
+            &tf2,
+            &id,
+            "Linked removal",
+            ModContent::Tree(vec![("materials/a.vmt".into(), b"owned".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap();
+        let live_pack = custom.join("linked-removal");
+        fs::remove_dir_all(&live_pack).unwrap();
+        let outside_remove = root.join("outside-remove");
+        fs::create_dir_all(outside_remove.join("materials")).unwrap();
+        fs::write(outside_remove.join("materials/a.vmt"), b"owned").unwrap();
+        symlink(&outside_remove, &live_pack).unwrap();
+
+        let before_remove = load_manifest(&profiles, &id).unwrap();
+        let err = remove_mod_to(&profiles, &tf2, &id, "linked-removal", unlocked()).unwrap_err();
+        assert!(err.message().contains("link"), "{err:?}");
+        assert_eq!(
+            fs::read(outside_remove.join("materials/a.vmt")).unwrap(),
+            b"owned"
+        );
+        let after_remove = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after_remove.files, before_remove.files);
+        assert_eq!(after_remove.mods, before_remove.mods);
         cleanup(&root);
     }
 

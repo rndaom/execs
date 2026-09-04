@@ -11,14 +11,22 @@ use crate::apply::{
     detail_from_manifest, read_profile_file_from, write_owned_file_to, ProfileDetail,
     WriteOwnedOptions,
 };
-use crate::archive::{extract_archive, extract_zip, read_dir_entries, ArchiveLimits};
+use crate::archive::{
+    extract_archive, extract_zip, read_dir_entries, read_regular_file_bounded,
+    read_regular_file_bounded_within, validate_imported_cfg, ArchiveLimits,
+};
+use crate::hash::{metadata_is_link, random_token, validate_dir_within};
+#[cfg(all(test, unix))]
+use crate::hash::{remove_dir_within, remove_file_force_within, validate_file_within};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, is_file_safe_rel_path, load_library_from, load_manifest,
-    normalize_rel_path, profiles_dir, put_profile_files_to, remove_manifest_files_to,
-    save_manifest, FileSource, HudRecord, HudSource, ProfileError, ProfileFile, ProfileManifest,
+    mutate_profile_files_to, mutate_profile_files_with_live_renames_to, normalize_rel_path,
+    profiles_dir, save_manifest, FileSource, HudRecord, HudSource, ProfileError, ProfileFile,
+    ProfileLiveProjection, ProfileLiveRename, ProfileManifest,
 };
 use crate::settings::execs_data_dir;
+use crate::switch::prune_empty_parents;
 use crate::vdf::{parse_vdf, VdfValue};
 
 pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
@@ -31,6 +39,7 @@ pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
 ];
 
 const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db/main";
+const MAX_HUD_CATALOG_CACHE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HudTree {
@@ -130,7 +139,6 @@ impl HudInstallKind {
         let lower = repo.trim().to_ascii_lowercase();
         let host = lower
             .strip_prefix("https://")
-            .or_else(|| lower.strip_prefix("http://"))
             .and_then(|rest| rest.split('/').next())
             .unwrap_or("");
         match host {
@@ -200,10 +208,11 @@ fn dir_entry_ignore_case(dir: &Path, name: &str) -> Option<PathBuf> {
     entries
         .flatten()
         .find(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .eq_ignore_ascii_case(name)
+            fs::symlink_metadata(entry.path()).is_ok_and(|meta| !metadata_is_link(&meta))
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(name)
         })
         .map(|entry| entry.path())
 }
@@ -243,13 +252,29 @@ pub struct LiveHud {
 /// NTFS — so the mounted `foo` was dropped and never dashed.
 pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
     let custom = tf2_root.join("tf").join("custom");
+    let Ok(meta) = fs::symlink_metadata(&custom) else {
+        return Vec::new();
+    };
+    if metadata_is_link(&meta) || !meta.is_dir() {
+        return Vec::new();
+    }
+    if validate_dir_within(tf2_root, &custom).is_err() {
+        return Vec::new();
+    }
     let Ok(entries) = fs::read_dir(&custom) else {
         return Vec::new();
     };
     let mut huds: Vec<LiveHud> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_dir() || !is_hud_dir(&path) {
+        let Ok(meta) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata_is_link(&meta)
+            || !meta.is_dir()
+            || validate_dir_within(tf2_root, &path).is_err()
+            || !is_hud_dir(&path)
+        {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -328,9 +353,7 @@ pub fn hud_zip_url(repo: &str, hash: &str) -> Option<String> {
 
 pub fn github_repo_parts(repo: &str) -> Option<(String, String)> {
     let trimmed = repo.trim().trim_end_matches('/');
-    let rest = trimmed
-        .strip_prefix("https://github.com/")
-        .or_else(|| trimmed.strip_prefix("http://github.com/"))?;
+    let rest = trimmed.strip_prefix("https://github.com/")?;
     let mut parts = rest.split('/');
     let owner = parts.next()?.trim();
     let name = parts.next()?.trim().trim_end_matches(".git");
@@ -361,6 +384,10 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
     }
     let parsed: RawHud =
         serde_json::from_str(raw).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let repo = parsed.repo.trim().to_string();
+    if !repo.starts_with("https://") {
+        return Err(ProfileError::Io("HUD catalog links must use HTTPS.".into()));
+    }
     let hash = match parsed.hash {
         serde_json::Value::String(text) => text,
         serde_json::Value::Number(number) => number.to_string(),
@@ -382,15 +409,15 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
     let album = parsed
         .social
         .and_then(|social| social.album)
-        .filter(|album| album.starts_with("https://") || album.starts_with("http://"));
+        .filter(|album| album.starts_with("https://"));
     Ok(HudCatalogEntry {
         comfig_url: format!("https://comfig.app/huds/page/{id}/"),
-        github: is_github_hud_repo(&parsed.repo),
-        install: HudInstallKind::from_repo(&parsed.repo),
+        github: is_github_hud_repo(&repo),
+        install: HudInstallKind::from_repo(&repo),
         id,
         name: parsed.name,
         author: parsed.author,
-        repo: parsed.repo,
+        repo,
         hash,
         flags: parsed.flags,
         banner,
@@ -409,15 +436,22 @@ pub fn catalog_cache_file(dir: &Path) -> PathBuf {
 }
 
 pub fn load_catalog_cache_from(dir: &Path) -> Option<HudCatalogCache> {
-    let text = fs::read_to_string(catalog_cache_file(dir)).ok()?;
-    serde_json::from_str(&text).ok()
+    let bytes =
+        read_regular_file_bounded(&catalog_cache_file(dir), MAX_HUD_CATALOG_CACHE_BYTES).ok()??;
+    serde_json::from_slice(&bytes).ok()
 }
 
 pub fn save_catalog_cache_to(dir: &Path, cache: &HudCatalogCache) -> Result<(), ProfileError> {
     fs::create_dir_all(dir).map_err(|err| ProfileError::Io(err.to_string()))?;
     let json =
         serde_json::to_string_pretty(cache).map_err(|err| ProfileError::Io(err.to_string()))?;
-    fs::write(catalog_cache_file(dir), format!("{json}\n"))
+    let bytes = format!("{json}\n").into_bytes();
+    if bytes.len() as u64 > MAX_HUD_CATALOG_CACHE_BYTES {
+        return Err(ProfileError::Io(
+            "The HUD catalog is too large to cache.".into(),
+        ));
+    }
+    crate::hash::write_atomic(&catalog_cache_file(dir), &bytes)
         .map_err(|err| ProfileError::Io(err.to_string()))
 }
 
@@ -481,6 +515,13 @@ fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, Profile
     let stripped = strip_wrapper_folder(raw);
     let mut tree = HudTree::default();
     for (path, data) in stripped {
+        if path
+            .rsplit('.')
+            .next()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("cfg"))
+        {
+            validate_imported_cfg(&format!("tf/custom/imported-hud/{path}"), &data)?;
+        }
         tree.insert(path, data);
     }
     let Some(info) = tree.info_vdf() else {
@@ -555,12 +596,34 @@ pub fn install_hud_pack(
     tree: &HudTree,
     record: HudRecord,
 ) -> Result<ProfileDetail, ProfileError> {
-    install_hud_pack_to(
+    install_hud_pack_with_cfgs_to(
         &profiles_dir(),
         tf2_root,
         profile_id,
         tree,
         record,
+        &[],
+        live_process_names(),
+    )
+}
+
+/// Install a prepared HUD tree and its schema-generated cfg files as one
+/// payload/metadata/live transaction. The matching autoexec lines are derived
+/// from `cfg_writes`, so a caller cannot inject an arbitrary exec target.
+pub fn install_hud_pack_with_cfgs(
+    tf2_root: &Path,
+    profile_id: &str,
+    tree: &HudTree,
+    record: HudRecord,
+    cfg_writes: &[(String, Vec<u8>)],
+) -> Result<ProfileDetail, ProfileError> {
+    install_hud_pack_with_cfgs_to(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        tree,
+        record,
+        cfg_writes,
         live_process_names(),
     )
 }
@@ -571,6 +634,31 @@ pub fn install_hud_pack_to<I, S>(
     profile_id: &str,
     tree: &HudTree,
     record: HudRecord,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    install_hud_pack_with_cfgs_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        tree,
+        record,
+        &[],
+        running_names,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn install_hud_pack_with_cfgs_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    tree: &HudTree,
+    record: HudRecord,
+    cfg_writes: &[(String, Vec<u8>)],
     running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
 where
@@ -599,9 +687,30 @@ where
         batch.push((path, FileSource::Bytes(bytes)));
     }
 
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut exec_stems = Vec::with_capacity(cfg_writes.len());
+    for (rel, bytes) in cfg_writes {
+        let path = normalize_rel_path(rel)?;
+        if !is_managed_hud_cfg(&path) {
+            return Err(ProfileError::ForbiddenPath(path));
+        }
+        validate_imported_cfg(&path, bytes)?;
+        let stem = Path::new(&path)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .ok_or(ProfileError::InvalidPath)?;
+        exec_stems.push(stem.to_string());
+        batch.push((path, FileSource::Bytes(bytes)));
+    }
+    exec_stems.sort();
+    exec_stems.dedup();
+    let autoexec =
+        prepare_hud_autoexec_update(profiles_dir, tf2_root, profile_id, &manifest, &exec_stems)?;
+    if let Some((path, bytes)) = &autoexec {
+        batch.push((path.clone(), FileSource::Bytes(bytes)));
+    }
     let previous = hud_packs(&manifest.files);
-    let remove: Vec<String> = manifest
+    let mut remove: Vec<String> = manifest
         .files
         .iter()
         .filter(|file| {
@@ -609,27 +718,54 @@ where
         })
         .map(|file| file.path.clone())
         .collect();
-    if !remove.is_empty() {
-        remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &remove, &running)?;
-    }
     // The previous HUD's option cfgs mean nothing to the new files. Callers
     // that apply options write the new set right after this returns.
-    remove_stale_hud_cfgs(profiles_dir, tf2_root, profile_id, &[], &running)?;
+    remove.extend(
+        manifest
+            .files
+            .iter()
+            .filter(|file| is_managed_hud_cfg(&file.path))
+            .map(|file| file.path.clone()),
+    );
+    remove.sort();
+    remove.dedup();
 
-    // One manifest + index write for the whole tree instead of one per file.
-    put_profile_files_to(profiles_dir, tf2_root, profile_id, &batch, &running)?;
+    let active = load_library_from(profiles_dir, Some(tf2_root))?
+        .active_profile_id
+        .as_deref()
+        == Some(profile_id);
+    // Disable every currently mounted HUD before publishing the replacement.
+    // The renames preserve the exact old trees (including untracked files) and
+    // keep the transaction's live destinations clear, so it never merges a
+    // new HUD into a stray or differently-cased folder.
+    let live_renames = if active {
+        plan_live_hud_renames(tf2_root, &id)?
+    } else {
+        Vec::new()
+    };
 
-    manifest = load_manifest(profiles_dir, profile_id)?;
     let mut stored = record;
     stored.id = id.clone();
-    manifest.hud = Some(stored);
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+    let manifest = mutate_profile_files_with_live_renames_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &batch,
+        &remove,
+        &live_renames,
+        &running,
+        move |manifest| {
+            manifest.hud = Some(stored);
+            Ok(())
+        },
+    )?;
 
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() == Some(profile_id) {
-        apply_hud_replace_live(tf2_root, profiles_dir, profile_id, &id, &previous)?;
+    if active {
+        for path in &remove {
+            prune_empty_parents(&live_path(tf2_root, path), tf2_root);
+        }
     }
-    profile_detail_fallback(profiles_dir, tf2_root, profile_id)
+    Ok(detail_from_manifest(&manifest))
 }
 
 pub fn match_hud_catalog(
@@ -689,12 +825,40 @@ pub fn load_hud_tree_from_profile(
 ) -> Result<HudTree, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let mut tree = HudTree::default();
+    let mut total = 0u64;
     for file in &manifest.files {
         let Some(rel) = hud_file_rel(&file.path, hud_id) else {
             continue;
         };
+        if tree.files.len() >= MAX_HUD_ENTRIES {
+            return Err(ProfileError::Io(format!(
+                "That profile's HUD has more than {MAX_HUD_ENTRIES} files and cannot be edited safely."
+            )));
+        }
         let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
-        let bytes = fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))?;
+        let remaining = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
+        let read_cap = remaining.min(MAX_HUD_ENTRY_BYTES);
+        let Some(bytes) = read_regular_file_bounded_within(profiles_dir, &source, read_cap)? else {
+            if remaining < MAX_HUD_ENTRY_BYTES {
+                return Err(ProfileError::Io(format!(
+                    "That profile's HUD is larger than {} MiB and cannot be edited safely.",
+                    MAX_HUD_TOTAL_BYTES / (1024 * 1024)
+                )));
+            }
+            return Err(ProfileError::Io(format!(
+                "{} is larger than {} MiB and cannot be edited safely.",
+                file.path,
+                MAX_HUD_ENTRY_BYTES / (1024 * 1024)
+            )));
+        };
+        total = total
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| ProfileError::Io("That profile's HUD is too large to edit.".into()))?;
+        if total > MAX_HUD_TOTAL_BYTES {
+            return Err(ProfileError::Io(
+                "That profile's HUD is too large to edit.".into(),
+            ));
+        }
         tree.insert(rel, bytes);
     }
     if tree.files.is_empty() {
@@ -811,6 +975,11 @@ where
     let manifest = load_manifest(profiles_dir, profile_id)?;
     let status = resolve_hud(&manifest)
         .ok_or_else(|| ProfileError::Io("Install a HUD before saving options.".into()))?;
+    if manifest.hud.is_none() {
+        return Err(ProfileError::Io(
+            "Install a HUD before saving options.".into(),
+        ));
+    }
     let mut tree = load_hud_tree_from_profile(profiles_dir, profile_id, &status.record.id)?;
     // Write back into the folder the manifest already spells, not the
     // lowercased id: `RaysHUD/` and `rayshud/` are two entries on disk on
@@ -825,32 +994,78 @@ where
         &options,
         layer,
     )?;
-    // A HUD's option cfgs are only meaningful for that HUD; a leftover
-    // `execs_hud_*.cfg` from a previous option set would keep executing.
-    remove_stale_hud_cfgs(
+    let autoexec = prepare_hud_autoexec_update(
         profiles_dir,
         tf2_root,
         profile_id,
-        &applied.cfg_writes,
-        &running,
-    )?;
-    write_hud_tree_files_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &folder,
-        &tree,
-        &applied.cfg_writes,
-        &running,
-    )?;
-    sync_hud_exec_lines_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
+        &manifest,
         &applied.exec_stems,
-        &running,
     )?;
-    set_hud_options_to(profiles_dir, tf2_root, profile_id, options, &running)
+
+    // Replace the whole HUD tree, every managed option cfg, its autoexec
+    // projection, and the option record in one recoverable commit. This also
+    // removes files that a FolderSwap option deleted from the in-memory tree.
+    let mut remove: Vec<String> = manifest
+        .files
+        .iter()
+        .filter(|file| {
+            hud_file_rel(&file.path, &status.record.id).is_some() || is_managed_hud_cfg(&file.path)
+        })
+        .map(|file| file.path.clone())
+        .collect();
+    remove.sort();
+    remove.dedup();
+
+    let mut puts: Vec<(String, FileSource<'_>)> = Vec::with_capacity(
+        tree.files.len() + applied.cfg_writes.len() + usize::from(autoexec.is_some()),
+    );
+    for (rel, bytes) in &tree.files {
+        let path = normalize_rel_path(&format!("tf/custom/{folder}/{rel}"))?;
+        if !is_file_safe_rel_path(&path) {
+            return Err(ProfileError::ForbiddenPath(path));
+        }
+        puts.push((path, FileSource::Bytes(bytes)));
+    }
+    for (rel, bytes) in &applied.cfg_writes {
+        let path = normalize_rel_path(rel)?;
+        if !is_managed_hud_cfg(&path) {
+            return Err(ProfileError::ForbiddenPath(path));
+        }
+        validate_imported_cfg(&path, bytes)?;
+        puts.push((path, FileSource::Bytes(bytes)));
+    }
+    if let Some((path, bytes)) = &autoexec {
+        puts.push((path.clone(), FileSource::Bytes(bytes)));
+    }
+
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &puts,
+        &remove,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        move |manifest| {
+            let Some(hud) = manifest.hud.as_mut() else {
+                return Err(ProfileError::Io(
+                    "Install a HUD before saving options.".into(),
+                ));
+            };
+            hud.options = options;
+            Ok(())
+        },
+    )?;
+    let active = load_library_from(profiles_dir, Some(tf2_root))?
+        .active_profile_id
+        .as_deref()
+        == Some(profile_id);
+    if active {
+        for path in &remove {
+            prune_empty_parents(&live_path(tf2_root, path), tf2_root);
+        }
+    }
+    Ok(detail_from_manifest(&manifest))
 }
 
 /// Keep the managed autoexec executing exactly the HUD option cfgs in `stems`
@@ -874,6 +1089,30 @@ pub fn sync_hud_exec_lines_to(
     running: &[String],
 ) -> Result<(), ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let Some((rel, next)) =
+        prepare_hud_autoexec_update(profiles_dir, tf2_root, profile_id, &manifest, stems)?
+    else {
+        return Ok(());
+    };
+    write_owned_file_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &rel,
+        &next,
+        running.iter().cloned(),
+        WriteOwnedOptions::default(),
+    )?;
+    Ok(())
+}
+
+fn prepare_hud_autoexec_update(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    manifest: &ProfileManifest,
+    stems: &[String],
+) -> Result<Option<(String, Vec<u8>)>, ProfileError> {
     let layer = crate::apply::cfg_layer_from_files(&manifest.files);
     let rel = match layer {
         crate::surface::CfgLayer::Comfig => "tf/cfg/overrides/autoexec.cfg",
@@ -885,7 +1124,7 @@ pub fn sync_hud_exec_lines_to(
         // to add it is left exactly as it is.
         Ok(content) if content.binary => {
             if stems.is_empty() {
-                return Ok(());
+                return Ok(None);
             }
             return Err(ProfileError::Io(format!(
                 "{rel} is not a text file, so HUD option exec lines cannot be added to it."
@@ -898,18 +1137,9 @@ pub fn sync_hud_exec_lines_to(
     };
     let next = crate::hud_apply::ensure_hud_exec_lines(&existing, layer, stems);
     if next == existing {
-        return Ok(());
+        return Ok(None);
     }
-    write_owned_file_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        rel,
-        next.as_bytes(),
-        running.iter().cloned(),
-        WriteOwnedOptions::default(),
-    )?;
-    Ok(())
+    Ok(Some((rel.to_string(), next.into_bytes())))
 }
 
 pub fn set_hud_options_to<I, S>(
@@ -948,76 +1178,6 @@ fn profile_detail_fallback(
     Ok(detail_from_manifest(&manifest))
 }
 
-fn apply_hud_replace_live(
-    tf2_root: &Path,
-    profiles_dir: &Path,
-    profile_id: &str,
-    new_id: &str,
-    previous: &[String],
-) -> Result<(), ProfileError> {
-    for pack in previous {
-        remove_live_pack(tf2_root, pack)?;
-    }
-    let manifest = load_manifest(profiles_dir, profile_id)?;
-    let key = new_id.to_ascii_lowercase();
-    // The folder about to be written, as the manifest spells it.
-    let folder = manifest_hud_folder(&manifest.files, &key).unwrap_or_else(|| key.clone());
-    for live in live_hud_names(tf2_root) {
-        // Same identity, different spelling (`RaysHUD` next to the `rayshud`
-        // being written) would leave two HUD folders mounted on Linux.
-        if live.key != key || live.name != folder {
-            dash_live_hud(tf2_root, &live)?;
-        }
-    }
-    for file in &manifest.files {
-        if hud_file_rel(&file.path, &key).is_none() {
-            continue;
-        }
-        let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
-        let dest = live_path(tf2_root, &file.path);
-        // Temp + rename: a plain copy cut off mid-way leaves a truncated .res
-        // with no part-file sibling, which the next absorb would ingest over
-        // the good library copy.
-        crate::hash::copy_and_sha256(&source, &dest)
-            .map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    Ok(())
-}
-
-/// Drop every managed `execs_hud_*.cfg` the profile still carries that the new
-/// option set does not produce, so a switched-away HUD leaves nothing of its
-/// options behind in the profile.
-fn remove_stale_hud_cfgs(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    keep: &[(String, Vec<u8>)],
-    running: &[String],
-) -> Result<(), ProfileError> {
-    let manifest = load_manifest(profiles_dir, profile_id)?;
-    let stale: Vec<String> = manifest
-        .files
-        .iter()
-        .map(|file| file.path.clone())
-        .filter(|path| is_managed_hud_cfg(path))
-        .filter(|path| !keep.iter().any(|(kept, _)| kept == path))
-        .collect();
-    if stale.is_empty() {
-        return Ok(());
-    }
-    remove_manifest_files_to(profiles_dir, tf2_root, profile_id, &stale, running)?;
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() == Some(profile_id) {
-        for path in &stale {
-            let dest = live_path(tf2_root, path);
-            if dest.is_file() {
-                fs::remove_file(&dest).map_err(|err| ProfileError::Io(err.to_string()))?;
-            }
-        }
-    }
-    Ok(())
-}
-
 fn is_managed_hud_cfg(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     if !lower.ends_with(".cfg") {
@@ -1033,8 +1193,21 @@ fn is_managed_hud_cfg(path: &str) -> bool {
 /// Remove every live folder whose identity is `pack`, however it is spelled
 /// or dashed on disk. `pack` is a lowercased key; on Linux `join(pack)` would
 /// miss the `RaysHUD` folder it names.
+#[cfg(all(test, unix))]
 fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
+    match fs::symlink_metadata(&custom) {
+        Ok(meta) if metadata_is_link(&meta) || !meta.is_dir() => {
+            return Err(ProfileError::Io(format!(
+                "Refusing to traverse a linked or non-directory custom folder: {}",
+                custom.display()
+            )));
+        }
+        Ok(_) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    }
+    validate_dir_within(tf2_root, &custom).map_err(|err| ProfileError::Io(err.to_string()))?;
     let Ok(entries) = fs::read_dir(&custom) else {
         return Ok(());
     };
@@ -1045,32 +1218,192 @@ fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
             continue;
         }
         let dir = entry.path();
-        if dir.is_dir() {
-            fs::remove_dir_all(&dir).map_err(|err| ProfileError::Io(err.to_string()))?;
+        let meta = fs::symlink_metadata(&dir).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if metadata_is_link(&meta) {
+            return Err(ProfileError::Io(format!(
+                "Refusing to traverse a linked live HUD folder: {}",
+                dir.display()
+            )));
+        }
+        if meta.is_dir() {
+            refuse_if_running_among(live_process_names()).map_err(ProfileError::from)?;
+            remove_live_tree_within(tf2_root, &dir)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
         }
     }
     Ok(())
 }
 
-/// Disable a live HUD folder by renaming it to Source's `-name` disable form.
-///
-/// Uses the folder's real on-disk spelling — a lowercased key never matched a
-/// `RaysHUD` folder on Linux, so the stray HUD stayed mounted. When the folder
-/// is already dashed there is nothing to do; when a `-name` twin already exists
-/// the enabled copy is removed rather than left mounted beside it.
-fn dash_live_hud(tf2_root: &Path, hud: &LiveHud) -> Result<(), ProfileError> {
+fn plan_live_hud_renames(
+    tf2_root: &Path,
+    target_id: &str,
+) -> Result<Vec<ProfileLiveRename>, ProfileError> {
+    let custom = tf2_root.join("tf").join("custom");
+    match fs::symlink_metadata(&custom) {
+        Ok(meta) if metadata_is_link(&meta) || !meta.is_dir() => {
+            return Err(ProfileError::Io(format!(
+                "Refusing to traverse a linked or non-directory custom folder: {}",
+                custom.display()
+            )));
+        }
+        Ok(_) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    }
+    validate_dir_within(tf2_root, &custom).map_err(|err| ProfileError::Io(err.to_string()))?;
+
+    let mut huds = Vec::new();
+    for entry in fs::read_dir(&custom).map_err(|err| ProfileError::Io(err.to_string()))? {
+        let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('-') {
+            continue;
+        }
+        let is_target = name.eq_ignore_ascii_case(target_id);
+        let path = entry.path();
+        let meta = fs::symlink_metadata(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if metadata_is_link(&meta) || !meta.is_dir() {
+            if is_target {
+                return Err(ProfileError::Io(format!(
+                    "Refusing to replace a linked or non-directory HUD destination: {}",
+                    path.display()
+                )));
+            }
+            continue;
+        }
+        validate_dir_within(tf2_root, &path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if is_target || is_hud_dir(&path) {
+            huds.push(LiveHud {
+                key: name.to_ascii_lowercase(),
+                name,
+            });
+        }
+    }
+    huds.sort_by(|left, right| left.name.cmp(&right.name));
+    huds.iter()
+        .map(|hud| plan_live_hud_rename(tf2_root, hud))
+        .collect()
+}
+
+fn plan_live_hud_rename(tf2_root: &Path, hud: &LiveHud) -> Result<ProfileLiveRename, ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
     let enabled = custom.join(&hud.name);
-    if hud.name.starts_with('-') || !enabled.is_dir() {
+    if hud.name.starts_with('-') {
+        return Err(ProfileError::Io("That HUD is already disabled.".into()));
+    }
+    match fs::symlink_metadata(&enabled) {
+        Ok(meta) if metadata_is_link(&meta) || !meta.is_dir() => {
+            return Err(ProfileError::Io(format!(
+                "Refusing to traverse a linked or non-directory HUD folder: {}",
+                enabled.display()
+            )));
+        }
+        Ok(_) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return Err(ProfileError::Io(format!(
+                "A live HUD disappeared while preparing its replacement: {}",
+                enabled.display()
+            )))
+        }
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    }
+    validate_dir_within(tf2_root, &custom).map_err(|err| ProfileError::Io(err.to_string()))?;
+    validate_dir_within(tf2_root, &enabled).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let preferred = custom.join(format!("-{}", hud.name));
+    let disabled = match fs::symlink_metadata(&preferred) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => preferred,
+        Ok(_) => {
+            let mut destination = None;
+            for _ in 0..8 {
+                let candidate = custom.join(format!("-execs-disabled-{}", random_token()));
+                match fs::symlink_metadata(&candidate) {
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                        destination = Some(candidate);
+                        break;
+                    }
+                    Ok(_) => {}
+                    Err(err) => return Err(ProfileError::Io(err.to_string())),
+                }
+            }
+            destination.ok_or_else(|| {
+                ProfileError::Io("Could not reserve a unique disabled HUD folder.".into())
+            })?
+        }
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    };
+    let from = format!("tf/custom/{}", hud.name);
+    let to = disabled
+        .strip_prefix(tf2_root)
+        .map_err(|_| ProfileError::InvalidPath)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok(ProfileLiveRename { from, to })
+}
+
+/// Disable one live HUD without deleting a pre-existing disabled twin.
+#[cfg(test)]
+fn dash_live_hud(tf2_root: &Path, hud: &LiveHud) -> Result<(), ProfileError> {
+    if hud.name.starts_with('-') {
         return Ok(());
     }
-    let disabled = custom.join(format!("-{}", hud.name));
-    if disabled.exists() {
-        // Both copies on disk means the enabled one is what the game mounts.
-        // "At most one HUD folder is mounted" wins over keeping a duplicate.
-        return fs::remove_dir_all(&enabled).map_err(|err| ProfileError::Io(err.to_string()));
+    let plan = plan_live_hud_rename(tf2_root, hud)?;
+    let from = live_path(tf2_root, &plan.from);
+    let to = live_path(tf2_root, &plan.to);
+    validate_dir_within(tf2_root, &from).map_err(|err| ProfileError::Io(err.to_string()))?;
+    match fs::symlink_metadata(&to) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Ok(_) => return Err(ProfileError::Io("Disabled HUD destination exists.".into())),
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
     }
-    fs::rename(&enabled, &disabled).map_err(|err| ProfileError::Io(err.to_string()))
+    refuse_if_running_among(live_process_names()).map_err(ProfileError::from)?;
+    fs::rename(from, to).map_err(|err| ProfileError::Io(err.to_string()))
+}
+
+#[cfg(all(test, unix))]
+fn validate_live_tree_within(root: &Path, dir: &Path) -> std::io::Result<()> {
+    validate_dir_within(root, dir)?;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let meta = fs::symlink_metadata(&path)?;
+        if metadata_is_link(&meta) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("refusing to traverse a linked HUD path: {}", path.display()),
+            ));
+        }
+        if meta.is_dir() {
+            validate_live_tree_within(root, &path)?;
+        } else if meta.is_file() {
+            validate_file_within(root, &path)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("refusing to remove a special HUD path: {}", path.display()),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(all(test, unix))]
+fn remove_live_tree_within(root: &Path, dir: &Path) -> std::io::Result<()> {
+    // Validate the complete tree before deleting its first child so a linked
+    // descendant cannot turn a safe refusal into a partially removed HUD.
+    validate_live_tree_within(root, dir)?;
+    fn remove_validated(root: &Path, dir: &Path) -> std::io::Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let path = entry?.path();
+            let meta = fs::symlink_metadata(&path)?;
+            if meta.is_dir() && !metadata_is_link(&meta) {
+                remove_validated(root, &path)?;
+            } else {
+                remove_file_force_within(root, &path)?;
+            }
+        }
+        remove_dir_within(root, dir)
+    }
+    remove_validated(root, dir)
 }
 
 fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
@@ -1100,25 +1433,26 @@ fn strip_wrapper_folder(entries: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>
         return entries;
     }
     let prefix = format!("{wrapper}/");
-    let mut stripped = Vec::new();
-    for (path, bytes) in &entries {
-        if let Some(rest) = path.strip_prefix(&prefix) {
-            if !rest.is_empty() {
-                stripped.push((rest.to_string(), bytes.clone()));
-            }
-        }
-    }
     // Only a wrapper if what is left is itself a HUD. A zip whose entries all
     // live under one real content folder (`resource/`, say) would otherwise
     // have that folder stripped off.
-    if stripped
+    if !entries
         .iter()
-        .any(|(path, _)| path.eq_ignore_ascii_case("info.vdf"))
+        .filter_map(|(path, _)| path.strip_prefix(&prefix))
+        .any(|path| path.eq_ignore_ascii_case("info.vdf"))
     {
-        stripped
-    } else {
-        entries
+        return entries;
     }
+
+    // Move payloads out of the wrapper. HUD archives routinely carry hundreds
+    // of MiB, so cloning every Vec here briefly doubled their resident size.
+    entries
+        .into_iter()
+        .filter_map(|(path, bytes)| {
+            let rest = path.strip_prefix(&prefix)?;
+            (!rest.is_empty()).then(|| (rest.to_string(), bytes))
+        })
+        .collect()
 }
 
 /// hud-db screenshot names are plain file stems. Anything else is refused
@@ -1258,6 +1592,44 @@ mod tests {
         assert!(HudInstallKind::Direct.installable());
         assert!(!HudInstallKind::None.installable());
     }
+
+    #[test]
+    fn catalog_cache_and_editable_hud_reads_are_bounded() {
+        let dir = test_temp_dir();
+        let cache = dir.join("catalog");
+        fs::create_dir_all(&cache).unwrap();
+        fs::File::create(catalog_cache_file(&cache))
+            .unwrap()
+            .set_len(MAX_HUD_CATALOG_CACHE_BYTES + 1)
+            .unwrap();
+        assert!(load_catalog_cache_from(&cache).is_none());
+
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let source = exclusive_file_path(
+            &profiles,
+            &id,
+            "tf/custom/rayshud/resource/ui/hudlayout.res",
+        );
+        fs::OpenOptions::new()
+            .write(true)
+            .open(source)
+            .unwrap()
+            .set_len(MAX_HUD_ENTRY_BYTES + 1)
+            .unwrap();
+        let err = load_hud_tree_from_profile(&profiles, &id, "rayshud").unwrap_err();
+        assert!(err.message().contains("larger than"), "{err:?}");
+        cleanup(&dir);
+    }
+
     use crate::apply::WriteOwnedOptions;
     use crate::profile::{create_profile_record_to, put_exclusive_file_to, set_active_profile_to};
     use crate::test_temp_dir;
@@ -1310,17 +1682,17 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// With both `foo` and `-foo` on disk the game mounts `foo`, so dashing
-    /// must not silently no-op and leave it mounted.
+    /// With both `foo` and `-foo` on disk the game mounts `foo`. Disabling it
+    /// must preserve both differing trees instead of deleting either one.
     #[test]
-    fn dashing_removes_the_enabled_copy_when_a_dashed_twin_exists() {
+    fn dashing_preserves_both_trees_when_a_disabled_twin_exists() {
         let dir = crate::test_temp_dir();
         let root = tf2_root(&dir);
         let custom = root.join("tf").join("custom");
-        for name in ["foo", "-foo"] {
-            fs::create_dir_all(custom.join(name)).unwrap();
-            fs::write(custom.join(name).join("info.vdf"), info_vdf()).unwrap();
-        }
+        fs::create_dir_all(custom.join("foo")).unwrap();
+        fs::create_dir_all(custom.join("-foo")).unwrap();
+        fs::write(custom.join("foo/info.vdf"), b"enabled").unwrap();
+        fs::write(custom.join("-foo/info.vdf"), b"already disabled").unwrap();
 
         let hud = LiveHud {
             name: "foo".into(),
@@ -1328,7 +1700,22 @@ mod tests {
         };
         dash_live_hud(&root, &hud).unwrap();
         assert!(!custom.join("foo").exists());
-        assert!(custom.join("-foo").is_dir());
+        assert_eq!(
+            fs::read(custom.join("-foo/info.vdf")).unwrap(),
+            b"already disabled"
+        );
+        let preserved = fs::read_dir(&custom)
+            .unwrap()
+            .flatten()
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("-execs-disabled-")
+            })
+            .expect("enabled twin should receive a unique disabled name")
+            .path();
+        assert_eq!(fs::read(preserved.join("info.vdf")).unwrap(), b"enabled");
 
         // A folder that is already dashed is left exactly as it is.
         let dashed = LiveHud {
@@ -1337,6 +1724,37 @@ mod tests {
         };
         dash_live_hud(&root, &dashed).unwrap();
         assert!(custom.join("-foo").is_dir());
+        cleanup(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn live_hud_removal_refuses_linked_trees() {
+        use std::os::unix::fs::symlink;
+
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let custom = root.join("tf/custom");
+        let outside = dir.join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("keep.txt"), b"keep").unwrap();
+
+        // A linked pack root must not make remove_live_pack recurse into its
+        // target, even when the target looks like a HUD.
+        symlink(&outside, custom.join("evil-hud")).unwrap();
+        let err = remove_live_pack(&root, "evil-hud").unwrap_err();
+        assert!(err.message().contains("linked"), "{err:?}");
+        assert_eq!(fs::read(outside.join("keep.txt")).unwrap(), b"keep");
+
+        // Nor may a linked descendant cause a partly removed real HUD tree.
+        let real = custom.join("real-hud");
+        fs::create_dir_all(&real).unwrap();
+        fs::write(real.join("info.vdf"), info_vdf()).unwrap();
+        symlink(outside.join("keep.txt"), real.join("linked.res")).unwrap();
+        let err = remove_live_tree_within(&root, &real).unwrap_err();
+        assert!(err.to_string().contains("linked"), "{err}");
+        assert!(real.join("info.vdf").is_file());
+        assert_eq!(fs::read(outside.join("keep.txt")).unwrap(), b"keep");
         cleanup(&dir);
     }
 
@@ -1472,6 +1890,19 @@ mod tests {
         let missing = zip_bytes(&[("wrapper/resource/ui/hudlayout.res", b"hud\n")]);
         let err = extract_hud_zip(&missing).unwrap_err();
         assert!(matches!(err, ProfileError::Io(message) if message.contains("info.vdf")));
+    }
+
+    #[test]
+    fn extract_rejects_hostile_cfg_hidden_in_a_hud() {
+        let bytes = zip_bytes(&[
+            ("hud/info.vdf", b"\"hud\" { \"ui_version\" \"3\" }"),
+            (
+                "hud/cfg/autoexec.cfg",
+                b"bind mouse1 \"echo ready; connect bad.example\"",
+            ),
+        ]);
+        let err = extract_hud_zip(&bytes).unwrap_err();
+        assert!(err.message().contains("connect"), "{}", err.message());
     }
 
     #[test]
@@ -1956,14 +2387,17 @@ mod tests {
         )
         .unwrap();
 
-        let live = live_hud_names(&root);
-        assert_eq!(live.len(), 1, "{live:?}");
-        assert_eq!(live[0].name, "rayshud");
+        let mounted: Vec<LiveHud> = live_hud_names(&root)
+            .into_iter()
+            .filter(|hud| !hud.name.starts_with('-'))
+            .collect();
+        assert_eq!(mounted.len(), 1, "{mounted:?}");
+        assert_eq!(mounted[0].name, "rayshud");
         assert_eq!(
             fs::read(custom.join("rayshud").join("info.vdf")).unwrap(),
             info_vdf()
         );
-        assert!(!custom.join("-RaysHUD").exists());
+        assert!(custom.join("-RaysHUD").exists());
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert!(manifest
             .files
@@ -2002,6 +2436,44 @@ mod tests {
             .filter(|hud| !hud.name.starts_with('-'))
             .collect();
         assert_eq!(mounted.len(), 1, "{mounted:?}");
+        cleanup(&dir);
+    }
+
+    /// A drifted target folder may no longer contain a HUD marker, but it
+    /// still has to be moved out of the destination before the fresh HUD is
+    /// projected. Otherwise its untracked files are silently merged into the
+    /// newly mounted pack.
+    #[test]
+    fn install_preserves_a_non_hud_target_without_merging_its_files() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let custom = root.join("tf").join("custom");
+        let stale = custom.join("RaysHUD");
+        fs::create_dir_all(stale.join("materials")).unwrap();
+        fs::write(stale.join("materials/leftover.vmt"), b"untracked\n").unwrap();
+
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+
+        assert!(!custom
+            .join("rayshud")
+            .join("materials/leftover.vmt")
+            .exists());
+        assert_eq!(
+            fs::read(custom.join("-RaysHUD/materials/leftover.vmt")).unwrap(),
+            b"untracked\n"
+        );
+        assert_eq!(
+            fs::read(custom.join("rayshud/info.vdf")).unwrap(),
+            info_vdf()
+        );
         cleanup(&dir);
     }
 
@@ -2100,6 +2572,106 @@ mod tests {
         assert_eq!(after.files, before.files);
         assert!(exclusive_file_path(&profiles, &id, "tf/custom/oldhud/info.vdf").is_file());
         assert!(!root.join("tf/custom/rayshud").exists());
+        cleanup(&dir);
+    }
+
+    /// A live-path failure after the library files were staged must restore
+    /// both the old payload and HUD record instead of leaving a half-install.
+    #[cfg(unix)]
+    #[test]
+    fn install_rolls_back_profile_and_record_when_live_projection_fails() {
+        use std::os::unix::fs::symlink;
+
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let before = load_manifest(&profiles, &id).unwrap();
+        let custom = root.join("tf/custom");
+        let outside = dir.join("outside-custom");
+        fs::create_dir_all(&outside).unwrap();
+        fs::remove_dir(&custom).unwrap();
+        symlink(&outside, &custom).unwrap();
+
+        let err = install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("link"), "{err:?}");
+        let after = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after.files, before.files);
+        assert_eq!(after.hud, before.hud);
+        assert!(!exclusive_file_path(&profiles, &id, "tf/custom/rayshud/info.vdf").exists());
+        assert!(!outside.join("rayshud/info.vdf").exists());
+        cleanup(&dir);
+    }
+
+    /// Tree edits, generated cfgs, autoexec lines, and the option record are a
+    /// single transaction. A failure publishing to the active live pack must
+    /// restore every library byte and metadata field.
+    #[cfg(unix)]
+    #[test]
+    fn option_apply_rolls_back_tree_cfg_autoexec_and_record_together() {
+        use std::os::unix::fs::symlink;
+
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let mut tree = HudTree::default();
+        tree.insert("info.vdf", info_vdf().to_vec());
+        tree.insert(
+            "resource/clientscheme_colors.res",
+            b"\"Scheme\" { \"Colors\" { \"Health\" \"255 0 0 255\" } }\n".to_vec(),
+        );
+        install_hud_pack_to(&profiles, &root, &id, &tree, rays_record(), unlocked()).unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let before_bytes = fs::read(exclusive_file_path(
+            &profiles,
+            &id,
+            "tf/custom/rayshud/resource/clientscheme_colors.res",
+        ))
+        .unwrap();
+
+        let live_pack = root.join("tf/custom/rayshud");
+        fs::remove_dir_all(&live_pack).unwrap();
+        let outside = dir.join("outside-options");
+        fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, &live_pack).unwrap();
+
+        let schema = crate::hud_apply::parse_hud_schema(
+            r##"{
+              "Author":"Test",
+              "Controls":{"Colors":[{
+                "Name":"Health","Type":"ColorPicker","Value":"0 255 0 255",
+                "Files":{"resource/clientscheme_colors.res":{
+                  "Scheme":{"Colors":{"Health":"$value"}}
+                }}
+              }]}
+            }"##,
+        )
+        .unwrap();
+        let mut options = BTreeMap::new();
+        options.insert("Health".into(), "0 255 0 255".into());
+        let err = apply_schema_options_to(&profiles, &root, &id, &schema, options, unlocked())
+            .unwrap_err();
+        assert!(err.message().contains("link"), "{err:?}");
+
+        let after = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after.files, before.files);
+        assert_eq!(after.hud, before.hud);
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/rayshud/resource/clientscheme_colors.res",
+            ))
+            .unwrap(),
+            before_bytes
+        );
+        assert!(!outside.join("resource/clientscheme_colors.res").exists());
+        assert!(!exclusive_file_path(&profiles, &id, "tf/cfg/execs_hud_Health.cfg").exists());
         cleanup(&dir);
     }
 

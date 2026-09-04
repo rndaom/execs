@@ -7,26 +7,33 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::sha256_hex;
+use crate::hash::{remove_file_force_within, sha256_hex, write_atomic_within};
 use crate::pcf::{
     check_parents, decode_pcf, encode_pcf, extract_elements, find_root_systems,
     get_parent_elements, remove_duplicate_elements, update_materials, PcfFile,
 };
-use crate::process_lock::refuse_if_running_among;
+use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::vpk::{
-    map_vpk_entries, patch_vpk_entry, read_vpk_entry, write_vpk_v2, VpkEntryLocation,
+    map_vpk_entries, patch_vpk_entry_if_unchanged, write_vpk_v2, VpkEntryLocation, VpkError,
 };
 
 use super::catalog::zip_archive;
-use super::gameinfo::{gameinfo_bypass_state, set_gameinfo_bypass};
+use super::gameinfo::{
+    gameinfo_bypass_state, preflight_gameinfo_bypass, set_gameinfo_bypass_with_sampler,
+};
 use super::pack::{
     is_excluded_addon_file, relocate_model_materials, scrub_ignorez, stock_entry_tables,
     stock_shadowing_paths, synthesize_missing_vmts,
 };
 use super::state::{
-    adopt_orphaned_snapshots, is_stock, load_state, misc_vpk_path, restore_patched_entries,
-    save_state, sidecar_path, snapshot_path, tidy_originals_dir, untracked_modified_particles,
-    vpk_fingerprint, write_snapshot, PatchedEntry, SkipNotice, UNTRACKED_REASON,
+    adopt_orphaned_snapshots, discover_orphaned_snapshots_readonly, is_stock,
+    live_file_exists_within, load_state, load_state_for_snapshot_recovery, misc_vpk_path,
+    read_particle_entry_bounded, read_snapshot_bounded, restore_patched_entries, save_state,
+    sidecar_path, tidy_originals_dir, untracked_modified_particles, vpk_fingerprint,
+    write_snapshot, PatchedEntry, PreloaderState, SkipNotice, UNTRACKED_REASON,
+};
+use super::transaction::{
+    recover_preloader_transaction as recover_transaction, PreloaderTransaction,
 };
 use super::{
     catalog::read_mods_catalog, DUPLICATE_EFFECT_FILES, DX8_TWIN_STEMS, MISC_VPK, PRELOADER_VPK,
@@ -71,6 +78,21 @@ pub(crate) struct WorkItem {
     bytes: Vec<u8>,
 }
 
+fn format_unresolved(summary: &str, details: &[String]) -> String {
+    if details.is_empty() {
+        summary.to_string()
+    } else {
+        format!("{summary}: {}", details.join("; "))
+    }
+}
+
+fn live_file_exists(tf2_root: &Path, path: &Path, name: &str) -> Result<bool, String> {
+    match live_file_exists_within(tf2_root, path) {
+        Ok(exists) => Ok(exists),
+        Err(err) => Err(format!("Could not safely inspect {name}: {err}")),
+    }
+}
+
 pub(crate) fn decode_vanilla(
     tf2_root: &Path,
     entries: &BTreeMap<String, VpkEntryLocation>,
@@ -79,7 +101,12 @@ pub(crate) fn decode_vanilla(
     let entry = entries
         .get(rel)
         .ok_or_else(|| format!("{rel} is missing from {MISC_VPK}"))?;
-    let bytes = read_vpk_entry(&misc_vpk_path(tf2_root), entry).map_err(|err| err.message())?;
+    let bytes = read_particle_entry_bounded(&misc_vpk_path(tf2_root), entry)?;
+    if !is_stock(&bytes, entry) {
+        return Err(format!(
+            "{rel} is not stock. Repair TF2 through Steam before rebuilding duplicate particles."
+        ));
+    }
     decode_pcf(&bytes).map_err(|err| format!("{rel}: {}", err.0))
 }
 
@@ -134,6 +161,317 @@ pub fn rebuild_keep_lists(
     keep_lists
 }
 
+fn baseline_entry_bytes(
+    tf2_root: &Path,
+    data_dir: &Path,
+    state: &PreloaderState,
+    entries: &BTreeMap<String, VpkEntryLocation>,
+    rel: &str,
+) -> Result<Vec<u8>, String> {
+    let entry = entries
+        .get(rel)
+        .ok_or_else(|| format!("{rel} is missing from {MISC_VPK}"))?;
+    let live = read_particle_entry_bounded(&misc_vpk_path(tf2_root), entry)?;
+    let Some(patched) = state.patched.get(rel) else {
+        if !is_stock(&live, entry) {
+            return Err(format!(
+                "{rel} is not stock. Repair TF2 through Steam before applying mods."
+            ));
+        }
+        return Ok(live);
+    };
+
+    let original = read_snapshot_bounded(data_dir, rel)
+        .map_err(|err| format!("Could not prepare {rel}: {err}"))?;
+    if original.len() != entry.length as usize
+        || (!patched.original_sha256.is_empty() && sha256_hex(&original) != patched.original_sha256)
+        || !is_stock(&original, entry)
+    {
+        return Err(format!(
+            "Could not prepare {rel}: its recovery snapshot no longer matches TF2's stock entry."
+        ));
+    }
+    if !is_stock(&live, entry)
+        && !patched.patched_sha256.is_empty()
+        && sha256_hex(&live) != patched.patched_sha256
+    {
+        return Err(format!(
+            "Could not prepare {rel}: the installed selection changed outside execs."
+        ));
+    }
+    Ok(original)
+}
+
+fn decode_baseline(
+    tf2_root: &Path,
+    data_dir: &Path,
+    state: &PreloaderState,
+    entries: &BTreeMap<String, VpkEntryLocation>,
+    rel: &str,
+) -> Result<PcfFile, String> {
+    let bytes = baseline_entry_bytes(tf2_root, data_dir, state, entries, rel)?;
+    decode_pcf(&bytes).map_err(|err| format!("{rel}: {}", err.0))
+}
+
+/// Read, decode, transform, and pack selection B while selection A is still
+/// byte-for-byte live. The write phase intentionally repeats some cheap
+/// validation to close races, but every deterministic archive/CRC failure is
+/// discovered here before A's restore begins.
+fn prepare_preloader_selection(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    state: &PreloaderState,
+    entries: &BTreeMap<String, VpkEntryLocation>,
+) -> Result<BTreeSet<String>, String> {
+    let catalog = read_mods_catalog(zip_path)?;
+    for name in &selection.addons {
+        if !catalog.addons.iter().any(|addon| &addon.id == name) {
+            return Err(format!("Unknown addon: {name}"));
+        }
+    }
+    for name in &selection.particle_mods {
+        if !catalog
+            .particle_mods
+            .iter()
+            .any(|particle| &particle.name == name)
+        {
+            return Err(format!("Unknown particle mod: {name}"));
+        }
+    }
+    let profile_mods = resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods)?;
+    let untracked = untracked_modified_particles(&misc_vpk_path(tf2_root), entries, state)?;
+    if !untracked.is_empty() {
+        return Err(format_unresolved(
+            "TF2 contains particle files execs cannot restore; repair the game through Steam before applying mods",
+            &untracked,
+        ));
+    }
+
+    let mut archive = zip_archive(zip_path)?;
+    let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();
+    for mod_name in &selection.particle_mods {
+        let prefix = format!("mods/particles/{mod_name}/actual_particles/");
+        for index in 0..archive.len() {
+            let mut entry = archive
+                .by_index(index)
+                .map_err(|err| format!("Could not read the mod library: {err}"))?;
+            let path = entry.name().replace('\\', "/");
+            let Some(file) = path.strip_prefix(&prefix) else {
+                continue;
+            };
+            let file = file.to_ascii_lowercase();
+            if file.contains('/') || !file.ends_with(".pcf") || entry.is_dir() {
+                continue;
+            }
+            let mut bytes = Vec::with_capacity(entry.size() as usize);
+            entry
+                .read_to_end(&mut bytes)
+                .map_err(|err| format!("Could not read {path}: {err}"))?;
+            let target = if file == "blood_trail.pcf" {
+                "npc_fx.pcf".to_string()
+            } else {
+                file
+            };
+            work.insert(
+                target.clone(),
+                WorkItem {
+                    target,
+                    mod_name: mod_name.clone(),
+                    bytes,
+                },
+            );
+        }
+    }
+    if let Some((profile_id, sources)) = &profile_mods {
+        let profiles = profiles_dir();
+        for source in sources {
+            for pcf in &source.pcf_files {
+                let bytes = read_mod_pcf(&profiles, profile_id, &source.mod_id, pcf)
+                    .map_err(|err| err.message())?
+                    .ok_or_else(|| {
+                        format!("{} is no longer installed on this profile.", source.name)
+                    })?;
+                let file = pcf.to_ascii_lowercase();
+                let target = if file == "blood_trail.pcf" {
+                    "npc_fx.pcf".to_string()
+                } else {
+                    file
+                };
+                work.insert(
+                    target.clone(),
+                    WorkItem {
+                        target,
+                        mod_name: source.name.clone(),
+                        bytes,
+                    },
+                );
+            }
+        }
+    }
+
+    if !selection.particle_mods.is_empty() || profile_mods.is_some() {
+        let mut roots_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for rel in entries.keys() {
+            let Some(name) = rel.strip_prefix("particles/") else {
+                continue;
+            };
+            if name.contains('/') || !name.ends_with(".pcf") || name.ends_with("_dx80.pcf") {
+                continue;
+            }
+            if let Ok(vanilla) = decode_baseline(tf2_root, data_dir, state, entries, rel) {
+                roots_by_file.insert(name.to_string(), find_root_systems(&vanilla));
+            }
+        }
+        for (target, keep) in rebuild_keep_lists(&roots_by_file) {
+            if work.contains_key(&target) {
+                continue;
+            }
+            let rel = format!("particles/{target}");
+            let vanilla = decode_baseline(tf2_root, data_dir, state, entries, &rel)?;
+            let rebuilt = extract_elements(&vanilla, &keep).map_err(|err| err.0)?;
+            let bytes = encode_pcf(&rebuilt).map_err(|err| err.0)?;
+            work.insert(
+                target.clone(),
+                WorkItem {
+                    target,
+                    mod_name: "stock rebuild".into(),
+                    bytes,
+                },
+            );
+        }
+    }
+
+    let disguise_parents = if work.is_empty() {
+        BTreeSet::new()
+    } else {
+        get_parent_elements(&decode_baseline(
+            tf2_root,
+            data_dir,
+            state,
+            entries,
+            "particles/disguise.pcf",
+        )?)
+    };
+    let stock_ceiling = largest_stock_particle(entries);
+    let mut touched = BTreeSet::new();
+    for item in work.values() {
+        if item.bytes.len() > stock_ceiling {
+            continue;
+        }
+        let Ok(decoded) = decode_pcf(&item.bytes) else {
+            continue;
+        };
+        let mut processed = if item.target == "disguise.pcf" {
+            update_materials(
+                &decode_baseline(tf2_root, data_dir, state, entries, "particles/disguise.pcf")?,
+                &decoded,
+            )
+        } else if check_parents(&decoded, &disguise_parents) {
+            continue;
+        } else {
+            decoded
+        };
+        if remove_duplicate_elements(&mut processed).is_err() {
+            continue;
+        }
+        let Ok(encoded) = encode_pcf(&processed) else {
+            continue;
+        };
+        let mut targets = vec![format!("particles/{}", item.target)];
+        let stem = item.target.trim_end_matches(".pcf");
+        if DX8_TWIN_STEMS.contains(&stem) {
+            let twin = format!("particles/{stem}_dx80.pcf");
+            if entries.contains_key(&twin) {
+                targets.push(twin);
+            }
+        }
+        for target in targets {
+            let Some(entry) = entries.get(&target) else {
+                continue;
+            };
+            if entry.preload_len != 0 || encoded.len() > entry.length as usize {
+                continue;
+            }
+            baseline_entry_bytes(tf2_root, data_dir, state, entries, &target)?;
+            touched.insert(target);
+        }
+    }
+
+    let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
+    for mod_name in &selection.particle_mods {
+        let prefix = format!("mods/particles/{mod_name}/");
+        for index in 0..archive.len() {
+            let mut entry = archive
+                .by_index(index)
+                .map_err(|err| format!("Could not read the mod library: {err}"))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let path = entry.name().replace('\\', "/");
+            let Some(inner) = path.strip_prefix(&prefix) else {
+                continue;
+            };
+            let inner = inner.to_ascii_lowercase();
+            if inner.is_empty()
+                || inner.contains("..")
+                || (!(inner.starts_with("materials/") || inner.starts_with("scripts/")))
+                || is_excluded_addon_file(&inner)
+            {
+                continue;
+            }
+            let mut bytes = Vec::with_capacity(entry.size() as usize);
+            entry
+                .read_to_end(&mut bytes)
+                .map_err(|err| format!("Could not read {path}: {err}"))?;
+            scrub_ignorez(&inner, &mut bytes);
+            custom.insert(inner, bytes);
+        }
+    }
+    for mod_name in &selection.addons {
+        let prefix = format!("mods/addons/{mod_name}/");
+        for index in 0..archive.len() {
+            let mut entry = archive
+                .by_index(index)
+                .map_err(|err| format!("Could not read the mod library: {err}"))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let path = entry.name().replace('\\', "/");
+            let Some(inner) = path.strip_prefix(&prefix) else {
+                continue;
+            };
+            let inner = inner.to_ascii_lowercase();
+            if inner.is_empty() || inner.contains("..") || is_excluded_addon_file(&inner) {
+                continue;
+            }
+            let mut bytes = Vec::with_capacity(entry.size() as usize);
+            entry
+                .read_to_end(&mut bytes)
+                .map_err(|err| format!("Could not read {path}: {err}"))?;
+            scrub_ignorez(&inner, &mut bytes);
+            custom.insert(inner.clone(), bytes);
+            addon_owner.insert(inner, mod_name.clone());
+        }
+    }
+    let stock_tables = stock_entry_tables(tf2_root);
+    for rel in stock_shadowing_paths(&stock_tables, &custom) {
+        custom.remove(&rel);
+        addon_owner.remove(&rel);
+    }
+    synthesize_missing_vmts(&stock_tables, &mut custom);
+    relocate_model_materials(&mut custom);
+    if !custom.is_empty() {
+        let _packed = write_vpk_v2(&custom);
+    }
+    if !custom.is_empty() || !touched.is_empty() {
+        preflight_gameinfo_bypass(tf2_root, data_dir, true)?;
+    }
+    Ok(touched)
+}
+
 pub fn apply_preloader_selection(
     tf2_root: &Path,
     data_dir: &Path,
@@ -141,16 +479,129 @@ pub fn apply_preloader_selection(
     selection: &PreloaderSelection,
     running_names: &[String],
 ) -> Result<PreloaderReport, String> {
+    apply_preloader_selection_with_sampler(
+        tf2_root,
+        data_dir,
+        zip_path,
+        selection,
+        running_names,
+        &live_process_names,
+    )
+}
+
+pub fn apply_preloader_selection_with_sampler(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+) -> Result<PreloaderReport, String> {
+    apply_preloader_selection_transactional(
+        tf2_root,
+        data_dir,
+        zip_path,
+        selection,
+        running_names,
+        process_sampler,
+        &|| Ok(()),
+    )
+}
+
+fn apply_preloader_selection_transactional(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+    before_final_state_save: &dyn Fn() -> Result<(), String>,
+) -> Result<PreloaderReport, String> {
+    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
+    recover_transaction(tf2_root, data_dir, running_names, process_sampler)?;
+    let vpk_path = misc_vpk_path(tf2_root);
+    if !live_file_exists(tf2_root, &vpk_path, MISC_VPK)? {
+        return Err(format!(
+            "{MISC_VPK} was not found — is the TF2 folder right?"
+        ));
+    }
+    let entries = map_vpk_entries(&vpk_path).map_err(|err| err.message())?;
+    let mut existing_state = load_state(data_dir)?;
+    discover_orphaned_snapshots_readonly(data_dir, &mut existing_state, Some(&entries));
+
+    // Every fallible read/decode and the complete custom VPK build happens
+    // while selection A is still installed. A corrupt payload in B therefore
+    // cannot uninstall A; the journal below covers only races/I/O failures in
+    // the subsequent write phase.
+    let mut touched_entries = prepare_preloader_selection(
+        tf2_root,
+        data_dir,
+        zip_path,
+        selection,
+        &existing_state,
+        &entries,
+    )?;
+    touched_entries.extend(existing_state.patched.keys().cloned());
+
+    let mut transaction =
+        PreloaderTransaction::begin(tf2_root, data_dir, &entries, &touched_entries)?;
+    let applied = apply_preloader_selection_inner(
+        tf2_root,
+        data_dir,
+        zip_path,
+        selection,
+        running_names,
+        process_sampler,
+        before_final_state_save,
+    );
+    match applied {
+        Ok(report) => {
+            if let Err(commit_error) = transaction.commit() {
+                if !commit_error.rollback_safe {
+                    return Err(format!(
+                        "The new preloader selection was applied, but its durable commit could not be confirmed; recovery remains pending: {}",
+                        commit_error.message()
+                    ));
+                }
+                return match transaction.rollback(running_names, process_sampler) {
+                    Ok(()) => Err(format!(
+                        "Could not commit the preloader selection; the previous selection was restored: {commit_error}"
+                    )),
+                    Err(rollback_error) => Err(format!(
+                        "Could not commit the preloader selection ({commit_error}); recovery is still pending: {rollback_error}"
+                    )),
+                };
+            }
+            Ok(report)
+        }
+        Err(error) => match transaction.rollback(running_names, process_sampler) {
+            Ok(()) => Err(error),
+            Err(rollback_error) => Err(format!(
+                "{error}; the previous selection could not yet be restored and recovery remains pending: {rollback_error}"
+            )),
+        },
+    }
+}
+
+fn apply_preloader_selection_inner(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+    before_final_state_save: &dyn Fn() -> Result<(), String>,
+) -> Result<PreloaderReport, String> {
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     let vpk_path = misc_vpk_path(tf2_root);
-    if !vpk_path.is_file() {
+    if !live_file_exists(tf2_root, &vpk_path, MISC_VPK)? {
         return Err(format!(
             "{MISC_VPK} was not found — is the TF2 folder right?"
         ));
     }
 
     let mut report = PreloaderReport::default();
-    let mut state = load_state(data_dir);
+    let mut state = load_state(data_dir)?;
 
     // A resized VPK usually means a game update, but it is also what a change
     // in how the fingerprint is measured looks like — and tracking is the only
@@ -188,10 +639,6 @@ pub fn apply_preloader_selection(
     // longer names an installed mod fails here, before anything is touched.
     let profile_mods = resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods)?;
 
-    // Re-check the run lock immediately before the first write into the
-    // official VPK: the caller checked before an 81 MB download.
-    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
-
     // Record the current length now, after validation so a refused selection
     // leaves the "game updated" hint alone, and before the first write so
     // state saved mid-install already carries the right baseline for a
@@ -200,12 +647,38 @@ pub fn apply_preloader_selection(
     save_state(data_dir, &state)?;
 
     adopt_orphaned_snapshots(data_dir, &mut state, Some(&entries));
-    for failure in restore_patched_entries(tf2_root, data_dir, &mut state, &entries)? {
-        report.skipped.push(SkipNotice {
-            file: failure.clone(),
-            mod_name: String::new(),
-            reason: "could not restore the previous patch".into(),
-        });
+    // Do not let a stale patch from another tool become an input to the
+    // duplicate-carrier rebuild. This preflight happens before restoring the
+    // current selection so a refusal leaves that install wholly intact.
+    let untracked = untracked_modified_particles(&vpk_path, &entries, &state)?;
+    if !untracked.is_empty() {
+        return Err(format_unresolved(
+            "TF2 contains particle files execs cannot restore; repair the game through Steam before applying mods",
+            &untracked,
+        ));
+    }
+
+    let before_official_write =
+        || refuse_if_running_among(process_sampler()).map_err(|err| err.message().to_string());
+    let failures = restore_patched_entries(
+        tf2_root,
+        data_dir,
+        &mut state,
+        &entries,
+        &before_official_write,
+    )?;
+    if !failures.is_empty() || !state.patched.is_empty() {
+        return Err(format_unresolved(
+            "The previous particle install could not be completely restored; its support files and selection were kept for a retry",
+            &failures,
+        ));
+    }
+    let after_restore = untracked_modified_particles(&vpk_path, &entries, &state)?;
+    if !after_restore.is_empty() {
+        return Err(format_unresolved(
+            "Restored particle files are not stock; repair the game through Steam before applying mods",
+            &after_restore,
+        ));
     }
     // Nothing from the old selection is installed any more. Record that now,
     // so a failure later in this run cannot leave state.json advertising mods
@@ -217,8 +690,9 @@ pub fn apply_preloader_selection(
     state.skipped.clear();
     save_state(data_dir, &state)?;
     let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
-    if custom_vpk.exists() {
-        std::fs::remove_file(&custom_vpk)
+    if live_file_exists(tf2_root, &custom_vpk, PRELOADER_VPK)? {
+        before_official_write()?;
+        remove_file_force_within(tf2_root, &custom_vpk)
             .map_err(|err| format!("Could not remove the previous {PRELOADER_VPK}: {err}"))?;
     }
 
@@ -456,9 +930,13 @@ pub fn apply_preloader_selection(
             let mut padded = encoded.clone();
             padded.resize(entry.length as usize, b' ');
 
-            let snapshot = snapshot_path(data_dir, &target_rel);
-            let current = read_vpk_entry(&vpk_path, entry).map_err(|err| err.message())?;
+            let current = read_particle_entry_bounded(&vpk_path, entry)?;
             let current_is_stock = is_stock(&current, entry);
+            if !current_is_stock {
+                return Err(format!(
+                    "{target_rel} changed after the stock preflight; leaving it alone. Wait for Steam to finish and try again."
+                ));
+            }
             if let Some(patched) = state.patched.get_mut(&target_rel) {
                 patched.owner = item.mod_name.clone();
                 patched.rel = target_rel.clone();
@@ -472,7 +950,7 @@ pub fn apply_preloader_selection(
                 } else if !sidecar_path(data_dir, &target_rel).is_file() {
                     // A snapshot from before sidecars existed: describe it now
                     // so it can be recognised without state.json.
-                    if let Ok(existing) = std::fs::read(&snapshot) {
+                    if let Ok(existing) = read_snapshot_bounded(data_dir, &target_rel) {
                         write_snapshot(data_dir, &target_rel, &existing, patched.pristine)?;
                     }
                 }
@@ -482,16 +960,16 @@ pub fn apply_preloader_selection(
                 // patch — an existing snapshot of the right size beats the
                 // current bytes, and only bytes the directory CRC vouches for
                 // beat it in turn.
-                let existing = std::fs::read(&snapshot)
+                let existing = read_snapshot_bounded(data_dir, &target_rel)
                     .ok()
                     .filter(|existing| existing.len() == entry.length as usize);
                 let (original, pristine) = if current_is_stock {
-                    (current, true)
+                    (current.clone(), true)
                 } else if let Some(existing) = existing {
                     let pristine = is_stock(&existing, entry);
                     (existing, pristine)
                 } else {
-                    (current, false)
+                    (current.clone(), false)
                 };
                 // Written even when the bytes already match: the sidecar is
                 // what lets a later run recognise the snapshot on its own.
@@ -521,7 +999,10 @@ pub fn apply_preloader_selection(
             // Track before writing: a crash mid-patch must leave the entry
             // marked patched so the next run restores it from the snapshot.
             save_state(data_dir, &state)?;
-            patch_vpk_entry(&vpk_path, entry, &padded).map_err(|err| err.message())?;
+            patch_vpk_entry_if_unchanged(&vpk_path, entry, Some(&current), &padded, || {
+                before_official_write().map_err(VpkError)
+            })
+            .map_err(|err| err.message())?;
             // Recorded only after the write lands, so a crash mid-patch leaves
             // it empty and the restore falls back to the size check alone
             // rather than refusing on bytes that were never fully written.
@@ -636,9 +1117,15 @@ pub fn apply_preloader_selection(
     }
 
     if custom.is_empty() {
-        let _ = std::fs::remove_file(&custom_vpk);
+        if live_file_exists(tf2_root, &custom_vpk, PRELOADER_VPK)? {
+            before_official_write()?;
+            remove_file_force_within(tf2_root, &custom_vpk)
+                .map_err(|err| format!("Could not remove {PRELOADER_VPK}: {err}"))?;
+        }
     } else {
-        crate::hash::write_atomic(&custom_vpk, &write_vpk_v2(&custom))
+        let packed = write_vpk_v2(&custom);
+        before_official_write()?;
+        write_atomic_within(tf2_root, &custom_vpk, &packed)
             .map_err(|err| format!("Could not write {PRELOADER_VPK}: {err}"))?;
         report.custom_vpk_written = true;
     }
@@ -647,7 +1134,7 @@ pub fn apply_preloader_selection(
     // behind with nothing installed; the bypass only goes on when there is
     // something for it to carry.
     if !custom.is_empty() || !report.patched_files.is_empty() {
-        set_gameinfo_bypass(tf2_root, data_dir, true, running_names)?;
+        set_gameinfo_bypass_with_sampler(tf2_root, data_dir, true, running_names, process_sampler)?;
     }
     // Report what actually happened: a gameinfo.txt without the expected
     // line means the bypass is not in effect.
@@ -655,7 +1142,7 @@ pub fn apply_preloader_selection(
 
     // Patched particle files execs holds no snapshot for cannot be restored
     // from here and may point at materials this install no longer ships.
-    for rel in untracked_modified_particles(&vpk_path, &entries, &state) {
+    for rel in untracked_modified_particles(&vpk_path, &entries, &state)? {
         report.skipped.push(SkipNotice {
             file: rel,
             mod_name: String::new(),
@@ -669,11 +1156,33 @@ pub fn apply_preloader_selection(
     state.particle_mods = selection.particle_mods.clone();
     state.profile_particle_mods = selection.profile_particle_mods.clone();
     state.skipped = report.skipped.clone();
+    before_final_state_save()?;
     save_state(data_dir, &state)?;
 
     report.addons_installed = selection.addons.clone();
     report.particle_mods_installed = selection.particle_mods.clone();
     Ok(report)
+}
+
+#[cfg(test)]
+pub(crate) fn apply_preloader_selection_with_final_state_hook(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+    before_final_state_save: &dyn Fn() -> Result<(), String>,
+) -> Result<PreloaderReport, String> {
+    apply_preloader_selection_transactional(
+        tf2_root,
+        data_dir,
+        zip_path,
+        selection,
+        running_names,
+        process_sampler,
+        before_final_state_save,
+    )
 }
 
 /// The active profile's mods a selection names, resolved to their particle
@@ -720,26 +1229,48 @@ pub fn revert_preloader(
     data_dir: &Path,
     running_names: &[String],
 ) -> Result<RevertReport, String> {
+    revert_preloader_with_sampler(tf2_root, data_dir, running_names, &live_process_names)
+}
+
+pub fn revert_preloader_with_sampler(
+    tf2_root: &Path,
+    data_dir: &Path,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+) -> Result<RevertReport, String> {
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
+    recover_transaction(tf2_root, data_dir, running_names, process_sampler)?;
     let mut report = RevertReport::default();
-    let mut state = load_state(data_dir);
+    let mut state = load_state_for_snapshot_recovery(data_dir)?;
     let vpk_path = misc_vpk_path(tf2_root);
+    if !live_file_exists(tf2_root, &vpk_path, MISC_VPK)? {
+        return Err(format!(
+            "Could not verify {MISC_VPK}; support files and the installed selection were kept: file not found"
+        ));
+    }
 
     // A resized VPK is not a reason to skip the restore: every entry is
     // judged against the directory's stock CRC (stock already in place →
     // untracked; our patch still there → snapshot written back; stock content
     // changed underneath → snapshot discarded and reported).
-    let entries = if vpk_path.is_file() {
-        Some(map_vpk_entries(&vpk_path).map_err(|err| err.message())?)
-    } else {
-        None
-    };
-    adopt_orphaned_snapshots(data_dir, &mut state, entries.as_ref());
-    if let (false, Some(entries)) = (state.patched.is_empty(), &entries) {
-        // Re-check right before the first write into the official VPK.
-        refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
+    let entries = map_vpk_entries(&vpk_path).map_err(|err| {
+        format!(
+            "Could not verify {MISC_VPK}; support files and the installed selection were kept: {}",
+            err.message()
+        )
+    })?;
+    adopt_orphaned_snapshots(data_dir, &mut state, Some(&entries));
+    let before_official_write =
+        || refuse_if_running_among(process_sampler()).map_err(|err| err.message().to_string());
+    if !state.patched.is_empty() {
         let tracked: Vec<String> = state.patched.keys().cloned().collect();
-        let failures = restore_patched_entries(tf2_root, data_dir, &mut state, entries)?;
+        let failures = restore_patched_entries(
+            tf2_root,
+            data_dir,
+            &mut state,
+            &entries,
+            &before_official_write,
+        )?;
         for rel in tracked {
             if !failures.iter().any(|failure| failure.starts_with(&rel)) {
                 report.restored_files.push(rel);
@@ -749,17 +1280,28 @@ pub fn revert_preloader(
     }
     // "Restore stock files" must not claim success over particle files it
     // has no stock bytes for.
-    if let Some(entries) = &entries {
-        for rel in untracked_modified_particles(&vpk_path, entries, &state) {
-            report.failures.push(format!("{rel}: {UNTRACKED_REASON}"));
-        }
+    for rel in untracked_modified_particles(&vpk_path, &entries, &state)? {
+        report.failures.push(format!("{rel}: {UNTRACKED_REASON}"));
+    }
+    if !report.failures.is_empty() || !state.patched.is_empty() {
+        return Err(format_unresolved(
+            "Restore is incomplete; support files and the installed selection were kept for a retry",
+            &report.failures,
+        ));
     }
 
-    report.gameinfo_restored = set_gameinfo_bypass(tf2_root, data_dir, false, running_names)?;
+    report.gameinfo_restored = set_gameinfo_bypass_with_sampler(
+        tf2_root,
+        data_dir,
+        false,
+        running_names,
+        process_sampler,
+    )?;
 
     let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
-    if custom_vpk.exists() {
-        std::fs::remove_file(&custom_vpk)
+    if live_file_exists(tf2_root, &custom_vpk, PRELOADER_VPK)? {
+        before_official_write()?;
+        remove_file_force_within(tf2_root, &custom_vpk)
             .map_err(|err| format!("Could not remove {PRELOADER_VPK}: {err}"))?;
         report.custom_vpk_removed = true;
     }
@@ -770,8 +1312,6 @@ pub fn revert_preloader(
     tidy_originals_dir(data_dir);
     if state.patched.is_empty() {
         state.vpk_len = 0;
-    } else if vpk_path.is_file() {
-        state.vpk_len = vpk_fingerprint(&vpk_path)?;
     }
     state.addons.clear();
     state.particle_mods.clear();
@@ -781,10 +1321,30 @@ pub fn revert_preloader(
     Ok(report)
 }
 
+/// Finish a selection replacement interrupted before its commit marker.
+/// Prepared journals restore the exact previous selection; committed journals
+/// only discard their now-obsolete backups.
+pub fn recover_pending_preloader(
+    tf2_root: &Path,
+    data_dir: &Path,
+    running_names: &[String],
+) -> Result<bool, String> {
+    recover_pending_preloader_with_sampler(tf2_root, data_dir, running_names, &live_process_names)
+}
+
+pub fn recover_pending_preloader_with_sampler(
+    tf2_root: &Path,
+    data_dir: &Path,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+) -> Result<bool, String> {
+    recover_transaction(tf2_root, data_dir, running_names, process_sampler)
+}
+
 /// Remember which profile the shared preload cfg was enabled on, so a later
 /// revert can clean it off that profile even if another one is active then.
 pub fn record_preload_profile(data_dir: &Path, profile_id: &str) -> Result<(), String> {
-    let mut state = load_state(data_dir);
+    let mut state = load_state(data_dir)?;
     if !state.preload_profiles.iter().any(|id| id == profile_id) {
         state.preload_profiles.push(profile_id.to_string());
         save_state(data_dir, &state)?;
@@ -792,14 +1352,31 @@ pub fn record_preload_profile(data_dir: &Path, profile_id: &str) -> Result<(), S
     Ok(())
 }
 
+/// Snapshot the retry list without consuming it. Callers remove an id only
+/// after that profile's preload cleanup succeeds, so one inaccessible profile
+/// cannot erase recovery work for the next attempt.
+pub fn preload_profiles(data_dir: &Path) -> Result<Vec<String>, String> {
+    Ok(load_state(data_dir)?.preload_profiles)
+}
+
+pub fn forget_preload_profile(data_dir: &Path, profile_id: &str) -> Result<(), String> {
+    let mut state = load_state(data_dir)?;
+    let before = state.preload_profiles.len();
+    state.preload_profiles.retain(|id| id != profile_id);
+    if state.preload_profiles.len() != before {
+        save_state(data_dir, &state)?;
+    }
+    Ok(())
+}
+
 /// The recorded preload profiles, cleared from state.
-pub fn take_preload_profiles(data_dir: &Path) -> Vec<String> {
-    let mut state = load_state(data_dir);
+pub fn take_preload_profiles(data_dir: &Path) -> Result<Vec<String>, String> {
+    let mut state = load_state(data_dir)?;
     let taken = std::mem::take(&mut state.preload_profiles);
     if !taken.is_empty() {
-        let _ = save_state(data_dir, &state);
+        save_state(data_dir, &state)?;
     }
-    taken
+    Ok(taken)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -823,27 +1400,53 @@ pub struct PreloaderStatus {
 }
 
 pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderStatus, String> {
-    let mut state = load_state(data_dir);
+    let mut state = load_state_for_snapshot_recovery(data_dir)?;
     let gameinfo = gameinfo_bypass_state(tf2_root)?;
     let vpk_path = misc_vpk_path(tf2_root);
-    let entries = map_vpk_entries(&vpk_path).ok();
+    if !live_file_exists(tf2_root, &vpk_path, MISC_VPK)? {
+        return Err(format!("Could not inspect {MISC_VPK}: file not found"));
+    }
+    let entries = map_vpk_entries(&vpk_path)
+        .map_err(|err| format!("Could not inspect {MISC_VPK}: {}", err.message()))?;
     // Tracking that a torn state.json lost is rebuilt from the snapshots, so
     // the status names the patched entries instead of calling them stale
     // patches nothing can restore.
     // A status call stays a read: what was rebuilt is reported either way,
     // and the next apply or revert adopts again if this save did not land.
-    if adopt_orphaned_snapshots(data_dir, &mut state, entries.as_ref()) > 0 {
-        let _ = save_state(data_dir, &state);
-    }
-    // Only a resized VPK signals a game update; mtime drifts from our own
-    // patch writes.
-    let stale = !state.patched.is_empty()
+    discover_orphaned_snapshots_readonly(data_dir, &mut state, Some(&entries));
+
+    // Total size catches ordinary TF2 updates; per-entry CRC/hash checks also
+    // catch a same-size Steam verify/update and third-party replacement.
+    let mut stale = !state.patched.is_empty()
         && vpk_fingerprint(&vpk_path)
             .map(|fingerprint| state.vpk_len != 0 && state.vpk_len != fingerprint)
             .unwrap_or(true);
-    let untracked_modified = entries
-        .map(|entries| untracked_modified_particles(&vpk_path, &entries, &state))
-        .unwrap_or_default();
+    for (rel, patched) in &state.patched {
+        let Some(entry) = entries.get(rel) else {
+            stale = true;
+            continue;
+        };
+        let current = read_particle_entry_bounded(&vpk_path, entry)
+            .map_err(|err| format!("Could not verify {rel}: {err}"))?;
+        if is_stock(&current, entry)
+            || patched.patched_sha256.is_empty()
+            || sha256_hex(&current) != patched.patched_sha256
+        {
+            stale = true;
+            continue;
+        }
+        let original = read_snapshot_bounded(data_dir, rel)
+            .map_err(|err| format!("Could not verify the snapshot for {rel}: {err}"))?;
+        if patched.original_sha256.is_empty()
+            || sha256_hex(&original) != patched.original_sha256
+            || (patched.pristine && !is_stock(&original, entry))
+        {
+            stale = true;
+        }
+    }
+    let untracked_modified = untracked_modified_particles(&vpk_path, &entries, &state)?;
+    let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
+    let custom_vpk_present = live_file_exists(tf2_root, &custom_vpk, PRELOADER_VPK)?;
     Ok(PreloaderStatus {
         gameinfo_found: gameinfo.found,
         gameinfo_bypassed: gameinfo.enabled,
@@ -853,11 +1456,7 @@ pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderSta
         profile_particle_mods: state.profile_particle_mods,
         skipped: state.skipped,
         stale,
-        custom_vpk_present: tf2_root
-            .join("tf")
-            .join("custom")
-            .join(PRELOADER_VPK)
-            .is_file(),
+        custom_vpk_present,
         untracked_modified,
     })
 }

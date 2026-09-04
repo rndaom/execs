@@ -15,10 +15,13 @@ export function SwitchProgressList({
   switchStep,
   active,
   visible,
+  detail,
 }: {
   switchStep: SwitchStep | null;
   active: boolean;
   visible: boolean;
+  /** Exact completion outcome supplied by the backend's Done event. */
+  detail?: string | null;
 }) {
   if (!visible) {
     return null;
@@ -51,7 +54,7 @@ export function SwitchProgressList({
         {complete ? <Check size={16} weight="bold" className="text-ok" /> : null}
       </div>
       <p data-testid="switch-progress-current" className="t-meta mt-1">
-        {complete ? "All steps done" : currentLabel}
+        {complete ? detail || "All steps done" : currentLabel}
       </p>
 
       <div

@@ -1,4 +1,4 @@
-export type SteamWriteStatus = "written" | "steam_open" | "no_account";
+export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
 
 /** The official mastercomfig set new and wizard profiles start from. */
 export function recommendedLaunchOptions(): string {
@@ -62,5 +62,7 @@ export function steamWriteCopy(status: SteamWriteStatus): string {
       return "Saved. Steam is open — copy into TF2 Properties yourself.";
     case "no_account":
       return "Saved. No Steam userdata folder found.";
+    case "write_failed":
+      return "Saved to the profile. Steam could not be updated yet.";
   }
 }

@@ -22,8 +22,13 @@ import {
   PREVIEW_GAMEBANANA_RECORDS,
   PREVIEW_MODS_STATUS,
   PREVIEW_PROFILE_MODS,
+  REPAIR_POLL_MS,
+  REPAIR_SLOW_POLL_MS,
   readMaturePreference,
   relativeDate,
+  repairActionDisabled,
+  repairPollDelay,
+  repairStateAfterBackendRead,
   selectionDirty,
   sortGameBananaMods,
   summarizeReport,
@@ -42,6 +47,24 @@ const INSTALLED = selection({
 });
 
 describe("mods ui", () => {
+  it("keeps polling without reopening a persisted verification hand-off", () => {
+    expect(repairPollDelay("waiting")).toBe(REPAIR_POLL_MS);
+    expect(repairPollDelay("timeout")).toBe(REPAIR_SLOW_POLL_MS);
+    expect(repairPollDelay("confirming")).toBeNull();
+    expect(repairPollDelay("done")).toBeNull();
+    expect(repairActionDisabled(false, true, true, "timeout")).toBe(true);
+    expect(repairActionDisabled(false, true, true, "waiting")).toBe(true);
+    expect(repairActionDisabled(false, true, false, "timeout")).toBe(true);
+  });
+
+  it("trusts a cleared backend marker after an ambiguous completion response", () => {
+    expect(repairStateAfterBackendRead("waiting", false, false)).toBe("idle");
+    expect(repairStateAfterBackendRead("confirming", false, false)).toBe("idle");
+    expect(repairStateAfterBackendRead("waiting", true, false)).toBe("waiting");
+    // The optimistic start update may render before its IPC has persisted.
+    expect(repairStateAfterBackendRead("waiting", false, true)).toBe("waiting");
+  });
+
   it("toggles names in and out", () => {
     expect(toggleName([], "a")).toEqual(["a"]);
     expect(toggleName(["a", "b"], "a")).toEqual(["b"]);
@@ -173,6 +196,12 @@ describe("mods apply gating", () => {
     expect(modsStatusLine(stale, INSTALLED, false)).toContain("TF2 updated");
   });
 
+  it("routes an interrupted transaction through the dedicated recovery action", () => {
+    const recovering = { ...status, recoveryRequired: true };
+    expect(modsApplyEnabled(recovering, { ...INSTALLED, addons: [] })).toBe(false);
+    expect(modsStatusLine(recovering, INSTALLED, false)).toBe("Finish interrupted recovery first");
+  });
+
   it("never applies without a cached library, whatever else is true", () => {
     const uncached = { ...stale, modsCached: false };
     expect(modsApplyEnabled(uncached, selection())).toBe(false);
@@ -201,6 +230,9 @@ describe("your mods", () => {
   it("only offers a link for a pack that has a page", () => {
     expect(modSourceUrl(local.source)).toBeNull();
     expect(modSourceUrl(gb.source)).toBe("https://gamebanana.com/mods/618734");
+    expect(modSourceUrl({ kind: "gamebanana", id: 7, url: "https://evil.example/fake" })).toBe(
+      "https://gamebanana.com/mods/7",
+    );
   });
 
   it("asks before removing a big pack only", () => {

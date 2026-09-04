@@ -8,7 +8,7 @@ use execs_core::{
 };
 use tauri::{AppHandle, Emitter};
 
-use super::shared::with_root;
+use super::shared::{with_root, ProfileSelectionContext};
 use crate::error::CommandError;
 use crate::WriteGate;
 
@@ -48,13 +48,20 @@ async fn run_wizard(
     start_from: StartFrom,
 ) -> Result<ProfileLibrary, CommandError> {
     let for_fetch = spec.clone();
-    let owned = with_root(move |_root| {
+    let (context, owned) = with_root(move |root| {
         execs_core::refuse_if_running()?;
-        Ok(crate::comfig_fetch::fetch_wizard_assets(&for_fetch)?)
+        Ok((
+            ProfileSelectionContext::capture(&root)?,
+            crate::comfig_fetch::fetch_wizard_assets(&for_fetch)?,
+        ))
     })
     .await?;
-    let _guard = gate.0.lock().await;
-    with_root(move |root| apply_wizard_and_switch(&app, &root, spec, start_from, &owned)).await
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        context.ensure_current(&root)?;
+        apply_wizard_and_switch(&app, &root, spec, start_from, &owned)
+    })
+    .await
 }
 
 pub(crate) fn apply_wizard_and_switch(

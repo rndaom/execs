@@ -14,40 +14,51 @@ export function ReadyPanel({
   profiles,
   progress,
   draftName,
+  launching,
+  recoveryTargetId,
   settings,
   onDraftName,
   onSave,
   onCreateNew,
   onChangeInstall,
   onLaunch,
+  onCancelLaunch,
 }: {
   path: string;
   profiles: ProfileLibraryState;
   progress: SwitchProgressController;
   draftName: string;
+  launching: boolean;
+  recoveryTargetId: string | null;
   settings?: ReactNode;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onCreateNew: () => void;
   onChangeInstall: () => void;
   onLaunch: () => void;
+  onCancelLaunch: () => void;
 }) {
   const { error, busy, running } = useAppStatus();
   const controlsBusy = busy || progress.state.active;
   const { library } = profiles;
+  const recoveryTarget = library?.profiles.find((profile) => profile.id === recoveryTargetId);
 
   return (
     <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
       <ReadyHeader
         path={path}
         running={running}
+        launching={launching}
+        disabled={controlsBusy || recoveryTargetId !== null}
         onLaunch={onLaunch}
+        onCancelLaunch={onCancelLaunch}
         menu={
           <ProfileMenu
             library={library}
             draftName={draftName}
             running={running}
             controlsBusy={controlsBusy}
+            recoveryTargetId={recoveryTargetId}
             onDraftName={onDraftName}
             onSave={onSave}
             onSwitch={(id) => void profiles.switchProfile(id)}
@@ -58,6 +69,17 @@ export function ReadyPanel({
           />
         }
       />
+
+      {recoveryTargetId ? (
+        <div
+          role="alert"
+          data-testid="switch-recovery-pending"
+          className="t-body shrink-0 border-b border-warn/50 bg-warn/10 px-5 py-2 text-ink"
+        >
+          A profile switch was interrupted. Switch to{" "}
+          {recoveryTarget?.name ?? "the pending profile"} to finish recovery.
+        </div>
+      ) : null}
 
       {error ? (
         <div
@@ -96,6 +118,7 @@ export function ReadyPanel({
         switchStep={progress.state.visibleStep}
         active={progress.state.active}
         visible={progress.state.visible}
+        detail={progress.state.completionDetail}
       />
     </section>
   );

@@ -22,6 +22,9 @@ describe("launch UI helpers", () => {
       "Saved. Steam is open — copy into TF2 Properties yourself.",
     );
     expect(steamWriteCopy("no_account")).toBe("Saved. No Steam userdata folder found.");
+    expect(steamWriteCopy("write_failed")).toBe(
+      "Saved to the profile. Steam could not be updated yet.",
+    );
     expect(steamWriteCopy("steam_open")).not.toMatch(/quit Steam/i);
     expect(steamWriteCopy("no_account")).not.toMatch(/quit Steam/i);
   });

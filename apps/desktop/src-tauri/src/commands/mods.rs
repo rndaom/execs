@@ -7,11 +7,11 @@
 use std::path::{Path, PathBuf};
 
 use execs_core::mods::{ModContent, ModSource, MAX_MOD_BYTES};
-use execs_core::ProfileDetail;
+use execs_core::{ModBatchBudget, ProfileDetail};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{archive_too_large, blocking, refuse_oversize_file, with_profile};
+use super::shared::{archive_too_large, blocking, read_bounded_file, with_profile, ActiveContext};
 use crate::error::CommandError;
 use crate::gamebanana::{self, GameBananaCategory, GameBananaPage, GameBananaProfile};
 use crate::WriteGate;
@@ -22,19 +22,16 @@ fn install_all(
     root: &Path,
     profile_id: &str,
     packs: Vec<(String, ModContent)>,
-    source: &ModSource,
+    source: ModSource,
 ) -> Result<ProfileDetail, CommandError> {
-    let mut detail = None;
-    for (name, content) in packs {
-        detail = Some(execs_core::mods::install_mod(
-            root,
-            profile_id,
-            &name,
-            content,
-            source.clone(),
-        )?);
+    if packs.is_empty() {
+        return Err(CommandError::unknown(
+            "That file holds no mod this app can install.",
+        ));
     }
-    detail.ok_or_else(|| CommandError::unknown("That file holds no mod this app can install."))
+    Ok(execs_core::mods::install_mods(
+        root, profile_id, packs, source,
+    )?)
 }
 
 /// Read a picked path into packs: a `.vpk` goes in verbatim, anything else is
@@ -49,8 +46,7 @@ fn packs_from_file(path: &Path) -> Result<Vec<(String, ModContent)>, CommandErro
         let (name, content) = execs_core::mods::mod_content_from_vpk_file(path)?;
         return Ok(vec![(name, content)]);
     }
-    refuse_oversize_file(path, MAX_MOD_BYTES, archive_too_large(MAX_MOD_BYTES))?;
-    let bytes = std::fs::read(path).map_err(|err| CommandError::unknown(err.to_string()))?;
+    let bytes = read_bounded_file(path, MAX_MOD_BYTES, archive_too_large(MAX_MOD_BYTES))?;
     if bytes.starts_with(b"Rar!") {
         return Err(CommandError::unknown(
             "RAR archives cannot be unpacked here. Extract it with 7-Zip, then use Add folder.",
@@ -64,6 +60,11 @@ pub async fn import_mod_archive(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
 ) -> Result<Option<ProfileDetail>, CommandError> {
+    let context = with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
+        Ok(ActiveContext::capture(&root, &profile_id))
+    })
+    .await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -84,18 +85,30 @@ pub async fn import_mod_archive(
     if paths.is_empty() {
         return Ok(None);
     }
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| {
+    let packs = blocking(move || {
         // Several files at once are one import: every pack from every file.
         let mut packs = Vec::new();
+        let mut budget = ModBatchBudget::default();
         for path in &paths {
-            packs.extend(packs_from_file(path)?);
+            for pack in packs_from_file(path)? {
+                // Reject the aggregate before retaining another individually
+                // bounded body; the core install repeats the same check at
+                // the final write boundary.
+                budget.add(&pack.1)?;
+                packs.push(pack);
+            }
         }
+        Ok(packs)
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
         Ok(Some(install_all(
             &root,
             &profile_id,
             packs,
-            &ModSource::Local,
+            ModSource::Local,
         )?))
     })
     .await
@@ -106,6 +119,11 @@ pub async fn import_mod_folder(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
 ) -> Result<Option<ProfileDetail>, CommandError> {
+    let context = with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
+        Ok(ActiveContext::capture(&root, &profile_id))
+    })
+    .await?;
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
@@ -120,14 +138,21 @@ pub async fn import_mod_folder(
     let path: PathBuf = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
-    let _guard = gate.0.lock().await;
-    with_profile(move |root, profile_id| {
+    let packs = blocking(move || {
         let (name, content) = execs_core::mods::mod_content_from_dir(&path)?;
+        let mut budget = ModBatchBudget::default();
+        budget.add(&content)?;
+        Ok(vec![(name, content)])
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
         Ok(Some(install_all(
             &root,
             &profile_id,
-            vec![(name, content)],
-            &ModSource::Local,
+            packs,
+            ModSource::Local,
         )?))
     })
     .await
@@ -138,7 +163,7 @@ pub async fn remove_mod(
     gate: tauri::State<'_, WriteGate>,
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| Ok(execs_core::mods::remove_mod(&root, &profile_id, &id)?))
         .await
 }
@@ -189,18 +214,20 @@ pub async fn install_gamebanana_mod(
     gate: tauri::State<'_, WriteGate>,
     id: u64,
 ) -> Result<ProfileDetail, CommandError> {
-    let (profile, packs) = with_profile(move |_root, _profile_id| {
+    let (context, profile, packs) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
-        fetch_gamebanana_mod(id)
+        let (profile, packs) = fetch_gamebanana_mod(id)?;
+        Ok((ActiveContext::capture(&root, &profile_id), profile, packs))
     })
     .await?;
-    let _guard = gate.0.lock().await;
+    let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
         install_all(
             &root,
             &profile_id,
             packs,
-            &ModSource::Gamebanana {
+            ModSource::Gamebanana {
                 id: profile.id,
                 url: profile.url.clone(),
             },

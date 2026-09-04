@@ -7,6 +7,14 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Backend: interrupted profile, HUD, Comfig, crosshair, viewmodel, sound,
+  and Casual-preloader changes now recover as complete transactions instead
+  of leaving a partly replaced live setup.
+- Backend: profile writes, TF2 launch, Steam file verification, and app-update
+  installation now share one durable lock, including across an app restart.
+- Backend: remote downloads, archives, VPKs, cfgs, WAVs, PCFs, and imported
+  folders reject unsafe paths, malformed counts, and over-limit input before
+  they can replace installed files.
 - Mods and Viewmodels: sticky Apply bar no longer covers the last lines
   of the pane.
 - Comfig: preset tiles stretch to the same height in each grid row.

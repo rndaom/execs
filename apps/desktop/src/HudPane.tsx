@@ -144,6 +144,13 @@ export function HudPane({
         actions={<span className="tnum t-meta text-ink-faint">{catalog.length} in catalog</span>}
       />
 
+      {state.catalogUnavailable ? (
+        <Alert tone="warn" testId="hud-state-catalog-unavailable" className="mt-6">
+          The installed HUD loaded, but its update status could not be checked. Refresh the catalog
+          when the connection is available.
+        </Alert>
+      ) : null}
+
       {installedId ? (
         <section data-testid="hud-installed">
           <div className="hero-row">

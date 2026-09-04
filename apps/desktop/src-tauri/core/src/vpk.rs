@@ -1,8 +1,13 @@
 //! Source VPK v1/v2 reader and a small v1 writer. Read-only against official TF2 VPKs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use same_file::Handle as SameFileHandle;
+
+use crate::hash::metadata_is_link;
 
 const SIGNATURE: u32 = 0x55AA_1234;
 const DIR_ARCHIVE: u16 = 0x7fff;
@@ -31,9 +36,62 @@ const NONE_MARKER: &str = " ";
 /// covering the whole data region would otherwise allocate fifty copies of it.
 const MATERIALIZE_HEADROOM: u64 = 1024 * 1024;
 
+/// Imported packs are also archive members from the Mods pane, whose public
+/// limit is 20,000 files. A VPK is one archive member, so its own directory
+/// needs the same independent limit.
+const MAX_IMPORTED_VPK_ENTRIES: usize = 20_000;
+const MAX_IMPORTED_PATH_BYTES: usize = 8 * 1024 * 1024;
+const MAX_IMPORTED_TREE_BYTES: usize = 16 * 1024 * 1024;
+
+/// Valve's directory archives are much larger than community packs. Keep a
+/// generous, finite ceiling so a corrupt `_dir.vpk` still cannot grow an
+/// unbounded map merely by being opened by a status call.
+const MAX_DIRECTORY_VPK_ENTRIES: usize = 500_000;
+const MAX_DIRECTORY_PATH_BYTES: usize = 64 * 1024 * 1024;
+const MAX_VPK_TREE_BYTES: usize = 64 * 1024 * 1024;
+const MAX_VPK_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_MATERIALIZED_VPK_BYTES: u64 = 512 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+struct MaterializationLimits {
+    entry_bytes: u64,
+    total_bytes: u64,
+}
+
+const DEFAULT_MATERIALIZATION_LIMITS: MaterializationLimits = MaterializationLimits {
+    entry_bytes: MAX_VPK_ENTRY_BYTES,
+    total_bytes: MAX_MATERIALIZED_VPK_BYTES,
+};
+
+#[derive(Clone, Copy)]
+struct TreeLimits {
+    entries: usize,
+    path_bytes: usize,
+    tree_bytes: usize,
+}
+
+const IMPORT_LIMITS: TreeLimits = TreeLimits {
+    entries: MAX_IMPORTED_VPK_ENTRIES,
+    path_bytes: MAX_IMPORTED_PATH_BYTES,
+    tree_bytes: MAX_IMPORTED_TREE_BYTES,
+};
+const DIRECTORY_LIMITS: TreeLimits = TreeLimits {
+    entries: MAX_DIRECTORY_VPK_ENTRIES,
+    path_bytes: MAX_DIRECTORY_PATH_BYTES,
+    tree_bytes: MAX_VPK_TREE_BYTES,
+};
+
 pub fn read_vpk_dir_file(path: &Path) -> Result<VpkArchive, VpkError> {
-    let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
-    read_vpk(&bytes, Some(path), None)
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    read_vpk(
+        &tree,
+        Some(path),
+        None,
+        on_disk_len,
+        limits,
+        DEFAULT_MATERIALIZATION_LIMITS,
+    )
 }
 
 /// Read only the entries whose relative path passes `keep`. Skipped entries
@@ -43,12 +101,67 @@ pub fn read_vpk_dir_file_filtered(
     path: &Path,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<VpkArchive, VpkError> {
-    let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
-    read_vpk(&bytes, Some(path), Some(keep))
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    read_vpk(
+        &tree,
+        Some(path),
+        Some(keep),
+        on_disk_len,
+        limits,
+        DEFAULT_MATERIALIZATION_LIMITS,
+    )
+}
+
+/// Read selected entries while enforcing a caller-specific allocation
+/// ceiling. This is for narrow consumers such as one particle source: the
+/// general VPK limit is intentionally much larger than their actual format.
+pub fn read_vpk_dir_file_filtered_bounded(
+    path: &Path,
+    keep: &dyn Fn(&str) -> bool,
+    max_entry_bytes: u64,
+    max_total_bytes: u64,
+) -> Result<VpkArchive, VpkError> {
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    read_vpk(
+        &tree,
+        Some(path),
+        Some(keep),
+        on_disk_len,
+        limits,
+        MaterializationLimits {
+            entry_bytes: max_entry_bytes.min(MAX_VPK_ENTRY_BYTES),
+            total_bytes: max_total_bytes.min(MAX_MATERIALIZED_VPK_BYTES),
+        },
+    )
 }
 
 pub fn read_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkArchive, VpkError> {
-    read_vpk(bytes, None, None)
+    read_vpk(
+        bytes,
+        None,
+        None,
+        bytes.len() as u64,
+        IMPORT_LIMITS,
+        DEFAULT_MATERIALIZATION_LIMITS,
+    )
+}
+
+/// Validate and materialize only selected entries from an in-memory community
+/// VPK. Strict imported-pack entry and metadata budgets still apply.
+pub fn read_vpk_dir_bytes_filtered(
+    bytes: &[u8],
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<VpkArchive, VpkError> {
+    read_vpk(
+        bytes,
+        None,
+        Some(keep),
+        bytes.len() as u64,
+        IMPORT_LIMITS,
+        DEFAULT_MATERIALIZATION_LIMITS,
+    )
 }
 
 /// What a validate-only pass learned about a single-file VPK.
@@ -60,6 +173,243 @@ pub struct VpkSummary {
     pub bytes: u64,
 }
 
+fn limits_for_path(path: &Path) -> TreeLimits {
+    let is_directory = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.to_ascii_lowercase().ends_with("_dir.vpk"));
+    if is_directory {
+        DIRECTORY_LIMITS
+    } else {
+        IMPORT_LIMITS
+    }
+}
+
+/// Read only the fixed header and directory tree from a path. A 500 MiB
+/// single-file community VPK can therefore be inspected for one PCF without
+/// first copying all 500 MiB into memory.
+fn read_tree_from_path(path: &Path, limits: TreeLimits) -> Result<(Vec<u8>, u64), VpkError> {
+    let (mut file, metadata, identity, canonical_parent) = open_regular_no_follow(path, false)?;
+    let on_disk_len = file
+        .metadata()
+        .map_err(|err| VpkError(err.to_string()))?
+        .len();
+    let mut fixed = [0u8; 12];
+    file.read_exact(&mut fixed)
+        .map_err(|_| VpkError("VPK header is too short.".into()))?;
+    let signature = u32::from_le_bytes(fixed[0..4].try_into().expect("fixed slice"));
+    if signature != SIGNATURE {
+        return Err(VpkError("Not a VPK archive.".into()));
+    }
+    let version = u32::from_le_bytes(fixed[4..8].try_into().expect("fixed slice"));
+    let header_size = match version {
+        1 => 12usize,
+        2 => 28usize,
+        _ => return Err(VpkError(format!("unsupported VPK version {version}"))),
+    };
+    let tree_size = u32::from_le_bytes(fixed[8..12].try_into().expect("fixed slice")) as usize;
+    if tree_size > limits.tree_bytes {
+        return Err(VpkError(format!(
+            "VPK directory tree is larger than {} MiB.",
+            limits.tree_bytes / (1024 * 1024)
+        )));
+    }
+    let tree_end = header_size
+        .checked_add(tree_size)
+        .ok_or_else(|| VpkError("VPK directory tree size overflows.".into()))?;
+    if tree_end as u64 > on_disk_len {
+        return Err(VpkError("VPK directory tree is truncated.".into()));
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(tree_end)
+        .map_err(|_| VpkError("Not enough memory for the VPK directory tree.".into()))?;
+    bytes.resize(tree_end, 0);
+    file.seek(SeekFrom::Start(0))
+        .map_err(|err| VpkError(err.to_string()))?;
+    file.read_exact(&mut bytes)
+        .map_err(|err| VpkError(err.to_string()))?;
+    verify_open_identity(path, &file, &metadata, &identity, &canonical_parent)?;
+    Ok((bytes, on_disk_len))
+}
+
+/// Open a VPK component without following a final symlink/reparse point and
+/// retain enough identity information to detect a replacement while it is
+/// being inspected. Writes use the same gate: a crafted `_000.vpk` link must
+/// never turn the in-place particle patch into a write outside the TF2 VPK
+/// directory.
+fn open_regular_no_follow(
+    path: &Path,
+    write: bool,
+) -> Result<(File, fs::Metadata, SameFileHandle, PathBuf), VpkError> {
+    let canonical_parent = canonical_regular_parent(path)?;
+    let before = fs::symlink_metadata(path).map_err(|err| VpkError(err.to_string()))?;
+    if metadata_is_link(&before) || !before.is_file() {
+        return Err(VpkError(format!(
+            "Refusing a linked or non-regular VPK file: {}",
+            path.display()
+        )));
+    }
+
+    let mut options = OpenOptions::new();
+    options.read(true).write(write);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Linux O_NOFOLLOW. The post-open identity checks below cover a path
+        // replacement on every supported platform as well.
+        options.custom_flags(0x0002_0000);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options
+        .open(path)
+        .map_err(|err| VpkError(err.to_string()))?;
+    let opened = file.metadata().map_err(|err| VpkError(err.to_string()))?;
+    if metadata_is_link(&opened) || !opened.is_file() {
+        return Err(VpkError(format!(
+            "Refusing a linked or non-regular VPK file: {}",
+            path.display()
+        )));
+    }
+    if write {
+        refuse_multiple_hard_links(&file, path)?;
+    }
+    let identity =
+        SameFileHandle::from_file(file.try_clone().map_err(|err| VpkError(err.to_string()))?)
+            .map_err(|err| VpkError(err.to_string()))?;
+    verify_open_identity(path, &file, &opened, &identity, &canonical_parent)?;
+    Ok((file, opened, identity, canonical_parent))
+}
+
+fn canonical_regular_parent(path: &Path) -> Result<PathBuf, VpkError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| VpkError("VPK file has no parent folder.".into()))?;
+    let metadata = fs::symlink_metadata(parent).map_err(|err| VpkError(err.to_string()))?;
+    if metadata_is_link(&metadata) || !metadata.is_dir() {
+        return Err(VpkError(format!(
+            "Refusing a linked or non-directory VPK parent: {}",
+            parent.display()
+        )));
+    }
+    fs::canonicalize(parent).map_err(|err| VpkError(err.to_string()))
+}
+
+fn verify_open_identity(
+    path: &Path,
+    file: &File,
+    opened_metadata: &fs::Metadata,
+    opened_identity: &SameFileHandle,
+    canonical_parent: &Path,
+) -> Result<(), VpkError> {
+    let current = fs::symlink_metadata(path).map_err(|err| VpkError(err.to_string()))?;
+    let handle_metadata = file.metadata().map_err(|err| VpkError(err.to_string()))?;
+    let current_identity =
+        SameFileHandle::from_path(path).map_err(|err| VpkError(err.to_string()))?;
+    let resolved = fs::canonicalize(path).map_err(|err| VpkError(err.to_string()))?;
+    if metadata_is_link(&current)
+        || !current.is_file()
+        || &current_identity != opened_identity
+        || metadata_changed(opened_metadata, &handle_metadata)
+        || metadata_changed(&handle_metadata, &current)
+        || resolved.parent() != Some(canonical_parent)
+    {
+        return Err(VpkError(format!(
+            "{} changed or escaped its VPK directory; retry after Steam finishes.",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn metadata_changed(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    left.len() != right.len()
+        || matches!((left.modified(), right.modified()), (Ok(a), Ok(b)) if a != b)
+}
+
+fn refuse_multiple_hard_links(file: &File, path: &Path) -> Result<(), VpkError> {
+    #[cfg(unix)]
+    let links = {
+        use std::os::unix::fs::MetadataExt;
+        file.metadata()
+            .map_err(|err| VpkError(err.to_string()))?
+            .nlink()
+    };
+    #[cfg(windows)]
+    let links = windows_file_link_count(file)?;
+    #[cfg(not(any(unix, windows)))]
+    let links = 1u64;
+
+    if links > 1 {
+        return Err(VpkError(format!(
+            "Refusing to patch a hard-linked VPK file: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn windows_file_link_count(file: &File) -> Result<u64, VpkError> {
+    use std::mem::MaybeUninit;
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+    #[repr(C)]
+    struct ByHandleFileInformation {
+        attributes: u32,
+        creation_time: FileTime,
+        last_access_time: FileTime,
+        last_write_time: FileTime,
+        volume_serial_number: u32,
+        file_size_high: u32,
+        file_size_low: u32,
+        number_of_links: u32,
+        file_index_high: u32,
+        file_index_low: u32,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        #[link_name = "GetFileInformationByHandle"]
+        fn get_file_information_by_handle(
+            handle: *mut std::ffi::c_void,
+            information: *mut ByHandleFileInformation,
+        ) -> i32;
+    }
+
+    let mut information = MaybeUninit::<ByHandleFileInformation>::uninit();
+    // SAFETY: the handle belongs to the live `File`, the output points to a
+    // correctly laid-out uninitialized structure, and it is read only after
+    // the OS reports success.
+    let result =
+        unsafe { get_file_information_by_handle(file.as_raw_handle(), information.as_mut_ptr()) };
+    if result == 0 {
+        return Err(VpkError(std::io::Error::last_os_error().to_string()));
+    }
+    // SAFETY: a successful call initialized the complete structure.
+    Ok(u64::from(
+        unsafe { information.assume_init() }.number_of_links,
+    ))
+}
+
+fn ensure_same_archive_parent(dir_path: &Path, data_path: &Path) -> Result<(), VpkError> {
+    if canonical_regular_parent(dir_path)? != canonical_regular_parent(data_path)? {
+        return Err(VpkError(
+            "Refusing a split VPK component outside the directory archive's folder.".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Check a single-file VPK the way `read_vpk_dir_bytes` would, without copying
 /// a single entry body: header, tree, every entry inside the data region, no
 /// split-archive references, and no more overlap between entries than a full
@@ -67,22 +417,41 @@ pub struct VpkSummary {
 pub fn validate_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkSummary, VpkError> {
     let mut summary = VpkSummary::default();
     let budget = materialize_budget(bytes.len() as u64);
-    walk_vpk_tree(bytes, &mut |entry| {
+    walk_vpk_tree(bytes, bytes.len() as u64, IMPORT_LIMITS, &mut |entry| {
         let length = entry.length as usize;
+        let total_len = entry
+            .preload
+            .len()
+            .checked_add(length)
+            .ok_or_else(|| VpkError("VPK entry size overflows.".into()))?;
+        if total_len as u64 > MAX_VPK_ENTRY_BYTES {
+            return Err(VpkError(format!(
+                "VPK entry is larger than {} MiB.",
+                MAX_VPK_ENTRY_BYTES / (1024 * 1024)
+            )));
+        }
         if length > 0 {
             if entry.archive_index != DIR_ARCHIVE {
                 return Err(VpkError(
                     "Refusing an in-memory split VPK (need the *_dir.vpk path).".into(),
                 ));
             }
-            let start = entry.data_base + entry.offset as usize;
-            let end = start.saturating_add(length);
-            if end > bytes.len() {
+            let start = entry
+                .data_base
+                .checked_add(u64::from(entry.offset))
+                .ok_or_else(|| VpkError("VPK file data offset overflows.".into()))?;
+            let end = start
+                .checked_add(length as u64)
+                .ok_or_else(|| VpkError("VPK file data size overflows.".into()))?;
+            if end > entry.data_end {
+                return Err(VpkError("VPK entry leaves its data section.".into()));
+            }
+            if end > bytes.len() as u64 {
                 return Err(VpkError("VPK file data is truncated.".into()));
             }
         }
         summary.files += 1;
-        charge(&mut summary.bytes, budget, entry.preload.len() + length)?;
+        charge(&mut summary.bytes, budget, total_len)?;
         Ok(())
     })?;
     Ok(summary)
@@ -94,6 +463,7 @@ fn materialize_budget(on_disk: u64) -> u64 {
     on_disk
         .saturating_mul(2)
         .saturating_add(MATERIALIZE_HEADROOM)
+        .min(MAX_MATERIALIZED_VPK_BYTES)
 }
 
 /// One directory-tree entry as the walker hands it out: where its bytes live,
@@ -108,7 +478,10 @@ struct RawEntry<'a> {
     offset: u32,
     length: u32,
     /// Absolute offset of the post-tree data region in the directory bytes.
-    data_base: usize,
+    data_base: u64,
+    /// End of the directory-resident data section. VPK v2 declares this
+    /// explicitly; entries may not point into checksum/signature sections.
+    data_end: u64,
 }
 
 /// Parse the header and walk the extension / folder / name tree, calling
@@ -116,6 +489,8 @@ struct RawEntry<'a> {
 /// on the tree are written once. Returns where the tree ends.
 fn walk_vpk_tree<'a>(
     bytes: &'a [u8],
+    on_disk_len: u64,
+    limits: TreeLimits,
     visit: &mut dyn FnMut(RawEntry<'a>) -> Result<(), VpkError>,
 ) -> Result<usize, VpkError> {
     if bytes.len() < 12 {
@@ -128,21 +503,59 @@ fn walk_vpk_tree<'a>(
     }
     let version = read_u32(&mut cur)?;
     let tree_size = read_u32(&mut cur)? as usize;
-    let header_size: usize = match version {
-        1 => 12,
+    let (header_size, declared_data_size): (usize, Option<u64>) = match version {
+        1 => (12, None),
         2 => {
             if bytes.len() < 28 {
                 return Err(VpkError("VPK v2 header is too short.".into()));
             }
-            cur.set_position(28);
-            28
+            let file_data_size = read_u32(&mut cur)? as u64;
+            let archive_md5_size = read_u32(&mut cur)? as u64;
+            let other_md5_size = read_u32(&mut cur)? as u64;
+            let signature_size = read_u32(&mut cur)? as u64;
+            let declared_end = [
+                28u64,
+                tree_size as u64,
+                file_data_size,
+                archive_md5_size,
+                other_md5_size,
+                signature_size,
+            ]
+            .into_iter()
+            .try_fold(0u64, |total, size| total.checked_add(size))
+            .ok_or_else(|| VpkError("VPK section sizes overflow.".into()))?;
+            if declared_end > on_disk_len {
+                return Err(VpkError("VPK sections run past the archive.".into()));
+            }
+            (28, Some(file_data_size))
         }
         _ => return Err(VpkError(format!("unsupported VPK version {version}"))),
     };
-    let tree_end = header_size.saturating_add(tree_size);
+    if tree_size > limits.tree_bytes {
+        return Err(VpkError(format!(
+            "VPK directory tree is larger than {} MiB.",
+            limits.tree_bytes / (1024 * 1024)
+        )));
+    }
+    let tree_end = header_size
+        .checked_add(tree_size)
+        .ok_or_else(|| VpkError("VPK directory tree size overflows.".into()))?;
     if bytes.len() < tree_end {
         return Err(VpkError("VPK directory tree is truncated.".into()));
     }
+    if tree_end as u64 > on_disk_len {
+        return Err(VpkError("VPK directory tree runs past the archive.".into()));
+    }
+    let data_base = tree_end as u64;
+    let data_end = match declared_data_size {
+        Some(size) => data_base
+            .checked_add(size)
+            .ok_or_else(|| VpkError("VPK data section size overflows.".into()))?,
+        None => on_disk_len,
+    };
+    let mut entry_count = 0usize;
+    let mut path_bytes = 0usize;
+    let mut seen_paths = BTreeSet::new();
     while cur.position() < tree_end as u64 {
         let ext = read_cstring(&mut cur, tree_end)?;
         if ext.is_empty() {
@@ -178,6 +591,17 @@ fn walk_vpk_tree<'a>(
                 }
                 let preload = &bytes[preload_start..preload_end];
                 cur.set_position(preload_end as u64);
+                if archive_index == DIR_ARCHIVE {
+                    let start = data_base
+                        .checked_add(u64::from(offset))
+                        .ok_or_else(|| VpkError("VPK file data offset overflows.".into()))?;
+                    let end = start
+                        .checked_add(u64::from(length))
+                        .ok_or_else(|| VpkError("VPK file data size overflows.".into()))?;
+                    if end > data_end {
+                        return Err(VpkError("VPK entry leaves its data section.".into()));
+                    }
+                }
                 let file = if ext == NONE_MARKER {
                     name
                 } else {
@@ -191,15 +615,38 @@ fn walk_vpk_tree<'a>(
                 if rel.contains("..") {
                     return Err(VpkError("Refusing a VPK path that escapes.".into()));
                 }
+                entry_count = entry_count
+                    .checked_add(1)
+                    .ok_or_else(|| VpkError("VPK entry count overflows.".into()))?;
+                if entry_count > limits.entries {
+                    return Err(VpkError(format!(
+                        "VPK contains more than {} entries.",
+                        limits.entries
+                    )));
+                }
+                path_bytes = path_bytes
+                    .checked_add(rel.len())
+                    .ok_or_else(|| VpkError("VPK path metadata size overflows.".into()))?;
+                if path_bytes > limits.path_bytes {
+                    return Err(VpkError("VPK path metadata is too large.".into()));
+                }
+                let normalized_rel = rel.replace('\\', "/");
+                let portable_key = normalized_rel.to_lowercase();
+                if !seen_paths.insert(portable_key) {
+                    return Err(VpkError(format!(
+                        "VPK contains duplicate or portable-colliding path: {normalized_rel}"
+                    )));
+                }
                 visit(RawEntry {
-                    rel: rel.replace('\\', "/"),
+                    rel: normalized_rel,
                     crc,
                     crc_pos,
                     preload,
                     archive_index,
                     offset,
                     length,
-                    data_base: tree_end,
+                    data_base,
+                    data_end,
                 })?;
             }
         }
@@ -211,29 +658,78 @@ fn read_vpk(
     bytes: &[u8],
     dir_path: Option<&Path>,
     keep: Option<&dyn Fn(&str) -> bool>,
+    on_disk_len: u64,
+    limits: TreeLimits,
+    materialization_limits: MaterializationLimits,
 ) -> Result<VpkArchive, VpkError> {
     let mut archives: BTreeMap<u16, std::fs::File> = BTreeMap::new();
     let mut files = BTreeMap::new();
-    // The directory bytes up front, each sibling archive as it is opened.
-    let mut budget = materialize_budget(bytes.len() as u64);
+    // The directory file on disk, then each sibling archive as it is opened.
+    let mut budget = materialize_budget(on_disk_len);
     let mut materialized: u64 = 0;
-    walk_vpk_tree(bytes, &mut |entry| {
+    walk_vpk_tree(bytes, on_disk_len, limits, &mut |entry| {
         if let Some(keep) = keep {
             if !keep(&entry.rel) {
                 return Ok(());
             }
         }
         let length = entry.length as usize;
+        let total_len = entry
+            .preload
+            .len()
+            .checked_add(length)
+            .ok_or_else(|| VpkError("VPK entry size overflows.".into()))?;
+        if total_len as u64 > materialization_limits.entry_bytes {
+            return Err(VpkError(format!(
+                "{} is larger than {} MiB.",
+                entry.rel,
+                materialization_limits.entry_bytes / (1024 * 1024)
+            )));
+        }
+        charge(
+            &mut materialized,
+            budget.min(materialization_limits.total_bytes),
+            entry.preload.len(),
+        )?;
         let mut body = entry.preload.to_vec();
         if length > 0 {
             if entry.archive_index == DIR_ARCHIVE {
-                let start = entry.data_base + entry.offset as usize;
-                let end = start.saturating_add(length);
-                if end > bytes.len() {
-                    return Err(VpkError("VPK file data is truncated.".into()));
+                charge(
+                    &mut materialized,
+                    budget.min(materialization_limits.total_bytes),
+                    length,
+                )?;
+                let start = entry
+                    .data_base
+                    .checked_add(u64::from(entry.offset))
+                    .ok_or_else(|| VpkError("VPK file data offset overflows.".into()))?;
+                let end = start
+                    .checked_add(length as u64)
+                    .ok_or_else(|| VpkError("VPK file data size overflows.".into()))?;
+                if end > entry.data_end {
+                    return Err(VpkError("VPK entry leaves its data section.".into()));
                 }
-                charge(&mut materialized, budget, length)?;
-                body.extend_from_slice(&bytes[start..end]);
+                if let Some(path) = dir_path {
+                    if end > on_disk_len {
+                        return Err(VpkError("VPK file data is truncated.".into()));
+                    }
+                    let archive = match archives.entry(DIR_ARCHIVE) {
+                        std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
+                        std::collections::btree_map::Entry::Vacant(entry) => {
+                            let (opened, _, _, _) = open_regular_no_follow(path, false)?;
+                            entry.insert(opened)
+                        }
+                    };
+                    archive
+                        .seek(SeekFrom::Start(start))
+                        .map_err(|err| VpkError(err.to_string()))?;
+                    append_exact(archive, &mut body, length)?;
+                } else {
+                    if end > bytes.len() as u64 {
+                        return Err(VpkError("VPK file data is truncated.".into()));
+                    }
+                    body.extend_from_slice(&bytes[start as usize..end as usize]);
+                }
             } else {
                 let Some(dir_path) = dir_path else {
                     return Err(VpkError(
@@ -244,13 +740,13 @@ fn read_vpk(
                     archives.entry(entry.archive_index)
                 {
                     let sibling = sibling_archive_path(dir_path, entry.archive_index)?;
-                    let opened =
-                        std::fs::File::open(&sibling).map_err(|err| VpkError(err.to_string()))?;
+                    ensure_same_archive_parent(dir_path, &sibling)?;
+                    let (opened, _, _, _) = open_regular_no_follow(&sibling, false)?;
                     let len = opened
                         .metadata()
                         .map_err(|err| VpkError(err.to_string()))?
                         .len();
-                    budget = budget.saturating_add(len.saturating_mul(2));
+                    budget = add_split_archive_budget(budget, len);
                     e.insert(opened);
                 }
                 let archive = archives
@@ -264,21 +760,41 @@ fn read_vpk(
                 if end > available {
                     return Err(VpkError("VPK archive data is truncated.".into()));
                 }
-                charge(&mut materialized, budget, length)?;
+                charge(
+                    &mut materialized,
+                    budget.min(materialization_limits.total_bytes),
+                    length,
+                )?;
                 archive
                     .seek(SeekFrom::Start(u64::from(entry.offset)))
                     .map_err(|err| VpkError(err.to_string()))?;
-                let mut chunk = vec![0u8; length];
-                archive
-                    .read_exact(&mut chunk)
-                    .map_err(|err| VpkError(err.to_string()))?;
-                body.extend_from_slice(&chunk);
+                append_exact(archive, &mut body, length)?;
             }
         }
         files.insert(entry.rel, body);
         Ok(())
     })?;
     Ok(VpkArchive { files })
+}
+
+fn add_split_archive_budget(current: u64, archive_len: u64) -> u64 {
+    current
+        .saturating_add(archive_len.saturating_mul(2))
+        .min(MAX_MATERIALIZED_VPK_BYTES)
+}
+
+fn append_exact(
+    reader: &mut std::fs::File,
+    body: &mut Vec<u8>,
+    length: usize,
+) -> Result<(), VpkError> {
+    body.try_reserve_exact(length)
+        .map_err(|_| VpkError("Not enough memory for a VPK entry.".into()))?;
+    let start = body.len();
+    body.resize(start + length, 0);
+    reader
+        .read_exact(&mut body[start..])
+        .map_err(|err| VpkError(err.to_string()))
 }
 
 /// Account `length` bytes against the materialization budget before they are
@@ -319,9 +835,9 @@ impl VpkEntryLocation {
 
 /// Map every entry to its physical location without reading any file bodies.
 pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
-    let bytes = std::fs::read(path).map_err(|err| VpkError(err.to_string()))?;
+    let (bytes, on_disk_len) = read_tree_from_path(path, DIRECTORY_LIMITS)?;
     let mut entries = BTreeMap::new();
-    walk_vpk_tree(&bytes, &mut |entry| {
+    walk_vpk_tree(&bytes, on_disk_len, DIRECTORY_LIMITS, &mut |entry| {
         entries.insert(
             entry.rel.clone(),
             VpkEntryLocation {
@@ -332,7 +848,7 @@ pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>
                 archive_index: entry.archive_index,
                 offset: entry.offset,
                 length: entry.length,
-                data_base: entry.data_base as u64,
+                data_base: entry.data_base,
             },
         );
         Ok(())
@@ -351,7 +867,10 @@ pub fn read_vpk_entry(dir_path: &Path, entry: &VpkEntryLocation) -> Result<Vec<u
     let (path, start) = if entry.archive_index == DIR_ARCHIVE {
         (
             dir_path.to_path_buf(),
-            entry.data_base + u64::from(entry.offset),
+            entry
+                .data_base
+                .checked_add(u64::from(entry.offset))
+                .ok_or_else(|| VpkError(format!("{}: entry offset overflows.", entry.rel)))?,
         )
     } else {
         (
@@ -359,12 +878,39 @@ pub fn read_vpk_entry(dir_path: &Path, entry: &VpkEntryLocation) -> Result<Vec<u
             u64::from(entry.offset),
         )
     };
-    let mut file = std::fs::File::open(&path).map_err(|err| VpkError(err.to_string()))?;
+    ensure_same_archive_parent(dir_path, &path)?;
+    let (mut file, opened_metadata, identity, canonical_parent) =
+        open_regular_no_follow(&path, false)?;
+    let available = file
+        .metadata()
+        .map_err(|err| VpkError(err.to_string()))?
+        .len();
+    let length = u64::from(entry.length);
+    let end = start
+        .checked_add(length)
+        .ok_or_else(|| VpkError(format!("{}: entry offset overflows.", entry.rel)))?;
+    if end > available {
+        return Err(VpkError(format!(
+            "{}: entry runs past the archive.",
+            entry.rel
+        )));
+    }
+    if length > MAX_VPK_ENTRY_BYTES {
+        return Err(VpkError(format!(
+            "{}: entry is larger than {} MiB.",
+            entry.rel,
+            MAX_VPK_ENTRY_BYTES / (1024 * 1024)
+        )));
+    }
     file.seek(SeekFrom::Start(start))
         .map_err(|err| VpkError(err.to_string()))?;
-    let mut body = vec![0u8; entry.length as usize];
+    let mut body = Vec::new();
+    body.try_reserve_exact(entry.length as usize)
+        .map_err(|_| VpkError("Not enough memory for a VPK entry.".into()))?;
+    body.resize(entry.length as usize, 0);
     file.read_exact(&mut body)
         .map_err(|err| VpkError(err.to_string()))?;
+    verify_open_identity(&path, &file, &opened_metadata, &identity, &canonical_parent)?;
     Ok(body)
 }
 
@@ -383,46 +929,117 @@ pub fn patch_vpk_entry(
     entry: &VpkEntryLocation,
     data: &[u8],
 ) -> Result<(), VpkError> {
+    patch_vpk_entry_if_unchanged(dir_path, entry, None, data, || Ok(()))
+}
+
+/// Patch an entry only if both its directory mapping and, when supplied, its
+/// current body still match what the caller inspected. `before_write` runs
+/// after those checks and immediately before the write on the already-open
+/// sibling handle; the preloader uses it for a fresh game-process check.
+pub fn patch_vpk_entry_if_unchanged<F>(
+    dir_path: &Path,
+    expected_entry: &VpkEntryLocation,
+    expected_current: Option<&[u8]>,
+    data: &[u8],
+    before_write: F,
+) -> Result<(), VpkError>
+where
+    F: FnOnce() -> Result<(), VpkError>,
+{
     use std::io::Write;
-    if entry.preload_len != 0 {
+    if expected_entry.preload_len != 0 {
         return Err(VpkError(format!(
             "{} keeps preload bytes in the directory; not supported.",
-            entry.rel
+            expected_entry.rel
         )));
     }
-    if data.len() != entry.length as usize {
+    if data.len() != expected_entry.length as usize {
         return Err(VpkError(format!(
             "{}: replacement is {} bytes but the entry stores {}.",
-            entry.rel,
+            expected_entry.rel,
             data.len(),
-            entry.length
+            expected_entry.length
         )));
     }
-    if entry.archive_index == DIR_ARCHIVE {
+    if expected_entry.archive_index == DIR_ARCHIVE {
         // Data stored inside the _dir.vpk itself would force a write to the
         // directory file; no stock particle uses this layout, and keeping the
         // directory byte-pristine matters more than supporting it.
         return Err(VpkError(format!(
             "{} stores its data in the directory file; not supported.",
-            entry.rel
+            expected_entry.rel
         )));
     }
-    let data_path = sibling_archive_path(dir_path, entry.archive_index)?;
-    let start = u64::from(entry.offset);
-    let mut data_file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(&data_path)
-        .map_err(|err| VpkError(err.to_string()))?;
+    // Steam verification and game updates can replace the directory and data
+    // archives independently. Never use an offset mapped before lengthy PCF
+    // processing without confirming that the directory still says exactly the
+    // same thing about this entry.
+    let remapped = map_vpk_entries(dir_path)?;
+    let current_entry = remapped.get(&expected_entry.rel).ok_or_else(|| {
+        VpkError(format!(
+            "{} disappeared while the VPK was being prepared; retry after Steam finishes.",
+            expected_entry.rel
+        ))
+    })?;
+    if current_entry != expected_entry {
+        return Err(VpkError(format!(
+            "{} changed location or CRC while the VPK was being prepared; retry after Steam finishes.",
+            expected_entry.rel
+        )));
+    }
+
+    let data_path = sibling_archive_path(dir_path, current_entry.archive_index)?;
+    ensure_same_archive_parent(dir_path, &data_path)?;
+    let start = u64::from(current_entry.offset);
+    let (mut data_file, opened_metadata, identity, canonical_parent) =
+        open_regular_no_follow(&data_path, true)?;
     let available = data_file
         .metadata()
         .map_err(|err| VpkError(err.to_string()))?
         .len();
-    if start.saturating_add(data.len() as u64) > available {
+    let end = start
+        .checked_add(data.len() as u64)
+        .ok_or_else(|| VpkError(format!("{}: entry size overflows.", current_entry.rel)))?;
+    if end > available {
         return Err(VpkError(format!(
             "{}: entry runs past the archive.",
-            entry.rel
+            current_entry.rel
         )));
     }
+    if let Some(expected) = expected_current {
+        if expected.len() != current_entry.length as usize {
+            return Err(VpkError(format!(
+                "{}: inspected entry length no longer matches.",
+                current_entry.rel
+            )));
+        }
+        data_file
+            .seek(SeekFrom::Start(start))
+            .map_err(|err| VpkError(err.to_string()))?;
+        let mut current = Vec::new();
+        current
+            .try_reserve_exact(expected.len())
+            .map_err(|_| VpkError("Not enough memory to verify a VPK entry.".into()))?;
+        current.resize(expected.len(), 0);
+        data_file
+            .read_exact(&mut current)
+            .map_err(|err| VpkError(err.to_string()))?;
+        if current != expected {
+            return Err(VpkError(format!(
+                "{} changed while the replacement was being prepared; leaving it alone.",
+                current_entry.rel
+            )));
+        }
+    }
+    verify_open_identity(
+        &data_path,
+        &data_file,
+        &opened_metadata,
+        &identity,
+        &canonical_parent,
+    )?;
+    refuse_multiple_hard_links(&data_file, &data_path)?;
+    before_write()?;
     data_file
         .seek(SeekFrom::Start(start))
         .map_err(|err| VpkError(err.to_string()))?;
@@ -705,6 +1322,21 @@ mod tests {
     }
 
     #[test]
+    fn v2_entries_cannot_point_into_checksum_sections() {
+        let mut files = BTreeMap::new();
+        files.insert("particles/test.pcf".into(), b"payload".to_vec());
+        let mut bytes = write_vpk_v2(&files);
+        // Claim the directory-resident data section is empty while leaving the
+        // bytes (and following checksum block) physically present.
+        bytes[12..16].copy_from_slice(&0u32.to_le_bytes());
+
+        let err = validate_vpk_dir_bytes(&bytes).unwrap_err();
+        assert!(err.0.contains("data section"), "{}", err.0);
+        let err = read_vpk_dir_bytes(&bytes).unwrap_err();
+        assert!(err.0.contains("data section"), "{}", err.0);
+    }
+
+    #[test]
     fn writes_and_reads_a_single_file() {
         let mut files = BTreeMap::new();
         files.insert("scripts/tf_weapon_scattergun.ctx".into(), b"hello".to_vec());
@@ -771,6 +1403,142 @@ mod tests {
         assert!(read_vpk_dir_bytes(&dir_bytes).is_err());
         assert!(sibling_archive_path(Path::new("not-a-dir.vpk"), 0).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn caller_materialization_limits_are_exact_and_aggregate() {
+        let dir = std::env::temp_dir().join(format!(
+            "execs-vpk-bounded-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("community.vpk");
+        let mut files = BTreeMap::new();
+        files.insert("particles/one.pcf".into(), b"12345".to_vec());
+        files.insert("particles/two.pcf".into(), b"67890".to_vec());
+        std::fs::write(&path, write_vpk_v2(&files)).unwrap();
+
+        let archive =
+            read_vpk_dir_file_filtered_bounded(&path, &|rel| rel == "particles/one.pcf", 5, 5)
+                .unwrap();
+        assert_eq!(archive.files["particles/one.pcf"], b"12345");
+
+        let err =
+            read_vpk_dir_file_filtered_bounded(&path, &|rel| rel == "particles/one.pcf", 4, 5)
+                .unwrap_err();
+        assert!(err.0.contains("larger"), "{}", err.0);
+
+        let err =
+            read_vpk_dir_file_filtered_bounded(&path, &|rel| rel.starts_with("particles/"), 5, 9)
+                .unwrap_err();
+        assert!(err.0.contains("overlap"), "{}", err.0);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn split_archive_budget_never_grows_past_the_global_ceiling() {
+        assert_eq!(
+            add_split_archive_budget(MAX_MATERIALIZED_VPK_BYTES - 1, u64::MAX),
+            MAX_MATERIALIZED_VPK_BYTES
+        );
+        assert_eq!(add_split_archive_budget(1024, 2048), 1024 + 2 * 2048);
+    }
+
+    fn patch_fixture(root: &Path) -> (PathBuf, PathBuf, VpkEntryLocation, &'static [u8]) {
+        let dir = root.join("game-vpks");
+        std::fs::create_dir_all(&dir).unwrap();
+        let payload: &'static [u8] = b"stock-particle";
+        let sibling = dir.join("tf2_misc_000.vpk");
+        std::fs::write(&sibling, payload).unwrap();
+
+        let mut tree = Vec::new();
+        write_cstring(&mut tree, "pcf");
+        write_cstring(&mut tree, "particles");
+        write_cstring(&mut tree, "test");
+        tree.extend_from_slice(&crc32(payload).to_le_bytes());
+        tree.extend_from_slice(&0u16.to_le_bytes());
+        tree.extend_from_slice(&0u16.to_le_bytes());
+        tree.extend_from_slice(&0u32.to_le_bytes());
+        tree.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        tree.extend_from_slice(&0xffffu16.to_le_bytes());
+        tree.extend_from_slice(&[0, 0, 0]);
+        let mut dir_bytes = Vec::new();
+        dir_bytes.extend_from_slice(&SIGNATURE.to_le_bytes());
+        dir_bytes.extend_from_slice(&1u32.to_le_bytes());
+        dir_bytes.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        dir_bytes.extend_from_slice(&tree);
+        let dir_path = dir.join("tf2_misc_dir.vpk");
+        std::fs::write(&dir_path, dir_bytes).unwrap();
+        let entry = map_vpk_entries(&dir_path)
+            .unwrap()
+            .remove("particles/test.pcf")
+            .unwrap();
+        (dir_path, sibling, entry, payload)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn patch_refuses_a_linked_split_archive_and_preserves_the_victim() {
+        use std::os::unix::fs::symlink;
+
+        let root = std::env::temp_dir().join(format!(
+            "execs-vpk-link-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (dir_path, sibling, entry, payload) = patch_fixture(&root);
+
+        let victim = root.join("outside-victim.vpk");
+        std::fs::write(&victim, payload).unwrap();
+        std::fs::remove_file(&sibling).unwrap();
+        symlink(&victim, &sibling).unwrap();
+        let err = patch_vpk_entry_if_unchanged(
+            &dir_path,
+            &entry,
+            Some(payload),
+            b"new-particle!!",
+            || Ok(()),
+        )
+        .unwrap_err();
+        assert!(err.0.contains("linked"), "{}", err.0);
+        assert_eq!(std::fs::read(&victim).unwrap(), payload);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn patch_refuses_a_hard_linked_split_archive_and_preserves_the_victim() {
+        let root = std::env::temp_dir().join(format!(
+            "execs-vpk-hardlink-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (dir_path, sibling, entry, payload) = patch_fixture(&root);
+        let victim = root.join("outside-victim.vpk");
+        std::fs::remove_file(&sibling).unwrap();
+        std::fs::write(&victim, payload).unwrap();
+        std::fs::hard_link(&victim, &sibling).unwrap();
+
+        let err = patch_vpk_entry_if_unchanged(
+            &dir_path,
+            &entry,
+            Some(payload),
+            b"new-particle!!",
+            || Ok(()),
+        )
+        .unwrap_err();
+        assert!(err.0.contains("hard-linked"), "{}", err.0);
+        assert_eq!(std::fs::read(&victim).unwrap(), payload);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -924,5 +1692,111 @@ mod tests {
         bytes.extend_from_slice(payload);
         let archive = read_vpk_dir_bytes(&bytes).unwrap();
         assert_eq!(archive.files.get("readme").unwrap(), payload);
+    }
+
+    #[test]
+    fn imported_vpk_inner_entry_count_is_bounded_even_for_empty_bodies() {
+        let bytes = overlapping_vpk(MAX_IMPORTED_VPK_ENTRIES + 1, b"");
+        let err = validate_vpk_dir_bytes(&bytes).unwrap_err();
+        assert!(err.0.contains("entries"), "{}", err.0);
+        let err = read_vpk_dir_bytes_filtered(&bytes, &|_| true).unwrap_err();
+        assert!(err.0.contains("entries"), "{}", err.0);
+    }
+
+    #[test]
+    fn portable_colliding_vpk_paths_are_rejected_before_cfg_filtering() {
+        let benign = b"echo benign\n";
+        let hostile = b"connect bad.example\n";
+        let mut tree = Vec::new();
+        write_cstring(&mut tree, "cfg");
+        for (path, name, offset, body) in [
+            ("cfg\\overrides", "AutoExec", 0u32, benign.as_slice()),
+            (
+                "cfg/overrides",
+                "autoexec",
+                benign.len() as u32,
+                hostile.as_slice(),
+            ),
+        ] {
+            write_cstring(&mut tree, path);
+            write_cstring(&mut tree, name);
+            tree.extend_from_slice(&crc32(body).to_le_bytes());
+            tree.extend_from_slice(&0u16.to_le_bytes());
+            tree.extend_from_slice(&DIR_ARCHIVE.to_le_bytes());
+            tree.extend_from_slice(&offset.to_le_bytes());
+            tree.extend_from_slice(&(body.len() as u32).to_le_bytes());
+            tree.extend_from_slice(&0xffffu16.to_le_bytes());
+            tree.push(0);
+        }
+        tree.push(0);
+        tree.push(0);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&SIGNATURE.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&tree);
+        bytes.extend_from_slice(benign);
+        bytes.extend_from_slice(hostile);
+
+        let err = validate_vpk_dir_bytes(&bytes).unwrap_err();
+        assert!(err.0.contains("colliding"), "{}", err.0);
+        let err = read_vpk_dir_bytes_filtered(&bytes, &|path| {
+            path.to_lowercase().ends_with("autoexec.cfg")
+        })
+        .unwrap_err();
+        assert!(err.0.contains("colliding"), "{}", err.0);
+    }
+
+    #[test]
+    fn filtered_path_read_streams_single_file_vpk_data() {
+        let dir = std::env::temp_dir().join(format!(
+            "execs-vpk-stream-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("community.vpk");
+        let mut files = BTreeMap::new();
+        files.insert("materials/large.vtf".into(), vec![7; 4 * 1024 * 1024]);
+        files.insert("particles/wanted.pcf".into(), b"small".to_vec());
+        std::fs::write(&path, write_vpk_v2(&files)).unwrap();
+
+        let archive =
+            read_vpk_dir_file_filtered(&path, &|rel| rel == "particles/wanted.pcf").unwrap();
+        assert_eq!(archive.files.len(), 1);
+        assert_eq!(archive.files["particles/wanted.pcf"], b"small");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn entry_length_is_checked_before_allocation() {
+        let dir = std::env::temp_dir().join(format!(
+            "execs-vpk-length-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir_path = dir.join("tf2_misc_dir.vpk");
+        std::fs::write(&dir_path, b"not used").unwrap();
+        std::fs::write(dir.join("tf2_misc_000.vpk"), [0u8]).unwrap();
+        let entry = VpkEntryLocation {
+            rel: "particles/bad.pcf".into(),
+            crc: 0,
+            crc_pos: 0,
+            preload_len: 0,
+            archive_index: 0,
+            offset: 0,
+            length: u32::MAX,
+            data_base: 0,
+        };
+        let err = read_vpk_entry(&dir_path, &entry).unwrap_err();
+        assert!(err.0.contains("past the archive"), "{}", err.0);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

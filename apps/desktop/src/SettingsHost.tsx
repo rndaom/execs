@@ -22,17 +22,18 @@ import {
   shouldSyncTrackedBinds,
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
-import type {
-  HudCatalogEntry,
-  HudSchemaView,
-  HudStat,
-  HudUiState,
-  ModsCatalog,
-  PreloaderReport,
-  PreloaderStatusPayload,
-  ProfileDetail,
-  SteamWriteStatus,
-  StockCrosshairSprite,
+import {
+  type HudCatalogEntry,
+  type HudSchemaView,
+  type HudStat,
+  type HudUiState,
+  type ModsCatalog,
+  type PreloaderReport,
+  type PreloaderStatusPayload,
+  type ProfileDetail,
+  parseInvokeError,
+  type SteamWriteStatus,
+  type StockCrosshairSprite,
 } from "./lib/bridge";
 import {
   type ComfigUiState,
@@ -40,11 +41,12 @@ import {
   hasBaseVpk,
   toggleComfigAddon,
 } from "./lib/comfig-ui";
+import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
 import { gameplayPath } from "./lib/gameplay-ui";
 import { HudReloadQueue } from "./lib/hud-reload-ui";
 import { emptyHudState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
-import { PRELOADER_REPO_URL } from "./lib/mods-ui";
+import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import type { SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
@@ -101,9 +103,10 @@ export function SettingsHost({
 }) {
   const { error } = useAppStatus();
   const toast = useToast();
-  const [localBusy, setLocalBusy] = useState(false);
+  const [queueBusy, setQueueBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [files, setFiles] = useState<CfgText[]>([]);
+  const [filesLimited, setFilesLimited] = useState(false);
   const [comfig, setComfig] = useState<ComfigUiState>(defaultComfigState);
   const [launch, setLaunch] = useState(recommendedLaunchOptions);
   /** What the profile actually holds — the pane's draft is diffed against it. */
@@ -127,29 +130,30 @@ export function SettingsHost({
   const [modsCatalog, setModsCatalog] = useState<ModsCatalog | null>(null);
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
-  const [settingsBusyQueue] = useState(
-    () =>
-      new SettingsBusyQueue((next) => {
-        setLocalBusy(next);
-        onBusyChange(next);
-      }),
-  );
+  const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   const hudRequest = useRef(0);
   const hudReloadQueue = useRef(new HudReloadQueue());
   /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
   const loadRequest = useRef(0);
 
+  const repairBusy = modsPayload?.repairInProgress === true;
+
+  // Queue work and Steam verification both own the write surface. Reflect both
+  // in App so launch, profile switches, update install, and every pane disable
+  // together instead of only locking controls in the Mods pane.
+  useEffect(() => {
+    onBusyChange(queueBusy || repairBusy);
+  }, [onBusyChange, queueBusy, repairBusy]);
+
   // A write in flight when this host unmounts still calls release() on the dead
-  // instance, which would leave App.settingsBusy latched true — switch, wizard
-  // apply and the whole ready panel disabled with no way back but a restart.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: unmount only; onBusyChange is stable.
+  // instance, which would otherwise leave App.settingsBusy latched true.
   useEffect(() => {
     return () => {
       onBusyChange(false);
     };
-  }, []);
+  }, [onBusyChange]);
 
-  const busy = externalBusy || localBusy;
+  const busy = externalBusy || queueBusy || repairBusy;
   const layer = detail?.layer ?? "comfig";
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
@@ -169,9 +173,11 @@ export function SettingsHost({
       return;
     }
     setDetail(next);
-    const cfgPaths = (next?.files ?? []).filter((file) => file.path.toLowerCase().endsWith(".cfg"));
+    const candidates = editorCfgCandidates(next?.files ?? []);
     const loaded: CfgText[] = [];
-    for (const file of cfgPaths) {
+    let totalBytes = 0;
+    let wasLimited = candidates.limited;
+    for (const file of candidates.files) {
       // One unreadable cfg must not abort the whole load: `files` would keep
       // its stale value and every pane would reseed from its defaults, which
       // reads to the user as "my settings reverted".
@@ -181,15 +187,28 @@ export function SettingsHost({
           return;
         }
         if (content.text !== null) {
+          const nextTotal = addEditorTextToBudget(totalBytes, content.text);
+          if (nextTotal === null) {
+            wasLimited = true;
+            break;
+          }
+          totalBytes = nextTotal;
           loaded.push({ path: content.path, text: content.text });
         }
-      } catch {
+      } catch (error) {
         // Tracked but unreadable (missing blob, path outside the profile).
+        const code = parseInvokeError(error).code;
+        if (code === "FileTooLarge" || code === "InvalidPath") {
+          wasLimited = true;
+        }
       }
     }
+    setFilesLimited(wasLimited);
     let nextFiles = loaded;
     const nextLayer = next?.layer ?? "comfig";
-    if (opts?.syncBinds && !running) {
+    // Never derive a managed binds rewrite from a deliberately partial file
+    // bundle: a size/count refusal can omit config.cfg or an included exec.
+    if (opts?.syncBinds && !running && !wasLimited) {
       const bindsPath = bindsFilePath(nextLayer);
       const managed = nextFiles.find((file) => file.path === bindsPath)?.text ?? "";
       const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
@@ -823,12 +842,82 @@ export function SettingsHost({
               { success: "Stock files restored", failure: "Could not restore" },
             );
           }}
+          onRecover={() => {
+            void runWrite(
+              async () => {
+                setModsPayload(await api.recoverPreloader());
+              },
+              { success: "Recovery finished", failure: "Could not recover" },
+            );
+          }}
           onRepair={async () => {
             onError(null);
+            setModsPayload((current) =>
+              current ? { ...current, repairInProgress: true } : current,
+            );
             try {
               await api.repairGameFiles();
+              await refreshModsStatus();
             } catch (err) {
+              // A retry can fail to reopen Steam while an older verification
+              // lease is still valid. Ask the backend instead of optimistically
+              // unlocking the renderer.
+              await refreshModsStatus().catch(() => {});
               onError(err instanceof Error ? err.message : "Could not start the repair.");
+              throw err;
+            }
+          }}
+          onCompleteRepair={async (selection: ModSelection) => {
+            onError(null);
+            let released = false;
+            try {
+              const complete = await api.completeGameFileRepair();
+              if (!complete) {
+                await refreshModsStatus();
+                onError("Steam's repair is still changing TF2 files. Wait, then confirm again.");
+                return false;
+              }
+              released = true;
+              if (
+                selection.addons.length > 0 ||
+                selection.particleMods.length > 0 ||
+                selection.profileParticleMods.length > 0
+              ) {
+                setModsReport(
+                  await api.applyPreloaderMods(
+                    selection.addons,
+                    selection.particleMods,
+                    selection.profileParticleMods,
+                  ),
+                );
+              }
+              await refreshModsStatus();
+              return true;
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not confirm the repair.");
+              await refreshModsStatus().catch(() => {});
+              // Completion may have safely released maintenance before
+              // re-applying the selection failed. Do not resurrect a repair
+              // state the backend no longer owns.
+              if (released) {
+                return true;
+              }
+              throw err;
+            }
+          }}
+          onCancelRepair={async () => {
+            onError(null);
+            try {
+              const cancelled = await api.cancelGameFileRepair();
+              await refreshModsStatus();
+              return cancelled;
+            } catch (err) {
+              onError(
+                err instanceof Error
+                  ? err.message
+                  : "Could not cancel the repair lock. Close Steam and TF2 first.",
+              );
+              await refreshModsStatus().catch(() => {});
               throw err;
             }
           }}
@@ -887,6 +976,7 @@ export function SettingsHost({
         <FilesPane
           profileId={profileId}
           files={files}
+          limited={filesLimited}
           hudId={detail?.hud?.id ?? null}
           onSave={(path, text) => {
             void runWrite(async () => {

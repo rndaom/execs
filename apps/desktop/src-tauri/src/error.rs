@@ -32,6 +32,15 @@ impl CommandError {
     pub fn unknown(message: impl Into<String>) -> Self {
         Self::new("Unknown", message)
     }
+
+    /// Preserve the write-lock code across the preloader's legacy string API.
+    pub fn preloader(message: String) -> Self {
+        if execs_core::preloader::is_game_running_error(&message) {
+            WriteLockError::GameRunning.into()
+        } else {
+            Self::unknown(message)
+        }
+    }
 }
 
 impl std::fmt::Display for CommandError {
@@ -106,6 +115,13 @@ mod tests {
 
         let owned: CommandError = String::from("boom").into();
         assert_eq!(owned.code, "Unknown");
+    }
+
+    #[test]
+    fn preloader_running_error_keeps_its_type() {
+        let message = WriteLockError::GameRunning.message().to_string();
+        let err = CommandError::preloader(message);
+        assert_eq!(err.code, "GameRunning");
     }
 
     #[test]

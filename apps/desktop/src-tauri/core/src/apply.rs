@@ -1,18 +1,21 @@
 //! Incremental apply of one owned file to the library and, if active, live TF2.
 
-use std::fs;
 use std::path::{Path, PathBuf};
+
+#[cfg(test)]
+use std::fs;
 
 use serde::{Deserialize, Serialize};
 
-use crate::absorb::write_config_cfg_dual_to;
+use crate::absorb::{set_cloud_sync_pending, write_config_cfg_dual_to};
 use crate::blob::blob_path;
 use crate::finder::discover_steam_roots;
-use crate::process_lock::live_process_names;
+use crate::hash::{read_small_file_bounded, MAX_CFG_FILE_BYTES};
+use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, is_shared_rel_path, load_library_from, load_manifest, normalize_rel_path,
-    profiles_dir, put_exclusive_file_to, put_shared_blob_to, CrosshairRecord, FileStorage,
-    HudRecord, ProfileError, ProfileFile, ViewmodelRecord,
+    exclusive_file_path, is_profile_ownable_rel_path, load_library_from, load_manifest,
+    mutate_profile_files_to, normalize_rel_path, profiles_dir, CrosshairRecord, FileSource,
+    FileStorage, HudRecord, ProfileError, ProfileFile, ProfileLiveProjection, ViewmodelRecord,
 };
 use crate::surface::CfgLayer;
 
@@ -129,7 +132,8 @@ pub fn profile_file_bytes_from(
         .find(|file| file.path == rel_path)
         .ok_or(ProfileError::InvalidPath)?;
     let source = manifest_source_path(profiles_dir, &manifest.id, file)?;
-    fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))
+    read_small_file_bounded(&source, MAX_CFG_FILE_BYTES)
+        .map_err(|err| ProfileError::Io(err.to_string()))
 }
 
 pub fn read_profile_file(
@@ -155,7 +159,8 @@ pub fn read_profile_file_from(
         .find(|file| file.path == path)
         .ok_or(ProfileError::InvalidPath)?;
     let source = manifest_source_path(profiles_dir, &manifest.id, file)?;
-    let bytes = fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let bytes = read_small_file_bounded(&source, MAX_CFG_FILE_BYTES)
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
     let text = String::from_utf8(bytes.clone()).ok();
     Ok(ProfileFileContent {
         path,
@@ -200,17 +205,47 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     let path = checked_owned_path(rel_path)?;
-    if is_shared_rel_path(&path) {
-        put_shared_blob_to(profiles_dir, tf2_root, profile_id, &path, bytes, &running)?;
-    } else {
-        put_exclusive_file_to(profiles_dir, tf2_root, profile_id, &path, bytes, &running)?;
-    }
-
+    refuse_if_running_among(&running)?;
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    if library.active_profile_id.as_deref() == Some(profile_id) {
-        apply_owned_file_to_live(profiles_dir, tf2_root, profile_id, &path, &options)?;
+    let active = library.active_profile_id.as_deref() == Some(profile_id);
+    let config_needs_cloud = active && path == CONFIG_CFG;
+    let puts = [(path, FileSource::Bytes(bytes))];
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &puts,
+        &[],
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |manifest| {
+            if config_needs_cloud {
+                manifest.cloud_sync_pending = true;
+            }
+            Ok(())
+        },
+    )?;
+
+    if config_needs_cloud {
+        let roots = match options.steam_roots {
+            Some(roots) => roots.to_vec(),
+            None => discover_steam_roots(),
+        };
+        if write_config_cfg_dual_to(tf2_root, bytes, &roots).is_ok() {
+            // Both authoritative local copies are already committed. Failure
+            // to clear this retry bit must not turn a successful Save into a
+            // misleading rollback error; absorb will retry idempotently.
+            let _ = set_cloud_sync_pending(
+                profiles_dir,
+                tf2_root,
+                profile_id,
+                false,
+                &live_process_names(),
+            );
+        }
+        return profile_detail_from(profiles_dir, profile_id);
     }
-    profile_detail_from(profiles_dir, profile_id)
+    Ok(detail_from_manifest(&manifest))
 }
 
 fn profile_detail_from(
@@ -221,38 +256,6 @@ fn profile_detail_from(
     Ok(detail_from_manifest(&manifest))
 }
 
-fn apply_owned_file_to_live(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    rel_path: &str,
-    options: &WriteOwnedOptions<'_>,
-) -> Result<(), ProfileError> {
-    let manifest = load_manifest(profiles_dir, profile_id)?;
-    let file = manifest
-        .files
-        .iter()
-        .find(|file| file.path == rel_path)
-        .ok_or(ProfileError::InvalidPath)?;
-    let source = manifest_source_path(profiles_dir, &manifest.id, file)?;
-    let dest = live_path(tf2_root, rel_path);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|err| ProfileError::Io(err.to_string()))?;
-    }
-    let bytes = fs::read(&source).map_err(|err| ProfileError::Io(err.to_string()))?;
-    // Temp + rename: a crash mid-write would otherwise leave a truncated
-    // .cfg/.vpk in the live tree, which the game happily mounts.
-    crate::hash::write_atomic(&dest, &bytes).map_err(|err| ProfileError::Io(err.to_string()))?;
-    if rel_path == CONFIG_CFG {
-        let roots = match options.steam_roots {
-            Some(roots) => roots.to_vec(),
-            None => discover_steam_roots(),
-        };
-        write_config_cfg_dual_to(tf2_root, &bytes, &roots)?;
-    }
-    Ok(())
-}
-
 /// Where the library keeps one manifest file: the profile's exclusive tree or
 /// the shared blob store. `Err` means the library copy is gone.
 pub(crate) fn manifest_source_path(
@@ -260,11 +263,14 @@ pub(crate) fn manifest_source_path(
     profile_id: &str,
     file: &ProfileFile,
 ) -> Result<PathBuf, ProfileError> {
+    if !is_profile_ownable_rel_path(&file.path) {
+        return Err(ProfileError::ForbiddenPath(file.path.clone()));
+    }
     let path = match file.storage {
         FileStorage::Shared => blob_path(profiles_dir, &file.sha256),
         FileStorage::Exclusive => exclusive_file_path(profiles_dir, profile_id, &file.path),
     };
-    if !path.is_file() {
+    if crate::hash::validate_file_within(profiles_dir, &path).is_err() {
         return Err(ProfileError::Io(format!(
             "Profile file missing: {}",
             file.path
@@ -273,17 +279,9 @@ pub(crate) fn manifest_source_path(
     Ok(path)
 }
 
-fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
-    let mut path = tf2_root.to_path_buf();
-    for part in rel.split('/') {
-        path.push(part);
-    }
-    path
-}
-
 fn checked_owned_path(path: &str) -> Result<String, ProfileError> {
     let path = normalize_rel_path(path)?;
-    if !is_file_safe_rel_path(&path) {
+    if !is_profile_ownable_rel_path(&path) {
         return Err(ProfileError::ForbiddenPath(path));
     }
     Ok(path)
@@ -361,6 +359,43 @@ mod tests {
             read_profile_file_from(&profiles, &root, &id, "tf/cfg/overrides/autoexec.cfg").unwrap();
         assert_eq!(read.text.as_deref(), Some("fov_desired 90\n"));
         assert!(!read.binary);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn profile_file_read_refuses_oversized_sparse_payload() {
+        let dir = test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = tf2_root(&dir);
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = library.profiles[0].id.clone();
+        let rel = "tf/cfg/oversized.cfg";
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            rel,
+            b"small",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        let payload = exclusive_file_path(&profiles, &id, rel);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&payload)
+            .unwrap()
+            .set_len(MAX_CFG_FILE_BYTES as u64 + 1)
+            .unwrap();
+
+        assert!(matches!(
+            read_profile_file_from(&profiles, &root, &id, rel),
+            Err(ProfileError::Io(_))
+        ));
+        assert!(matches!(
+            profile_file_bytes_from(&profiles, &id, rel),
+            Err(ProfileError::Io(_))
+        ));
         cleanup(&dir);
     }
 
@@ -472,6 +507,133 @@ mod tests {
             fs::read_to_string(steam.join("userdata/111/440/remote/cfg/config.cfg")).unwrap(),
             "bind w +forward\n"
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn failed_cloud_write_is_retried_after_live_already_matches() {
+        let dir = test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = tf2_root(&dir);
+        let steam = dir.join("Steam");
+        let cloud = steam.join("userdata/111/440/remote/cfg/config.cfg");
+        fs::create_dir_all(cloud.parent().unwrap()).unwrap();
+        fs::create_dir_all(steam.join("userdata/111/config")).unwrap();
+        fs::write(
+            steam.join("userdata/111/config/localconfig.vdf"),
+            "\"UserLocalConfigStore\"\n{\n}\n",
+        )
+        .unwrap();
+        // A directory at the final destination fails after both live and the
+        // profile manifest have committed.
+        fs::create_dir(&cloud).unwrap();
+
+        create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
+            .id
+            .clone();
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let roots = [steam.clone()];
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            CONFIG_CFG,
+            b"bind w +forward\n",
+            unlocked(),
+            WriteOwnedOptions {
+                steam_roots: Some(&roots),
+            },
+        )
+        .unwrap();
+        assert!(load_manifest(&profiles, &id).unwrap().cloud_sync_pending);
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"bind w +forward\n"
+        );
+
+        fs::remove_dir(&cloud).unwrap();
+        crate::absorb::absorb_owned_to(
+            &profiles,
+            &root,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&roots),
+            },
+        )
+        .unwrap();
+        assert_eq!(fs::read(&cloud).unwrap(), b"bind w +forward\n");
+        assert!(!load_manifest(&profiles, &id).unwrap().cloud_sync_pending);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn cloud_marker_clear_failure_is_a_retryable_saved_outcome() {
+        let dir = test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = tf2_root(&dir);
+        let steam = dir.join("Steam");
+        let cloud = steam.join("userdata/111/440/remote/cfg/config.cfg");
+        fs::create_dir_all(cloud.parent().unwrap()).unwrap();
+        fs::create_dir_all(steam.join("userdata/111/config")).unwrap();
+        fs::write(
+            steam.join("userdata/111/config/localconfig.vdf"),
+            "\"UserLocalConfigStore\"\n{\n}\n",
+        )
+        .unwrap();
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = library.profiles[0].id.clone();
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let manifest_path = crate::profile::manifest_file(&profiles, &id);
+        let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+        let sampler_fired = fired.clone();
+        let sampled_cloud = cloud.clone();
+        let sampled_manifest = manifest_path.clone();
+        let roots = [steam.clone()];
+
+        crate::profile::with_profile_process_sampler(
+            move || {
+                let ready = sampled_cloud.is_file()
+                    && fs::read_to_string(&sampled_manifest)
+                        .ok()
+                        .is_some_and(|json| json.contains("\"cloudSyncPending\": true"));
+                if ready && !sampler_fired.replace(true) {
+                    vec![tf2_name().to_string()]
+                } else {
+                    Vec::new()
+                }
+            },
+            || {
+                write_owned_file_to(
+                    &profiles,
+                    &root,
+                    &id,
+                    CONFIG_CFG,
+                    b"bind w +forward\n",
+                    unlocked(),
+                    WriteOwnedOptions {
+                        steam_roots: Some(&roots),
+                    },
+                )
+            },
+        )
+        .unwrap();
+
+        assert!(fired.get());
+        assert_eq!(fs::read(&cloud).unwrap(), b"bind w +forward\n");
+        assert!(load_manifest(&profiles, &id).unwrap().cloud_sync_pending);
+        crate::absorb::absorb_owned_to(
+            &profiles,
+            &root,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&roots),
+            },
+        )
+        .unwrap();
+        assert!(!load_manifest(&profiles, &id).unwrap().cloud_sync_pending);
         cleanup(&dir);
     }
 

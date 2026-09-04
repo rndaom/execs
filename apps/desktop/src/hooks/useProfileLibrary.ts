@@ -82,7 +82,7 @@ export function useProfileLibrary(
 
   // Materialize the library folder the first time we have a usable root.
   useEffect(() => {
-    if (!confirmed || running || !library) {
+    if (!confirmed || running || busy || !library) {
       return;
     }
     if (library.initialized || library.rootMismatch || !library.usable) {
@@ -104,12 +104,12 @@ export function useProfileLibrary(
     return () => {
       cancelled = true;
     };
-  }, [api, confirmed, running, library, setError]);
+  }, [api, confirmed, running, busy, library, setError]);
 
   // Absorb live drift after every observed quit (and on boot with TF2 closed).
   const libraryReady = library !== null;
   useEffect(() => {
-    if (!confirmed || !libraryReady || running || quitNonce === 0) {
+    if (!confirmed || !libraryReady || running || busy || quitNonce === 0) {
       return;
     }
     let cancelled = false;
@@ -137,7 +137,7 @@ export function useProfileLibrary(
     return () => {
       cancelled = true;
     };
-  }, [api, confirmed, libraryReady, running, quitNonce, setError]);
+  }, [api, confirmed, libraryReady, running, busy, quitNonce, setError]);
 
   const saveCurrent = useCallback(
     async (name: string) => {
@@ -209,6 +209,14 @@ export function useProfileLibrary(
         setPackPromptDeferred(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not switch profiles.");
+        // A failure after the durable switch marker was written clears the
+        // active profile on disk. Never leave the renderer showing the stale
+        // pre-switch active id; the refreshed library also exposes recovery.
+        try {
+          setLibrary(await api.getProfileLibrary());
+        } catch {
+          /* Keep the switch error; it carries the recovery instruction. */
+        }
         progress.cancel();
       } finally {
         setBusy(false);

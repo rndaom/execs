@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "TF2 desktop companion"
 authors = ["rndaom"]
 edition = "2021"
+rust-version = "1.93"
 
 [lib]
 name = "execs_lib"
@@ -25,7 +26,6 @@ serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 # The write gate's mutex. Must be tokio's (not std's): the guard is held

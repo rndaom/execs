@@ -28,9 +28,12 @@ import {
   modsStatusLine,
   PRELOADER_CREDIT,
   PRELOADER_EXPLAINER,
-  REPAIR_POLL_MS,
   REPAIR_TIMEOUT_MS,
-  repairComplete,
+  type RepairState,
+  repairActionDisabled,
+  repairPollDelay,
+  repairReadyForConfirmation,
+  repairStateAfterBackendRead,
   serializeModSelection,
   summarizeReport,
   toggleName,
@@ -52,8 +55,14 @@ export type ModsPaneProps = {
   onToggleBypass: (enabled: boolean) => void;
   onTogglePreload: (enabled: boolean) => void;
   onRevert: () => void;
+  /** Finish a crash-interrupted preloader transaction without changing selection. */
+  onRecover: () => void;
   /** Start Steam's verify; the pane polls `onRefreshStatus` until it finishes. */
   onRepair: () => Promise<void>;
+  /** User-confirmed completion; backend also requires a stable clean interval. */
+  onCompleteRepair: (selection: ModSelection) => Promise<boolean>;
+  /** Escape a cancelled verify only after Steam and TF2 are both closed. */
+  onCancelRepair: () => Promise<boolean>;
   onRefreshStatus: () => Promise<void>;
   onOpenRepo: () => void;
   onImportArchive: () => void;
@@ -76,7 +85,10 @@ export function ModsPane({
   onToggleBypass,
   onTogglePreload,
   onRevert,
+  onRecover,
   onRepair,
+  onCompleteRepair,
+  onCancelRepair,
   onRefreshStatus,
   onOpenRepo,
   onImportArchive,
@@ -85,6 +97,7 @@ export function ModsPane({
   onInstallGameBananaMod,
 }: ModsPaneProps) {
   const { running, busy } = useAppStatus();
+  const canWrite = useCanWrite();
   const status = payload?.status ?? null;
   const installed = useMemo<ModSelection>(() => installedModSelection(payload), [payload]);
   const [draft, setSelection] = useSeededDraft(installed, serializeModSelection);
@@ -94,56 +107,101 @@ export function ModsPane({
   const selection = visibleModSelection(draft, particleSources, installed.profileParticleMods);
   const { addons, particleMods, profileParticleMods } = selection;
   const [browsing, setBrowsing] = useState(false);
-
-  const locked = !useCanWrite();
-  const canApply = modsApplyEnabled(payload, selection);
-  const untracked = status?.untrackedModified ?? [];
   // Steam's verify runs outside the app; while it does, poll the status and,
   // once every stale file reads as stock again, put the selection back.
-  const [repair, setRepair] = useState<"idle" | "waiting" | "timeout" | "done">("idle");
+  const [repair, setRepair] = useState<RepairState>("idle");
   const repairStarted = useRef(0);
+  const repairStartPending = useRef(false);
   const repairSelection = useRef<ModSelection>(installed);
+  const locked =
+    !canWrite ||
+    payload?.repairInProgress === true ||
+    payload?.recoveryRequired === true ||
+    repair === "waiting";
+  const canApply = modsApplyEnabled(payload, selection);
+  const untracked = status?.untrackedModified ?? [];
+
+  // The backend owns verification state so navigation/remounts cannot unlock
+  // the app while Steam is still mutating game files.
   useEffect(() => {
-    if (repair !== "waiting") {
+    if (payload?.repairInProgress && repair === "idle") {
+      repairStarted.current = Date.now();
+      repairSelection.current = installed;
+      setRepair("waiting");
+    }
+  }, [installed, payload?.repairInProgress, repair]);
+
+  useEffect(() => {
+    if (!payload) {
       return;
     }
-    if (repairComplete(payload)) {
-      setRepair("done");
-      const want = repairSelection.current;
-      if (
-        want.addons.length > 0 ||
-        want.particleMods.length > 0 ||
-        want.profileParticleMods.length > 0
-      ) {
-        onApply(want.addons, want.particleMods, want.profileParticleMods);
-      }
+    const reconciled = repairStateAfterBackendRead(
+      repair,
+      payload.repairInProgress === true,
+      repairStartPending.current,
+    );
+    if (reconciled !== repair) {
+      setRepair(reconciled);
+    }
+  }, [payload, repair]);
+
+  useEffect(() => {
+    const delay = repairPollDelay(repair);
+    if (delay === null) {
       return;
     }
-    if (Date.now() - repairStarted.current > REPAIR_TIMEOUT_MS) {
+    if (repairReadyForConfirmation(payload)) {
+      // A clean scan is only readiness for explicit confirmation. Steam can
+      // restore the affected VPK before its external verify job has ended.
+      return;
+    }
+    if (repair === "waiting" && Date.now() - repairStarted.current > REPAIR_TIMEOUT_MS) {
       setRepair("timeout");
       return;
     }
     const timer = window.setTimeout(() => {
       void onRefreshStatus().catch(() => {});
-    }, REPAIR_POLL_MS);
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [repair, payload, onApply, onRefreshStatus]);
-
-  // Steam can finish after the wait gave up. Once the status reports nothing
-  // left to repair the section goes away rather than counting zero files.
-  useEffect(() => {
-    if (repair === "timeout" && untracked.length === 0) {
-      setRepair("idle");
-    }
-  }, [repair, untracked.length]);
+  }, [repair, payload, onRefreshStatus]);
 
   async function startRepair() {
+    repairStartPending.current = true;
     repairStarted.current = Date.now();
     repairSelection.current = selection;
     setRepair("waiting");
     try {
       await onRepair();
     } catch {
+      setRepair("idle");
+    } finally {
+      repairStartPending.current = false;
+    }
+  }
+
+  async function finishRepair() {
+    setRepair("confirming");
+    try {
+      const want = repairSelection.current;
+      if (!(await onCompleteRepair(want))) {
+        setRepair("waiting");
+        return;
+      }
+      setRepair("done");
+    } catch {
+      // A lost response may follow a successful backend clear. The refreshed
+      // payload reconciles this to waiting again only if the marker remains.
+      setRepair("idle");
+    }
+  }
+
+  async function cancelRepair() {
+    try {
+      if (await onCancelRepair()) {
+        setRepair("idle");
+      }
+    } catch {
+      // SettingsHost presents the structured reason (usually SteamRunning).
       setRepair("idle");
     }
   }
@@ -215,6 +273,22 @@ export function ModsPane({
         ) : null}
       </div>
 
+      {payload?.recoveryRequired ? (
+        <Alert tone="warn" testId="mods-recovery-required" className="mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>An interrupted mod change must finish before other files can be changed.</span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={!canWrite || payload.repairInProgress === true}
+              onClick={onRecover}
+            >
+              Finish recovery
+            </button>
+          </div>
+        </Alert>
+      ) : null}
+
       {status?.stale ? (
         <Alert tone="warn" testId="mods-stale" className="mt-6">
           TF2 updated — the old patches are gone. Apply again to re-install them.
@@ -226,32 +300,72 @@ export function ModsPane({
           press Apply again. Without it, mods stay invisible on Valve servers.
         </Alert>
       ) : null}
-      {untracked.length > 0 || repair === "waiting" ? (
+      {untracked.length > 0 || payload?.repairInProgress || repair === "waiting" ? (
         <section data-testid="mods-repair" className="section">
           <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
             <div className="min-w-0 max-w-[62ch]">
               <h2 className="t-section">
-                {repair === "waiting"
-                  ? "Waiting for Steam to verify"
-                  : `${untracked.length} particle ${untracked.length === 1 ? "file needs" : "files need"} a repair`}
+                {repair === "confirming"
+                  ? "Confirming Steam is finished"
+                  : payload?.repairInProgress && untracked.length === 0
+                    ? "Finish Steam verification"
+                    : repair === "waiting"
+                      ? "Waiting for Steam to verify"
+                      : `${untracked.length} particle ${untracked.length === 1 ? "file needs" : "files need"} a repair`}
               </h2>
               <p className="t-meta mt-1">
-                {repair === "waiting"
-                  ? "Keep the game closed; your selection re-applies when Steam finishes."
-                  : repair === "timeout"
-                    ? "Steam has not finished. Press Repair again once it is done."
-                    : "Patched by an earlier install with no snapshot to restore. Repair asks Steam to verify TF2, then re-applies your selection."}
+                {repair === "confirming"
+                  ? "Checking that TF2's official files stay unchanged before unlocking writes."
+                  : payload?.repairInProgress && untracked.length === 0
+                    ? "Wait until Steam says verification is complete, then confirm here. execs checks again before unlocking writes."
+                    : repair === "waiting"
+                      ? "Keep the game closed. Confirm here only after Steam reports verification complete."
+                      : repair === "timeout"
+                        ? "Steam has not finished. Keep waiting, or close Steam and cancel the repair lock if you stopped it."
+                        : "Patched by an earlier install with no snapshot to restore. Repair asks Steam to verify TF2, then re-applies your selection."}
               </p>
             </div>
-            <button
-              type="button"
-              data-testid="mods-repair-button"
-              className="btn btn-primary"
-              disabled={locked || repair === "waiting"}
-              onClick={() => void startRepair()}
-            >
-              {repair === "waiting" ? "Verifying…" : "Repair with Steam"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {payload?.repairInProgress && untracked.length === 0 ? (
+                <button
+                  type="button"
+                  data-testid="mods-repair-complete"
+                  className="btn btn-primary"
+                  disabled={running || repair === "confirming"}
+                  onClick={() => void finishRepair()}
+                >
+                  {repair === "confirming" ? "Checking…" : "Steam says it’s finished"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="mods-repair-button"
+                  className="btn btn-primary"
+                  disabled={repairActionDisabled(
+                    running,
+                    busy,
+                    payload?.repairInProgress === true,
+                    repair,
+                  )}
+                  onClick={() => void startRepair()}
+                >
+                  {payload?.repairInProgress || repair === "waiting"
+                    ? "Verifying…"
+                    : "Repair with Steam"}
+                </button>
+              )}
+              {payload?.repairInProgress ? (
+                <button
+                  type="button"
+                  data-testid="mods-repair-cancel"
+                  className="btn btn-ghost"
+                  disabled={running || repair === "confirming"}
+                  onClick={() => void cancelRepair()}
+                >
+                  Cancel repair lock
+                </button>
+              ) : null}
+            </div>
           </div>
         </section>
       ) : null}

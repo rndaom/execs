@@ -2,22 +2,23 @@
 //!
 //! Does not write the live TF2 folder. Apply uses `switch_profile` after this.
 
-use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::apply::profile_file_bytes_from;
+use crate::apply::manifest_source_path;
+use crate::hash::read_small_file_bounded;
 use crate::launch::{recommended_launch_options, sanitize_launch_options};
 use crate::process_lock::live_process_names;
 use crate::profile::{
-    create_profile_record_to, is_shared_rel_path, load_library_from, load_manifest, profiles_dir,
-    put_exclusive_file_to, put_shared_blob_to, FileStorage, ProfileError, ProfileLibrary,
+    create_populated_profile_to, load_library_from, load_manifest, profiles_dir, FileSource,
+    FileStorage, ProfileError, ProfileLibrary,
 };
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
 const SETUP_HOOK: &str = "tf/cfg/overrides/setup_hook.cfg";
 const BASE_VPK: &str = "tf/custom/mastercomfig-base.vpk";
+const MAX_WIZARD_CONFIG_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -238,120 +239,55 @@ where
     // Read the source config before the new record exists: `current` means the
     // profile that is active now, never the one we are about to create.
     let config = build_config_cfg(profiles_dir, tf2_root, start_from)?;
-    let library = create_profile_record_to(profiles_dir, tf2_root, &spec.name, &running)?;
-    let profile_id = library
+    let before = load_library_from(profiles_dir, Some(tf2_root))?;
+    let previous_ids: std::collections::HashSet<&str> = before
         .profiles
         .iter()
-        .rev()
-        .find(|profile| profile.name == spec.name.trim())
-        .map(|profile| profile.id.clone())
-        .ok_or(ProfileError::UnknownProfile)?;
-
-    // The record exists from here on. A failure filling it (a missing
-    // official VPK, most often) must not leave an empty profile in the
-    // library, so the record is removed again before the error goes out.
-    if let Err(err) = fill_wizard_profile(
-        profiles_dir,
-        tf2_root,
-        &profile_id,
-        spec,
-        &config,
-        assets,
-        &options,
-        &running,
-    ) {
-        let _ =
-            crate::profile::remove_profile_record_to(profiles_dir, tf2_root, &profile_id, &running);
-        return Err(err);
-    }
-
-    Ok(WizardResult {
-        library: load_library_from(profiles_dir, Some(tf2_root))?,
-        profile_id,
-    })
-}
-
-#[allow(clippy::too_many_arguments)]
-fn fill_wizard_profile(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    spec: &WizardSpec,
-    config: &[u8],
-    assets: &[WizardAsset<'_>],
-    options: &WizardOptions<'_>,
-    running: &[String],
-) -> Result<(), ProfileError> {
-    put_exclusive_file_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        CONFIG_CFG,
-        config,
-        running,
-    )?;
-
+        .map(|profile| profile.id.as_str())
+        .collect();
     let hook = format!("preset={}\n", spec.preset.alias());
-    put_exclusive_file_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        SETUP_HOOK,
-        hook.as_bytes(),
-        running,
-    )?;
-
-    put_required_assets(profiles_dir, tf2_root, profile_id, spec, assets, running)?;
-
-    let launch = match options.launch_options {
-        Some(raw) => sanitize_launch_options(raw),
-        None => recommended_launch_options(),
-    };
-    crate::profile::set_manifest_launch_options(profiles_dir, tf2_root, profile_id, launch, running)
-}
-
-fn put_required_assets<I, S>(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    spec: &WizardSpec,
-    assets: &[WizardAsset<'_>],
-    running: I,
-) -> Result<(), ProfileError>
-where
-    I: IntoIterator<Item = S> + Clone,
-    S: AsRef<str>,
-{
+    let mut puts = vec![
+        (CONFIG_CFG.to_string(), FileSource::Bytes(&config)),
+        (SETUP_HOOK.to_string(), FileSource::Bytes(hook.as_bytes())),
+    ];
     for required in required_wizard_assets(spec) {
         let Some(asset) = assets.iter().find(|asset| asset.path == required) else {
             return Err(ProfileError::Io(format!(
                 "Missing official mastercomfig file: {required}"
             )));
         };
-        if !crate::profile::is_file_safe_rel_path(&required) {
-            return Err(ProfileError::ForbiddenPath(required));
-        }
-        if is_shared_rel_path(&required) {
-            put_shared_blob_to(
-                profiles_dir,
-                tf2_root,
-                profile_id,
-                &required,
-                asset.bytes,
-                running.clone(),
-            )?;
-        } else {
-            put_exclusive_file_to(
-                profiles_dir,
-                tf2_root,
-                profile_id,
-                &required,
-                asset.bytes,
-                running.clone(),
-            )?;
-        }
+        puts.push((required, FileSource::Bytes(asset.bytes)));
     }
-    Ok(())
+    let launch = match options.launch_options {
+        Some(raw) => sanitize_launch_options(raw),
+        None => recommended_launch_options(),
+    };
+    let library = create_populated_profile_to(
+        profiles_dir,
+        tf2_root,
+        &spec.name,
+        &puts,
+        false,
+        &running,
+        move |manifest| {
+            manifest.launch_options = launch;
+            // This profile is not active yet. Its first switch owns the Steam
+            // projection and clears the durable pending bit after success.
+            manifest.launch_sync_pending = true;
+            Ok(())
+        },
+    )?;
+    let profile_id = library
+        .profiles
+        .iter()
+        .find(|profile| !previous_ids.contains(profile.id.as_str()))
+        .map(|profile| profile.id.clone())
+        .ok_or(ProfileError::UnknownProfile)?;
+
+    Ok(WizardResult {
+        library,
+        profile_id,
+    })
 }
 
 fn build_config_cfg(
@@ -362,12 +298,10 @@ fn build_config_cfg(
     match start_from {
         StartFrom::Fresh => {
             let default_path = tf2_root.join("tf").join("cfg").join("config_default.cfg");
-            if !default_path.is_file() {
-                return Err(ProfileError::Io(
-                    "Valve config_default.cfg is missing from this TF2 install.".into(),
-                ));
-            }
-            fs::read(&default_path).map_err(|err| ProfileError::Io(err.to_string()))
+            read_wizard_config(
+                &default_path,
+                "Valve config_default.cfg is missing or unreadable in this TF2 install.",
+            )
         }
         StartFrom::Current => {
             let library = load_library_from(profiles_dir, Some(tf2_root))?;
@@ -376,11 +310,36 @@ fn build_config_cfg(
                     "Save or switch to a profile before starting from your current setup.".into(),
                 ));
             };
-            profile_file_bytes_from(profiles_dir, &active, CONFIG_CFG).map_err(|_| {
+            let manifest = load_manifest(profiles_dir, &active)?;
+            let file = manifest
+                .files
+                .iter()
+                .find(|file| file.path == CONFIG_CFG)
+                .ok_or_else(|| {
+                    ProfileError::Io("The active profile has no config.cfg to copy.".into())
+                })?;
+            let source = manifest_source_path(profiles_dir, &active, file).map_err(|_| {
                 ProfileError::Io("The active profile has no config.cfg to copy.".into())
-            })
+            })?;
+            read_wizard_config(
+                &source,
+                "The active profile's config.cfg is missing or unreadable.",
+            )
         }
     }
+}
+
+fn read_wizard_config(path: &Path, unreadable: &str) -> Result<Vec<u8>, ProfileError> {
+    read_small_file_bounded(path, MAX_WIZARD_CONFIG_BYTES).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::InvalidData {
+            ProfileError::Io(format!(
+                "The config file is larger than {} MiB and cannot be copied safely.",
+                MAX_WIZARD_CONFIG_BYTES / (1024 * 1024)
+            ))
+        } else {
+            ProfileError::Io(format!("{unreadable} ({err})"))
+        }
+    })
 }
 
 pub fn wizard_profile_rel_paths(
@@ -727,6 +686,109 @@ mod tests {
         // profile with an empty manifest in the library.
         let library = load_library_from(&dir.join("profiles"), Some(&root)).unwrap();
         assert!(library.profiles.is_empty(), "{:?}", library.profiles);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn staging_failure_never_publishes_a_partial_or_duplicate_wizard_profile() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let profiles = dir.join("profiles");
+        let failed = crate::hash::with_sync_parent_fault(
+            |path| path.ends_with("mastercomfig-addon-no-tutorial.vpk"),
+            || {
+                materialize_wizard_profile_to(
+                    &profiles,
+                    &root,
+                    &spec("Fresh"),
+                    StartFrom::Fresh,
+                    &assets(b"base", b"addon"),
+                    None::<&str>,
+                    WizardOptions::default(),
+                )
+            },
+        );
+        assert!(failed.is_err());
+        assert!(load_library_from(&profiles, Some(&root))
+            .unwrap()
+            .profiles
+            .is_empty());
+
+        let retry = materialize_wizard_profile_to(
+            &profiles,
+            &root,
+            &spec("Fresh"),
+            StartFrom::Fresh,
+            &assets(b"base", b"addon"),
+            None::<&str>,
+            WizardOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(retry.library.profiles.len(), 1);
+        assert_eq!(retry.library.profiles[0].id, retry.profile_id);
+        assert!(!profiles.join(".create-data").exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn fresh_start_rejects_an_oversized_valve_config_before_profile_creation() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let default = root.join("tf/cfg/config_default.cfg");
+        File::create(&default)
+            .unwrap()
+            .set_len(MAX_WIZARD_CONFIG_BYTES as u64 + 1)
+            .unwrap();
+        let profiles = dir.join("profiles");
+
+        let error = materialize_wizard_profile_to(
+            &profiles,
+            &root,
+            &spec("Fresh"),
+            StartFrom::Fresh,
+            &assets(b"base", b"addon"),
+            None::<&str>,
+            WizardOptions::default(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(&error, ProfileError::Io(message) if message.contains("larger than 1 MiB")),
+            "{error:?}"
+        );
+        assert!(load_library_from(&profiles, Some(&root))
+            .unwrap()
+            .profiles
+            .is_empty());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn current_start_rejects_an_oversized_profile_config() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let live = root.join(CONFIG_CFG);
+        File::create(&live)
+            .unwrap()
+            .set_len(MAX_WIZARD_CONFIG_BYTES as u64 + 1)
+            .unwrap();
+        let profiles = dir.join("profiles");
+        save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            None::<&str>,
+            SaveCurrentOptions {
+                launch_options: Some(""),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+
+        let error = build_config_cfg(&profiles, &root, StartFrom::Current).unwrap_err();
+        assert!(
+            matches!(&error, ProfileError::Io(message) if message.contains("larger than 1 MiB")),
+            "{error:?}"
+        );
         cleanup(&dir);
     }
 

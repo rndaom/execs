@@ -2,14 +2,29 @@
 //! game-update fingerprint that invalidates them.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::{sha256_hex, write_atomic};
-use crate::vpk::{crc32, patch_vpk_entry, read_vpk_entry, VpkEntryLocation};
+use crate::archive::read_regular_file_bounded;
+use crate::hash::{
+    metadata_is_link, remove_dir_within, remove_file_force_within, sha256_hex,
+    validate_file_within, write_atomic_within,
+};
+use crate::pcf::MAX_PCF_BYTES;
+use crate::process_lock::WriteLockError;
+use crate::vpk::{crc32, patch_vpk_entry_if_unchanged, read_vpk_entry, VpkEntryLocation, VpkError};
 
 use super::{MISC_VPK, PRELOADER_VPK};
+
+const MAX_STATE_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_SIDECAR_BYTES: u64 = 64 * 1024;
+const MAX_SNAPSHOT_BYTES: u64 = MAX_PCF_BYTES as u64;
+const MAX_ORIGINAL_ENTRIES: usize = 20_000;
+const MAX_ORIGINAL_BYTES_SCANNED: u64 = 512 * 1024 * 1024;
+const MAX_STATE_LIST_ENTRIES: usize = 20_000;
+const PRELOADER_STATE_SCHEMA: u32 = 1;
 
 pub(crate) fn preloader_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("preloader")
@@ -23,12 +38,128 @@ pub(crate) fn state_path(data_dir: &Path) -> PathBuf {
     preloader_dir(data_dir).join("state.json")
 }
 
+/// Validate every existing app-data component without following links or
+/// junctions. Missing components are created one at a time only when `create`
+/// is true. The returned boolean says whether the complete directory existed
+/// before this call.
+pub(crate) fn app_dir_within(data_dir: &Path, dir: &Path, create: bool) -> Result<bool, String> {
+    if !data_dir.exists() {
+        if !create {
+            return Ok(false);
+        }
+        fs::create_dir_all(data_dir)
+            .map_err(|err| format!("Could not prepare the execs data folder: {err}"))?;
+    }
+    let root_meta = fs::symlink_metadata(data_dir)
+        .map_err(|err| format!("Could not inspect the execs data folder: {err}"))?;
+    if metadata_is_link(&root_meta) || !root_meta.is_dir() {
+        return Err("The execs data folder is linked or is not a directory.".into());
+    }
+    let canonical_root = fs::canonicalize(data_dir)
+        .map_err(|err| format!("Could not resolve the execs data folder: {err}"))?;
+    let rel = dir
+        .strip_prefix(data_dir)
+        .map_err(|_| "A preloader path escapes the execs data folder.".to_string())?;
+    let mut current = data_dir.to_path_buf();
+    let mut existed = true;
+    for component in rel.components() {
+        let Component::Normal(component) = component else {
+            return Err("A preloader path contains an invalid component.".into());
+        };
+        current.push(component);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) => {
+                if metadata_is_link(&metadata) || !metadata.is_dir() {
+                    return Err(format!(
+                        "Refusing to traverse a linked or non-directory preloader path: {}",
+                        current.display()
+                    ));
+                }
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound && create => {
+                existed = false;
+                fs::create_dir(&current).map_err(|err| {
+                    format!("Could not create {} safely: {err}", current.display())
+                })?;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(err) => return Err(format!("Could not inspect {}: {err}", current.display())),
+        }
+        let canonical = fs::canonicalize(&current)
+            .map_err(|err| format!("Could not resolve {}: {err}", current.display()))?;
+        if !canonical.starts_with(&canonical_root) {
+            return Err(format!(
+                "Refusing a preloader path outside the execs data folder: {}",
+                current.display()
+            ));
+        }
+    }
+    Ok(existed)
+}
+
+/// Read an optional app-data file only after proving every parent remains
+/// inside the configured data directory. The file itself is opened with the
+/// archive module's no-follow, bounded, identity-checked reader.
+pub(crate) fn read_app_file_bounded(
+    data_dir: &Path,
+    path: &Path,
+    max_bytes: u64,
+) -> Result<Option<Vec<u8>>, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "A preloader file has no parent directory.".to_string())?;
+    if !app_dir_within(data_dir, parent, false)? {
+        return Ok(None);
+    }
+    match fs::symlink_metadata(path) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(format!("Could not inspect {}: {err}", path.display())),
+        Ok(metadata) if metadata_is_link(&metadata) || !metadata.is_file() => {
+            return Err(format!(
+                "Refusing to read a linked or non-file preloader path: {}",
+                path.display()
+            ))
+        }
+        Ok(_) => {}
+    }
+    validate_file_within(data_dir, path)
+        .map_err(|err| format!("Could not validate {}: {err}", path.display()))?;
+    match read_regular_file_bounded(path, max_bytes).map_err(|err| err.message())? {
+        Some(bytes) => Ok(Some(bytes)),
+        None => Err(format!(
+            "{} exceeds its {} byte safety limit",
+            path.display(),
+            max_bytes
+        )),
+    }
+}
+
 /// Snapshots are named by `sha256(rel)`. The old `/` -> `__` mangling was not
 /// injective: any entry path containing `__` round-tripped to a different rel,
 /// so `adopt_orphaned_snapshots` inserted a bogus entry while the real snapshot
 /// was orphaned and never restored.
 pub(crate) fn snapshot_path(data_dir: &Path, rel: &str) -> PathBuf {
     originals_dir(data_dir).join(sha256_hex(rel.as_bytes()))
+}
+
+pub(crate) fn read_snapshot_bounded(data_dir: &Path, rel: &str) -> Result<Vec<u8>, String> {
+    read_app_file_bounded(data_dir, &snapshot_path(data_dir, rel), MAX_SNAPSHOT_BYTES)
+        .map_err(|err| format!("Could not read the recovery snapshot for {rel}: {err}"))?
+        .ok_or_else(|| format!("The recovery snapshot for {rel} is missing."))
+}
+
+pub(crate) fn read_particle_entry_bounded(
+    vpk_path: &Path,
+    entry: &VpkEntryLocation,
+) -> Result<Vec<u8>, String> {
+    if u64::from(entry.length) > MAX_SNAPSHOT_BYTES {
+        return Err(format!(
+            "{} exceeds the {} MiB particle safety limit.",
+            entry.rel,
+            MAX_SNAPSHOT_BYTES / (1024 * 1024)
+        ));
+    }
+    read_vpk_entry(vpk_path, entry).map_err(|err| err.message())
 }
 
 /// The sidecar that makes a snapshot self-describing: `<hash>.json` beside
@@ -59,7 +190,14 @@ pub(crate) fn write_snapshot(
     bytes: &[u8],
     pristine: bool,
 ) -> Result<(), String> {
-    write_atomic(&snapshot_path(data_dir, rel), bytes)
+    if bytes.len() as u64 > MAX_SNAPSHOT_BYTES {
+        return Err(format!(
+            "Could not snapshot {rel}: particle data exceeds the {} MiB recovery limit.",
+            MAX_SNAPSHOT_BYTES / (1024 * 1024)
+        ));
+    }
+    app_dir_within(data_dir, &originals_dir(data_dir), true)?;
+    write_atomic_within(data_dir, &snapshot_path(data_dir, rel), bytes)
         .map_err(|err| format!("Could not snapshot {rel}: {err}"))?;
     let sidecar = SnapshotSidecar {
         rel: rel.to_string(),
@@ -68,14 +206,30 @@ pub(crate) fn write_snapshot(
         pristine,
     };
     let json = serde_json::to_vec_pretty(&sidecar).map_err(|err| err.to_string())?;
-    write_atomic(&sidecar_path(data_dir, rel), &json)
+    write_atomic_within(data_dir, &sidecar_path(data_dir, rel), &json)
         .map_err(|err| format!("Could not describe the snapshot of {rel}: {err}"))
 }
 
-/// Delete a snapshot the restore has consumed, sidecar included.
-pub(crate) fn remove_snapshot(data_dir: &Path, rel: &str) {
-    let _ = std::fs::remove_file(snapshot_path(data_dir, rel));
-    let _ = std::fs::remove_file(sidecar_path(data_dir, rel));
+/// Delete a snapshot the restore has consumed, sidecar included. Cleanup is
+/// part of the recovery transaction: if it fails, tracking stays in state so
+/// the next restore retries instead of later adopting a stale leftover as a
+/// fresh orphan.
+pub(crate) fn remove_snapshot(data_dir: &Path, rel: &str) -> Result<(), String> {
+    if !app_dir_within(data_dir, &originals_dir(data_dir), false)? {
+        return Ok(());
+    }
+    for path in [snapshot_path(data_dir, rel), sidecar_path(data_dir, rel)] {
+        match remove_file_force_within(data_dir, &path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(format!(
+                    "Could not remove the recovery snapshot for {rel}: {err}"
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Clear the snapshot folder of what cannot matter (torn `.execs-part`
@@ -84,7 +238,10 @@ pub(crate) fn remove_snapshot(data_dir: &Path, rel: &str) {
 /// may be the only copy of a stock file.
 pub(crate) fn tidy_originals_dir(data_dir: &Path) {
     let dir = originals_dir(data_dir);
-    let Ok(entries) = std::fs::read_dir(&dir) else {
+    let Ok(true) = app_dir_within(data_dir, &dir, false) else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(&dir) else {
         return;
     };
     for entry in entries.flatten() {
@@ -97,11 +254,11 @@ pub(crate) fn tidy_originals_dir(data_dir: &Path) {
             .strip_suffix(".json")
             .is_some_and(|stem| !dir.join(stem).is_file());
         if torn || orphan_sidecar {
-            let _ = std::fs::remove_file(&path);
+            let _ = remove_file_force_within(data_dir, &path);
         }
     }
     // Fails while anything is left, which is the point.
-    let _ = std::fs::remove_dir(&dir);
+    let _ = remove_dir_within(data_dir, &dir);
 }
 
 fn is_hashed_name(name: &str) -> bool {
@@ -163,20 +320,23 @@ pub(crate) fn untracked_modified_particles(
     vpk_path: &Path,
     entries: &BTreeMap<String, VpkEntryLocation>,
     state: &PreloaderState,
-) -> Vec<String> {
-    entries
-        .iter()
-        .filter(|(rel, entry)| {
-            rel.starts_with("particles/")
-                && rel.ends_with(".pcf")
-                && entry.preload_len == 0
-                && !state.patched.contains_key(*rel)
-        })
-        .filter(|(_, entry)| {
-            read_vpk_entry(vpk_path, entry).is_ok_and(|bytes| !is_stock(&bytes, entry))
-        })
-        .map(|(rel, _)| rel.clone())
-        .collect()
+) -> Result<Vec<String>, String> {
+    let mut modified = Vec::new();
+    for (rel, entry) in entries {
+        if !rel.starts_with("particles/")
+            || !rel.ends_with(".pcf")
+            || entry.preload_len != 0
+            || state.patched.contains_key(rel)
+        {
+            continue;
+        }
+        let bytes = read_particle_entry_bounded(vpk_path, entry)
+            .map_err(|err| format!("Could not verify {rel}: {err}"))?;
+        if !is_stock(&bytes, entry) {
+            modified.push(rel.clone());
+        }
+    }
+    Ok(modified)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -216,19 +376,116 @@ pub struct PreloaderState {
     pub preload_profiles: Vec<String>,
 }
 
-pub(crate) fn load_state(data_dir: &Path) -> PreloaderState {
-    std::fs::read(state_path(data_dir))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+pub(crate) fn load_state(data_dir: &Path) -> Result<PreloaderState, String> {
+    let Some(bytes) = read_state_bytes(data_dir)? else {
+        return Ok(PreloaderState::default());
+    };
+    let state: PreloaderState = serde_json::from_slice(&bytes)
+        .map_err(|err| format!("Could not read preloader state safely: {err}"))?;
+    validate_state(&state)?;
+    Ok(state)
+}
+
+fn read_state_bytes(data_dir: &Path) -> Result<Option<Vec<u8>>, String> {
+    read_app_file_bounded(data_dir, &state_path(data_dir), MAX_STATE_BYTES)
+}
+
+/// Status and explicit stock restoration can reconstruct particle tracking
+/// from pristine snapshots when only the JSON syntax was damaged. Unsafe,
+/// linked, unreadable, or oversized state paths still fail closed.
+pub(crate) fn load_state_for_snapshot_recovery(data_dir: &Path) -> Result<PreloaderState, String> {
+    let Some(bytes) = read_state_bytes(data_dir)? else {
+        return Ok(PreloaderState::default());
+    };
+    match serde_json::from_slice::<PreloaderState>(&bytes) {
+        Ok(state) => {
+            validate_state(&state)?;
+            Ok(state)
+        }
+        Err(_) => Ok(PreloaderState::default()),
+    }
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_particle_rel(rel: &str) -> bool {
+    rel.len() <= 4096
+        && rel.starts_with("particles/")
+        && rel.ends_with(".pcf")
+        && !rel.contains('\\')
+        && Path::new(rel)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+}
+
+fn validate_state(state: &PreloaderState) -> Result<(), String> {
+    if state.schema > PRELOADER_STATE_SCHEMA {
+        return Err("The preloader state uses an unsupported schema.".into());
+    }
+    for (label, count) in [
+        ("addons", state.addons.len()),
+        ("particle mods", state.particle_mods.len()),
+        ("profile particle mods", state.profile_particle_mods.len()),
+        ("patched files", state.patched.len()),
+        ("skipped files", state.skipped.len()),
+        ("preload profiles", state.preload_profiles.len()),
+    ] {
+        if count > MAX_STATE_LIST_ENTRIES {
+            return Err(format!("The preloader state contains too many {label}."));
+        }
+    }
+    if state
+        .addons
+        .iter()
+        .chain(&state.particle_mods)
+        .chain(&state.profile_particle_mods)
+        .chain(&state.preload_profiles)
+        .any(|value| value.is_empty() || value.len() > 4096)
+    {
+        return Err("The preloader state contains an invalid selection value.".into());
+    }
+    for (rel, entry) in &state.patched {
+        if !valid_particle_rel(rel)
+            || entry.rel != *rel
+            || entry.owner.len() > 4096
+            || !valid_sha256(&entry.original_sha256)
+            || !(entry.patched_sha256.is_empty() || valid_sha256(&entry.patched_sha256))
+        {
+            return Err(format!(
+                "The preloader state has an unsafe patched entry: {rel}"
+            ));
+        }
+    }
+    if state.skipped.iter().any(|notice| {
+        notice.file.is_empty()
+            || notice.file.len() > 4096
+            || notice.mod_name.len() > 4096
+            || notice.reason.len() > 16 * 1024
+    }) {
+        return Err("The preloader state contains an invalid skipped-file record.".into());
+    }
+    Ok(())
 }
 
 /// Atomic, like every file that matters: state.json is the index of which
 /// official entries hold our bytes, and a truncated index is what turns
 /// pristine snapshots into files nothing knows how to use.
 pub(crate) fn save_state(data_dir: &Path, state: &PreloaderState) -> Result<(), String> {
+    validate_state(state)?;
     let json = serde_json::to_vec_pretty(state).map_err(|err| err.to_string())?;
-    write_atomic(&state_path(data_dir), &json)
+    if json.len() as u64 > MAX_STATE_BYTES {
+        return Err(format!(
+            "Could not save preloader state: it exceeds the {} MiB safety limit.",
+            MAX_STATE_BYTES / (1024 * 1024)
+        ));
+    }
+    app_dir_within(data_dir, &preloader_dir(data_dir), true)?;
+    write_atomic_within(data_dir, &state_path(data_dir), &json)
         .map_err(|err| format!("Could not save preloader state: {err}"))
 }
 
@@ -256,9 +513,16 @@ pub(crate) fn vpk_fingerprint(path: &Path) -> Result<u64, String> {
     for index in 0..1000u32 {
         let sibling = parent.join(format!("{prefix}_{index:03}.vpk"));
         match std::fs::metadata(&sibling) {
-            Ok(meta) => total = total.wrapping_add(meta.len()),
+            Ok(meta) => {
+                total = total
+                    .checked_add(meta.len())
+                    .ok_or_else(|| format!("The {MISC_VPK} archive sizes overflow."))?;
+            }
             // Archives are numbered contiguously from 000.
-            Err(_) => break,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => break,
+            Err(err) => {
+                return Err(format!("Could not inspect {}: {err}", sibling.display()));
+            }
         }
     }
     Ok(total)
@@ -268,21 +532,110 @@ pub(crate) fn misc_vpk_path(tf2_root: &Path) -> PathBuf {
     tf2_root.join("tf").join(MISC_VPK)
 }
 
+/// Check for a regular file below `root` without following symlinks or Windows
+/// reparse points and without creating missing parents. This is the read-only
+/// counterpart to the write-oriented `*_within` helpers in `hash`.
+pub(crate) fn live_file_exists_within(root: &Path, path: &Path) -> std::io::Result<bool> {
+    let rel = path.strip_prefix(root).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "path escapes its allowed root",
+        )
+    })?;
+    let root_meta = std::fs::symlink_metadata(root)?;
+    if metadata_is_link(&root_meta) || !root_meta.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "refusing to traverse a linked or non-directory root: {}",
+                root.display()
+            ),
+        ));
+    }
+    let canonical_root = std::fs::canonicalize(root)?;
+    let mut components = rel.components().peekable();
+    if components.peek().is_none() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "file path names the allowed root",
+        ));
+    }
+
+    let mut current = root.to_path_buf();
+    while let Some(component) = components.next() {
+        let Component::Normal(component) = component else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "path contains a non-normal component",
+            ));
+        };
+        current.push(component);
+        let meta = match std::fs::symlink_metadata(&current) {
+            Ok(meta) => meta,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(err) => return Err(err),
+        };
+        if metadata_is_link(&meta) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "refusing to traverse a link or reparse point: {}",
+                    current.display()
+                ),
+            ));
+        }
+
+        let is_file = components.peek().is_none();
+        if (is_file && !meta.is_file()) || (!is_file && !meta.is_dir()) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "refusing to traverse a non-directory or non-file: {}",
+                    current.display()
+                ),
+            ));
+        }
+        let resolved = std::fs::canonicalize(&current)?;
+        if !resolved.starts_with(&canonical_root) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "path resolves outside its allowed root: {}",
+                    current.display()
+                ),
+            ));
+        }
+    }
+    Ok(true)
+}
+
 /// Whether the mods preloader still needs the shared `execs_preload` cfg and
 /// its launch token. The cfg is shared with viewmodel packs, so removing a
 /// viewmodel pack must not take it away while patched particles or addon
 /// content are still installed — that is the "installed but nothing works"
 /// failure mode on Valve Casual.
-pub fn preload_is_wanted(data_dir: &Path, tf2_root: &Path) -> bool {
-    let state = load_state(data_dir);
-    !state.patched.is_empty()
+pub fn preload_is_wanted(data_dir: &Path, tf2_root: &Path) -> Result<bool, String> {
+    let state = load_state(data_dir)?;
+    let originals = originals_dir(data_dir);
+    let orphaned_snapshots = if app_dir_within(data_dir, &originals, false)? {
+        std::fs::read_dir(&originals)
+            .map_err(|err| format!("Could not inspect preloader snapshots: {err}"))?
+            .next()
+            .transpose()
+            .map_err(|err| format!("Could not inspect preloader snapshots: {err}"))?
+            .is_some()
+    } else {
+        false
+    };
+    Ok(!state.patched.is_empty()
         || !state.addons.is_empty()
         || !state.particle_mods.is_empty()
-        || tf2_root
-            .join("tf")
-            .join("custom")
-            .join(PRELOADER_VPK)
-            .is_file()
+        || orphaned_snapshots
+        || live_file_exists_within(
+            tf2_root,
+            &tf2_root.join("tf").join("custom").join(PRELOADER_VPK),
+        )
+        .map_err(|err| format!("Could not inspect the preloader pack safely: {err}"))?)
 }
 
 /// Snapshots on disk that state does not track — the crash hit between the
@@ -301,7 +654,30 @@ pub(crate) fn adopt_orphaned_snapshots(
     state: &mut PreloaderState,
     entries: Option<&BTreeMap<String, VpkEntryLocation>>,
 ) -> usize {
-    let Ok(dir) = std::fs::read_dir(originals_dir(data_dir)) else {
+    discover_orphaned_snapshots(data_dir, state, entries, true)
+}
+
+/// Read-only form used by status. It reports recoverable snapshots in a cloned
+/// state but never migrates files, writes sidecars, or persists state.json.
+pub(crate) fn discover_orphaned_snapshots_readonly(
+    data_dir: &Path,
+    state: &mut PreloaderState,
+    entries: Option<&BTreeMap<String, VpkEntryLocation>>,
+) -> usize {
+    discover_orphaned_snapshots(data_dir, state, entries, false)
+}
+
+fn discover_orphaned_snapshots(
+    data_dir: &Path,
+    state: &mut PreloaderState,
+    entries: Option<&BTreeMap<String, VpkEntryLocation>>,
+    persist_repairs: bool,
+) -> usize {
+    let originals = originals_dir(data_dir);
+    let Ok(true) = app_dir_within(data_dir, &originals, false) else {
+        return 0;
+    };
+    let Ok(dir) = fs::read_dir(&originals) else {
         return 0;
     };
     let tracked_files: BTreeSet<PathBuf> = state
@@ -320,7 +696,13 @@ pub(crate) fn adopt_orphaned_snapshots(
         })
         .unwrap_or_default();
     let mut adopted = 0;
+    let mut inspected_entries = 0usize;
+    let mut inspected_bytes = 0u64;
     for file in dir.flatten() {
+        inspected_entries = inspected_entries.saturating_add(1);
+        if inspected_entries > MAX_ORIGINAL_ENTRIES {
+            break;
+        }
         let path = file.path();
         if tracked_files.contains(&path) {
             continue;
@@ -331,20 +713,38 @@ pub(crate) fn adopt_orphaned_snapshots(
         if name.ends_with(".json") || name.ends_with(crate::hash::PART_SUFFIX) {
             continue;
         }
-        let Ok(bytes) = std::fs::read(&path) else {
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata_is_link(&metadata) || !metadata.is_file() || metadata.len() > MAX_SNAPSHOT_BYTES
+        {
+            continue;
+        }
+        inspected_bytes = match inspected_bytes.checked_add(metadata.len()) {
+            Some(total) if total <= MAX_ORIGINAL_BYTES_SCANNED => total,
+            _ => break,
+        };
+        let Ok(Some(bytes)) = read_app_file_bounded(data_dir, &path, MAX_SNAPSHOT_BYTES) else {
             continue;
         };
         let sha = sha256_hex(&bytes);
         let (rel, pristine) = if is_hashed_name(&name) {
-            let from_sidecar = std::fs::read(path.with_extension("json"))
-                .ok()
-                .and_then(|json| serde_json::from_slice::<SnapshotSidecar>(&json).ok())
-                .filter(|sidecar| {
-                    sha256_hex(sidecar.rel.as_bytes()) == name
-                        && sidecar.original_sha256 == sha
-                        && sidecar.size == bytes.len() as u64
-                })
-                .map(|sidecar| (sidecar.rel, sidecar.pristine));
+            let from_sidecar =
+                read_app_file_bounded(data_dir, &path.with_extension("json"), MAX_SIDECAR_BYTES)
+                    .ok()
+                    .flatten()
+                    .and_then(|json| serde_json::from_slice::<SnapshotSidecar>(&json).ok())
+                    .and_then(|sidecar| {
+                        if !valid_particle_rel(&sidecar.rel)
+                            || sha256_hex(sidecar.rel.as_bytes()) != name
+                            || sidecar.original_sha256 != sha
+                            || sidecar.size != bytes.len() as u64
+                        {
+                            return None;
+                        }
+                        let entry = entries?.get(&sidecar.rel)?;
+                        Some((sidecar.rel, is_stock(&bytes, entry)))
+                    });
             let from_archive = || {
                 let rel = *rels_by_hash.get(&name)?;
                 let entry = entries?.get(rel)?;
@@ -357,18 +757,19 @@ pub(crate) fn adopt_orphaned_snapshots(
         } else {
             // Written by an older build under the `__` mangling.
             let rel = name.replace("__", "/");
-            if state.patched.contains_key(&rel) {
+            if !valid_particle_rel(&rel) || state.patched.contains_key(&rel) {
                 continue;
             }
-            // Judged by the directory when it is at hand; otherwise the restore
-            // only applies the CRC test to snapshots that claimed to be stock.
-            let pristine = entries
-                .and_then(|entries| entries.get(&rel))
-                .is_some_and(|entry| is_stock(&bytes, entry));
-            if write_snapshot(data_dir, &rel, &bytes, pristine).is_err() {
+            let Some(entry) = entries.and_then(|entries| entries.get(&rel)) else {
                 continue;
+            };
+            let pristine = is_stock(&bytes, entry);
+            if persist_repairs {
+                if write_snapshot(data_dir, &rel, &bytes, pristine).is_err() {
+                    continue;
+                }
+                let _ = remove_file_force_within(data_dir, &path);
             }
-            let _ = std::fs::remove_file(&path);
             (rel, pristine)
         };
         if state.patched.contains_key(&rel) {
@@ -376,7 +777,12 @@ pub(crate) fn adopt_orphaned_snapshots(
         }
         // A snapshot the archive explained has no sidecar yet; give it one so
         // the next recovery does not depend on the archive being there.
-        if !sidecar_path(data_dir, &rel).is_file() {
+        if persist_repairs
+            && read_app_file_bounded(data_dir, &sidecar_path(data_dir, &rel), MAX_SIDECAR_BYTES)
+                .ok()
+                .flatten()
+                .is_none()
+        {
             let _ = write_snapshot(data_dir, &rel, &bytes, pristine);
         }
         state.patched.insert(
@@ -415,50 +821,92 @@ pub(crate) fn restore_patched_entries(
     data_dir: &Path,
     state: &mut PreloaderState,
     entries: &BTreeMap<String, VpkEntryLocation>,
+    before_write: &dyn Fn() -> Result<(), String>,
 ) -> Result<Vec<String>, String> {
+    validate_state(state)?;
     let vpk_path = misc_vpk_path(tf2_root);
     let mut failures = Vec::new();
     let tracked: Vec<String> = state.patched.keys().cloned().collect();
     for rel in tracked {
-        let (expected_patched, pristine) = state
+        let (expected_original, expected_patched, pristine) = state
             .patched
             .get(&rel)
-            .map(|entry| (entry.patched_sha256.clone(), entry.pristine))
+            .map(|entry| {
+                (
+                    entry.original_sha256.clone(),
+                    entry.patched_sha256.clone(),
+                    entry.pristine,
+                )
+            })
             .unwrap_or_default();
         let snapshot = snapshot_path(data_dir, &rel);
-        let Ok(original) = std::fs::read(&snapshot) else {
-            failures.push(format!("{rel}: snapshot is missing"));
-            state.patched.remove(&rel);
-            save_state(data_dir, state)?;
-            continue;
+        let original = match read_app_file_bounded(data_dir, &snapshot, MAX_SNAPSHOT_BYTES) {
+            Ok(Some(original)) => original,
+            Ok(None) => {
+                failures.push(format!("{rel}: snapshot is missing"));
+                if let Err(cleanup) = remove_snapshot(data_dir, &rel) {
+                    failures.push(format!("{rel}: {cleanup}"));
+                    continue;
+                }
+                state.patched.remove(&rel);
+                save_state(data_dir, state)?;
+                continue;
+            }
+            Err(err) => {
+                failures.push(format!(
+                    "{rel}: could not read its recovery snapshot: {err}"
+                ));
+                continue;
+            }
         };
+        if !expected_original.is_empty() && sha256_hex(&original) != expected_original {
+            failures.push(format!(
+                "{rel}: snapshot hash does not match its recovery record; leaving it untouched"
+            ));
+            continue;
+        }
         let Some(entry) = entries.get(&rel) else {
             failures.push(format!("{rel}: no longer in {MISC_VPK}"));
+            if let Err(cleanup) = remove_snapshot(data_dir, &rel) {
+                failures.push(format!("{rel}: {cleanup}"));
+                continue;
+            }
             state.patched.remove(&rel);
-            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         };
         if entry.length as usize != original.len() {
             failures.push(format!("{rel}: stock size changed (game update)"));
+            if let Err(cleanup) = remove_snapshot(data_dir, &rel) {
+                failures.push(format!("{rel}: {cleanup}"));
+                continue;
+            }
             state.patched.remove(&rel);
-            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         }
-        let current = match read_vpk_entry(&vpk_path, entry) {
+        let current = match read_particle_entry_bounded(&vpk_path, entry) {
             Ok(current) => current,
             Err(err) => {
-                failures.push(format!("{rel}: {}", err.message()));
+                failures.push(format!("{rel}: {err}"));
                 continue;
             }
         };
         // Stock bytes are already in place (a game update, or the user ran
         // Steam's verify): nothing to write, and the snapshot has done its job.
         if is_stock(&current, entry) {
+            if let Err(cleanup) = remove_snapshot(data_dir, &rel) {
+                failures.push(format!("{rel}: {cleanup}"));
+                continue;
+            }
             state.patched.remove(&rel);
-            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
+            continue;
+        }
+        if expected_patched.is_empty() {
+            failures.push(format!(
+                "{rel}: recovery cannot prove these live bytes were written by execs; verify game files in Steam"
+            ));
             continue;
         }
         // A same-size replacement passes the length check, so confirm the entry
@@ -478,17 +926,29 @@ pub(crate) fn restore_patched_entries(
                 "{rel}: the game changed this file since it was snapshotted; \
                  the old snapshot was discarded — verify game files in Steam"
             ));
+            if let Err(cleanup) = remove_snapshot(data_dir, &rel) {
+                failures.push(format!("{rel}: {cleanup}"));
+                continue;
+            }
             state.patched.remove(&rel);
-            remove_snapshot(data_dir, &rel);
             save_state(data_dir, state)?;
             continue;
         }
-        match patch_vpk_entry(&vpk_path, entry, &original) {
+        match patch_vpk_entry_if_unchanged(&vpk_path, entry, Some(&current), &original, || {
+            before_write().map_err(VpkError)
+        }) {
             Ok(()) => {
+                if let Err(cleanup) = remove_snapshot(data_dir, &rel) {
+                    failures.push(format!("{rel}: {cleanup}"));
+                    save_state(data_dir, state)?;
+                    continue;
+                }
                 state.patched.remove(&rel);
-                remove_snapshot(data_dir, &rel);
             }
             Err(err) => {
+                if err.message() == WriteLockError::GameRunning.message() {
+                    return Err(err.message());
+                }
                 failures.push(format!("{rel}: {}", err.message()));
             }
         }

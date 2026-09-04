@@ -9,16 +9,18 @@
 //! decode is converted to 16-bit 44.1 kHz on the way in; anything else is
 //! refused with a reason.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::apply::{detail_from_manifest, write_owned_file_to, ProfileDetail, WriteOwnedOptions};
+use crate::apply::{detail_from_manifest, ProfileDetail};
+use crate::archive::read_regular_file_bounded_within;
+use crate::hash::{metadata_is_link, remove_file_force_within, validate_dir_within};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, load_library_from, load_manifest, profiles_dir, remove_manifest_files_to,
-    save_manifest, ProfileError,
+    exclusive_file_path, load_library_from, load_manifest, mutate_profile_files_to, profiles_dir,
+    FileSource, ProfileError, ProfileLiveProjection, ProfileManifest,
 };
 use crate::vpk::read_vpk_dir_file_filtered;
 
@@ -29,6 +31,9 @@ pub const KILLSOUND_REL: &str = "tf/custom/execs-hitsounds/sound/ui/killsound.wa
 /// Ceiling on one sound file. A hit sound is a fraction of a second; even a
 /// generous 44.1 kHz stereo 16-bit clip of ten seconds is under 2 MiB.
 pub const HITSOUND_MAX_BYTES: usize = 8 * 1024 * 1024;
+const MAX_LIVE_HITSOUND_ENTRIES: usize = 128;
+const MAX_HITSOUND_ENTRY_NAME_BYTES: usize = 256;
+const MAX_HITSOUND_SOURCE_ID_BYTES: usize = 256;
 
 /// Sample rates the engine plays. Everything else is resampled to the last.
 const SUPPORTED_RATES: [u32; 3] = [11025, 22050, 44100];
@@ -154,6 +159,10 @@ pub struct WavInfo {
     pub bits_per_sample: u16,
     pub data_bytes: usize,
     pub duration_ms: u32,
+    #[serde(skip)]
+    block_align: u16,
+    #[serde(skip)]
+    byte_rate: u32,
 }
 
 struct Chunks<'a> {
@@ -200,14 +209,21 @@ fn wav_chunks(bytes: &[u8]) -> Result<Chunks<'_>, String> {
         let id = &bytes[at..at + 4];
         let len = read_u32(bytes, at + 4).ok_or("Truncated WAV chunk.")? as usize;
         let start = at + 8;
-        let end = start.saturating_add(len).min(bytes.len());
+        let end = start
+            .checked_add(len)
+            .ok_or("WAV chunk length overflowed.")?;
+        if end > bytes.len() {
+            return Err("That WAV has a truncated chunk.".into());
+        }
         match id {
             b"fmt " => fmt = Some(&bytes[start..end]),
             b"data" => data = Some(&bytes[start..end]),
             _ => {}
         }
-        // Chunks are word-aligned; a truncated final chunk still counts.
-        at = start.saturating_add(len).saturating_add(len & 1);
+        // Chunks are word-aligned.
+        at = end
+            .checked_add(len & 1)
+            .ok_or("WAV chunk offset overflowed.")?;
         if fmt.is_some() && data.is_some() {
             break;
         }
@@ -231,6 +247,94 @@ fn effective_tag(fmt: &[u8]) -> u16 {
     }
 }
 
+#[derive(Debug)]
+struct AdpcmLayout {
+    block_align: usize,
+    samples_per_block: usize,
+    coefficients: Vec<(i32, i32)>,
+}
+
+fn ms_adpcm_layout(
+    fmt: &[u8],
+    data: &[u8],
+    channels: u16,
+    bits_per_sample: u16,
+) -> Result<AdpcmLayout, String> {
+    if bits_per_sample != 4 {
+        return Err("That MS-ADPCM WAV is not 4-bit audio.".into());
+    }
+    if !(1..=2).contains(&channels) {
+        return Err("Only mono and stereo MS-ADPCM hit sounds are supported.".into());
+    }
+    if fmt.len() < 22 {
+        return Err("That MS-ADPCM WAV has no complete format extension.".into());
+    }
+    let extension_size = usize::from(read_u16(fmt, 16).unwrap_or(0));
+    let extension_end = 18usize
+        .checked_add(extension_size)
+        .ok_or("MS-ADPCM format extension overflowed.")?;
+    if extension_size < 4 || extension_end > fmt.len() {
+        return Err("That MS-ADPCM WAV has a truncated format extension.".into());
+    }
+    let samples_per_block = usize::from(read_u16(fmt, 18).unwrap_or(0));
+    let coefficient_count = usize::from(read_u16(fmt, 20).unwrap_or(0));
+    if coefficient_count == 0 || coefficient_count > 256 {
+        return Err("That MS-ADPCM WAV has an invalid coefficient count.".into());
+    }
+    let coefficient_bytes = coefficient_count
+        .checked_mul(4)
+        .ok_or("MS-ADPCM coefficient table overflowed.")?;
+    let coefficient_end = 22usize
+        .checked_add(coefficient_bytes)
+        .ok_or("MS-ADPCM coefficient table overflowed.")?;
+    if coefficient_end > extension_end || coefficient_end > fmt.len() {
+        return Err("That MS-ADPCM WAV has a truncated coefficient table.".into());
+    }
+    let mut coefficients = Vec::with_capacity(coefficient_count);
+    for index in 0..coefficient_count {
+        let at = 22 + index * 4;
+        coefficients.push((
+            i32::from(read_i16(fmt, at)),
+            i32::from(read_i16(fmt, at + 2)),
+        ));
+    }
+
+    let channels = usize::from(channels);
+    let block_align = usize::from(read_u16(fmt, 12).unwrap_or(0));
+    let header_bytes = 7usize
+        .checked_mul(channels)
+        .ok_or("MS-ADPCM block header overflowed.")?;
+    if block_align < header_bytes {
+        return Err("That MS-ADPCM WAV has an invalid block size.".into());
+    }
+    let payload_nibbles = (block_align - header_bytes)
+        .checked_mul(2)
+        .ok_or("MS-ADPCM block size overflowed.")?;
+    if !payload_nibbles.is_multiple_of(channels) {
+        return Err("That MS-ADPCM WAV has a misaligned block size.".into());
+    }
+    let expected_samples_per_block = 2 + payload_nibbles / channels;
+    if samples_per_block != expected_samples_per_block {
+        return Err("That MS-ADPCM WAV has an inconsistent samples-per-block value.".into());
+    }
+    if !data.len().is_multiple_of(block_align) {
+        return Err("That MS-ADPCM WAV ends with an incomplete audio block.".into());
+    }
+    for block in data.chunks_exact(block_align) {
+        if block[..channels]
+            .iter()
+            .any(|predictor| usize::from(*predictor) >= coefficient_count)
+        {
+            return Err("That MS-ADPCM WAV uses an invalid predictor.".into());
+        }
+    }
+    Ok(AdpcmLayout {
+        block_align,
+        samples_per_block,
+        coefficients,
+    })
+}
+
 /// Read the header of a WAV without decoding it. Fails on anything that is
 /// not a RIFF/WAVE file with a format and a data chunk.
 pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
@@ -241,6 +345,7 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
     let channels = read_u16(fmt, 2).unwrap_or(0);
     let sample_rate = read_u32(fmt, 4).unwrap_or(0);
     let byte_rate = read_u32(fmt, 8).unwrap_or(0);
+    let block_align = read_u16(fmt, 12).unwrap_or(0);
     let bits_per_sample = read_u16(fmt, 14).unwrap_or(0);
     if channels == 0 || sample_rate == 0 {
         return Err("That WAV has no channels or no sample rate.".into());
@@ -250,18 +355,47 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
             "That WAV's header says {sample_rate} Hz. This app accepts {MIN_SAMPLE_RATE} to {MAX_SAMPLE_RATE} Hz — re-export it at 44100 Hz."
         ));
     }
-    let data_bytes = chunks.data.len();
-    // Byte rate is the honest way to time compressed data; fall back to the
-    // PCM arithmetic when a writer left it zero.
-    let bytes_per_second = if byte_rate > 0 {
-        byte_rate as u64
+    // Some widely-used TF2/comfig MS-ADPCM assets carry a placeholder
+    // nAvgBytesPerSec even though their block structure is valid and TF2
+    // plays them. Treat the complete block layout as authoritative instead
+    // of rejecting or timing compressed audio from that unreliable field.
+    let adpcm_layout = if raw_format_tag == WAVE_FORMAT_ADPCM {
+        Some(ms_adpcm_layout(
+            fmt,
+            chunks.data,
+            channels,
+            bits_per_sample,
+        )?)
     } else {
-        u64::from(sample_rate) * u64::from(channels) * u64::from(bits_per_sample.max(8) / 8)
+        None
     };
-    let duration_ms = (data_bytes as u64 * 1000)
-        .checked_div(bytes_per_second)
-        .unwrap_or(0)
-        .min(u32::MAX as u64) as u32;
+    let data_bytes = chunks.data.len();
+    let duration_ms = if let Some(layout) = adpcm_layout {
+        let blocks = u64::try_from(data_bytes / layout.block_align)
+            .map_err(|_| "MS-ADPCM block count overflowed.")?;
+        let samples_per_block = u64::try_from(layout.samples_per_block)
+            .map_err(|_| "MS-ADPCM sample count overflowed.")?;
+        blocks
+            .checked_mul(samples_per_block)
+            .and_then(|samples| samples.checked_mul(1000))
+            .and_then(|millis| millis.checked_div(u64::from(sample_rate)))
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32
+    } else {
+        // Byte rate is useful for the remaining compressed formats; fall
+        // back to PCM arithmetic when a writer left it zero.
+        let bytes_per_second = if byte_rate > 0 {
+            u64::from(byte_rate)
+        } else {
+            u64::from(sample_rate) * u64::from(channels) * u64::from(bits_per_sample.max(8) / 8)
+        };
+        u64::try_from(data_bytes)
+            .ok()
+            .and_then(|bytes| bytes.checked_mul(1000))
+            .and_then(|millis| millis.checked_div(bytes_per_second))
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32
+    };
     Ok(WavInfo {
         format_tag,
         raw_format_tag,
@@ -270,6 +404,8 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
         bits_per_sample,
         data_bytes,
         duration_ms,
+        block_align,
+        byte_rate,
     })
 }
 
@@ -279,8 +415,19 @@ pub fn inspect_wav(bytes: &[u8]) -> Result<WavInfo, String> {
 pub fn wav_is_engine_ready(info: &WavInfo) -> bool {
     let rate_ok = SUPPORTED_RATES.contains(&info.sample_rate);
     let format_ok = match info.raw_format_tag {
-        WAVE_FORMAT_PCM => matches!(info.bits_per_sample, 8 | 16),
-        WAVE_FORMAT_ADPCM => true,
+        WAVE_FORMAT_PCM if matches!(info.bits_per_sample, 8 | 16) => {
+            let bytes_per_sample = info.bits_per_sample / 8;
+            let expected_align = info.channels.checked_mul(bytes_per_sample);
+            expected_align.is_some_and(|align| {
+                align > 0
+                    && info.block_align == align
+                    && info.byte_rate == info.sample_rate.checked_mul(u32::from(align)).unwrap_or(0)
+                    && info.data_bytes.is_multiple_of(usize::from(align))
+            })
+        }
+        // `inspect_wav` validates the complete MS-ADPCM extension, block
+        // layout, coefficient table and data before constructing `WavInfo`.
+        WAVE_FORMAT_ADPCM => info.bits_per_sample == 4,
         _ => false,
     };
     rate_ok && format_ok && (1..=2).contains(&info.channels)
@@ -424,7 +571,7 @@ fn decode_frames(data: &[u8], info: &WavInfo) -> Result<Vec<f32>, String> {
     let channels = usize::from(info.channels);
     let bits = usize::from(info.bits_per_sample);
     let sample_bytes = bits / 8;
-    if sample_bytes == 0 || bits % 8 != 0 {
+    if sample_bytes == 0 || !bits.is_multiple_of(8) {
         return Err(format!(
             "{}-bit samples are not something this app can convert.",
             info.bits_per_sample
@@ -455,7 +602,12 @@ fn decode_frames(data: &[u8], info: &WavInfo) -> Result<Vec<f32>, String> {
             ))
         }
     };
-    let frame_bytes = sample_bytes * channels;
+    let frame_bytes = sample_bytes
+        .checked_mul(channels)
+        .ok_or("WAV frame size overflowed.")?;
+    if !data.len().is_multiple_of(frame_bytes) {
+        return Err("That WAV ends with an incomplete PCM frame.".into());
+    }
     let frame_count = data.len() / frame_bytes;
     refuse_if_too_long(frame_count, info.sample_rate)?;
     let mut samples = Vec::with_capacity(frame_count * channels);
@@ -520,16 +672,6 @@ fn encode_pcm16(channels: &[Vec<f32>], rate: u32) -> Vec<u8> {
 // MS-ADPCM → PCM, for auditioning only
 // ---------------------------------------------------------------------------
 
-/// Microsoft ADPCM's fixed predictor coefficient table (7 pairs).
-const ADPCM_COEFFS: [(i32, i32); 7] = [
-    (256, 0),
-    (512, -256),
-    (0, 0),
-    (192, 64),
-    (240, 0),
-    (460, -208),
-    (392, -232),
-];
 const ADPCM_ADAPT: [i32; 16] = [
     230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230,
 ];
@@ -552,30 +694,15 @@ pub fn preview_wav(bytes: &[u8]) -> Vec<u8> {
 fn decode_ms_adpcm(bytes: &[u8], info: &WavInfo) -> Result<Vec<u8>, String> {
     let chunks = wav_chunks(bytes)?;
     let channels = usize::from(info.channels);
-    if !(1..=2).contains(&channels) {
-        return Err("Only mono and stereo ADPCM can be previewed.".into());
-    }
-    let block_align = usize::from(read_u16(chunks.fmt, 12).unwrap_or(0));
-    if block_align < 7 * channels {
-        return Err("That ADPCM WAV has an invalid block size.".into());
-    }
-    // Optional cbSize + samples-per-block; fall back to the MS default
-    // derived from the block size when a writer left the extension out.
-    let samples_per_block = read_u16(chunks.fmt, 18)
-        .filter(|value| *value > 0)
-        .map(usize::from)
-        .unwrap_or((block_align - 7 * channels) * 2 / channels + 2);
+    let layout = ms_adpcm_layout(chunks.fmt, chunks.data, info.channels, info.bits_per_sample)?;
     let mut out: Vec<Vec<f32>> = vec![Vec::new(); channels];
-    for block in chunks.data.chunks(block_align) {
-        if block.len() < 7 * channels {
-            break;
-        }
+    for block in chunks.data.chunks_exact(layout.block_align) {
         let mut predictor = [0usize; 2];
         let mut delta = [0i32; 2];
         let mut sample1 = [0i32; 2];
         let mut sample2 = [0i32; 2];
         for ch in 0..channels {
-            predictor[ch] = usize::from(block[ch]).min(ADPCM_COEFFS.len() - 1);
+            predictor[ch] = usize::from(block[ch]);
         }
         let mut at = channels;
         for slot in delta.iter_mut().take(channels) {
@@ -599,11 +726,18 @@ fn decode_ms_adpcm(bytes: &[u8], info: &WavInfo) -> Result<Vec<u8>, String> {
         let nibbles = block[at..].iter().flat_map(|byte| [byte >> 4, byte & 0x0F]);
         let mut ch = 0usize;
         for nibble in nibbles {
-            if produced >= samples_per_block && ch == 0 {
+            if produced >= layout.samples_per_block && ch == 0 {
                 break;
             }
-            let (c1, c2) = ADPCM_COEFFS[predictor[ch]];
-            let predicted = (sample1[ch] * c1 + sample2[ch] * c2) >> 8;
+            let (c1, c2) = layout.coefficients[predictor[ch]];
+            // Coefficients are signed 16-bit values from the file. Two
+            // individually valid products can overflow i32 before the
+            // fixed-point shift (for example -32768 * -32768 twice), so do
+            // the adversarial arithmetic wide even though ordinary ADPCM
+            // tables use much smaller coefficients.
+            let predicted = ((i64::from(sample1[ch]) * i64::from(c1)
+                + i64::from(sample2[ch]) * i64::from(c2))
+                >> 8) as i32;
             let signed = if nibble & 0x08 != 0 {
                 i32::from(nibble) - 16
             } else {
@@ -679,62 +813,88 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
-    let mut record = load_manifest(profiles_dir, profile_id)?
-        .hitsound
-        .unwrap_or_default();
-    for (kind, change) in [(HitsoundKind::Hit, hit), (HitsoundKind::Kill, kill)] {
+    validate_prepared_change(&hit)?;
+    validate_prepared_change(&kill)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    refuse_untracked_live_hitsound_files(profiles_dir, tf2_root, profile_id, &manifest)?;
+    // Cache cleanup can fail (notably for a read-only file on Windows). Do it
+    // before changing either slot so an error cannot leave new WAV bytes with
+    // the previous HitsoundRecord.
+    remove_live_sound_cache_if_active(profiles_dir, tf2_root, profile_id)?;
+    let mut record = manifest.hitsound.clone().unwrap_or_default();
+    let mut puts = Vec::new();
+    let mut removes = Vec::new();
+    for (kind, change) in [(HitsoundKind::Hit, &hit), (HitsoundKind::Kill, &kill)] {
         match change {
             HitsoundChange::Keep => {}
             HitsoundChange::Clear => {
-                remove_manifest_files_to(
-                    profiles_dir,
-                    tf2_root,
-                    profile_id,
-                    &[kind.rel_path().to_string()],
-                    &running,
-                )?;
-                remove_live_file_if_active(profiles_dir, tf2_root, profile_id, kind.rel_path())?;
+                removes.push(kind.rel_path().to_string());
                 set_slot(&mut record, kind, None);
             }
             HitsoundChange::Install { entry, wav } => {
-                if wav.is_empty() || wav.len() > HITSOUND_MAX_BYTES {
-                    return Err(ProfileError::Io(
-                        "That sound file is empty or too large.".into(),
-                    ));
-                }
-                let info = inspect_wav(&wav).map_err(ProfileError::Io)?;
-                if !wav_is_engine_ready(&info) {
-                    return Err(ProfileError::Io(
-                        "That WAV is not in a format TF2 plays. Prepare it first.".into(),
-                    ));
-                }
-                write_owned_file_to(
-                    profiles_dir,
-                    tf2_root,
-                    profile_id,
-                    kind.rel_path(),
-                    &wav,
-                    running.iter().cloned(),
-                    WriteOwnedOptions::default(),
-                )?;
-                set_slot(&mut record, kind, Some(entry));
+                puts.push((
+                    kind.rel_path().to_string(),
+                    FileSource::Bytes(wav.as_slice()),
+                ));
+                set_slot(&mut record, kind, Some(entry.clone()));
             }
         }
     }
-    // The engine caches decoded sounds per folder; a stale cache plays the
-    // previous file (or noise) after a same-name replace.
-    remove_live_sound_cache_if_active(profiles_dir, tf2_root, profile_id)?;
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
-    manifest.hitsound = if record.hit.is_none() && record.kill.is_none() {
-        None
-    } else {
-        Some(record)
-    };
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
-    Ok(detail_from_manifest(&load_manifest(
+    let manifest = mutate_profile_files_to(
         profiles_dir,
+        tf2_root,
         profile_id,
-    )?))
+        &puts,
+        &removes,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        move |manifest| {
+            manifest.hitsound = if record.hit.is_none() && record.kill.is_none() {
+                None
+            } else {
+                Some(record)
+            };
+            Ok(())
+        },
+    )?;
+    Ok(detail_from_manifest(&manifest))
+}
+
+fn validate_prepared_change(change: &HitsoundChange) -> Result<(), ProfileError> {
+    let HitsoundChange::Install { entry, wav } = change else {
+        return Ok(());
+    };
+    if entry.name.is_empty()
+        || entry.name.len() > MAX_HITSOUND_ENTRY_NAME_BYTES
+        || entry.name.chars().any(char::is_control)
+    {
+        return Err(ProfileError::Io(
+            "A hit-sound name is empty, too long, or contains a control character.".into(),
+        ));
+    }
+    for (field, value) in [("token", &entry.token), ("hash", &entry.hash)] {
+        if value.as_ref().is_some_and(|value| {
+            value.is_empty()
+                || value.len() > MAX_HITSOUND_SOURCE_ID_BYTES
+                || value.chars().any(char::is_control)
+        }) {
+            return Err(ProfileError::Io(format!(
+                "The hit-sound source {field} is empty, too long, or contains a control character."
+            )));
+        }
+    }
+    if wav.is_empty() || wav.len() > HITSOUND_MAX_BYTES {
+        return Err(ProfileError::Io(
+            "That sound file is empty or too large.".into(),
+        ));
+    }
+    let info = inspect_wav(wav).map_err(ProfileError::Io)?;
+    if !wav_is_engine_ready(&info) {
+        return Err(ProfileError::Io(
+            "That WAV is not in a format TF2 plays. Prepare it first.".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn set_slot(record: &mut HitsoundRecord, kind: HitsoundKind, entry: Option<HitsoundEntry>) {
@@ -760,30 +920,90 @@ pub fn stored_hitsound(
     kind: HitsoundKind,
 ) -> Option<Vec<u8>> {
     let path = exclusive_file_path(profiles_dir, profile_id, kind.rel_path());
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = read_regular_file_bounded_within(profiles_dir, &path, HITSOUND_MAX_BYTES as u64)
+        .ok()
+        .flatten()?;
     inspect_wav(&bytes).ok()?;
     Some(bytes)
 }
 
-fn remove_live_file_if_active(
+fn refuse_untracked_live_hitsound_files(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
-    rel: &str,
+    manifest: &ProfileManifest,
 ) -> Result<(), ProfileError> {
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     if library.active_profile_id.as_deref() != Some(profile_id) {
         return Ok(());
     }
-    let mut dest = tf2_root.to_path_buf();
-    for part in rel.split('/') {
-        dest.push(part);
+    let dir = tf2_root
+        .join("tf")
+        .join("custom")
+        .join(EXECS_HITSOUNDS_PACK);
+    let meta = match std::fs::symlink_metadata(&dir) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Ok(meta) => meta,
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
+    };
+    if metadata_is_link(&meta) || !meta.is_dir() {
+        return Err(ProfileError::Io(
+            "Refusing to traverse a linked or invalid live hit-sound pack.".into(),
+        ));
     }
-    if dest.is_file() {
-        std::fs::remove_file(&dest).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let tracked: BTreeSet<String> = manifest
+        .files
+        .iter()
+        .filter(|file| matches!(file.path.as_str(), HITSOUND_REL | KILLSOUND_REL))
+        .map(|file| file.path.to_ascii_lowercase())
+        .collect();
+    let cache_rel = format!("tf/custom/{EXECS_HITSOUNDS_PACK}/sound/sound.cache");
+    let mut pending = vec![dir];
+    let mut entries = 0usize;
+    while let Some(current) = pending.pop() {
+        validate_dir_within(tf2_root, &current).map_err(|err| ProfileError::Io(err.to_string()))?;
+        for entry in std::fs::read_dir(&current).map_err(|err| ProfileError::Io(err.to_string()))? {
+            let path = entry
+                .map_err(|err| ProfileError::Io(err.to_string()))?
+                .path();
+            let meta = std::fs::symlink_metadata(&path)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
+            entries = entries.saturating_add(1);
+            if entries > MAX_LIVE_HITSOUND_ENTRIES {
+                return Err(ProfileError::Io(format!(
+                    "The live hit-sound pack contains more than {MAX_LIVE_HITSOUND_ENTRIES} entries."
+                )));
+            }
+            if metadata_is_link(&meta) {
+                return Err(ProfileError::Io(
+                    "Refusing to traverse a link or junction in the live hit-sound pack.".into(),
+                ));
+            }
+            if meta.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !meta.is_file() {
+                return Err(ProfileError::Io(
+                    "The live hit-sound pack contains an invalid entry.".into(),
+                ));
+            }
+            let rel = path
+                .strip_prefix(tf2_root)
+                .map_err(|_| ProfileError::InvalidPath)?
+                .to_string_lossy()
+                .replace('\\', "/")
+                .to_ascii_lowercase();
+            if rel != cache_rel
+                && !tracked.contains(&rel)
+                && !rel.ends_with(crate::hash::PART_SUFFIX)
+            {
+                return Err(ProfileError::Io(format!(
+                    "The live hit-sound pack contains an untracked file: {rel}. Remove or save it before applying."
+                )));
+            }
+        }
     }
-    // Leave the folder itself for the engine to ignore when empty; removing
-    // the whole pack is the caller's decision, not a side effect of one slot.
     Ok(())
 }
 
@@ -802,8 +1022,14 @@ fn remove_live_sound_cache_if_active(
         .join(EXECS_HITSOUNDS_PACK)
         .join("sound")
         .join("sound.cache");
-    if cache.is_file() {
-        std::fs::remove_file(&cache).map_err(|err| ProfileError::Io(err.to_string()))?;
+    // The game may have started after the caller's entry check. Sample again
+    // at the destructive boundary just like the journaled live projection.
+    refuse_if_running_among(live_process_names()).map_err(ProfileError::from)?;
+    match std::fs::symlink_metadata(&cache) {
+        Ok(_) => remove_file_force_within(tf2_root, &cache)
+            .map_err(|err| ProfileError::Io(err.to_string()))?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
     }
     Ok(())
 }
@@ -930,6 +1156,32 @@ mod tests {
         Vec::new()
     }
 
+    #[cfg(unix)]
+    fn link_dir(target: &Path, link: &Path) {
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn link_dir(target: &Path, link: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .status()
+            .unwrap();
+        assert!(status.success(), "could not create test junction");
+    }
+
+    #[cfg(unix)]
+    fn unlink_dir(link: &Path) {
+        std::fs::remove_file(link).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn unlink_dir(link: &Path) {
+        std::fs::remove_dir(link).unwrap();
+    }
+
     #[test]
     fn a_stock_style_wav_passes_through_untouched() {
         let wav = pcm_wav(44100, 2, 16, 4410);
@@ -1015,6 +1267,9 @@ mod tests {
         // A stale engine cache next to the files goes with the next apply.
         let cache = tf2.join("tf/custom/execs-hitsounds/sound/sound.cache");
         std::fs::write(&cache, b"stale").unwrap();
+        let mut permissions = std::fs::metadata(&cache).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&cache, permissions).unwrap();
         let detail = apply_hitsounds_to(
             &profiles,
             &tf2,
@@ -1096,6 +1351,199 @@ mod tests {
     }
 
     #[test]
+    fn apply_bounds_record_strings_at_the_core_boundary() {
+        let wav = pcm_wav(44100, 1, 16, 20);
+        let too_long = HitsoundChange::Install {
+            entry: HitsoundEntry::new(
+                "x".repeat(MAX_HITSOUND_ENTRY_NAME_BYTES + 1),
+                HitsoundSource::File,
+            ),
+            wav: wav.clone(),
+        };
+        let err = validate_prepared_change(&too_long).unwrap_err();
+        assert!(err.message().contains("name"), "{err:?}");
+
+        let mut bad_token = HitsoundEntry::new("safe".into(), HitsoundSource::File);
+        bad_token.token = Some("bad\nsource".into());
+        let err = validate_prepared_change(&HitsoundChange::Install {
+            entry: bad_token,
+            wav,
+        })
+        .unwrap_err();
+        assert!(err.message().contains("token"), "{err:?}");
+    }
+
+    #[test]
+    fn both_slots_are_validated_before_either_is_changed() {
+        let (root, profiles, tf2, id) = setup();
+        let old = pcm_wav(44100, 1, 16, 20);
+        apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("old".into(), HitsoundSource::File),
+                wav: old.clone(),
+            },
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("new".into(), HitsoundSource::File),
+                wav: pcm_wav(44100, 1, 16, 20),
+            },
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("bad".into(), HitsoundSource::File),
+                wav: pcm_wav(48000, 1, 16, 20),
+            },
+            unlocked(),
+        )
+        .unwrap_err();
+
+        assert!(err.message().contains("Prepare it first"), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(tf2.join(HITSOUND_REL)).unwrap(), old);
+        assert!(!tf2.join(KILLSOUND_REL).exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn both_slots_and_record_roll_back_together_if_manifest_commit_fails() {
+        let (root, profiles, tf2, id) = setup();
+        let old = pcm_wav(44100, 1, 16, 20);
+        apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("old hit".into(), HitsoundSource::File),
+                wav: old.clone(),
+            },
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("old kill".into(), HitsoundSource::File),
+                wav: old.clone(),
+            },
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        std::fs::create_dir_all(&blocker).unwrap();
+        let replacement = pcm_wav(44100, 2, 16, 30);
+
+        let err = apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("new hit".into(), HitsoundSource::Community),
+                wav: replacement,
+            },
+            HitsoundChange::Clear,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(tf2.join(HITSOUND_REL)).unwrap(), old);
+        assert_eq!(std::fs::read(tf2.join(KILLSOUND_REL)).unwrap(), old);
+        assert_eq!(
+            stored_hitsound(&profiles, &id, HitsoundKind::Hit).unwrap(),
+            old
+        );
+        assert_eq!(
+            stored_hitsound(&profiles, &id, HitsoundKind::Kill).unwrap(),
+            old
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn stored_hitsound_read_accepts_the_limit_and_rejects_one_byte_more() {
+        let (root, profiles, _tf2, id) = setup();
+        let path = exclusive_file_path(&profiles, &id, HITSOUND_REL);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut exact = pcm_wav(44100, 1, 16, 20);
+        exact.resize(HITSOUND_MAX_BYTES, 0);
+        std::fs::write(&path, &exact).unwrap();
+        assert_eq!(
+            stored_hitsound(&profiles, &id, HitsoundKind::Hit)
+                .unwrap()
+                .len(),
+            HITSOUND_MAX_BYTES
+        );
+
+        exact.push(0);
+        std::fs::write(&path, exact).unwrap();
+        assert!(stored_hitsound(&profiles, &id, HitsoundKind::Hit).is_none());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn apply_refuses_a_linked_live_pack_without_touching_its_target() {
+        let (root, profiles, tf2, id) = setup();
+        let outside = root.join("outside-hitsound-pack");
+        let outside_cache = outside.join("sound/sound.cache");
+        std::fs::create_dir_all(outside_cache.parent().unwrap()).unwrap();
+        std::fs::write(&outside_cache, b"outside cache").unwrap();
+        let link = tf2.join("tf").join("custom").join(EXECS_HITSOUNDS_PACK);
+        link_dir(&outside, &link);
+
+        let err = apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Clear,
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap_err();
+
+        assert!(
+            err.message().contains("link") || err.message().contains("reparse"),
+            "{err:?}"
+        );
+        assert_eq!(std::fs::read(&outside_cache).unwrap(), b"outside cache");
+        unlink_dir(&link);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn apply_refuses_untracked_content_in_the_app_owned_pack() {
+        let (root, profiles, tf2, id) = setup();
+        let stray = tf2.join("tf/custom/execs-hitsounds/cfg/autoexec.cfg");
+        std::fs::create_dir_all(stray.parent().unwrap()).unwrap();
+        std::fs::write(&stray, b"quit\n").unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let wav = pcm_wav(44100, 1, 16, 20);
+
+        let err = apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("new".into(), HitsoundSource::File),
+                wav,
+            },
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("untracked"), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(stray).unwrap(), b"quit\n");
+        assert!(!tf2.join(HITSOUND_REL).exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn stock_sounds_come_out_of_a_synthetic_sound_vpk_by_stem() {
         let root = test_temp_dir();
         let tf2 = root.join("tf2");
@@ -1132,17 +1580,32 @@ mod tests {
     }
 
     fn adpcm_wav_with_delta(channels: u16, blocks: usize, nibble: u8, delta: i16) -> Vec<u8> {
+        const COEFFICIENTS: [(i16, i16); 7] = [
+            (256, 0),
+            (512, -256),
+            (0, 0),
+            (192, 64),
+            (240, 0),
+            (460, -208),
+            (392, -232),
+        ];
         let block_align: u16 = 7 * channels + 8 * channels;
         let samples_per_block: u16 = 2 + 16;
+        let byte_rate = 44100 * u32::from(block_align) / u32::from(samples_per_block);
         let mut fmt = Vec::new();
         fmt.extend_from_slice(&WAVE_FORMAT_ADPCM.to_le_bytes());
         fmt.extend_from_slice(&channels.to_le_bytes());
         fmt.extend_from_slice(&44100u32.to_le_bytes());
-        fmt.extend_from_slice(&0u32.to_le_bytes());
+        fmt.extend_from_slice(&byte_rate.to_le_bytes());
         fmt.extend_from_slice(&block_align.to_le_bytes());
         fmt.extend_from_slice(&4u16.to_le_bytes());
-        fmt.extend_from_slice(&2u16.to_le_bytes());
+        fmt.extend_from_slice(&32u16.to_le_bytes());
         fmt.extend_from_slice(&samples_per_block.to_le_bytes());
+        fmt.extend_from_slice(&(COEFFICIENTS.len() as u16).to_le_bytes());
+        for (first, second) in COEFFICIENTS {
+            fmt.extend_from_slice(&first.to_le_bytes());
+            fmt.extend_from_slice(&second.to_le_bytes());
+        }
         let mut data = Vec::new();
         for _ in 0..blocks {
             // predictor 0: coef (256, 0) → predicted = sample1
@@ -1219,6 +1682,104 @@ mod tests {
         assert_eq!(preview_wav(&pcm), pcm);
         assert_eq!(preview_wav(b"nope"), b"nope".to_vec());
         let _ = preview_wav(&wav[..40]);
+    }
+
+    #[test]
+    fn comfig_style_adpcm_ignores_placeholder_byte_rate_and_times_blocks() {
+        // Header shape observed in the pinned comfig hits library. Its
+        // nAvgBytesPerSec is 16000, but the structurally valid stereo blocks
+        // are 1024 bytes / 1012 samples and TF2 plays the file as-is.
+        let mut wav = adpcm_wav(2, 1, 0);
+        wav[28..32].copy_from_slice(&16000u32.to_le_bytes());
+        wav[32..34].copy_from_slice(&1024u16.to_le_bytes());
+        wav[38..40].copy_from_slice(&1012u16.to_le_bytes());
+        wav.resize(78 + 1024, 0);
+        wav[74..78].copy_from_slice(&1024u32.to_le_bytes());
+        let riff_len = u32::try_from(wav.len() - 8).unwrap();
+        wav[4..8].copy_from_slice(&riff_len.to_le_bytes());
+
+        let info = inspect_wav(&wav).unwrap();
+        assert!(wav_is_engine_ready(&info));
+        assert_eq!(info.duration_ms, 22, "duration comes from complete blocks");
+        let (installed, prepared) = prepare_hitsound_wav(&wav).unwrap();
+        assert_eq!(installed, wav);
+        assert_eq!(prepared.duration_ms, 22);
+    }
+
+    #[test]
+    fn adversarial_adpcm_coefficients_do_not_overflow_the_decoder() {
+        let mut wav = adpcm_wav(1, 1, 0);
+        // Coefficient pair 0 and both seed samples are valid signed i16s, but
+        // their two products overflow i32 before the fixed-point shift.
+        wav[42..44].copy_from_slice(&i16::MIN.to_le_bytes());
+        wav[44..46].copy_from_slice(&i16::MIN.to_le_bytes());
+        wav[81..83].copy_from_slice(&i16::MIN.to_le_bytes());
+        wav[83..85].copy_from_slice(&i16::MIN.to_le_bytes());
+
+        let result = std::panic::catch_unwind(|| preview_wav(&wav));
+        assert!(result.is_ok(), "valid hostile coefficients must not panic");
+        let decoded = inspect_wav(&result.unwrap()).unwrap();
+        assert_eq!(decoded.format_tag, WAVE_FORMAT_PCM);
+        assert_eq!(decoded.bits_per_sample, 16);
+    }
+
+    #[test]
+    fn malformed_ms_adpcm_is_never_treated_as_engine_ready() {
+        let valid = adpcm_wav(1, 2, 0);
+
+        let mut wrong_depth = valid.clone();
+        wrong_depth[34..36].copy_from_slice(&16u16.to_le_bytes());
+        assert!(prepare_hitsound_wav(&wrong_depth)
+            .unwrap_err()
+            .contains("4-bit"));
+
+        let mut missing_coefficients = valid.clone();
+        missing_coefficients[40..42].copy_from_slice(&8u16.to_le_bytes());
+        assert!(inspect_wav(&missing_coefficients)
+            .unwrap_err()
+            .contains("coefficient table"));
+
+        let mut bad_predictor = valid.clone();
+        bad_predictor[78] = 7;
+        assert!(inspect_wav(&bad_predictor)
+            .unwrap_err()
+            .contains("predictor"));
+
+        let mut incomplete_block = valid;
+        incomplete_block.pop();
+        let data_len = u32::from_le_bytes(incomplete_block[74..78].try_into().unwrap()) - 1;
+        incomplete_block[74..78].copy_from_slice(&data_len.to_le_bytes());
+        let riff_len = (incomplete_block.len() - 8) as u32;
+        incomplete_block[4..8].copy_from_slice(&riff_len.to_le_bytes());
+        assert!(inspect_wav(&incomplete_block)
+            .unwrap_err()
+            .contains("incomplete audio block"));
+    }
+
+    #[test]
+    fn pcm_header_and_data_alignment_are_validated() {
+        let valid = pcm_wav(44100, 1, 16, 2);
+
+        let mut wrong_alignment = valid.clone();
+        wrong_alignment[32..34].copy_from_slice(&1u16.to_le_bytes());
+        let info = inspect_wav(&wrong_alignment).unwrap();
+        assert!(!wav_is_engine_ready(&info));
+        let (_, repaired) = prepare_hitsound_wav(&wrong_alignment).unwrap();
+        assert!(wav_is_engine_ready(&repaired));
+
+        let mut wrong_byte_rate = valid.clone();
+        wrong_byte_rate[28..32].copy_from_slice(&1u32.to_le_bytes());
+        assert!(!wav_is_engine_ready(
+            &inspect_wav(&wrong_byte_rate).unwrap()
+        ));
+
+        let mut incomplete_frame = valid;
+        incomplete_frame.pop();
+        incomplete_frame[40..44].copy_from_slice(&3u32.to_le_bytes());
+        incomplete_frame[4..8].copy_from_slice(&39u32.to_le_bytes());
+        assert!(prepare_hitsound_wav(&incomplete_frame)
+            .unwrap_err()
+            .contains("incomplete PCM frame"));
     }
 
     #[test]

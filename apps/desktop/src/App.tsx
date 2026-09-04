@@ -10,6 +10,7 @@ import { FirstRunExisting } from "./FirstRunExisting";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useFirstRun } from "./hooks/useFirstRun";
+import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
@@ -34,14 +35,34 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
     () => previewSettingsTab(preview) ?? "comfig",
   );
 
   const lock = useWriteLock(api);
+  const lifecycle = useLifecycleStatus(api);
   const progress = useSwitchProgress(api, preview === "switch" ? previewSwitchStep() : null);
-  const anyBusy = busy || settingsBusy;
+  const update = useAppUpdate(api, {
+    setError,
+    seedProgress: previewUpdateProgress(preview),
+  });
+  const launchPending = launching || lifecycle.launchingTf2;
+  const lifecycleBusy =
+    !lifecycle.available ||
+    lifecycle.launchingTf2 ||
+    lifecycle.steamVerification ||
+    lifecycle.installingUpdate;
+  const maintenanceCopy = lifecycle.steamVerification
+    ? "Steam verification owns TF2 files — finish or cancel it from Mods."
+    : lifecycle.launchingTf2
+      ? "Steam is still starting TF2 — changes remain locked."
+      : lifecycle.installingUpdate
+        ? "execs is installing an update — changes remain locked."
+        : null;
+  const anyBusy =
+    busy || settingsBusy || launchPending || lifecycleBusy || update.progress !== null;
 
   const install = useTf2Install(api, {
     setError,
@@ -65,6 +86,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     setError,
     setBusy,
   });
+  const recoveryTargetId = profiles.library?.pendingSwitchProfileId ?? null;
 
   const firstRun = useFirstRun(api, {
     confirmed: install.confirmed,
@@ -76,11 +98,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     setBusy,
     setLibrary: profiles.setLibrary,
     seedCreating: previewCreating(preview),
-  });
-
-  const update = useAppUpdate(api, {
-    setError,
-    seedProgress: previewUpdateProgress(preview),
   });
 
   const creating = firstRun.creating;
@@ -141,6 +158,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             switchStep={progress.state.visibleStep}
             active={progress.state.active}
             visible={progress.state.visible}
+            detail={progress.state.completionDetail}
           />
           {isCreate ? null : (
             <button
@@ -175,7 +193,33 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         profiles={profiles}
         progress={progress}
         draftName={draftName}
-        onLaunch={() => void api.launchTf2().catch((err) => setError(invokeErrorMessage(err)))}
+        launching={launchPending}
+        recoveryTargetId={recoveryTargetId}
+        onLaunch={() => {
+          setError(null);
+          setLaunching(true);
+          void api
+            .launchTf2()
+            .catch((err) => setError(invokeErrorMessage(err)))
+            .finally(() => {
+              setLaunching(false);
+              void lifecycle.refresh();
+            });
+        }}
+        onCancelLaunch={() => {
+          if (
+            !window.confirm(
+              "Cancel the launch, then close Steam completely. Release execs' launch lock now?",
+            )
+          ) {
+            return;
+          }
+          setError(null);
+          void api
+            .cancelTf2Launch()
+            .then(() => lifecycle.refresh())
+            .catch((err) => setError(invokeErrorMessage(err)));
+        }}
         settings={
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout tab={settingsTab} onTab={setSettingsTab}>
@@ -183,7 +227,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 api={api}
                 tab={settingsTab}
                 running={lock.running}
-                externalBusy={busy || progress.state.active}
+                externalBusy={
+                  busy || progress.state.active || recoveryTargetId !== null || lifecycleBusy
+                }
                 refreshKey={profiles.refreshKey}
                 bindSyncRequest={profiles.bindSyncRequest}
                 onBindSyncHandled={profiles.onBindSyncHandled}
@@ -212,8 +258,23 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     >
       <ToastProvider>
         <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
-          <WriteLockBanner running={lock.running} degraded={lock.degraded ?? progress.degraded} />
-          <UpdateBanner update={update} />
+          <WriteLockBanner
+            running={lock.running}
+            degraded={lock.degraded ?? lifecycle.degraded ?? progress.degraded}
+            maintenance={maintenanceCopy}
+          />
+          <UpdateBanner
+            update={update}
+            blocked={
+              busy ||
+              settingsBusy ||
+              progress.state.active ||
+              launchPending ||
+              lock.running ||
+              lifecycleBusy ||
+              recoveryTargetId !== null
+            }
+          />
 
           <main
             className={`flex min-h-0 w-full flex-1 flex-col ${

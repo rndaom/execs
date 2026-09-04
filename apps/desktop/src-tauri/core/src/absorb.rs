@@ -12,12 +12,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::apply::manifest_source_path;
 use crate::finder::discover_steam_roots;
-use crate::hash::{part_path, sha256_file, write_atomic, PART_SUFFIX};
+use crate::hash::{
+    copy_verified_atomic_within, part_path, read_small_file_bounded, remove_file_force_within,
+    sha256_file, validate_dir_within, write_atomic_within, MAX_CFG_FILE_BYTES, PART_SUFFIX,
+};
 use crate::launch::{cloud_config_path_from, find_cloud_config, find_cloud_config_from};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    load_library_from, load_manifest, profiles_dir, put_exclusive_files_from_paths_to,
-    remove_manifest_files_to, ProfileError, ProfileFile, ProfileLibrary,
+    is_profile_ownable_rel_path, load_library_from, load_manifest, profiles_dir,
+    put_exclusive_files_from_paths_to, recover_profile_mutation_to, remove_manifest_files_to,
+    ProfileError, ProfileFile, ProfileLibrary,
 };
 use crate::surface::{
     inventory_live_surface_for_absorb, is_stock_custom_entry, is_stock_custom_pack,
@@ -97,7 +101,11 @@ pub fn pack_key(rel: &str) -> Option<String> {
     if name.is_empty() {
         return None;
     }
-    Some(name.to_ascii_lowercase())
+    if cfg!(windows) {
+        Some(name.to_ascii_lowercase())
+    } else {
+        Some(name.to_string())
+    }
 }
 
 pub fn write_config_cfg_dual(tf2_root: &Path, bytes: &[u8]) -> Result<(), ProfileError> {
@@ -110,9 +118,15 @@ pub fn write_config_cfg_dual_to(
     steam_roots: &[PathBuf],
 ) -> Result<(), ProfileError> {
     let live = tf2_root.join("tf").join("cfg").join("config.cfg");
-    write_bytes(&live, bytes)?;
+    write_bytes(tf2_root, &live, bytes)?;
     if let Some(cloud) = cloud_config_path_from(steam_roots) {
-        write_bytes(&cloud, bytes)?;
+        let cloud_root = steam_roots
+            .iter()
+            .find(|root| cloud.starts_with(root))
+            .ok_or_else(|| {
+                ProfileError::Io("Steam Cloud config resolved outside every Steam root".into())
+            })?;
+        write_bytes(cloud_root, &cloud, bytes)?;
     }
     Ok(())
 }
@@ -169,6 +183,10 @@ where
     let repaired = repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     let config_cfg_absorbed = classified.delta.config_cfg;
+    let pending_cloud_sync = load_manifest(profiles_dir, &profile_id)?.cloud_sync_pending;
+    if config_cfg_absorbed && !pending_cloud_sync {
+        set_cloud_sync_pending(profiles_dir, tf2_root, &profile_id, true, &running)?;
+    }
     put_live_files(
         profiles_dir,
         tf2_root,
@@ -191,6 +209,10 @@ where
     // fresh mtime on a Steam Cloud file on every single boot.
     if config_cfg_absorbed {
         dual_write_config(tf2_root, &classified, &options)?;
+        set_cloud_sync_pending(profiles_dir, tf2_root, &profile_id, false, &running)?;
+    } else if pending_cloud_sync {
+        retry_pending_cloud_sync(profiles_dir, tf2_root, &profile_id, &options)?;
+        set_cloud_sync_pending(profiles_dir, tf2_root, &profile_id, false, &running)?;
     }
 
     let mut remaining = classified.delta;
@@ -384,7 +406,14 @@ fn repair_interrupted_writes(
     profile_id: &str,
     running: &[String],
 ) -> Result<Vec<String>, ProfileError> {
+    recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let before_files = manifest.files.len();
+    // Older builds could accidentally claim Valve/global/junk entries. Drop
+    // those metadata records without reading or touching their live paths.
+    manifest
+        .files
+        .retain(|file| is_profile_ownable_rel_path(&file.path));
     let mut repaired_packs = BTreeSet::new();
     let mut repaired_files = Vec::new();
     for file in &manifest.files {
@@ -406,8 +435,8 @@ fn repair_interrupted_writes(
         let Ok(source) = manifest_source_path(profiles_dir, profile_id, file) else {
             continue;
         };
-        let bytes = fs::read(&source).map_err(|e| ProfileError::Io(e.to_string()))?;
-        write_atomic(&dest, &bytes).map_err(|e| ProfileError::Io(e.to_string()))?;
+        copy_verified_atomic_within(tf2_root, &source, &dest, &file.sha256)
+            .map_err(|e| ProfileError::Io(e.to_string()))?;
         match pack {
             Some(pack) => {
                 repaired_packs.insert(pack);
@@ -416,14 +445,14 @@ fn repair_interrupted_writes(
         }
     }
 
-    remove_stray_parts(&tf2_root.join("tf").join("custom"));
-    remove_stray_parts(&tf2_root.join("tf").join("cfg"));
+    remove_stray_parts(tf2_root, &tf2_root.join("tf").join("custom"))?;
+    remove_stray_parts(tf2_root, &tf2_root.join("tf").join("cfg"))?;
 
     let before = manifest.ignored_packs.len();
     manifest
         .ignored_packs
         .retain(|pack| !is_stock_custom_pack(pack) && !repaired_packs.contains(pack));
-    if manifest.ignored_packs.len() != before {
+    if manifest.ignored_packs.len() != before || manifest.files.len() != before_files {
         crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)?;
     }
 
@@ -436,9 +465,14 @@ fn repair_interrupted_writes(
 
 /// Delete our own `.execs-part` side files under `dir`, recursively. Only that
 /// suffix: everything else in the live tree belongs to the game or the user.
-fn remove_stray_parts(dir: &Path) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
+fn remove_stray_parts(tf2_root: &Path, dir: &Path) -> Result<(), ProfileError> {
+    if !dir.exists() {
+        return Ok(());
+    }
+    validate_dir_within(tf2_root, dir).map_err(|e| ProfileError::Io(e.to_string()))?;
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
     };
     for entry in entries.flatten() {
         let Ok(kind) = entry.file_type() else {
@@ -446,7 +480,7 @@ fn remove_stray_parts(dir: &Path) {
         };
         let path = entry.path();
         if kind.is_dir() {
-            remove_stray_parts(&path);
+            remove_stray_parts(tf2_root, &path)?;
         } else if kind.is_file()
             && entry
                 .file_name()
@@ -454,9 +488,11 @@ fn remove_stray_parts(dir: &Path) {
                 .to_ascii_lowercase()
                 .ends_with(PART_SUFFIX)
         {
-            let _ = fs::remove_file(&path);
+            remove_file_force_within(tf2_root, &path)
+                .map_err(|e| ProfileError::Io(e.to_string()))?;
         }
     }
+    Ok(())
 }
 
 /// Rewrite live files from the profile's own library copies. Used by Restore,
@@ -475,9 +511,11 @@ fn write_library_files_to_live(
         let Some(file) = manifest.files.iter().find(|file| &file.path == path) else {
             continue;
         };
+        if !is_profile_ownable_rel_path(path) {
+            return Err(ProfileError::ForbiddenPath(path.clone()));
+        }
         let source = manifest_source_path(profiles_dir, profile_id, file)?;
-        let bytes = fs::read(&source).map_err(|e| ProfileError::Io(e.to_string()))?;
-        write_atomic(&live_path(tf2_root, path), &bytes)
+        copy_verified_atomic_within(tf2_root, &source, &live_path(tf2_root, path), &file.sha256)
             .map_err(|e| ProfileError::Io(e.to_string()))?;
     }
     Ok(())
@@ -762,7 +800,8 @@ fn dual_write_config(
     let Some(source) = classified.live.get(CONFIG_CFG) else {
         return Ok(());
     };
-    let bytes = fs::read(source).map_err(|e| ProfileError::Io(e.to_string()))?;
+    let bytes = read_small_file_bounded(source, MAX_CFG_FILE_BYTES)
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
     let roots = match options.steam_roots {
         Some(roots) => roots.to_vec(),
         None => discover_steam_roots(),
@@ -770,11 +809,51 @@ fn dual_write_config(
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
 }
 
+fn retry_pending_cloud_sync(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    options: &AbsorbOptions<'_>,
+) -> Result<(), ProfileError> {
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let Some(file) = manifest.files.iter().find(|file| file.path == CONFIG_CFG) else {
+        return Ok(());
+    };
+    let source = manifest_source_path(profiles_dir, profile_id, file)?;
+    let bytes = read_small_file_bounded(&source, MAX_CFG_FILE_BYTES)
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
+    if !crate::hash::sha256_hex(&bytes).eq_ignore_ascii_case(&file.sha256) {
+        return Err(ProfileError::Io(
+            "Profile config.cfg failed integrity verification".into(),
+        ));
+    }
+    let roots = match options.steam_roots {
+        Some(roots) => roots.to_vec(),
+        None => discover_steam_roots(),
+    };
+    write_config_cfg_dual_to(tf2_root, &bytes, &roots)
+}
+
+pub(crate) fn set_cloud_sync_pending(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    pending: bool,
+    running: &[String],
+) -> Result<(), ProfileError> {
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    if manifest.cloud_sync_pending == pending {
+        return Ok(());
+    }
+    manifest.cloud_sync_pending = pending;
+    crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)
+}
+
 /// Live `config.cfg` and its Steam Cloud copy. Atomic like every other write
 /// that matters: a truncated `config.cfg` is the one the game loads, and a
 /// truncated Cloud copy is the one Steam syncs up.
-fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ProfileError> {
-    write_atomic(path, bytes).map_err(|e| ProfileError::Io(e.to_string()))
+fn write_bytes(root: &Path, path: &Path, bytes: &[u8]) -> Result<(), ProfileError> {
+    write_atomic_within(root, path, bytes).map_err(|e| ProfileError::Io(e.to_string()))
 }
 
 #[cfg(test)]
@@ -878,6 +957,19 @@ mod tests {
             Some("mastercomfig-base.vpk".into())
         );
         assert_eq!(pack_key("tf/cfg/config.cfg"), None);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn pack_keys_preserve_case_on_case_sensitive_filesystems() {
+        assert_ne!(
+            pack_key("tf/custom/Hud/info.vdf"),
+            pack_key("tf/custom/hud/info.vdf")
+        );
+        assert_eq!(
+            pack_key("tf/custom/-Hud/info.vdf"),
+            pack_key("tf/custom/Hud/info.vdf")
+        );
     }
 
     #[test]
@@ -1547,7 +1639,7 @@ mod tests {
             "toonhud.vpk".into(),
             "workshop".into(),
         ];
-        crate::profile::save_manifest(&profiles, &root, &manifest, &[]).unwrap();
+        crate::profile::save_manifest(&profiles, &root, &manifest, Vec::<String>::new()).unwrap();
 
         absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
 

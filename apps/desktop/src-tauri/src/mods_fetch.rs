@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use crate::net::{self, Verify};
+use crate::net::{self, RemoteSource, Verify};
 
 const MODS_RELEASE: &str = "v1.7.1";
 const MODS_URL: &str =
@@ -19,13 +19,11 @@ pub fn cache_path() -> PathBuf {
         .join(format!("mods-{MODS_RELEASE}.zip"))
 }
 
-/// A cheap "has the user already paid the 81 MB" probe for the pane. Not a
-/// verification — `ensure_mods_zip` hashes before handing the path out.
+/// Whether the complete, hash-verified release archive is already cached.
+/// This is intentionally not just a length probe: a same-sized corrupt file
+/// must not make the UI promise an offline install that will later fail.
 pub fn is_cached() -> bool {
-    cache_path()
-        .metadata()
-        .map(|meta| meta.len() == MODS_SIZE_BYTES)
-        .unwrap_or(false)
+    net::cached_file_accepts(&cache_path(), Verify::Sha256(MODS_SHA256), MODS_SIZE_BYTES)
 }
 
 /// The library zip path, downloading and verifying it first if needed. The
@@ -33,11 +31,12 @@ pub fn is_cached() -> bool {
 /// re-downloaded rather than unzipped into the user's game.
 pub fn ensure_mods_zip() -> Result<PathBuf, String> {
     let cached = cache_path();
-    net::download_pinned(
+    net::download_pinned_for(
         MODS_URL,
         &cached,
         Verify::Sha256(MODS_SHA256),
         MODS_SIZE_BYTES,
+        RemoteSource::GitHubRelease,
     )
     .map_err(|err| {
         err.replace(
@@ -45,5 +44,10 @@ pub fn ensure_mods_zip() -> Result<PathBuf, String> {
             "The downloaded mod library failed verification.",
         )
     })?;
+    // Do not return a stale/unverified path if the cache was replaced between
+    // the download and this hand-off.
+    if !net::cached_file_accepts(&cached, Verify::Sha256(MODS_SHA256), MODS_SIZE_BYTES) {
+        return Err("The cached mod library failed verification.".into());
+    }
     Ok(cached)
 }
