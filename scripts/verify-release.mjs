@@ -3,6 +3,7 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { changelogPath, releaseNotesFromChangelog } from "./release-notes.mjs";
 
 // Tauri's public key and .sig files are base64-encoded Minisign text documents.
 export function verifyMinisign(bytes, encodedSignature, encodedPublicKey) {
@@ -88,6 +89,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     version,
     readJson("apps/desktop/src-tauri/tauri.conf.json").plugins.updater.pubkey,
   );
+  // tauri-action initially writes the draft placeholder into the updater feed.
+  // Publish the same substantive changelog notes as the GitHub release body.
+  manifest.notes = releaseNotesFromChangelog(readFileSync(changelogPath(), "utf8"), version);
   writeFileSync(join(directory, "latest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`Verified signed Windows and Linux artifacts for ${version}`);
 }

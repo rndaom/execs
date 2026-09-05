@@ -112,7 +112,8 @@ jobs:
           version=$(node scripts/release-version.mjs)
           tag="v$version"
           gh release download "$tag" --dir "$RUNNER_TEMP/candidate" --pattern '*.exe' --pattern '*.AppImage' --pattern '*.sig' --pattern latest.json
-          gh api "repos/$GH_REPO/releases/tags/$tag" > "$RUNNER_TEMP/candidate/release.json"
+          release_id=$(gh release view "$tag" --json databaseId --jq .databaseId)
+          gh api "repos/$GH_REPO/releases/$release_id" > "$RUNNER_TEMP/candidate/release.json"
           node scripts/verify-release.mjs "$RUNNER_TEMP/candidate" "$version"
           gh release upload "$tag" "$RUNNER_TEMP/candidate/latest.json" --clobber
           node scripts/release-notes.mjs "$version" > "$RUNNER_TEMP/notes.md"
