@@ -5,6 +5,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings: pause edits during profile switches until the target settings load.
+
 ## [0.1.2] - 2026-09-05
 
 ### Fixed

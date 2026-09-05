@@ -182,6 +182,10 @@ export function SettingsHost({
   }, [onBusyChange]);
 
   const busy = externalBusy || queueBusy || repairBusy || loading || filesLimited;
+  // A switch leaves the old pane visible until its replacement snapshot loads.
+  // Own saves keep inputs live so their responses cannot interrupt newer edits.
+  const inputsBlocked =
+    externalBusy || (!queueBusy && (loadBlocked.current || loading || loadError !== null));
   const layer = detail?.layer ?? "comfig";
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
@@ -1122,8 +1126,13 @@ export function SettingsHost({
       <AutosaveDiscard.Provider value={discardAutosaves}>
         <AutosavePending.Provider value={reportPending}>
           {[...visited.current.tabs].map((paneTab) => (
-            <div key={`${profileId}:${paneTab}:${draftEpoch}`} hidden={tab !== paneTab}>
-              <AutosaveActivity.Provider value={tab === paneTab}>
+            <div
+              key={`${profileId}:${paneTab}:${draftEpoch}`}
+              hidden={tab !== paneTab}
+              inert={inputsBlocked}
+              data-testid={`settings-surface-${paneTab}`}
+            >
+              <AutosaveActivity.Provider value={tab === paneTab && !inputsBlocked}>
                 {pane(paneTab)}
               </AutosaveActivity.Provider>
             </div>

@@ -71,6 +71,11 @@ const deferred = <T>() => {
 };
 let api: any;
 let props: any;
+function requiredElement(selector: string): HTMLElement {
+  const element = container.querySelector<HTMLElement>(selector);
+  if (!element) throw new Error(`Missing element: ${selector}`);
+  return element;
+}
 async function render(p: any = {}) {
   Object.assign(props, p);
   await act(async () => root.render(h(SettingsHost, props)));
@@ -279,5 +284,73 @@ describe("settings snapshot integrity", () => {
     await render({ refreshKey: 2 });
     await act(async () => expect(oldSave("fov_desired 75")).resolves.toBe(false));
     expect(api.writeManagedCfg).not.toHaveBeenCalled();
+  });
+  it("blocks the old pane throughout a profile transition and releases the complete replacement", async () => {
+    await render();
+    const surface = () => requiredElement('[data-testid="settings-surface-gameplay"]');
+    expect(surface().hasAttribute("inert")).toBe(false);
+    await render({ externalBusy: true });
+    expect(surface().hasAttribute("inert")).toBe(true);
+    const pending = deferred<any>();
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "B",
+      layer: "vanilla",
+      files: [{ path: "tf/cfg/config.cfg" }],
+      launchOptions: "",
+    });
+    api.readProfileFile.mockReturnValue(pending.promise);
+    await render({ externalBusy: false, refreshKey: 2 });
+    expect(capture.panes.gameplay.profileId).toBe("A");
+    expect(surface().hasAttribute("inert")).toBe(true);
+    await act(async () => pending.resolve({ path: "tf/cfg/config.cfg", text: "fov_desired 80" }));
+    expect(capture.panes.gameplay.profileId).toBe("B");
+    expect(surface().hasAttribute("inert")).toBe(false);
+  });
+  it("keeps controls live during an own save and its reload, and after a running-state reload", async () => {
+    await render({ tab: "launch" });
+    const surface = () => requiredElement('[data-testid="settings-surface-launch"]');
+    const saving = deferred<any>();
+    const reloading = deferred<any>();
+    api.setProfileLaunchOptions = vi.fn(() => saving.promise);
+    await act(async () => capture.panes.launch.onChange("-nojoy"));
+    let result!: Promise<boolean>;
+    await act(async () => {
+      result = capture.panes.launch.onSave();
+    });
+    expect(surface().hasAttribute("inert")).toBe(false);
+    api.getComfigState.mockReturnValueOnce(reloading.promise);
+    await act(async () => saving.resolve({ launchOptions: "-nojoy", steamWrite: "steam-running" }));
+    expect(surface().hasAttribute("inert")).toBe(false);
+    await act(async () => {
+      reloading.resolve(null);
+      await result;
+    });
+    await render({ running: true });
+    expect(surface().hasAttribute("inert")).toBe(false);
+  });
+  it("keeps a failed replacement snapshot inaccessible until retry succeeds", async () => {
+    await render();
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "B",
+      layer: "vanilla",
+      files: [],
+      launchOptions: "",
+    });
+    api.getComfigState.mockRejectedValueOnce(new Error("temporarily unavailable"));
+    await render({ refreshKey: 2 });
+    expect(capture.panes.gameplay.profileId).toBe("A");
+    expect(requiredElement('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(
+      true,
+    );
+    const retry = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Retry loading settings",
+    );
+    if (!retry) throw new Error("Retry button was not rendered");
+    expect(retry.closest("[inert]")).toBeNull();
+    await act(async () => retry.click());
+    expect(capture.panes.gameplay.profileId).toBe("B");
+    expect(requiredElement('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(
+      false,
+    );
   });
 });
