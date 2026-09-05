@@ -51,10 +51,10 @@ that the notice bundle is actually present in Windows, AppImage and .deb output.
 - [x] Public 0.1.0 profile fixture imports without changing its files.
 - [x] Real studiomdl builds complete with `CREATE_NO_WINDOW` enabled.
 - [ ] Windows signed updater installs over 0.1.0 in a disposable worker.
-- [ ] Linux signed updater replaces a 0.1.0 AppImage; .deb installs and starts.
+- [x] Linux signed updater replaces a 0.1.0 AppImage; .deb installs and starts.
 - [ ] Packaged apps start, preserve app data and carry the notice bundle.
 - [ ] Both release artifacts verify against the unchanged production public key.
-- [ ] Manual game/Cloud/recovery scenarios and limitations recorded below.
+- [x] Manual game/Cloud/recovery scenarios and limitations recorded below.
 - [ ] Draft release contains the final notes and exact source commit evidence.
 
 The Release workflow runs the reusable CI workflow before building, checks all
@@ -79,7 +79,7 @@ installer validation before the candidate is frozen.
 | Live sources | mastercomfig VPK digests, comfig sound resolution, HUD thread resolution, and GameBanana browse/search/install-policy tests passed on the candidate. |
 | Signature verifier | Both real published 0.1.0 artifacts passed signature, sidecar, asset-size, release-URL and digest verification against the unchanged production public key. Negative tests reject altered bytes, signatures, keys and trusted comments. |
 
-## Field validation still required before publication
+## Field validation and limits
 
 Automated regressions cover Cloud dual writes and retry markers, autosave
 deferral/flush, process resampling at live-write boundaries, interrupted profile
@@ -88,15 +88,30 @@ These passed on the candidate. They use controlled fixtures and injected races;
 they do not establish a real Steam Cloud server round trip or Casual-server
 acceptance of the installed artifacts.
 
-The remaining field pass uses a backed-up test profile on a spare TF2 install:
+With the owner's permission, the field pass used the installed TF2 game and a
+separate app-data directory. The original six-profile library was backed up and
+never loaded by the candidate. The native launcher verified it was outside
+Codex's Windows package context. Original cfg/custom files and Steam settings
+were backed up before changes.
 
-1. Capture, switch and absorb with Steam Cloud enabled, disabled and offline;
-   restart Steam/TF2 and confirm cfg, packs and pending Cloud writes persist.
-2. Change a setting immediately before switching profiles; start TF2 while a
-   mutation is pending, confirm writes stop and the draft saves after it exits.
-3. Apply/restore preload, restart after an interrupted operation, and validate
-   restore after a game update. Confirm stock bytes and a Casual-server join.
+- Captured 733 files, created two test profiles, and switched between them.
+  The selected FOV changed from 87 to 88, the active id matched the target, the
+  pending switch cleared, and the local Cloud config matched the engine config.
+- Launched real TF2 through the app with the existing launch options. The game
+  reached its normal main menu. A change from FOV 89 to 88 while the game ran
+  stayed in the UI draft; the live file's hash remained unchanged. After quitting,
+  the write lock cleared and the draft saved to both live and profile files.
+- The field pass was stopped by the user before completing the full manual
+  matrix. A real Steam Cloud server round trip, offline Steam restart, deliberate
+  interruption of the live preloader, a live TF2 update, and a Casual-server join
+  were not established. Recovery, Cloud retry and game-archive replacement have
+  passing controlled regression coverage, not equivalent live-service evidence.
 
-The user's live library/game has not been downgraded, rewritten or interrupted
-to manufacture this evidence. A green installer workflow does not check these
-field items automatically.
+Release run 33934901438 passed all reusable CI jobs and the Linux package smoke:
+the signed updater replaced a public 0.1.0 AppImage, both Linux package formats
+started, user data survived, and notices were present. The Windows probe failed
+at process load because Cargo examples do not inherit tauri-winres's binary
+manifest. The release-probes build now explicitly embeds Common Controls v6;
+local startup reaches the intended CI-only guard instead of failing to resolve
+TaskDialogIndirect. The final tag workflow must rerun both platforms before
+publishing. Its smoke artifacts and release-commit.json are the final evidence.
