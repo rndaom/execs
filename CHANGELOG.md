@@ -5,55 +5,49 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-05
+
+A maintenance update focused on keeping profiles intact and recovering safely
+when a file operation is interrupted. Existing 0.1.0 profiles and exports remain
+supported.
+
 ### Fixed
 
-- Profiles: unreadable custom files stop a save or switch without removing
-  their saved copies; retry once the files are available again.
-- Profiles: changing only a file or folder's capitalization preserves its
-  contents and no longer leaves it behind when switching profiles.
-- Mods: GameBanana's All and search results exclude unsupported categories,
-  and installation checks the category before downloading a pack.
-- Backend: interrupted profile, HUD, Comfig, crosshair, viewmodel, sound,
-  and Casual-preloader changes now recover as complete transactions instead
-  of leaving a partly replaced live setup.
-- Backend: profile writes, TF2 launch, Steam file verification, and app-update
-  installation now share one durable lock, including across an app restart.
-- Backend: remote downloads, archives, VPKs, cfgs, WAVs, PCFs, and imported
-  folders reject unsafe paths, malformed counts, and over-limit input before
-  they can replace installed files.
-- Mods and Viewmodels: sticky Apply bar no longer covers the last lines
-  of the pane.
-- Comfig: preset tiles stretch to the same height in each grid row.
-- Profiles: a switch no longer deletes packs from the profile you are
-  leaving, and no longer forgets which packs you chose to keep. A switch
-  that failed part-way finishes cleanly when you re-apply a profile.
-- Profiles: a second HUD on a profile stays enabled after the game quits
-  instead of both HUDs ending up disabled.
-- Profiles: every file the app writes is written atomically, so a crash
-  or antivirus scan mid-write can no longer leave a truncated profile
-  library, settings, config.cfg, or HUD file.
-- Profiles: files with the read-only attribute no longer stop a switch.
-- Mods: GameBanana mods uploaded as a single .vpk now install.
-- Mods: casual preload snapshots survive a damaged state file, and
-  Restore stock files never deletes them.
-- Sounds: hit sounds saved in the extensible WAV format play in game;
-  files with loop or cue markers no longer repeat; a WAV with a bogus
-  sample rate is refused instead of crashing the app.
-- Crosshair: one unreadable weapon script no longer blocks every
-  crosshair.
-- HUD: a HUD folder whose name differs in case from its catalog id works
-  with Apply options and updates cleanly; Refresh repairs a partially
-  loaded catalog; "Check for updates" times out instead of hanging.
-- HUD and Mods: a malformed info.vdf or archive can no longer crash the
-  app.
-- Downloads and imports are checked against size limits before they are
-  read, and the write lock is checked before a download starts.
-- Only one copy of the app runs at a time; a second launch focuses the
-  open window.
+- Profiles: preserve saved files when a live file is temporarily unreadable or
+  only its capitalization changes. Switching no longer loses removed packs,
+  forgets kept packs, or leaves files from the previous profile behind.
+- Profiles: recover interrupted switches and file changes, keep Steam Cloud
+  config updates pending until they succeed, and handle read-only files safely.
+- HUD: preserve secondary HUDs, accept folder names with different capitalization,
+  repair partial catalogs, and time out stalled update checks.
+- Mods: install standalone GameBanana VPKs and exclude unsupported categories
+  from browse, search, and direct installation.
+- Casual preload: preserve stock snapshots through damaged state files and
+  interrupted changes, and retain them after restoring stock files.
+- Sounds: support extensible WAV files, remove unwanted loop/cue markers,
+  and reject invalid sample rates without crashing.
+- Crosshair: an unreadable weapon script no longer blocks all crosshairs.
+- Viewmodels: building a pack no longer opens a console window for every class
+  on Windows.
+- Interface: keep content clear of sticky Apply bars, align Comfig preset tiles,
+  remember disclosure state per profile, and show update-check results in the footer.
+- Application: a second launch focuses the existing window instead of opening
+  another instance that could interfere with profile writes.
 
 ### Changed
 
-- Disclosure sections remember open/closed state per profile.
+- Existing profiles load without manual migration. Compatible recovery metadata
+  records unfinished profile, launch-option, and Cloud updates so they can retry.
+- Installers include full third-party license notices alongside the application.
+
+### Security
+
+- Serialize profile writes, game launch, Steam file verification, and app-update
+  installation so these operations cannot overlap through the app.
+- Validate download sizes, archive paths, cfgs, VPKs, audio, particles, and imported
+  folders before replacing installed content; malformed inputs fail safely.
+- Contain filesystem writes and recover interrupted profile and preloader
+  transactions without trusting redirected paths or partial state.
 
 ## [0.1.0] - 2026-09-03
 

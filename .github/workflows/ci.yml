@@ -2,8 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "rndaom/release-*"]
   pull_request:
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   frontend:
@@ -43,6 +45,11 @@ jobs:
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
       - name: Tests
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Linux advisory disposition
+        run: node scripts/check-glib-disposition.mjs
 
   rust-windows:
     runs-on: windows-latest

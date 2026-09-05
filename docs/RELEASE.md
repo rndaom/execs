@@ -37,7 +37,7 @@ always match the tag `v0.Y.Z`:
 
 | Bump | When | Features | Data / write surface |
 |---|---|---|---|
-| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | None. | No schema change. Old profiles load unchanged. |
+| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | None. | No new features or incompatible schema change. Older profiles still load; additive internal recovery metadata needed for a bug fix is allowed. |
 | **Minor** `0.Y+1.0` | Monthly train (below). Skip if nothing is ready. | At most **three** user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
 | **1.0.0** | Yearly review says the contracts are stable. | — | Profile format, write surface, updater URL, and OS matrix are promises. |
 
@@ -129,7 +129,7 @@ When you do ship:
 A patch is a bug the last public version has, with no feature attached.
 Bump `Z`, write the changelog section, tag, done. If `main` already has
 an unreleased breaking change, cut `release/0.Y` from the last tag,
-patch there, and tag from that branch. Until that happens, patch from
+patch there, and tag from that branch. Use a separate patch branch whenever main also contains unreleased features. Until that happens, patch from
 `main`.
 
 ### Once a year (the first Thursday of September)

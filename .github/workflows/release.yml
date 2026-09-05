@@ -3,62 +3,64 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: [validate]
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: windows-latest
-          - platform: ubuntu-22.04
+        platform: [windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      - name: Version guard
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate versions and release state
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          conf_version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
-          if [ "${{ github.event_name }}" = "push" ]; then
-            if [ "$GITHUB_REF_NAME" != "v${conf_version}" ]; then
-              echo "Pushed tag '$GITHUB_REF_NAME' does not match tauri.conf.json version '$conf_version' (expected 'v${conf_version}')." >&2
-              exit 1
-            fi
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            version=$(node scripts/release-version.mjs "$GITHUB_REF_NAME")
           else
-            # A manual run must never upload into a release users already have.
-            if [ "$(gh release view "v${conf_version}" --json isDraft --jq .isDraft 2>/dev/null || echo none)" = "false" ]; then
-              echo "v${conf_version} is already published; bump the version before building again." >&2
-              exit 1
-            fi
+            version=$(node scripts/release-version.mjs)
+          fi
+          if [ "$(gh release view "v$version" --json isDraft --jq .isDraft 2>/dev/null || echo none)" = false ]; then
+            echo "v$version is already public; refusing to replace its assets." >&2
+            exit 1
           fi
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb xdotool
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
       - run: pnpm install --frozen-lockfile
-      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+      - name: Verify packaged third-party notices
+        run: node scripts/third-party-notices.mjs --check
+      - name: Include Linux system-library notices
+        if: runner.os == 'Linux'
+        run: |
+          python3 scripts/linux-notices.py
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -67,18 +69,32 @@ jobs:
           projectPath: apps/desktop
           tagName: v__VERSION__
           releaseName: execs v__VERSION__
-          releaseBody: Changelog is filled in after both platforms build.
-          # Draft until the publish job below has seen both platforms' assets
-          # and a complete latest.json. A live release with a half-populated
-          # updater manifest would push a broken update to the other platform.
+          releaseCommitish: ${{ github.sha }}
+          releaseBody: Candidate build; release notes follow verification.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
+      - name: Build isolated updater probe
+        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --features release-probes --example updater_probe
+      - name: Windows installer and updater smoke
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/smoke-packages.mjs
+      - name: Linux packages and updater smoke
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: xvfb-run -a node scripts/smoke-packages.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-smoke-${{ runner.os }}
+          path: ${{ runner.temp }}/execs-package-smoke/*.json
 
-  # Fails the train if CHANGELOG.md has no non-empty section for this version.
-  notes:
+  verify:
     needs: [build]
-    if: ${{ needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -87,71 +103,33 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Write release notes from CHANGELOG.md
+      - name: Verify both signed artifacts and write release notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "push" ]; then
-            version="${GITHUB_REF_NAME#v}"
-          else
-            version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
-          fi
-          tag="v${version}"
+          version=$(node scripts/release-version.mjs)
+          tag="v$version"
+          gh release download "$tag" --dir "$RUNNER_TEMP/candidate" --pattern '*.exe' --pattern '*.AppImage' --pattern '*.sig' --pattern latest.json
+          gh api "repos/$GH_REPO/releases/tags/$tag" > "$RUNNER_TEMP/candidate/release.json"
+          node scripts/verify-release.mjs "$RUNNER_TEMP/candidate" "$version"
+          gh release upload "$tag" "$RUNNER_TEMP/candidate/latest.json" --clobber
           node scripts/release-notes.mjs "$version" > "$RUNNER_TEMP/notes.md"
           gh release edit "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP+"/release-commit.json",JSON.stringify({commit:process.env.GITHUB_SHA,run:process.env.GITHUB_RUN_ID},null,2)+"\n")'
+          gh release upload "$tag" "$RUNNER_TEMP/release-commit.json" --clobber
 
-  # workflow_dispatch runs stay drafts on purpose: only a real version tag publishes.
   publish:
-    needs: [build, notes]
-    if: ${{ github.event_name == 'push' && needs.build.result == 'success' && needs.notes.result == 'success' }}
+    needs: [verify]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Verify both platforms shipped, then publish
+      - name: Publish verified release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          assets=$(gh release view "$TAG" --json assets --jq '.assets[].name')
-          echo "Release assets:"
-          echo "$assets"
-
-          if ! echo "$assets" | grep -Eqi '\.(exe|nsis\.zip|msi)$'; then
-            echo "No Windows installer asset (.exe / .nsis.zip / .msi) on $TAG." >&2
-            exit 1
-          fi
-          if ! echo "$assets" | grep -Eqi '\.AppImage$'; then
-            echo "No Linux .AppImage asset on $TAG." >&2
-            exit 1
-          fi
-          if ! echo "$assets" | grep -Fqx 'latest.json'; then
-            echo "No latest.json on $TAG." >&2
-            exit 1
-          fi
-
-          gh release download "$TAG" --pattern latest.json --dir "$RUNNER_TEMP" --clobber
-          for platform in windows-x86_64 linux-x86_64; do
-            if [ "$(jq -r --arg p "$platform" '.platforms[$p].url // empty' "$RUNNER_TEMP/latest.json")" = "" ]; then
-              echo "latest.json has no '$platform' entry — refusing to publish a partial updater manifest." >&2
-              jq . "$RUNNER_TEMP/latest.json" >&2
-              exit 1
-            fi
-          done
-          if [ "$(jq -r '.version' "$RUNNER_TEMP/latest.json")" != "${TAG#v}" ]; then
-            echo "latest.json version does not match $TAG." >&2
-            exit 1
-          fi
-
-          # The .deb is a first-install package only: the updater would run
-          # dpkg through pkexec and prompt for a password. AppImage users keep
-          # the linux-x86_64 / -appimage entries.
-          jq 'del(.platforms["linux-x86_64-deb"])' "$RUNNER_TEMP/latest.json" > "$RUNNER_TEMP/latest.trimmed.json"
-          mv "$RUNNER_TEMP/latest.trimmed.json" "$RUNNER_TEMP/latest.json"
-          gh release upload "$TAG" "$RUNNER_TEMP/latest.json" --clobber
-
-          gh release edit "$TAG" --draft=false
+        run: gh release edit "$TAG" --draft=false
