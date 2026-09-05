@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-05
+
 ### Fixed
 
 - Settings: keep deferred and in-flight drafts when navigating, retry refused
