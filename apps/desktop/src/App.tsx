@@ -35,6 +35,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsPending, setSettingsPending] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
@@ -62,7 +63,12 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         ? "execs is installing an update — changes remain locked."
         : null;
   const anyBusy =
-    busy || settingsBusy || launchPending || lifecycleBusy || update.progress !== null;
+    busy ||
+    settingsBusy ||
+    settingsPending ||
+    launchPending ||
+    lifecycleBusy ||
+    update.progress !== null;
 
   const install = useTf2Install(api, {
     setError,
@@ -234,6 +240,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 bindSyncRequest={profiles.bindSyncRequest}
                 onBindSyncHandled={profiles.onBindSyncHandled}
                 onBusyChange={setSettingsBusy}
+                onPendingChange={setSettingsPending}
                 onError={setError}
               />
             </SettingsLayout>
@@ -268,6 +275,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             blocked={
               busy ||
               settingsBusy ||
+              settingsPending ||
               progress.state.active ||
               launchPending ||
               lock.running ||

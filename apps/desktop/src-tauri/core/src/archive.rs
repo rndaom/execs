@@ -29,6 +29,10 @@ const MAX_7Z_NEXT_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 /// an attacker-declared 4 GiB LZMA dictionary before our output limits run.
 const MAX_7Z_DICTIONARY_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_ARCHIVE_COMPRESSION_RATIO: u64 = 200;
+// Small neutral textures routinely compress beyond 200x (budhud ships two
+// 256 KiB textures at 756x). Apply the expansion heuristic above this floor;
+// declared and actual per-entry/total byte ceilings still apply at every size.
+const ARCHIVE_COMPRESSION_RATIO_FLOOR: u64 = 8 * MIB;
 /// Imported cfgs are executable text, not game assets. Bounding the parser
 /// keeps a renamed binary or intentionally huge token stream out of memory.
 pub const MAX_IMPORTED_CFG_BYTES: usize = 8 * 1024 * 1024;
@@ -128,6 +132,7 @@ pub fn extract_zip(
     let mut raw: Vec<(String, Vec<u8>)> = Vec::new();
     let mut seen = HashSet::new();
     let mut total: u64 = 0;
+    let mut declared_total: u64 = 0;
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
@@ -149,6 +154,13 @@ pub fn extract_zip(
         }
         let declared = entry.size();
         let compressed = entry.compressed_size();
+        declared_total = declared_total
+            .checked_add(declared)
+            .ok_or_else(|| limits.total_too_big())?;
+        if declared_total > limits.max_total_bytes {
+            return Err(limits.total_too_big());
+        }
+        validate_zip_total_expansion(declared_total, bytes.len() as u64)?;
         if compression_ratio_exceeded(declared, compressed) {
             return Err(ProfileError::Io(format!(
                 "{rel} decompresses more than {MAX_ARCHIVE_COMPRESSION_RATIO}x; refusing to unpack it."
@@ -171,10 +183,20 @@ pub fn extract_zip(
         if total > limits.max_total_bytes {
             return Err(limits.total_too_big());
         }
+        validate_zip_total_expansion(total, bytes.len() as u64)?;
         validate_actual_archive_entry(&rel, data.len() as u64, declared, compressed)?;
         raw.push((rel, data));
     }
     Ok(raw)
+}
+
+fn validate_zip_total_expansion(expanded: u64, archive_bytes: u64) -> Result<(), ProfileError> {
+    if compression_ratio_exceeded(expanded, archive_bytes) {
+        return Err(ProfileError::Io(format!(
+            "That ZIP archive decompresses more than {MAX_ARCHIVE_COMPRESSION_RATIO}x; refusing to unpack it."
+        )));
+    }
+    Ok(())
 }
 
 fn extract_7z(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<(String, Vec<u8>)>, ProfileError> {
@@ -280,6 +302,7 @@ fn extract_7z(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<(String, Vec<u8
 fn compression_ratio_exceeded(uncompressed: u64, compressed: u64) -> bool {
     (compressed == 0 && uncompressed > 0)
         || (compressed > 0
+            && uncompressed > ARCHIVE_COMPRESSION_RATIO_FLOOR
             && uncompressed > compressed.saturating_mul(MAX_ARCHIVE_COMPRESSION_RATIO))
 }
 
@@ -1270,6 +1293,7 @@ pub fn sanitize_entry_path(raw: &str) -> Result<String, ProfileError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use std::io::Write;
     use zip::write::SimpleFileOptions;
     use zip::{CompressionMethod, ZipWriter};
@@ -1347,17 +1371,95 @@ mod tests {
 
     #[test]
     fn generic_archive_checks_ratio_and_declared_size_against_actual_output() {
-        let zeros = vec![0u8; 1024 * 1024];
+        let zeros = vec![0u8; ARCHIVE_COMPRESSION_RATIO_FLOOR as usize + 1];
         let bytes = zip_bytes(&[("zeros.bin", &zeros)]);
-        let err = extract_zip(
-            &bytes,
-            ArchiveLimits::new(2, 2 * 1024 * 1024, 2 * 1024 * 1024),
-        )
-        .unwrap_err();
+        let err = extract_zip(&bytes, ArchiveLimits::new(2, 16 * MIB, 16 * MIB)).unwrap_err();
         assert!(err.message().contains("decompresses more"), "{err:?}");
 
         let err = validate_actual_archive_entry("entry", 5, 4, 4).unwrap_err();
         assert!(err.message().contains("declared"), "{err:?}");
+    }
+
+    #[test]
+    fn small_repetitive_hud_assets_unpack_without_changing_their_bytes() {
+        // Match the reported asset's expanded length without copying its art.
+        let mut texture = vec![0u8; 262_352];
+        texture[..4].copy_from_slice(b"VTF\0");
+        let path = "hud/materials/vgui/replay/thumbnails/overlays/refract.vtf";
+        let bytes = zip_bytes(&[
+            ("hud/info.vdf", b"\"HUD\" { \"ui_version\" \"3\" }"),
+            (path, &texture),
+        ]);
+        let mut archive = ZipArchive::new(Cursor::new(&bytes)).unwrap();
+        let entry = archive.by_name(path).unwrap();
+        assert!(entry.size() > entry.compressed_size() * MAX_ARCHIVE_COMPRESSION_RATIO);
+        drop(entry);
+        let hud = crate::extract_hud_archive(&bytes).unwrap();
+        assert_eq!(hud.tree.files.len(), 2);
+        assert_eq!(
+            hud.tree.get(path.strip_prefix("hud/").unwrap()),
+            Some(texture.as_slice())
+        );
+
+        let renamed = zip_bytes(&[("repetitive.bin", &texture)]);
+        let extracted = extract_zip(&renamed, ArchiveLimits::new(1, MIB, MIB)).unwrap();
+        assert_eq!(extracted, vec![("repetitive.bin".into(), texture)]);
+    }
+
+    #[test]
+    fn ratio_floor_is_bounded_and_does_not_accept_missing_compressed_data() {
+        assert!(!compression_ratio_exceeded(
+            ARCHIVE_COMPRESSION_RATIO_FLOOR,
+            1
+        ));
+        assert!(compression_ratio_exceeded(
+            ARCHIVE_COMPRESSION_RATIO_FLOOR + 1,
+            1
+        ));
+        assert!(compression_ratio_exceeded(1, 0));
+        assert!(!compression_ratio_exceeded(0, 0));
+        assert!(!compression_ratio_exceeded(u64::MAX, u64::MAX));
+        assert!(validate_actual_archive_entry(
+            "expanded",
+            ARCHIVE_COMPRESSION_RATIO_FLOOR + 1,
+            ARCHIVE_COMPRESSION_RATIO_FLOOR + 1,
+            1
+        )
+        .is_err());
+        assert!(validate_actual_archive_entry("small", 10, 9, 1).is_err());
+    }
+
+    #[test]
+    fn small_high_ratio_entries_still_obey_entry_and_total_byte_caps() {
+        let payload = vec![0u8; 262_352];
+        let single = zip_bytes(&[("asset.bin", &payload)]);
+        let err = extract_zip(&single, ArchiveLimits::new(3, 262_351, MIB)).unwrap_err();
+        assert!(err.message().contains("larger than"));
+        let multiple = zip_bytes(&[
+            ("a.bin", &payload),
+            ("b.bin", &payload),
+            ("c.bin", &payload),
+        ]);
+        let err = extract_zip(&multiple, ArchiveLimits::new(3, MIB, 524_704)).unwrap_err();
+        assert!(err.message().contains("unpacks to more than"));
+    }
+
+    #[test]
+    fn many_small_entries_cannot_bypass_the_total_expansion_ratio() {
+        let payload = vec![0u8; MIB as usize];
+        let paths: Vec<_> = (0..10).map(|index| format!("asset-{index}.bin")).collect();
+        let entries: Vec<_> = paths
+            .iter()
+            .map(|path| (path.as_str(), payload.as_slice()))
+            .collect();
+        let bytes = zip_bytes(&entries);
+        let err = extract_zip(&bytes, ArchiveLimits::new(10, 2 * MIB, 16 * MIB)).unwrap_err();
+        assert!(
+            err.message().contains("ZIP archive decompresses"),
+            "{err:?}"
+        );
+        assert!(validate_zip_total_expansion(ARCHIVE_COMPRESSION_RATIO_FLOOR, 1).is_ok());
+        assert!(validate_zip_total_expansion(ARCHIVE_COMPRESSION_RATIO_FLOOR + 1, 1).is_err());
     }
 
     /// A folder nested past the cap is refused rather than walked forever.

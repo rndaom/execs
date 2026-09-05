@@ -1,8 +1,8 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
+import type { FilesDraftStore } from "./lib/files-drafts";
 import {
   editorTextBytes,
   FILES_EDITOR_MAX_FILE_BYTES,
@@ -19,24 +19,30 @@ import {
   lintBundle,
 } from "./lib/files-ui";
 
-export function FilesPane({
+type FilesPaneProps = {
+  profileId: string | null;
+  files: { path: string; text: string }[];
+  limited?: boolean;
+  hudId: string | null;
+  draftStore: FilesDraftStore;
+  onSave: (path: string, text: string) => Promise<boolean>;
+};
+
+export function FilesPane(props: FilesPaneProps) {
+  return <ProfileFilesPane key={props.profileId} {...props} />;
+}
+
+function ProfileFilesPane({
   profileId,
   files,
   limited,
   hudId,
   onSave,
-}: {
-  /** The profile this draft belongs to; a switch discards it. */
-  profileId: string | null;
-  files: { path: string; text: string }[];
-  /** Some cfgs exceeded the editor's count or byte budget and were skipped. */
-  limited?: boolean;
-  hudId: string | null;
-  onSave: (path: string, text: string) => void;
-}) {
-  const { running, busy } = useAppStatus();
+  draftStore,
+}: FilesPaneProps) {
+  const { running, busy, setError } = useAppStatus();
   const listed = useMemo(() => cfgFiles(files, hudId), [files, hudId]);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(() => draftStore.selected(profileId));
   const selected =
     picked !== null && listed.some((file) => file.path === picked)
       ? picked
@@ -47,14 +53,28 @@ export function FilesPane({
   const [limitHitPath, setLimitHitPath] = useState<string | null>(null);
 
   const editable = selectedMeta?.editable ?? false;
-  // A reload hands this pane a brand-new `files` array even when the bytes are
-  // identical; the shared hook reseeds on real content change or a file switch,
-  // never over unsaved edits.
-  const [draft, setDraft] = useSeededDraft(
-    source,
-    (text) => text,
-    draftRecordKey(profileId, selected),
-  );
+  const [, refreshDraft] = useState(0);
+  const draft = selected === null ? source : draftStore.read(profileId, selected, source);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const revision = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  function setDraft(text: string) {
+    if (selected === null) return;
+    draftStore.edit(profileId, selected, text);
+    revision.current += 1;
+    refreshDraft((value) => value + 1);
+  }
+  function pick(path: string) {
+    draftStore.select(profileId, path);
+    setPicked(path);
+  }
   const dirty = selected !== null && editable && draft !== source;
   const draftFits = editorTextBytes(draft) !== null;
   const draftLimitHit = selected !== null && limitHitPath === selected;
@@ -86,13 +106,32 @@ export function FilesPane({
     (finding) => finding.tier === "block" && !blockingHere.includes(finding),
   ).length;
   const canSave =
-    selected !== null && draftFits && canSaveCfg(blockingHere, running, busy, dirty, editable);
+    selected !== null &&
+    !saving &&
+    draftFits &&
+    canSaveCfg(blockingHere, running, busy, dirty, editable);
 
-  function handleSave() {
-    if (!selected || !draftFits || !canSaveCfg(blockingHere, running, busy, dirty, editable)) {
-      return;
+  async function handleSave(switchTo: string | null = null) {
+    if (!selected || !canSave || savingRef.current) return;
+    const submittedRevision = revision.current;
+    const submittedPath = selected;
+    const submittedText = draft;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      if (!(await onSave(submittedPath, submittedText))) return;
+      draftStore.acknowledge(profileId, submittedPath, submittedText);
+      if (!mounted.current) return;
+      if (switchTo !== null && revision.current === submittedRevision) {
+        pick(switchTo);
+        setPendingPath(null);
+      }
+    } catch (error) {
+      if (mounted.current) setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      savingRef.current = false;
+      if (mounted.current) setSaving(false);
     }
-    onSave(selected, draft);
   }
 
   function updateDraft(next: string) {
@@ -107,7 +146,7 @@ export function FilesPane({
   }
 
   function requestPick(path: string) {
-    if (path === selected) {
+    if (savingRef.current || path === selected) {
       return;
     }
     if (dirty) {
@@ -115,27 +154,24 @@ export function FilesPane({
       setPendingPath(path);
       return;
     }
-    setPicked(path);
+    pick(path);
   }
 
   function discardAndSwitch() {
-    if (pendingPath === null) {
+    if (pendingPath === null || savingRef.current) {
       return;
     }
+    if (selected !== null) draftStore.discard(profileId, selected, source);
     setDraft(source);
-    setPicked(pendingPath);
+    pick(pendingPath);
     setPendingPath(null);
   }
 
   function saveAndSwitch() {
-    if (pendingPath === null) {
+    if (pendingPath === null || savingRef.current) {
       return;
     }
-    handleSave();
-    if (canSave) {
-      setPicked(pendingPath);
-    }
-    setPendingPath(null);
+    void handleSave(pendingPath);
   }
 
   return (
@@ -219,11 +255,12 @@ export function FilesPane({
                   onClick={saveAndSwitch}
                   className="btn btn-primary"
                 >
-                  Save
+                  {saving ? "Saving…" : "Save and switch"}
                 </button>
                 <button
                   type="button"
                   data-testid="files-switch-discard"
+                  disabled={saving}
                   onClick={discardAndSwitch}
                   className="btn btn-ghost"
                 >
@@ -232,6 +269,7 @@ export function FilesPane({
                 <button
                   type="button"
                   data-testid="files-switch-cancel"
+                  disabled={saving}
                   onClick={() => setPendingPath(null)}
                   className="btn btn-ghost"
                 >
@@ -292,7 +330,7 @@ export function FilesPane({
                     type="button"
                     data-testid="files-save"
                     disabled={!canSave}
-                    onClick={handleSave}
+                    onClick={() => void handleSave()}
                     className="btn btn-primary"
                   >
                     Save file

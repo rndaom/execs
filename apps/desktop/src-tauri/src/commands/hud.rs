@@ -69,10 +69,8 @@ pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
     .await
 }
 
-/// The HUD zip (up to 512 MiB) is downloaded before the write gate is taken,
-/// so an autosave or absorb is not queued behind a slow link; the
-/// running-game check comes first so the user hears "close TF2" before the
-/// transfer, not after it. Core re-checks under the gate before it writes.
+/// Download outside the write gate so autosave and absorb can continue.
+/// Check TF2 before downloading; core checks again under the gate before writing.
 #[tauri::command]
 pub async fn install_hud(
     gate: tauri::State<'_, WriteGate>,
@@ -143,7 +141,12 @@ pub async fn import_hud_archive(
             HUD_ZIP_MAX_BYTES,
             archive_too_large(HUD_ZIP_MAX_BYTES),
         )?;
-        Ok((name, execs_core::extract_hud_archive(&bytes)?.tree))
+        Ok((
+            name,
+            execs_core::extract_hud_archive(&bytes)
+                .map_err(hud_input_error)?
+                .tree,
+        ))
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
@@ -191,7 +194,12 @@ pub async fn import_hud_folder(
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        Ok((name, execs_core::hud_tree_from_dir(&path)?.tree))
+        Ok((
+            name,
+            execs_core::hud_tree_from_dir(&path)
+                .map_err(hud_input_error)?
+                .tree,
+        ))
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
@@ -226,6 +234,15 @@ fn install_local_hud(
         },
         &[],
     )?)
+}
+
+// These errors describe rejected input before any profile write. Keep the
+// core error code without its generic profile-library write failure prefix.
+fn hud_input_error(error: execs_core::ProfileError) -> CommandError {
+    match error {
+        execs_core::ProfileError::Io(message) => CommandError::new("Io", message),
+        other => other.into(),
+    }
 }
 
 /// Pair a local HUD record with its hud-db entry. The catalog read may hit
@@ -382,7 +399,7 @@ fn fetch_hud_from_catalog(id: &str, include_schema: bool) -> Result<FetchedHud, 
         ));
     }
     let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
-    let extracted = execs_core::extract_hud_archive(&bytes)?;
+    let extracted = execs_core::extract_hud_archive(&bytes).map_err(hud_input_error)?;
     let schema = if include_schema {
         let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
         Some(execs_core::parse_hud_schema(&raw)?)
@@ -457,6 +474,27 @@ fn install_fetched_hud(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejected_hud_input_keeps_guidance_without_claiming_a_profile_write_failed() {
+        let guidance = "This download contains multiple HUD folders: CRUELTY DEATH, CRUELTY LIFE. Extract it, then import the one HUD folder you want.";
+        let error = hud_input_error(execs_core::ProfileError::Io(guidance.into()));
+        assert_eq!(error.code, "Io");
+        assert_eq!(error.message, guidance);
+
+        let invalid = hud_input_error(execs_core::extract_hud_archive(b"garbage").unwrap_err());
+        assert!(invalid.message.contains("not a zip or 7z"));
+        assert!(!invalid.message.contains("profile library"));
+
+        let lock = hud_input_error(execs_core::ProfileError::GameRunning);
+        assert_eq!(lock.code, "GameRunning");
+        assert_eq!(
+            lock.message,
+            execs_core::ProfileError::GameRunning.message()
+        );
+        let write_error: CommandError = execs_core::ProfileError::Io("disk full".into()).into();
+        assert!(write_error.message.contains("profile library"));
+    }
 
     /// The frontend's `HudUiState` shape must survive the added field: the
     /// original keys stay flat and top-level, `catalogUnavailable` rides

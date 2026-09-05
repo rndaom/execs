@@ -5,6 +5,28 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings: keep deferred and in-flight drafts when navigating, retry refused
+  saves after TF2 closes, and preserve newer edits when earlier saves finish.
+- Files: retain unsaved text per profile and file; Save and switch waits for
+  success and keeps edits visible if saving fails.
+- Settings: refuse incomplete or mixed-profile cfg loads, and merge Gameplay,
+  Crosshair and Sounds changes without overwriting each other's settings.
+- Binds and Gameplay: update managed cfg and autoexec entries together while
+  preserving the latest unrelated commands.
+- Application: keep writes disabled after a TF2 lock subscription failure,
+  even if an older status response arrives later.
+- HUD: discard obsolete or ambiguous cached statistics instead of ranking
+  unrelated download counts.
+
+- HUD: accept small, highly compressible assets such as budhud textures while
+  retaining file, archive and large-expansion limits.
+- HUD: follow Dropbox download redirects, find uniquely nested HUD imports,
+  and validate UI version 3 metadata before replacing the installed HUD.
+- HUD: rank verified statistics, explain missing data, and show six previews
+  per page with numbered navigation and a single Import HUD entry.
+
 ## [0.1.1] - 2026-09-05
 
 A maintenance update focused on keeping profiles intact and recovering safely

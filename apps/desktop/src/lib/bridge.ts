@@ -414,6 +414,26 @@ export async function writeOwnedFile(
   return call<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
 }
 
+export async function writeManagedCfg(
+  path: string,
+  text: string,
+  expectedProfileId: string,
+  scope?: "gameplay" | "crosshair" | "sounds",
+): Promise<ProfileDetail> {
+  if (!editorPathFits(path)) {
+    throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+  }
+  if (editorTextBytes(text) === null) {
+    throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+  }
+  return call<ProfileDetail>("write_managed_cfg", {
+    path,
+    text,
+    expectedProfileId,
+    scope: scope ?? null,
+  });
+}
+
 export type ComfigState = {
   preset: ComfigPreset;
   modules: Record<string, string>;

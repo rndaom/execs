@@ -1,4 +1,8 @@
-# 0.1.1 release candidate
+# 0.1.1 release record
+
+[Published September 5, 2026 at 02:05 UTC](https://github.com/rndaom/execs/releases/tag/v0.1.1)
+from `7b3c0feae2ee628a0ba8418d2c99ca7a8d7e940f`. The release includes
+`release-commit.json` and `release-validation.json` with the final evidence.
 
 This bugfix release branches from `843a830` (PR #39). Creator ZIP imports and
 profile-owned preloader selections from PR #40 stay in 0.2.0. The release is
@@ -47,15 +51,15 @@ that the notice bundle is actually present in Windows, AppImage and .deb output.
 
 ## Release gates
 
-- [x] Candidate frontend and Windows/Linux Rust CI passed at `80f5345`.
+- [x] Final frontend and Windows/Linux Rust CI passed at `7b3c0fe`.
 - [x] Public 0.1.0 profile fixture imports without changing its files.
 - [x] Real studiomdl builds complete with `CREATE_NO_WINDOW` enabled.
-- [ ] Windows signed updater installs over 0.1.0 in a disposable worker.
+- [x] Windows signed updater installs over 0.1.0 in a disposable worker.
 - [x] Linux signed updater replaces a 0.1.0 AppImage; .deb installs and starts.
-- [ ] Packaged apps start, preserve app data and carry the notice bundle.
-- [ ] Both release artifacts verify against the unchanged production public key.
+- [x] Packaged apps start, preserve app data and carry the notice bundle.
+- [x] Both release artifacts verify against the unchanged production public key.
 - [x] Manual game/Cloud/recovery scenarios and limitations recorded below.
-- [ ] Draft release contains the final notes and exact source commit evidence.
+- [x] Published release contains final notes and exact source commit evidence.
 
 The Release workflow runs the reusable CI workflow before building, checks all
 four versions and substantive notes, refuses overwriting a public release,
@@ -65,9 +69,26 @@ Only a version tag publishes after these gates succeed.
 
 ## Validation record
 
-No release has been published during preparation. Product-source checks below
-use `80f5345`; later release-script/documentation changes require fresh CI and
-installer validation before the candidate is frozen.
+The final tag's product-source CI and both package jobs passed in
+[run 33937047350](https://github.com/rndaom/execs/actions/runs/33937047350).
+Both smoke results confirm signed upgrades over public 0.1.0, startup, packaged
+notices and preservation of user data. The earlier local evidence below uses
+the same product changes at `80f5345`.
+
+The workflow's final metadata lookup failed with HTTP 404 because GitHub's
+release-by-tag endpoint did not resolve the draft. Finalization used its numeric
+release ID, independently checked all three CI jobs and both package jobs, and
+verified the actual downloaded Windows/Linux artifacts against the unchanged
+production public key, asset digests, sizes, sidecars and updater URLs. The
+owner-authorized publication followed those checks. The workflow as a whole is
+recorded as failed at metadata lookup, not as a green publication run.
+
+Final notes were written to both the release body and updater manifest, and
+source/validation records were attached before publication. Unauthenticated
+requests to the latest updater endpoint returned 0.1.1 with full notes and no
+Debian updater entry; both installer URLs returned HTTP 200. The maintenance
+branch fixes the draft lookup and automatically populates updater notes for
+future releases without moving the published tag or rebuilding its installers.
 
 | Check | Result |
 |---|---|
@@ -113,5 +134,7 @@ started, user data survived, and notices were present. The Windows probe failed
 at process load because Cargo examples do not inherit tauri-winres's binary
 manifest. The release-probes build now explicitly embeds Common Controls v6;
 local startup reaches the intended CI-only guard instead of failing to resolve
-TaskDialogIndirect. The final tag workflow must rerun both platforms before
-publishing. Its smoke artifacts and release-commit.json are the final evidence.
+TaskDialogIndirect. The final tag reran both platforms successfully; its smoke
+artifacts and release-commit.json are the final evidence. Restoration of the
+owner's temporary field-test state is deferred until they finish playing,
+as explicitly requested; it is not represented as completed.

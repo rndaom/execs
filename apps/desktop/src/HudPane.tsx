@@ -7,7 +7,7 @@ import {
   UploadSimple,
   X,
 } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
@@ -15,7 +15,7 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useAutosave } from "./hooks/useAutosave";
+import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { Api } from "./lib/api";
 import {
@@ -31,14 +31,17 @@ import {
   canInstallHud,
   filterHudCatalog,
   formatHudRgba,
+  HUD_CATALOG_PAGE_SIZE,
   HUD_SORTS,
-  type HudSort,
+  hudCatalogControls,
   hudInstallSourceCopy,
   hudOptionsDirty,
+  hudPageLinks,
   hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
   paginateHudCatalog,
+  parseHudPageJump,
   parseHudRgba,
   seedHudOptions,
   sortHudCatalog,
@@ -67,6 +70,9 @@ export function HudPane({
   catalogError,
   catalog,
   stats,
+  statsLoading = false,
+  statsError = null,
+  previewData = false,
   state,
   schema,
   onRefresh,
@@ -85,6 +91,9 @@ export function HudPane({
   catalog: HudCatalogEntry[];
   /** Popularity and recency per id; empty until the stats have loaded. */
   stats: Record<string, HudStat>;
+  statsLoading?: boolean;
+  statsError?: string | null;
+  previewData?: boolean;
   state: HudUiState;
   schema: HudSchemaView | null;
   onRefresh: () => void;
@@ -99,21 +108,25 @@ export function HudPane({
 }) {
   const { running, busy } = useAppStatus();
   const locked = !useCanWrite();
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<HudSort>("name");
-  const [page, setPage] = useState(0);
+  const [{ query, sort, page }, dispatchCatalog] = useReducer(hudCatalogControls, {
+    query: "",
+    sort: "name",
+    page: 0,
+  });
   const [viewer, setViewer] = useState<HudViewer | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const seeded = useMemo(() => seedHudOptions(schema, state.installed), [schema, state.installed]);
   const [draft, setDraft] = useSeededDraft(
     seeded,
     (value) => JSON.stringify(value),
     installedKeyOf(profileId, state),
   );
-  const filtered = useMemo(
-    () => sortHudCatalog(filterHudCatalog(catalog, query), stats, sort),
-    [catalog, query, stats, sort],
-  );
+  const matching = useMemo(() => filterHudCatalog(catalog, query), [catalog, query]);
+  const filtered = useMemo(() => sortHudCatalog(matching, stats, sort), [matching, stats, sort]);
   const paged = paginateHudCatalog(filtered, page);
+  const missingStats = matching.length - filtered.length;
+  const metric =
+    sort === "updated" ? "update dates" : sort === "downloads" ? "download counts" : "view counts";
   // The schema options are a draft of the HUD's own file: they autosave, so
   // nothing in that block is disabled — the lock defers the write instead.
   const dirty = hudOptionsDirty(draft, seeded);
@@ -125,23 +138,36 @@ export function HudPane({
   });
   const installedId = state.installed?.id ?? null;
   const installedLabel = installedHudLabel(state);
-  // The active HUD's own art, when hud-db knows the entry — the hero shows
-  // what you installed, not just its name.
   const installedEntry = installedId
     ? (catalog.find((entry) => entry.id.toLowerCase() === installedId.toLowerCase()) ?? null)
     : null;
 
-  function goToPage(next: number) {
-    setPage(next);
-    document.getElementById("hud-catalog")?.scrollIntoView({ block: "start" });
+  function goToPage(next: number, fromBottom = false) {
+    dispatchCatalog({ type: "page", page: next });
+    if (fromBottom) {
+      const heading = document.getElementById("hud-catalog-heading");
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: "start" });
+    }
   }
 
   return (
     <section data-testid="settings-hud" className="min-w-0 text-left">
       <PaneHeader
         title="HUD"
-        lede="One HUD per profile — custom materials usually do not survive Valve Casual."
-        actions={<span className="tnum t-meta text-ink-faint">{catalog.length} in catalog</span>}
+        lede="One HUD per profile."
+        actions={
+          <button
+            type="button"
+            data-testid="hud-import"
+            disabled={locked}
+            onClick={() => setImportOpen(true)}
+            className="btn btn-ghost"
+          >
+            <UploadSimple size={14} />
+            Import HUD…
+          </button>
+        }
       />
 
       {state.catalogUnavailable ? (
@@ -262,8 +288,6 @@ export function HudPane({
                           );
                         }
                         if (control.controlType === "combo") {
-                          // A short list is pills; only a long one still earns
-                          // a dropdown (AGENTS.md, "Fewer controls").
                           if (control.choices.length <= SEGMENTED_CHOICE_MAX) {
                             return (
                               <div
@@ -445,35 +469,25 @@ export function HudPane({
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="hud-import-archive"
-          disabled={locked}
-          onClick={onImportArchive}
-          className="btn btn-ghost"
-        >
-          <UploadSimple size={14} />
-          Import archive…
-        </button>
-        <button
-          type="button"
-          data-testid="hud-import-folder"
-          disabled={locked}
-          onClick={onImportFolder}
-          className="btn btn-ghost"
-        >
-          <FolderOpen size={14} />
-          Import folder…
-        </button>
-        <span className="t-meta">Zip, 7z or folder with info.vdf; replaces the active HUD.</span>
-      </div>
+      <p className="t-meta mt-3">Custom materials may not work on Valve Casual servers.</p>
 
       <section id="hud-catalog" className="section scroll-mt-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="t-section">Catalog</h2>
-            {query.trim() ? <p className="t-meta mt-1 tnum">{paged.total} matching</p> : null}
+            <h2 id="hud-catalog-heading" tabIndex={-1} className="t-section scroll-mt-4">
+              Browse HUDs
+            </h2>
+            <p className="t-meta mt-1 tnum">
+              {matching.length} {query.trim() ? "matching " : ""}HUD
+              {matching.length === 1 ? "" : "s"}
+              {query.trim() ? "" : " in the catalog"}
+              {previewData ? (
+                <>
+                  {" "}
+                  <span className="ml-2 text-ink-faint">Preview data</span>
+                </>
+              ) : null}
+            </p>
           </div>
           <div className="flex min-w-0 flex-1 flex-wrap items-end justify-end gap-2 sm:flex-nowrap">
             <label className="min-w-48 max-w-sm flex-1" htmlFor="hud-search">
@@ -483,10 +497,7 @@ export function HudPane({
                 data-testid="hud-search"
                 type="search"
                 value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setPage(0);
-                }}
+                onChange={(event) => dispatchCatalog({ type: "search", query: event.target.value })}
                 placeholder="Search HUDs…"
                 className="field w-full px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
               />
@@ -511,12 +522,54 @@ export function HudPane({
             testIdPrefix="hud-sort"
             options={HUD_SORTS}
             value={sort}
-            onChange={(next) => {
-              setSort(next);
-              setPage(0);
-            }}
+            onChange={(next) => dispatchCatalog({ type: "sort", sort: next })}
           />
         </div>
+
+        {statsLoading ? (
+          <p data-testid="hud-stats-loading" role="status" className="t-meta mt-3">
+            Loading dates and popularity…
+          </p>
+        ) : statsError ? (
+          <Alert tone="warn" testId="hud-stats-error" className="mt-3 py-2">
+            Could not refresh dates and popularity. {statsError} Available data is still shown.
+          </Alert>
+        ) : null}
+
+        {sort !== "name" && matching.length > 0 ? (
+          <div
+            data-testid="hud-ranking-coverage"
+            className="t-meta mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1"
+          >
+            <p>
+              Ranking {paged.total} of {matching.length} {query.trim() ? "matching " : ""}HUD
+              {matching.length === 1 ? "" : "s"} with {metric}.
+              {missingStats > 0
+                ? ` ${missingStats} ${missingStats === 1 ? "has" : "have"} no ${metric} available${statsLoading ? " yet" : ""}.`
+                : ""}
+            </p>
+            {missingStats > 0 ? (
+              <button
+                type="button"
+                data-testid="hud-view-all"
+                onClick={() => dispatchCatalog({ type: "sort", sort: "name" })}
+                className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+              >
+                View all A to Z
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {paged.total > 0 ? (
+          <HudPagination
+            page={paged.page}
+            pageCount={paged.pageCount}
+            total={paged.total}
+            position="top"
+            onPage={goToPage}
+          />
+        ) : null}
 
         {catalogLoading ? (
           <p
@@ -541,21 +594,27 @@ export function HudPane({
           </Alert>
         ) : null}
 
-        <div data-testid="hud-catalog" aria-busy={catalogLoading} className="mt-4">
+        <div
+          data-testid="hud-catalog"
+          aria-busy={catalogLoading || (sort !== "name" && statsLoading)}
+          className="mt-4"
+        >
           {paged.items.length === 0 ? (
             catalogLoading ? null : (
               <p className="t-meta px-1 py-10 text-center">
-                {query.trim()
-                  ? "No HUDs match that search."
-                  : catalogError
-                    ? "Catalog unavailable — try Refresh."
-                    : "Catalog is empty."}
+                {sort !== "name" && matching.length > 0
+                  ? statsLoading
+                    ? `Loading ${metric}…`
+                    : `No ${metric} available for these HUDs. Choose A to Z to browse them.`
+                  : query.trim()
+                    ? "No HUDs match that search."
+                    : catalogError
+                      ? "Catalog unavailable — try Refresh."
+                      : "Catalog is empty."}
               </p>
             )
           ) : (
-            /* Hairline rows, not per-row boxes. The banner keeps its own
-               frame — that one is real media. */
-            <div>
+            <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
               {paged.items.map((entry) => {
                 const current = installedId?.toLowerCase() === entry.id.toLowerCase();
                 const installable = canInstallHud(entry);
@@ -569,21 +628,21 @@ export function HudPane({
                     data-testid={`hud-card-${entry.id}`}
                     data-github={entry.github ? "true" : "false"}
                     data-install={entry.install}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-edge py-3.5"
+                    className="flex min-w-0 flex-col gap-3 border-b border-edge pb-4"
                   >
                     <button
                       type="button"
                       title={hasPictures ? `View ${entry.name} screenshots` : undefined}
                       disabled={!hasPictures}
                       onClick={() => setViewer({ entry, index: 0 })}
-                      className="surface h-16 w-28 shrink-0 cursor-zoom-in disabled:cursor-default"
+                      className="surface aspect-[16/7] w-full shrink-0 cursor-zoom-in disabled:cursor-default"
                     >
                       {entry.banner ? (
                         <img
                           src={entry.banner}
                           alt={`${entry.name} HUD preview`}
                           loading="lazy"
-                          className="h-full w-full object-cover"
+                          className="h-full w-full bg-panel object-contain"
                         />
                       ) : (
                         <span className="grid h-full w-full place-items-center text-[11px] text-ink-faint">
@@ -591,14 +650,14 @@ export function HudPane({
                         </span>
                       )}
                     </button>
-                    <div className="min-w-48 flex-1">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <p className="t-row">{entry.name}</p>
-                        <p className="truncate text-[12.5px] text-ink-faint">by {entry.author}</p>
                         {current ? <span className="badge badge-ok">Active</span> : null}
                       </div>
+                      <p className="t-meta truncate">by {entry.author}</p>
                       {statCopy || entry.flags.length > 0 || sourceCopy ? (
-                        <p className="t-meta mt-0.5">
+                        <p className="t-meta mt-1 text-ink-faint">
                           {[
                             statCopy,
                             entry.flags.length > 0 ? entry.flags.join(" · ") : null,
@@ -609,7 +668,7 @@ export function HudPane({
                         </p>
                       ) : null}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
                       {hasPictures ? (
                         <button
                           type="button"
@@ -638,7 +697,7 @@ export function HudPane({
                         onClick={() =>
                           installable ? onInstall(entry.id) : void openExternal(entry.repo)
                         }
-                        className={`btn ml-1 ${current || !installable ? "btn-ghost" : "btn-primary"}`}
+                        className={`btn ml-auto ${current || !installable ? "btn-ghost" : "btn-primary"}`}
                       >
                         {/* Honest label: a row with no fetchable archive
                             opens the author's page instead of pretending. */}
@@ -659,33 +718,13 @@ export function HudPane({
         </div>
 
         {paged.pageCount > 1 ? (
-          <div className="mt-4 flex items-center justify-between gap-3 border-t border-edge pt-4">
-            <p className="t-meta tnum">
-              Page {paged.page + 1} of {paged.pageCount} · {paged.total} HUDs
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                data-testid="hud-page-prev"
-                disabled={paged.page === 0}
-                onClick={() => goToPage(paged.page - 1)}
-                className="btn btn-ghost"
-              >
-                <ArrowLeft size={13} />
-                Previous
-              </button>
-              <button
-                type="button"
-                data-testid="hud-page-next"
-                disabled={paged.page >= paged.pageCount - 1}
-                onClick={() => goToPage(paged.page + 1)}
-                className="btn btn-ghost"
-              >
-                Next
-                <ArrowRight size={13} />
-              </button>
-            </div>
-          </div>
+          <HudPagination
+            page={paged.page}
+            pageCount={paged.pageCount}
+            total={paged.total}
+            position="bottom"
+            onPage={(next) => goToPage(next, true)}
+          />
         ) : null}
       </section>
 
@@ -718,6 +757,60 @@ export function HudPane({
         Valve or Steam.
       </p>
 
+      {importOpen ? (
+        <Modal
+          open
+          testId="hud-import-dialog"
+          title="Import a HUD"
+          description="Choose the HUD you downloaded. Importing replaces the active HUD."
+          className="fixed top-1/2 left-1/2 z-50 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2"
+          onClose={() => setImportOpen(false)}
+        >
+          <div className="mt-5 flex flex-col gap-3">
+            <button
+              type="button"
+              data-testid="hud-import-archive"
+              disabled={locked}
+              onClick={() => {
+                setImportOpen(false);
+                onImportArchive();
+              }}
+              className="btn btn-ghost justify-start gap-3 px-3 py-3 text-left"
+            >
+              <UploadSimple size={20} />
+              <span>
+                <span className="block">Choose ZIP or 7z…</span>
+                <span className="t-meta mt-1 block">Downloaded archive. No need to unzip it.</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              data-testid="hud-import-folder"
+              disabled={locked}
+              onClick={() => {
+                setImportOpen(false);
+                onImportFolder();
+              }}
+              className="btn btn-ghost justify-start gap-3 px-3 py-3 text-left"
+            >
+              <FolderOpen size={20} />
+              <span>
+                <span className="block">Choose folder…</span>
+                <span className="t-meta mt-1 block">For a HUD you already extracted.</span>
+              </span>
+            </button>
+          </div>
+          <p className="t-meta mt-4">
+            The package is checked before import. In-game compatibility depends on the HUD.
+          </p>
+          <div className="mt-5 flex justify-end">
+            <button type="button" className="btn btn-quiet" onClick={() => setImportOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+
       {viewer ? (
         <HudLightbox
           api={api}
@@ -730,11 +823,114 @@ export function HudPane({
   );
 }
 
-/**
- * Every picture of a HUD in one place: hud-db's own screenshots first, then
- * the author's album (Imgur or a GitHub showcase page) fetched in-app, so
- * nobody has to leave to see what they are choosing.
- */
+function HudPagination({
+  page,
+  pageCount,
+  total,
+  position,
+  onPage,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  position: "top" | "bottom";
+  onPage: (page: number) => void;
+}) {
+  const [jump, setJump] = useState(String(page + 1));
+  useEffect(() => setJump(String(page + 1)), [page]);
+  const jumpPage = parseHudPageJump(jump, pageCount);
+  const first = page * HUD_CATALOG_PAGE_SIZE + 1;
+  const last = Math.min((page + 1) * HUD_CATALOG_PAGE_SIZE, total);
+  return (
+    <nav
+      aria-label={`HUD catalog pages, ${position}`}
+      data-testid={`hud-pagination-${position}`}
+      className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-edge pt-3"
+    >
+      <p className="t-meta tnum" aria-live={position === "top" ? "polite" : "off"}>
+        {first === last ? first : `${first}–${last}`} of {total}
+      </p>
+      {pageCount > 1 ? (
+        <>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              data-testid={`hud-page-prev-${position}`}
+              aria-label="Previous page"
+              disabled={page === 0}
+              onClick={() => onPage(page - 1)}
+              className="btn btn-quiet p-2"
+            >
+              <ArrowLeft size={14} />
+            </button>
+            {hudPageLinks(page, pageCount).map((link) =>
+              typeof link === "number" ? (
+                <button
+                  key={link}
+                  type="button"
+                  aria-label={`Page ${link + 1}`}
+                  aria-current={link === page ? "page" : undefined}
+                  onClick={() => onPage(link)}
+                  className={`btn btn-quiet tnum min-w-8 px-2 py-1.5 ${
+                    link === page ? "bg-brand/6 ring-1 ring-brand" : ""
+                  }`}
+                >
+                  {link + 1}
+                </button>
+              ) : (
+                <span key={link} className="t-meta px-0.5" aria-hidden="true">
+                  …
+                </span>
+              ),
+            )}
+            <button
+              type="button"
+              data-testid={`hud-page-next-${position}`}
+              aria-label="Next page"
+              disabled={page >= pageCount - 1}
+              onClick={() => onPage(page + 1)}
+              className="btn btn-quiet p-2"
+            >
+              <ArrowRight size={14} />
+            </button>
+          </div>
+          <form
+            className="flex items-center gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (jumpPage !== null) onPage(jumpPage);
+            }}
+          >
+            <label htmlFor={`hud-page-jump-${position}`} className="t-meta">
+              Page
+            </label>
+            <input
+              id={`hud-page-jump-${position}`}
+              data-testid={`hud-page-jump-${position}`}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]+"
+              value={jump}
+              onChange={(event) => setJump(event.target.value)}
+              aria-label={`Page number, 1 to ${pageCount}`}
+              aria-invalid={jump !== "" && jumpPage === null ? true : undefined}
+              className="field tnum w-12 px-2 py-1.5 text-center text-[13px] text-ink focus:outline-none"
+            />
+            <span className="t-meta tnum">/ {pageCount}</span>
+            <button
+              type="submit"
+              disabled={jumpPage === null || jumpPage === page}
+              className="btn btn-quiet px-2 py-1.5"
+            >
+              Go
+            </button>
+          </form>
+        </>
+      ) : null}
+    </nav>
+  );
+}
+
 function HudLightbox({
   api,
   viewer,
@@ -747,6 +943,7 @@ function HudLightbox({
   onClose: () => void;
 }) {
   const { entry, index } = viewer;
+  const active = useContext(AutosaveActivity);
   const [album, setAlbum] = useState<HudAlbumImage[] | null>(null);
   const [albumFailed, setAlbumFailed] = useState(false);
 
@@ -788,6 +985,9 @@ function HudLightbox({
 
   // Escape and focus are the Modal's job; only the arrow-key paging is ours.
   useEffect(() => {
+    if (!active) {
+      return;
+    }
     function onKey(event: KeyboardEvent) {
       if (event.key === "ArrowRight") {
         onPick(stepHudScreenshot(safeIndex, 1, count));
@@ -797,7 +997,7 @@ function HudLightbox({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [safeIndex, count, onPick]);
+  }, [safeIndex, count, onPick, active]);
 
   const albumUrl = entry.album;
   const albumNote = albumUrl

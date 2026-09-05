@@ -11,6 +11,7 @@ use crate::absorb::{set_cloud_sync_pending, write_config_cfg_dual_to};
 use crate::blob::blob_path;
 use crate::finder::discover_steam_roots;
 use crate::hash::{read_small_file_bounded, MAX_CFG_FILE_BYTES};
+use crate::managed_cfg::{ensure_exec as ensure_managed_exec, merge_scope, ManagedCfgScope};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, is_profile_ownable_rel_path, load_library_from, load_manifest,
@@ -248,6 +249,150 @@ where
     Ok(detail_from_manifest(&manifest))
 }
 
+pub fn write_managed_cfg(
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    bytes: &[u8],
+    scope: Option<ManagedCfgScope>,
+) -> Result<ProfileDetail, ProfileError> {
+    write_scoped_managed_cfg_to(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        rel_path,
+        bytes,
+        scope,
+        live_process_names(),
+    )
+}
+
+/// Caller serializes this entire read/merge/commit with profile switches.
+pub fn write_managed_cfg_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    bytes: &[u8],
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    write_scoped_managed_cfg_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        rel_path,
+        bytes,
+        None,
+        running_names,
+    )
+}
+
+pub fn write_scoped_managed_cfg_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    bytes: &[u8],
+    scope: Option<ManagedCfgScope>,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|s| s.as_ref().to_owned())
+        .collect();
+    refuse_if_running_among(&running)?;
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() != Some(profile_id) {
+        return Err(ProfileError::UnknownProfile);
+    }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let prefix = match cfg_layer_from_files(&manifest.files) {
+        CfgLayer::Comfig => "overrides/",
+        CfgLayer::Vanilla => "",
+    };
+    let stems = ["execs_binds", "execs_gameplay"];
+    if !stems
+        .iter()
+        .any(|stem| rel_path == format!("tf/cfg/{prefix}{stem}.cfg"))
+    {
+        return Err(ProfileError::ForbiddenPath(rel_path.to_owned()));
+    }
+    let auto_path = format!("tf/cfg/{prefix}autoexec.cfg");
+    if scope.is_some() && rel_path != format!("tf/cfg/{prefix}execs_gameplay.cfg") {
+        return Err(ProfileError::InvalidPath);
+    }
+    let cfg = if let Some(scope) = scope {
+        let existing = current_managed_bytes(profiles_dir, tf2_root, &manifest, rel_path)?;
+        merge_scope(&existing, bytes, scope)?
+    } else {
+        bytes.to_vec()
+    };
+    let mut merged = current_managed_bytes(profiles_dir, tf2_root, &manifest, &auto_path)?;
+    crate::managed_cfg::validate_quotes(&merged)?;
+    for stem in stems {
+        let path = format!("tf/cfg/{prefix}{stem}.cfg");
+        if path == rel_path || manifest.files.iter().any(|file| file.path == path) {
+            merged = ensure_managed_exec(&merged, prefix, stem);
+        }
+    }
+    if merged.len() > MAX_CFG_FILE_BYTES || cfg.len() > MAX_CFG_FILE_BYTES {
+        return Err(ProfileError::Io(
+            "Managed cfg exceeds the cfg size limit.".into(),
+        ));
+    }
+    let puts = [
+        (rel_path.to_owned(), FileSource::Bytes(&cfg)),
+        (auto_path, FileSource::Bytes(&merged)),
+    ];
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &puts,
+        &[],
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |_| Ok(()),
+    )?;
+    Ok(detail_from_manifest(&manifest))
+}
+
+fn current_managed_bytes(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    manifest: &crate::profile::ProfileManifest,
+    auto_path: &str,
+) -> Result<Vec<u8>, ProfileError> {
+    let live = tf2_root.join(auto_path);
+    // Preserve edits made outside the app since absorb last ran, including
+    // non-UTF8 comments. A missing live file falls back to the owned copy.
+    let existing = match std::fs::symlink_metadata(&live) {
+        Ok(_) => {
+            crate::hash::validate_file_within(tf2_root, &live)
+                .map_err(|e| ProfileError::Io(e.to_string()))?;
+            read_small_file_bounded(&live, MAX_CFG_FILE_BYTES)
+                .map_err(|e| ProfileError::Io(e.to_string()))?
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if manifest.files.iter().any(|file| file.path == auto_path) {
+                profile_file_bytes_from(profiles_dir, &manifest.id, auto_path)?
+            } else {
+                Vec::new()
+            }
+        }
+        Err(e) => return Err(ProfileError::Io(e.to_string())),
+    };
+    Ok(existing)
+}
+
 fn profile_detail_from(
     profiles_dir: &Path,
     profile_id: &str,
@@ -313,7 +458,215 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         fs::create_dir_all(root.join("tf").join("cfg")).unwrap();
         fs::create_dir_all(root.join("tf").join("custom")).unwrap();
+        fs::write(root.join("tf/steam.inf"), "appID=440\n").unwrap();
         root
+    }
+
+    #[test]
+    fn managed_cfg_merges_both_orders_and_preserves_latest_live_autoexec() {
+        for comfig in [false, true] {
+            for order in [
+                ["execs_binds", "execs_gameplay"],
+                ["execs_gameplay", "execs_binds"],
+            ] {
+                let dir = test_temp_dir();
+                let profiles = dir.join("profiles");
+                let root = tf2_root(&dir);
+                let library =
+                    create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+                let id = &library.profiles[0].id;
+                set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+                let prefix = if comfig { "overrides/" } else { "" };
+                let auto = format!("tf/cfg/{prefix}autoexec.cfg");
+                write_owned_file_to(
+                    &profiles,
+                    &root,
+                    id,
+                    &auto,
+                    b"echo old\n",
+                    unlocked(),
+                    WriteOwnedOptions::default(),
+                )
+                .unwrap();
+                let custom = b"exec hud/settings\r\n// custom \xff\r\necho newest\r\n\r\n";
+                fs::write(root.join(&auto), custom).unwrap();
+                for stem in order {
+                    write_managed_cfg_to(
+                        &profiles,
+                        &root,
+                        id,
+                        &format!("tf/cfg/{prefix}{stem}.cfg"),
+                        b"echo saved\n",
+                        unlocked(),
+                    )
+                    .unwrap();
+                }
+                let result = fs::read(root.join(&auto)).unwrap();
+                assert!(result.starts_with(custom));
+                for stem in order {
+                    let line = format!("exec {prefix}{stem} // execs:managed\n");
+                    assert!(result.windows(line.len()).any(|w| w == line.as_bytes()));
+                }
+                assert_eq!(
+                    profile_file_bytes_from(&profiles, id, &auto).unwrap(),
+                    result
+                );
+                cleanup(&dir);
+            }
+        }
+    }
+
+    #[test]
+    fn managed_cfg_refuses_stale_profile_layer_and_partial_write() {
+        let dir = test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = tf2_root(&dir);
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+        let path = "tf/cfg/execs_binds.cfg";
+        assert!(write_managed_cfg_to(&profiles, &root, id, path, b"new", unlocked()).is_err());
+        set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+        assert!(write_managed_cfg_to(
+            &profiles,
+            &root,
+            id,
+            "tf/cfg/overrides/execs_binds.cfg",
+            b"new",
+            unlocked()
+        )
+        .is_err());
+        assert!(write_managed_cfg_to(&profiles, &root, id, path, b"new", [tf2_name()]).is_err());
+        fs::create_dir(root.join("tf/cfg/autoexec.cfg")).unwrap();
+        assert!(write_managed_cfg_to(&profiles, &root, id, path, b"new", unlocked()).is_err());
+        assert!(!root.join(path).exists());
+        assert!(load_manifest(&profiles, id).unwrap().files.is_empty());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn scoped_managed_writes_merge_latest_sibling_settings_in_both_orders() {
+        for scopes in [
+            [
+                ManagedCfgScope::Gameplay,
+                ManagedCfgScope::Crosshair,
+                ManagedCfgScope::Sounds,
+            ],
+            [
+                ManagedCfgScope::Sounds,
+                ManagedCfgScope::Crosshair,
+                ManagedCfgScope::Gameplay,
+            ],
+        ] {
+            let dir = test_temp_dir();
+            let profiles = dir.join("profiles");
+            let root = tf2_root(&dir);
+            let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+            let id = &library.profiles[0].id;
+            set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+            let path = "tf/cfg/execs_gameplay.cfg";
+            for scope in scopes {
+                let submitted = match scope {
+                    ManagedCfgScope::Gameplay => {
+                        b"fov_desired 90; cl_crosshair_scale 1; tf_dingaling_volume 1".as_slice()
+                    }
+                    ManagedCfgScope::Crosshair => {
+                        b"fov_desired 10; cl_crosshair_scale 50; tf_dingaling_volume 1".as_slice()
+                    }
+                    ManagedCfgScope::Sounds => {
+                        b"fov_desired 10; cl_crosshair_scale 1; tf_dingaling_volume 0.5".as_slice()
+                    }
+                };
+                write_scoped_managed_cfg_to(
+                    &profiles,
+                    &root,
+                    id,
+                    path,
+                    submitted,
+                    Some(scope),
+                    unlocked(),
+                )
+                .unwrap();
+            }
+            let result = fs::read_to_string(root.join(path)).unwrap();
+            assert_eq!(result.lines().count(), 3);
+            assert!(result.contains("fov_desired 90\n"));
+            assert!(result.contains("cl_crosshair_scale 50\n"));
+            assert!(result.contains("tf_dingaling_volume 0.5\n"));
+            assert_eq!(
+                profile_file_bytes_from(&profiles, id, path).unwrap(),
+                result.as_bytes()
+            );
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn managed_exec_migrates_only_its_line_and_preserves_user_bytes() {
+        let old =
+            b"exec execs_binds // execs:managed\r\nexec hud\r\necho \"exec execs_binds\"\r\n  \r\n";
+        assert_eq!(ensure_managed_exec(old, "overrides/", "execs_binds"), b"exec overrides/execs_binds // execs:managed\r\nexec hud\r\necho \"exec execs_binds\"\r\n  \r\n");
+        let user = b"exec \"overrides/execs_binds.cfg\"; exec hud // user\n\n";
+        assert_eq!(ensure_managed_exec(user, "overrides/", "execs_binds"), user);
+    }
+
+    #[test]
+    fn managed_cfg_rolls_back_both_files_after_partial_live_projection() {
+        let dir = test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = tf2_root(&dir);
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+        set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+        let path = "tf/cfg/execs_binds.cfg";
+        let auto = "tf/cfg/autoexec.cfg";
+        write_owned_file_to(
+            &profiles,
+            &root,
+            id,
+            path,
+            b"old",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        write_owned_file_to(
+            &profiles,
+            &root,
+            id,
+            auto,
+            b"exec hud\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, id).unwrap();
+        let live_cfg = root.join(path);
+        let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+        let sampled = fired.clone();
+        let result = crate::profile::with_profile_process_sampler(
+            move || {
+                if fs::read(&live_cfg).ok().as_deref() == Some(b"new") && !sampled.replace(true) {
+                    vec![tf2_name().to_owned()]
+                } else {
+                    Vec::new()
+                }
+            },
+            || write_managed_cfg_to(&profiles, &root, id, path, b"new", unlocked()),
+        );
+        assert!(result.is_err());
+        assert!(fired.get());
+        assert_eq!(fs::read(root.join(path)).unwrap(), b"old");
+        assert_eq!(fs::read(root.join(auto)).unwrap(), b"exec hud\n");
+        assert_eq!(
+            profile_file_bytes_from(&profiles, id, path).unwrap(),
+            b"old"
+        );
+        assert_eq!(
+            profile_file_bytes_from(&profiles, id, auto).unwrap(),
+            b"exec hud\n"
+        );
+        assert_eq!(load_manifest(&profiles, id).unwrap(), before);
+        cleanup(&dir);
     }
 
     #[test]

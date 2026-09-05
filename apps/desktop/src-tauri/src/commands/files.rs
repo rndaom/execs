@@ -73,6 +73,35 @@ pub async fn write_owned_file(
     .await
 }
 
+#[tauri::command]
+pub async fn write_managed_cfg(
+    gate: tauri::State<'_, WriteGate>,
+    path: String,
+    text: String,
+    expected_profile_id: String,
+    scope: Option<execs_core::ManagedCfgScope>,
+) -> Result<ProfileDetail, CommandError> {
+    validate_editor_path(&path)?;
+    validate_editor_text(&text)?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        if profile_id != expected_profile_id {
+            return Err(CommandError::new(
+                "ProfileChanged",
+                "The active profile changed before saving. Try again.",
+            ));
+        }
+        Ok(execs_core::write_managed_cfg(
+            &root,
+            &profile_id,
+            &path,
+            text.as_bytes(),
+            scope,
+        )?)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef } from "react";
 import { useToast } from "../components/ui/Toast";
 
 /** How long the user has to stop changing things before a save goes out. */
 export const AUTOSAVE_DELAY_MS = 700;
+
+/** Retained panes flush their debounce when hidden, and still observe unlocks. */
+export const AutosaveActivity = createContext(true);
+
+export const AutosavePending = createContext<((id: string, pending: boolean) => void) | null>(null);
+
+/** Set before explicitly discarding/remounting retained panes. */
+export const AutosaveDiscard = createContext<Readonly<{ current: boolean }> | null>(null);
 
 /**
  * The scheduler behind `useAutosave`, as a pure step function.
@@ -31,6 +39,7 @@ export type AutosaveEvent =
   | { type: "elapsed"; locked: boolean }
   /** The save that was in flight finished, either way. */
   | { type: "settled"; locked: boolean }
+  | { type: "failed"; locked: boolean }
   /** TF2 started. */
   | { type: "locked" }
   /** TF2 quit. */
@@ -67,6 +76,13 @@ function begin(state: AutosaveState): AutosaveStep {
 
 export function autosaveStep(state: AutosaveState, event: AutosaveEvent): AutosaveStep {
   switch (event.type) {
+    case "failed": {
+      if (state.dirty && state.due && !event.locked) {
+        return begin({ ...state, saving: false });
+      }
+      const pending = { ...state, dirty: true, due: false, saving: false };
+      return event.locked ? announce(pending) : { state: pending, effect: "none" };
+    }
     case "change": {
       const dirty = { ...state, dirty: true };
       // While TF2 runs the edit is kept as a draft; nothing is armed, because
@@ -109,7 +125,10 @@ export function autosaveStep(state: AutosaveState, event: AutosaveEvent): Autosa
     }
     case "unlocked": {
       const free = { ...state, announced: false };
-      if (!free.dirty || free.saving) {
+      if (free.dirty && free.saving) {
+        return { state: { ...free, due: true }, effect: "none" };
+      }
+      if (!free.dirty) {
         return { state: free, effect: "none" };
       }
       return begin(free);
@@ -118,8 +137,11 @@ export function autosaveStep(state: AutosaveState, event: AutosaveEvent): Autosa
       // Losing a debounced edit because the user clicked another pane is the
       // one failure autosave cannot have. Locked is the exception: the draft
       // survives the pane switch on its own.
-      if (event.locked || !state.dirty || state.saving) {
+      if (event.locked || !state.dirty) {
         return { state, effect: "none" };
+      }
+      if (state.saving) {
+        return { state: { ...state, due: true }, effect: "none" };
       }
       return begin(state);
     }
@@ -158,6 +180,12 @@ export function useAutosave({
   token,
   delay = AUTOSAVE_DELAY_MS,
 }: AutosaveOptions): { flush: () => void } {
+  const active = useContext(AutosaveActivity);
+  const reportPending = useContext(AutosavePending);
+  const discard = useContext(AutosaveDiscard);
+  const discarded = useRef(false);
+  const pendingId = useId();
+  const mounted = useRef(true);
   const toast = useToast();
   const state = useRef<AutosaveState>(autosaveInitial());
   const timer = useRef<number | null>(null);
@@ -180,8 +208,14 @@ export function useAutosave({
 
   const dispatch = useCallback(
     function run(event: AutosaveEvent) {
+      if (discarded.current) {
+        return;
+      }
       const next = autosaveStep(state.current, event);
       state.current = next.state;
+      if (mounted.current) {
+        reportPending?.(pendingId, next.state.dirty || next.state.saving);
+      }
       if (next.effect === "arm") {
         cancel();
         timer.current = window.setTimeout(() => {
@@ -197,21 +231,33 @@ export function useAutosave({
       if (next.effect === "save") {
         cancel();
         attempted.current = tokenRef.current;
+        const submit = saveRef.current;
         // The write path owns the success and failure toasts; a rejection here
         // would only be a second report of the same thing.
         Promise.resolve()
-          .then(() => saveRef.current())
-          .catch(() => undefined)
-          .finally(() => run({ type: "settled", locked: lockedRef.current }));
+          .then(() => (discarded.current ? false : submit()))
+          .then((result) => {
+            if (result === false) {
+              attempted.current = undefined;
+              run({ type: "failed", locked: lockedRef.current });
+            } else {
+              run({ type: "settled", locked: lockedRef.current });
+            }
+          })
+          .catch(() => {
+            attempted.current = undefined;
+            run({ type: "failed", locked: lockedRef.current });
+          });
       }
     },
-    [cancel, delay, toast],
+    [cancel, delay, toast, reportPending, pendingId],
   );
 
   useEffect(() => {
     if (!dirty) {
       cancel();
       state.current = { ...state.current, dirty: false, due: false };
+      reportPending?.(pendingId, state.current.saving);
       return;
     }
     // A save that came back and reseeded the pane is not a new edit.
@@ -219,7 +265,7 @@ export function useAutosave({
       return;
     }
     dispatch({ type: "change", locked: lockedRef.current });
-  }, [dirty, token, dispatch, cancel]);
+  }, [dirty, token, dispatch, cancel, reportPending, pendingId]);
 
   useEffect(() => {
     if (locked) {
@@ -237,11 +283,25 @@ export function useAutosave({
     dispatch({ type: "flush", locked: lockedRef.current });
   }, [dispatch]);
 
+  useEffect(() => {
+    if (!active) {
+      flush();
+    }
+  }, [active, flush]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: unmount only.
   useEffect(() => {
+    mounted.current = true;
     return () => {
-      dispatch({ type: "flush", locked: lockedRef.current });
+      if (discard?.current) {
+        discarded.current = true;
+        state.current = autosaveInitial();
+      } else {
+        dispatch({ type: "flush", locked: lockedRef.current });
+      }
       cancel();
+      mounted.current = false;
+      reportPending?.(pendingId, false);
     };
   }, []);
 

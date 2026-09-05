@@ -12,9 +12,9 @@ import {
   type CrosshairFile,
   clampGameplay,
   type GameplaySettings,
-  gameplayDirty,
   seedGameplay,
   serializeGameplay,
+  serializeGameplayScope,
 } from "./lib/gameplay-ui";
 import {
   STOCK_CROSSHAIR_LABELS,
@@ -46,14 +46,15 @@ export function StockCrosshairSettings({
   // user was mid-edit here; `useSeededDraft` keeps a dirty draft instead.
   const [draft, setDraft] = useSeededDraft(
     seeded,
-    serializeGameplay,
+    (value) => serializeGameplayScope(value, "crosshair"),
     draftRecordKey(profileId, "stock-crosshair"),
   );
-  const dirty = gameplayDirty(draft, seeded);
+  const token = serializeGameplayScope(draft, "crosshair");
+  const dirty = token !== serializeGameplayScope(seeded, "crosshair");
   // Nothing here is disabled: these are drafts of one managed cfg, and the
   // write lock defers the save rather than taking the controls away.
   const text = serializeGameplay(clampGameplay(draft));
-  useAutosave({ dirty, locked: running, token: text, save: () => onSave(text) });
+  useAutosave({ dirty, locked: running, token, save: () => onSave(text) });
 
   function patch(update: Partial<GameplaySettings>) {
     setDraft((current) => ({ ...current, ...update }));

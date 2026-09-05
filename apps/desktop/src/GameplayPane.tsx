@@ -13,10 +13,10 @@ import {
   FOV_MIN,
   type GameplayLayer,
   type GameplaySettings,
-  gameplayDirty,
   gameplayPath,
   seedGameplay,
   serializeGameplay,
+  serializeGameplayScope,
 } from "./lib/gameplay-ui";
 
 export type GameplayPaneProps = {
@@ -48,14 +48,15 @@ export function GameplayPane({
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
   const [draft, setDraft] = useSeededDraft(
     seeded,
-    serializeGameplay,
+    (value) => serializeGameplayScope(value, "gameplay"),
     draftRecordKey(profileId, gameplayPath(layer)),
   );
-  const dirty = gameplayDirty(draft, seeded);
+  const token = serializeGameplayScope(draft, "gameplay");
+  const dirty = token !== serializeGameplayScope(seeded, "gameplay");
   // Everything here is a draft of one managed cfg, so nothing is disabled: the
   // write lock defers the save, it does not take the sliders away.
   const text = serializeGameplay(clampGameplay(draft));
-  useAutosave({ dirty, locked: running, token: text, save: () => onSave(text) });
+  useAutosave({ dirty, locked: running, token, save: () => onSave(text) });
   // The addon toggle is not part of the draft: it is a comfig package write
   // that has to wait for the queue like any other.
   const addonLocked = running || busy;
