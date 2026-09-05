@@ -68,6 +68,8 @@ Find TF2 through Steam library folders (registry, `libraryfolders.vdf`, `~/.stea
 
 ## Saving
 
+- Files drafts belong to the application session, keyed by profile and path. Closing execs, profile/install changes, profile creation and update installation ask Save / Discard / Cancel; Save awaits every dirty file and refuses the transition on failure, a changed profile, newer edits or the write lock. Files editing waits for the native close listener; host unmount alone never deletes drafts.
+
 Cvar and small-file panes autosave (`useAutosave`: 700 ms debounce, coalesced, deferred while TF2 runs, flushed when the lock lifts or the pane changes). One toast reports every write: "Saving…" only past 400 ms, "Saved" briefly, a failure that stays until the next success or Escape, "Draft kept until TF2 closes" once. Controls stay live while TF2 runs. Heavy or destructive actions keep a button that says what happens: Build pack, Apply mods, HUD install/update/import, Files Save/Discard, Remove pack, Remove sound files. No "packages installed" style status text when everything is fine.
 
 ## Third-party sources

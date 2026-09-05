@@ -25,6 +25,7 @@ type FilesPaneProps = {
   limited?: boolean;
   hudId: string | null;
   draftStore: FilesDraftStore;
+  closeReady?: boolean;
   onSave: (path: string, text: string) => Promise<boolean>;
 };
 
@@ -39,6 +40,7 @@ function ProfileFilesPane({
   hudId,
   onSave,
   draftStore,
+  closeReady = true,
 }: FilesPaneProps) {
   const { running, busy, setError } = useAppStatus();
   const listed = useMemo(() => cfgFiles(files, hudId), [files, hudId]);
@@ -135,6 +137,7 @@ function ProfileFilesPane({
   }
 
   function updateDraft(next: string) {
+    if (!closeReady) return;
     if (editorTextBytes(next) === null) {
       // Do not copy an oversized paste into React state. Keep the previous
       // draft intact and make the refusal visible instead of truncating it.
@@ -308,7 +311,7 @@ function ProfileFilesPane({
                 id="files-editor"
                 data-testid="files-editor"
                 value={editable ? draft : source}
-                readOnly={running || !editable}
+                readOnly={running || !editable || !closeReady}
                 onChange={(event) => updateDraft(event.target.value)}
                 spellCheck={false}
                 className="min-h-72 flex-1 resize-y border-0 bg-bg px-4 py-3 font-mono text-[13px] leading-6 text-ink outline-none transition-shadow focus:shadow-[inset_2px_0_0_var(--color-brand)] read-only:cursor-not-allowed read-only:text-ink-muted xl:min-h-[25rem]"

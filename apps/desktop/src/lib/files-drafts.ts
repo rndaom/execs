@@ -1,4 +1,5 @@
 type FileDraft = { text: string; baseline: string; source: string };
+export type DirtyFileDraft = { profile: string | null; path: string; text: string };
 
 /** Session-owned drafts never cross profile identities or write themselves to disk. */
 export function createFilesDraftStore() {
@@ -6,6 +7,17 @@ export function createFilesDraftStore() {
   const selections = new Map<string, string>();
   const key = (profile: string | null, path: string) => JSON.stringify([profile, path]);
   return {
+    dirty(): DirtyFileDraft[] {
+      return [...drafts]
+        .filter(([, entry]) => entry.text !== entry.baseline)
+        .map(([id, entry]) => {
+          const [profile, path] = JSON.parse(id) as [string | null, string];
+          return { profile, path, text: entry.text };
+        });
+    },
+    discardAll() {
+      for (const entry of drafts.values()) entry.text = entry.baseline;
+    },
     read(profile: string | null, path: string, source: string): string {
       const id = key(profile, path);
       const entry = drafts.get(id);

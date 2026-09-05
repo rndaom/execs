@@ -36,8 +36,13 @@ import {
   hasBaseVpk,
   toggleComfigAddon,
 } from "./lib/comfig-ui";
-import { createFilesDraftStore } from "./lib/files-drafts";
+import {
+  createFilesDraftStore,
+  type DirtyFileDraft,
+  type FilesDraftStore,
+} from "./lib/files-drafts";
 import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
+import { blockingFindingsForFile, cfgFileMeta, lintBundle } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
 import { HudReloadQueue } from "./lib/hud-reload-ui";
 import { emptyHudState } from "./lib/hud-ui";
@@ -78,6 +83,9 @@ function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
 
 export function SettingsHost({
   api,
+  filesDraftStore: suppliedFilesDraftStore,
+  filesSaver,
+  filesCloseReady = true,
   tab,
   running,
   externalBusy,
@@ -85,10 +93,14 @@ export function SettingsHost({
   bindSyncRequest,
   onBindSyncHandled,
   onBusyChange,
+  onWriteBusyChange,
   onPendingChange,
   onError,
 }: {
   api: Api;
+  filesDraftStore?: FilesDraftStore;
+  filesCloseReady?: boolean;
+  filesSaver?: { current: ((draft: DirtyFileDraft) => Promise<boolean>) | null };
   tab: SettingsTab;
   running: boolean;
   externalBusy: boolean;
@@ -96,6 +108,7 @@ export function SettingsHost({
   bindSyncRequest: number | null;
   onBindSyncHandled: (request: number) => void;
   onBusyChange: (busy: boolean) => void;
+  onWriteBusyChange?: (busy: boolean) => void;
   onPendingChange?: (pending: boolean) => void;
   onError: (message: string | null) => void;
 }) {
@@ -111,7 +124,8 @@ export function SettingsHost({
   const detailRef = useRef<ProfileDetail | null>(null);
   const launchRef = useRef(recommendedLaunchOptions());
   const launchSeedRef = useRef(recommendedLaunchOptions());
-  const filesDraftStore = useRef(createFilesDraftStore()).current;
+  const localFilesDraftStore = useRef(createFilesDraftStore()).current;
+  const filesDraftStore = suppliedFilesDraftStore ?? localFilesDraftStore;
   const visited = useRef({ profile: null as string | null, tabs: new Set<SettingsTab>() });
   const [comfig, setComfig] = useState<ComfigUiState>(defaultComfigState);
   const [launch, setLaunch] = useState(recommendedLaunchOptions);
@@ -172,6 +186,10 @@ export function SettingsHost({
   useEffect(() => {
     onBusyChange(queueBusy || repairBusy);
   }, [onBusyChange, queueBusy, repairBusy]);
+  useEffect(() => {
+    onWriteBusyChange?.(queueBusy);
+    return () => onWriteBusyChange?.(false);
+  }, [onWriteBusyChange, queueBusy]);
 
   // A write in flight when this host unmounts still calls release() on the dead
   // instance, which would otherwise leave App.settingsBusy latched true.
@@ -515,6 +533,31 @@ export function SettingsHost({
       return false;
     }
   }
+
+  async function saveFileDraft(draft: DirtyFileDraft): Promise<boolean> {
+    if (running || draft.profile !== profileId || !files.some((file) => file.path === draft.path))
+      return false;
+    if (!cfgFileMeta(draft.path, detail?.hud?.id).editable) return false;
+    const bundle = files.map((file) =>
+      file.path === draft.path ? { path: file.path, text: draft.text } : file,
+    );
+    if (
+      blockingFindingsForFile(lintBundle(bundle, detail?.hud?.id).findings, draft.path).length > 0
+    ) {
+      onError("Resolve blocking findings in Files before saving.");
+      return false;
+    }
+    return runWrite(async () => {
+      await api.writeOwnedFile(draft.path, draft.text);
+    });
+  }
+  useEffect(() => {
+    if (!filesSaver) return;
+    filesSaver.current = saveFileDraft;
+    return () => {
+      filesSaver.current = null;
+    };
+  });
 
   // Preloader state is global (game files + app data), not part of the
   // profile detail, so the Mods tab loads it separately.
@@ -1036,12 +1079,11 @@ export function SettingsHost({
           profileId={profileId}
           files={files}
           draftStore={filesDraftStore}
+          closeReady={filesCloseReady}
           limited={filesLimited}
           hudId={detail?.hud?.id ?? null}
           onSave={(path, text) => {
-            return runWrite(async () => {
-              await api.writeOwnedFile(path, text);
-            });
+            return saveFileDraft({ profile: profileId, path, text });
           }}
         />
       );
