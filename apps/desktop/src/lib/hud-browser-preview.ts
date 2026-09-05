@@ -1,0 +1,273 @@
+import type { HudCatalogEntry, HudStat } from "./bridge";
+
+// Deliberately varied demo values exercise all three ranked sorts across pages.
+// Missing fields also exercise partial coverage; these are not live statistics.
+export const PREVIEW_HUD_BROWSER_STATS: Record<string, HudStat> = {
+  "1-shot": { updated: "2023-04-05", downloads: 700, views: 8200 },
+  "7hud": { updated: "2024-02-01", downloads: 8200, views: 11000 },
+  ahud: { updated: "2026-01-15", downloads: 330400, views: 931600 },
+  "ants-hud": { updated: "2025-06-12", downloads: 18000, views: 98000 },
+  "astro-hud": { updated: "2026-02-05", downloads: 5600, views: 32000 },
+  axhud: { downloads: 0, views: 200 },
+  budhud: { updated: "2026-08-28", downloads: 900000, views: 1500000 },
+  flawhud: { updated: "2026-05-18", downloads: 240000, views: 1100000 },
+  kbnhud: { updated: "2025-11-01", downloads: 62000, views: 180000 },
+  m0rehud: { updated: "2026-04-12", downloads: 180000, views: 820000 },
+  rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
+  toonhud: { updated: "2024-03-02" },
+};
+
+// Public catalog metadata for checking multiple pages without Tauri or live downloads.
+export const PREVIEW_HUD_BROWSER_CATALOG: HudCatalogEntry[] = [
+  {
+    id: "1-shot",
+    name: "1 Shot",
+    author: "Unknown",
+    repo: "https://github.com/TF2HUDsArchive/1-Shot-Hud",
+    hash: "b643330e09748a1224cdc80aa9208651e99f0a6a",
+    github: true,
+    install: "github",
+    flags: [],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/1-shot/1-shot-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/1-shot/1-shot-banner.webp",
+    ],
+    album: "https://github.com/TF2HUDsArchive/1-Shot-Hud/blob/screenshots/showcase.md",
+    comfigUrl: "https://comfig.app/huds/page/1-shot/",
+  },
+  {
+    id: "7hud",
+    name: "7HUD",
+    author: "sevin",
+    repo: "https://github.com/Sevin7/7hud",
+    hash: "75daba995a8253d39926ec324e9f26709b27b8b6",
+    github: true,
+    install: "github",
+    flags: ["fonts", "menus", "scoreboards", "crosshairs", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/7hud/7hud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/7hud/7hud-banner.webp",
+    ],
+    album: "https://imgur.com/a/yluqH",
+    comfigUrl: "https://comfig.app/huds/page/7hud/",
+  },
+  {
+    id: "ahud",
+    name: "ahud",
+    author: "n0kk",
+    repo: "https://github.com/n0kk/ahud",
+    hash: "419f0b4bcfd5c086d35525ec24558b6bdb01f587",
+    github: true,
+    install: "github",
+    flags: ["fonts", "menus", "scoreboards", "crosshairs", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/ahud/ahud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/ahud/ahud-banner.webp",
+    ],
+    album: "https://imgur.com/a/569GH",
+    comfigUrl: "https://comfig.app/huds/page/ahud/",
+  },
+  {
+    id: "ants-hud",
+    name: "AntsHUD",
+    author: "Antwan",
+    repo: "https://github.com/AsianAntwan/AntsHUD",
+    hash: "ed6cb37bf0c6c66e4f0e959a23f4c586a08350d0",
+    github: true,
+    install: "github",
+    flags: ["fonts", "menus", "scoreboards", "crosshairs", "minmode", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/ants-hud/ants-hud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/ants-hud/ants-hud-banner.webp",
+    ],
+    album: "https://imgur.com/a/rHpj0ys",
+    comfigUrl: "https://comfig.app/huds/page/ants-hud/",
+  },
+  {
+    id: "astro-hud",
+    name: "AstroHUD",
+    author: "Fricc",
+    repo: "https://github.com/wat-the-fricc/astrohud",
+    hash: "0aae4c8903a01d1051e9c2e22c8d3a24db6221cc",
+    github: true,
+    install: "github",
+    flags: ["fonts", "menus", "scoreboards", "crosshairs", "minmode", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/astro-hud/astro-hud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/astro-hud/astro-hud-banner.webp",
+    ],
+    album: "https://imgur.com/a/rwty9qU",
+    comfigUrl: "https://comfig.app/huds/page/astro-hud/",
+  },
+  {
+    id: "axhud",
+    name: "AXHud",
+    author: "Alex_f",
+    repo: "https://steamcommunity.com/groups/axhud",
+    hash: "2.0",
+    github: false,
+    install: "none",
+    flags: [],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/axhud/axhud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/axhud/axhud-banner.webp",
+    ],
+    album: "https://imgur.com/a/uVgHL5x",
+    comfigUrl: "https://comfig.app/huds/page/axhud/",
+  },
+  {
+    id: "barehud",
+    name: "Barehud",
+    author: "Jocelyn",
+    repo: "https://www.dropbox.com/scl/fi/u3tlpw9qzkjiq9kwe48g6/Barehud.7z?rlkey=n7ppyhogkfgzbcpnht6gh7cp2&dl=1",
+    hash: "",
+    github: false,
+    install: "direct",
+    flags: [],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/barehud/barehud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/barehud/barehud-banner.webp",
+    ],
+    album: "https://imgur.com/a/cxLhQUk",
+    comfigUrl: "https://comfig.app/huds/page/barehud/",
+  },
+  {
+    id: "budhud",
+    name: "budhud",
+    author: "Whisker",
+    repo: "https://github.com/rbjaxter/budhud",
+    hash: "16f7be2bb4f0dcbe46ec5f444486ab6a6ea4c7e6",
+    github: true,
+    install: "github",
+    flags: ["fonts", "menus", "crosshairs", "scoreboards", "streamer-mode", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/budhud-01-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/budhud-01-banner.webp",
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/budhud-02-backpack.webp",
+    ],
+    album: "https://imgur.com/a/aJ1K5",
+    comfigUrl: "https://comfig.app/huds/page/budhud/",
+  },
+  {
+    id: "cruelty-squad-hud",
+    name: "Cruelty Squad HUD",
+    author: "BrickSluggan",
+    repo: "https://www.dropbox.com/scl/fi/ggzlcvfmwuqj2atam8r1t/Cruelty-Squad-HUD.7z?rlkey=31j9udueoyyholuq45xs0723q&dl=1",
+    hash: "",
+    github: false,
+    install: "direct",
+    flags: [],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/cruelty-squad-hud/cruelty-squad-hud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/cruelty-squad-hud/cruelty-squad-hud-banner.webp",
+    ],
+    album: "https://imgur.com/a/eWiBUBa",
+    comfigUrl: "https://comfig.app/huds/page/cruelty-squad-hud/",
+  },
+  {
+    id: "flawhud",
+    name: "FlawHUD",
+    author: "CriticalFlaw",
+    repo: "https://github.com/CriticalFlaw/flawhud",
+    hash: "6282582e531ec1ca20b0ab85f9f1511be2f346df",
+    github: true,
+    install: "github",
+    flags: ["fonts", "crosshairs", "streamer-mode", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/flawhud/banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/flawhud/banner.webp",
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/flawhud/menu.webp",
+    ],
+    album: null,
+    comfigUrl: "https://comfig.app/huds/page/flawhud/",
+  },
+  {
+    id: "kbnhud",
+    name: "KBNHud",
+    author: "Jötunn",
+    repo: "https://github.com/Jotunn/kbnHud",
+    hash: "daeda0c20310a54646253f7dfdc9536ae7acdfb6",
+    github: true,
+    install: "github",
+    flags: [
+      "fonts",
+      "menus",
+      "scoreboards",
+      "crosshairs",
+      "streamer-mode",
+      "materials",
+      "customization",
+    ],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/kbnhud/01-kbnhud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/kbnhud/01-kbnhud-banner.webp",
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/kbnhud/02-kbnhud-main-menu.webp",
+    ],
+    album: "https://imgur.com/a/MIXppFP",
+    comfigUrl: "https://comfig.app/huds/page/kbnhud/",
+  },
+  {
+    id: "m0rehud",
+    name: "m0rehud",
+    author: "Hypnotize",
+    repo: "https://github.com/Hypnootize/m0rehud",
+    hash: "4f00092352c34d3317e195db5a5c414b0143a898",
+    github: true,
+    install: "github",
+    flags: ["fonts", "menus", "scoreboards", "crosshairs", "minmode", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/m0rehud/m0rehud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/m0rehud/m0rehud-banner.webp",
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/m0rehud/m0rehud-menu.webp",
+    ],
+    album: "https://github.com/Hypnootize/m0rehud/blob/screenshots/showcase.md",
+    comfigUrl: "https://comfig.app/huds/page/m0rehud/",
+  },
+  {
+    id: "rayshud",
+    name: "rayshud",
+    author: "raysfire",
+    repo: "https://github.com/raysfire/rayshud",
+    hash: "a22ede014e4f3b1260aa8fd657ff0757d9d006b8",
+    github: true,
+    install: "github",
+    flags: ["menus", "scoreboards", "crosshairs", "minmode", "materials", "customization"],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/banner.webp",
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/menu.webp",
+    ],
+    album: "https://imgur.com/a/vsxPG",
+    comfigUrl: "https://comfig.app/huds/page/rayshud/",
+  },
+  {
+    id: "toonhud",
+    name: "ToonHUD",
+    author: "Griever",
+    repo: "https://toonhud.com/",
+    hash: "11.4",
+    github: false,
+    install: "none",
+    flags: [],
+    banner:
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/toonhud/toonhud-banner.webp",
+    screenshots: [
+      "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/toonhud/toonhud-banner.webp",
+    ],
+    album: "https://imgur.com/a/8Ktyl8m",
+    comfigUrl: "https://comfig.app/huds/page/toonhud/",
+  },
+];

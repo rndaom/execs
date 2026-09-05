@@ -27,6 +27,7 @@ import {
 import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
 import { editorPathFits, editorTextBytes } from "./files-limits";
+import { PREVIEW_HUD_BROWSER_CATALOG, PREVIEW_HUD_BROWSER_STATS } from "./hud-browser-preview";
 import {
   emptyHudState,
   PREVIEW_HUD_CATALOG,
@@ -101,6 +102,8 @@ function notInPreview(what: string): BridgeError {
 }
 
 export function createPreviewApi(state: PreviewState): Api {
+  const hudCatalog =
+    state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
   let library: ProfileLibrary | null = previewLibrary(state);
   let files = PREVIEW_FILES.map((file) => ({ ...file }));
@@ -374,7 +377,7 @@ export function createPreviewApi(state: PreviewState): Api {
 
     // --- HUD ----------------------------------------------------------------
     async getHudCatalog() {
-      return PREVIEW_HUD_CATALOG;
+      return hudCatalog;
     },
     async getHudState() {
       return hudState;
@@ -383,13 +386,14 @@ export function createPreviewApi(state: PreviewState): Api {
       return [];
     },
     async getHudStats() {
+      if (state === "settings-hud-browser") return PREVIEW_HUD_BROWSER_STATS;
       return {
         rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
         toonhud: { updated: "2024-03-02" },
       };
     },
     async installHud(id: string) {
-      const entry = PREVIEW_HUD_CATALOG.find((item) => item.id === id);
+      const entry = hudCatalog.find((item) => item.id === id);
       const supported = schemaSupportedIds().includes(id);
       hudState = {
         installed: { id, hash: entry?.hash ?? null, source: "hudDb", options: {} },

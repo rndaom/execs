@@ -118,6 +118,11 @@ fn load_catalog_cache(root: &Path, dir: &Path) -> Result<Option<CatalogCache>, S
     Ok(Some(cache))
 }
 
+pub fn load_cached_catalog() -> Result<Option<Vec<HudCatalogEntry>>, String> {
+    let root = execs_core::try_execs_data_dir()?;
+    Ok(load_catalog_cache(&root, &root.join("hud-catalog"))?.map(|cache| cache.entries))
+}
+
 fn save_catalog_cache(root: &Path, dir: &Path, cache: &CatalogCache) -> Result<(), String> {
     let json = serde_json::to_string_pretty(cache).map_err(|err| err.to_string())?;
     if json.len() as u64 > CATALOG_CACHE_MAX_BYTES {

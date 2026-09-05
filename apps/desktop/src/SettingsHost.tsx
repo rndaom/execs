@@ -27,6 +27,7 @@ import {
   type HudSchemaView,
   type HudStat,
   type HudUiState,
+  isTauri,
   type ModsCatalog,
   type PreloaderReport,
   type PreloaderStatusPayload,
@@ -115,6 +116,8 @@ export function SettingsHost({
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
   const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
   const [hudStats, setHudStats] = useState<Record<string, HudStat>>({});
+  const [hudStatsLoading, setHudStatsLoading] = useState(false);
+  const [hudStatsError, setHudStatsError] = useState<string | null>(null);
   const [hudState, setHudState] = useState<HudUiState>(emptyHudState);
   const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(null);
   const [hudCatalogLoading, setHudCatalogLoading] = useState(true);
@@ -133,6 +136,7 @@ export function SettingsHost({
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   const hudRequest = useRef(0);
   const hudReloadQueue = useRef(new HudReloadQueue());
+  const hudStatsReloadQueue = useRef(new HudReloadQueue());
   /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
   const loadRequest = useRef(0);
 
@@ -242,33 +246,40 @@ export function SettingsHost({
 
   async function reloadHud(refresh: boolean, showCatalogProgress = false) {
     const request = ++hudRequest.current;
+    setHudStatsLoading(true);
+    setHudStatsError(null);
     if (showCatalogProgress) {
       setHudCatalogLoading(true);
       setHudCatalogError(null);
     }
     return hudReloadQueue.current.enqueue(async () => {
+      let statsQueued = false;
       try {
         const nextCatalog = await api.getHudCatalog(refresh);
-        if (request !== hudRequest.current) {
-          return;
-        }
+        // Keep the catalog usable while stats load, but serialize cache reads
+        // behind refreshes so an older request cannot overwrite fresh numbers.
+        statsQueued = true;
+        void hudStatsReloadQueue.current.enqueue(async () => {
+          if (request !== hudRequest.current && !refresh) return;
+          try {
+            const nextStats = await api.getHudStats(refresh);
+            if (request === hudRequest.current) setHudStats(nextStats);
+          } catch (err) {
+            if (request === hudRequest.current) {
+              setHudStatsError(
+                err instanceof Error ? err.message : "Check your connection and try again.",
+              );
+            }
+          } finally {
+            if (request === hudRequest.current) setHudStatsLoading(false);
+          }
+        });
+        if (request !== hudRequest.current) return;
         setHudCatalogError(null);
         const nextState = await api.getHudState();
-        if (request !== hudRequest.current) {
-          return;
-        }
+        if (request !== hudRequest.current) return;
         setHudCatalog(nextCatalog);
         setHudState(nextState);
-        // Numbers are decoration on top of the catalog: fetched after it,
-        // never blocking it, and a failure just leaves the sort on names.
-        api
-          .getHudStats(refresh)
-          .then((nextStats) => {
-            if (request === hudRequest.current) {
-              setHudStats(nextStats);
-            }
-          })
-          .catch(() => {});
         if (nextState.schemaSupported) {
           const nextSchema = await api.getHudSchema();
           if (request === hudRequest.current) {
@@ -279,6 +290,7 @@ export function SettingsHost({
         }
       } catch (err) {
         if (request === hudRequest.current) {
+          if (!statsQueued) setHudStatsLoading(false);
           setHudCatalogError(
             err instanceof Error ? err.message : "Check your connection and try again.",
           );
@@ -349,6 +361,7 @@ export function SettingsHost({
       cancelled = true;
       hudRequest.current += 1;
       setHudCatalogLoading(false);
+      setHudStatsLoading(false);
     };
   }, [tab, refreshKey, externalBusy]);
 
@@ -613,6 +626,9 @@ export function SettingsHost({
           catalogError={hudCatalogError}
           catalog={hudCatalog}
           stats={hudStats}
+          statsLoading={hudStatsLoading}
+          statsError={hudStatsError}
+          previewData={import.meta.env.DEV && !isTauri()}
           state={hudState}
           schema={hudSchema}
           onRefresh={() => {
