@@ -29,7 +29,7 @@ autosaves pause profile changes until saved or explicitly discarded.
 
 ## Validation
 
-- Frontend: 104 cfglint, 326 desktop and 11 release-script tests passed;
+- Frontend: 104 cfglint, 329 desktop and 11 release-script tests passed;
   Biome, TypeScript and the Vite production build passed. The existing bundle
   size advisory remains.
 - Windows Rust: workspace formatting, locked Clippy across all targets including
@@ -53,6 +53,11 @@ autosaves pause profile changes until saved or explicitly discarded.
   screen, detected TF2 without confirmation, and displayed version 0.1.2.
   Launcher and app returned unpackaged identity code 15700. Candidate closed;
   isolated settings and profiles remained absent.
+- Live-source checks: mastercomfig digests, HUD thread resolution, comfig sound
+  objects and GameBanana browse/search policies all passed.
+- Browser transition check: created a fixture profile, switched to it, observed
+  inert settings during progress and editable controls after completion.
+  Locked FOV/sound drafts survived navigation while saved cfg bytes stayed unchanged.
 - Packaged third-party notices: all 453 dependency packages verified.
 
 ## Remaining gates
