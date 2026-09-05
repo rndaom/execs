@@ -5,13 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-### Fixed
-
-- Files: protect unsaved drafts when closing execs, switching profiles or installs, creating a profile, and installing updates. Save must finish successfully before continuing; Cancel keeps every draft.
-
 ## [0.1.2] - 2026-09-05
 
 ### Fixed
+
+- Files: protect unsaved drafts when closing execs, switching profiles or installs, creating a profile, and installing updates. Save must finish successfully before continuing; Cancel keeps every draft.
 
 - Settings: pause edits during profile switches until the target settings load.
 

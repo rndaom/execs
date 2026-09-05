@@ -72,3 +72,25 @@ Casual-server acceptance, a real TF2 update, or Linux interactive behavior.
 Native save/switch tests cannot safely use an APPDATA override alone because
 Steam discovery can still reach the real Cloud folder. User profiles and live
 game files were therefore not used for this validation.
+
+## Files exit acceptance follow-up
+
+Live Linear access was restored after the initial candidate. RND-209 explicitly
+requires app-close protection; that remaining gap is now implemented in d83a1a2.
+App-owned Files drafts are guarded before native close, profile/install changes,
+profile creation, saving a new profile and updater installation. Save waits for
+successful writes; Cancel retains exact bytes; Discard is explicit. Active writes
+prevent closing, and Files editing waits for native close-listener readiness.
+A failed close request stays visible and retryable. No schema or write targets change.
+
+Seven real App/preview tests, seven native-listener tests, three native-close
+modal tests and four multi-draft transaction tests cover the gap. These include
+failed writes, TF2 starting while dirty, blocked cfg commands, delayed saves,
+newer edits and subscription failure/cleanup. Biome and TypeScript passed.
+The browser walkthrough verified Cancel, Save and Discard across install changes,
+including saved-byte checks after reconfirming the fixture install. The native
+Windows embedded app started and closed via Alt-F4 with isolated app data and
+unpackaged identity 15700; it created no settings or profiles. Native dirty-close
+fault injection uses controlled events, not a live TF2 profile. Independent
+review found no blocker. A fresh package workflow records final candidate checks;
+the earlier 33975206173 result applies only to 297a4c2.
