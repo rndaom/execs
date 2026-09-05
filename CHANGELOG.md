@@ -7,6 +7,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- HUD: a compact preview grid with six HUDs per page, numbered navigation and
+  page jumps above and below the catalog, plus one Import HUD entry point.
+
 - Profiles: app-themed import review with archive-reading and saving progress,
   expandable config findings, and a direct switch action after import.
 
@@ -14,6 +17,20 @@ User-facing changes only. The release workflow publishes the matching
   a new profile, with a review before keeping the creator's cfg commands.
 
 ### Fixed
+
+- HUD: small, highly compressible assets such as budhud's neutral textures
+  no longer trigger the archive expansion guard. File and archive size
+  limits and checks against large compressed expansions remain enforced.
+
+- HUD: popularity sorting reads HUD records instead of screenshot IDs and
+  matches missing catalog links by unique GitHub repository. Ranked pages
+  show only HUDs with the selected statistic, explain missing data, and keep
+  the full catalog available through A to Z.
+
+- HUD: Dropbox downloads accept its download-server redirects. Imports find
+  a single HUD inside nested folders, explain bundles with multiple variants
+  or extra files, and refuse invalid or outdated HUD metadata before replacing
+  the current HUD.
 
 - Profiles: switching now replaces shared preloader textures and particle mods
   with the target profile's selections, so creator imports do not inherit them.
