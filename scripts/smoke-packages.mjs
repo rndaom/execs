@@ -170,16 +170,41 @@ try {
     executable = join(tree, "AppRun");
   }
   assert.equal(readFileSync(sentinel, "utf8"), "user data must survive updates\n");
-  const application = spawn(executable, [], { env: childEnv, stdio: "inherit", windowsHide: true });
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 10000));
-  assert.equal(application.exitCode, null, "Packaged app exited during startup");
-  if (!windows) {
-    assert.ok(
-      execFileSync("xdotool", ["search", "--name", "^execs$"], { encoding: "utf8" }).trim(),
-      "Packaged app did not create a window",
+  if (windows) {
+    // NSIS /R restarts the upgraded app. Stop only this worker's installed copy
+    // so the next launch exercises startup instead of the single-instance handoff.
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10000));
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        "Get-Process execs -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $env:EXECS_SMOKE_EXE } | Stop-Process -Force",
+      ],
+      { env: { ...childEnv, EXECS_SMOKE_EXE: executable } },
     );
   }
-  application.kill();
+  for (const command of windows ? [executable] : [executable, "/usr/bin/execs"]) {
+    const application = spawn(command, [], { env: childEnv, stdio: "inherit", windowsHide: true });
+    let launchError;
+    application.on("error", (error) => {
+      launchError = error;
+    });
+    try {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 10000));
+      assert.ifError(launchError);
+      assert.equal(application.exitCode, null, `Packaged app exited during startup: ${command}`);
+      if (!windows) {
+        assert.ok(
+          execFileSync("xdotool", ["search", "--name", "^execs$"], { encoding: "utf8" }).trim(),
+          "Packaged app did not create a window",
+        );
+      }
+    } finally {
+      application.kill();
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
+    }
+  }
   writeFileSync(
     join(scratch, "result.json"),
     `${JSON.stringify({ version, platform: process.platform, oldVersion: "0.1.0", artifact: basename(asset), signatureVerified: true, updateInstalled: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,

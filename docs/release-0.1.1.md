@@ -47,9 +47,9 @@ that the notice bundle is actually present in Windows, AppImage and .deb output.
 
 ## Release gates
 
-- [ ] Exact-candidate frontend and Windows/Linux Rust CI passed.
-- [ ] Public 0.1.0 profile fixture imports without changing its files.
-- [ ] Real studiomdl build completes without visible child consoles.
+- [x] Candidate frontend and Windows/Linux Rust CI passed at `80f5345`.
+- [x] Public 0.1.0 profile fixture imports without changing its files.
+- [x] Real studiomdl builds complete with `CREATE_NO_WINDOW` enabled.
 - [ ] Windows signed updater installs over 0.1.0 in a disposable worker.
 - [ ] Linux signed updater replaces a 0.1.0 AppImage; .deb installs and starts.
 - [ ] Packaged apps start, preserve app data and carry the notice bundle.
@@ -65,5 +65,38 @@ Only a version tag publishes after these gates succeed.
 
 ## Validation record
 
-Results are filled in from the exact candidate, rather than inferred from
-earlier PRs. No release has been published during preparation.
+No release has been published during preparation. Product-source checks below
+use `80f5345`; later release-script/documentation changes require fresh CI and
+installer validation before the candidate is frozen.
+
+| Check | Result |
+|---|---|
+| [CI run 33933994635](https://github.com/rndaom/execs/actions/runs/33933994635) | Frontend, Rust Windows and Rust Linux passed. Release run 33933994057 independently passed the same reusable CI gates. |
+| Local frontend | 391 tests passed (104 cfglint, 276 desktop, 11 release scripts), Biome clean, TypeScript/Vite production build passed. The existing large-chunk advisory remains. |
+| Local Windows Rust | Format, locked Clippy with all targets and the release probe, and 626 workspace tests passed. Four normally ignored live-service tests also passed explicitly. The two optional PCF reference-corpus tests require an unavailable external corpus. |
+| Public compatibility | The exact candidate core, built using its committed lockfile, loaded a library captured by public v0.1.0 and imported its ZIP. All three synthetic cfg/custom files and `-novid` launch options were preserved byte-for-byte; the imported profile stayed inactive. Earlier base validation also confirmed a re-export could be read by public v0.1.0. This is source-level fixture evidence, not a test of every historical profile. |
+| Actual viewmodel compiler | The pinned archive (SHA-256 `68b14e6537d1ee3b8b2d0cc1e92f12d4a7fd0f68eb5f12d2f0aa3231a60ee9c3`) and installed TF2 `studiomdl.exe` compiled all 64 groups across all nine classes. Full-hide output: 2,705,830 bytes in 6.18 seconds; weapon-only: 3,573,214 bytes in 8.44 seconds. Both VPKs parsed and contained all nine MDLs. Writes stayed in temporary staging. No in-game rendering or visual console-window observation is claimed. |
+| Live sources | mastercomfig VPK digests, comfig sound resolution, HUD thread resolution, and GameBanana browse/search/install-policy tests passed on the candidate. |
+| Signature verifier | Both real published 0.1.0 artifacts passed signature, sidecar, asset-size, release-URL and digest verification against the unchanged production public key. Negative tests reject altered bytes, signatures, keys and trusted comments. |
+
+## Field validation still required before publication
+
+Automated regressions cover Cloud dual writes and retry markers, autosave
+deferral/flush, process resampling at live-write boundaries, interrupted profile
+recovery, byte-exact preloader rollback, and a resized/replaced game archive.
+These passed on the candidate. They use controlled fixtures and injected races;
+they do not establish a real Steam Cloud server round trip or Casual-server
+acceptance of the installed artifacts.
+
+The remaining field pass uses a backed-up test profile on a spare TF2 install:
+
+1. Capture, switch and absorb with Steam Cloud enabled, disabled and offline;
+   restart Steam/TF2 and confirm cfg, packs and pending Cloud writes persist.
+2. Change a setting immediately before switching profiles; start TF2 while a
+   mutation is pending, confirm writes stop and the draft saves after it exits.
+3. Apply/restore preload, restart after an interrupted operation, and validate
+   restore after a game update. Confirm stock bytes and a Casual-server join.
+
+The user's live library/game has not been downgraded, rewritten or interrupted
+to manufacture this evidence. A green installer workflow does not check these
+field items automatically.

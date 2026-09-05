@@ -2,10 +2,17 @@ import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { releaseVersion } from "./release-version.mjs";
 import { verifyMinisign, verifyRelease } from "./verify-release.mjs";
+
+function removeFixture(directory) {
+  const target = resolve(directory);
+  assert.equal(dirname(target), resolve(tmpdir()));
+  assert.ok(basename(target).startsWith("execs-release-"));
+  rmSync(target, { recursive: true });
+}
 
 function signatureFixture() {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -47,8 +54,8 @@ test("release validation binds signatures to both assets and their release", () 
       ["windows-x86_64", "execs_0.1.1_x64-setup.exe"],
       ["linux-x86_64", "execs_0.1.1_amd64.AppImage"],
     ]) {
-      const url = `https://api.github.com/repos/rndaom/execs/releases/assets/${release.assets.length + 1}`;
-      release.assets.push({ name, url, size: bytes.length });
+      const url = `https://github.com/rndaom/execs/releases/download/v0.1.1/${name}`;
+      release.assets.push({ name, browser_download_url: url, size: bytes.length });
       manifest.platforms[platform] = { url, signature };
       writeFileSync(join(directory, name), bytes);
       writeFileSync(join(directory, `${name}.sig`), signature);
@@ -62,11 +69,15 @@ test("release validation binds signatures to both assets and their release", () 
     const other = structuredClone(manifest);
     other.platforms["linux-x86_64"].url = "https://example.org/other.AppImage";
     assert.throws(() => verifyRelease(other, release, directory, "0.1.1", key));
+    other.platforms["linux-x86_64"].url =
+      "https://api.github.com/repos/rndaom/execs/releases/assets/2";
+    release.assets[1].url = other.platforms["linux-x86_64"].url;
+    verifyRelease(other, release, directory, "0.1.1", key);
     delete other.platforms["linux-x86_64"];
     assert.throws(() => verifyRelease(other, release, directory, "0.1.1", key));
     assert.throws(() => verifyRelease(manifest, release, directory, "0.1.2", key));
   } finally {
-    rmSync(directory, { recursive: true });
+    removeFixture(directory);
   }
 });
 
@@ -91,7 +102,7 @@ test("all product versions, the tag and substantive notes must agree", () => {
     writeFileSync(join(root, "CHANGELOG.md"), "## [0.1.1]\n\n### Fixed\n");
     assert.throws(() => releaseVersion(root));
   } finally {
-    rmSync(root, { recursive: true });
+    removeFixture(root);
   }
 });
 

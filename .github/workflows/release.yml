@@ -116,7 +116,7 @@ jobs:
           node scripts/verify-release.mjs "$RUNNER_TEMP/candidate" "$version"
           gh release upload "$tag" "$RUNNER_TEMP/candidate/latest.json" --clobber
           node scripts/release-notes.mjs "$version" > "$RUNNER_TEMP/notes.md"
-          gh release edit "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release edit "$tag" --target "$GITHUB_SHA" --notes-file "$RUNNER_TEMP/notes.md"
           node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP+"/release-commit.json",JSON.stringify({commit:process.env.GITHUB_SHA,run:process.env.GITHUB_RUN_ID},null,2)+"\n")'
           gh release upload "$tag" "$RUNNER_TEMP/release-commit.json" --clobber
 

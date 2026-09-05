@@ -78,7 +78,7 @@ export function verifyRelease(manifest, release, directory, version, publicKey) 
   return manifest;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const [directory, version] = process.argv.slice(2);
   const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
   const manifest = verifyRelease(
