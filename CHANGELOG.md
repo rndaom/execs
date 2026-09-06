@@ -5,14 +5,17 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-## [0.1.2] - 2026-09-05
+## [0.1.2] - 2026-09-06
+
+A maintenance update focused on protecting unsaved edits and fixing HUD
+installation and browsing. Existing 0.1.1 profiles and exports remain supported.
 
 ### Fixed
 
-- Files: protect unsaved drafts when closing execs, switching profiles or installs, creating a profile, and installing updates. Save must finish successfully before continuing; Cancel keeps every draft.
-
+- Files: protect unsaved drafts when closing execs, switching profiles or installs,
+  creating a profile, and installing updates. Save must finish successfully before
+  continuing; Cancel keeps every draft.
 - Settings: pause edits during profile switches until the target settings load.
-
 - Settings: keep deferred and in-flight drafts when navigating, retry refused
   saves after TF2 closes, and preserve newer edits when earlier saves finish.
 - Files: retain unsaved text per profile and file; Save and switch waits for
@@ -25,7 +28,6 @@ User-facing changes only. The release workflow publishes the matching
   even if an older status response arrives later.
 - HUD: discard obsolete or ambiguous cached statistics instead of ranking
   unrelated download counts.
-
 - HUD: accept small, highly compressible assets such as budhud textures while
   retaining file, archive and large-expansion limits.
 - HUD: follow Dropbox download redirects, find uniquely nested HUD imports,
