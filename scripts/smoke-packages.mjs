@@ -26,13 +26,13 @@ assert.ok(asset, "Candidate installer missing");
 const bytes = readFileSync(join(bundle, asset));
 const signature = readFileSync(join(bundle, `${asset}.sig`), "utf8").trim();
 const marker = join(scratch, "updater-verified.txt");
-const oldName = windows ? "execs_0.1.0_x64-setup.exe" : "execs_0.1.0_amd64.AppImage";
+const oldName = windows ? "execs_0.1.1_x64-setup.exe" : "execs_0.1.1_amd64.AppImage";
 execFileSync(
   "gh",
   [
     "release",
     "download",
-    "v0.1.0",
+    "v0.1.1",
     "--repo",
     "rndaom/execs",
     "--pattern",
@@ -207,7 +207,7 @@ try {
   }
   writeFileSync(
     join(scratch, "result.json"),
-    `${JSON.stringify({ version, platform: process.platform, oldVersion: "0.1.0", artifact: basename(asset), signatureVerified: true, updateInstalled: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,
+    `${JSON.stringify({ version, platform: process.platform, oldVersion: "0.1.1", artifact: basename(asset), signatureVerified: true, updateInstalled: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,
   );
   console.log(
     "PASS: signed updater, installer upgrade, packaged startup, notices and data preservation",

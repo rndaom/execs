@@ -211,7 +211,21 @@ fn validate_url_shape(
     } else {
         source.initial_hosts()
     };
-    if !host_matches(url, allowed) {
+    // Dropbox's dl=1 links redirect to an ephemeral download shard. Trust
+    // that one DNS label only for Dropbox redirects, never arbitrary user
+    // content hosts or an initial URL supplied by another catalog source.
+    let dropbox_shard = redirect
+        && source == RemoteSource::Dropbox
+        && url.host_str().is_some_and(|host| {
+            host.strip_suffix(".dl.dropboxusercontent.com")
+                .is_some_and(|label| {
+                    !label.is_empty()
+                        && label
+                            .bytes()
+                            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                })
+        });
+    if !host_matches(url, allowed) && !dropbox_shard {
         return Err("The download redirected to an untrusted host.".into());
     }
     if !redirect && !source.initial_path_is_valid(url) {
@@ -1000,6 +1014,30 @@ mod tests {
         assert!(ip_is_private_or_special("169.254.169.254".parse().unwrap()));
         assert!(ip_is_private_or_special("::1".parse().unwrap()));
         assert!(!ip_is_private_or_special("1.1.1.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn dropbox_download_shards_are_scoped_to_its_redirects() {
+        let shard = reqwest::Url::parse(
+            "https://uc0de0cfc254226afeadcc6946c0.dl.dropboxusercontent.com/cd/0/inline/file?dl=1",
+        )
+        .unwrap();
+        assert!(validate_url_shape(&shard, RemoteSource::Dropbox, true).is_ok());
+        assert!(validate_url_shape(&shard, RemoteSource::Dropbox, false).is_err());
+        assert!(validate_url_shape(&shard, RemoteSource::GitHubRelease, true).is_err());
+        for url in [
+            "https://evil-dropboxusercontent.com/file",
+            "https://dl.dropboxusercontent.com.evil.test/file",
+            "https://evildl.dropboxusercontent.com/file",
+            "https://a.b.dl.dropboxusercontent.com/file",
+            "https://www.dropboxusercontent.com/file",
+            "http://shard.dl.dropboxusercontent.com/file",
+            "https://shard.dl.dropboxusercontent.com:8443/file",
+            "https://user:pass@shard.dl.dropboxusercontent.com/file",
+        ] {
+            let url = reqwest::Url::parse(url).unwrap();
+            assert!(validate_url_shape(&url, RemoteSource::Dropbox, true).is_err());
+        }
     }
 
     #[test]

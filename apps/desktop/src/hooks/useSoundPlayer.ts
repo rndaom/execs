@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Api } from "../lib/api";
 import type { HitsoundPick } from "../lib/bridge";
+import { AutosaveActivity } from "./useAutosave";
 
 /** Object URLs for auditioned sounds, keyed by pick. Session-long. */
 const urls = new Map<string, string>();
@@ -56,6 +57,7 @@ export type SoundPlayer = {
 
 /** One audio element for the whole pane, so sounds never overlap. */
 export function useSoundPlayer(api: Api): SoundPlayer {
+  const active = useContext(AutosaveActivity);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const requestRef = useRef(0);
   const [playing, setPlaying] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function useSoundPlayer(api: Api): SoundPlayer {
     audio.addEventListener("ended", onEnd);
     audioRef.current = audio;
     return () => {
+      requestRef.current += 1;
       audio.pause();
       audio.removeEventListener("ended", onEnd);
       audioRef.current = null;
@@ -82,6 +85,12 @@ export function useSoundPlayer(api: Api): SoundPlayer {
     audioRef.current?.pause();
     setPlaying(null);
   }, []);
+
+  useEffect(() => {
+    if (!active) {
+      stop();
+    }
+  }, [active, stop]);
 
   const play = useCallback(
     (pick: HitsoundPick, volume: number) => {

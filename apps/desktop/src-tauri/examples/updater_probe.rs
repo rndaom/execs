@@ -20,7 +20,7 @@ fn main() {
         .unwrap()
         .starts_with(&runner));
     let mut context = tauri::generate_context!();
-    context.package_info_mut().version = "0.1.0".parse().unwrap();
+    context.package_info_mut().version = "0.1.1".parse().unwrap();
     context.config_mut().app.windows.clear();
     let updater = context.config_mut().plugins.0.get_mut("updater").unwrap();
     updater["dangerousInsecureTransportProtocol"] = serde_json::json!(true);
@@ -40,7 +40,7 @@ fn main() {
                     let update = updater
                         .check()
                         .await?
-                        .ok_or("No update offered from 0.1.0")?;
+                        .ok_or("No update offered from 0.1.1")?;
                     assert_eq!(update.version, args[3]);
                     let bytes = update.download(|_, _| {}, || {}).await?;
                     std::fs::write(

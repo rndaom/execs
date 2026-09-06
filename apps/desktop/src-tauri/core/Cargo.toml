@@ -1,6 +1,6 @@
 [package]
 name = "execs-core"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 rust-version = "1.93"
 description = "TF2 finder, settings, write-lock, and profile library (no Tauri / WebKit)"

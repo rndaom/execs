@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, useContext, useEffect, useId, useRef } from "react";
+import { AutosaveActivity } from "../../hooks/useAutosave";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -32,6 +33,7 @@ export function Modal({
   /** Fired on Enter when focus is not already on a button or a text field. */
   onDefaultAction?: () => void;
 }) {
+  const active = useContext(AutosaveActivity);
   const ref = useRef<HTMLDivElement | null>(null);
   const restoreTo = useRef<HTMLElement | null>(null);
   const baseId = useId();
@@ -40,7 +42,7 @@ export function Modal({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: callbacks are read through refs on the live event.
   useEffect(() => {
-    if (!open) {
+    if (!open || !active) {
       return;
     }
     restoreTo.current =
@@ -99,9 +101,9 @@ export function Modal({
       document.removeEventListener("keydown", onKeyDown, true);
       restoreTo.current?.focus();
     };
-  }, [open]);
+  }, [open, active]);
 
-  if (!open) {
+  if (!open || !active) {
     return null;
   }
 

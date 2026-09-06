@@ -39,6 +39,7 @@ const PARTIAL_STATS_TTL: Duration = Duration::from_secs(60 * 60);
 /// briefly.
 const STATS_DEADLINE: Duration = Duration::from_secs(90);
 const STATS_CACHE_MAX_BYTES: u64 = 16 * MIB;
+const STATS_SOURCE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +62,8 @@ pub struct HudStatsCache {
     /// this field existed were only ever written when that was true.
     #[serde(default = "default_true")]
     pub complete: bool,
+    #[serde(default)]
+    pub source_version: u32,
 }
 
 fn default_true() -> bool {
@@ -76,7 +79,8 @@ impl HudStatsCache {
         } else {
             PARTIAL_STATS_TTL
         };
-        now.saturating_sub(self.fetched_at) < ttl.as_secs()
+        self.source_version == STATS_SOURCE_VERSION
+            && now.saturating_sub(self.fetched_at) < ttl.as_secs()
     }
 }
 
@@ -88,8 +92,8 @@ struct Walk<T> {
     complete: bool,
 }
 
-/// `(downloads, views)` per hud-db id.
-type Counts = BTreeMap<String, (u64, u64)>;
+/// `(downloads, views)` per hud-db id; None invalidates an ambiguous cached match.
+type Counts = BTreeMap<String, Option<(u64, u64)>>;
 
 fn cache_file(root: &std::path::Path) -> PathBuf {
     root.join("hud-catalog").join("stats-v1.json")
@@ -117,9 +121,28 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
         }
     }
     let client = net::api_client()?;
+    let catalog = crate::hud_fetch::load_cached_catalog();
+    let repositories = catalog
+        .as_ref()
+        .ok()
+        .and_then(|entries| entries.as_deref())
+        .map(catalog_repository_ids)
+        .unwrap_or_default();
     let deadline = Instant::now() + STATS_DEADLINE;
-    let updated = fetch_comfig_updated(&client, deadline);
-    let counts = fetch_tf2huds_counts(&client, deadline);
+    // An unavailable dates source must not spend the counts source's budget.
+    let (updated, mut counts) = std::thread::scope(|scope| {
+        let dates = scope.spawn(|| fetch_comfig_updated(&client, deadline));
+        let counts = fetch_tf2huds_counts(&client, deadline, &repositories);
+        let dates = dates
+            .join()
+            .unwrap_or_else(|_| Err("Could not read HUD update dates.".into()));
+        (dates, counts)
+    });
+    if !matches!(catalog, Ok(Some(_))) {
+        if let Ok(walk) = &mut counts {
+            walk.complete = false;
+        }
+    }
     let complete = matches!(&updated, Ok(walk) if walk.complete)
         && matches!(&counts, Ok(walk) if walk.complete);
     if let (Err(err), Err(_)) = (&updated, &counts) {
@@ -146,6 +169,7 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
         fetched_at: now,
         stats: stats.clone(),
         complete,
+        source_version: STATS_SOURCE_VERSION,
     };
     let text = serde_json::to_string(&cache).map_err(|err| err.to_string())?;
     net::write_cache_file_within(&root, &cache_file(&root), text.as_bytes())
@@ -167,7 +191,10 @@ fn load_stats_cache(root: &std::path::Path, now: u64) -> Result<Option<HudStatsC
     let Some(cache) = cache else {
         return Ok(None);
     };
-    let valid = cache.fetched_at <= now.saturating_add(60 * 60)
+    // Old matching rules cannot supply stale fallback values or be promoted
+    // to the current source version by a partial refresh.
+    let valid = cache.source_version == STATS_SOURCE_VERSION
+        && cache.fetched_at <= now.saturating_add(60 * 60)
         && cache.stats.len() <= 4096
         && cache.stats.iter().all(|(id, stat)| {
             valid_stat_id(id)
@@ -219,10 +246,10 @@ fn merge_counts(stats: &mut BTreeMap<String, HudStat>, source: Result<Walk<Count
             stat.views = None;
         }
     }
-    for (id, (downloads, views)) in walk.found {
+    for (id, counts) in walk.found {
         let stat = stats.entry(id).or_default();
-        stat.downloads = Some(downloads);
-        stat.views = Some(views);
+        stat.downloads = counts.map(|(downloads, _)| downloads);
+        stat.views = counts.map(|(_, views)| views);
     }
 }
 
@@ -245,7 +272,7 @@ fn fetch_comfig_updated(
         let url = format!("{COMFIG_LIST_BASE}/{page}/");
         let html = match net::get_text_for(client, &url, RemoteSource::ComfigApp) {
             Ok(html) => html,
-            // The first page failing is an outage; a later one is the end.
+            // A failed later page is partial data, not a successful end.
             Err(err) if page == 1 => return Err(err),
             Err(_) => {
                 complete = false;
@@ -257,12 +284,22 @@ fn fetch_comfig_updated(
             return Err("comfig.app returned too many HUDs on one page.".into());
         }
         if found.is_empty() {
-            reached_end = true;
+            complete = false;
             break;
         }
+        let before = out.len();
         out.extend(found);
         if out.len() > STATS_IDS_TOTAL_LIMIT {
             return Err("comfig.app returned too many HUDs.".into());
+        }
+        if out.len() == before {
+            complete = false;
+            break;
+        }
+        if !comfig_has_next_page(&html, page) {
+            reached_end = comfig_last_page(&html) == Some(page);
+            complete &= reached_end;
+            break;
         }
     }
     // Pages that parse to nothing mean the listing's markup moved, not that
@@ -274,6 +311,28 @@ fn fetch_comfig_updated(
         found: out,
         complete: complete && reached_end,
     })
+}
+
+fn comfig_has_next_page(html: &str, page: usize) -> bool {
+    let path = format!("/huds/{}/", page + 1);
+    let path_without_slash = path.trim_end_matches('/');
+    [path.as_str(), path_without_slash].iter().any(|path| {
+        html.contains(&format!("href=\"{path}\"")) || html.contains(&format!("href='{path}'"))
+    })
+}
+
+fn comfig_last_page(html: &str) -> Option<usize> {
+    let icon = html.find("fa-angles-right")?;
+    let anchor = html[..icon].rfind("<a ")?;
+    let opening = html[anchor..icon].split_once('>')?.0;
+    for quote in ['"', '\''] {
+        let marker = format!("href={quote}/huds/");
+        if let Some((_, after)) = opening.split_once(&marker) {
+            let page = after.split(quote).next()?.trim_end_matches('/');
+            return page.parse().ok();
+        }
+    }
+    None
 }
 
 /// Pairs of (id, ISO date) from one listing page. Each card carries
@@ -426,6 +485,7 @@ where
 fn fetch_tf2huds_counts(
     client: &reqwest::blocking::Client,
     deadline: Instant,
+    repositories: &BTreeMap<String, String>,
 ) -> Result<Walk<Counts>, String> {
     // 1. The listing pages give the site's own ids.
     let mut ids = std::collections::BTreeSet::new();
@@ -450,7 +510,10 @@ fn fetch_tf2huds_counts(
                 break;
             }
         };
-        let found = tf2huds_list_ids(&text);
+        let Some(found) = tf2huds_list_ids(&text) else {
+            complete = false;
+            break;
+        };
         if found.len() > STATS_IDS_PER_PAGE_LIMIT {
             return Err("tf2huds.dev returned too many HUDs on one page.".into());
         }
@@ -464,7 +527,7 @@ fn fetch_tf2huds_counts(
             return Err("tf2huds.dev returned too many HUDs.".into());
         }
         if ids.len() == before {
-            reached_end = true;
+            complete = false;
             break;
         }
     }
@@ -496,9 +559,12 @@ fn fetch_tf2huds_counts(
                             TF2HUDS_RESPONSE_MAX_BYTES,
                         )
                         .ok()
-                        .and_then(|text| tf2huds_counts(&text))
+                        .and_then(|text| tf2huds_counts(&text, repositories))
                         {
-                            Some(entry) => found.push(entry),
+                            Some(Some(entry)) => found.push(entry),
+                            // The site also lists HUDs outside hud-db. A
+                            // valid unmatched record is not a fetch failure.
+                            Some(None) => {}
                             None => complete = false,
                         }
                     }
@@ -507,13 +573,19 @@ fn fetch_tf2huds_counts(
             })
             .collect();
         let mut out = BTreeMap::new();
+        let mut duplicate_ids = HashSet::new();
         let mut walked_all = true;
         for handle in handles {
             match handle.join() {
                 Ok((batch, complete)) => {
                     walked_all &= complete;
                     for (id, downloads, views) in batch {
-                        out.insert(id, (downloads, views));
+                        walked_all &= insert_unique_counts(
+                            &mut out,
+                            &mut duplicate_ids,
+                            id,
+                            (downloads, views),
+                        );
                     }
                 }
                 Err(_) => walked_all = false,
@@ -525,6 +597,23 @@ fn fetch_tf2huds_counts(
         found: out,
         complete: complete && reached_end && walked_all,
     })
+}
+
+fn insert_unique_counts(
+    counts: &mut Counts,
+    duplicate_ids: &mut HashSet<String>,
+    id: String,
+    value: (u64, u64),
+) -> bool {
+    if duplicate_ids.contains(&id) {
+        return false;
+    }
+    if counts.insert(id.clone(), Some(value)).is_some() {
+        counts.insert(id.clone(), None);
+        duplicate_ids.insert(id);
+        return false;
+    }
+    true
 }
 
 fn devalue_nodes(text: &str) -> Vec<Vec<serde_json::Value>> {
@@ -549,36 +638,49 @@ fn devalue_lookup<'a>(
     data.get(index)
 }
 
-/// The site's ids on one listing page: every object with an `id` whose
-/// value is a string and a `name` beside it.
-pub fn tf2huds_list_ids(text: &str) -> Vec<String> {
+/// Follow the root's HUD list, rather than scanning every devalue object:
+/// cover images also have id/name fields and are not HUD detail routes.
+fn tf2huds_list_ids(text: &str) -> Option<Vec<String>> {
     let mut ids = Vec::new();
     let mut seen = HashSet::new();
     for data in devalue_nodes(text) {
-        for value in &data {
-            let Some(object) = value.as_object() else {
-                continue;
-            };
-            if !object.contains_key("name") {
-                continue;
+        let Some(root) = data.first().and_then(serde_json::Value::as_object) else {
+            continue;
+        };
+        let Some(huds) = devalue_lookup(&data, root, "huds") else {
+            continue;
+        };
+        for index in huds.as_array()? {
+            let object = data.get(index.as_u64()? as usize)?.as_object()?;
+            let id = devalue_lookup(&data, object, "id")?.as_str()?;
+            if id.is_empty()
+                || id.len() > 128
+                || matches!(id, "." | "..")
+                || !id.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'!' | b'.')
+                })
+            {
+                return None;
             }
-            if let Some(serde_json::Value::String(id)) = devalue_lookup(&data, object, "id") {
-                if !id.is_empty() && id.len() <= 128 && seen.insert(id.clone()) {
-                    ids.push(id.clone());
-                    if ids.len() > STATS_IDS_PER_PAGE_LIMIT {
-                        return ids;
-                    }
+            if seen.insert(id.to_string()) {
+                ids.push(id.to_string());
+                if ids.len() > STATS_IDS_PER_PAGE_LIMIT {
+                    break;
                 }
             }
         }
+        return Some(ids);
     }
-    ids
+    None
 }
 
-/// `(hud-db id, downloads, views)` from one HUD's data document. The hud-db
-/// id comes from `comfigHudsUrl` (`https://comfig.app/huds/page/<id>/`);
-/// a HUD without one is not in hud-db and is skipped.
-pub fn tf2huds_counts(text: &str) -> Option<(String, u64, u64)> {
+/// A valid document may have no catalog match. Prefer its explicit comfig
+/// link; otherwise join its exact GitHub repository only when hud-db has
+/// one entry for it. Display names and site slugs are not stable identities.
+fn tf2huds_counts(
+    text: &str,
+    repositories: &BTreeMap<String, String>,
+) -> Option<Option<(String, u64, u64)>> {
     for data in devalue_nodes(text) {
         for value in &data {
             let Some(object) = value.as_object() else {
@@ -589,12 +691,85 @@ pub fn tf2huds_counts(text: &str) -> Option<(String, u64, u64)> {
             }
             let views = devalue_lookup(&data, object, "viewCount")?.as_u64()?;
             let downloads = devalue_lookup(&data, object, "downloadCount")?.as_u64()?;
-            let url = devalue_lookup(&data, object, "comfigHudsUrl")?.as_str()?;
-            let id = comfig_page_id(url)?;
-            return Some((id, downloads, views));
+            let url = devalue_lookup(&data, object, "comfigHudsUrl")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let id = if !url.trim().is_empty() {
+                comfig_page_id(url)
+            } else {
+                tf2huds_repository(&data, object)
+                    .and_then(|repository| repositories.get(&repository).cloned())
+            };
+            return Some(id.map(|id| (id, downloads, views)));
         }
     }
     None
+}
+
+fn catalog_repository_ids(entries: &[execs_core::HudCatalogEntry]) -> BTreeMap<String, String> {
+    let mut repositories = BTreeMap::new();
+    let mut ambiguous = HashSet::new();
+    for entry in entries {
+        let Some(repository) = canonical_github_repository(&entry.repo) else {
+            continue;
+        };
+        if repositories
+            .insert(repository.clone(), entry.id.clone())
+            .is_some_and(|previous| previous != entry.id)
+        {
+            ambiguous.insert(repository);
+        }
+    }
+    repositories.retain(|repository, _| !ambiguous.contains(repository));
+    repositories
+}
+
+fn canonical_github_repository(url: &str) -> Option<String> {
+    let url = reqwest::Url::parse(url.trim()).ok()?;
+    if url.scheme() != "https"
+        || url.host_str() != Some("github.com")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    let parts: Vec<_> = url.path().trim_matches('/').split('/').collect();
+    let [owner, repository] = parts.as_slice() else {
+        return None;
+    };
+    let repository = repository.strip_suffix(".git").unwrap_or(repository);
+    if owner.is_empty()
+        || repository.is_empty()
+        || [*owner, repository].iter().any(|part| {
+            matches!(*part, "." | "..")
+                || !part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+    {
+        return None;
+    }
+    Some(format!("{owner}/{repository}").to_ascii_lowercase())
+}
+
+fn tf2huds_repository(
+    data: &[serde_json::Value],
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Option<String> {
+    if let Some(url) = devalue_lookup(data, object, "githubUrl")
+        .and_then(serde_json::Value::as_str)
+        .filter(|url| !url.trim().is_empty())
+    {
+        return canonical_github_repository(url);
+    }
+    let repository = devalue_lookup(data, object, "githubRepository")?.as_object()?;
+    let name = devalue_lookup(data, repository, "name")?.as_str()?;
+    let owner = devalue_lookup(data, repository, "githubUser")?.as_object()?;
+    let owner = devalue_lookup(data, owner, "name")?.as_str()?;
+    canonical_github_repository(&format!("https://github.com/{owner}/{name}"))
 }
 
 fn comfig_page_id(url: &str) -> Option<String> {
@@ -627,6 +802,167 @@ fn comfig_page_id(url: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn listing_only_requests_huds_and_distinguishes_malformed_from_empty() {
+        let listing = r#"{"nodes":[{"data":[{"huds":1},[2],{"id":3,"name":3,"cover":4},"LOL-!!-HUD",{"id":5,"name":6},"image-uuid","cover.png"]}]}"#;
+        assert_eq!(tf2huds_list_ids(listing), Some(vec!["LOL-!!-HUD".into()]));
+        assert_eq!(
+            tf2huds_list_ids(r#"{"nodes":[{"data":[{"huds":1},[]]}]}"#),
+            Some(vec![])
+        );
+        assert_eq!(tf2huds_list_ids("not json"), None);
+        assert_eq!(
+            tf2huds_list_ids(r#"{"nodes":[{"data":[{"huds":999}]}]}"#),
+            None
+        );
+        assert_eq!(
+            tf2huds_list_ids(&listing.replace("LOL-!!-HUD", "../huds?other")),
+            None
+        );
+    }
+
+    #[test]
+    fn repository_joins_are_exact_unique_and_subordinate_to_explicit_links() {
+        let entry = |id: &str, repository: &str| {
+            execs_core::catalog_entry_from_json(
+                id,
+                &serde_json::json!({
+                    "name": id, "author": "author", "repo": repository, "hash": ""
+                })
+                .to_string(),
+            )
+            .unwrap()
+        };
+        let entries = [
+            entry("ahud", "https://github.com/n0kk/ahud"),
+            entry("variant-a", "https://github.com/author/shared"),
+            entry("variant-b", "https://github.com/Author/Shared.git/"),
+        ];
+        let repositories = catalog_repository_ids(&entries);
+        assert_eq!(repositories.len(), 1);
+        let record = r#"{"nodes":[{"data":[{"viewCount":1,"downloadCount":2,"comfigHudsUrl":3,"githubUrl":4},931686,330446,"","https://github.com/N0kk/AHud.git/"]}]}"#;
+        assert_eq!(
+            tf2huds_counts(record, &repositories),
+            Some(Some(("ahud".into(), 330446, 931686)))
+        );
+        assert_eq!(
+            tf2huds_counts(&record.replace("AHud.git/", "other"), &repositories),
+            Some(None)
+        );
+        let explicit = record.replace(
+            "330446,\"\",",
+            "330446,\"https://comfig.app/huds/page/explicit/\",",
+        );
+        assert_eq!(
+            tf2huds_counts(&explicit, &repositories),
+            Some(Some(("explicit".into(), 330446, 931686)))
+        );
+        for url in [
+            "http://github.com/n0kk/ahud",
+            "https://github.com.evil.test/n0kk/ahud",
+            "https://github.com/n0kk/ahud/tree/main",
+            "https://github.com/n0kk/ahud?other=1",
+        ] {
+            assert_eq!(canonical_github_repository(url), None);
+        }
+    }
+
+    #[test]
+    fn repository_relations_are_followed_without_guessing_display_names() {
+        let record = r#"{"nodes":[{"data":[{"viewCount":1,"downloadCount":2,"githubRepository":3},0,6,{"name":4,"githubUser":5},"ahud",{"name":6},"n0kk"]}]}"#;
+        let repositories = BTreeMap::from([("n0kk/ahud".into(), "ahud".into())]);
+        assert_eq!(
+            tf2huds_counts(record, &repositories),
+            Some(Some(("ahud".into(), 6, 0)))
+        );
+    }
+
+    #[test]
+    fn duplicate_source_records_cannot_overwrite_or_sum_a_huds_counts() {
+        let mut counts = BTreeMap::new();
+        let mut duplicate_ids = HashSet::new();
+        assert!(insert_unique_counts(
+            &mut counts,
+            &mut duplicate_ids,
+            "hud".into(),
+            (10, 20)
+        ));
+        assert!(!insert_unique_counts(
+            &mut counts,
+            &mut duplicate_ids,
+            "hud".into(),
+            (50, 100)
+        ));
+        assert!(!insert_unique_counts(
+            &mut counts,
+            &mut duplicate_ids,
+            "hud".into(),
+            (2, 3)
+        ));
+        assert_eq!(counts["hud"], None);
+        let mut stats = BTreeMap::from([(
+            "hud".into(),
+            HudStat {
+                updated: Some("2026-01-01".into()),
+                downloads: Some(10),
+                views: Some(20),
+            },
+        )]);
+        merge_counts(
+            &mut stats,
+            Ok(Walk {
+                found: counts,
+                complete: false,
+            }),
+        );
+        assert_eq!(stats["hud"].downloads, None);
+        assert_eq!(stats["hud"].views, None);
+        assert_eq!(stats["hud"].updated.as_deref(), Some("2026-01-01"));
+    }
+
+    #[test]
+    fn legacy_source_cache_cannot_be_used_as_stale_refresh_input() {
+        let root = std::env::temp_dir().join(format!(
+            "execs-hud-stats-source-version-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("hud-catalog")).unwrap();
+        let mut cache = HudStatsCache {
+            fetched_at: 5,
+            stats: BTreeMap::from([(
+                "hud".into(),
+                HudStat {
+                    views: Some(100),
+                    ..HudStat::default()
+                },
+            )]),
+            complete: false,
+            source_version: STATS_SOURCE_VERSION - 1,
+        };
+        std::fs::write(cache_file(&root), serde_json::to_vec(&cache).unwrap()).unwrap();
+        assert!(load_stats_cache(&root, 100_000).unwrap().is_none());
+        cache.source_version = STATS_SOURCE_VERSION;
+        std::fs::write(cache_file(&root), serde_json::to_vec(&cache).unwrap()).unwrap();
+        let loaded = load_stats_cache(&root, 100_000).unwrap().unwrap();
+        assert!(!loaded.is_fresh(100_000));
+        assert_eq!(loaded.stats["hud"].views, Some(100));
+        std::fs::remove_file(cache_file(&root)).unwrap();
+        std::fs::remove_dir(root.join("hud-catalog")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn comfig_pagination_requires_an_explicit_last_page() {
+        let html = r#"<a href="/huds/2">next</a><a href="/huds/20" class="btn"><span class="fas fa-angles-right fa-fw"></span></a>"#;
+        assert!(comfig_has_next_page(html, 1));
+        assert!(!comfig_has_next_page(html, 2));
+        assert_eq!(comfig_last_page(html), Some(20));
+        assert_eq!(
+            comfig_last_page("<a href=\"/huds/page/rayshud/\">hud</a>"),
+            None
+        );
+    }
 
     #[test]
     fn comfig_listing_pairs_ids_with_dates() {
@@ -669,6 +1005,7 @@ mod tests {
             fetched_at: 1_000_000,
             stats: BTreeMap::new(),
             complete: true,
+            source_version: STATS_SOURCE_VERSION,
         };
         let partial = HudStatsCache {
             complete: false,
@@ -684,6 +1021,7 @@ mod tests {
         let old: HudStatsCache =
             serde_json::from_str(r#"{"fetchedAt":5,"stats":{"rayshud":{"views":3}}}"#).unwrap();
         assert!(old.complete);
+        assert!(!old.is_fresh(5), "legacy sparse caches must be refreshed");
         assert_eq!(old.stats["rayshud"].views, Some(3));
         let json = serde_json::to_value(&partial).unwrap();
         assert_eq!(json["complete"], false);
@@ -692,16 +1030,19 @@ mod tests {
     #[test]
     fn tf2huds_devalue_documents_decode() {
         let list = r#"{"type":"data","nodes":[null,{"type":"data","data":[{"huds":1},[2,5],{"id":3,"name":4},"rayshud","rayshud",{"id":6,"name":7},"-Middle-Mann","Middle Mann"]}]}"#;
-        assert_eq!(tf2huds_list_ids(list), vec!["rayshud", "-Middle-Mann"]);
+        assert_eq!(
+            tf2huds_list_ids(list),
+            Some(vec!["rayshud".into(), "-Middle-Mann".into()])
+        );
         let hud = r#"{"type":"data","nodes":[{"type":"data","data":[{"hud":1},{"id":2,"viewCount":3,"downloadCount":4,"comfigHudsUrl":5,"updatedDatetime":6},"rayshud",1168295,398380,"https://comfig.app/huds/page/RaysHUD/",["Date","2026-01-25T00:00:00.000Z"]]}]}"#;
         assert_eq!(
-            tf2huds_counts(hud),
-            Some(("rayshud".to_string(), 398380, 1168295))
+            tf2huds_counts(hud, &BTreeMap::new()),
+            Some(Some(("rayshud".to_string(), 398380, 1168295)))
         );
-        // No comfig link → not a hud-db HUD → skipped.
+        // An unmatched HUD is valid source data, not a failed request.
         let orphan = r#"{"type":"data","nodes":[{"type":"data","data":[{"viewCount":1,"downloadCount":2,"comfigHudsUrl":3},5,6,null]}]}"#;
-        assert_eq!(tf2huds_counts(orphan), None);
-        assert_eq!(tf2huds_counts("not json"), None);
+        assert_eq!(tf2huds_counts(orphan, &BTreeMap::new()), Some(None));
+        assert_eq!(tf2huds_counts("not json", &BTreeMap::new()), None);
         assert_eq!(
             comfig_page_id("https://comfig.app.evil.test/huds/page/rayshud/"),
             None

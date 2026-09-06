@@ -13,6 +13,8 @@ pub mod hud;
 pub mod hud_apply;
 pub mod ice;
 pub mod launch;
+mod managed_cfg;
+pub use managed_cfg::ManagedCfgScope;
 pub mod mdl;
 pub mod mods;
 pub mod pcf;
@@ -36,8 +38,8 @@ pub use absorb::{
     absorb_owned, absorb_packs, write_config_cfg_dual, AbsorbDelta, AbsorbOwnedResult, PackChoice,
 };
 pub use apply::{
-    get_active_profile_detail, profile_file_bytes_from, read_profile_file, write_owned_file,
-    ProfileDetail, ProfileFileContent,
+    get_active_profile_detail, profile_file_bytes_from, read_profile_file, write_managed_cfg,
+    write_owned_file, ProfileDetail, ProfileFileContent,
 };
 pub use comfig::{
     apply_official_vpk_bytes, apply_official_vpk_bytes_to, import_comfig_custom,

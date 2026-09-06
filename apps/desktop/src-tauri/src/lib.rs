@@ -668,6 +668,7 @@ pub fn run() {
             commands::files::get_active_profile_detail,
             commands::files::read_profile_file,
             commands::files::write_owned_file,
+            commands::files::write_managed_cfg,
             commands::comfig::get_comfig_state,
             commands::comfig::set_comfig_preset,
             commands::comfig::set_comfig_modules,

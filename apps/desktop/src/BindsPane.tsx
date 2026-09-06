@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
+import { AutosaveActivity } from "./hooks/useAutosave";
 import {
   applyRecordedBind,
   BIND_ACTIONS,
@@ -44,10 +45,11 @@ const BIND_GROUPS: Array<{
 ];
 
 export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsPaneProps) {
+  const active = useContext(AutosaveActivity);
   const { running, busy } = useAppStatus();
   const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
-  const canRecord = canRecordBinds(running, busy);
+  const canRecord = active && canRecordBinds(running, busy);
   const managedKeys = parseManagedBinds(managedText);
 
   useEffect(() => {

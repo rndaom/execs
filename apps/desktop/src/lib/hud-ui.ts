@@ -9,11 +9,44 @@ export const HUD_SORTS: { id: HudSort; label: string }[] = [
   { id: "views", label: "Most views" },
 ];
 
-/**
- * Order the catalog. Numbers come from tf2huds.dev and dates from comfig.app,
- * neither of which knows every HUD, so the unknowns sink to the bottom in
- * name order instead of pretending to be zero.
- */
+export type HudCatalogControls = { query: string; sort: HudSort; page: number };
+export type HudCatalogAction =
+  | { type: "search"; query: string }
+  | { type: "sort"; sort: HudSort }
+  | { type: "page"; page: number };
+
+export function hudCatalogControls(
+  current: HudCatalogControls,
+  action: HudCatalogAction,
+): HudCatalogControls {
+  switch (action.type) {
+    case "search":
+      return { ...current, query: action.query, page: 0 };
+    case "sort":
+      return { ...current, sort: action.sort, page: 0 };
+    case "page":
+      return { ...current, page: action.page };
+  }
+}
+
+function validHudCount(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function hudUpdatedTime(value: string | null | undefined): number | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : null;
+}
+
+/** A missing source value has no rank; zero is still a published count. */
+function hudRankValue(stat: HudStat | undefined, sort: Exclude<HudSort, "name">): number | null {
+  if (sort === "updated") return hudUpdatedTime(stat?.updated);
+  const count = stat?.[sort];
+  return validHudCount(count) ? count : null;
+}
+
+/** Metric sorts include only HUDs the source can rank; A to Z includes every HUD. */
 export function sortHudCatalog(
   entries: HudCatalogEntry[],
   stats: Record<string, HudStat>,
@@ -22,27 +55,13 @@ export function sortHudCatalog(
   const byName = (a: HudCatalogEntry, b: HudCatalogEntry) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
   const stat = (entry: HudCatalogEntry) => stats[entry.id.toLowerCase()] ?? stats[entry.id];
-  const sorted = [...entries];
-  switch (sort) {
-    case "updated":
-      sorted.sort((a, b) => {
-        const da = stat(a)?.updated ?? "";
-        const db = stat(b)?.updated ?? "";
-        return db.localeCompare(da) || byName(a, b);
-      });
-      break;
-    case "downloads":
-    case "views":
-      sorted.sort((a, b) => {
-        const na = stat(a)?.[sort] ?? -1;
-        const nb = stat(b)?.[sort] ?? -1;
-        return nb - na || byName(a, b);
-      });
-      break;
-    default:
-      sorted.sort(byName);
-  }
-  return sorted;
+  if (sort === "name") return [...entries].sort(byName);
+  const ranked = entries.flatMap((entry) => {
+    const value = hudRankValue(stat(entry), sort);
+    return value === null ? [] : [{ entry, value }];
+  });
+  ranked.sort((a, b) => b.value - a.value || byName(a.entry, b.entry));
+  return ranked.map(({ entry }) => entry);
 }
 
 /** "398k downloads · updated Jan 2026", or null when nothing is known. */
@@ -51,13 +70,13 @@ export function hudStatCopy(stat: HudStat | undefined): string | null {
     return null;
   }
   const parts: string[] = [];
-  if (typeof stat.downloads === "number") {
+  if (validHudCount(stat.downloads)) {
     parts.push(`${compactCount(stat.downloads)} downloads`);
   }
-  if (typeof stat.views === "number") {
+  if (validHudCount(stat.views)) {
     parts.push(`${compactCount(stat.views)} views`);
   }
-  if (stat.updated) {
+  if (stat.updated && hudUpdatedTime(stat.updated) !== null) {
     parts.push(`updated ${monthYear(stat.updated)}`);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
@@ -207,7 +226,7 @@ export function normalizeHudSearch(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-export const HUD_CATALOG_PAGE_SIZE = 20;
+export const HUD_CATALOG_PAGE_SIZE = 6;
 
 export type HudCatalogPage = {
   items: HudCatalogEntry[];
@@ -215,6 +234,30 @@ export type HudCatalogPage = {
   pageCount: number;
   total: number;
 };
+
+/** Keep the ends reachable without filling the toolbar with every page. */
+export function hudPageLinks(
+  page: number,
+  pageCount: number,
+): (number | "gap-before" | "gap-after")[] {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index);
+  }
+  const start = Math.max(1, Math.min(page - 1, pageCount - 4));
+  const end = Math.min(pageCount - 2, Math.max(page + 1, 3));
+  const links: (number | "gap-before" | "gap-after")[] = [0];
+  if (start > 1) links.push("gap-before");
+  for (let index = start; index <= end; index += 1) links.push(index);
+  if (end < pageCount - 2) links.push("gap-after");
+  links.push(pageCount - 1);
+  return links;
+}
+
+export function parseHudPageJump(value: string, pageCount: number): number | null {
+  if (!/^\d+$/.test(value.trim())) return null;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page >= 1 && page <= pageCount ? page - 1 : null;
+}
 
 /** Slice one page out of the (already filtered) catalog, clamping the page index. */
 export function paginateHudCatalog(

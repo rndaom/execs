@@ -53,6 +53,9 @@ export function useSeededDraft<T>(
     const keyChanged = lastKey.current !== recordKey;
     const dirty = lastSeeded.current !== null && serialize(draft) !== lastSeeded.current;
     if (!shouldReseedFor(lastSeeded.current, next, dirty, keyChanged)) {
+      // An acknowledged save advances the baseline even while newer edits
+      // remain on screen. Later external changes can then refresh a clean draft.
+      lastSeeded.current = next;
       return;
     }
     lastKey.current = recordKey;

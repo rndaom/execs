@@ -3,7 +3,16 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.0** (2026-09-03).
+Current public version: **0.1.1** (published 2026-09-05 UTC).
+Next patch: **0.1.2**, draft/write integrity and the owner-approved HUD fixes.
+
+Prepare 0.1.2 from the public 0.1.1 baseline with release-metadata corrections.
+Its scope is RND-209, RND-210, RND-235, RND-236, RND-237, RND-240,
+RND-241, RND-242, RND-244, RND-249, RND-250 and RND-252. The HUD scope
+includes budhud compression limits, Dropbox redirects, nested imports, metadata
+validation, verified rankings, pagination and the unified import entry.
+Creator-profile ZIP imports and profile-scoped preloader metadata remain on
+0.2.0. See `docs/release-0.1.2.md` for validation and outstanding release gates.
 Next minor: **0.2.0**, first Thursday of the month, skipped if the budget is empty.
 
 ## Who sees what

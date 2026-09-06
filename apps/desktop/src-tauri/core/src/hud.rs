@@ -27,7 +27,7 @@ use crate::profile::{
 };
 use crate::settings::execs_data_dir;
 use crate::switch::prune_empty_parents;
-use crate::vdf::{parse_vdf, VdfValue};
+use crate::vdf::parse_vdf;
 
 pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
     "rayshud",
@@ -40,6 +40,7 @@ pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
 
 const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db/main";
 const MAX_HUD_CATALOG_CACHE_BYTES: u64 = 16 * 1024 * 1024;
+const CURRENT_HUD_UI_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HudTree {
@@ -512,7 +513,7 @@ pub fn extract_hud_archive(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
 }
 
 fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, ProfileError> {
-    let stripped = strip_wrapper_folder(raw);
+    let stripped = strip_wrapper_folder(raw)?;
     let mut tree = HudTree::default();
     for (path, data) in stripped {
         if path
@@ -524,13 +525,28 @@ fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, Profile
         }
         tree.insert(path, data);
     }
-    let Some(info) = tree.info_vdf() else {
-        return Err(ProfileError::Io(
-            "That archive is not a HUD (missing info.vdf at the root).".into(),
-        ));
-    };
-    let ui_version = std::str::from_utf8(info).ok().and_then(parse_ui_version);
-    Ok(ExtractedHud { tree, ui_version })
+    validate_hud_info(&tree)?;
+    Ok(ExtractedHud {
+        tree,
+        ui_version: Some(CURRENT_HUD_UI_VERSION),
+    })
+}
+
+fn validate_hud_info(tree: &HudTree) -> Result<(), ProfileError> {
+    let info = tree.info_vdf().ok_or_else(|| {
+        ProfileError::Io(
+            "No HUD folder was found (missing info.vdf). Choose a complete HUD download or its extracted HUD folder.".into(),
+        )
+    })?;
+    match std::str::from_utf8(info).ok().and_then(parse_ui_version) {
+        Some(CURRENT_HUD_UI_VERSION) => Ok(()),
+        Some(version) => Err(ProfileError::Io(format!(
+            "This HUD declares UI version {version}; TF2 requires {CURRENT_HUD_UI_VERSION}. Get an updated copy from the author. Your current HUD has not changed."
+        ))),
+        None => Err(ProfileError::Io(
+            "This HUD's info.vdf is invalid or has no ui_version. Get a complete, updated copy from the author. Your current HUD has not changed.".into(),
+        )),
+    }
 }
 
 pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
@@ -671,11 +687,7 @@ where
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let id = sanitize_hud_id(&record.id)?;
-    if tree.info_vdf().is_none() {
-        return Err(ProfileError::Io(
-            "That zip is not a HUD (missing info.vdf at the root).".into(),
-        ));
-    }
+    validate_hud_info(tree)?;
     // Every destination is checked before the old HUD is touched: a bad entry
     // name must fail here, not after the previous HUD is already gone.
     let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(tree.files.len());
@@ -1413,45 +1425,49 @@ fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
     path
 }
 
-fn strip_wrapper_folder(entries: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
-    let mut first: Option<String> = None;
-    for (path, _) in &entries {
-        let Some(root) = path.split('/').next() else {
-            return entries;
-        };
-        match &first {
-            None => first = Some(root.to_string()),
-            Some(expected) if expected == root => {}
-            _ => return entries,
-        }
-    }
-    let Some(wrapper) = first else {
-        return entries;
-    };
-    if wrapper.eq_ignore_ascii_case("info.vdf") {
-        return entries;
-    }
-    let prefix = format!("{wrapper}/");
-    // Only a wrapper if what is left is itself a HUD. A zip whose entries all
-    // live under one real content folder (`resource/`, say) would otherwise
-    // have that folder stripped off.
-    if !entries
+fn strip_wrapper_folder(
+    entries: Vec<(String, Vec<u8>)>,
+) -> Result<Vec<(String, Vec<u8>)>, ProfileError> {
+    let roots: Vec<&str> = entries
         .iter()
-        .filter_map(|(path, _)| path.strip_prefix(&prefix))
-        .any(|path| path.eq_ignore_ascii_case("info.vdf"))
-    {
-        return entries;
+        .filter_map(|(path, _)| {
+            let (parent, name) = path.rsplit_once('/').unwrap_or(("", path));
+            name.eq_ignore_ascii_case("info.vdf").then_some(parent)
+        })
+        .collect();
+    if roots.len() > 1 {
+        let names = roots
+            .iter()
+            .take(5)
+            .map(|root| if root.is_empty() { "(root)" } else { root })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let more = if roots.len() > 5 { ", …" } else { "" };
+        return Err(ProfileError::Io(format!(
+            "This download contains multiple HUD folders: {names}{more}. Extract it, then import the one HUD folder you want. Your current HUD has not changed."
+        )));
     }
-
-    // Move payloads out of the wrapper. HUD archives routinely carry hundreds
-    // of MiB, so cloning every Vec here briefly doubled their resident size.
-    entries
+    let Some(root) = roots.first() else {
+        return Ok(entries);
+    };
+    if root.is_empty() {
+        return Ok(entries);
+    }
+    let prefix = format!("{root}/");
+    // A unique info.vdf is not enough to discard siblings: the HUD may need
+    // their assets. Unwrap only when every retained file belongs to the HUD.
+    if entries.iter().any(|(path, _)| !path.starts_with(&prefix)) {
+        return Err(ProfileError::Io(format!(
+            "This download has a HUD in {root} and files outside it. Extract it, check the author's instructions, then import that HUD folder. Your current HUD has not changed."
+        )));
+    }
+    Ok(entries
         .into_iter()
         .filter_map(|(path, bytes)| {
             let rest = path.strip_prefix(&prefix)?;
             (!rest.is_empty()).then(|| (rest.to_string(), bytes))
         })
-        .collect()
+        .collect())
 }
 
 /// hud-db screenshot names are plain file stems. Anything else is refused
@@ -1467,19 +1483,16 @@ fn is_safe_screenshot_name(name: &str) -> bool {
 
 fn parse_ui_version(text: &str) -> Option<u32> {
     let vdf = parse_vdf(text).ok()?;
-    for (_, value) in &vdf.entries {
-        if let Some(version) = value.as_str() {
-            if let Ok(parsed) = version.parse() {
-                return Some(parsed);
-            }
-        }
-        if let Some(obj) = value.as_obj() {
-            if let Some(version) = obj.get("ui_version").and_then(VdfValue::as_str) {
-                return version.parse().ok();
-            }
-        }
-    }
-    None
+    let [(_, root)] = vdf.entries.as_slice() else {
+        return None;
+    };
+    let root = root.as_obj()?;
+    let mut versions = root
+        .entries
+        .iter()
+        .filter(|(key, _)| key.eq_ignore_ascii_case("ui_version"));
+    let version = versions.next()?.1.as_str()?.parse().ok()?;
+    versions.next().is_none().then_some(version)
 }
 
 pub(crate) fn normalize_hud_rel(path: &str) -> String {
@@ -1795,6 +1808,110 @@ mod tests {
         );
     }
 
+    #[test]
+    fn nested_hud_wrappers_preserve_every_file_and_byte() {
+        let bytes = zip_bytes(&[
+            ("download/tf/custom/My HUD/Info.vdf", info_vdf()),
+            (
+                "download/tf/custom/My HUD/Resource/UI/hudlayout.res",
+                b"#base ../base.res\r\n",
+            ),
+            (
+                "download/tf/custom/My HUD/materials/icon.vtf",
+                b"VTF\0bytes",
+            ),
+        ]);
+        let extracted = extract_hud_archive(&bytes).unwrap();
+        assert_eq!(extracted.tree.files.len(), 3);
+        assert_eq!(extracted.tree.get("Info.vdf"), Some(info_vdf()));
+        assert_eq!(
+            extracted.tree.get("Resource/UI/hudlayout.res"),
+            Some(b"#base ../base.res\r\n".as_slice())
+        );
+        assert_eq!(
+            extracted.tree.get("materials/icon.vtf"),
+            Some(b"VTF\0bytes".as_slice())
+        );
+    }
+
+    #[test]
+    fn cruelty_style_variant_download_requires_a_choice() {
+        let bytes = zip_bytes(&[
+            ("CRUELTY DEATH/info.vdf", info_vdf()),
+            ("CRUELTY DEATH/resource/ui/hudlayout.res", b"death\n"),
+            ("CRUELTY LIFE/info.vdf", info_vdf()),
+            ("CRUELTY LIFE/resource/ui/hudlayout.res", b"life\n"),
+            ("READ ME.txt", b"Choose either HUD folder."),
+            ("hitsound.wav", b"optional sound"),
+        ]);
+        let message = extract_hud_archive(&bytes).unwrap_err().message();
+        assert!(message.contains("multiple HUD folders"), "{message}");
+        assert!(message.contains("CRUELTY DEATH"), "{message}");
+        assert!(message.contains("CRUELTY LIFE"), "{message}");
+        assert!(message.contains("Extract it"), "{message}");
+        assert!(message.contains("current HUD has not changed"), "{message}");
+    }
+
+    #[test]
+    fn unique_nested_hud_does_not_silently_discard_sibling_assets() {
+        let bytes = zip_bytes(&[
+            ("hud/info.vdf", info_vdf()),
+            ("hud/resource/ui/hudlayout.res", b"hud\n"),
+            ("shared/materials/icon.vtf", b"required?"),
+        ]);
+        let message = extract_hud_archive(&bytes).unwrap_err().message();
+        assert!(message.contains("files outside it"), "{message}");
+    }
+
+    #[test]
+    fn hud_metadata_must_declare_the_current_engine_ui_version() {
+        for (info, expected) in [
+            (b"not valid vdf".as_slice(), "invalid"),
+            (b"\"not_ui_version\" \"3\"".as_slice(), "invalid"),
+            (
+                b"\"HUD\" { \"ui_version\" \"3\" \"UI_VERSION\" \"2\" }".as_slice(),
+                "invalid",
+            ),
+            (b"\"HUD\" { }".as_slice(), "no ui_version"),
+            (
+                b"\"HUD\" { \"ui_version\" \"2\" }".as_slice(),
+                "UI version 2",
+            ),
+            (
+                b"\"HUD\" { \"ui_version\" \"4\" }".as_slice(),
+                "UI version 4",
+            ),
+        ] {
+            let bytes = zip_bytes(&[("info.vdf", info)]);
+            let message = extract_hud_archive(&bytes).unwrap_err().message();
+            assert!(message.contains(expected), "{message}");
+        }
+        let bytes = zip_bytes(&[("Info.vdf", b"\"HUD\" { \"UI_VERSION\" \"3\" }")]);
+        assert_eq!(extract_hud_archive(&bytes).unwrap().ui_version, Some(3));
+    }
+
+    #[test]
+    fn importing_an_extracted_variant_uses_the_same_root_rules() {
+        let root = crate::test_temp_dir();
+        for variant in ["CRUELTY DEATH", "CRUELTY LIFE"] {
+            let dir = root.join(variant);
+            fs::create_dir_all(dir.join("resource/ui")).unwrap();
+            fs::write(dir.join("info.vdf"), info_vdf()).unwrap();
+            fs::write(dir.join("resource/ui/hudlayout.res"), variant).unwrap();
+        }
+        assert!(hud_tree_from_dir(&root)
+            .unwrap_err()
+            .message()
+            .contains("multiple HUD folders"));
+        let selected = hud_tree_from_dir(&root.join("CRUELTY LIFE")).unwrap();
+        assert_eq!(selected.tree.files.len(), 2);
+        assert_eq!(
+            selected.tree.get("resource/ui/hudlayout.res"),
+            Some(b"CRUELTY LIFE".as_slice())
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
     /// "The wrapper is not named info.vdf" is not guard enough on its own: a
     /// zip whose entries all sit under one real content folder must keep that
     /// folder.
@@ -1822,7 +1939,7 @@ mod tests {
                 b"hp\n".to_vec(),
             ),
         ];
-        assert_eq!(strip_wrapper_folder(entries.clone()), entries);
+        assert_eq!(strip_wrapper_folder(entries.clone()).unwrap(), entries);
 
         // A genuine wrapper leaves info.vdf at the root once stripped.
         let wrapped = vec![
@@ -1830,7 +1947,7 @@ mod tests {
             ("rayshud-abc/resource/x.res".to_string(), b"x\n".to_vec()),
         ];
         assert_eq!(
-            strip_wrapper_folder(wrapped),
+            strip_wrapper_folder(wrapped).unwrap(),
             vec![
                 ("info.vdf".to_string(), info_vdf().to_vec()),
                 ("resource/x.res".to_string(), b"x\n".to_vec()),
@@ -2544,6 +2661,8 @@ mod tests {
     fn install_refuses_a_bad_entry_before_removing_the_old_hud() {
         let dir = test_temp_dir();
         let (profiles, root, id) = active_profile(&dir);
+        fs::create_dir_all(root.join("tf/custom/oldhud")).unwrap();
+        fs::write(root.join("tf/custom/oldhud/info.vdf"), b"old\n").unwrap();
         put_exclusive_file_to(
             &profiles,
             &root,
@@ -2567,9 +2686,20 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, ProfileError::ForbiddenPath(_)), "{err:?}");
 
+        let mut outdated = rays_tree();
+        outdated.insert("info.vdf", b"\"HUD\" { \"ui_version\" \"2\" }".to_vec());
+        let err = install_hud_pack_to(&profiles, &root, &id, &outdated, rays_record(), unlocked())
+            .unwrap_err();
+        assert!(err.message().contains("UI version 2"));
+
         let after = load_manifest(&profiles, &id).unwrap();
         assert_eq!(after.files, before.files);
+        assert_eq!(after.hud, before.hud);
         assert!(exclusive_file_path(&profiles, &id, "tf/custom/oldhud/info.vdf").is_file());
+        assert_eq!(
+            fs::read(root.join("tf/custom/oldhud/info.vdf")).unwrap(),
+            b"old\n"
+        );
         assert!(!root.join("tf/custom/rayshud").exists());
         cleanup(&dir);
     }

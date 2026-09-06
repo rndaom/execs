@@ -7,6 +7,7 @@
  * bundle. Nothing here may import `@tauri-apps/*`.
  */
 import type { Api } from "./api";
+import { ensureAutoexecExecLine } from "./binds-ui";
 import {
   type AbsorbDelta,
   BridgeError,
@@ -27,6 +28,8 @@ import {
 import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
 import { editorPathFits, editorTextBytes } from "./files-limits";
+import { defaultGameplay, parseCvarMap } from "./gameplay-ui";
+import { PREVIEW_HUD_BROWSER_CATALOG, PREVIEW_HUD_BROWSER_STATS } from "./hud-browser-preview";
 import {
   emptyHudState,
   PREVIEW_HUD_CATALOG,
@@ -101,6 +104,8 @@ function notInPreview(what: string): BridgeError {
 }
 
 export function createPreviewApi(state: PreviewState): Api {
+  const hudCatalog =
+    state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
   let library: ProfileLibrary | null = previewLibrary(state);
   let files = PREVIEW_FILES.map((file) => ({ ...file }));
@@ -310,6 +315,48 @@ export function createPreviewApi(state: PreviewState): Api {
       return requireDetail();
     },
 
+    async writeManagedCfg(path, text, expectedProfileId, scope) {
+      const current = requireDetail();
+      if (current.id !== expectedProfileId) {
+        throw new BridgeError(
+          "The active profile changed before saving. Try again.",
+          "ProfileChanged",
+        );
+      }
+      const prefix = current.layer === "comfig" ? "tf/cfg/overrides/" : "tf/cfg/";
+      const stems = ["execs_binds", "execs_gameplay"] as const;
+      if (!stems.some((stem) => path === `${prefix}${stem}.cfg`)) {
+        throw new BridgeError("That managed cfg path is not allowed.", "ForbiddenPath");
+      }
+      if (editorTextBytes(text) === null) {
+        throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+      }
+      const autoPath = `${prefix}autoexec.cfg`;
+      let auto = files.find((file) => file.path === autoPath)?.text ?? "";
+      for (const stem of stems) {
+        const sibling = `${prefix}${stem}.cfg`;
+        if (sibling === path || files.some((file) => file.path === sibling)) {
+          auto = ensureAutoexecExecLine(auto, stem, current.layer);
+        }
+      }
+      if (scope) {
+        if (path !== `${prefix}execs_gameplay.cfg`) {
+          throw new BridgeError("That managed cfg scope is not allowed.", "InvalidPath");
+        }
+        const latest = files.find((file) => file.path === path)?.text ?? "";
+        const values = Object.entries(parseCvarMap(text)).filter(([name]) => {
+          if (!(name in defaultGameplay())) return false;
+          if (scope === "crosshair") return name.startsWith("cl_crosshair_");
+          if (scope === "sounds") return name.startsWith("tf_dingaling");
+          return !name.startsWith("cl_crosshair_") && !name.startsWith("tf_dingaling");
+        });
+        text = `${latest}\n${values.map(([name, value]) => `${name} ${JSON.stringify(value)}`).join("\n")}\n`;
+      }
+      upsert(path, text);
+      upsert(autoPath, auto);
+      return requireDetail();
+    },
+
     // --- comfig -------------------------------------------------------------
     async getComfigState() {
       return comfig;
@@ -348,7 +395,7 @@ export function createPreviewApi(state: PreviewState): Api {
 
     // --- HUD ----------------------------------------------------------------
     async getHudCatalog() {
-      return PREVIEW_HUD_CATALOG;
+      return hudCatalog;
     },
     async getHudState() {
       return hudState;
@@ -357,13 +404,14 @@ export function createPreviewApi(state: PreviewState): Api {
       return [];
     },
     async getHudStats() {
+      if (state === "settings-hud-browser") return PREVIEW_HUD_BROWSER_STATS;
       return {
         rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
         toonhud: { updated: "2024-03-02" },
       };
     },
     async installHud(id: string) {
-      const entry = PREVIEW_HUD_CATALOG.find((item) => item.id === id);
+      const entry = hudCatalog.find((item) => item.id === id);
       const supported = schemaSupportedIds().includes(id);
       hudState = {
         installed: { id, hash: entry?.hash ?? null, source: "hudDb", options: {} },
