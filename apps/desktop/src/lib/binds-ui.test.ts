@@ -31,12 +31,28 @@ describe("source key mapping", () => {
     expect(sourceKeyFromCode("ShiftLeft")).toBe("shift");
   });
 
-  it("maps keyboard events and mouse buttons the pane will see", () => {
+  it("maps keyboard events and DOM mouse buttons the pane will see", () => {
     expect(sourceKeyFromKeyboardEvent({ code: "KeyW" })).toBe("w");
     expect(sourceKeyFromKeyboardEvent({ code: "KeyW", repeat: true })).toBeNull();
     expect(sourceKeyFromMouseButton(0)).toBe("mouse1");
+    expect(sourceKeyFromMouseButton(1)).toBe("mouse3");
+    expect(sourceKeyFromMouseButton(2)).toBe("mouse2");
+    expect(sourceKeyFromMouseButton(3)).toBe("mouse4");
+    expect(sourceKeyFromMouseButton(4)).toBe("mouse5");
+    expect(sourceKeyFromMouseButton(-1)).toBeNull();
+    expect(sourceKeyFromMouseButton(5)).toBeNull();
     expect(sourceKeyFromCode("Semicolon")).toBe("semicolin");
     expect(sourceKeyFromCode("Numpad0")).toBe("kp_ins");
+  });
+
+  it("preserves the synthetic Mouse0-Mouse4 code fallback", () => {
+    expect(["Mouse0", "Mouse1", "Mouse2", "Mouse3", "Mouse4"].map(sourceKeyFromCode)).toEqual([
+      "mouse1",
+      "mouse2",
+      "mouse3",
+      "mouse4",
+      "mouse5",
+    ]);
   });
 
   it("falls back to KeyboardEvent.key when a WebView omits code", () => {
@@ -149,6 +165,65 @@ describe("syncTrackedBindsFromConfig", () => {
       ]),
     );
     expect(parseManagedBinds(fromMap).medic).toBe("mouse3");
+  });
+
+  it("removes managed assignments that are absent from the complete config map", () => {
+    const current = serializeManagedBinds({ forward: "w", medic: "e", voice: "v" });
+    const next = syncTrackedBindsFromConfig(current, {
+      w: "+forward",
+      e: "+use",
+      mouse1: "+attack",
+    });
+
+    expect(parseManagedBinds(next)).toEqual({ forward: "w", use: "e" });
+    expect(next).not.toContain("+attack");
+  });
+
+  it("clears every tracked assignment when the complete config map is empty", () => {
+    const current = serializeManagedBinds({ forward: "w", medic: "e" });
+
+    expect(syncTrackedBindsFromConfig(current, {})).toBe(`${MANAGED_BINDS_HEADER}\n`);
+  });
+
+  it("handles moves, reassignments, swaps, and multiple keys in one sync", () => {
+    const current = serializeManagedBinds({
+      forward: "w",
+      back: "s",
+      duck: "ctrl",
+      medic: "e",
+    });
+    const next = syncTrackedBindsFromConfig(
+      current,
+      new Map([
+        ["w", "+back"],
+        ["s", "+forward"],
+        ["ctrl", "+duck"],
+        ["e", "+use"],
+        ["h", "voicemenu 0 0"],
+        ["j", "  VOICEMENU   0  0  "],
+        ["mouse1", "+attack"],
+      ]),
+    );
+
+    expect(parseManagedBinds(next)).toEqual({
+      forward: "s",
+      back: "w",
+      duck: "ctrl",
+      medic: "j",
+      use: "e",
+    });
+  });
+
+  it("leaves an already-synced managed file byte-for-byte unchanged", () => {
+    const current = `${serializeManagedBinds({ forward: "w", medic: "e" })}\n`;
+
+    expect(
+      syncTrackedBindsFromConfig(current, {
+        mouse1: "+attack",
+        w: "+forward",
+        e: "voicemenu 0 0",
+      }),
+    ).toBe(current);
   });
 
   it("reads config.cfg binds and ignores the managed overlay file", () => {

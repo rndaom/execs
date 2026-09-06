@@ -664,6 +664,7 @@ export function SettingsHost({
       const path = bindsFilePath(layer);
       return (
         <BindsPane
+          profileId={profileId}
           layer={layer}
           effectiveBinds={maps.binds}
           managedText={files.find((file) => file.path === path)?.text ?? ""}

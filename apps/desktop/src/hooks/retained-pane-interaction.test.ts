@@ -8,11 +8,14 @@ import type { Api } from "../lib/api";
 import { AutosaveActivity } from "./useAutosave";
 import { type SoundPlayer, useSoundPlayer } from "./useSoundPlayer";
 
-vi.mock("./useAppStatus", () => ({ useAppStatus: () => ({ running: false, busy: false }) }));
+const appStatus = vi.hoisted(() => ({ running: false, busy: false }));
+vi.mock("./useAppStatus", () => ({ useAppStatus: () => appStatus }));
 
 let dom: JSDOM;
 let root: Root;
 beforeEach(() => {
+  appStatus.running = false;
+  appStatus.busy = false;
   dom = new JSDOM("<!doctype html><div id='root'></div>");
   vi.stubGlobal("window", dom.window);
   vi.stubGlobal("document", dom.window.document);
@@ -36,10 +39,11 @@ describe("retained pane interactions", () => {
           AutosaveActivity.Provider,
           { value: active },
           createElement(BindsPane, {
+            profileId: "profile-a",
             layer: "comfig",
             effectiveBinds: {},
             managedText: "",
-            onSave: save,
+            onSave: async (text: string) => save(text),
           }),
         ),
       );
@@ -75,6 +79,51 @@ describe("retained pane interactions", () => {
         }),
       ),
     );
+    await act(async () => new Promise((resolve) => dom.window.setTimeout(resolve, 750)));
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0][0]).toContain("bind x +jump");
+  });
+
+  it("keeps a locked bind draft across pane navigation and saves it on unlock", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    const render = (active: boolean) =>
+      root.render(
+        createElement(
+          AutosaveActivity.Provider,
+          { value: active },
+          createElement(BindsPane, {
+            profileId: "profile-a",
+            layer: "comfig",
+            effectiveBinds: {},
+            managedText: "",
+            onSave: save,
+          }),
+        ),
+      );
+
+    appStatus.running = true;
+    await act(async () => render(true));
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await act(async () =>
+      dom.window.dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", {
+          key: "x",
+          code: "KeyX",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    );
+    await act(async () => render(false));
+    expect(save).not.toHaveBeenCalled();
+
+    await act(async () => render(true));
+    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("x");
+    appStatus.running = false;
+    await act(async () => render(true));
+    await act(async () => Promise.resolve());
     expect(save).toHaveBeenCalledTimes(1);
     expect(save.mock.calls[0][0]).toContain("bind x +jump");
   });

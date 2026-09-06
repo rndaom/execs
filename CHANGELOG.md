@@ -5,6 +5,18 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Binds: record right and middle mouse buttons with the correct TF2 names,
+  preserve bind drafts while TF2 is running, and honor tracked binds removed
+  through the in-game settings after TF2 closes.
+- Profiles: stop absorb restore and repair work before another live-file change
+  if TF2 starts during the operation.
+- HUD: keep options editable after matching an imported HUD whose folder name
+  differs from its catalog identity.
+- Profiles: exported profiles with small, highly compressible assets import
+  again without weakening archive size and expansion limits.
+
 ## [0.1.2] - 2026-09-06
 
 A maintenance update focused on protecting unsaved edits and fixing HUD

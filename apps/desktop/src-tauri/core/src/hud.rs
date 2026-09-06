@@ -814,20 +814,100 @@ where
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     let id = sanitize_hud_id(id)?;
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
     let options = manifest
         .hud
         .as_ref()
         .map(|hud| hud.options.clone())
         .unwrap_or_default();
-    manifest.hud = Some(HudRecord {
-        id,
+    let stored = HudRecord {
+        id: id.clone(),
         hash,
         source: HudSource::HudDb,
         options,
-    });
-    save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
-    profile_detail_fallback(profiles_dir, tf2_root, profile_id)
+    };
+
+    let current_id = resolve_hud(&manifest).map(|status| status.record.id);
+    let folder = current_id
+        .as_deref()
+        .and_then(|current| manifest_hud_folder_resolved(&manifest.files, current));
+    let Some(folder) = folder else {
+        let mut manifest = manifest;
+        manifest.hud = Some(stored);
+        save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+        return profile_detail_fallback(profiles_dir, tf2_root, profile_id);
+    };
+
+    // Case-only differences are already a single portable identity, and the
+    // manifest spelling is needed on case-sensitive filesystems. A genuinely
+    // different imported folder, however, would become unreachable as soon as
+    // its record changes to the catalog id. Rename that tree in the same
+    // journaled mutation as the record so options, export, switch, and update
+    // all continue from one identity.
+    if folder.eq_ignore_ascii_case(&id) {
+        let mut manifest = manifest;
+        manifest.hud = Some(stored);
+        save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+        return profile_detail_fallback(profiles_dir, tf2_root, profile_id);
+    }
+
+    if manifest
+        .files
+        .iter()
+        .any(|file| pack_key(&file.path).is_some_and(|pack| pack.eq_ignore_ascii_case(&id)))
+    {
+        return Err(ProfileError::Io(format!(
+            "Cannot match this HUD because tf/custom/{id} already belongs to another custom pack. Rename or remove that pack first."
+        )));
+    }
+
+    let tree = load_hud_tree_from_manifest(profiles_dir, profile_id, &manifest, &folder)?;
+    let mut owned_puts = Vec::with_capacity(tree.files.len());
+    for (rel, bytes) in tree.files {
+        let path = normalize_rel_path(&format!("tf/custom/{id}/{rel}"))?;
+        if !is_file_safe_rel_path(&path) {
+            return Err(ProfileError::ForbiddenPath(path));
+        }
+        owned_puts.push((path, bytes));
+    }
+    let puts: Vec<(String, FileSource<'_>)> = owned_puts
+        .iter()
+        .map(|(path, bytes)| (path.clone(), FileSource::Bytes(bytes)))
+        .collect();
+    let remove: Vec<String> = manifest
+        .files
+        .iter()
+        .filter(|file| hud_file_rel(&file.path, &folder).is_some())
+        .map(|file| file.path.clone())
+        .collect();
+    let active = load_library_from(profiles_dir, Some(tf2_root))?
+        .active_profile_id
+        .as_deref()
+        == Some(profile_id);
+    let live_renames = if active {
+        plan_live_hud_renames(tf2_root, &id)?
+    } else {
+        Vec::new()
+    };
+    let manifest = mutate_profile_files_with_live_renames_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &puts,
+        &remove,
+        &live_renames,
+        &running,
+        move |manifest| {
+            manifest.hud = Some(stored);
+            Ok(())
+        },
+    )?;
+    if active {
+        for path in &remove {
+            prune_empty_parents(&live_path(tf2_root, path), tf2_root);
+        }
+    }
+    Ok(detail_from_manifest(&manifest))
 }
 
 pub fn load_hud_tree_from_profile(
@@ -836,10 +916,21 @@ pub fn load_hud_tree_from_profile(
     hud_id: &str,
 ) -> Result<HudTree, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let folder =
+        manifest_hud_folder_resolved(&manifest.files, hud_id).unwrap_or_else(|| hud_id.to_string());
+    load_hud_tree_from_manifest(profiles_dir, profile_id, &manifest, &folder)
+}
+
+fn load_hud_tree_from_manifest(
+    profiles_dir: &Path,
+    profile_id: &str,
+    manifest: &ProfileManifest,
+    folder: &str,
+) -> Result<HudTree, ProfileError> {
     let mut tree = HudTree::default();
     let mut total = 0u64;
     for file in &manifest.files {
-        let Some(rel) = hud_file_rel(&file.path, hud_id) else {
+        let Some(rel) = hud_file_rel(&file.path, folder) else {
             continue;
         };
         if tree.files.len() >= MAX_HUD_ENTRIES {
@@ -904,6 +995,31 @@ pub fn manifest_hud_folder(files: &[ProfileFile], hud_id: &str) -> Option<String
         let rest = file.path.strip_prefix("tf/custom/")?;
         Some(rest.split('/').next()?.to_string())
     })
+}
+
+/// Resolve old manifests whose catalog record was saved without renaming the
+/// sole imported HUD folder. Exact identity wins; the fallback is deliberately
+/// limited to one HUD so an ambiguous profile is never edited by guesswork.
+fn manifest_hud_folder_resolved(files: &[ProfileFile], hud_id: &str) -> Option<String> {
+    if let Some(folder) = manifest_hud_folder(files, hud_id) {
+        return Some(folder);
+    }
+    let mut folders = Vec::<(String, String)>::new();
+    for file in files {
+        if !is_hud_marker(&file.path) {
+            continue;
+        }
+        let rest = file.path.strip_prefix("tf/custom/")?;
+        let folder = rest.split('/').next()?;
+        let identity = folder.strip_prefix('-').unwrap_or(folder);
+        if !folders
+            .iter()
+            .any(|(known, _)| known.eq_ignore_ascii_case(identity))
+        {
+            folders.push((identity.to_string(), folder.to_string()));
+        }
+    }
+    (folders.len() == 1).then(|| folders.remove(0).1)
 }
 
 pub fn write_hud_tree_files_to<I, S>(
@@ -991,12 +1107,12 @@ where
             "Install a HUD before saving options.".into(),
         ));
     }
-    let mut tree = load_hud_tree_from_profile(profiles_dir, profile_id, &status.record.id)?;
+    let folder = manifest_hud_folder_resolved(&manifest.files, &status.record.id)
+        .unwrap_or_else(|| status.record.id.clone());
+    let mut tree = load_hud_tree_from_manifest(profiles_dir, profile_id, &manifest, &folder)?;
     // Write back into the folder the manifest already spells, not the
     // lowercased id: `RaysHUD/` and `rayshud/` are two entries on disk on
     // Linux and two manifest paths everywhere.
-    let folder = manifest_hud_folder(&manifest.files, &status.record.id)
-        .unwrap_or_else(|| status.record.id.clone());
     let layer = crate::apply::cfg_layer_from_files(&manifest.files);
     let applied = crate::hud_apply::apply_hud_options_for_layer(
         &mut tree,
@@ -1020,7 +1136,7 @@ where
         .files
         .iter()
         .filter(|file| {
-            hud_file_rel(&file.path, &status.record.id).is_some() || is_managed_hud_cfg(&file.path)
+            hud_file_rel(&file.path, &folder).is_some() || is_managed_hud_cfg(&file.path)
         })
         .map(|file| file.path.clone())
         .collect();
@@ -2177,6 +2293,237 @@ mod tests {
         .unwrap();
         assert_eq!(detail.hud.as_ref().unwrap().source, HudSource::HudDb);
         assert_eq!(detail.hud.as_ref().unwrap().hash.as_deref(), Some("def456"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn matching_an_import_folder_to_catalog_renames_payload_and_keeps_it_editable() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let original_info = b"// author bytes stay untouched\n\"hud\" { \"ui_version\" \"3\" }\n";
+        let colors = b"\"Scheme\"\n{\n\t\"Colors\"\n\t{\n\t\t\"bh_Health_Buff\"\t\t\"255 0 0 255\"\n\t}\n}\n";
+        let mut tree = HudTree::default();
+        tree.insert("info.vdf", original_info.to_vec());
+        tree.insert("resource/clientscheme_colors.res", colors.to_vec());
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &tree,
+            HudRecord {
+                id: "rayshud-main".into(),
+                hash: None,
+                source: HudSource::Local,
+                options: BTreeMap::new(),
+            },
+            unlocked(),
+        )
+        .unwrap();
+
+        match_hud_catalog_to(
+            &profiles,
+            &root,
+            &id,
+            "rayshud",
+            Some("catalog-hash".into()),
+            unlocked(),
+        )
+        .unwrap();
+
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(manifest.hud.as_ref().unwrap().id, "rayshud");
+        assert!(manifest
+            .files
+            .iter()
+            .filter(|file| is_hud_marker(&file.path))
+            .all(|file| file.path.starts_with("tf/custom/rayshud/")));
+        assert_eq!(
+            fs::read(root.join("tf/custom/rayshud/info.vdf")).unwrap(),
+            original_info
+        );
+        assert!(!root.join("tf/custom/rayshud-main").exists());
+
+        let schema = crate::hud_apply::parse_hud_schema(
+            r##"{
+  "Author": "Test",
+  "Controls": {
+    "Colors": [{
+      "Name": "bh_Health_Buff",
+      "Type": "ColorPicker",
+      "Value": "0 153 255 255",
+      "Files": {
+        "resource/clientscheme_colors.res": {
+          "Scheme": { "Colors": { "bh_Health_Buff": "$value" } }
+        }
+      }
+    }]
+  }
+}"##,
+        )
+        .unwrap();
+        let mut options = BTreeMap::new();
+        options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
+        apply_schema_options_to(&profiles, &root, &id, &schema, options, unlocked()).unwrap();
+        let written =
+            fs::read_to_string(root.join("tf/custom/rayshud/resource/clientscheme_colors.res"))
+                .unwrap();
+        assert!(written.contains("0 153 255 255"), "{written}");
+        cleanup(&dir);
+    }
+
+    fn catalog_match_target_collision(active: bool) {
+        let dir = test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = tf2_root(&dir);
+        create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
+            .id
+            .clone();
+        if active {
+            set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        }
+
+        let mut tree = HudTree::default();
+        tree.insert("info.vdf", info_vdf().to_vec());
+        tree.insert("resource/ui/hudlayout.res", b"source hud\n".to_vec());
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &tree,
+            HudRecord {
+                id: "rayshud-release".into(),
+                hash: None,
+                source: HudSource::Local,
+                options: BTreeMap::new(),
+            },
+            unlocked(),
+        )
+        .unwrap();
+        let collision_path = "tf/custom/rayshud/materials/unrelated.vmt";
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &id,
+            collision_path,
+            b"unrelated pack\n",
+            unlocked(),
+        )
+        .unwrap();
+        if active {
+            let live_collision = root.join(collision_path);
+            fs::create_dir_all(live_collision.parent().unwrap()).unwrap();
+            fs::write(live_collision, b"unrelated pack\n").unwrap();
+        }
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = match_hud_catalog_to(
+            &profiles,
+            &root,
+            &id,
+            "rayshud",
+            Some("catalog-hash".into()),
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::Io(message)
+                if message.contains("already belongs to another custom pack")
+        ));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, collision_path)).unwrap(),
+            b"unrelated pack\n"
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/rayshud-release/resource/ui/hudlayout.res",
+            ))
+            .unwrap(),
+            b"source hud\n"
+        );
+        if active {
+            assert_eq!(
+                fs::read(root.join("tf/custom/rayshud/materials/unrelated.vmt")).unwrap(),
+                b"unrelated pack\n"
+            );
+            assert_eq!(
+                fs::read(root.join("tf/custom/rayshud-release/resource/ui/hudlayout.res")).unwrap(),
+                b"source hud\n"
+            );
+            assert!(!root.join("tf/custom/-rayshud").exists());
+            assert!(!root.join("tf/custom/-rayshud-release").exists());
+        } else {
+            assert!(!root.join("tf/custom/rayshud").exists());
+            assert!(!root.join("tf/custom/rayshud-release").exists());
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn active_catalog_match_refuses_a_conflicting_target_pack() {
+        catalog_match_target_collision(true);
+    }
+
+    #[test]
+    fn inactive_catalog_match_refuses_a_conflicting_target_pack() {
+        catalog_match_target_collision(false);
+    }
+
+    #[test]
+    fn options_recover_a_preexisting_catalog_record_with_an_import_folder() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let colors = b"\"Scheme\"\n{\n\t\"Colors\"\n\t{\n\t\t\"bh_Health_Buff\"\t\t\"255 0 0 255\"\n\t}\n}\n";
+        for (rel, bytes) in [
+            ("tf/custom/rayshud-release/info.vdf", info_vdf()),
+            (
+                "tf/custom/rayshud-release/resource/clientscheme_colors.res",
+                colors.as_slice(),
+            ),
+        ] {
+            put_exclusive_file_to(&profiles, &root, &id, rel, bytes, unlocked()).unwrap();
+        }
+        let mut manifest = load_manifest(&profiles, &id).unwrap();
+        manifest.hud = Some(rays_record());
+        save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
+
+        let schema = crate::hud_apply::parse_hud_schema(
+            r##"{
+  "Author": "Test",
+  "Controls": {
+    "Colors": [{
+      "Name": "bh_Health_Buff",
+      "Type": "ColorPicker",
+      "Value": "0 153 255 255",
+      "Files": {
+        "resource/clientscheme_colors.res": {
+          "Scheme": { "Colors": { "bh_Health_Buff": "$value" } }
+        }
+      }
+    }]
+  }
+}"##,
+        )
+        .unwrap();
+        let mut options = BTreeMap::new();
+        options.insert("bh_Health_Buff".into(), "0 153 255 255".into());
+        apply_schema_options_to(&profiles, &root, &id, &schema, options, unlocked()).unwrap();
+
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest.files.iter().any(|file| {
+            file.path == "tf/custom/rayshud-release/resource/clientscheme_colors.res"
+        }));
+        let written = fs::read_to_string(exclusive_file_path(
+            &profiles,
+            &id,
+            "tf/custom/rayshud-release/resource/clientscheme_colors.res",
+        ))
+        .unwrap();
+        assert!(written.contains("0 153 255 255"), "{written}");
         cleanup(&dir);
     }
 
