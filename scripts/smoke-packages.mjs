@@ -36,7 +36,7 @@ execFileSync(
   [
     "release",
     "download",
-    "v0.1.1",
+    `v${oldVersion}`,
     "--repo",
     "rndaom/execs",
     "--pattern",

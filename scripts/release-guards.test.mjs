@@ -114,6 +114,8 @@ test("package smoke derives and passes the immediately previous changelog releas
   const smoke = readFileSync("scripts/smoke-packages.mjs", "utf8");
   const probe = readFileSync("apps/desktop/src-tauri/examples/updater_probe.rs", "utf8");
   assert.match(smoke, /const oldVersion = previousReleaseVersion\(process\.cwd\(\), version\)/);
+  assert.match(smoke, /`v\$\{oldVersion\}`/);
+  assert.doesNotMatch(smoke, /"v0\.1\.1"/);
   assert.match(smoke, /version,\s*oldVersion,\s*\]\);/);
   assert.doesNotMatch(smoke, /execs_0\.1\.1_/);
   assert.match(probe, /args\[4\]\.parse\(\)/);
