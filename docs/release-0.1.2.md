@@ -1,5 +1,11 @@
 # 0.1.2 release candidate
 
+Published September 6, 2026 from `64b7b813267f1a4c380c099fedee714cecbc6865`.
+The tagged release workflow passed Windows and Linux validation, packaging,
+signed updater/installer smoke checks and final asset verification. The
+candidate-stage limits and remaining-gate notes below are retained as the audit
+record; they no longer describe the public release state.
+
 Prepared September 5, 2026 from public `v0.1.1` (`7b3c0fe`) on
 `rndaom/release-0.1.2`, with the release metadata corrections from `c133265`.
 The original development checkout and its uncommitted changes are preserved.
@@ -60,7 +66,7 @@ autosaves pause profile changes until saved or explicitly discarded.
   Locked FOV/sound drafts survived navigation while saved cfg bytes stayed unchanged.
 - Packaged third-party notices: all 453 dependency packages verified.
 
-## Remaining gates
+## Candidate-stage remaining gates
 
 Cross-platform CI, packaged upgrade/startup verification and the remaining UI
 walkthrough are recorded below when completed. No public tag or release is

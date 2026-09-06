@@ -110,3 +110,9 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - Visited settings panes retain drafts until saved or explicitly discarded; hidden panes release keyboard capture, modals and audition playback. Pending autosaves pause profile changes and game launch. Files drafts stay in session memory keyed by profile and path.
 - Failed or refused autosaves remain pending, retry after TF2 unlocks, and preserve edits made during an in-flight save. Settings identity and cfg seeds publish only after a complete read; incomplete reads keep writes blocked until retry succeeds.
 - Managed cfg and autoexec updates execute together under the native write gate. Gameplay, crosshair and sound saves merge only their own commands into current bytes so deferred edits from different panes cannot overwrite each other.
+
+## 0.1.3 bind and integrity fixes
+
+- Prepare 0.1.3 from the published 0.1.2 tag, not from `main`; creator-profile and profile-scoped-preloader schema work remains on the minor track.
+- Binds records DOM right/middle buttons as Source `mouse2`/`mouse3`, retains profile-scoped drafts while TF2 runs, and synchronizes tracked removals from a complete post-absorb `config.cfg` read.
+- Absorb rechecks the live process before each restore, repair and config/Cloud mutation. Catalog matching keeps an imported HUD's local tree editable, and profile ZIPs apply the bounded small-entry compression exception used by HUD archives.

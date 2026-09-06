@@ -3,16 +3,18 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.1** (published 2026-09-05 UTC).
-Next patch: **0.1.2**, draft/write integrity and the owner-approved HUD fixes.
+Current public version: **0.1.2** (published 2026-09-06 UTC).
+Next patch: **0.1.3**, bind correctness plus confirmed public write-lock,
+HUD-identity and profile-import regressions.
 
-Prepare 0.1.2 from the public 0.1.1 baseline with release-metadata corrections.
-Its scope is RND-209, RND-210, RND-235, RND-236, RND-237, RND-240,
-RND-241, RND-242, RND-244, RND-249, RND-250 and RND-252. The HUD scope
-includes budhud compression limits, Dropbox redirects, nested imports, metadata
-validation, verified rankings, pagination and the unified import entry.
-Creator-profile ZIP imports and profile-scoped preloader metadata remain on
-0.2.0. See `docs/release-0.1.2.md` for validation and outstanding release gates.
+Prepare 0.1.3 from the public 0.1.2 tag on a separate maintenance branch.
+Its planned bind scope is RND-212, RND-233 and RND-234. The September 6 audit
+also found three patch-class regressions in public 0.1.2: absorb must stop if
+TF2 starts mid-operation, a catalog-matched imported HUD must keep its editable
+local tree, and an exported profile with a small highly compressible asset must
+import again. Creator-profile ZIP imports and profile-scoped preloader metadata
+remain on 0.2.0. See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and
+implementation evidence.
 Next minor: **0.2.0**, first Thursday of the month, skipped if the budget is empty.
 
 ## Who sees what
@@ -136,10 +138,9 @@ When you do ship:
 ### Anytime (a patch)
 
 A patch is a bug the last public version has, with no feature attached.
-Bump `Z`, write the changelog section, tag, done. If `main` already has
-an unreleased breaking change, cut `release/0.Y` from the last tag,
-patch there, and tag from that branch. Use a separate patch branch whenever main also contains unreleased features. Until that happens, patch from
-`main`.
+Bump `Z`, write the changelog section, tag, done. If `main` already has an
+unreleased breaking change or feature work, cut the patch branch from the last
+public tag and tag from that branch. Otherwise patch from `main`.
 
 ### Once a year (the first Thursday of September)
 
