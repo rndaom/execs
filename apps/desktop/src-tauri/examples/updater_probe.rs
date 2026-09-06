@@ -8,8 +8,8 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     assert_eq!(
         args.len(),
-        4,
-        "feed, old executable, marker, expected version"
+        5,
+        "feed, old executable, marker, expected version, installed version"
     );
     assert!(args[0].starts_with("http://127.0.0.1:"));
     let runner = std::fs::canonicalize(std::env::var("RUNNER_TEMP").unwrap()).unwrap();
@@ -20,7 +20,7 @@ fn main() {
         .unwrap()
         .starts_with(&runner));
     let mut context = tauri::generate_context!();
-    context.package_info_mut().version = "0.1.1".parse().unwrap();
+    context.package_info_mut().version = args[4].parse().expect("valid installed version");
     context.config_mut().app.windows.clear();
     let updater = context.config_mut().plugins.0.get_mut("updater").unwrap();
     updater["dangerousInsecureTransportProtocol"] = serde_json::json!(true);
@@ -40,7 +40,7 @@ fn main() {
                     let update = updater
                         .check()
                         .await?
-                        .ok_or("No update offered from 0.1.1")?;
+                        .ok_or_else(|| format!("No update offered from {}", args[4]))?;
                     assert_eq!(update.version, args[3]);
                     let bytes = update.download(|_, _| {}, || {}).await?;
                     std::fs::write(

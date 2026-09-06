@@ -4,8 +4,9 @@ Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
 Current public version: **0.1.2** (published 2026-09-06 UTC).
-Next patch: **0.1.3**, bind correctness plus confirmed public write-lock,
-HUD-identity and profile-import regressions.
+Private release candidate: **0.1.3**, bind correctness plus confirmed public
+write-lock, HUD-identity and profile-import regressions. Its version and release
+notes are prepared, but it is not tagged, dispatched, pushed, or published.
 
 Prepare 0.1.3 from the public 0.1.2 tag on a separate maintenance branch.
 Its planned bind scope is RND-212, RND-233 and RND-234. The September 6 audit
@@ -157,6 +158,10 @@ public tag and tag from that branch. Otherwise patch from `main`.
 
 ## Ship checklist
 
+Candidate preparation and platform evidence may be completed before the tag.
+Tag, workflow publication, public-inbox closure, and milestone closure remain
+unchecked until the owner authorizes the release and the publish succeeds.
+
 - [ ] Milestone frozen; leftover issues moved off it
 - [ ] Compatibility list walked
 - [ ] `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section
@@ -167,8 +172,11 @@ public tag and tag from that branch. Otherwise patch from `main`.
 - [ ] Linear milestone issues are Done
 - [ ] Next milestone exists with a theme and a budget of three
 
-`workflow_dispatch` builds a draft for the current version and never
-publishes. Use it to inspect installers. To ship, push a tag.
+`workflow_dispatch` requires the matching `vX.Y.Z` release tag as its
+`release_tag` input, builds that version's private draft, and never publishes.
+The input gives candidate and tag runs the same concurrency lock, so they cannot
+mutate one draft at the same time. Use it to inspect installers. To ship, push
+the tag.
 
 ## Changelog
 

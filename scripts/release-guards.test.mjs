@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { releaseVersion } from "./release-version.mjs";
+import { previousReleaseVersion, releaseVersion } from "./release-version.mjs";
 import { verifyMinisign, verifyRelease } from "./verify-release.mjs";
 
 function removeFixture(directory) {
@@ -93,8 +93,12 @@ test("all product versions, the tag and substantive notes must agree", () => {
       "apps/desktop/src-tauri/core/Cargo.toml",
     ])
       writeFileSync(join(root, file), '[package]\nversion = "0.1.1"\n');
-    writeFileSync(join(root, "CHANGELOG.md"), "## [0.1.1]\n\n### Fixed\n\n- A real fix.\n");
+    writeFileSync(
+      join(root, "CHANGELOG.md"),
+      "## [0.1.1]\n\n### Fixed\n\n- A real fix.\n\n## [0.1.0]\n\n### Added\n\n- First release.\n",
+    );
     assert.equal(releaseVersion(root, "v0.1.1"), "0.1.1");
+    assert.equal(previousReleaseVersion(root, "0.1.1"), "0.1.0");
     assert.throws(() => releaseVersion(root, "v0.1.0"));
     writeFileSync(join(root, "apps/desktop/src-tauri/core/Cargo.toml"), 'version = "0.1.0"\n');
     assert.throws(() => releaseVersion(root));
@@ -106,9 +110,39 @@ test("all product versions, the tag and substantive notes must agree", () => {
   }
 });
 
+test("package smoke derives and passes the immediately previous changelog release", () => {
+  const smoke = readFileSync("scripts/smoke-packages.mjs", "utf8");
+  const probe = readFileSync("apps/desktop/src-tauri/examples/updater_probe.rs", "utf8");
+  assert.match(smoke, /const oldVersion = previousReleaseVersion\(process\.cwd\(\), version\)/);
+  assert.match(smoke, /version,\s*oldVersion,\s*\]\);/);
+  assert.doesNotMatch(smoke, /execs_0\.1\.1_/);
+  assert.match(probe, /args\[4\]\.parse\(\)/);
+  assert.doesNotMatch(probe, /context\.package_info_mut\(\)\.version = "0\.1\.1"/);
+});
+
 test("release workflow always waits for the reusable CI gate", () => {
   const yaml = readFileSync(".github/workflows/release.yml", "utf8");
   assert.match(yaml, /uses: \.\/\.github\/workflows\/ci.yml/);
   assert.match(yaml, /build:\s*\n\s*needs: \[validate\]/);
   assert.match(yaml, /node scripts\/verify-release.mjs/);
+});
+
+test("release candidates and tag builds share a product-tag concurrency lock", () => {
+  const yaml = readFileSync(".github/workflows/release.yml", "utf8");
+  assert.match(
+    yaml,
+    /workflow_dispatch:\s*\n\s*inputs:\s*\n\s*release_tag:\s*\n(?:\s+.*\n)*?\s*required: true/,
+  );
+  assert.match(
+    yaml,
+    /group: release-\$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.release_tag \|\| github\.ref_name \}\}/,
+  );
+  assert.match(yaml, /cancel-in-progress: false/);
+  assert.match(
+    yaml,
+    /RELEASE_TAG: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.release_tag \|\| github\.ref_name \}\}/,
+  );
+  assert.match(yaml, /node scripts\/release-version.mjs "\$RELEASE_TAG"/);
+  assert.match(yaml, /releaseDraft: true/);
+  assert.match(yaml, /publish:\s*\n\s*needs: \[verify\]\s*\n\s*if: github\.event_name == 'push'/);
 });

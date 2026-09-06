@@ -11,10 +11,12 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { basename, join, resolve } from "node:path";
+import { previousReleaseVersion, releaseVersion } from "./release-version.mjs";
 
 assert.equal(process.env.CI, "true", "Installer smoke runs only on disposable CI workers");
 const windows = process.platform === "win32";
-const version = JSON.parse(readFileSync("apps/desktop/package.json", "utf8")).version;
+const version = releaseVersion(process.cwd());
+const oldVersion = previousReleaseVersion(process.cwd(), version);
 const scratch = join(process.env.RUNNER_TEMP, "execs-package-smoke");
 mkdirSync(scratch, { recursive: true });
 const bundle = resolve(
@@ -26,7 +28,9 @@ assert.ok(asset, "Candidate installer missing");
 const bytes = readFileSync(join(bundle, asset));
 const signature = readFileSync(join(bundle, `${asset}.sig`), "utf8").trim();
 const marker = join(scratch, "updater-verified.txt");
-const oldName = windows ? "execs_0.1.1_x64-setup.exe" : "execs_0.1.1_amd64.AppImage";
+const oldName = windows
+  ? `execs_${oldVersion}_x64-setup.exe`
+  : `execs_${oldVersion}_amd64.AppImage`;
 execFileSync(
   "gh",
   [
@@ -124,6 +128,7 @@ try {
     executable,
     marker,
     version,
+    oldVersion,
   ]);
   assert.match(readFileSync(marker, "utf8"), /signature-verified/);
   if (windows) {
@@ -207,7 +212,7 @@ try {
   }
   writeFileSync(
     join(scratch, "result.json"),
-    `${JSON.stringify({ version, platform: process.platform, oldVersion: "0.1.1", artifact: basename(asset), signatureVerified: true, updateInstalled: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,
+    `${JSON.stringify({ version, platform: process.platform, oldVersion, artifact: basename(asset), signatureVerified: true, updateInstalled: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,
   );
   console.log(
     "PASS: signed updater, installer upgrade, packaged startup, notices and data preservation",

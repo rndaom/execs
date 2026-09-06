@@ -25,6 +25,29 @@ export function releaseVersion(root, tag) {
   return version;
 }
 
+export function previousReleaseVersion(root, version) {
+  const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
+  const releases = [
+    ...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\](?: - \d{4}-\d{2}-\d{2})?$/gm),
+  ].map((match) => match[1]);
+  const current = releases.indexOf(version);
+  assert.notEqual(current, -1, `Release ${version} is missing from CHANGELOG.md`);
+  assert.ok(releases[current + 1], `Release ${version} has no previous release in CHANGELOG.md`);
+  const previous = releases[current + 1];
+  const parts = (value) => value.split(".").map(Number);
+  const [currentMajor, currentMinor, currentPatch] = parts(version);
+  const [previousMajor, previousMinor, previousPatch] = parts(previous);
+  assert.ok(
+    previousMajor < currentMajor ||
+      (previousMajor === currentMajor && previousMinor < currentMinor) ||
+      (previousMajor === currentMajor &&
+        previousMinor === currentMinor &&
+        previousPatch < currentPatch),
+    `Previous changelog release ${previous} must be older than ${version}`,
+  );
+  return previous;
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.log(releaseVersion(process.cwd(), process.argv[2]));
 }

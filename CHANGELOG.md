@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-06
+
 ### Fixed
 
 - Binds: record right and middle mouse buttons with the correct TF2 names,

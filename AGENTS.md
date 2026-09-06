@@ -86,6 +86,8 @@ Versioning is `0.Y.Z` until a yearly review promotes 1.0.0. Patch (`0.Y.Z+1`) is
 
 Release = write `CHANGELOG.md` `## [X.Y.Z]`, bump `version` in `apps/desktop/package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/core/Cargo.toml`, push `vX.Y.Z`. The workflow guards the version, builds both platforms into a draft, sets the release body from the changelog (fails if that section is missing or empty), verifies both `latest.json` entries, then publishes.
 
+Private `workflow_dispatch` candidates require the matching `vX.Y.Z` input. Candidate and tag runs for that product version share one concurrency lock because both mutate the same draft. Installer smoke derives the immediately previous public version from ordered changelog history and tests that exact updater path; it is never hard-coded to an older release.
+
 GitHub Issues and Discussions are the public inbox. Linear execs is the backlog. A public thread that becomes work gets a Linear issue labeled `from-github` (and `compat` when it touches profiles, the data dir, the write surface, or the updater). Do not keep a second backlog on GitHub. Every user-facing change adds its `[Unreleased]` changelog line in the same commit.
 
 ## Design system
