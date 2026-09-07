@@ -92,6 +92,8 @@ Release = write `CHANGELOG.md` `## [X.Y.Z]` (including `+N` for an explicitly re
 
 Private `workflow_dispatch` candidates require the matching `vX.Y.Z` input. Candidate and tag runs for that product version share one concurrency lock because both mutate the same draft. Installer smoke derives the immediately previous public version from ordered changelog history and tests that exact updater path; it is never hard-coded to an older release.
 
+Release verification accepts GitHub's temporary `untagged-...` draft browser slug only when it matches that draft's `html_url` and the feed references its stable API asset URL. The exact `tag_name`, revision and signatures remain mandatory. Previous-installer downloads select actual public asset names, including either literal or normalized numeric build suffixes.
+
 GitHub Issues and Discussions are the public inbox. Linear execs is the backlog. A public thread that becomes work gets a Linear issue labeled `from-github` (and `compat` when it touches profiles, the data dir, the write surface, or the updater). Do not keep a second backlog on GitHub. Every user-facing change adds its `[Unreleased]` changelog line in the same commit.
 
 ## Design system

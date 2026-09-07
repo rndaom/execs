@@ -23,11 +23,23 @@ export function releaseName(version) {
   return `execs v${baseVersion}${revision ? ` — Hotfix ${revision}` : ""}`;
 }
 
-// The pinned tauri-action's ghAssetName sanitizes '+' to '.' when uploading.
-// Keep this distinct from the updater version and tag, which retain '+N'.
+// Some upload paths sanitize '+' to '.'. GitHub can also retain the literal
+// '+', so inspect actual release assets instead of assuming either spelling.
 export function releaseAssetVersion(version) {
   parseReleaseVersion(version);
   return version.replace("+", ".");
+}
+
+export function releaseInstallerName(release, version, windows) {
+  parseReleaseVersion(version);
+  assert.equal(release.tagName, `v${version}`, "Previous installer tag mismatch");
+  assert.equal(release.isDraft, false, "Previous installer must be public");
+  const names = [version, releaseAssetVersion(version)].map(
+    (value) => `execs_${value}_${windows ? "x64-setup.exe" : "amd64.AppImage"}`,
+  );
+  const matches = release.assets.filter((asset) => names.includes(asset.name));
+  assert.equal(matches.length, 1, "Exactly one previous installer revision is required");
+  return matches[0].name;
 }
 
 function isOlderRelease(previous, current) {

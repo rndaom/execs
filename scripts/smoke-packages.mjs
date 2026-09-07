@@ -11,7 +11,11 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { basename, join, resolve } from "node:path";
-import { previousReleaseVersion, releaseAssetVersion, releaseVersion } from "./release-version.mjs";
+import {
+  previousReleaseVersion,
+  releaseInstallerName,
+  releaseVersion,
+} from "./release-version.mjs";
 
 assert.equal(process.env.CI, "true", "Installer smoke runs only on disposable CI workers");
 const windows = process.platform === "win32";
@@ -31,9 +35,22 @@ const asset = candidates[0];
 const bytes = readFileSync(join(bundle, asset));
 const signature = readFileSync(join(bundle, `${asset}.sig`), "utf8").trim();
 const marker = join(scratch, "updater-verified.txt");
-const oldName = windows
-  ? `execs_${releaseAssetVersion(oldVersion)}_x64-setup.exe`
-  : `execs_${releaseAssetVersion(oldVersion)}_amd64.AppImage`;
+const previousRelease = JSON.parse(
+  execFileSync(
+    "gh",
+    [
+      "release",
+      "view",
+      `v${oldVersion}`,
+      "--repo",
+      "rndaom/execs",
+      "--json",
+      "tagName,isDraft,assets",
+    ],
+    { encoding: "utf8" },
+  ),
+);
+const oldName = releaseInstallerName(previousRelease, oldVersion, windows);
 execFileSync(
   "gh",
   [

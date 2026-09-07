@@ -9,6 +9,7 @@ import {
   parseReleaseVersion,
   previousReleaseVersion,
   releaseAssetVersion,
+  releaseInstallerName,
   releaseName,
   releaseVersion,
 } from "./release-version.mjs";
@@ -85,6 +86,75 @@ test("release validation binds signatures to both assets and their release", () 
     assert.throws(() => verifyRelease(manifest, release, directory, "0.1.2", key));
   } finally {
     removeFixture(directory);
+  }
+});
+
+test("draft URL identity accepts its stable signed API assets and refuses temporary feed URLs", () => {
+  const directory = mkdtempSync(join(tmpdir(), "execs-release-draft-"));
+  try {
+    const { bytes, signature, key } = signatureFixture();
+    const version = "0.1.3+1";
+    const slug = "untagged-da3cb7d716e6735787e3";
+    const release = {
+      tag_name: `v${version}`,
+      draft: true,
+      prerelease: false,
+      html_url: `https://github.com/rndaom/execs/releases/tag/${slug}`,
+      assets: [],
+    };
+    const manifest = { version, platforms: {} };
+    for (const [id, platform, suffix] of [
+      [1, "windows-x86_64", "x64-setup.exe"],
+      [2, "linux-x86_64", "amd64.AppImage"],
+    ]) {
+      const name = `execs_${version}_${suffix}`;
+      const url = `https://api.github.com/repos/rndaom/execs/releases/assets/${id}`;
+      release.assets.push({
+        name,
+        url,
+        browser_download_url: `https://github.com/rndaom/execs/releases/download/${slug}/${encodeURIComponent(name)}`,
+        size: bytes.length,
+      });
+      manifest.platforms[platform] = { url, signature };
+      writeFileSync(join(directory, name), bytes);
+      writeFileSync(join(directory, `${name}.sig`), signature);
+    }
+    verifyRelease(structuredClone(manifest), release, directory, version, key);
+    const wrongDraft = structuredClone(release);
+    wrongDraft.html_url = wrongDraft.html_url.replace(slug, "untagged-deadbeef");
+    assert.throws(() => verifyRelease(manifest, wrongDraft, directory, version, key));
+    const temporary = structuredClone(manifest);
+    temporary.platforms["windows-x86_64"].url = release.assets[0].browser_download_url;
+    assert.throws(() => verifyRelease(temporary, release, directory, version, key));
+    const wrongTag = { ...release, tag_name: "v0.1.3" };
+    assert.throws(() => verifyRelease(manifest, wrongTag, directory, version, key));
+  } finally {
+    removeFixture(directory);
+  }
+});
+
+test("previous installers use actual published asset names with literal or sanitized revisions", () => {
+  for (const spelling of ["0.1.3+1", "0.1.3.1"]) {
+    const release = {
+      tagName: "v0.1.3+1",
+      isDraft: false,
+      assets: [
+        { name: `execs_${spelling}_x64-setup.exe` },
+        { name: `execs_${spelling}_amd64.AppImage` },
+      ],
+    };
+    assert.equal(releaseInstallerName(release, "0.1.3+1", true), release.assets[0].name);
+    assert.equal(releaseInstallerName(release, "0.1.3+1", false), release.assets[1].name);
+    assert.throws(() => releaseInstallerName({ ...release, isDraft: true }, "0.1.3+1", true));
+    assert.throws(() => releaseInstallerName(release, "0.1.3", true));
+    assert.throws(() => releaseInstallerName({ ...release, assets: [] }, "0.1.3+1", true));
+    assert.throws(() =>
+      releaseInstallerName(
+        { ...release, assets: [...release.assets, release.assets[0]] },
+        "0.1.3+1",
+        true,
+      ),
+    );
   }
 });
 
@@ -227,8 +297,7 @@ test("signed hotfix assets accept literal or encoded plus URLs and reject origin
     for (const entry of Object.values(encoded.platforms))
       entry.url = entry.url.replaceAll("+", "%2b");
     verifyRelease(encoded, release, directory, version, key);
-    // Match the real pinned action: only uploaded filenames are sanitized;
-    // the updater version and release-tag URL component keep the + revision.
+    // Accept upload paths that sanitize filenames without changing the tag.
     for (const [index, platform] of ["windows-x86_64", "linux-x86_64"].entries()) {
       const asset = release.assets[index];
       asset.name = asset.name.replace(version, releaseAssetVersion(version));

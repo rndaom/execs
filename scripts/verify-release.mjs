@@ -75,9 +75,24 @@ export function verifyRelease(manifest, release, directory, version, publicKey) 
     assert.equal(download.search + download.hash, "", "Unexpected release download suffix");
     const segments = download.pathname.split("/").map(decodeURIComponent);
     assert.equal(segments.length, 7, "Unexpected release download path");
+    let downloadTag = `v${version}`;
+    // GitHub assigns a temporary browser URL to a draft even when tag_name
+    // already names the exact existing tag. Its API asset URL remains stable.
+    if (/^untagged-[a-f0-9]+$/.test(segments[5])) {
+      assert.equal(
+        release.html_url,
+        `${download.origin}/${segments[1]}/${segments[2]}/releases/tag/${segments[5]}`,
+        "Draft asset must belong to this exact draft release",
+      );
+      assert.ok(
+        typeof asset.url === "string" && sameUrl(asset.url, entry.url),
+        "A temporary draft download must use its stable API asset URL in the feed",
+      );
+      downloadTag = segments[5];
+    }
     assert.deepEqual(
       segments.slice(3),
-      ["releases", "download", `v${version}`, asset.name],
+      ["releases", "download", downloadTag, asset.name],
       "Asset URL must name this exact release tag and artifact",
     );
     const bytes = readFileSync(join(directory, asset.name));

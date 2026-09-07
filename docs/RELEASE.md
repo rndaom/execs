@@ -50,8 +50,8 @@ always match the release tag (without its `v` prefix):
 An explicitly requested hotfix may retain the product version and increment
 only a build revision: **0.1.3 Hotfix 1** is `0.1.3+1` in these files, the
 changelog heading, updater manifest and new `v0.1.3+1` tag. Local bundle names
-retain `+1`; the pinned upload action changes `+` to `.`, so public filenames
-use `execs_0.1.3.1_...`. The feed points to those actual uploaded assets.
+retain `+1`. Upload paths can retain `+` or normalize it to `.`, so verification
+and previous-installer selection read the actual release asset names.
 Use positive numeric revisions from 1 through 65535, without leading zeros.
 The app footer stays `v0.1.3`; release notes and update copy identify the hotfix.
 Diagnostics, staged notes and install matching retain the complete revision.
@@ -69,6 +69,12 @@ Keep the original published tag and artifacts intact. Build the hotfix in its
 own private draft, then publish it as the latest stable release through the
 existing workflow, feed URL and signing key. This adds no prerelease channel.
 The owner requested this delivery for the September 7 0.1.3 fixes.
+
+GitHub can give a draft an `untagged-...` browser URL despite its exact
+`tag_name`. Verification binds that temporary URL to the draft's `html_url`,
+requires the feed to use the corresponding stable API asset URL, and still
+checks the exact product tag, file revision, signatures and bytes. A temporary
+draft browser URL must never be left in the published updater feed.
 
 | Bump | When | Features | Data / write surface |
 |---|---|---|---|

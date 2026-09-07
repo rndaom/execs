@@ -73,9 +73,28 @@ all-target Clippy including release probes, dependency notices and whitespace
 checks pass. The installer smoke selects the exact local candidate revision,
 downloads the immediately previous public installer, verifies the signed
 replacement and user-data preservation, then checks for no repeat offer.
-The pinned upload action normalizes `+` to `.` in GitHub asset names; the
-verifier and prior-installer download account for that without changing the
-full updater version or tag identity.
+GitHub retained literal `+1` in this build's uploaded asset names. The verifier
+and prior-installer selection inspect actual names and also accept normalized
+`.1` names, without changing the full updater version or tag identity.
+
+### Hotfix platform evidence and finalization
+
+[Release run 34164650979](https://github.com/rndaom/execs/actions/runs/34164650979)
+built commit `df96cb018f5bee219d84bd0a8abab25cdfe64fb1` from the immutable
+`v0.1.3+1` tag. Frontend, Windows and Linux validation passed. Both signed
+package jobs passed the `0.1.3` to `0.1.3+1` upgrade, startup, packaged notices,
+data-preservation and no-repeat-offer checks; their `release-smoke-Windows`
+and `release-smoke-Linux` artifacts contain the results.
+
+The final workflow verifier stopped on GitHub's temporary draft download
+slug, before publication. The release-script correction validates that slug
+against this exact draft's `html_url` while requiring stable API asset URLs
+in the feed. All 19 release-script tests pass, including rejection of another
+draft and a temporary feed URL. Local verification of both downloaded CI
+artifacts then passed exact revision, byte length, SHA-256, minisign key,
+signature sidecar and updater-entry checks. Finalization uses these unchanged
+artifacts and the original tag; the provenance asset records the separate
+verification-script commit. Publication is pending the finalization step.
 
 ### Original published scope
 
