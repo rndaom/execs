@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.3+1] - 2026-09-07
+
+0.1.3 Hotfix 1. Installs through the normal updater and keeps the displayed
+product version at 0.1.3. Existing profiles and exports remain supported.
+
 ### Fixed
 
 - HUD: keep replaced and legacy disabled HUDs out of TF2's active search paths,
