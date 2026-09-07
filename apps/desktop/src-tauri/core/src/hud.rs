@@ -15,7 +15,9 @@ use crate::archive::{
     extract_archive, extract_zip, read_dir_entries, read_regular_file_bounded,
     read_regular_file_bounded_within, validate_imported_cfg, ArchiveLimits,
 };
-use crate::hash::{metadata_is_link, random_token, validate_dir_within};
+use crate::hash::{
+    metadata_is_link, random_token, validate_dir_within, validate_write_target_within,
+};
 #[cfg(all(test, unix))]
 use crate::hash::{remove_dir_within, remove_file_force_within, validate_file_within};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
@@ -26,6 +28,7 @@ use crate::profile::{
     ProfileLiveProjection, ProfileLiveRename, ProfileManifest,
 };
 use crate::settings::execs_data_dir;
+use crate::surface::{is_stock_custom_pack, HUD_BACKUP_CONTAINER};
 use crate::switch::prune_empty_parents;
 use crate::vdf::parse_vdf;
 
@@ -234,23 +237,53 @@ pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
     packs
 }
 
+/// A legacy profile may contain multiple HUD trees. Its selected record wins;
+/// a sole imported folder can still resolve an older catalog-only record.
+/// Without a matching record, use a stable choice independent of another
+/// profile's live HUD and of filesystem enumeration order.
+pub(crate) fn selected_hud_pack(manifest: &ProfileManifest) -> Option<String> {
+    let mut packs = hud_packs(&manifest.files);
+    if let Some(record) = &manifest.hud {
+        if let Some(folder) = manifest_hud_folder_resolved(&manifest.files, &record.id) {
+            let key = pack_key(&format!("tf/custom/{folder}"))?;
+            if let Some(pack) = packs.iter().find(|pack| pack.eq_ignore_ascii_case(&key)) {
+                return Some(pack.clone());
+            }
+        }
+    }
+    packs.sort_by_key(|pack| (pack.to_ascii_lowercase(), pack.clone()));
+    packs.into_iter().next()
+}
+
+/// Extra legacy HUDs remain readable/exportable in the library, but are not
+/// projected to TF2 or classified as deleted merely because they are absent.
+pub(crate) fn inactive_hud_packs(manifest: &ProfileManifest) -> Vec<String> {
+    let selected = selected_hud_pack(manifest);
+    hud_packs(&manifest.files)
+        .into_iter()
+        .filter(|pack| {
+            selected
+                .as_ref()
+                .is_none_or(|selected| !pack.eq_ignore_ascii_case(selected))
+        })
+        .collect()
+}
+
 /// A HUD folder found in `tf/custom/`. `name` is the folder as it is spelled
 /// on disk — the lowercased `key` alone is not enough to open it on a
 /// case-sensitive filesystem, which is how a stray `RaysHUD` stayed mounted
 /// next to a newly installed HUD on Linux.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiveHud {
-    /// Folder name exactly as it appears in `tf/custom/`, disable prefix and all.
+    /// Folder name exactly as it appears in `tf/custom/`, including legacy `-` prefixes.
     pub name: String,
-    /// Lowercased, `-`-stripped identity used to compare against a manifest.
+    /// Lowercased, `-`-stripped legacy identity used to compare against a manifest.
     pub key: String,
 }
 
-/// Every HUD folder in `tf/custom/`, one entry per on-disk spelling. `foo`
-/// and `-foo` (or `RaysHUD` and `rayshud` on Linux) share a key but are
-/// different folders, and each needs handling: deduping on key in directory
-/// order used to keep whichever came first — `-foo` sorts before `foo` on
-/// NTFS — so the mounted `foo` was dropped and never dashed.
+/// Every mounted HUD folder in `tf/custom/`, one per on-disk spelling.
+/// A leading dash does not disable a Source search root: `foo` and `-foo`
+/// can both load. Preserve both entries so replacement handles every tree.
 pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
     let custom = tf2_root.join("tf").join("custom");
     let Ok(meta) = fs::symlink_metadata(&custom) else {
@@ -279,6 +312,9 @@ pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') || is_stock_custom_pack(&name) {
+            continue;
+        }
         let key = name
             .strip_prefix('-')
             .unwrap_or(name.as_str())
@@ -288,8 +324,7 @@ pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
         }
         huds.push(LiveHud { name, key });
     }
-    // Enabled folders first so a caller that stops at the first match per key
-    // sees the one the game actually mounts.
+    // Prefer the canonical spelling when matching a legacy manifest identity.
     huds.sort_by_key(|hud| hud.name.starts_with('-'));
     huds
 }
@@ -327,6 +362,7 @@ pub fn sanitize_hud_id(id: &str) -> Result<String, ProfileError> {
     let id = id.trim().to_ascii_lowercase();
     if id.is_empty()
         || id.starts_with('-')
+        || is_stock_custom_pack(&id)
         || id
             .chars()
             .any(|ch| !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'))
@@ -590,14 +626,9 @@ pub fn resolve_hud(manifest: &ProfileManifest) -> Option<HudStatus> {
             inferred: false,
         });
     }
-    let mut packs = hud_packs(&manifest.files);
-    if packs.is_empty() {
-        return None;
-    }
-    packs.sort();
     Some(HudStatus {
         record: HudRecord {
-            id: packs.into_iter().next()?.to_ascii_lowercase(),
+            id: selected_hud_pack(manifest)?.to_ascii_lowercase(),
             hash: None,
             source: HudSource::Local,
             options: BTreeMap::new(),
@@ -746,12 +777,13 @@ where
         .active_profile_id
         .as_deref()
         == Some(profile_id);
-    // Disable every currently mounted HUD before publishing the replacement.
+    // Move every currently mounted HUD beneath the reserved backup container
+    // before publishing the replacement. A top-level `-name` still mounts.
     // The renames preserve the exact old trees (including untracked files) and
     // keep the transaction's live destinations clear, so it never merges a
     // new HUD into a stray or differently-cased folder.
     let live_renames = if active {
-        plan_live_hud_renames(tf2_root, &id)?
+        plan_live_hud_renames(tf2_root, std::slice::from_ref(&id))?
     } else {
         Vec::new()
     };
@@ -885,7 +917,7 @@ where
         .as_deref()
         == Some(profile_id);
     let live_renames = if active {
-        plan_live_hud_renames(tf2_root, &id)?
+        plan_live_hud_renames(tf2_root, std::slice::from_ref(&id))?
     } else {
         Vec::new()
     };
@@ -1363,7 +1395,7 @@ fn remove_live_pack(tf2_root: &Path, pack: &str) -> Result<(), ProfileError> {
 
 fn plan_live_hud_renames(
     tf2_root: &Path,
-    target_id: &str,
+    known_folders: &[String],
 ) -> Result<Vec<ProfileLiveRename>, ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
     match fs::symlink_metadata(&custom) {
@@ -1383,10 +1415,12 @@ fn plan_live_hud_renames(
     for entry in fs::read_dir(&custom).map_err(|err| ProfileError::Io(err.to_string()))? {
         let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('-') {
+        if name.starts_with('.') || is_stock_custom_pack(&name) {
             continue;
         }
-        let is_target = name.eq_ignore_ascii_case(target_id);
+        let is_target = known_folders
+            .iter()
+            .any(|folder| name.eq_ignore_ascii_case(folder));
         let path = entry.path();
         let meta = fs::symlink_metadata(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
         if metadata_is_link(&meta) || !meta.is_dir() {
@@ -1412,12 +1446,86 @@ fn plan_live_hud_renames(
         .collect()
 }
 
+/// A switch has already journaled and cleared its active profile before this
+/// runs. Preserve any HUD remnants left after hash-checked removal, including
+/// roots whose HUD marker was removed but whose untracked files remain. A
+/// retry can rebuild the selected HUD from its library without losing these
+/// old bytes, even if a move is interrupted between roots.
+pub(crate) fn preserve_live_huds_for_switch(
+    tf2_root: &Path,
+    known_folders: &[String],
+) -> Result<(), ProfileError> {
+    let plans = plan_live_hud_renames(tf2_root, known_folders)?;
+    for plan in plans {
+        refuse_if_running_among(live_process_names())?;
+        crate::hash::move_dir_no_replace_within(
+            tf2_root,
+            &live_path(tf2_root, &plan.from),
+            &live_path(tf2_root, &plan.to),
+        )
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    }
+    Ok(())
+}
+
+/// Heal the old install/switch backup convention during ordinary absorb.
+/// Only legacy dashed, unselected HUDs are migrated, and only when the
+/// selected HUD is actually present. Fresh non-dashed external HUD changes
+/// retain their normal absorb prompt. The existing profile journal preserves
+/// rollback/recovery while the renamed bytes remain outside mounted roots.
+pub(crate) fn recover_legacy_hud_backups_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running: &[String],
+) -> Result<(), ProfileError> {
+    refuse_if_running_among(running)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let Some(selected) = selected_hud_pack(&manifest) else {
+        return Ok(());
+    };
+    let Some(selected_folder) = manifest_hud_folder(&manifest.files, &selected) else {
+        return Ok(());
+    };
+    let live = live_hud_names(tf2_root);
+    if !live
+        .iter()
+        .any(|hud| hud.name.eq_ignore_ascii_case(&selected_folder))
+    {
+        return Ok(());
+    }
+    let legacy: Vec<&LiveHud> = live
+        .iter()
+        .filter(|hud| hud.name.starts_with('-') && !hud.name.eq_ignore_ascii_case(&selected_folder))
+        .collect();
+    if legacy.is_empty() {
+        return Ok(());
+    }
+    let plans: Vec<ProfileLiveRename> = legacy
+        .iter()
+        .map(|hud| plan_live_hud_rename(tf2_root, hud))
+        .collect::<Result<_, _>>()?;
+    mutate_profile_files_with_live_renames_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &[],
+        &[],
+        &plans,
+        running,
+        |manifest| {
+            manifest
+                .ignored_packs
+                .retain(|pack| !legacy.iter().any(|hud| hud.key.eq_ignore_ascii_case(pack)));
+            Ok(())
+        },
+    )?;
+    Ok(())
+}
+
 fn plan_live_hud_rename(tf2_root: &Path, hud: &LiveHud) -> Result<ProfileLiveRename, ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
     let enabled = custom.join(&hud.name);
-    if hud.name.starts_with('-') {
-        return Err(ProfileError::Io("That HUD is already disabled.".into()));
-    }
     match fs::symlink_metadata(&enabled) {
         Ok(meta) if metadata_is_link(&meta) || !meta.is_dir() => {
             return Err(ProfileError::Io(format!(
@@ -1436,28 +1544,22 @@ fn plan_live_hud_rename(tf2_root: &Path, hud: &LiveHud) -> Result<ProfileLiveRen
     }
     validate_dir_within(tf2_root, &custom).map_err(|err| ProfileError::Io(err.to_string()))?;
     validate_dir_within(tf2_root, &enabled).map_err(|err| ProfileError::Io(err.to_string()))?;
-    let preferred = custom.join(format!("-{}", hud.name));
-    let disabled = match fs::symlink_metadata(&preferred) {
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => preferred,
-        Ok(_) => {
-            let mut destination = None;
-            for _ in 0..8 {
-                let candidate = custom.join(format!("-execs-disabled-{}", random_token()));
-                match fs::symlink_metadata(&candidate) {
-                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                        destination = Some(candidate);
-                        break;
-                    }
-                    Ok(_) => {}
-                    Err(err) => return Err(ProfileError::Io(err.to_string())),
-                }
+    let mut destination = None;
+    for _ in 0..8 {
+        let candidate = custom.join(HUD_BACKUP_CONTAINER).join(random_token());
+        match fs::symlink_metadata(&candidate) {
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                destination = Some(candidate.join(&hud.name));
+                break;
             }
-            destination.ok_or_else(|| {
-                ProfileError::Io("Could not reserve a unique disabled HUD folder.".into())
-            })?
+            Ok(_) => {}
+            Err(err) => return Err(ProfileError::Io(err.to_string())),
         }
-        Err(err) => return Err(ProfileError::Io(err.to_string())),
-    };
+    }
+    let disabled = destination
+        .ok_or_else(|| ProfileError::Io("Could not reserve a unique HUD backup folder.".into()))?;
+    validate_write_target_within(tf2_root, &disabled)
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
     let from = format!("tf/custom/{}", hud.name);
     let to = disabled
         .strip_prefix(tf2_root)
@@ -1467,12 +1569,9 @@ fn plan_live_hud_rename(tf2_root: &Path, hud: &LiveHud) -> Result<ProfileLiveRen
     Ok(ProfileLiveRename { from, to })
 }
 
-/// Disable one live HUD without deleting a pre-existing disabled twin.
+/// Preserve one live HUD without deleting a pre-existing legacy dashed twin.
 #[cfg(test)]
-fn dash_live_hud(tf2_root: &Path, hud: &LiveHud) -> Result<(), ProfileError> {
-    if hud.name.starts_with('-') {
-        return Ok(());
-    }
+fn preserve_live_hud(tf2_root: &Path, hud: &LiveHud) -> Result<(), ProfileError> {
     let plan = plan_live_hud_rename(tf2_root, hud)?;
     let from = live_path(tf2_root, &plan.from);
     let to = live_path(tf2_root, &plan.to);
@@ -1483,7 +1582,8 @@ fn dash_live_hud(tf2_root: &Path, hud: &LiveHud) -> Result<(), ProfileError> {
         Err(err) => return Err(ProfileError::Io(err.to_string())),
     }
     refuse_if_running_among(live_process_names()).map_err(ProfileError::from)?;
-    fs::rename(from, to).map_err(|err| ProfileError::Io(err.to_string()))
+    crate::hash::move_dir_no_replace_within(tf2_root, &from, &to)
+        .map_err(|err| ProfileError::Io(err.to_string()))
 }
 
 #[cfg(all(test, unix))]
@@ -1804,16 +1904,15 @@ mod tests {
         assert_eq!(huds[0].name, "RaysHUD");
         assert_eq!(huds[0].key, "rayshud");
 
-        dash_live_hud(&root, &huds[0]).unwrap();
+        preserve_live_hud(&root, &huds[0]).unwrap();
         assert!(!custom.join("RaysHUD").exists());
-        assert!(custom.join("-RaysHUD").is_dir());
+        assert!(preserved_hud(&root, "RaysHUD").is_dir());
         cleanup(&dir);
     }
 
-    /// With both `foo` and `-foo` on disk the game mounts `foo`. Disabling it
-    /// must preserve both differing trees instead of deleting either one.
+    /// Both `foo` and `-foo` mount. Preserving either must retain both trees.
     #[test]
-    fn dashing_preserves_both_trees_when_a_disabled_twin_exists() {
+    fn preservation_keeps_both_trees_when_a_legacy_dashed_twin_exists() {
         let dir = crate::test_temp_dir();
         let root = tf2_root(&dir);
         let custom = root.join("tf").join("custom");
@@ -1826,32 +1925,26 @@ mod tests {
             name: "foo".into(),
             key: "foo".into(),
         };
-        dash_live_hud(&root, &hud).unwrap();
+        preserve_live_hud(&root, &hud).unwrap();
         assert!(!custom.join("foo").exists());
         assert_eq!(
             fs::read(custom.join("-foo/info.vdf")).unwrap(),
             b"already disabled"
         );
-        let preserved = fs::read_dir(&custom)
-            .unwrap()
-            .flatten()
-            .find(|entry| {
-                entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("-execs-disabled-")
-            })
-            .expect("enabled twin should receive a unique disabled name")
-            .path();
+        let preserved = preserved_hud(&root, "foo");
         assert_eq!(fs::read(preserved.join("info.vdf")).unwrap(), b"enabled");
 
-        // A folder that is already dashed is left exactly as it is.
+        // A folder that was dashed by an older build needs preservation too.
         let dashed = LiveHud {
             name: "-foo".into(),
             key: "foo".into(),
         };
-        dash_live_hud(&root, &dashed).unwrap();
-        assert!(custom.join("-foo").is_dir());
+        preserve_live_hud(&root, &dashed).unwrap();
+        assert!(!custom.join("-foo").exists());
+        assert_eq!(
+            fs::read(preserved_hud(&root, "-foo").join("info.vdf")).unwrap(),
+            b"already disabled"
+        );
         cleanup(&dir);
     }
 
@@ -2187,7 +2280,7 @@ mod tests {
     }
 
     #[test]
-    fn install_replaces_previous_hud_and_dashes_stray() {
+    fn install_replaces_previous_hud_and_preserves_stray_outside_mounted_roots() {
         let dir = test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = tf2_root(&dir);
@@ -2252,8 +2345,8 @@ mod tests {
             b"new\n"
         );
         assert!(!root.join("tf/custom/oldhud").exists());
-        assert!(root
-            .join("tf/custom/-stray/resource/ui/hudlayout.res")
+        assert!(preserved_hud(&root, "stray")
+            .join("resource/ui/hudlayout.res")
             .is_file());
         cleanup(&dir);
     }
@@ -2697,6 +2790,234 @@ mod tests {
         (profiles, root, id)
     }
 
+    fn preserved_hud(root: &Path, name: &str) -> PathBuf {
+        let found: Vec<PathBuf> = fs::read_dir(root.join("tf/custom").join(HUD_BACKUP_CONTAINER))
+            .unwrap()
+            .map(|entry| entry.unwrap().path().join(name))
+            .filter(|path| path.is_dir())
+            .collect();
+        assert_eq!(found.len(), 1, "one untouched backup of {name}: {found:?}");
+        found.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn oxide_to_colly_preserves_edits_without_a_second_mounted_hud_or_absorb_prompt() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let mut record = rays_record();
+        record.id = "grape-oxide".into();
+        install_hud_pack_to(&profiles, &root, &id, &rays_tree(), record, unlocked()).unwrap();
+        let old = root.join("tf/custom/grape-oxide");
+        fs::write(old.join("resource/ui/hudlayout.res"), b"my oxide edit\n").unwrap();
+        fs::write(old.join("notes.txt"), b"untracked notes\n").unwrap();
+        fs::write(old.join("unfinished.execs-part"), b"preserve every byte\n").unwrap();
+
+        let mut colly = rays_record();
+        colly.id = "colly-hud".into();
+        install_hud_pack_to(&profiles, &root, &id, &rays_tree(), colly, unlocked()).unwrap();
+        let mounted = live_hud_names(&root);
+        assert_eq!(mounted.len(), 1, "{mounted:?}");
+        assert_eq!(mounted[0].name, "colly-hud");
+        let backup = preserved_hud(&root, "grape-oxide");
+        assert_eq!(
+            fs::read(backup.join("resource/ui/hudlayout.res")).unwrap(),
+            b"my oxide edit\n"
+        );
+        assert_eq!(
+            fs::read(backup.join("notes.txt")).unwrap(),
+            b"untracked notes\n"
+        );
+        let result = crate::absorb::absorb_owned_to(
+            &profiles,
+            &root,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            },
+        )
+        .unwrap();
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        assert_eq!(
+            fs::read(backup.join("unfinished.execs-part")).unwrap(),
+            b"preserve every byte\n"
+        );
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(hud_packs(&manifest.files), ["colly-hud"]);
+        assert!(manifest.ignored_packs.is_empty());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn install_moves_legacy_ignored_oxide_beneath_the_backup_container() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let old = root.join("tf/custom/-grape-oxide");
+        fs::create_dir_all(old.join("resource/ui")).unwrap();
+        fs::write(old.join("info.vdf"), info_vdf()).unwrap();
+        fs::write(old.join("resource/ui/hudlayout.res"), b"legacy oxide\n").unwrap();
+        let mut manifest = load_manifest(&profiles, &id).unwrap();
+        manifest.ignored_packs.push("grape-oxide".into());
+        save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
+        let mut record = rays_record();
+        record.id = "colly-hud".into();
+        install_hud_pack_to(&profiles, &root, &id, &rays_tree(), record, unlocked()).unwrap();
+        assert!(!old.exists());
+        let mounted = live_hud_names(&root);
+        assert_eq!(mounted.len(), 1, "{mounted:?}");
+        assert_eq!(mounted[0].name, "colly-hud");
+        assert_eq!(
+            fs::read(preserved_hud(&root, "-grape-oxide").join("resource/ui/hudlayout.res"))
+                .unwrap(),
+            b"legacy oxide\n"
+        );
+        let delta = crate::absorb::scan_absorb_delta_to(
+            &profiles,
+            &root,
+            crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            },
+        )
+        .unwrap();
+        assert!(!delta.has_pack_changes(), "{delta:?}");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_blocked_backup_container_refuses_before_replacing_any_hud_bytes() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        fs::write(
+            root.join("tf/custom").join(HUD_BACKUP_CONTAINER),
+            b"unrelated file\n",
+        )
+        .unwrap();
+        let mut record = rays_record();
+        record.id = "colly-hud".into();
+        assert!(
+            install_hud_pack_to(&profiles, &root, &id, &rays_tree(), record, unlocked()).is_err()
+        );
+        let after = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(after.files, before.files);
+        assert_eq!(after.hud, before.hud);
+        assert_eq!(
+            fs::read(root.join("tf/custom/rayshud/info.vdf")).unwrap(),
+            info_vdf()
+        );
+        assert!(!root.join("tf/custom/colly-hud").exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn ordinary_absorb_heals_legacy_oxide_but_still_prompts_for_new_external_huds() {
+        for ignored in [false, true] {
+            let dir = test_temp_dir();
+            let (profiles, root, id) = active_profile(&dir);
+            let mut record = rays_record();
+            record.id = "colly-hud".into();
+            install_hud_pack_to(&profiles, &root, &id, &rays_tree(), record, unlocked()).unwrap();
+            let legacy = root.join("tf/custom/-grape-oxide");
+            fs::create_dir_all(&legacy).unwrap();
+            fs::write(legacy.join("info.vdf"), b"legacy oxide bytes\n").unwrap();
+            fs::create_dir_all(root.join("tf/custom/-colly-hud")).unwrap();
+            fs::write(
+                root.join("tf/custom/-colly-hud/info.vdf"),
+                b"older Colly update\n",
+            )
+            .unwrap();
+            fs::create_dir_all(root.join("tf/custom/external")).unwrap();
+            fs::write(root.join("tf/custom/external/info.vdf"), b"external HUD\n").unwrap();
+            if ignored {
+                let mut manifest = load_manifest(&profiles, &id).unwrap();
+                manifest.ignored_packs.push("grape-oxide".into());
+                save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
+            }
+            let opts = || crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            };
+            let locked = crate::absorb::absorb_owned_to(&profiles, &root, ["tf_win64.exe"], opts());
+            assert_eq!(locked.unwrap_err(), ProfileError::GameRunning);
+            assert!(legacy.is_dir());
+            for _ in 0..2 {
+                let result =
+                    crate::absorb::absorb_owned_to(&profiles, &root, unlocked(), opts()).unwrap();
+                assert_eq!(result.delta.packs_added, ["external"]);
+                assert!(result.delta.packs_removed.is_empty());
+            }
+            assert!(!legacy.exists());
+            assert!(!root.join("tf/custom/-colly-hud").exists());
+            assert_eq!(
+                fs::read(preserved_hud(&root, "-colly-hud").join("info.vdf")).unwrap(),
+                b"older Colly update\n"
+            );
+            assert_eq!(
+                fs::read(preserved_hud(&root, "-grape-oxide").join("info.vdf")).unwrap(),
+                b"legacy oxide bytes\n"
+            );
+            assert!(root.join("tf/custom/external/info.vdf").is_file());
+            assert!(root.join("tf/custom/colly-hud/info.vdf").is_file());
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn ordinary_absorb_keeps_inactive_legacy_hud_library_files_and_never_restores_them() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let old_rel = "tf/custom/-execs-oldhud/info.vdf";
+        put_exclusive_file_to(&profiles, &root, &id, old_rel, b"library HUD\n", unlocked())
+            .unwrap();
+        fs::create_dir_all(root.join("tf/custom/-execs-oldhud")).unwrap();
+        fs::write(root.join(old_rel), b"edited old HUD\n").unwrap();
+        let result = crate::absorb::absorb_owned_to(
+            &profiles,
+            &root,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            },
+        )
+        .unwrap();
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        assert_eq!(live_hud_names(&root).len(), 1);
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, old_rel)).unwrap(),
+            b"library HUD\n"
+        );
+        assert_eq!(
+            fs::read(preserved_hud(&root, "-execs-oldhud").join("info.vdf")).unwrap(),
+            b"edited old HUD\n"
+        );
+        assert!(load_manifest(&profiles, &id)
+            .unwrap()
+            .files
+            .iter()
+            .any(|file| file.path == old_rel));
+        cleanup(&dir);
+    }
+
     fn rays_tree() -> HudTree {
         let mut tree = HudTree::default();
         tree.insert("info.vdf", info_vdf().to_vec());
@@ -2820,9 +3141,7 @@ mod tests {
 
     /// Catalog Update on a profile whose HUD was absorbed as `RaysHUD`: the
     /// live folder with the same identity but another spelling must not stay
-    /// mounted next to the fresh `rayshud/`. Exercises `remove_live_pack` by
-    /// key on Linux; on Windows the two names are one folder and the result
-    /// is the same.
+    /// mounted next to the fresh `rayshud/` on either platform.
     #[test]
     fn install_replaces_a_live_folder_that_differs_only_in_case() {
         let dir = test_temp_dir();
@@ -2850,17 +3169,14 @@ mod tests {
         )
         .unwrap();
 
-        let mounted: Vec<LiveHud> = live_hud_names(&root)
-            .into_iter()
-            .filter(|hud| !hud.name.starts_with('-'))
-            .collect();
+        let mounted = live_hud_names(&root);
         assert_eq!(mounted.len(), 1, "{mounted:?}");
         assert_eq!(mounted[0].name, "rayshud");
         assert_eq!(
             fs::read(custom.join("rayshud").join("info.vdf")).unwrap(),
             info_vdf()
         );
-        assert!(custom.join("-RaysHUD").exists());
+        assert!(preserved_hud(&root, "RaysHUD").is_dir());
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert!(manifest
             .files
@@ -2870,9 +3186,9 @@ mod tests {
     }
 
     /// A stray `RaysHUD` the profile never absorbed shares the new HUD's key
-    /// but not its folder: it is dashed, not left mounted.
+    /// but not its folder: it must be preserved outside the mounted roots.
     #[test]
-    fn install_dashes_a_stray_folder_that_shares_the_key() {
+    fn install_preserves_a_stray_folder_that_shares_the_key() {
         let dir = test_temp_dir();
         let (profiles, root, id) = active_profile(&dir);
         let custom = root.join("tf").join("custom");
@@ -2889,15 +3205,12 @@ mod tests {
         )
         .unwrap();
 
-        assert!(custom.join("-RaysHUD").is_dir());
+        assert!(preserved_hud(&root, "RaysHUD").is_dir());
         assert_eq!(
             fs::read(custom.join("rayshud").join("info.vdf")).unwrap(),
             info_vdf()
         );
-        let mounted: Vec<LiveHud> = live_hud_names(&root)
-            .into_iter()
-            .filter(|hud| !hud.name.starts_with('-'))
-            .collect();
+        let mounted = live_hud_names(&root);
         assert_eq!(mounted.len(), 1, "{mounted:?}");
         cleanup(&dir);
     }
@@ -2930,7 +3243,7 @@ mod tests {
             .join("materials/leftover.vmt")
             .exists());
         assert_eq!(
-            fs::read(custom.join("-RaysHUD/materials/leftover.vmt")).unwrap(),
+            fs::read(preserved_hud(&root, "RaysHUD").join("materials/leftover.vmt")).unwrap(),
             b"untracked\n"
         );
         assert_eq!(
@@ -2970,10 +3283,9 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// `-foo` sorts before `foo` on NTFS. Deduping on key kept the dashed
-    /// copy and dropped the mounted one, so it was never dashed.
+    /// Both legacy dashed and plain folders must leave the mounted roots.
     #[test]
-    fn live_hud_names_keep_every_spelling_and_the_enabled_one_is_dashed() {
+    fn live_hud_names_keep_every_spelling_and_both_are_preserved() {
         let dir = test_temp_dir();
         let (profiles, root, id) = active_profile(&dir);
         let custom = root.join("tf").join("custom");
@@ -2997,8 +3309,11 @@ mod tests {
         )
         .unwrap();
         assert!(!custom.join("foo").exists());
-        assert!(custom.join("-foo").is_dir());
+        assert!(!custom.join("-foo").exists());
+        assert!(preserved_hud(&root, "foo").is_dir());
+        assert!(preserved_hud(&root, "-foo").is_dir());
         assert!(custom.join("rayshud").is_dir());
+        assert_eq!(live_hud_names(&root).len(), 1);
         cleanup(&dir);
     }
 

@@ -15,7 +15,7 @@ use crate::hash::{
     remove_file_force_within, sha256_file, validate_dir_within, validate_file_within,
     MAX_CFG_FILE_BYTES,
 };
-use crate::hud::{hud_packs, live_hud_keys};
+use crate::hud::{inactive_hud_packs, live_hud_names, preserve_live_huds_for_switch};
 use crate::launch::LaunchWriteReason;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -206,7 +206,10 @@ where
     // deleted and the new ones half-written.
     preflight_target(profiles_dir, profile_id, &target)?;
 
-    let live_huds = live_hud_keys(tf2_root);
+    let live_hud_folders: Vec<String> = live_hud_names(tf2_root)
+        .into_iter()
+        .map(|hud| hud.name)
+        .collect();
     let previous = library.active_profile_id.clone();
     progress(SwitchProgress::new(SwitchStep::Pack));
     if previous.is_some() {
@@ -260,11 +263,14 @@ where
 
     let mut result = remove_unmodified_live(tf2_root, &journal.cleanup_files);
     if result.is_ok() {
+        result = preserve_live_huds_for_switch(tf2_root, &live_hud_folders);
+    }
+    if result.is_ok() {
         result = refuse_if_running_among(live_process_names()).map_err(ProfileError::from);
     }
     if result.is_ok() {
         progress(SwitchProgress::new(SwitchStep::Write));
-        result = write_target_live(profiles_dir, tf2_root, &target, &live_huds);
+        result = write_target_live(profiles_dir, tf2_root, &target);
     }
     if result.is_ok() {
         progress(SwitchProgress::new(SwitchStep::Cloud));
@@ -388,6 +394,30 @@ fn mid_switch_error(err: &ProfileError) -> ProfileError {
     ))
 }
 
+/// Read-only preflight for commands that must prepare other install-global
+/// state before switching. A bad profile or damaged source must fail before
+/// that preparation mutates anything. The switch repeats its own preflight
+/// under the same write gate before touching the live profile surface.
+pub fn validate_profile_switch_target(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if !library.usable {
+        return Err(ProfileError::NotInitialized);
+    }
+    if !library
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id)
+    {
+        return Err(ProfileError::UnknownProfile);
+    }
+    let target = load_manifest(profiles_dir, profile_id)?;
+    preflight_target(profiles_dir, profile_id, &target)
+}
+
 /// Validate the entire target manifest before the live tree is touched: every
 /// path inside the file-safe surface, every source file present.
 fn preflight_target(
@@ -494,10 +524,8 @@ fn write_target_live(
     profiles_dir: &Path,
     tf2_root: &Path,
     target: &ProfileManifest,
-    live_huds: &[String],
 ) -> Result<(), ProfileError> {
-    let preferred_hud = preferred_hud(target, live_huds);
-    let extra_huds = extra_hud_packs(&target.files, preferred_hud.as_deref());
+    let extra_huds = inactive_hud_packs(target);
     for file in &target.files {
         if !is_profile_ownable_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
@@ -509,9 +537,13 @@ fn write_target_live(
         if is_stock_custom_entry(&file.path) {
             continue;
         }
-        let dest_rel = rewrite_extra_hud_path(&file.path, &extra_huds);
+        if pack_key(&file.path)
+            .is_some_and(|pack| extra_huds.iter().any(|hud| hud.eq_ignore_ascii_case(&pack)))
+        {
+            continue;
+        }
         let source = target_source(profiles_dir, target, file)?;
-        let dest = live_path(tf2_root, &dest_rel);
+        let dest = live_path(tf2_root, &file.path);
         refuse_if_running_among(live_process_names())?;
         copy_verified_atomic_within(tf2_root, &source, &dest, &file.sha256)
             .map_err(|e| ProfileError::Io(e.to_string()))?;
@@ -544,57 +576,8 @@ fn dual_write_target_config(
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
 }
 
-fn preferred_hud(target: &ProfileManifest, live_huds: &[String]) -> Option<String> {
-    let mut target_huds = hud_packs(&target.files);
-    if target_huds.is_empty() {
-        return None;
-    }
-    if let Some(hud) = &target.hud {
-        if target_huds.iter().any(|pack| pack == &hud.id) {
-            return Some(hud.id.clone());
-        }
-    }
-    for live in live_huds {
-        if target_huds.iter().any(|hud| hud == live) {
-            return Some(live.clone());
-        }
-    }
-    target_huds.sort();
-    target_huds.into_iter().next()
-}
-
-fn extra_hud_packs(files: &[ProfileFile], preferred: Option<&str>) -> Vec<String> {
-    hud_packs(files)
-        .into_iter()
-        .filter(|hud| preferred != Some(hud.as_str()))
-        .collect()
-}
-
-fn rewrite_extra_hud_path(rel: &str, extra_huds: &[String]) -> String {
-    let Some(pack) = pack_key(rel) else {
-        return rel.to_string();
-    };
-    if !extra_huds.iter().any(|hud| hud == &pack) {
-        return rel.to_string();
-    }
-    let Some(rest) = rel.strip_prefix("tf/custom/") else {
-        return rel.to_string();
-    };
-    let (first, after) = rest.split_once('/').unwrap_or((rest, ""));
-    let disabled = if first.starts_with('-') {
-        first.to_string()
-    } else {
-        format!("-{first}")
-    };
-    if after.is_empty() {
-        format!("tf/custom/{disabled}")
-    } else {
-        format!("tf/custom/{disabled}/{after}")
-    }
-}
-
 /// Where a manifest path can be found live: its own path, plus the Source
-/// disable-prefixed name a user renames a pack to.
+/// legacy dash-prefixed spelling a user or older build renamed a pack to.
 pub(crate) fn live_candidates(tf2_root: &Path, rel: &str) -> Vec<PathBuf> {
     let mut out = vec![live_path(tf2_root, rel)];
     if let Some(disabled) = disabled_custom_rel(rel) {
@@ -1166,7 +1149,7 @@ mod tests {
     }
 
     #[test]
-    fn extra_hud_writes_with_disable_prefix() {
+    fn extra_hud_stays_in_the_library_without_an_absorb_deletion() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1187,13 +1170,39 @@ mod tests {
         switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
 
         assert!(root.join("tf/custom/ahud/info.vdf").is_file());
-        assert!(root.join("tf/custom/-zhud/info.vdf").is_file());
+        assert!(!root.join("tf/custom/-zhud/info.vdf").exists());
         assert!(!root.join("tf/custom/zhud/info.vdf").exists());
+        assert_eq!(crate::hud::live_hud_names(&root).len(), 1);
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &both,
+                "tf/custom/zhud/info.vdf"
+            ))
+            .unwrap(),
+            b"z\n"
+        );
+        let result = absorb_owned_to(&profiles, &root, unlocked(), no_steam()).unwrap();
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        assert!(load_manifest(&profiles, &both)
+            .unwrap()
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/zhud/info.vdf"));
+        switch_profile_to(&profiles, &root, &plain, unlocked(), no_steam(), |_| {}).unwrap();
+        assert!(crate::hud::live_hud_names(&root).is_empty());
+        switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
+        assert_eq!(crate::hud::live_hud_names(&root).len(), 1);
+        assert!(
+            !crate::absorb::scan_absorb_delta_to(&profiles, &root, no_steam())
+                .unwrap()
+                .has_pack_changes()
+        );
         cleanup(&dir);
     }
 
     #[test]
-    fn prefers_currently_live_hud() {
+    fn another_profiles_live_hud_cannot_change_the_targets_inferred_hud() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1211,8 +1220,16 @@ mod tests {
         write_live(&root.join("tf/custom/zhud/info.vdf"), "z\n");
         switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
 
-        assert!(root.join("tf/custom/zhud/info.vdf").is_file());
-        assert!(root.join("tf/custom/-ahud/info.vdf").is_file());
+        let mounted = crate::hud::live_hud_names(&root);
+        assert_eq!(mounted.len(), 1, "{mounted:?}");
+        assert_eq!(mounted[0].name, "ahud");
+        assert!(!root.join("tf/custom/-ahud").exists());
+        assert!(!root.join("tf/custom/zhud").exists());
+        assert!(
+            !crate::absorb::scan_absorb_delta_to(&profiles, &root, no_steam())
+                .unwrap()
+                .has_pack_changes()
+        );
         cleanup(&dir);
     }
 
@@ -1372,11 +1389,22 @@ mod tests {
             "B",
             &[("tf/cfg/config.cfg", b"binds-b\n")],
         );
+        assert!(validate_profile_switch_target(&profiles, &root, &b).is_ok());
         fs::write(
             exclusive_file_path(&profiles, &b, "tf/cfg/config.cfg"),
             b"tampered",
         )
         .unwrap();
+
+        let index_before = fs::read(profiles.join("index.json")).unwrap();
+        let preflight = validate_profile_switch_target(&profiles, &root, &b).unwrap_err();
+        assert!(preflight.message().contains("integrity verification"));
+        assert_eq!(fs::read(profiles.join("index.json")).unwrap(), index_before);
+        assert_eq!(
+            validate_profile_switch_target(&profiles, &root, "unknown").unwrap_err(),
+            ProfileError::UnknownProfile
+        );
+        assert!(validate_profile_switch_target(&profiles, &dir.join("other TF2"), &b).is_err());
 
         let mut steps = Vec::new();
         let err = switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |step| {
@@ -1688,14 +1716,63 @@ mod tests {
     }
 
     #[test]
-    fn rewrite_extra_hud_path_prefixes() {
-        assert_eq!(
-            rewrite_extra_hud_path("tf/custom/zhud/info.vdf", &["zhud".into()]),
-            "tf/custom/-zhud/info.vdf"
+    fn switching_to_colly_preserves_ignored_legacy_oxide_and_only_mounts_colly() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/rayshud/info.vdf"), "current HUD\n");
+        let oxide = save(&profiles, &root, "Oxide");
+        let colly = library_profile(
+            &profiles,
+            &root,
+            "Colly",
+            &[
+                ("tf/cfg/config.cfg", b"unbindall\n"),
+                ("tf/custom/Colly-HUD/info.vdf", b"colly\n"),
+                ("tf/custom/grape-oxide/info.vdf", b"old profile copy\n"),
+            ],
         );
-        assert_eq!(
-            rewrite_extra_hud_path("tf/custom/ahud/info.vdf", &["zhud".into()]),
-            "tf/custom/ahud/info.vdf"
+        let mut manifest = load_manifest(&profiles, &colly).unwrap();
+        manifest.hud = Some(crate::profile::HudRecord {
+            id: "colly-hud".into(),
+            hash: None,
+            source: crate::profile::HudSource::Local,
+            options: Default::default(),
+        });
+        crate::profile::save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
+        write_live(
+            &root.join("tf/custom/-grape-oxide/info.vdf"),
+            "manually edited oxide\n",
         );
+        let mut before = load_manifest(&profiles, &oxide).unwrap();
+        before.ignored_packs.push("grape-oxide".into());
+        crate::profile::save_manifest(&profiles, &root, &before, unlocked()).unwrap();
+        switch_profile_to(&profiles, &root, &colly, unlocked(), no_steam(), |_| {}).unwrap();
+        let mounted = crate::hud::live_hud_names(&root);
+        assert_eq!(mounted.len(), 1, "{mounted:?}");
+        assert_eq!(mounted[0].name, "Colly-HUD");
+        let backups: Vec<PathBuf> = fs::read_dir(
+            root.join("tf/custom")
+                .join(crate::surface::HUD_BACKUP_CONTAINER),
+        )
+        .unwrap()
+        .map(|entry| entry.unwrap().path().join("-grape-oxide/info.vdf"))
+        .filter(|path| path.is_file())
+        .collect();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(fs::read(&backups[0]).unwrap(), b"manually edited oxide\n");
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &colly,
+                "tf/custom/grape-oxide/info.vdf"
+            ))
+            .unwrap(),
+            b"old profile copy\n"
+        );
+        let result = absorb_owned_to(&profiles, &root, unlocked(), no_steam()).unwrap();
+        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
+        cleanup(&dir);
     }
 }

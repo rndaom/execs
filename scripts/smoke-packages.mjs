@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { basename, join, resolve } from "node:path";
-import { previousReleaseVersion, releaseVersion } from "./release-version.mjs";
+import { previousReleaseVersion, releaseAssetVersion, releaseVersion } from "./release-version.mjs";
 
 assert.equal(process.env.CI, "true", "Installer smoke runs only on disposable CI workers");
 const windows = process.platform === "win32";
@@ -23,14 +23,17 @@ const bundle = resolve(
   "apps/desktop/src-tauri/target/release/bundle",
   windows ? "nsis" : "appimage",
 );
-const asset = readdirSync(bundle).find((name) => name.endsWith(windows ? ".exe" : ".AppImage"));
-assert.ok(asset, "Candidate installer missing");
+const candidates = readdirSync(bundle).filter(
+  (name) => name.includes(`_${version}_`) && name.endsWith(windows ? ".exe" : ".AppImage"),
+);
+assert.equal(candidates.length, 1, "Exactly one installer for the candidate revision is required");
+const asset = candidates[0];
 const bytes = readFileSync(join(bundle, asset));
 const signature = readFileSync(join(bundle, `${asset}.sig`), "utf8").trim();
 const marker = join(scratch, "updater-verified.txt");
 const oldName = windows
-  ? `execs_${oldVersion}_x64-setup.exe`
-  : `execs_${oldVersion}_amd64.AppImage`;
+  ? `execs_${releaseAssetVersion(oldVersion)}_x64-setup.exe`
+  : `execs_${releaseAssetVersion(oldVersion)}_amd64.AppImage`;
 execFileSync(
   "gh",
   [
@@ -131,9 +134,10 @@ try {
     oldVersion,
   ]);
   assert.match(readFileSync(marker, "utf8"), /signature-verified/);
+  let installedVersion = version;
   if (windows) {
     // NSIS is asynchronous when invoked by the updater, which exits for replacement.
-    let installedVersion = "";
+    installedVersion = "";
     for (let attempt = 0; attempt < 90; attempt++) {
       installedVersion = execFileSync(
         "powershell",
@@ -174,6 +178,15 @@ try {
     );
     executable = join(tree, "AppRun");
   }
+  // Use the installed PE revision on Windows; Linux already matched the entire
+  // replacement image against the candidate. The signed feed must not loop.
+  await run(
+    resolve(
+      "apps/desktop/src-tauri/target/debug/examples",
+      windows ? "updater_check_probe.exe" : "updater_check_probe",
+    ),
+    [`http://127.0.0.1:${server.address().port}/latest.json`, installedVersion, "none"],
+  );
   assert.equal(readFileSync(sentinel, "utf8"), "user data must survive updates\n");
   if (windows) {
     // NSIS /R restarts the upgraded app. Stop only this worker's installed copy
@@ -212,7 +225,7 @@ try {
   }
   writeFileSync(
     join(scratch, "result.json"),
-    `${JSON.stringify({ version, platform: process.platform, oldVersion, artifact: basename(asset), signatureVerified: true, updateInstalled: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,
+    `${JSON.stringify({ version, platform: process.platform, oldVersion, artifact: basename(asset), signatureVerified: true, updateInstalled: true, noRepeatOffer: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,
   );
   console.log(
     "PASS: signed updater, installer upgrade, packaged startup, notices and data preservation",

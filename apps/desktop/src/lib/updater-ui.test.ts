@@ -7,6 +7,7 @@ import {
   INSTALL_LABEL,
   LATER_LABEL,
   PREVIEW_UPDATE_VERSION,
+  releaseVersionCopy,
   showUpdateBanner,
   updateBannerCopy,
   updateCheckButtonLabel,
@@ -40,13 +41,22 @@ describe("updater UI helpers", () => {
   it("keeps auto-check quiet and names manual outcomes", () => {
     expect(updateCheckCopy("latest")).toBe("You're on the latest version.");
     expect(updateCheckCopy("error")).toBe("Could not check for updates.");
-    expect(appVersionCopy("0.1.0")).toBe("execs 0.1.0");
+    expect(appVersionCopy("0.1.0")).toBe("v0.1.0");
     expect(INSTALL_LABEL).toBe("Install");
     expect(LATER_LABEL).toBe("Later");
     expect(CHECK_LABEL).toBe("Check for updates");
     expect(updateCheckButtonLabel(null)).toBe(CHECK_LABEL);
     expect(updateCheckButtonLabel(updateCheckCopy("latest"))).toBe("You're on the latest version.");
     expect(updateCheckButtonLabel(updateCheckCopy("error"))).toBe("Could not check for updates.");
+  });
+
+  it("keeps the product version visible while naming hotfix revisions in update copy", () => {
+    expect(appVersionCopy("0.1.3")).toBe("v0.1.3");
+    expect(appVersionCopy("0.1.3+1")).toBe("v0.1.3");
+    expect(releaseVersionCopy("0.1.3")).toBe("0.1.3");
+    expect(releaseVersionCopy("0.1.3+1")).toBe("0.1.3 · Hotfix 1");
+    expect(releaseVersionCopy("0.1.3+2")).toBe("0.1.3 · Hotfix 2");
+    expect(updateBannerCopy("0.1.3+1")).toBe("Update available — execs 0.1.3 · Hotfix 1");
   });
 
   it("seeds preview fixtures and leaves other chrome alone", () => {

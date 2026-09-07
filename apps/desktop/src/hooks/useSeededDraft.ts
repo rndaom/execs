@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useState } from "react";
 import { shouldReseedDraft } from "../lib/files-ui";
 
 /** Neither a profile id nor any record name can contain it. */
@@ -41,27 +41,34 @@ export function useSeededDraft<T>(
   serialize: (value: T) => string,
   recordKey?: string | null,
 ): [T, Dispatch<SetStateAction<T>>] {
-  const [draft, setDraft] = useState<T>(seed);
-  const lastSeeded = useRef<string | null>(null);
-  const lastKey = useRef<string | null | undefined>(recordKey);
+  const next = serialize(seed);
+  const [state, setState] = useState(() => ({ draft: seed, seeded: next, recordKey }));
+  let current = state;
 
-  // `draft` is read to decide whether there are unsaved edits, never depended
-  // on: a reseed must be driven by incoming content, not by the user typing.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above.
-  useEffect(() => {
-    const next = serialize(seed);
-    const keyChanged = lastKey.current !== recordKey;
-    const dirty = lastSeeded.current !== null && serialize(draft) !== lastSeeded.current;
-    if (!shouldReseedFor(lastSeeded.current, next, dirty, keyChanged)) {
-      // An acknowledged save advances the baseline even while newer edits
-      // remain on screen. Later external changes can then refresh a clean draft.
-      lastSeeded.current = next;
-      return;
-    }
-    lastKey.current = recordKey;
-    lastSeeded.current = next;
-    setDraft(seed);
-  }, [seed, recordKey]);
+  // Reconcile before effects can observe the draft. A reload can publish new
+  // settings and lift the write lock together: effect-based reseeding exposed
+  // the old draft against the new seed, and autosave immediately wrote it back.
+  // State (rather than render-time ref mutation) also keeps discarded renders
+  // from advancing the baseline.
+  if (state.seeded !== next || state.recordKey !== recordKey) {
+    const dirty = serialize(state.draft) !== state.seeded;
+    const reseed = shouldReseedFor(state.seeded, next, dirty, state.recordKey !== recordKey);
+    current = {
+      draft: reseed ? seed : state.draft,
+      // An acknowledged save advances the baseline while newer edits remain.
+      seeded: next,
+      recordKey,
+    };
+    setState(current);
+  }
 
-  return [draft, setDraft];
+  const setDraft = useCallback<Dispatch<SetStateAction<T>>>((update) => {
+    setState((previous) => {
+      const draft =
+        typeof update === "function" ? (update as (value: T) => T)(previous.draft) : update;
+      return Object.is(draft, previous.draft) ? previous : { ...previous, draft };
+    });
+  }, []);
+
+  return [current.draft, setDraft];
 }

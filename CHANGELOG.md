@@ -5,6 +5,22 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- HUD: keep replaced and legacy disabled HUDs out of TF2's active search paths,
+  preserve their files as backups, and stop reporting those backups as external
+  profile changes.
+- Mods: stop carrying another profile's particle-mod selections and patches
+  through profile switches, and recover stale source references.
+- Crosshair and settings: stop reloads from moving clean sliders back and
+  triggering repeated autosaves; keep newer edits during an in-flight save.
+- Files: keep the save-drafts dialog visible and clickable, and let an active
+  operation finish without asking to save nonexistent Files drafts.
+- Profiles: check external changes once per game session or profile switch,
+  and stop offering an old profile's pack choices on the new profile.
+- Application: deliver these fixes as 0.1.3 Hotfix 1 through the existing
+  in-app updater, keeping the displayed product version at 0.1.3.
+
 ## [0.1.3] - 2026-09-07
 
 ### Added

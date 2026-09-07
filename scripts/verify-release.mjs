@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { changelogPath, releaseNotesFromChangelog } from "./release-notes.mjs";
+import { parseReleaseVersion, releaseAssetVersion } from "./release-version.mjs";
 
 // Tauri's public key and .sig files are base64-encoded Minisign text documents.
 export function verifyMinisign(bytes, encodedSignature, encodedPublicKey) {
@@ -44,21 +45,41 @@ export function verifyMinisign(bytes, encodedSignature, encodedPublicKey) {
 }
 
 export function verifyRelease(manifest, release, directory, version, publicKey) {
+  parseReleaseVersion(version);
   assert.equal(manifest.version, version, "Updater version mismatch");
   assert.equal(release.tag_name, `v${version}`, "Release tag mismatch");
+  assert.equal(release.draft, true, "Refusing to replace assets of an already public release");
+  assert.equal(release.prerelease, false, "Product releases must not be prereleases");
+  // GitHub and tauri-action can spell + as either + or %2B in URL paths.
+  // Normalize only that encoding, never remove or reinterpret the revision.
+  const sameUrl = (left, right) =>
+    typeof left === "string" && left.replace(/%2b/gi, "+") === right.replace(/%2b/gi, "+");
   const platforms = { "windows-x86_64": ".exe", "linux-x86_64": ".AppImage" };
   for (const [platform, suffix] of Object.entries(platforms)) {
     const entry = manifest.platforms?.[platform];
     assert.ok(entry?.url && entry?.signature, `Incomplete ${platform} updater entry`);
     const asset = release.assets.find(
-      (item) => item.url === entry.url || item.browser_download_url === entry.url,
+      (item) => sameUrl(item.url, entry.url) || sameUrl(item.browser_download_url, entry.url),
     );
     assert.ok(
       asset?.name.endsWith(suffix),
       `${platform} must reference this release's ${suffix} asset`,
     );
     assert.equal(basename(asset.name), asset.name, "Unsafe asset name");
-    assert.ok(asset.name.includes(`_${version}_`), "Asset filename version mismatch");
+    assert.ok(
+      [version, releaseAssetVersion(version)].some((value) => asset.name.includes(`_${value}_`)),
+      "Asset filename version mismatch",
+    );
+    const download = new URL(asset.browser_download_url);
+    assert.equal(download.origin, "https://github.com", "Unexpected release download host");
+    assert.equal(download.search + download.hash, "", "Unexpected release download suffix");
+    const segments = download.pathname.split("/").map(decodeURIComponent);
+    assert.equal(segments.length, 7, "Unexpected release download path");
+    assert.deepEqual(
+      segments.slice(3),
+      ["releases", "download", `v${version}`, asset.name],
+      "Asset URL must name this exact release tag and artifact",
+    );
     const bytes = readFileSync(join(directory, asset.name));
     assert.equal(bytes.length, asset.size, "Downloaded asset size mismatch");
     const sidecar = readFileSync(join(directory, `${asset.name}.sig`), "utf8").trim();

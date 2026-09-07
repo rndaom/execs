@@ -362,8 +362,8 @@ pub struct PreloaderState {
     pub addons: Vec<String>,
     #[serde(default)]
     pub particle_mods: Vec<String>,
-    /// Ids of the active profile's own mods whose particles are installed, so
-    /// the status can name them beside the library's.
+    /// Source mod IDs from the last Apply. These patches are global; an ID
+    /// alone does not prove that the current profile still owns its source.
     #[serde(default)]
     pub profile_particle_mods: Vec<String>,
     #[serde(default)]

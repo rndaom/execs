@@ -1703,7 +1703,10 @@ where
         return Err(err);
     }
 
-    if manifest == old_manifest && !(activate_if_none && old_index.active_profile_id.is_none()) {
+    if manifest == old_manifest
+        && requested_live_renames.is_empty()
+        && !(activate_if_none && old_index.active_profile_id.is_none())
+    {
         let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
         return Ok(ProfileMutationResult { manifest, hashes });
     }
@@ -1855,7 +1858,12 @@ where
                     profile_id,
                     &manifest,
                     &new_index,
-                )? =>
+                )? && journal.live_renames.iter().all(|rename| {
+                    // A live-only repair can have identical old/new metadata
+                    // (including index timestamps within one clock tick).
+                    // A rolled-back directory move must not report success.
+                    validate_dir_within(tf2_root, &profile_live_path(tf2_root, &rename.to)).is_ok()
+                }) =>
             {
                 // Atomic publication can succeed even when the following
                 // directory durability sync reports an error. Recovery has
@@ -2139,9 +2147,16 @@ fn snapshot_live_change(
 }
 
 fn checked_live_pack_dir(path: &str) -> Result<String, ProfileError> {
-    let path = checked_rel_path(path)?;
+    let path = normalize_rel_path(path)?;
     let parts: Vec<&str> = path.split('/').collect();
-    if parts.len() != 3 || parts[0] != "tf" || parts[1] != "custom" {
+    let pack = parts.len() == 3 && is_profile_ownable_rel_path(&path);
+    // Preserve old top-level rename journals, but only allow nested moves in
+    // the reserved HUD backup namespace. The container and token directory
+    // themselves must never become rename endpoints or profile-owned files.
+    let hud_backup = parts.len() == 5
+        && parts[2] == crate::surface::HUD_BACKUP_CONTAINER
+        && valid_transaction_id(parts[3]);
+    if parts.len() < 3 || parts[0] != "tf" || parts[1] != "custom" || (!pack && !hud_backup) {
         return Err(ProfileError::ForbiddenPath(path));
     }
     Ok(path)
@@ -2324,7 +2339,11 @@ fn prepare_live_changes(
         .iter()
         .filter_map(|change| portable_path_key(&change.path).ok())
         .collect();
+    let inactive_huds = crate::hud::inactive_hud_packs(new_manifest);
     for file in &new_manifest.files {
+        if crate::absorb::pack_key(&file.path).is_some_and(|pack| inactive_huds.contains(&pack)) {
+            continue;
+        }
         if live_renames
             .iter()
             .any(|rename| path_is_below(&file.path, &rename.from))
@@ -4700,6 +4719,27 @@ mod tests {
     }
 
     #[test]
+    fn live_renames_allow_only_exact_nested_hud_backup_endpoints() {
+        let backup = "tf/custom/execs-hud-backups/0123456789abcdef0123456789abcdef/-oxide";
+        assert_eq!(checked_live_pack_dir(backup).unwrap(), backup);
+        assert!(
+            checked_live_pack_dir("tf/custom/-oxide").is_ok(),
+            "old journals remain readable"
+        );
+        assert!(!is_profile_ownable_rel_path(&format!("{backup}/info.vdf")));
+        for refused in [
+            "tf/custom/execs-hud-backups",
+            "tf/custom/execs-hud-backups/0123456789abcdef0123456789abcdef",
+            "tf/custom/execs-hud-backups/resource/oxide",
+            "tf/custom/execs-hud-backups/0123456789abcdef0123456789abcdef/oxide/resource",
+            "tf/custom/unrelated/0123456789abcdef0123456789abcdef/oxide",
+            "tf/execs-hud-backups/0123456789abcdef0123456789abcdef/oxide",
+        ] {
+            assert!(checked_live_pack_dir(refused).is_err(), "{refused}");
+        }
+    }
+
+    #[test]
     fn file_safe_predicate_is_the_only_allowlist() {
         assert!(is_file_safe_rel_path("tf/cfg/overrides/autoexec.cfg"));
         assert!(is_file_safe_rel_path("tf/cfg/config.cfg"));
@@ -5353,6 +5393,56 @@ mod tests {
         );
         #[cfg(not(windows))]
         assert!(!root.join("tf/custom/RaysHUD").exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn a_live_only_nested_hud_backup_rolls_back_when_the_game_starts() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/steam.inf"), "appID=440\n");
+        let library = create_profile_record_to(&profiles, &root, "A", unlocked()).unwrap();
+        let id = library.profiles[0].id.clone();
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let original = root.join("tf/custom/-oxide/info.vdf");
+        write_live(&original, "manual bytes\n");
+        let backup_rel = "tf/custom/execs-hud-backups/0123456789abcdef0123456789abcdef/-oxide";
+        let backup = root.join(backup_rel).join("info.vdf");
+        let before = load_manifest(&profiles, &id).unwrap();
+        let observed = std::rc::Rc::new(std::cell::Cell::new(false));
+        let sampled = observed.clone();
+        let backup_for_sampler = backup.clone();
+        let result = with_profile_process_sampler(
+            move || {
+                if backup_for_sampler.is_file() && !sampled.replace(true) {
+                    vec![tf2_name().into()]
+                } else {
+                    Vec::new()
+                }
+            },
+            || {
+                mutate_profile_files_with_live_renames_to(
+                    &profiles,
+                    &root,
+                    &id,
+                    &[],
+                    &[],
+                    &[ProfileLiveRename {
+                        from: "tf/custom/-oxide".into(),
+                        to: backup_rel.into(),
+                    }],
+                    unlocked(),
+                    |_| Ok(()),
+                )
+            },
+        );
+        assert!(observed.get());
+        assert_eq!(result.unwrap_err(), ProfileError::GameRunning);
+        assert_eq!(fs::read(original).unwrap(), b"manual bytes\n");
+        assert!(!backup.exists());
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!mutation_journal_file(&profiles, &id).exists());
         cleanup(&dir);
     }
 

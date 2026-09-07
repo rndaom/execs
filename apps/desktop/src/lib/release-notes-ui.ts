@@ -3,8 +3,15 @@ import type { AppUpdateInfo } from "./updater-ui";
 const LAST_VERSION_KEY = "execs:last-launched-version";
 const PENDING_RELEASE_KEY = "execs:pending-release-notes";
 
-/** 0.1.2 predates the launch marker, so its upgrade needs one bundled handoff. */
+/** Exact-revision fallback for manual updates or an updater body without notes. */
 const BUNDLED_NOTES: Record<string, string> = {
+  "0.1.3+1": `### Fixed
+
+- HUDs: replaced and legacy disabled HUDs stay out of TF2's active search paths. Their files are preserved as backups and no longer reported as external profile changes.
+- Mods: profile switches remove the previous profile's particle patches, and stale source references recover instead of blocking Apply mods.
+- Crosshair and settings: reloads stop moving clean sliders back or triggering repeated autosaves. Newer edits survive an in-flight save.
+- Files: the save-drafts dialog stays visible and clickable above other dialogs. Closing during an operation waits for it to finish without asking to save nonexistent Files drafts.
+- Profiles: external-change checks run once per game session or profile switch, and old pack choices are not offered on another profile.`,
   "0.1.3": `### Added
 
 - execs now shows these release notes after updates, with a link to the matching GitHub release.

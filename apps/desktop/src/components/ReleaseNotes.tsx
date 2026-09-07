@@ -1,7 +1,7 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import type { Api } from "../lib/api";
 import { githubReleaseUrl, releaseNotesSections } from "../lib/release-notes-ui";
-import type { AppUpdateInfo } from "../lib/updater-ui";
+import { type AppUpdateInfo, releaseVersionCopy } from "../lib/updater-ui";
 import { Modal } from "./ui/Modal";
 
 export function ReleaseNotes({
@@ -20,7 +20,7 @@ export function ReleaseNotes({
     <Modal
       open={release !== null}
       testId="release-notes"
-      title={release ? `What's new in execs ${release.version}` : "What's new"}
+      title={release ? `What's new in execs ${releaseVersionCopy(release.version)}` : "What's new"}
       description="Your update is installed and ready."
       className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-3rem)] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto p-6"
       onClose={onClose}

@@ -6,6 +6,79 @@ authorization. The earlier candidate evidence is retained below.
 
 ## Scope
 
+### September 7 post-release hotfix work
+
+The following fixes remain on the 0.1.3 maintenance baseline. At the owner's
+request, delivery uses internal build revision `0.1.3+1`, displayed as 0.1.3
+with Hotfix 1 in update/release-note copy. All four version files and the
+updater manifest identify that revision. The original published `v0.1.3` tag
+and assets remain intact. Hotfix publication and installer smoke are pending.
+
+The read-only native updater probe passes discovery from `0.1.3` to
+`0.1.3+1`, no repeat or downgrade offer, numeric revision ordering (9 to 10),
+and progression to the next patch. It runs the production updater with no
+custom comparator or artifact downloads. The public `v0.1.3` lockfile pins
+the same updater 2.10.1 and semver 1.0.28 as the hotfix. The existing public
+app will show the full `0.1.3+1` identifier in its update prompt; the hotfix
+itself presents the product version and hotfix label separately.
+
+- The old HUD replacement path renamed old folders to `-<HUD>`. Source still
+  mounts those roots. Read-only inspection confirmed the reported live Colly
+  HUD alongside `-grape-oxide`, while the active manifest owned only Colly.
+  Replacement, switching, and boot recovery now preserve obsolete HUD trees
+  under `tf/custom/execs-hud-backups/<token>/<original-folder>/`. The container
+  is excluded from profile inventory and absorb. Extra HUD trees already in
+  legacy profiles remain in their library/export, with only the selected HUD
+  projected live. Fresh external HUD additions still produce a pack choice.
+- Global preloader state retained the MvM cash particle source ID after the
+  profile owning it was no longer active. The UI also treated globally
+  installed IDs as valid invisible choices. Profile-source patches now clear
+  before switching/removing their packs, stale sources reconcile on boot,
+  and UI choices follow the active profile. Target source validation runs
+  before particle cleanup, and invalid selections fail before mutations.
+  Empty cleanup requires no download. Default-library choices remain global
+  in 0.1.3; profile-particle selections need reselecting when returning to a
+  profile. This fix introduces no profile schema change.
+- Draft reseeding ran after the autosave effect observed a new seed. A reload
+  and unlock could therefore write the previous slider values back. Seeds
+  now reconcile before effects, preserving real newer edits. Absorb consumes
+  one boot/quit/profile event instead of rerunning after every settings save;
+  invalidated snapshots retry serially while preserving consumed config drift.
+- The Files exit dialog lacked fixed positioning and a stacking level, so
+  its own scrim obscured it. It now has explicit geometry, distinguishes a
+  busy operation from dirty Files drafts, and shares a modal stack with
+  current callbacks, top-dialog keyboard capture and focus restoration.
+- A rename-only profile recovery could report success after rollback when
+  old/new manifest and index values were identical. Recovered success now
+  checks that every intended rename destination exists within the live root.
+
+Bugfix validation before the delivery changes: 393 desktop tests, 105 cfglint tests,
+13 release-script tests, 99 Tauri crate tests, 571 core tests and seven absorb
+integration tests pass. Six live-network Rust tests remain intentionally
+ignored. Biome, production frontend build, strict all-target Windows Clippy,
+Rustfmt and whitespace checks pass. Browser checks verified slider settling,
+draft retention, Cancel and Save/continue, and a second modal above an already
+open designer with real pointer hit-testing and Escape focus restoration.
+
+All mutation/recovery tests used temporary fixtures. Inspection of the user's
+existing profile metadata and HUD directories was read-only; the installed
+application and real game files were not used for hotfix mutation tests.
+Linux validation and packaged installer/updater verification have not been
+rerun for these unpublished changes.
+
+Hotfix delivery checks on Windows also pass: 400 desktop, 105 cfglint,
+17 release-script and 677 Rust tests, plus six read-only native updater
+comparison scenarios. Biome, TypeScript/production build, Rustfmt,
+all-target Clippy including release probes, dependency notices and whitespace
+checks pass. The installer smoke selects the exact local candidate revision,
+downloads the immediately previous public installer, verifies the signed
+replacement and user-data preservation, then checks for no repeat offer.
+The pinned upload action normalizes `+` to `.` in GitHub asset names; the
+verifier and prior-installer download account for that without changing the
+full updater version or tag identity.
+
+### Original published scope
+
 - RND-212: keep Binds recording available as a deferred profile draft while
   TF2 runs.
 - RND-233: map DOM right and middle mouse buttons to Source `mouse2` and

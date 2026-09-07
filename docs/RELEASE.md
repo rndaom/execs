@@ -40,12 +40,35 @@ profile format unless you asked for it.
 ## Versioning
 
 `0.Y.Z` until a yearly review promotes **1.0.0**. The four product files
-always match the tag `v0.Y.Z`:
+always match the release tag (without its `v` prefix):
 
 - `apps/desktop/package.json`
 - `apps/desktop/src-tauri/tauri.conf.json`
 - `apps/desktop/src-tauri/Cargo.toml`
 - `apps/desktop/src-tauri/core/Cargo.toml`
+
+An explicitly requested hotfix may retain the product version and increment
+only a build revision: **0.1.3 Hotfix 1** is `0.1.3+1` in these files, the
+changelog heading, updater manifest and new `v0.1.3+1` tag. Local bundle names
+retain `+1`; the pinned upload action changes `+` to `.`, so public filenames
+use `execs_0.1.3.1_...`. The feed points to those actual uploaded assets.
+Use positive numeric revisions from 1 through 65535, without leading zeros.
+The app footer stays `v0.1.3`; release notes and update copy identify the hotfix.
+Diagnostics, staged notes and install matching retain the complete revision.
+
+This works with the updater already shipped in 0.1.3: its pinned Rust semver
+comparison orders build metadata, even though general SemVer precedence does
+not. Numeric metadata also supplies the Windows installer's fourth version
+component. Keep both the native comparison probes and signed upgrade smoke
+green; do not assume another updater implementation treats metadata the same.
+The smoke source is the immediately preceding changelog release, so the first
+hotfix tests the actual 0.1.3 installer, and a second hotfix tests the first.
+An identical revision must not be offered again.
+
+Keep the original published tag and artifacts intact. Build the hotfix in its
+own private draft, then publish it as the latest stable release through the
+existing workflow, feed URL and signing key. This adds no prerelease channel.
+The owner requested this delivery for the September 7 0.1.3 fixes.
 
 | Bump | When | Features | Data / write surface |
 |---|---|---|---|

@@ -926,9 +926,9 @@ fn orphan_textures_get_a_material_preferring_the_stock_one() {
     write_split_vpk(&root.join("tf").join("tf2_textures_dir.vpk"), &stock);
 
     let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    custom.insert("materials/models/flat.vtf".into(), b"VTF ".to_vec());
-    custom.insert("materials/world/new_rock.vtf".into(), b"VTF ".to_vec());
-    custom.insert("materials/world/has_one.vtf".into(), b"VTF ".to_vec());
+    custom.insert("materials/models/flat.vtf".into(), b"VTF\0".to_vec());
+    custom.insert("materials/world/new_rock.vtf".into(), b"VTF\0".to_vec());
+    custom.insert("materials/world/has_one.vtf".into(), b"VTF\0".to_vec());
     custom.insert("materials/world/has_one.vmt".into(), b"mine".to_vec());
 
     let written = synthesize_missing_vmts(&stock_entry_tables(&root), &mut custom);
@@ -995,11 +995,11 @@ fn model_materials_move_under_console_and_the_model_follows() {
     );
     custom.insert(
         "materials/models/props_gameplay/locker.vtf".into(),
-        b"VTF ".to_vec(),
+        b"VTF\0".to_vec(),
     );
     // A world material the mod also ships must NOT move: it rides the
     // gameinfo bypass at its stock path.
-    custom.insert("materials/wood/wall.vtf".into(), b"VTF ".to_vec());
+    custom.insert("materials/wood/wall.vtf".into(), b"VTF\0".to_vec());
 
     let moved = relocate_model_materials(&mut custom);
 
@@ -1117,7 +1117,7 @@ fn extension_checks_ignore_letter_case() {
 #[test]
 fn relocation_is_a_noop_without_models_or_matching_materials() {
     let mut only_world: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    only_world.insert("materials/wood/wall.vtf".into(), b"VTF ".to_vec());
+    only_world.insert("materials/wood/wall.vtf".into(), b"VTF\0".to_vec());
     assert_eq!(relocate_model_materials(&mut only_world), 0);
 
     // A model whose materials the mod does not ship must not be rewritten.
@@ -1256,6 +1256,176 @@ fn corrupt_replacement_payload_leaves_the_installed_selection_byte_exact() {
     );
     assert_eq!(installed_bytes(&root, &data), before);
     assert!(!data.join("preloader/apply-transaction").exists());
+}
+
+/// Reproduce the legacy global state left by a profile mod overriding the
+/// same particle slot as a library mod, without reaching real profile data.
+fn legacy_profile_particle_fixture() -> (
+    std::path::PathBuf,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    InstalledBytes,
+) {
+    let (root, data) = fake_root();
+    let zip_path = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection_with_sampler(
+        &root,
+        &data,
+        &zip_path,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            particle_mods: vec!["Blue Water".into()],
+            profile_particle_mods: Vec::new(),
+        },
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    let library_only = installed_bytes(&root, &data);
+    let vpk = root.join("tf").join(MISC_VPK);
+    let entries = map_vpk_entries(&vpk).unwrap();
+    let mut state = load_state(&data).unwrap();
+    for rel in ["particles/water.pcf", "particles/water_dx80.pcf"] {
+        let entry = &entries[rel];
+        let mut cash = tiny_pcf("water_effect", 77.0);
+        cash.resize(entry.length as usize, b' ');
+        crate::vpk::patch_vpk_entry(&vpk, entry, &cash).unwrap();
+        let patched = state.patched.get_mut(rel).unwrap();
+        patched.owner = "High vis MvM cash particles".into();
+        patched.patched_sha256 = crate::hash::sha256_hex(&cash);
+    }
+    state.profile_particle_mods = vec!["high-vis-mvm-cash-particles-gigantic".into()];
+    save_state(&data, &state).unwrap();
+    (root, data, zip_path, library_only)
+}
+
+#[test]
+fn profile_particle_cleanup_rebuilds_overridden_library_particles_and_preserves_addons() {
+    let (root, data, zip_path, library_only) = legacy_profile_particle_fixture();
+    assert_ne!(
+        installed_bytes(&root, &data).misc_data,
+        library_only.misc_data
+    );
+    let before_plan = installed_bytes(&root, &data);
+    let selection = profile_particle_cleanup_selection(&data, &[])
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        installed_bytes(&root, &data),
+        before_plan,
+        "planning stays read-only"
+    );
+    assert!(selection.profile_particle_mods.is_empty());
+    assert_eq!(selection.addons, ["Flat Look"]);
+    assert_eq!(selection.particle_mods, ["Blue Water"]);
+
+    apply_preloader_selection_with_sampler(&root, &data, &zip_path, &selection, &[], &Vec::new)
+        .unwrap();
+    let after = installed_bytes(&root, &data);
+    assert_eq!(after.misc_data, library_only.misc_data);
+    assert_eq!(after.misc_dir, library_only.misc_dir);
+    assert_eq!(after.custom, library_only.custom);
+    assert_eq!(after.gameinfo, library_only.gameinfo);
+    assert_eq!(after.originals, library_only.originals);
+    assert!(load_state(&data).unwrap().profile_particle_mods.is_empty());
+    assert!(profile_particle_cleanup_selection(&data, &[])
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn profile_particle_cleanup_keeps_current_sources_and_handles_legacy_state() {
+    let data = test_temp_dir();
+    assert!(profile_particle_cleanup_selection(&data, &[])
+        .unwrap()
+        .is_none());
+    let mut state = PreloaderState {
+        profile_particle_mods: vec!["cash".into(), "trails".into()],
+        ..PreloaderState::default()
+    };
+    save_state(&data, &state).unwrap();
+    assert!(
+        profile_particle_cleanup_selection(&data, &["cash".into(), "trails".into()])
+            .unwrap()
+            .is_none()
+    );
+    let selection = profile_particle_cleanup_selection(&data, &["trails".into()])
+        .unwrap()
+        .unwrap();
+    assert_eq!(selection.profile_particle_mods, ["trails"]);
+    state.profile_particle_mods.clear();
+    save_state(&data, &state).unwrap();
+    assert!(profile_particle_cleanup_selection(&data, &[])
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn profile_particle_cleanup_needs_no_library_for_an_empty_target_and_preserves_bypass() {
+    let (root, data, zip_path, _) = legacy_profile_particle_fixture();
+    let mut state = load_state(&data).unwrap();
+    // Legacy profile-only application: snapshots describe all patched bytes,
+    // and no library selection needs to be rebuilt on the destination.
+    state.addons.clear();
+    state.particle_mods.clear();
+    save_state(&data, &state).unwrap();
+    let selection = profile_particle_cleanup_selection(&data, &[])
+        .unwrap()
+        .unwrap();
+    let before = installed_bytes(&root, &data);
+    let expected_stock = read_snapshot_bounded(&data, "particles/water.pcf").unwrap();
+    std::fs::remove_file(&zip_path).unwrap();
+
+    apply_preloader_selection_with_sampler(&root, &data, &zip_path, &selection, &[], &Vec::new)
+        .unwrap();
+    let after = installed_bytes(&root, &data);
+    let vpk = root.join("tf").join(MISC_VPK);
+    let entries = map_vpk_entries(&vpk).unwrap();
+    assert_eq!(
+        read_particle_entry_bounded(&vpk, &entries["particles/water.pcf"]).unwrap(),
+        expected_stock
+    );
+    assert_eq!(after.misc_dir, before.misc_dir);
+    assert_eq!(after.gameinfo, before.gameinfo);
+    assert_eq!(after.gameinfo_backup, before.gameinfo_backup);
+    assert!(after.custom.is_none());
+    assert!(after.originals.is_empty());
+    let status = preloader_status(&root, &data).unwrap();
+    assert!(status.profile_particle_mods.is_empty());
+    assert!(status.patched_files.is_empty());
+    assert!(status.gameinfo_bypassed);
+}
+
+#[test]
+fn profile_particle_cleanup_failure_keeps_the_old_install_and_snapshots() {
+    let (root, data, zip_path, _) = legacy_profile_particle_fixture();
+    let before = installed_bytes(&root, &data);
+    let selection = profile_particle_cleanup_selection(&data, &[])
+        .unwrap()
+        .unwrap();
+    let running = vec!["tf_win64.exe".to_string()];
+    let error =
+        apply_preloader_selection_with_sampler(&root, &data, &zip_path, &selection, &[], &|| {
+            running.clone()
+        })
+        .unwrap_err();
+    assert!(is_game_running_error(&error), "{error}");
+    assert_eq!(installed_bytes(&root, &data), before);
+
+    corrupt_zip_payload(
+        &zip_path,
+        "mods/particles/Blue Water/actual_particles/water.pcf",
+    );
+    assert!(apply_preloader_selection_with_sampler(
+        &root,
+        &data,
+        &zip_path,
+        &selection,
+        &[],
+        &Vec::new,
+    )
+    .is_err());
+    assert_eq!(installed_bytes(&root, &data), before);
 }
 
 #[test]

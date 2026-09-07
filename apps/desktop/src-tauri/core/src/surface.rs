@@ -193,13 +193,21 @@ pub fn is_global_custom_file(rel: &str) -> bool {
 /// become profile files, and written by a switch they spread to every profile.
 pub const STOCK_CUSTOM_ENTRIES: &[&str] = &["readme.txt", "workshop"];
 
+/// Replaced HUDs are preserved below a token and their original folder name.
+/// Source mounts immediate custom children, so neither the token nor any HUD
+/// resource directory is exposed at a mounted root. These backups belong to
+/// the install, never to a profile or an absorb/import operation.
+pub const HUD_BACKUP_CONTAINER: &str = "execs-hud-backups";
+
 /// True for a top-level `tf/custom/` entry name that is not profile content.
 /// Also the shape of a pack key, so a stale `ignored_packs` entry can be
 /// recognised and dropped.
 pub fn is_stock_custom_pack(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     let lower = lower.strip_prefix('-').unwrap_or(&lower);
-    lower.ends_with(PART_SUFFIX) || STOCK_CUSTOM_ENTRIES.contains(&lower)
+    lower.ends_with(PART_SUFFIX)
+        || STOCK_CUSTOM_ENTRIES.contains(&lower)
+        || lower == HUD_BACKUP_CONTAINER
 }
 
 /// True for a relative path that is one of those entries: any `.execs-part`
@@ -1036,6 +1044,30 @@ mod tests {
         assert!(!taken.iter().any(|rel| rel.ends_with(PART_SUFFIX)));
         assert!(taken.contains(&"tf/custom/myhud/readme.txt"));
         assert!(taken.contains(&"tf/custom/myhud/info.vdf"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn hud_backups_cannot_be_captured_owned_or_classified_as_packs() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let reserved = format!(
+            "tf/custom/{HUD_BACKUP_CONTAINER}/0123456789abcdef0123456789abcdef/-oxide/info.vdf"
+        );
+        write_file(&root.join(&reserved), "preserved\n");
+        write_file(&root.join("tf/custom/colly-hud/info.vdf"), "selected\n");
+        for path in [
+            &reserved,
+            &reserved.to_ascii_uppercase(),
+            &reserved.replace('/', "\\"),
+        ] {
+            assert!(is_stock_custom_entry(path));
+            assert!(!crate::profile::is_profile_ownable_rel_path(path));
+            assert_eq!(crate::absorb::pack_key(path), None);
+        }
+        let inventory = inventory_live_surface(&root).unwrap();
+        assert_eq!(dests(&inventory), ["tf/custom/colly-hud/info.vdf"]);
+        assert!(fs::read(root.join(&reserved)).is_ok());
         cleanup(&dir);
     }
 

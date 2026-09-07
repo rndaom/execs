@@ -165,8 +165,11 @@ pub async fn remove_mod(
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| Ok(execs_core::mods::remove_mod(&root, &profile_id, &id)?))
-        .await
+    with_profile(move |root, profile_id| {
+        super::preloader::clear_profile_particles_before_mod_removal(&root, &id)?;
+        Ok(execs_core::mods::remove_mod(&root, &profile_id, &id)?)
+    })
+    .await
 }
 
 /// One page of TF2 mods from GameBanana.

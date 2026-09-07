@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Api } from "../lib/api";
 import type { AbsorbDelta, PackChoice, ProfileLibrary, Tf2Install } from "../lib/bridge";
 import {
@@ -52,9 +52,19 @@ export function useProfileLibrary(
 ): ProfileLibraryState {
   const [library, setLibrary] = useState<ProfileLibrary | null>(null);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(null);
+  const [packPromptProfile, setPackPromptProfile] = useState<string | null>(null);
   const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
   const [packPromptDeferred, setPackPromptDeferred] = useState(false);
   const [absorbNonce, setAbsorbNonce] = useState(0);
+  const [absorbRetry, setAbsorbRetry] = useState(0);
+  const absorb = useRef({
+    generation: 0,
+    gate: 0,
+    live: false,
+    inFlight: false,
+    completed: null as string | null,
+    configDrift: false,
+  });
 
   // Load the library for a confirmed root.
   useEffect(() => {
@@ -108,36 +118,83 @@ export function useProfileLibrary(
 
   // Absorb live drift after every observed quit (and on boot with TF2 closed).
   const libraryReady = library !== null;
+  const activeProfileId = library?.activeProfileId ?? null;
+  const rootPath = confirmed?.path ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: ownership changes invalidate pending native snapshots, including A to B to A.
+  useEffect(() => {
+    const control = absorb.current;
+    control.generation += 1;
+    control.live = true;
+    control.completed = null;
+    control.configDrift = false;
+    return () => {
+      control.generation += 1;
+      control.live = false;
+    };
+  }, [api, rootPath, activeProfileId]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: every gate transition invalidates a snapshot, even if it returns to idle before completion.
+  useEffect(() => {
+    absorb.current.gate += 1;
+  }, [busy, running, quitNonce]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: absorbRetry resumes serialized work after an invalidated request settles.
   useEffect(() => {
     if (!confirmed || !libraryReady || running || busy || quitNonce === 0) {
       return;
     }
-    let cancelled = false;
+    // Busy changes are only a gate for a pending pass. An ordinary settings
+    // save must not become another external-change event and reload every pane.
+    const key = JSON.stringify([confirmed.path, activeProfileId, quitNonce]);
+    const control = absorb.current;
+    if (control.completed === key || control.inFlight) return;
+    const generation = control.generation;
+    const gate = control.gate;
+    control.inFlight = true;
     api
       .absorbOwned()
       .then((result) => {
-        if (cancelled) {
-          return;
-        }
+        if (generation !== control.generation || !control.live) return;
+        // Native absorb may already have consumed config drift when a write
+        // invalidates this snapshot. Keep that signal for the fresh idle pass,
+        // but never replay stale library or pack data over a subsequent save.
+        control.configDrift ||= result.configCfgAbsorbed;
+        if (gate !== control.gate) return;
+        control.completed = key;
         setLibrary(result.library);
-        // A pack delta is a question, not a notification: keep the previous
-        // unanswered one when this pass reports nothing new.
-        setPackPrompt((current) => (hasPackChanges(result.delta) ? result.delta : current));
+        // Each result is a complete current snapshot. An old question must not
+        // outlive its files or be presented as a choice for a different profile.
+        setPackPrompt(hasPackChanges(result.delta) ? result.delta : null);
+        setPackPromptProfile(result.library.activeProfileId);
         setPackPromptDeferred(false);
         setAbsorbNonce((value) => value + 1);
-        if (result.configCfgAbsorbed) {
+        if (control.configDrift) {
           setBindSyncRequest((current) => (current ?? 0) + 1);
         }
+        control.configDrift = false;
       })
       .catch((err) => {
-        if (!cancelled) {
+        if (control.live && generation === control.generation && gate === control.gate) {
           setError(err instanceof Error ? err.message : "Could not absorb live changes.");
         }
+      })
+      .finally(() => {
+        control.inFlight = false;
+        // Serialize retries, including a new owner waiting behind an old call.
+        // Failures otherwise wait for the next gate/event instead of spinning.
+        if (control.live && (generation !== control.generation || gate !== control.gate)) {
+          setAbsorbRetry((value) => value + 1);
+        }
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, confirmed, libraryReady, running, busy, quitNonce, setError]);
+  }, [
+    api,
+    confirmed,
+    libraryReady,
+    activeProfileId,
+    running,
+    busy,
+    quitNonce,
+    setError,
+    absorbRetry,
+  ]);
 
   const saveCurrent = useCallback(
     async (name: string) => {
@@ -198,14 +255,14 @@ export function useProfileLibrary(
         return;
       }
       setError(null);
-      // The pack prompt is deferred, not answered: a switch must not throw the
-      // question away — it is re-offered once the switch settles.
+      // The native switch reconciles the outgoing profile. A fresh absorb of
+      // the target will report its own delta when the switch settles.
       progress.start();
       setBusy(true);
       try {
         setLibrary(await api.switchProfile(id));
         progress.complete();
-        // Re-offer whatever the user deferred: the delta outlived the switch.
+        setPackPrompt(null);
         setPackPromptDeferred(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not switch profiles.");
@@ -227,27 +284,33 @@ export function useProfileLibrary(
 
   const answerPackPrompt = useCallback(
     async (choice: PackChoice) => {
+      if (!packPrompt || packPromptProfile !== activeProfileId || running || busy) return;
       setError(null);
       setBusy(true);
       try {
         setLibrary(await api.absorbPacks(choice));
         setPackPrompt(null);
         setPackPromptDeferred(false);
+        setAbsorbNonce((value) => value + 1);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not update packs.");
       } finally {
         setBusy(false);
       }
     },
-    [api, setError, setBusy],
+    [api, packPrompt, packPromptProfile, activeProfileId, running, busy, setError, setBusy],
   );
 
   const reset = useCallback(() => {
     setLibrary(null);
     setPackPrompt(null);
+    setPackPromptProfile(null);
     setPackPromptDeferred(false);
     setBindSyncRequest(null);
     setAbsorbNonce(0);
+    absorb.current.generation += 1;
+    absorb.current.completed = null;
+    absorb.current.configDrift = false;
   }, []);
 
   const onBindSyncHandled = useCallback((request: number) => {
@@ -256,7 +319,7 @@ export function useProfileLibrary(
 
   return {
     library,
-    packPrompt,
+    packPrompt: packPromptProfile === activeProfileId ? packPrompt : null,
     packPromptDeferred,
     deferPackPrompt: () => setPackPromptDeferred(true),
     bindSyncRequest,

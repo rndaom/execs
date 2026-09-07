@@ -69,3 +69,22 @@ it("reports a failed release link and provides a fallback when notes are absent"
   await act(async () => box.querySelector("button")?.click());
   expect(onError).toHaveBeenCalledWith("Could not open the release page.");
 });
+
+it("names the hotfix in the title while linking to its exact revision tag", async () => {
+  const api = createPreviewApi("release-notes");
+  const open = vi.spyOn(api, "openExternal").mockResolvedValue(undefined);
+  await act(async () =>
+    root.render(
+      createElement(ReleaseNotes, {
+        api,
+        release: { version: "0.1.3+1", notes: "### Fixed\n- Profile isolation" },
+        onClose: vi.fn(),
+        onError: vi.fn(),
+      }),
+    ),
+  );
+  expect(box.textContent).toContain("What's new in execs 0.1.3 · Hotfix 1");
+  expect(box.textContent).not.toContain("0.1.3+1");
+  await act(async () => box.querySelector("button")?.click());
+  expect(open).toHaveBeenCalledWith("https://github.com/rndaom/execs/releases/tag/v0.1.3%2B1");
+});

@@ -96,7 +96,22 @@ it("keeps a rejected native close visible and retryable after saving", async () 
   await act(async () => button("Save and continue").click());
   expect(box.querySelector('[role="alert"]')?.textContent).toBe("close refused");
   expect(store.dirty()).toEqual([]);
-  await act(async () => button("Save and continue").click());
+  await act(async () => button("Continue").click());
   expect(native.destroy).toHaveBeenCalledTimes(2);
   expect(box.querySelector('[data-testid="files-exit-guard"]')).toBeNull();
+});
+
+it("waits for a settings write without inventing Files drafts or requiring a saver", async () => {
+  store.discardAll();
+  busy = true;
+  await act(async () => root.render(createElement(Harness)));
+  await requestClose();
+  expect(box.textContent).toContain("Finish current operation?");
+  expect(box.textContent).not.toContain("Discard and continue");
+  expect(button("Continue").disabled).toBe(true);
+  busy = false;
+  await act(async () => root.render(createElement(Harness)));
+  await act(async () => button("Continue").click());
+  expect(save).not.toHaveBeenCalled();
+  expect(native.destroy).toHaveBeenCalledOnce();
 });

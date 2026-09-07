@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clearPendingRelease,
+  dismissInstalledRelease,
   githubReleaseUrl,
   installedReleaseForLaunch,
   releaseNotesSections,
@@ -36,6 +37,47 @@ describe("installed release notes", () => {
   it("does not show update notes on a fresh install", () => {
     const state = storage();
     expect(installedReleaseForLaunch(state, "0.1.3", false)).toBeNull();
+    expect(installedReleaseForLaunch(storage(), "0.1.3+1", false)).toBeNull();
+  });
+
+  it("shows bundled Hotfix 1 notes once after updating an existing 0.1.3 install", () => {
+    const state = storage();
+    installedReleaseForLaunch(state, "0.1.3", false);
+    const release = installedReleaseForLaunch(state, "0.1.3+1", true);
+    expect(release?.version).toBe("0.1.3+1");
+    expect(release?.notes).toContain("particle patches");
+    expect(release?.notes).toContain("clean sliders");
+    expect(release?.notes).toContain("save-drafts dialog");
+    expect(release?.notes).toContain("HUDs");
+    expect(release?.notes).not.toContain("right and middle mouse buttons");
+    expect(state.getItem("execs:last-launched-version")).toBe("0.1.3+1");
+    dismissInstalledRelease(state, "0.1.3+1");
+    expect(installedReleaseForLaunch(state, "0.1.3+1", true)).toBeNull();
+  });
+
+  it("matches and dismisses pending notes by exact revision, including consecutive hotfixes", () => {
+    const state = storage();
+    installedReleaseForLaunch(state, "0.1.3", false);
+    stagePendingRelease(state, { version: "0.1.3+1", notes: null });
+    expect(installedReleaseForLaunch(state, "0.1.3", true)).toBeNull();
+    clearPendingRelease(state, "0.1.3");
+    expect(JSON.parse(state.getItem("execs:pending-release-notes") ?? "null")?.version).toBe(
+      "0.1.3+1",
+    );
+    expect(installedReleaseForLaunch(state, "0.1.3+1", true)?.notes).toContain("particle patches");
+    dismissInstalledRelease(state, "0.1.3+1");
+    expect(installedReleaseForLaunch(state, "0.1.3+1", true)).toBeNull();
+
+    const next = { version: "0.1.3+2", notes: "### Fixed\n- Next hotfix" };
+    stagePendingRelease(state, next);
+    expect(installedReleaseForLaunch(state, "0.1.3+1", true)).toBeNull();
+    dismissInstalledRelease(state, "0.1.3+1");
+    expect(installedReleaseForLaunch(state, "0.1.3+2", true)).toEqual(next);
+    dismissInstalledRelease(state, "0.1.3+2");
+    expect(installedReleaseForLaunch(state, "0.1.3+2", true)).toBeNull();
+    expect(githubReleaseUrl("0.1.3+1")).toBe(
+      "https://github.com/rndaom/execs/releases/tag/v0.1.3%2B1",
+    );
   });
 
   it("bridges existing users upgrading from the marker-less 0.1.2 build", () => {

@@ -4,7 +4,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { previousReleaseVersion, releaseVersion } from "./release-version.mjs";
+import { releaseNotesFromChangelog } from "./release-notes.mjs";
+import {
+  parseReleaseVersion,
+  previousReleaseVersion,
+  releaseAssetVersion,
+  releaseName,
+  releaseVersion,
+} from "./release-version.mjs";
 import { verifyMinisign, verifyRelease } from "./verify-release.mjs";
 
 function removeFixture(directory) {
@@ -48,7 +55,7 @@ test("release validation binds signatures to both assets and their release", () 
   const directory = mkdtempSync(join(tmpdir(), "execs-release-guards-"));
   try {
     const { bytes, signature, key } = signatureFixture();
-    const release = { tag_name: "v0.1.1", assets: [] };
+    const release = { tag_name: "v0.1.1", draft: true, prerelease: false, assets: [] };
     const manifest = { version: "0.1.1", platforms: { "linux-x86_64-deb": {} } };
     for (const [platform, name] of [
       ["windows-x86_64", "execs_0.1.1_x64-setup.exe"],
@@ -76,6 +83,199 @@ test("release validation binds signatures to both assets and their release", () 
     delete other.platforms["linux-x86_64"];
     assert.throws(() => verifyRelease(other, release, directory, "0.1.1", key));
     assert.throws(() => verifyRelease(manifest, release, directory, "0.1.2", key));
+  } finally {
+    removeFixture(directory);
+  }
+});
+
+function writeProductVersion(root, version) {
+  for (const path of ["apps/desktop", "apps/desktop/src-tauri", "apps/desktop/src-tauri/core"])
+    mkdirSync(join(root, path), { recursive: true });
+  for (const path of ["apps/desktop/package.json", "apps/desktop/src-tauri/tauri.conf.json"])
+    writeFileSync(join(root, path), JSON.stringify({ version }));
+  for (const path of [
+    "apps/desktop/src-tauri/Cargo.toml",
+    "apps/desktop/src-tauri/core/Cargo.toml",
+  ])
+    writeFileSync(join(root, path), `[package]\nversion = "${version}"\n`);
+}
+
+test("stable hotfix versions accept only canonical positive bounded numeric revisions", () => {
+  for (const version of ["0.1.3", "0.1.3+1", "0.1.3+9", "0.1.3+10", "0.1.3+65535"])
+    assert.doesNotThrow(() => parseReleaseVersion(version), version);
+  for (const version of [
+    "0.1.3+0",
+    "0.1.3+01",
+    "0.1.3+0001",
+    "0.1.3+65536",
+    "0.1.3+99999999999999999999",
+    "0.1.3+hotfix1",
+    "0.1.3+1.2",
+    "0.1.3+1-extra",
+    "0.1.3+1+2",
+    "0.1.3+",
+    "0.1.3-rc.1",
+    "0.1.3-rc.1+1",
+    "00.1.3",
+    "0.01.3",
+    "0.1.03",
+    "v0.1.3+1",
+    "0.1.3+1\n",
+    " 0.1.3+1",
+  ])
+    assert.throws(() => parseReleaseVersion(version), undefined, version);
+  assert.equal(releaseName("0.1.3"), "execs v0.1.3");
+  assert.equal(releaseName("0.1.3+1"), "execs v0.1.3 — Hotfix 1");
+  assert.equal(releaseAssetVersion("0.1.3"), "0.1.3");
+  assert.equal(releaseAssetVersion("0.1.3+1"), "0.1.3.1");
+  assert.equal(releaseAssetVersion("0.1.3+65535"), "0.1.3.65535");
+});
+
+test("a hotfix requires its own exact tag, four source versions and substantive changelog section", () => {
+  const root = mkdtempSync(join(tmpdir(), "execs-release-hotfix-"));
+  try {
+    writeProductVersion(root, "0.1.3+1");
+    const changelog =
+      "## [Unreleased]\n\n## [0.1.3+1] - 2026-09-07\n\n- Fix profile isolation.\n\n## [0.1.3]\n\n- Original release.\n\n## [0.1.2]\n\n- Previous release.\n";
+    writeFileSync(join(root, "CHANGELOG.md"), changelog);
+    assert.equal(releaseVersion(root, "v0.1.3+1"), "0.1.3+1");
+    assert.throws(() => releaseVersion(root, "v0.1.3"));
+    assert.throws(() => releaseVersion(root, "v0.1.3%2B1"));
+    const notes = releaseNotesFromChangelog(changelog, "0.1.3+1");
+    assert.match(notes, /Fix profile isolation/);
+    assert.doesNotMatch(notes, /Original release|Previous release/);
+    for (const path of [
+      "apps/desktop/package.json",
+      "apps/desktop/src-tauri/tauri.conf.json",
+      "apps/desktop/src-tauri/Cargo.toml",
+      "apps/desktop/src-tauri/core/Cargo.toml",
+    ]) {
+      const fullPath = join(root, path);
+      const original = readFileSync(fullPath, "utf8");
+      writeFileSync(fullPath, original.replaceAll("0.1.3+1", "0.1.3"));
+      assert.throws(() => releaseVersion(root, "v0.1.3+1"), undefined, path);
+      writeFileSync(fullPath, original);
+    }
+    writeFileSync(join(root, "CHANGELOG.md"), "## [0.1.3]\n\n- Original release.\n");
+    assert.throws(() => releaseVersion(root, "v0.1.3+1"));
+    writeFileSync(join(root, "CHANGELOG.md"), "## [0.1.3+1]\n\n### Fixed\n");
+    assert.throws(() => releaseVersion(root, "v0.1.3+1"));
+    writeProductVersion(root, "0.1.3+01");
+    writeFileSync(join(root, "CHANGELOG.md"), "## [0.1.3+01]\n\n- Invalid revision.\n");
+    assert.throws(() => releaseVersion(root, "v0.1.3+01"));
+  } finally {
+    removeFixture(root);
+  }
+});
+
+test("updater history selects the immediately preceding stable release or numeric hotfix", () => {
+  const root = mkdtempSync(join(tmpdir(), "execs-release-history-"));
+  try {
+    const releases = ["0.1.4", "0.1.3+10", "0.1.3+9", "0.1.3+2", "0.1.3+1", "0.1.3", "0.1.2"];
+    writeFileSync(
+      join(root, "CHANGELOG.md"),
+      `## [Unreleased]\r\n\r\n${releases.map((version) => `## [${version}] - 2026-09-07\r\n\r\n- A release.\r\n`).join("\r\n")}`,
+    );
+    for (const [index, version] of releases.slice(0, -1).entries())
+      assert.equal(previousReleaseVersion(root, version), releases[index + 1]);
+    for (const [current, previous] of [
+      ["0.1.3+1", "0.1.3+2"],
+      ["0.1.3+1", "0.1.3+1"],
+      ["0.1.3", "0.1.3+1"],
+      ["0.1.3+2", "0.1.4"],
+      ["0.1.3+1", "0.1.3+0"],
+      ["0.1.3+1", "0.1.3+01"],
+    ]) {
+      writeFileSync(
+        join(root, "CHANGELOG.md"),
+        `## [${current}]\n\n- Current.\n\n## [${previous}]\n\n- Previous.\n`,
+      );
+      assert.throws(
+        () => previousReleaseVersion(root, current),
+        undefined,
+        `${current} after ${previous}`,
+      );
+    }
+  } finally {
+    removeFixture(root);
+  }
+});
+
+test("signed hotfix assets accept literal or encoded plus URLs and reject original-release substitutions", () => {
+  const directory = mkdtempSync(join(tmpdir(), "execs-release-plus-"));
+  try {
+    const { bytes, signature, key } = signatureFixture();
+    const version = "0.1.3+1";
+    const release = { tag_name: `v${version}`, draft: true, prerelease: false, assets: [] };
+    const manifest = { version, platforms: {} };
+    for (const [platform, name] of [
+      ["windows-x86_64", `execs_${version}_x64-setup.exe`],
+      ["linux-x86_64", `execs_${version}_amd64.AppImage`],
+    ]) {
+      const literal = `https://github.com/rndaom/execs/releases/download/v${version}/${name}`;
+      release.assets.push({
+        name,
+        browser_download_url: literal.replaceAll("+", "%2B"),
+        size: bytes.length,
+      });
+      manifest.platforms[platform] = { url: literal, signature };
+      writeFileSync(join(directory, name), bytes);
+      writeFileSync(join(directory, `${name}.sig`), signature);
+    }
+    verifyRelease(structuredClone(manifest), release, directory, version, key);
+    const encoded = structuredClone(manifest);
+    for (const entry of Object.values(encoded.platforms))
+      entry.url = entry.url.replaceAll("+", "%2b");
+    verifyRelease(encoded, release, directory, version, key);
+    // Match the real pinned action: only uploaded filenames are sanitized;
+    // the updater version and release-tag URL component keep the + revision.
+    for (const [index, platform] of ["windows-x86_64", "linux-x86_64"].entries()) {
+      const asset = release.assets[index];
+      asset.name = asset.name.replace(version, releaseAssetVersion(version));
+      const literal = `https://github.com/rndaom/execs/releases/download/v${version}/${asset.name}`;
+      asset.browser_download_url = literal.replaceAll("+", "%2B");
+      manifest.platforms[platform].url = literal;
+      writeFileSync(join(directory, asset.name), bytes);
+      writeFileSync(join(directory, `${asset.name}.sig`), signature);
+    }
+    verifyRelease(structuredClone(manifest), release, directory, version, key);
+    for (const change of [
+      (feed) => {
+        feed.version = "0.1.3";
+      },
+      (_feed, source) => {
+        source.tag_name = "v0.1.3";
+      },
+      (_feed, source) => {
+        source.draft = false;
+      },
+      (_feed, source) => {
+        source.prerelease = true;
+      },
+      (_feed, source) => {
+        source.assets[0].name = "execs_0.1.3_x64-setup.exe";
+      },
+      (feed) => {
+        feed.platforms["windows-x86_64"].url = feed.platforms["windows-x86_64"].url.replace(
+          "v0.1.3+1/",
+          "v0.1.3/",
+        );
+      },
+      (feed, source) => {
+        source.assets[0].browser_download_url = source.assets[0].browser_download_url.replace(
+          "v0.1.3%2B1/",
+          "v0.1.3/",
+        );
+        feed.platforms["windows-x86_64"].url = source.assets[0].browser_download_url;
+      },
+    ]) {
+      const feed = structuredClone(manifest);
+      const source = structuredClone(release);
+      change(feed, source);
+      assert.throws(() => verifyRelease(feed, source, directory, version, key));
+    }
+    writeFileSync(join(directory, release.assets[0].name), Buffer.from("changed hotfix payload"));
+    assert.throws(() => verifyRelease(manifest, release, directory, version, key));
   } finally {
     removeFixture(directory);
   }
@@ -127,6 +327,18 @@ test("release workflow always waits for the reusable CI gate", () => {
   assert.match(yaml, /uses: \.\/\.github\/workflows\/ci.yml/);
   assert.match(yaml, /build:\s*\n\s*needs: \[validate\]/);
   assert.match(yaml, /node scripts\/verify-release.mjs/);
+  assert.match(yaml, /--features release-probes --examples/);
+  assert.match(yaml, /run: node scripts\/smoke-updater-check.mjs/);
+  assert.match(yaml, /run: xvfb-run -a node scripts\/smoke-updater-check.mjs/);
+  assert.ok(
+    yaml.indexOf("scripts/smoke-updater-check.mjs") < yaml.indexOf("scripts/smoke-packages.mjs"),
+  );
+  assert.match(yaml, /already public; refusing to replace its assets/);
+  assert.match(yaml, /node scripts\/release-version.mjs "\$RELEASE_TAG" --name/);
+  assert.match(yaml, /releaseName: \$\{\{ steps\.release\.outputs\.name \}\}/);
+  assert.match(yaml, /gh release edit "\$TAG" --draft=false --prerelease=false --latest/);
+  assert.match(yaml, /node scripts\/release-version.mjs "\$TAG" --name/);
+  assert.match(yaml, /--latest --title "\$name"/);
 });
 
 test("release candidates and tag builds share a product-tag concurrency lock", () => {

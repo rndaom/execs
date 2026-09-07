@@ -84,10 +84,10 @@ mod transaction;
 // The public API is exactly what `preloader.rs` exported before the split.
 pub use apply::{
     apply_preloader_selection, apply_preloader_selection_with_sampler, forget_preload_profile,
-    preload_profiles, preloader_status, rebuild_keep_lists, record_preload_profile,
-    recover_pending_preloader, recover_pending_preloader_with_sampler, revert_preloader,
-    revert_preloader_with_sampler, take_preload_profiles, PreloaderReport, PreloaderSelection,
-    PreloaderStatus, RevertReport,
+    preload_profiles, preloader_status, profile_particle_cleanup_selection, rebuild_keep_lists,
+    record_preload_profile, recover_pending_preloader, recover_pending_preloader_with_sampler,
+    revert_preloader, revert_preloader_with_sampler, take_preload_profiles, PreloaderReport,
+    PreloaderSelection, PreloaderStatus, RevertReport,
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{

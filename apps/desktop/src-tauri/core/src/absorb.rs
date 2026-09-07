@@ -453,6 +453,7 @@ fn repair_interrupted_writes(
     refuse_if_running_among(running)?;
     refuse_absorb_mutation()?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
+    crate::hud::recover_legacy_hud_backups_to(profiles_dir, tf2_root, profile_id, running)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     let before_files = manifest.files.len();
     // Older builds could accidentally claim Valve/global/junk entries. Drop
@@ -462,8 +463,10 @@ fn repair_interrupted_writes(
         .retain(|file| is_profile_ownable_rel_path(&file.path));
     let mut repaired_packs = BTreeSet::new();
     let mut repaired_files = Vec::new();
+    let inactive_huds = crate::hud::inactive_hud_packs(&manifest);
     for file in &manifest.files {
         if is_stock_custom_entry(&file.path)
+            || pack_key(&file.path).is_some_and(|pack| inactive_huds.contains(&pack))
             || live_candidates(tf2_root, &file.path)
                 .iter()
                 .any(|path| path.exists())
@@ -527,6 +530,14 @@ fn remove_stray_parts(tf2_root: &Path, dir: &Path) -> Result<(), ProfileError> {
             continue;
         };
         let path = entry.path();
+        if path.parent() == Some(tf2_root.join("tf/custom").as_path())
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(crate::surface::HUD_BACKUP_CONTAINER)
+        {
+            continue;
+        }
         if kind.is_dir() {
             remove_stray_parts(tf2_root, &path)?;
         } else if kind.is_file()
@@ -556,12 +567,16 @@ fn write_library_files_to_live(
         return Ok(());
     }
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let inactive_huds = crate::hud::inactive_hud_packs(&manifest);
     for path in paths {
         let Some(file) = manifest.files.iter().find(|file| &file.path == path) else {
             continue;
         };
         if !is_profile_ownable_rel_path(path) {
             return Err(ProfileError::ForbiddenPath(path.clone()));
+        }
+        if pack_key(path).is_some_and(|pack| inactive_huds.contains(&pack)) {
+            continue;
         }
         let source = manifest_source_path(profiles_dir, profile_id, file)?;
         refuse_absorb_mutation()?;
@@ -602,6 +617,7 @@ fn classify(
     let cloud = resolve_inventory_cloud(options);
     let inventory = inventory_live_surface_for_absorb(tf2_root, cloud.as_deref())?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let inactive_huds = crate::hud::inactive_hud_packs(&manifest);
     let manifest_paths: BTreeSet<String> = manifest
         .files
         .iter()
@@ -633,7 +649,7 @@ fn classify(
                 // deletion. Left in the manifest it never gets removed, and the
                 // next switch back rewrites the file the user deleted.
                 // `packs_removed` only fires when the whole pack key is gone.
-                Some(pack) if live_pack_keys.contains(&pack) => {
+                Some(pack) if live_pack_keys.contains(&pack) && !inactive_huds.contains(&pack) => {
                     owned_missing.push(file.path.clone());
                 }
                 Some(_) => {}
@@ -692,6 +708,7 @@ fn classify(
         .collect();
     let packs_removed: Vec<String> = manifest_packs
         .difference(&live_packs)
+        .filter(|pack| !inactive_huds.contains(*pack))
         .filter(|pack| !ignored.contains(*pack))
         .cloned()
         .collect();
@@ -716,12 +733,12 @@ fn classify(
 
 /// The live tree keyed by the spelling the manifest uses for each pack.
 ///
-/// A pack is the same pack whether its folder is `hud` or `-hud` (the Source
-/// disable prefix), and on Windows whether it is `RaysHUD` or `rayshud`. The
-/// switch itself writes a profile's second HUD as `-hud` while the manifest
-/// keeps `hud`; matched by exact path, the next absorb read that as "hud was
+/// A pack keeps its legacy identity whether its folder is `hud` or `-hud`,
+/// and on Windows whether it is `RaysHUD` or `rayshud`. Older switches wrote
+/// a profile's second HUD as `-hud` while the manifest kept `hud`; matched by
+/// exact path, the next absorb read that as "hud was
 /// deleted, -hud is new", removed the library copy and re-added it under the
-/// disabled name — and the following switch wrote both HUDs disabled. Keying
+/// dashed name — and the following switch wrote both HUDs dashed. Keying
 /// live files by the manifest's spelling makes the folder name a live-only
 /// detail: the library copy keeps the manifest path, and the twin's bytes are
 /// what get hashed against it.

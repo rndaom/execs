@@ -3,7 +3,7 @@ import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type { Api } from "../lib/api";
 import { openExternal } from "../lib/bridge";
 import { copyButtonLabel } from "../lib/copy-ui";
-import { appVersionCopy, updateCheckButtonLabel } from "../lib/updater-ui";
+import { appVersionCopy, releaseVersionCopy, updateCheckButtonLabel } from "../lib/updater-ui";
 
 const ISSUES_URL = "https://github.com/rndaom/execs/issues/new/choose";
 
@@ -51,7 +51,9 @@ export function AppFooter({
       <p className={pinned ? "shrink-0 text-[10px] text-ink-faint" : "t-meta"}>
         {update.version ? (
           <>
-            <span data-testid="app-version">{appVersionCopy(update.version)}</span>
+            <span data-testid="app-version" title={`execs ${releaseVersionCopy(update.version)}`}>
+              {appVersionCopy(update.version)}
+            </span>
             {" · "}
           </>
         ) : null}

@@ -167,15 +167,23 @@ describe("mods apply gating", () => {
   it("forgets a pick whose pack was removed", () => {
     const picked = { ...INSTALLED, profileParticleMods: ["gb-618734"] };
     const sources = [{ modId: "gb-618734", name: "Clean Rocket Trails", pcfFiles: ["a.pcf"] }];
-    expect(visibleModSelection(picked, sources, []).profileParticleMods).toEqual(["gb-618734"]);
+    expect(visibleModSelection(picked, sources).profileParticleMods).toEqual(["gb-618734"]);
     // The pack is gone: no row could untick it, so it stops counting.
-    expect(visibleModSelection(picked, [], []).profileParticleMods).toEqual([]);
-    // Still patched in — the backend knows it, so the selection matches disk.
-    expect(visibleModSelection(picked, [], ["gb-618734"]).profileParticleMods).toEqual([
-      "gb-618734",
-    ]);
+    expect(visibleModSelection(picked, []).profileParticleMods).toEqual([]);
     // Nothing to prune returns the very same object.
-    expect(visibleModSelection(INSTALLED, [], [])).toBe(INSTALLED);
+    expect(visibleModSelection(INSTALLED, [])).toBe(INSTALLED);
+  });
+
+  it("drops a previous profile's globally installed particle ID and enables cleanup", () => {
+    const previous = "high-vis-mvm-cash-particles-gigantic";
+    const switched = {
+      ...status,
+      status: { ...status.status, profileParticleMods: [previous] },
+      profileParticleSources: [],
+    };
+    const visible = visibleModSelection({ ...INSTALLED, profileParticleMods: [previous] }, []);
+    expect(visible).toEqual(INSTALLED);
+    expect(modsApplyEnabled(switched, visible)).toBe(true);
   });
 
   it("treats a payload without the field as nothing installed", () => {
@@ -202,11 +210,13 @@ describe("mods apply gating", () => {
     expect(modsStatusLine(recovering, INSTALLED, false)).toBe("Finish interrupted recovery first");
   });
 
-  it("never applies without a cached library, whatever else is true", () => {
+  it("requires the cached library only when selecting its content", () => {
     const uncached = { ...stale, modsCached: false };
-    expect(modsApplyEnabled(uncached, selection())).toBe(false);
+    expect(modsApplyEnabled(uncached, selection())).toBe(true);
+    expect(modsApplyEnabled(uncached, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(null, selection())).toBe(false);
-    expect(modsStatusLine(uncached, selection(), false)).toContain("Download the mod library");
+    expect(modsStatusLine(uncached, INSTALLED, false)).toContain("Download the mod library");
+    expect(modsStatusLine(uncached, selection(), false)).toBe("Unsaved changes");
   });
 
   it("says the draft is kept before anything else", () => {

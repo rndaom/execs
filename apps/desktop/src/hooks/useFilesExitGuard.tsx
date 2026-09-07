@@ -35,7 +35,7 @@ export function useFilesExitGuard(store: FilesDraftStore, running: boolean, busy
     saving.current = true;
     setWorking(true);
     try {
-      if (save) {
+      if (save && store.dirty().length > 0) {
         if (
           running ||
           !saver.current ||
@@ -47,7 +47,7 @@ export function useFilesExitGuard(store: FilesDraftStore, running: boolean, busy
           setError("Drafts kept. Close TF2 and resolve any save errors before continuing.");
           return;
         }
-      } else store.discardAll();
+      } else if (!save) store.discardAll();
       const next = action.current;
       await next?.();
       action.current = null;
@@ -60,6 +60,8 @@ export function useFilesExitGuard(store: FilesDraftStore, running: boolean, busy
     }
   }
   const closeGuard = useNativeCloseGuard(store, request, busy);
+  const drafts = store.dirty();
+  const hasDrafts = drafts.length > 0;
   return {
     saver,
     request,
@@ -68,13 +70,18 @@ export function useFilesExitGuard(store: FilesDraftStore, running: boolean, busy
     modal: (
       <Modal
         open={open}
-        title="Save Files drafts?"
-        description="Save your edited files before continuing, or discard them."
+        title={hasDrafts ? "Save Files drafts?" : "Finish current operation?"}
+        description={
+          hasDrafts
+            ? "Save your edited files before continuing, or discard them."
+            : "Continue once the current operation has finished."
+        }
         onClose={cancel}
         testId="files-exit-guard"
+        className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto"
       >
         <ul className="t-meta text-ink-muted">
-          {store.dirty().map((draft) => (
+          {drafts.map((draft) => (
             <li key={JSON.stringify([draft.profile, draft.path])}>{draft.path}</li>
           ))}
         </ul>
@@ -86,24 +93,28 @@ export function useFilesExitGuard(store: FilesDraftStore, running: boolean, busy
         {busy && !working ? (
           <p className="t-body mt-3">Wait for the current operation to finish before continuing.</p>
         ) : null}
-        {running ? <p className="t-body mt-3">Close TF2 to save. Your drafts are kept.</p> : null}
+        {running && hasDrafts ? (
+          <p className="t-body mt-3">Close TF2 to save. Your drafts are kept.</p>
+        ) : null}
         <div className="mt-5 flex gap-3">
           <button
             type="button"
             className="btn btn-primary"
-            disabled={working || running || busy}
+            disabled={working || (running && hasDrafts) || busy}
             onClick={() => void finish(true)}
           >
-            {working ? "Saving…" : "Save and continue"}
+            {working ? "Continuing…" : hasDrafts ? "Save and continue" : "Continue"}
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={working || busy}
-            onClick={() => void finish(false)}
-          >
-            Discard and continue
-          </button>
+          {hasDrafts ? (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={working || busy}
+              onClick={() => void finish(false)}
+            >
+              Discard and continue
+            </button>
+          ) : null}
           <button type="button" className="btn btn-ghost" disabled={working} onClick={cancel}>
             Cancel
           </button>
