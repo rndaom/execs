@@ -1,8 +1,8 @@
-# 0.1.3 release candidate
+# 0.1.3 release record
 
 Prepared September 6, 2026 from public `v0.1.2` (`64b7b81`) on
-`rndaom/release-0.1.3`. This is a private candidate record. No 0.1.3 tag or
-public release exists until the owner authorizes release.
+`rndaom/release-0.1.3`. Published September 7, 2026 at 19:30 UTC after owner
+authorization. The earlier candidate evidence is retained below.
 
 ## Scope
 
@@ -19,7 +19,7 @@ public release exists until the owner authorizes release.
 - RND-255: re-import execs profile exports containing small highly
   compressible assets while retaining entry, aggregate and byte limits.
 
-## Local gates
+## September 6 local gates
 
 - All four product versions and the dated changelog section agree at 0.1.3.
 - 104 cfglint tests, 360 desktop tests and 13 release-script tests pass.
@@ -68,14 +68,14 @@ does not claim an in-menu quit-path check.
   ordered changelog history. The 0.1.3 candidate therefore tests the required
   0.1.2 to 0.1.3 signed updater path rather than the stale 0.1.1 path.
 
-## Candidate-only gates
+## Original candidate gates
 
-The non-publishing release workflow must still pass on this exact commit. It
+The non-publishing release workflow was required before tagging. It
 provides the genuine Ubuntu 22.04 compile, AppImage and `.deb` builds, Xvfb
 startup, dpkg install, signed Windows NSIS updater, 0.1.2 upgrade/data
 preservation, packaged notices and final two-platform `latest.json`
-verification. Record its run and draft asset results here before declaring the
-candidate ready to tag.
+verification. The successful refreshed candidate and publication runs are
+recorded below.
 
 ## September 7 candidate refresh
 
@@ -152,5 +152,27 @@ only documentation and this test, leaving the verified product source unchanged.
 The 0.1.3 Linear milestone records the complete frozen candidate scope; the next
 minor already has its three-feature budget. GitHub has no open issues or pull
 requests requiring patch triage. Tagging/publication, public-inbox closure and
-milestone completion remain release-time actions. The fresh visual walkthrough
+milestone completion were reserved for release time. The fresh visual walkthrough
 limitation above remains explicit; the automated release gates are complete.
+
+## Published release
+
+The owner authorized publication on September 7, 2026. Tag `v0.1.3` points to
+`2dbec18022b7f1158d9ca216508cc5f25e65e404`; only the changelog date changed after
+the final candidate evidence commit. [Publishing workflow 34154173866](https://github.com/rndaom/execs/actions/runs/34154173866)
+passed all validation, Windows/Linux builds, both signed 0.1.2 upgrade checks,
+final artifact verification and publication.
+
+[execs v0.1.3](https://github.com/rndaom/execs/releases/tag/v0.1.3) became public
+at 19:30:44 UTC. GitHub public latest and the canonical updater feed both resolve
+to 0.1.3. Windows NSIS and Linux AppImage downloads and signature sidecars were
+downloaded without authentication and independently verified against the public
+release metadata, signing key and digests. Both updater asset URLs return binary
+data without authentication with the updater's application/octet-stream header.
+Release notes match the changelog, .deb is excluded from self-update, and
+release-commit.json matches the tag commit and publishing workflow.
+
+Evidence is retained under `.artifacts/public-0.1.3/`. All six tracked 0.1.3
+Linear fixes are Done and the milestone records publication. No open GitHub
+issues required release closure. The existing 0.1.4 and 0.2.0 milestones remain
+the next work buckets; maintenance fixes still need to flow into 0.2.0.

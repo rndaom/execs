@@ -117,6 +117,6 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 
 ## 0.1.3 bind and integrity fixes
 
-- Prepare 0.1.3 from the published 0.1.2 tag, not from `main`; creator-profile and profile-scoped-preloader schema work remains on the minor track.
+- Published 0.1.3 is based on the 0.1.2 tag through its maintenance branch; creator-profile and profile-scoped-preloader schema work remains on the minor track. Future patches start from the latest public maintenance baseline.
 - Binds records DOM right/middle buttons as Source `mouse2`/`mouse3`, retains profile-scoped drafts while TF2 runs, and synchronizes tracked removals from a complete post-absorb `config.cfg` read.
 - Absorb rechecks the live process before each restore, repair and config/Cloud mutation. Catalog matching keeps an imported HUD's local tree editable, and profile ZIPs apply the bounded small-entry compression exception used by HUD archives.
