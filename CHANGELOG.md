@@ -5,7 +5,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-## [0.1.3] - 2026-09-06
+## [0.1.3] - 2026-09-07
 
 ### Added
 
