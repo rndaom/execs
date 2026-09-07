@@ -3,10 +3,12 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.3** (published 2026-09-07 at 19:30 UTC).
-The tagged release passed Windows/Linux validation, package builds, signed
-0.1.2 upgrades, startup and data-preservation checks. Public downloads and the
-updater feed are verified. See `docs/release-0.1.3.md` for evidence.
+Current public version: **0.1.3 Hotfix 1** (`0.1.3+1`, published 2026-09-07
+at 22:23 UTC). Windows/Linux validation, package builds, signed upgrades from
+the original 0.1.3, startup, data preservation and no-repeat-offer checks pass.
+Public downloads and the updater feed are verified. The original 0.1.3 tag
+and assets remain intact. See `docs/release-0.1.3.md` for evidence, including
+the release-script correction used for final verification and publication.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit

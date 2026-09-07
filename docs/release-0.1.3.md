@@ -12,7 +12,8 @@ The following fixes remain on the 0.1.3 maintenance baseline. At the owner's
 request, delivery uses internal build revision `0.1.3+1`, displayed as 0.1.3
 with Hotfix 1 in update/release-note copy. All four version files and the
 updater manifest identify that revision. The original published `v0.1.3` tag
-and assets remain intact. Hotfix publication and installer smoke are pending.
+and assets remain intact. Hotfix 1 was published September 7 at 22:23 UTC;
+both platform installers and upgrades passed verification.
 
 The read-only native updater probe passes discovery from `0.1.3` to
 `0.1.3+1`, no repeat or downgrade offer, numeric revision ordering (9 to 10),
@@ -63,8 +64,8 @@ open designer with real pointer hit-testing and Escape focus restoration.
 All mutation/recovery tests used temporary fixtures. Inspection of the user's
 existing profile metadata and HUD directories was read-only; the installed
 application and real game files were not used for hotfix mutation tests.
-Linux validation and packaged installer/updater verification have not been
-rerun for these unpublished changes.
+At that local validation stage, Linux and packaged installer/updater checks
+were pending. Their later results are recorded below.
 
 Hotfix delivery checks on Windows also pass: 400 desktop, 105 cfglint,
 17 release-script and 677 Rust tests, plus six read-only native updater
@@ -93,8 +94,16 @@ in the feed. All 19 release-script tests pass, including rejection of another
 draft and a temporary feed URL. Local verification of both downloaded CI
 artifacts then passed exact revision, byte length, SHA-256, minisign key,
 signature sidecar and updater-entry checks. Finalization uses these unchanged
-artifacts and the original tag; the provenance asset records the separate
-verification-script commit. Publication is pending the finalization step.
+artifacts and the original tag; the provenance asset records verification
+commit `d8cea82` (see the full value in `release-commit.json`).
+
+[0.1.3 Hotfix 1](https://github.com/rndaom/execs/releases/tag/v0.1.3%2B1)
+was published as the latest stable release at **2026-09-07 22:23:47 UTC**.
+The anonymous public updater endpoint returns `0.1.3+1`, the hotfix notes,
+and Windows NSIS / Linux AppImage entries (including their aliases), with
+the `.deb` updater entry removed. Both public artifact URLs respond with the
+expected installer content types and sizes.
+The original `v0.1.3` release's eight asset IDs, sizes and digests are unchanged.
 
 ### Original published scope
 
