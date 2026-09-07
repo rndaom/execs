@@ -6,8 +6,8 @@ Users install published GitHub Releases. Development stays on Linear and
 Current public version: **0.1.2** (published 2026-09-06 UTC).
 Private release candidate: **0.1.3**, bind correctness, write-lock, HUD and
 profile-import fixes, GameBanana download/archive fixes, and the bounded
-post-update release-notes sheet. The maintenance branch and an earlier private
-draft have been built; the September 7 additions require a fresh candidate run.
+post-update release-notes sheet. The September 7 candidate passed the full
+Windows/Linux package and signed-updater workflow at implementation `b874383`.
 No public 0.1.3 release has been published. See `docs/release-0.1.3.md` for evidence.
 
 Prepare 0.1.3 from the public 0.1.2 tag on a separate maintenance branch.
