@@ -17,7 +17,8 @@ use crate::gamebanana::{self, GameBananaCategory, GameBananaPage, GameBananaProf
 use crate::WriteGate;
 
 /// Install everything the user picked, and report the profile as it ends up.
-/// An archive can hold several VPK packs, so one pick can be several mods.
+/// A multi-file picker can produce several mods. Ambiguous archives containing
+/// several VPK choices are refused by core before this boundary.
 fn install_all(
     root: &Path,
     profile_id: &str,

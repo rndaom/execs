@@ -77,3 +77,27 @@ preservation, packaged notices and final two-platform `latest.json`
 verification. Record its run and draft asset results here before declaring the
 candidate ready to tag.
 
+## September 7 candidate refresh
+
+The release preparation includes the existing uncommitted GameBanana redirect
+and archive-choice fixes, HUD cfg compatibility changes, and post-update
+release-notes sheet. These additions are included in the 0.1.3 changelog.
+
+Review corrected Rust formatting, joined wrapped changelog bullets in the
+release-notes sheet, completed its bundled 0.1.3 notes, and guarded access to
+unavailable webview storage so it cannot interrupt startup or update installation.
+Regression tests cover wrapped notes, unavailable storage and the throwing
+localStorage property getter at React startup.
+
+Local verification: frontend suite, production frontend build, Biome, locked
+Windows Rust workspace tests, strict all-target Clippy, Rustfmt, release-version
+guard, packaged notices for 453 dependencies and whitespace checks pass.
+The production pnpm advisory check reports no known vulnerabilities. Cargo audit
+is not installed in this Windows environment; the earlier RustSec result above
+is historical, not a new advisory scan.
+
+The earlier successful private workflow was
+[34053212253](https://github.com/rndaom/execs/actions/runs/34053212253), for
+`18f7065d9005ce8ff2fb71bd5abcfd1a17d0ada7`. It does not verify these new additions.
+A fresh non-publishing workflow must validate the refreshed candidate before
+tagging. The public release remains 0.1.2 throughout preparation.

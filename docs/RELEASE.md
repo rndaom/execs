@@ -4,9 +4,11 @@ Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
 Current public version: **0.1.2** (published 2026-09-06 UTC).
-Private release candidate: **0.1.3**, bind correctness plus confirmed public
-write-lock, HUD-identity and profile-import regressions. Its version and release
-notes are prepared, but it is not tagged, dispatched, pushed, or published.
+Private release candidate: **0.1.3**, bind correctness, write-lock, HUD and
+profile-import fixes, GameBanana download/archive fixes, and the bounded
+post-update release-notes sheet. The maintenance branch and an earlier private
+draft have been built; the September 7 additions require a fresh candidate run.
+No public 0.1.3 release has been published. See `docs/release-0.1.3.md` for evidence.
 
 Prepare 0.1.3 from the public 0.1.2 tag on a separate maintenance branch.
 Its planned bind scope is RND-212, RND-233 and RND-234. The September 6 audit
@@ -49,13 +51,21 @@ always match the tag `v0.Y.Z`:
 
 | Bump | When | Features | Data / write surface |
 |---|---|---|---|
-| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | None. | No new features or incompatible schema change. Older profiles still load; additive internal recovery metadata needed for a bug fix is allowed. |
-| **Minor** `0.Y+1.0` | Monthly train (below). Skip if nothing is ready. | At most **three** user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
+| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | Bug fixes by default. A bounded feature or polish item may ship when the owner explicitly assigns it to that named patch. | No incompatible schema or new write target. Older profiles and exports still work; additive internal recovery metadata is allowed. |
+| **Minor** `0.Y+1.0` | Monthly train (below). Skip if nothing is ready. | At most **three** planned user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
 | **1.0.0** | Yearly review says the contracts are stable. | — | Profile format, write surface, updater URL, and OS matrix are promises. |
 
 A user-visible feature is something a player notices in a pane or on
 first run. Refactors, tests, copy, and process docs are not features and
 do not wait for a train.
+
+Patches stay small and bugfix-led; they are not a second feature train.
+The owner may nevertheless put a specific, bounded, non-breaking feature or
+polish change into a named patch when that update is the right delivery unit.
+Record that decision and the complete scope in the Linear milestone. The
+explicit assignment controls the update; do not move the item back to a minor
+solely because it is user-visible, and do not use the exception to infer extra
+scope the owner did not request.
 
 **Breaking** (new minor at minimum, plus a migration note in
 `CHANGELOG.md`): changing which files we write, a profile or manifest
@@ -87,8 +97,9 @@ Linear is private planning. GitHub is the public desk.
 3. If it is real work, open a Linear issue on the execs project, label
    `from-github`, and paste the GitHub URL. Add `compat` when it applies.
    Bug / Feature / Improvement stay the type labels.
-4. Commit it to a version milestone only when it is in that minor's
-   feature budget, or when it is patch-class and you will ship it now.
+4. Commit it to a version milestone when it is in that minor's feature
+   budget, when it is a patch-class fix you will ship now, or when the owner
+   explicitly assigns the bounded work to a named patch.
 5. When the version that contains it is published, comment the version
    on the GitHub thread and close it.
 
@@ -138,10 +149,16 @@ When you do ship:
 
 ### Anytime (a patch)
 
-A patch is a bug the last public version has, with no feature attached.
+A patch is normally a focused set of bugs in the last public version. It may
+also contain a bounded, non-breaking feature or polish item that the owner
+explicitly assigned to that named patch. Freeze exactly that recorded milestone
+scope; an exception is not permission to sweep in adjacent backlog work.
+
 Bump `Z`, write the changelog section, tag, done. If `main` already has an
-unreleased breaking change or feature work, cut the patch branch from the last
-public tag and tag from that branch. Otherwise patch from `main`.
+unreleased breaking change or work outside the frozen patch scope, cut the patch
+branch from the last public tag and tag from that branch. Otherwise patch from
+`main`. Older profiles and exports must remain readable, write targets must not
+expand, and every breaking change still waits for a minor.
 
 ### Once a year (the first Thursday of September)
 

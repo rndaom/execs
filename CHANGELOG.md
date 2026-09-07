@@ -7,8 +7,20 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [0.1.3] - 2026-09-06
 
+### Added
+
+- Application: show a themed, dismissible release-notes sheet after an update,
+  with a link to the matching GitHub release.
+
 ### Fixed
 
+- Mods: install GameBanana downloads served through its numbered file-cache
+  hosts, and refuse archives with ambiguous VPK choices instead of installing
+  every variant.
+- HUD: allow imported HUD cfg files that set the normal, server-controlled
+  `sv_cheats` cvar.
+- HUD and Files: allow top-level `unbindall` bind-reset configs while continuing
+  to flag the command when hidden inside a bind or alias payload.
 - Binds: record right and middle mouse buttons with the correct TF2 names,
   preserve bind drafts while TF2 is running, and honor tracked binds removed
   through the in-game settings after TF2 closes.

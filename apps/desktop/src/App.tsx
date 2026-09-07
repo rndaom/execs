@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { AppFooter } from "./components/AppFooter";
 import { FinderPanel } from "./components/FinderPanel";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
+import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ToastProvider } from "./components/ui/Toast";
@@ -13,6 +14,7 @@ import { useFilesExitGuard } from "./hooks/useFilesExitGuard";
 import { useFirstRun } from "./hooks/useFirstRun";
 import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
+import { useReleaseNotes } from "./hooks/useReleaseNotes";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
@@ -90,6 +92,19 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       firstRun.reset();
       progress.cancel();
     },
+  });
+  const releaseNotes = useReleaseNotes({
+    version: update.version,
+    installResolved: !install.scanning,
+    existingInstall: install.confirmed !== null,
+    seed:
+      preview === "release-notes"
+        ? {
+            version: "0.1.3",
+            notes:
+              "### Fixed\n\n- Mouse binds now use the correct TF2 names.\n- Profile repairs stop safely if TF2 starts.\n- Imported HUD options remain editable.",
+          }
+        : null,
   });
 
   const profiles = useProfileLibrary(api, {
@@ -286,6 +301,12 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       }}
     >
       <ToastProvider>
+        <ReleaseNotes
+          api={api}
+          release={releaseNotes.release}
+          onClose={releaseNotes.dismiss}
+          onError={(message) => setError(message)}
+        />
         {filesExit.modal}
         {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
         <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
