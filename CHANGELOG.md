@@ -15,8 +15,8 @@ User-facing changes only. The release workflow publishes the matching
 ### Fixed
 
 - Mods: install GameBanana downloads served through its numbered file-cache
-  hosts, and refuse archives with ambiguous VPK choices instead of installing
-  every variant.
+  hosts, and refuse archives with ambiguous VPK or loose-folder choices instead
+  of installing every variant or silently dropping alternatives.
 - HUD: allow imported HUD cfg files that set the normal, server-controlled
   `sv_cheats` cvar.
 - HUD and Files: allow top-level `unbindall` bind-reset configs while continuing

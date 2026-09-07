@@ -339,7 +339,21 @@ fn content_root(
             break;
         }
     }
-    if candidates.len() > 1 {
+    // A deeper alternative is still a choice. Selecting only the shallowest
+    // candidate could silently discard, for example, alternate/red/materials
+    // beside default/materials.
+    let outside_selected = selected.as_ref().is_some_and(|selected| {
+        entries.iter().any(|(rel, _)| {
+            let parts: Vec<&str> = rel.split('/').collect();
+            (0..parts.len().saturating_sub(1))
+                .take_while(|depth| *depth <= max_depth)
+                .find(|depth| {
+                    MOD_CONTENT_ROOTS.contains(&parts[*depth].to_ascii_lowercase().as_str())
+                })
+                .is_some_and(|depth| parts[..depth].join("/") != *selected)
+        })
+    });
+    if candidates.len() > 1 || outside_selected {
         return Err(ProfileError::Io(
             "That archive contains multiple peer TF2 content roots; split it into one mod per folder before importing it."
                 .into(),
@@ -1096,6 +1110,16 @@ mod tests {
             "{}",
             err.message()
         );
+    }
+
+    #[test]
+    fn loose_alternatives_at_different_depths_require_a_choice() {
+        let bytes = zip_bytes(&[
+            ("default/materials/skin.vmt", b"default"),
+            ("alternatives/red/materials/skin.vmt", b"red"),
+        ]);
+        let err = mod_content_from_archive("choices.zip", &bytes).unwrap_err();
+        assert!(err.message().contains("multiple peer TF2 content roots"));
     }
 
     /// The same rule for a picked file: `skin_000.vpk` alone installs, the

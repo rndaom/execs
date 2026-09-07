@@ -89,6 +89,10 @@ unavailable webview storage so it cannot interrupt startup or update installatio
 Regression tests cover wrapped notes, unavailable storage and the throwing
 localStorage property getter at React startup.
 
+The archive review also found that loose alternatives at different wrapper
+depths could be silently dropped. Import now refuses that ambiguous selection;
+the regression test covers default/materials alongside alternatives/red/materials.
+
 Local verification: frontend suite, production frontend build, Biome, locked
 Windows Rust workspace tests, strict all-target Clippy, Rustfmt, release-version
 guard, packaged notices for 453 dependencies and whitespace checks pass.
