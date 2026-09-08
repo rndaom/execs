@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-08
+
 ### Added
 
 - Crosshair: choose In-game or Custom mode, with saved custom packs and weapon
