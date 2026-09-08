@@ -140,6 +140,24 @@ impl Iterator for Tokens<'_> {
     }
 }
 
+pub(crate) fn scalar(text: &[u8], name: &str) -> Option<String> {
+    let mut value = None;
+    for command in (Commands { remaining: text }) {
+        let mut tokens = Tokens {
+            remaining: command.body,
+        };
+        if tokens
+            .next()
+            .is_some_and(|token| token.eq_ignore_ascii_case(name.as_bytes()))
+        {
+            value = tokens
+                .next()
+                .and_then(|token| String::from_utf8(token).ok());
+        }
+    }
+    value
+}
+
 pub(crate) fn merge_scope(
     existing: &[u8],
     submitted: &[u8],

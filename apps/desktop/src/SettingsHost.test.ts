@@ -123,6 +123,30 @@ afterEach(async () => {
 });
 
 describe("settings snapshot integrity", () => {
+  it("retries stock decoding after leaving during the first request and ignores obsolete results", async () => {
+    const first = deferred<any>();
+    const second = deferred<any>();
+    api.getStockCrosshairSprites
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    await render({ tab: "crosshair" });
+    await render({ tab: "gameplay" });
+    await render({ tab: "crosshair" });
+    const sprites = { crosshair3: { width: 1, height: 1, rgba: [255, 255, 255, 255] } };
+    await act(async () => second.resolve(sprites));
+    await act(async () => first.resolve({ obsolete: true }));
+    expect(api.getStockCrosshairSprites).toHaveBeenCalledTimes(2);
+    expect(capture.panes.crosshair.stockSprites).toEqual(sprites);
+  });
+
+  it("retries a failed stock decode on the next visit", async () => {
+    api.getStockCrosshairSprites.mockRejectedValueOnce(new Error("decode failed"));
+    await render({ tab: "crosshair" });
+    await render({ tab: "gameplay" });
+    await render({ tab: "crosshair" });
+    expect(api.getStockCrosshairSprites).toHaveBeenCalledTimes(2);
+    expect(capture.panes.crosshair.stockSprites).toEqual({});
+  });
   it("publishes the new profile identity only with its complete cfg seed", async () => {
     const path = "tf/cfg/execs_gameplay.cfg";
     api.getActiveProfileDetail.mockResolvedValue({

@@ -19,9 +19,23 @@ pub async fn apply_crosshairs(
     color: Option<[u8; 3]>,
     library: Option<BTreeMap<String, CrosshairAsset>>,
     design: Option<String>,
+    settings: Option<execs_core::crosshair::CrosshairBuildSettings>,
 ) -> Result<ProfileDetail, CommandError> {
     let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| {
+        if let Some(settings) = settings {
+            return Ok(execs_core::crosshair::apply_crosshairs_configured(
+                &root,
+                &profile_id,
+                &shape,
+                &assignments,
+                custom_rgba.as_deref(),
+                color,
+                &library.unwrap_or_default(),
+                design.as_deref(),
+                &settings,
+            )?);
+        }
         Ok(execs_core::apply_crosshairs(
             &root,
             &profile_id,
@@ -109,7 +123,12 @@ pub async fn get_pack_crosshair_previews(
         let manifest = active_manifest(&profile_id)?;
         let mut out = BTreeMap::new();
         if let Some(record) = manifest.crosshair {
-            for name in record.library.keys() {
+            for name in record
+                .library
+                .keys()
+                .map(String::as_str)
+                .chain(std::iter::once("custom"))
+            {
                 let Some(bytes) = execs_core::stored_pack_crosshair(
                     &execs_core::profiles_dir(),
                     &profile_id,
@@ -119,7 +138,7 @@ pub async fn get_pack_crosshair_previews(
                 };
                 if let Ok(decoded) = execs_core::vtf_read::decode_vtf_frame0(&bytes) {
                     out.insert(
-                        name.clone(),
+                        name.to_owned(),
                         StockCrosshairSprite {
                             width: decoded.width,
                             height: decoded.height,
@@ -146,4 +165,20 @@ pub async fn remove_crosshairs(
 ) -> Result<ProfileDetail, CommandError> {
     let _guard = gate.lock_for_write().await?;
     with_profile(|root, profile_id| Ok(execs_core::remove_crosshairs(&root, &profile_id)?)).await
+}
+
+#[tauri::command]
+pub async fn deactivate_crosshairs(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_profile(|root, id| {
+        Ok(execs_core::crosshair::deactivate_crosshairs_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
 }

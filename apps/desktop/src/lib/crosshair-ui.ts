@@ -4,7 +4,16 @@ import { migrateCommunityName } from "./community-crosshairs";
 export const EXECS_CROSSHAIRS_PACK = "execs-crosshairs";
 export const CROSSHAIR_CANVAS_SIZE = 64;
 
-export const CROSSHAIR_SHAPES = ["dot", "cross", "plus-gap", "circle", "t"] as const;
+export const CROSSHAIR_SHAPES = [
+  "dot",
+  "cross",
+  "plus-gap",
+  "circle",
+  "t",
+  "execs-chevron",
+  "execs-diamond",
+  "execs-ring-cross",
+] as const;
 export const CUSTOM_CROSSHAIR_SHAPE = "custom";
 /** Name of the parametric-designer library entry. */
 export const DESIGNED_CROSSHAIR_NAME = "designed";
@@ -215,7 +224,7 @@ export const WEAPON_CATALOG: WeaponCatalogEntry[] = [
 export const CROSSHAIR_CASUAL_COPY = "Custom crosshairs usually work on Valve Casual.";
 
 export const CROSSHAIR_STOCK_OVERRIDE_NOTE =
-  "Set the crosshair file above to Default / none, or these will not show.";
+  "Custom mode uses Weapon default so each weapon can draw its assigned crosshair.";
 
 export type CrosshairColor = [number, number, number];
 
@@ -427,6 +436,19 @@ export function renderCrosshairRgba(
         set(size - 1 - i, mid);
       }
       break;
+    case "execs-chevron":
+    case "execs-diamond": {
+      for (let y = 0; y < size; y += 1)
+        for (let x = 0; x < size; x += 1) {
+          const dx = x - 31.5,
+            dy = y - 31.5;
+          const edge =
+            shape === "execs-diamond" ? Math.abs(dx) + Math.abs(dy) - 12 : Math.abs(dx) - dy - 6;
+          if (Math.abs(edge) <= 1 && Math.abs(dx) <= 12 && Math.abs(dy) <= 12) set(x, y);
+        }
+      break;
+    }
+    case "execs-ring-cross":
     case "circle": {
       const r = 12;
       for (let y = 0; y < size; y += 1) {
@@ -434,7 +456,12 @@ export function renderCrosshairRgba(
           const dx = x - mid + 0.5;
           const dy = y - mid + 0.5;
           const d = Math.hypot(dx, dy);
-          if (Math.abs(d - r) < 0.85) {
+          if (
+            Math.abs(d - r) < 0.85 ||
+            (shape === "execs-ring-cross" &&
+              Math.min(Math.abs(dx), Math.abs(dy)) < 0.85 &&
+              Math.max(Math.abs(dx), Math.abs(dy)) < r)
+          ) {
             set(x, y);
           }
         }

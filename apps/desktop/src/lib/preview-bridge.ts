@@ -120,6 +120,7 @@ export function createPreviewApi(state: PreviewState): Api {
   let mods: ModRecord[] =
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
+  const crosshairPixels: Record<string, { width: number; height: number; rgba: number[] }> = {};
   let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
   let hitsound: HitsoundRecord | null =
@@ -452,15 +453,44 @@ export function createPreviewApi(state: PreviewState): Api {
     },
 
     // --- crosshair ----------------------------------------------------------
-    async applyCrosshairs(shape, assignments, _customRgba, color, _library, design) {
+    async applyCrosshairs(shape, assignments, customRgba, color, library, design, settings) {
+      const names = settings?.libraryNames ?? [
+        ...new Set([...Object.keys(crosshair?.library ?? {}), ...Object.keys(library ?? {})]),
+      ];
       crosshair = {
         id: "preview",
+        inactive: false,
+        scale: settings?.scale,
+        stock: settings?.stock,
         shape,
         assignments,
         color: color ?? null,
-        library: crosshair?.library,
+        library: Object.fromEntries(
+          names.map((name) => [
+            name,
+            library?.[name]?.format ?? crosshair?.library?.[name] ?? "rgba",
+          ]),
+        ),
         design: design ?? null,
       };
+      for (const [name, asset] of Object.entries(library ?? {})) {
+        if (asset.format === "rgba")
+          crosshairPixels[name] = { width: 64, height: 64, rgba: asset.bytes };
+      }
+      if (customRgba) crosshairPixels.custom = { width: 64, height: 64, rgba: customRgba };
+      const detail = requireDetail();
+      const path =
+        detail.layer === "comfig"
+          ? "tf/cfg/overrides/execs_gameplay.cfg"
+          : "tf/cfg/execs_gameplay.cfg";
+      const latest = files.find((file) => file.path === path)?.text ?? "";
+      const rgb = color
+        ? `cl_crosshair_red ${color[0]}\ncl_crosshair_green ${color[1]}\ncl_crosshair_blue ${color[2]}\n`
+        : "";
+      upsert(
+        path,
+        `${latest}\ncl_crosshair_file ""\ncl_crosshair_scale ${settings?.scale ?? 32}\n${rgb}`,
+      );
       return requireDetail();
     },
     async fetchCommunityCrosshair(file: string) {
@@ -471,15 +501,28 @@ export function createPreviewApi(state: PreviewState): Api {
       return {};
     },
     async getPackCrosshairPreviews() {
-      // Decoded sprites need the user's own game files; the panes fall back to
-      // their drawn geometry, which is exactly what preview should show.
-      throw notInPreview("Pack crosshair previews");
+      return crosshairPixels;
     },
     async getStockCrosshairSprites() {
       throw notInPreview("Stock crosshair sprites");
     },
     async removeCrosshairs() {
       crosshair = null;
+      return requireDetail();
+    },
+    async deactivateCrosshairs() {
+      if (crosshair) {
+        crosshair = { ...crosshair, inactive: true };
+        const path =
+          requireDetail().layer === "comfig"
+            ? "tf/cfg/overrides/execs_gameplay.cfg"
+            : "tf/cfg/execs_gameplay.cfg";
+        const latest = files.find((file) => file.path === path)?.text ?? "";
+        upsert(
+          path,
+          `${latest}\ncl_crosshair_file "${crosshair.stock?.file ?? ""}"\ncl_crosshair_scale ${crosshair.stock?.scale ?? 32}\n`,
+        );
+      }
       return requireDetail();
     },
 

@@ -242,6 +242,15 @@ pub struct HudRecord {
 #[serde(rename_all = "camelCase")]
 pub struct CrosshairRecord {
     pub id: String,
+    /// Missing on old profiles means the custom pack is active.
+    #[serde(default)]
+    pub inactive: bool,
+    /// Custom display scale; missing preserves the existing cfg value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<u32>,
+    /// Stock settings retained while custom mode owns the live cvars.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stock: Option<CrosshairStockSettings>,
     #[serde(default)]
     pub shape: String,
     #[serde(default)]
@@ -256,6 +265,13 @@ pub struct CrosshairRecord {
     /// Serialized designer parameters for the "designed" entry, for re-editing.
     #[serde(default)]
     pub design: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosshairStockSettings {
+    pub file: String,
+    pub scale: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

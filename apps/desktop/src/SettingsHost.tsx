@@ -4,6 +4,7 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { useToast } from "./components/ui/Toast";
+import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
@@ -160,18 +161,11 @@ export function SettingsHost({
   const loadRequest = useRef(0);
 
   const pendingIds = useRef(new Set<string>());
-  const [pendingDrafts, setPendingDrafts] = useState(false);
-  const [draftEpoch, setDraftEpoch] = useState(0);
   const discardAutosaves = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only after discarded panes finish cleanup.
-  useEffect(() => {
-    discardAutosaves.current = false;
-  }, [draftEpoch]);
   const reportPending = useCallback(
     (id: string, pending: boolean) => {
       if (pending) pendingIds.current.add(id);
       else pendingIds.current.delete(id);
-      setPendingDrafts(pendingIds.current.size > 0);
       onPendingChange?.(pendingIds.current.size > 0);
     },
     [onPendingChange],
@@ -453,11 +447,12 @@ export function SettingsHost({
         }
       })
       .catch(() => {
-        stockSpritesRequested.current = false;
+        if (!cancelled) stockSpritesRequested.current = false;
         /* geometry fallback stays in place */
       });
     return () => {
       cancelled = true;
+      stockSpritesRequested.current = false;
     };
   }, [api, tab]);
 
@@ -468,11 +463,12 @@ export function SettingsHost({
   const crosshairLibraryKey = JSON.stringify([
     detail?.id ?? null,
     detail?.crosshair?.library ?? null,
+    detail?.files.filter((file) => file.path.includes("execs-crosshairs/")),
   ]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by profile + library content.
   useEffect(() => {
     setPackPreviews(null);
-    if (tab !== "crosshair" || !detail?.crosshair?.library) {
+    if (tab !== "crosshair" || !detail?.crosshair) {
       return;
     }
     let cancelled = false;
@@ -792,6 +788,7 @@ export function SettingsHost({
           layer={layer}
           effective={maps.effective}
           stockSprites={stockSprites}
+          scene={<CrosshairScene api={api} />}
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSaveStock={(gameplayText) =>
@@ -799,9 +796,22 @@ export function SettingsHost({
               await writeManaged(path, gameplayText, "crosshair");
             })
           }
-          onApply={(shape, assignments, customRgba, color, library, design) =>
+          onApply={(shape, assignments, customRgba, color, library, design, settings) =>
             runWrite(async () => {
-              await api.applyCrosshairs(shape, assignments, customRgba, color, library, design);
+              await api.applyCrosshairs(
+                shape,
+                assignments,
+                customRgba,
+                color,
+                library,
+                design,
+                settings,
+              );
+            })
+          }
+          onDeactivate={() =>
+            runWrite(async () => {
+              await api.deactivateCrosshairs();
             })
           }
           onRemove={() => {
@@ -1148,29 +1158,11 @@ export function SettingsHost({
         </div>
       ) : null}
       {!profileId && loading ? <p>Loading settings…</p> : null}
-      {pendingDrafts && !running ? (
-        <div className="mb-4 text-ink-muted t-meta">
-          <span>Save pending. Profile changes stay paused until drafts are saved.</span>
-          <button
-            type="button"
-            className="btn btn-ghost ml-2"
-            disabled={queueBusy || loading}
-            onClick={() => {
-              discardAutosaves.current = true;
-              launchRef.current = launchSeedRef.current;
-              setLaunch(launchSeedRef.current);
-              setDraftEpoch((value) => value + 1);
-            }}
-          >
-            Discard pending drafts
-          </button>
-        </div>
-      ) : null}
       <AutosaveDiscard.Provider value={discardAutosaves}>
         <AutosavePending.Provider value={reportPending}>
           {[...visited.current.tabs].map((paneTab) => (
             <div
-              key={`${profileId}:${paneTab}:${draftEpoch}`}
+              key={`${profileId}:${paneTab}`}
               hidden={tab !== paneTab}
               inert={inputsBlocked}
               data-testid={`settings-surface-${paneTab}`}
