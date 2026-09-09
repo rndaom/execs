@@ -151,6 +151,9 @@ const PUNCTUATION_KEY_TO_SOURCE: Record<string, string> = {
 };
 
 const DOM_KEY_LOCATION_NUMPAD = 3;
+// DOM orders the middle and right buttons as 1 and 2, while Source names
+// right-click mouse2 and middle-click mouse3.
+const DOM_MOUSE_BUTTON_TO_SOURCE = ["mouse1", "mouse3", "mouse2", "mouse4", "mouse5"] as const;
 
 for (let index = 1; index <= 12; index += 1) {
   CODE_TO_SOURCE[`F${index}`] = `f${index}`;
@@ -214,10 +217,7 @@ export function recorderOutcomeForKey(key: string | null): RecorderOutcome {
 }
 
 export function sourceKeyFromMouseButton(button: number): string | null {
-  if (button >= 0 && button <= 4) {
-    return `mouse${button + 1}`;
-  }
-  return null;
+  return DOM_MOUSE_BUTTON_TO_SOURCE[button] ?? null;
 }
 
 export function sourceKeyFromWheelDelta(deltaY: number): "mwheelup" | "mwheeldown" | null {
@@ -439,22 +439,18 @@ export function configBindsFromFiles(
 }
 
 export function syncTrackedBindsFromConfig(currentFile: string, configBinds: BindMap): string {
-  const next = { ...parseManagedBinds(currentFile) };
-  let changed = false;
+  const current = parseManagedBinds(currentFile);
+  const next: Partial<Record<BindActionId, string>> = {};
   for (const action of BIND_ACTIONS) {
     const configKey = lastKeyForCommand(configBinds, action.command);
-    if (!configKey || next[action.id] === configKey) {
-      continue;
+    if (configKey) {
+      next[action.id] = configKey;
     }
-    for (const id of BIND_ACTIONS.map((item) => item.id)) {
-      if (next[id] === configKey && id !== action.id) {
-        delete next[id];
-      }
-    }
-    next[action.id] = configKey;
-    changed = true;
   }
-  return changed || currentFile.trim().length === 0 ? serializeManagedBinds(next) : currentFile;
+  const serialized = serializeManagedBinds(next);
+  return currentFile.trim().length === 0 || serializeManagedBinds(current) !== serialized
+    ? serialized
+    : currentFile;
 }
 
 function execStem(target: string): string {

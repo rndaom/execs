@@ -7,7 +7,7 @@ import {
   UploadSimple,
   X,
 } from "@phosphor-icons/react";
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
@@ -15,7 +15,7 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useAutosave } from "./hooks/useAutosave";
+import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { Api } from "./lib/api";
 import {
@@ -943,6 +943,7 @@ function HudLightbox({
   onClose: () => void;
 }) {
   const { entry, index } = viewer;
+  const active = useContext(AutosaveActivity);
   const [album, setAlbum] = useState<HudAlbumImage[] | null>(null);
   const [albumFailed, setAlbumFailed] = useState(false);
 
@@ -984,6 +985,9 @@ function HudLightbox({
 
   // Escape and focus are the Modal's job; only the arrow-key paging is ours.
   useEffect(() => {
+    if (!active) {
+      return;
+    }
     function onKey(event: KeyboardEvent) {
       if (event.key === "ArrowRight") {
         onPick(stepHudScreenshot(safeIndex, 1, count));
@@ -993,7 +997,7 @@ function HudLightbox({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [safeIndex, count, onPick]);
+  }, [safeIndex, count, onPick, active]);
 
   const albumUrl = entry.album;
   const albumNote = albumUrl

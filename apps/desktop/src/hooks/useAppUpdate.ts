@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Api } from "../lib/api";
 import {
+  clearPendingRelease,
+  releaseNotesStorage,
+  stagePendingRelease,
+} from "../lib/release-notes-ui";
+import {
   type AppUpdateInfo,
   type AppUpdateProgress,
   canInstallUpdate,
@@ -78,11 +83,13 @@ export function useAppUpdate(
       return;
     }
     setCheckMessage(null);
+    stagePendingRelease(releaseNotesStorage(), available);
     try {
       // Progress is driven by the adapter's own callback, so a backend that
       // cannot install never strands the banner on "Downloading".
       await api.installAppUpdate((step) => setProgress(step));
     } catch (err) {
+      clearPendingRelease(releaseNotesStorage(), available.version);
       setProgress(null);
       setError(err instanceof Error ? err.message : "Could not install the update.");
     }

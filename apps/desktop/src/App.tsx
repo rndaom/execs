@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { AppFooter } from "./components/AppFooter";
 import { FinderPanel } from "./components/FinderPanel";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
+import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ToastProvider } from "./components/ui/Toast";
@@ -9,14 +10,17 @@ import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import { useAppUpdate } from "./hooks/useAppUpdate";
+import { useFilesExitGuard } from "./hooks/useFilesExitGuard";
 import { useFirstRun } from "./hooks/useFirstRun";
 import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
+import { useReleaseNotes } from "./hooks/useReleaseNotes";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
 import type { Api } from "./lib/api";
 import { invokeErrorMessage } from "./lib/bridge";
+import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
 import { previewSwitchStep } from "./lib/library-ui";
@@ -35,6 +39,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsWriting, setSettingsWriting] = useState(false);
+  const [settingsPending, setSettingsPending] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
@@ -42,6 +48,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   );
 
   const lock = useWriteLock(api);
+  const [filesDraftStore] = useState(createFilesDraftStore);
   const lifecycle = useLifecycleStatus(api);
   const progress = useSwitchProgress(api, preview === "switch" ? previewSwitchStep() : null);
   const update = useAppUpdate(api, {
@@ -61,8 +68,18 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       : lifecycle.installingUpdate
         ? "execs is installing an update — changes remain locked."
         : null;
+  const filesExit = useFilesExitGuard(
+    filesDraftStore,
+    lock.running,
+    busy || settingsWriting || progress.state.active || update.progress !== null,
+  );
   const anyBusy =
-    busy || settingsBusy || launchPending || lifecycleBusy || update.progress !== null;
+    busy ||
+    settingsBusy ||
+    settingsPending ||
+    launchPending ||
+    lifecycleBusy ||
+    update.progress !== null;
 
   const install = useTf2Install(api, {
     setError,
@@ -75,6 +92,19 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       firstRun.reset();
       progress.cancel();
     },
+  });
+  const releaseNotes = useReleaseNotes({
+    version: update.version,
+    installResolved: !install.scanning,
+    existingInstall: install.confirmed !== null,
+    seed:
+      preview === "release-notes"
+        ? {
+            version: "0.1.3",
+            notes:
+              "### Fixed\n\n- Mouse binds now use the correct TF2 names.\n- Profile repairs stop safely if TF2 starts.\n- Imported HUD options remain editable.",
+          }
+        : null,
   });
 
   const profiles = useProfileLibrary(api, {
@@ -131,8 +161,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           draftName={draftName}
           reasons={firstRun.reasons}
           onDraftName={setDraftName}
-          onSave={() => void onSaveCurrent()}
-          onChange={install.change}
+          onSave={() => filesExit.request(onSaveCurrent)}
+          onChange={() => filesExit.request(install.change)}
         />
       );
     }
@@ -163,7 +193,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           {isCreate ? null : (
             <button
               type="button"
-              onClick={install.change}
+              onClick={() => filesExit.request(install.change)}
               disabled={busy || progress.state.active}
               className="btn btn-ghost mt-6"
             >
@@ -181,7 +211,11 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             execs
           </p>
           <p className="t-body mt-8 text-ink-muted">Checking this install…</p>
-          <button type="button" onClick={install.change} className="btn btn-ghost mt-6">
+          <button
+            type="button"
+            onClick={() => filesExit.request(install.change)}
+            className="btn btn-ghost mt-6"
+          >
             Change install
           </button>
         </section>
@@ -190,7 +224,12 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     return (
       <ReadyPanel
         path={path}
-        profiles={profiles}
+        profiles={{
+          ...profiles,
+          switchProfile: async (id) => {
+            filesExit.request(() => profiles.switchProfile(id));
+          },
+        }}
         progress={progress}
         draftName={draftName}
         launching={launchPending}
@@ -225,6 +264,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             <SettingsLayout tab={settingsTab} onTab={setSettingsTab}>
               <SettingsHost
                 api={api}
+                filesDraftStore={filesDraftStore}
+                filesSaver={filesExit.saver}
+                filesCloseReady={filesExit.ready}
                 tab={settingsTab}
                 running={lock.running}
                 externalBusy={
@@ -234,15 +276,17 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 bindSyncRequest={profiles.bindSyncRequest}
                 onBindSyncHandled={profiles.onBindSyncHandled}
                 onBusyChange={setSettingsBusy}
+                onWriteBusyChange={setSettingsWriting}
+                onPendingChange={setSettingsPending}
                 onError={setError}
               />
             </SettingsLayout>
           ) : null
         }
         onDraftName={setDraftName}
-        onSave={() => void onSaveCurrent()}
-        onCreateNew={firstRun.openCreate}
-        onChangeInstall={install.change}
+        onSave={() => filesExit.request(onSaveCurrent)}
+        onCreateNew={() => filesExit.request(firstRun.openCreate)}
+        onChangeInstall={() => filesExit.request(install.change)}
       />
     );
   }
@@ -257,6 +301,14 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       }}
     >
       <ToastProvider>
+        <ReleaseNotes
+          api={api}
+          release={releaseNotes.release}
+          onClose={releaseNotes.dismiss}
+          onError={(message) => setError(message)}
+        />
+        {filesExit.modal}
+        {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
         <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
           <WriteLockBanner
             running={lock.running}
@@ -264,10 +316,16 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             maintenance={maintenanceCopy}
           />
           <UpdateBanner
-            update={update}
+            update={{
+              ...update,
+              install: async () => {
+                filesExit.request(update.install);
+              },
+            }}
             blocked={
               busy ||
               settingsBusy ||
+              settingsPending ||
               progress.state.active ||
               launchPending ||
               lock.running ||
@@ -299,7 +357,16 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
               />
             )}
 
-            <AppFooter api={api} update={update} pinned={settingsOpen} />
+            <AppFooter
+              api={api}
+              update={{
+                ...update,
+                install: async () => {
+                  filesExit.request(update.install);
+                },
+              }}
+              pinned={settingsOpen}
+            />
           </main>
         </div>
       </ToastProvider>

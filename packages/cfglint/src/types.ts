@@ -76,8 +76,9 @@ export interface SummarySection {
  *   bind on a gameplay key, and an `exec` the app cannot resolve are ordinary
  *   things to want in a personal config, so they report as warnings and never
  *   refuse a save. The rules that stay block-tier are the ones no personal cfg
- *   needs either: `unbindall`, rcon/password, console lockout, `sv_cheats`,
- *   and aliases shadowing engine commands.
+ *   needs either: rcon/password, console lockout, and aliases shadowing
+ *   engine commands. A top-level `unbindall` is a normal bind-table reset and
+ *   only warns; hiding it in a bind or alias payload follows the trust tier.
  */
 export type LintTrust = "self" | "provided";
 

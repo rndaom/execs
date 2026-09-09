@@ -43,6 +43,10 @@ const MAX_TOTAL_UNCOMPRESSED: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_ENTRY_UNCOMPRESSED: u64 = 1024 * 1024 * 1024;
 /// Real game content does not deflate anywhere near this well.
 const MAX_COMPRESSION_RATIO: u64 = 200;
+// Small neutral textures can legitimately compress beyond 200x. Match the
+// bounded floor used by HUD/mod archives; byte ceilings still apply, and the
+// aggregate check below prevents many small entries from bypassing the ratio.
+const COMPRESSION_RATIO_FLOOR: u64 = 8 * 1024 * 1024;
 /// The manifest is the one entry we keep in memory.
 const MAX_MANIFEST_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_PROFILE_ZIP_ENTRIES: usize = 40_001;
@@ -413,6 +417,7 @@ fn read_import_zip(
     review: Option<&ProfileImportReview>,
 ) -> Result<ZipPayload, ProfileError> {
     let file = fs::File::open(zip_path).map_err(io_err)?;
+    let archive_bytes = file.metadata().map_err(io_err)?.len();
     let mut file = file;
     if let Some(review) = review {
         if sha256_reader(&mut file).map_err(io_err)? != review.sha256 {
@@ -424,7 +429,7 @@ fn read_import_zip(
     }
     let mut verification = file.try_clone().map_err(io_err)?;
     let archive = ZipArchive::new(file).map_err(zip_invalid)?;
-    let payload = read_zip_payload(archive, zip_path, staging_root, staging)?;
+    let payload = read_zip_payload(archive, zip_path, staging_root, staging, archive_bytes)?;
     if let Some(review) = review {
         verification.rewind().map_err(io_err)?;
         if sha256_reader(&mut verification).map_err(io_err)? != review.sha256 {
@@ -441,6 +446,7 @@ fn read_zip_payload(
     zip_path: &Path,
     staging_root: &Path,
     staging: &Path,
+    archive_bytes: u64,
 ) -> Result<ZipPayload, ProfileError> {
     if archive.len() > MAX_PROFILE_ZIP_ENTRIES {
         return Err(invalid_zip(format!(
@@ -462,6 +468,7 @@ fn read_zip_payload(
     let mut exclusive_keys = HashSet::new();
     let mut blobs = HashMap::new();
     let mut total: u64 = 0;
+    let mut declared_total: u64 = 0;
 
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(zip_invalid)?;
@@ -474,6 +481,10 @@ fn read_zip_payload(
             continue;
         };
         check_entry_budget(entry.size(), entry.compressed_size(), &raw_name, total)?;
+        declared_total = declared_total
+            .checked_add(entry.size())
+            .ok_or_else(|| invalid_zip("this profile zip is too large"))?;
+        check_total_compression_ratio(declared_total, archive_bytes)?;
 
         match role {
             ZipRole::Manifest => {
@@ -503,6 +514,7 @@ fn read_zip_payload(
                 total = total
                     .checked_add(actual)
                     .ok_or_else(|| invalid_zip("this profile zip is too large"))?;
+                check_total_compression_ratio(total, archive_bytes)?;
                 let parsed: ProfileZipManifest =
                     serde_json::from_slice(&bytes).map_err(zip_invalid)?;
                 if parsed.schema != ZIP_SCHEMA {
@@ -532,6 +544,7 @@ fn read_zip_payload(
                 total = total
                     .checked_add(written)
                     .ok_or_else(|| invalid_zip("this profile zip is too large"))?;
+                check_total_compression_ratio(total, archive_bytes)?;
                 if exclusive.insert(dest.clone(), staged).is_some() {
                     return Err(invalid_zip(format!("duplicate file: {dest}")));
                 }
@@ -552,6 +565,7 @@ fn read_zip_payload(
                 total = total
                     .checked_add(written)
                     .ok_or_else(|| invalid_zip("this profile zip is too large"))?;
+                check_total_compression_ratio(total, archive_bytes)?;
                 if sha256_file(&staged).map_err(io_err)? != hash {
                     return Err(invalid_zip("blob hash mismatch"));
                 }
@@ -587,11 +601,25 @@ fn check_entry_budget(
     if total_so_far.saturating_add(size) > MAX_TOTAL_UNCOMPRESSED {
         return Err(invalid_zip("this profile zip unpacks to more than 2 GiB"));
     }
-    if compressed == 0 && size > 0
-        || compressed > 0 && size > compressed.saturating_mul(MAX_COMPRESSION_RATIO)
-    {
+    if compression_ratio_exceeded(size, compressed) {
         return Err(invalid_zip(format!(
             "{name} decompresses more than {MAX_COMPRESSION_RATIO}x; refusing to unpack it"
+        )));
+    }
+    Ok(())
+}
+
+fn compression_ratio_exceeded(uncompressed: u64, compressed: u64) -> bool {
+    (compressed == 0 && uncompressed > 0)
+        || (compressed > 0
+            && uncompressed > COMPRESSION_RATIO_FLOOR
+            && uncompressed > compressed.saturating_mul(MAX_COMPRESSION_RATIO))
+}
+
+fn check_total_compression_ratio(expanded: u64, archive_bytes: u64) -> Result<(), ProfileError> {
+    if compression_ratio_exceeded(expanded, archive_bytes) {
+        return Err(invalid_zip(format!(
+            "this profile zip decompresses more than {MAX_COMPRESSION_RATIO}x; refusing to unpack it"
         )));
     }
     Ok(())
@@ -640,9 +668,7 @@ fn check_actual_entry_budget(
     {
         return Err(invalid_zip("this profile zip unpacks to more than 2 GiB"));
     }
-    if compressed == 0 && actual > 0
-        || compressed > 0 && actual > compressed.saturating_mul(MAX_COMPRESSION_RATIO)
-    {
+    if compression_ratio_exceeded(actual, compressed) {
         return Err(invalid_zip(format!(
             "{name} decompresses more than {MAX_COMPRESSION_RATIO}x; refusing to unpack it"
         )));
@@ -1349,7 +1375,7 @@ mod tests {
         }
         let file = fs::File::create(path).unwrap();
         let mut zip = ZipWriter::new(file);
-        let options = SimpleFileOptions::default();
+        let options = file_options();
         for (name, bytes) in entries {
             zip.start_file(*name, options).unwrap();
             zip.write_all(bytes).unwrap();
@@ -1579,14 +1605,12 @@ mod tests {
         );
         let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\n";
         write_raw_zip(&path, &[("/", b""), ("cfg/overrides/autoexec.cfg", cfg)]);
-        assert!(import_profile_from(&profiles, &root, &path, unlocked())
-            .unwrap_err()
-            .message()
-            .contains("sv_cheats"));
+        let refused = import_profile_from(&profiles, &root, &path, unlocked()).unwrap_err();
+        assert!(refused.message().contains("password"), "{refused:?}");
         let review =
             creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
         assert_eq!(review.warnings.len(), 1);
-        assert!(review.warnings[0].contains("sv_cheats"));
+        assert!(review.warnings[0].contains("password"));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
         assert_eq!(
@@ -1752,8 +1776,9 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         init_library_to(&profiles, &root, unlocked()).unwrap();
         let zip_path = dir.join("bomb.zip");
-        // 8 MiB of zeros deflates to a few KB: a ratio in the thousands.
-        let zeros = vec![0u8; 8 * 1024 * 1024];
+        // Anything above the bounded floor still trips the ratio guard before
+        // the stream can consume an attacker-controlled amount of disk.
+        let zeros = vec![0u8; COMPRESSION_RATIO_FLOOR as usize + 1];
         write_raw_zip(
             &zip_path,
             &[
@@ -1788,6 +1813,12 @@ mod tests {
         assert!(check_entry_budget(1024 * 1024, 900 * 1024, "x", 0).is_ok());
         // A stored (uncompressed) entry has a ratio of 1.
         assert!(check_entry_budget(4096, 4096, "x", 0).is_ok());
+        // Small repetitive assets are allowed, but the exemption is bounded.
+        assert!(check_entry_budget(COMPRESSION_RATIO_FLOOR, 1, "x", 0).is_ok());
+        assert!(check_entry_budget(COMPRESSION_RATIO_FLOOR + 1, 1, "x", 0).is_err());
+        assert!(check_entry_budget(1, 0, "x", 0).is_err());
+        assert!(check_total_compression_ratio(COMPRESSION_RATIO_FLOOR, 1).is_ok());
+        assert!(check_total_compression_ratio(COMPRESSION_RATIO_FLOOR + 1, 1).is_err());
     }
 
     #[test]
@@ -1798,8 +1829,20 @@ mod tests {
         let err = stream_entry(&dir, &mut understated, &dest, "entry", 0, 4, 4).unwrap_err();
         assert!(err.message().contains("zip header"), "{err:?}");
 
-        let err = check_actual_entry_budget(201, 201, 1, "entry", 0).unwrap_err();
+        let expanded = COMPRESSION_RATIO_FLOOR + 1;
+        let err = check_actual_entry_budget(expanded, expanded, 1, "entry", 0).unwrap_err();
         assert!(err.message().contains("decompresses more"), "{err:?}");
+        let err = check_actual_entry_budget(
+            MAX_ENTRY_UNCOMPRESSED + 1,
+            MAX_ENTRY_UNCOMPRESSED + 1,
+            MAX_ENTRY_UNCOMPRESSED + 1,
+            "entry",
+            0,
+        )
+        .unwrap_err();
+        assert!(err.message().contains("larger than 1 GiB"), "{err:?}");
+        let err = check_actual_entry_budget(1, 1, 1, "entry", MAX_TOTAL_UNCOMPRESSED).unwrap_err();
+        assert!(err.message().contains("more than 2 GiB"), "{err:?}");
         cleanup(&dir);
     }
 
@@ -1914,6 +1957,57 @@ mod tests {
         assert_eq!(shared.sha256, sha256_hex(b"shared-vpk"));
         assert!(blob_path(&profiles, &shared.sha256).is_file());
         assert_eq!(snapshot_tree(&root), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn highly_compressible_texture_round_trips_through_profile_export() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        seed_live(&root);
+
+        let rel = "tf/custom/repetitive/materials/vgui/refract.vtf";
+        let source = root.join(rel);
+        fs::create_dir_all(source.parent().unwrap()).unwrap();
+        let mut texture = vec![0u8; 262_352];
+        texture[..4].copy_from_slice(b"VTF\0");
+        fs::write(&source, &texture).unwrap();
+
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Repetitive texture",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: None,
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        let source_id = saved.profiles[0].id.clone();
+        let zip_path = dir.join("repetitive-texture.zip");
+        export_profile_to(&profiles, &root, &source_id, &zip_path).unwrap();
+
+        let mut archive = ZipArchive::new(fs::File::open(&zip_path).unwrap()).unwrap();
+        let entry = archive.by_name(&format!("files/{rel}")).unwrap();
+        assert!(entry.size() > entry.compressed_size() * MAX_COMPRESSION_RATIO);
+        assert!(entry.size() <= COMPRESSION_RATIO_FLOOR);
+        drop(entry);
+        drop(archive);
+
+        let library = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        let imported_id = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id != source_id)
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &imported_id, rel)).unwrap(),
+            texture
+        );
         cleanup(&dir);
     }
 

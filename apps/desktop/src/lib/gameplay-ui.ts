@@ -255,6 +255,32 @@ export function gameplayDirty(draft: GameplaySettings, saved: GameplaySettings):
   return serializeGameplay(draft) !== serializeGameplay(saved);
 }
 
+/** Sibling panes share a cfg file, but acknowledge only their own controls. */
+export function serializeGameplayScope(
+  settings: GameplaySettings,
+  scope: "gameplay" | "crosshair" | "sounds",
+): string {
+  return JSON.stringify(
+    Object.entries(clampGameplay(settings)).filter(([name]) => {
+      if (scope === "crosshair") {
+        return name.startsWith("cl_crosshair_");
+      }
+      if (scope === "sounds") {
+        return name.startsWith("tf_dingaling");
+      }
+      return [
+        "fov_desired",
+        "viewmodel_fov",
+        "tf_use_min_viewmodels",
+        "r_drawviewmodel",
+        "r_drawtracers_firstperson",
+        "r_drawtracers",
+        "cl_flipviewmodels",
+      ].includes(name);
+    }),
+  );
+}
+
 function applyCvars(base: GameplaySettings, values: Record<string, string>): GameplaySettings {
   const next = { ...base };
   const normalized: Record<string, string> = {};

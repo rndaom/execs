@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
+import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   applyRecordedBind,
   BIND_ACTIONS,
   type BindActionId,
   type BindsLayer,
   bindsFilePath,
-  canRecordBinds,
   displayedKeyForAction,
   parseManagedBinds,
   recorderOutcomeForKey,
@@ -19,10 +20,13 @@ import {
 } from "./lib/binds-ui";
 
 export type BindsPaneProps = {
+  /** The profile this draft belongs to; a switch must never reuse it. */
+  profileId: string | null;
   layer: BindsLayer;
   effectiveBinds: Record<string, string>;
   managedText: string;
-  onSave: (bindsText: string) => void;
+  /** Resolves when the managed cfg write settles. */
+  onSave: (bindsText: string) => Promise<unknown>;
 };
 
 const BIND_GROUPS: Array<{
@@ -43,12 +47,30 @@ const BIND_GROUPS: Array<{
   },
 ];
 
-export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsPaneProps) {
+export function BindsPane({
+  profileId,
+  layer,
+  effectiveBinds,
+  managedText,
+  onSave,
+}: BindsPaneProps) {
+  const active = useContext(AutosaveActivity);
   const { running, busy } = useAppStatus();
   const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
-  const canRecord = canRecordBinds(running, busy);
-  const managedKeys = parseManagedBinds(managedText);
+  const path = bindsFilePath(layer);
+  const [draft, setDraft] = useSeededDraft(
+    managedText,
+    (text) => text,
+    draftRecordKey(profileId, path),
+  );
+  const dirty = draft !== managedText;
+  useAutosave({ dirty, locked: running, token: draft, save: () => onSave(draft) });
+
+  // Recording changes only the in-memory draft. Busy work still blocks input,
+  // while TF2's write lock is handled by autosave after the game closes.
+  const canRecord = active && !busy;
+  const managedKeys = parseManagedBinds(draft);
 
   useEffect(() => {
     if (recordingId === null || !canRecord) {
@@ -72,10 +94,10 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
         setRecordingId(null);
         return;
       }
-      const next = applyRecordedBind(managedText, recordingId, outcome.key);
+      const next = applyRecordedBind(draft, recordingId, outcome.key);
       setRecordingId(null);
-      if (next !== managedText) {
-        onSave(next);
+      if (next !== draft) {
+        setDraft(next);
       }
     }
 
@@ -115,7 +137,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
       window.removeEventListener("mousedown", onMouseDown, true);
       window.removeEventListener("wheel", onWheel, true);
     };
-  }, [recordingId, canRecord, managedText, onSave]);
+  }, [recordingId, canRecord, draft, setDraft]);
 
   useEffect(() => {
     if (!canRecord) {
@@ -150,7 +172,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
       <PaneHeader
         title="Binds"
         lede="Click an action, then press a key, button or scroll."
-        actions={<p className="t-meta font-mono text-ink-faint">{bindsFilePath(layer)}</p>}
+        actions={<p className="t-meta font-mono text-ink-faint">{path}</p>}
       />
 
       <div
@@ -225,11 +247,7 @@ export function BindsPane({ layer, effectiveBinds, managedText, onSave }: BindsP
         </PaneSection>
       ))}
 
-      {!canRecord ? (
-        <p className="t-meta mt-8">
-          {running ? "Close TF2 to change binds." : "Finish the current task first."}
-        </p>
-      ) : null}
+      {!canRecord ? <p className="t-meta mt-8">Finish the current task first.</p> : null}
     </section>
   );
 }

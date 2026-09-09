@@ -34,7 +34,7 @@ const STOCK_CROSSHAIR_SHAPES: Record<Exclude<CrosshairFile, "">, StockShapePrimi
   ],
 };
 
-/** null means "Default / none": each weapon draws its own sprite crosshair. */
+/** null means "Weapon default": each weapon draws its own sprite crosshair. */
 export function stockCrosshairPrimitives(file: CrosshairFile): StockShapePrimitive[] | null {
   if (file === "") {
     return null;
@@ -51,7 +51,7 @@ export function stockCrosshairRenderedSize(scale: number, spriteSize = 64): numb
 }
 
 export const STOCK_CROSSHAIR_LABELS: Record<CrosshairFile, string> = {
-  "": "Default / none",
+  "": "Weapon default",
   crosshair1: "Cross with gaps + dot",
   crosshair2: "Three-arm cross + dot",
   crosshair3: "Open circle",

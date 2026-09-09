@@ -26,6 +26,8 @@ export function CrosshairLibraryChips({
   onRemove,
   onOpenDesigner,
   onOpenCommunity,
+  showDesigner = true,
+  showCommunity = true,
 }: {
   choices: CrosshairShape[];
   selected: CrosshairShape;
@@ -39,6 +41,8 @@ export function CrosshairLibraryChips({
   onRemove: (shape: CrosshairShape) => void;
   onOpenDesigner: () => void;
   onOpenCommunity: () => void;
+  showDesigner?: boolean;
+  showCommunity?: boolean;
 }) {
   return (
     <fieldset>
@@ -48,26 +52,30 @@ export function CrosshairLibraryChips({
           <p className="t-meta mt-0.5">Used unless a weapon has an override.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            data-testid="crosshair-open-designer"
-            disabled={locked}
-            onClick={onOpenDesigner}
-            className="btn btn-ghost"
-          >
-            <PencilSimple size={13} />
-            {hasDesign ? "Edit design" : "Design your own"}
-          </button>
-          <button
-            type="button"
-            data-testid="crosshair-open-community"
-            disabled={locked || !canBrowseCommunity}
-            onClick={onOpenCommunity}
-            className="btn btn-ghost"
-          >
-            <Plus size={13} />
-            Community crosshairs
-          </button>
+          {showDesigner ? (
+            <button
+              type="button"
+              data-testid="crosshair-open-designer"
+              disabled={locked}
+              onClick={onOpenDesigner}
+              className="btn btn-ghost"
+            >
+              <PencilSimple size={13} />
+              {hasDesign ? "Edit design" : "Design your own"}
+            </button>
+          ) : null}
+          {showCommunity ? (
+            <button
+              type="button"
+              data-testid="crosshair-open-community"
+              disabled={locked || !canBrowseCommunity}
+              onClick={onOpenCommunity}
+              className="btn btn-ghost"
+            >
+              <Plus size={13} />
+              Community crosshairs
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
@@ -95,7 +103,7 @@ export function CrosshairLibraryChips({
                 shape={shape}
                 customRgba={customRgba}
                 color={color}
-                preview={isLibrary ? previewFor(shape) : null}
+                preview={previewFor(shape)}
                 size={44}
               />
               <span className={`thumb-label ${isLibrary ? "" : "capitalize"}`}>

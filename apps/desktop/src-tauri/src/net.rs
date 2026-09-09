@@ -211,9 +211,9 @@ fn validate_url_shape(
     } else {
         source.initial_hosts()
     };
-    // Dropbox's dl=1 links redirect to an ephemeral download shard. Trust
-    // that one DNS label only for Dropbox redirects, never arbitrary user
-    // content hosts or an initial URL supplied by another catalog source.
+    // Dropbox's dl=1 links and GameBanana's /dl/ links redirect to ephemeral
+    // download shards. Trust only the exact shard shapes each service uses,
+    // and only on redirects, never arbitrary subdomains or initial URLs.
     let dropbox_shard = redirect
         && source == RemoteSource::Dropbox
         && url.host_str().is_some_and(|host| {
@@ -225,7 +225,16 @@ fn validate_url_shape(
                             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
                 })
         });
-    if !host_matches(url, allowed) && !dropbox_shard {
+    let gamebanana_shard = redirect
+        && source == RemoteSource::GameBananaDownload
+        && url.host_str().is_some_and(|host| {
+            host.strip_suffix(".gamebanana.com")
+                .and_then(|label| label.strip_prefix("filecache"))
+                .is_some_and(|number| {
+                    !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+                })
+        });
+    if !host_matches(url, allowed) && !dropbox_shard && !gamebanana_shard {
         return Err("The download redirected to an untrusted host.".into());
     }
     if !redirect && !source.initial_path_is_valid(url) {
@@ -1037,6 +1046,32 @@ mod tests {
         ] {
             let url = reqwest::Url::parse(url).unwrap();
             assert!(validate_url_shape(&url, RemoteSource::Dropbox, true).is_err());
+        }
+    }
+
+    #[test]
+    fn gamebanana_filecache_shards_are_scoped_to_its_redirects() {
+        for url in [
+            "https://filecache31.gamebanana.com/mods/archive.zip",
+            "https://filecache42.gamebanana.com/mods/archive.7z",
+        ] {
+            let shard = reqwest::Url::parse(url).unwrap();
+            assert!(validate_url_shape(&shard, RemoteSource::GameBananaDownload, true).is_ok());
+            assert!(validate_url_shape(&shard, RemoteSource::GameBananaDownload, false).is_err());
+            assert!(validate_url_shape(&shard, RemoteSource::Dropbox, true).is_err());
+        }
+        for url in [
+            "https://filecache.gamebanana.com/mods/archive.zip",
+            "https://filecachex.gamebanana.com/mods/archive.zip",
+            "https://filecache31.evil.test/mods/archive.zip",
+            "https://filecache31.gamebanana.com.evil.test/mods/archive.zip",
+            "https://a.filecache31.gamebanana.com/mods/archive.zip",
+            "http://filecache31.gamebanana.com/mods/archive.zip",
+            "https://filecache31.gamebanana.com:8443/mods/archive.zip",
+            "https://user:pass@filecache31.gamebanana.com/mods/archive.zip",
+        ] {
+            let url = reqwest::Url::parse(url).unwrap();
+            assert!(validate_url_shape(&url, RemoteSource::GameBananaDownload, true).is_err());
         }
     }
 

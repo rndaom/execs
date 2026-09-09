@@ -8,6 +8,7 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:resources:allow-close",
+    "core:window:allow-destroy",
     "updater:allow-check",
     {
       "identifier": "opener:allow-open-url",

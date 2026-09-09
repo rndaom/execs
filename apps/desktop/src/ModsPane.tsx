@@ -8,7 +8,7 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { Switch, SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
-import { useSeededDraft } from "./hooks/useSeededDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { Api } from "./lib/api";
 import type {
   CatalogAddon,
@@ -99,12 +99,27 @@ export function ModsPane({
   const { running, busy } = useAppStatus();
   const canWrite = useCanWrite();
   const status = payload?.status ?? null;
-  const installed = useMemo<ModSelection>(() => installedModSelection(payload), [payload]);
-  const [draft, setSelection] = useSeededDraft(installed, serializeModSelection);
-  const particleSources = payload?.profileParticleSources ?? [];
+  // A profile reload and its preloader status arrive independently. Never
+  // offer an old status row after the active profile's own mod list changes.
+  const particleSources = useMemo(
+    () =>
+      (payload?.profileParticleSources ?? []).filter((source) =>
+        mods.some((mod) => mod.id === source.modId),
+      ),
+    [mods, payload],
+  );
+  const installed = useMemo<ModSelection>(
+    () => visibleModSelection(installedModSelection(payload), particleSources),
+    [payload, particleSources],
+  );
+  const [draft, setSelection] = useSeededDraft(
+    installed,
+    serializeModSelection,
+    draftRecordKey(profileId, "mods"),
+  );
   // Removing a pack takes its rows with it; a pick left behind would keep Apply
   // lit over something nothing on screen can switch off.
-  const selection = visibleModSelection(draft, particleSources, installed.profileParticleMods);
+  const selection = visibleModSelection(draft, particleSources);
   const { addons, particleMods, profileParticleMods } = selection;
   const [browsing, setBrowsing] = useState(false);
   // Steam's verify runs outside the app; while it does, poll the status and,
@@ -182,7 +197,7 @@ export function ModsPane({
   async function finishRepair() {
     setRepair("confirming");
     try {
-      const want = repairSelection.current;
+      const want = visibleModSelection(repairSelection.current, particleSources);
       if (!(await onCompleteRepair(want))) {
         setRepair("waiting");
         return;

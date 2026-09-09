@@ -170,9 +170,11 @@ pub struct ParticleSource {
 // Reading a mod out of what the user handed over
 // ---------------------------------------------------------------------------
 
-/// Every pack an archive holds. An archive carrying VPKs yields one pack per
-/// VPK (a "pack of packs" is how most GameBanana skin bundles ship); anything
-/// else is one loose-file pack rooted at its shallowest content folder.
+/// The unambiguous pack an archive holds. A single VPK is one pack; several
+/// VPKs may be mutually exclusive variants, so the user must extract and pick
+/// the intended files instead of letting filesystem order choose a winner.
+/// Anything else is one loose-file pack rooted at its shallowest content
+/// folder.
 pub fn mod_content_from_archive(
     name: &str,
     bytes: &[u8],
@@ -188,12 +190,22 @@ pub fn mod_content_from_archive(
         .map(|(rel, _)| rel.as_str())
         .collect();
     if !vpk_names.is_empty() {
-        refuse_multi_part(vpk_names.into_iter())?;
-        return Ok(entries
+        refuse_multi_part(vpk_names.iter().copied())?;
+        if vpk_names.len() > 1 {
+            return Err(ProfileError::Io(MULTIPLE_VPK_CHOICES.into()));
+        }
+        if entries
+            .iter()
+            .filter(|(rel, _)| !has_extension(rel, "vpk"))
+            .any(|(rel, _)| path_has_content_root(rel))
+        {
+            return Err(ProfileError::Io(MIXED_VPK_AND_LOOSE_CONTENT.into()));
+        }
+        let (rel, bytes) = entries
             .into_iter()
-            .filter(|(rel, _)| has_extension(rel, "vpk"))
-            .map(|(rel, bytes)| (vpk_pack_name(&rel), ModContent::Vpk(bytes)))
-            .collect());
+            .find(|(rel, _)| has_extension(rel, "vpk"))
+            .expect("the validated VPK entry is present");
+        return Ok(vec![(vpk_pack_name(&rel), ModContent::Vpk(bytes))]);
     }
 
     let Some(root) = content_root(&entries, usize::MAX)? else {
@@ -265,6 +277,20 @@ const NO_TF2_CONTENT: &str =
 const MULTI_PART_VPK: &str =
     "That is a multi-part VPK (a _dir.vpk with _000.vpk siblings), which this app cannot install as one pack. Unpack it first, or install the folder version.";
 
+const MULTIPLE_VPK_CHOICES: &str =
+    "That archive contains several VPKs that may be install choices. Open the author's page, extract the archive, then add only the VPKs you want.";
+
+const MIXED_VPK_AND_LOOSE_CONTENT: &str =
+    "That archive contains both a VPK and loose TF2 files. They may be alternatives or required together; follow the author's instructions, then add the intended VPK or extracted folder.";
+
+fn path_has_content_root(rel: &str) -> bool {
+    rel.rsplit_once('/').is_some_and(|(parent, _)| {
+        parent
+            .split('/')
+            .any(|part| MOD_CONTENT_ROOTS.contains(&part.to_ascii_lowercase().as_str()))
+    })
+}
+
 /// The shallowest folder that directly holds a content root, as a prefix
 /// (`""` when the archive is already rooted there). `max_depth` bounds how many
 /// wrapper folders may sit above it.
@@ -313,7 +339,21 @@ fn content_root(
             break;
         }
     }
-    if candidates.len() > 1 {
+    // A deeper alternative is still a choice. Selecting only the shallowest
+    // candidate could silently discard, for example, alternate/red/materials
+    // beside default/materials.
+    let outside_selected = selected.as_ref().is_some_and(|selected| {
+        entries.iter().any(|(rel, _)| {
+            let parts: Vec<&str> = rel.split('/').collect();
+            (0..parts.len().saturating_sub(1))
+                .take_while(|depth| *depth <= max_depth)
+                .find(|depth| {
+                    MOD_CONTENT_ROOTS.contains(&parts[*depth].to_ascii_lowercase().as_str())
+                })
+                .is_some_and(|depth| parts[..depth].join("/") != *selected)
+        })
+    });
+    if candidates.len() > 1 || outside_selected {
         return Err(ProfileError::Io(
             "That archive contains multiple peer TF2 content roots; split it into one mod per folder before importing it."
                 .into(),
@@ -994,32 +1034,92 @@ mod tests {
     }
 
     #[test]
-    fn an_archive_of_vpks_becomes_one_pack_per_vpk() {
+    fn pre_and_post_steampipe_wrappers_become_a_custom_pack() {
+        for (archive_name, source, expected) in [
+            (
+                "legacy-skin.zip",
+                "Steam/steamapps/player/team fortress 2/tf/materials/models/player/scout.vtf",
+                "materials/models/player/scout.vtf",
+            ),
+            (
+                "current-skin.zip",
+                "Team Fortress 2/tf/custom/author-skin/materials/models/player/scout.vtf",
+                "materials/models/player/scout.vtf",
+            ),
+        ] {
+            let bytes = zip_bytes(&[(source, b"vtf")]);
+            let packs = mod_content_from_archive(archive_name, &bytes).unwrap();
+            assert_eq!(packs.len(), 1);
+            let ModContent::Tree(entries) = &packs[0].1 else {
+                panic!("expected loose files");
+            };
+            assert_eq!(entries, &vec![(expected.to_string(), b"vtf".to_vec())]);
+        }
+    }
+
+    #[test]
+    fn one_archived_vpk_installs_but_several_require_a_choice() {
         let mut files = BTreeMap::new();
         files.insert("materials/a.vmt".to_string(), b"vmt".to_vec());
         let vpk = write_vpk_v1(&files);
-        let bytes = zip_bytes(&[
-            ("pack/Red Scout.vpk", &vpk),
-            ("pack/Blue Scout_dir.vpk", &vpk),
-            ("pack/readme.txt", b"hi"),
+        let one = zip_bytes(&[("pack/Red Scout.vpk", &vpk), ("pack/readme.txt", b"hi")]);
+        let packs = mod_content_from_archive("scout.zip", &one).unwrap();
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].0, "Red Scout");
+        assert!(matches!(packs[0].1, ModContent::Vpk(_)));
+
+        let choices = zip_bytes(&[
+            ("options/regular-fists.vpk", &vpk),
+            ("options/team-colored-fists.vpk", &vpk),
         ]);
-        let packs = mod_content_from_archive("scouts.zip", &bytes).unwrap();
-        let names: Vec<&str> = packs.iter().map(|(name, _)| name.as_str()).collect();
-        assert_eq!(names, vec!["Red Scout", "Blue Scout"]);
-        assert!(packs
-            .iter()
-            .all(|(_, content)| matches!(content, ModContent::Vpk(_))));
+        let err = mod_content_from_archive("heavy-options.zip", &choices).unwrap_err();
+        assert!(
+            err.message().contains("install choices"),
+            "{}",
+            err.message()
+        );
 
         // A split set is refused rather than half-installed.
         let split = zip_bytes(&[("pack/big_dir.vpk", &vpk), ("pack/big_000.vpk", &vpk)]);
         let err = mod_content_from_archive("big.zip", &split).unwrap_err();
         assert!(err.message().contains("multi-part"), "{}", err.message());
 
-        // A numbered name with no `_dir.vpk` beside it is an ordinary pack.
+        // Numbered names without a `_dir.vpk` are ordinary VPKs, but several
+        // ordinary VPKs in one archive are still an ambiguous selection.
         let numbered = zip_bytes(&[("pack/skin_001.vpk", &vpk), ("pack/skin_002.vpk", &vpk)]);
-        let packs = mod_content_from_archive("skins.zip", &numbered).unwrap();
-        let names: Vec<&str> = packs.iter().map(|(name, _)| name.as_str()).collect();
-        assert_eq!(names, vec!["skin_001", "skin_002"]);
+        let err = mod_content_from_archive("skins.zip", &numbered).unwrap_err();
+        assert!(
+            err.message().contains("install choices"),
+            "{}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn an_archive_cannot_silently_drop_loose_content_beside_a_vpk() {
+        let mut files = BTreeMap::new();
+        files.insert("materials/a.vmt".to_string(), b"packed".to_vec());
+        let vpk = write_vpk_v1(&files);
+        let bytes = zip_bytes(&[
+            ("mod.vpk", &vpk),
+            ("folder/materials/supplement.vmt", b"loose"),
+        ]);
+        let err = mod_content_from_archive("mixed.zip", &bytes).unwrap_err();
+        assert!(
+            err.message().contains("both a VPK and loose TF2 files"),
+            "{}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn loose_alternatives_at_different_depths_require_a_choice() {
+        let bytes = zip_bytes(&[
+            ("default/materials/skin.vmt", b"default"),
+            ("alternatives/red/materials/skin.vmt", b"red"),
+        ]);
+        let err = mod_content_from_archive("choices.zip", &bytes).unwrap_err();
+        assert!(err.message().contains("multiple peer TF2 content roots"));
     }
 
     /// The same rule for a picked file: `skin_000.vpk` alone installs, the

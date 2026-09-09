@@ -92,8 +92,8 @@ struct Walk<T> {
     complete: bool,
 }
 
-/// `(downloads, views)` per hud-db id.
-type Counts = BTreeMap<String, (u64, u64)>;
+/// `(downloads, views)` per hud-db id; None invalidates an ambiguous cached match.
+type Counts = BTreeMap<String, Option<(u64, u64)>>;
 
 fn cache_file(root: &std::path::Path) -> PathBuf {
     root.join("hud-catalog").join("stats-v1.json")
@@ -191,7 +191,10 @@ fn load_stats_cache(root: &std::path::Path, now: u64) -> Result<Option<HudStatsC
     let Some(cache) = cache else {
         return Ok(None);
     };
-    let valid = cache.fetched_at <= now.saturating_add(60 * 60)
+    // Old matching rules cannot supply stale fallback values or be promoted
+    // to the current source version by a partial refresh.
+    let valid = cache.source_version == STATS_SOURCE_VERSION
+        && cache.fetched_at <= now.saturating_add(60 * 60)
         && cache.stats.len() <= 4096
         && cache.stats.iter().all(|(id, stat)| {
             valid_stat_id(id)
@@ -243,10 +246,10 @@ fn merge_counts(stats: &mut BTreeMap<String, HudStat>, source: Result<Walk<Count
             stat.views = None;
         }
     }
-    for (id, (downloads, views)) in walk.found {
+    for (id, counts) in walk.found {
         let stat = stats.entry(id).or_default();
-        stat.downloads = Some(downloads);
-        stat.views = Some(views);
+        stat.downloads = counts.map(|(downloads, _)| downloads);
+        stat.views = counts.map(|(_, views)| views);
     }
 }
 
@@ -605,8 +608,8 @@ fn insert_unique_counts(
     if duplicate_ids.contains(&id) {
         return false;
     }
-    if counts.insert(id.clone(), value).is_some() {
-        counts.remove(&id);
+    if counts.insert(id.clone(), Some(value)).is_some() {
+        counts.insert(id.clone(), None);
         duplicate_ids.insert(id);
         return false;
     }
@@ -897,7 +900,56 @@ mod tests {
             "hud".into(),
             (2, 3)
         ));
-        assert!(!counts.contains_key("hud"));
+        assert_eq!(counts["hud"], None);
+        let mut stats = BTreeMap::from([(
+            "hud".into(),
+            HudStat {
+                updated: Some("2026-01-01".into()),
+                downloads: Some(10),
+                views: Some(20),
+            },
+        )]);
+        merge_counts(
+            &mut stats,
+            Ok(Walk {
+                found: counts,
+                complete: false,
+            }),
+        );
+        assert_eq!(stats["hud"].downloads, None);
+        assert_eq!(stats["hud"].views, None);
+        assert_eq!(stats["hud"].updated.as_deref(), Some("2026-01-01"));
+    }
+
+    #[test]
+    fn legacy_source_cache_cannot_be_used_as_stale_refresh_input() {
+        let root = std::env::temp_dir().join(format!(
+            "execs-hud-stats-source-version-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("hud-catalog")).unwrap();
+        let mut cache = HudStatsCache {
+            fetched_at: 5,
+            stats: BTreeMap::from([(
+                "hud".into(),
+                HudStat {
+                    views: Some(100),
+                    ..HudStat::default()
+                },
+            )]),
+            complete: false,
+            source_version: STATS_SOURCE_VERSION - 1,
+        };
+        std::fs::write(cache_file(&root), serde_json::to_vec(&cache).unwrap()).unwrap();
+        assert!(load_stats_cache(&root, 100_000).unwrap().is_none());
+        cache.source_version = STATS_SOURCE_VERSION;
+        std::fs::write(cache_file(&root), serde_json::to_vec(&cache).unwrap()).unwrap();
+        let loaded = load_stats_cache(&root, 100_000).unwrap().unwrap();
+        assert!(!loaded.is_fresh(100_000));
+        assert_eq!(loaded.stats["hud"].views, Some(100));
+        std::fs::remove_file(cache_file(&root)).unwrap();
+        std::fs::remove_dir(root.join("hud-catalog")).unwrap();
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

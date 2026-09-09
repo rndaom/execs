@@ -1,7 +1,6 @@
 import { X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "../components/ui/Modal";
-import { Segmented } from "../components/ui/Segmented";
 import { Switch } from "../components/ui/Switch";
 import {
   type CrosshairDesign,
@@ -19,14 +18,17 @@ export function CrosshairDesigner({
   initial,
   color,
   onSave,
+  initialName = "",
   onClose,
 }: {
   open: boolean;
   initial: CrosshairDesign;
   color: CrosshairColor | null;
-  onSave: (design: CrosshairDesign) => void;
+  onSave: (design: CrosshairDesign, name: string) => void;
+  initialName?: string;
   onClose: () => void;
 }) {
+  const [name, setName] = useState(initialName);
   const [design, setDesign] = useState<CrosshairDesign>(initial);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -68,6 +70,17 @@ export function CrosshairDesigner({
         <X size={16} />
       </button>
 
+      <label className="t-row mt-4 block">
+        Design name
+        <input
+          aria-label="Design name"
+          className="input mt-2 w-full"
+          maxLength={40}
+          value={name}
+          placeholder="My crosshair"
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
       <div className="mt-4 grid gap-5 sm:grid-cols-[11rem_1fr]">
         <div>
           <div className="surface bg-bg p-3">
@@ -81,17 +94,25 @@ export function CrosshairDesigner({
             />
           </div>
           <div className="mt-3">
-            <Segmented
-              label="Style"
-              size="sm"
-              testIdPrefix="crosshair-designer-style"
-              options={DESIGN_STYLES.map((style) => ({
-                id: style,
-                label: <span className="capitalize">{style}</span>,
-              }))}
-              value={design.style}
-              onChange={(style) => patch({ style })}
-            />
+            <fieldset className="grid grid-cols-2 gap-2">
+              <legend className="sr-only">Style</legend>
+              {DESIGN_STYLES.map((style) => (
+                <label
+                  key={style}
+                  className={`thumb cursor-pointer px-2 py-2 focus-within:ring-2 focus-within:ring-brand ${design.style === style ? "thumb-selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    name="designer-style"
+                    checked={design.style === style}
+                    onChange={() => patch({ style })}
+                    data-testid={`crosshair-designer-style-${style}`}
+                  />
+                  <span className="t-meta capitalize">{style.replaceAll("-", " ")}</span>
+                </label>
+              ))}
+            </fieldset>
           </div>
         </div>
 
@@ -105,15 +126,17 @@ export function CrosshairDesigner({
             note={sizeCapped ? `Capped at ${sizeMax} px by thickness, gap and outline.` : undefined}
             onChange={(size) => patch({ size })}
           />
-          <DesignerSlider
-            id="designer-thickness"
-            label="Thickness"
-            value={design.thickness}
-            min={DESIGN_LIMITS.thickness.min}
-            max={DESIGN_LIMITS.thickness.max}
-            onChange={(thickness) => patch({ thickness })}
-          />
-          {design.style !== "circle" && design.style !== "dot" ? (
+          {design.style !== "dot" ? (
+            <DesignerSlider
+              id="designer-thickness"
+              label="Thickness"
+              value={design.thickness}
+              min={DESIGN_LIMITS.thickness.min}
+              max={DESIGN_LIMITS.thickness.max}
+              onChange={(thickness) => patch({ thickness })}
+            />
+          ) : null}
+          {["cross", "t", "x", "split", "arms"].includes(design.style) ? (
             <DesignerSlider
               id="designer-gap"
               label="Gap"
@@ -122,6 +145,31 @@ export function CrosshairDesigner({
               max={DESIGN_LIMITS.gap.max}
               onChange={(gap) => patch({ gap })}
             />
+          ) : null}
+          {design.style === "arms" ? (
+            <div className="flex flex-wrap gap-3">
+              {(["up", "down", "left", "right"] as const).map((direction) => (
+                <span key={direction} className="t-meta flex items-center gap-2 capitalize">
+                  <Switch
+                    label={`${direction} arm`}
+                    checked={design.arms?.[direction] !== false}
+                    onChange={(enabled) =>
+                      patch({
+                        arms: {
+                          up: true,
+                          down: true,
+                          left: true,
+                          right: true,
+                          ...design.arms,
+                          [direction]: enabled,
+                        },
+                      })
+                    }
+                  />
+                  {direction}
+                </span>
+              ))}
+            </div>
           ) : null}
           <DesignerSlider
             id="designer-outline"
@@ -182,7 +230,7 @@ export function CrosshairDesigner({
         <button
           type="button"
           data-testid="crosshair-designer-save"
-          onClick={() => onSave(design)}
+          onClick={() => onSave(design, name.trim() || "My crosshair")}
           className="btn btn-primary"
         >
           Save to library

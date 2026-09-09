@@ -1,4 +1,4 @@
-/** The read-only strip shown while `tf_win64.exe` / `tf_linux64` is running. */
+/** The write-lock strip shown while `tf_win64.exe` / `tf_linux64` is running. */
 export function WriteLockBanner({
   running,
   degraded,
@@ -39,7 +39,7 @@ export function WriteLockBanner({
       data-testid="tf2-write-lock"
       className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
     >
-      TF2 is running — execs is read-only.
+      TF2 is running — editable settings stay as drafts and save when it closes.
     </div>
   );
 }

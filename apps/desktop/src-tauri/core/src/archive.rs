@@ -789,7 +789,10 @@ fn check_cfg_command(
     if matches!(name.as_str(), "connect" | "redirect") {
         return Err(hostile_cfg(path, &name));
     }
-    if name == "unbindall" && !engine_top {
+    // Valve's own config_default.cfg and complete community bind configs use a
+    // top-level `unbindall` before declaring their bind table. Only reject the
+    // command when it is hidden in a bind or alias payload.
+    if name == "unbindall" && !top_level {
         return Err(hostile_cfg(path, &name));
     }
     if name == "unbind" && value.as_deref() == Some("escape") {
@@ -797,9 +800,6 @@ fn check_cfg_command(
     }
     if name == "con_enable" && value.as_deref() == Some("0") && !engine_top {
         return Err(hostile_cfg(path, "con_enable 0"));
-    }
-    if name == "sv_cheats" && value.as_deref().is_some_and(|value| value != "0") {
-        return Err(hostile_cfg(path, "sv_cheats"));
     }
     if name == "alias" {
         if let Some(alias) = command.get(1) {
@@ -1646,9 +1646,9 @@ mod tests {
             "bind mouse1 \"echo hi; connect bad.example\"",
             "alias harmless \"password hunter2\"",
             "alias connect echo",
+            "bind mouse2 \"unbindall\"",
             "unbind escape",
             "con_enable 0",
-            "sv_cheats 1",
         ] {
             let err = validate_imported_cfg("tf/cfg/overrides/autoexec.cfg", hostile.as_bytes())
                 .unwrap_err();
@@ -1658,6 +1658,12 @@ mod tests {
                 err.message()
             );
         }
+
+        validate_imported_cfg(
+            "tf/custom/imported-hud/resource/dev/hud_config.cfg",
+            b"unbindall\nbind w +forward\nbind s +back\nsv_cheats 1\n",
+        )
+        .unwrap();
 
         validate_imported_cfg(
             "tf/cfg/config.cfg",

@@ -35,7 +35,6 @@ describe("trust: self", () => {
 
   it("keeps the rules no personal config needs at block tier", () => {
     for (const text of [
-      "unbindall",
       "rcon_password hunter2",
       'password "letmein"',
       // Even the engine's own unset form blocks outside config.cfg: nothing
@@ -43,13 +42,18 @@ describe("trust: self", () => {
       'password "0"',
       "unbind escape",
       "con_enable 0",
-      "sv_cheats 1",
       'alias exec "echo gotcha"',
     ]) {
       const result = lint(one(text), { trust: "self" });
       expect(result.findings.some((f) => f.tier === "block")).toBe(true);
       expect(result.ok).toBe(false);
     }
+  });
+
+  it("warns for a direct bind-table reset and for a user-authored dynamic reset", () => {
+    expect(self("unbindall\nbind w +forward")).toContain("warn:unbindall");
+    expect(self('bind mouse2 "unbindall"')).toContain("warn:unbindall");
+    expect(lint(one("unbindall\nbind w +forward"), { trust: "self" }).ok).toBe(true);
   });
 
   it("leaves host_writeconfig and con_logfile as warns in both trust modes", () => {
@@ -126,7 +130,9 @@ describe("engineManagedLintOptions", () => {
     expect(result.ok).toBe(true);
     expect(result.binds.get("escape")).toBe("cancelselect");
     expect(result.effective.get("con_enable")?.value).toBe("0");
-    expect(result.findings.some((f) => f.advisory && f.ruleId === "unbindall")).toBe(true);
+    expect(
+      result.findings.some((f) => !f.advisory && f.tier === "warn" && f.ruleId === "unbindall"),
+    ).toBe(true);
   });
 
   it("accepts the archived `password` line every config.cfg carries", () => {

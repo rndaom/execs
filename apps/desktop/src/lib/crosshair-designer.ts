@@ -5,7 +5,18 @@ import { CROSSHAIR_CANVAS_SIZE, type CrosshairColor } from "./crosshair-ui";
  * buffer the VTF pipeline already bakes, so a design is a real crosshair, not
  * a preview-only effect.
  */
-export const DESIGN_STYLES = ["cross", "circle", "dot", "t", "x"] as const;
+export const DESIGN_STYLES = [
+  "cross",
+  "circle",
+  "dot",
+  "t",
+  "x",
+  "chevron",
+  "diamond",
+  "ring-cross",
+  "split",
+  "arms",
+] as const;
 
 const SIZE = CROSSHAIR_CANVAS_SIZE;
 
@@ -28,6 +39,8 @@ export type CrosshairDesign = {
   shadow: boolean;
   /** Fill opacity 0–255. */
   opacity: number;
+  /** Independently enabled arms; absent on old designs means all four. */
+  arms?: { up: boolean; down: boolean; left: boolean; right: boolean };
 };
 
 export const DESIGN_LIMITS = {
@@ -61,8 +74,8 @@ function clampTo(value: number, limits: { min: number; max: number }): number {
 }
 
 /** Styles whose reach starts at the gap; circle and dot ignore it. */
-function gapApplies(style: DesignStyle): boolean {
-  return style === "cross" || style === "t" || style === "x";
+export function gapApplies(style: DesignStyle): boolean {
+  return ["cross", "t", "x", "split", "arms"].includes(style);
 }
 
 /**
@@ -95,6 +108,16 @@ export function clampDesign(design: CrosshairDesign): CrosshairDesign {
     outline: clampTo(design.outline, DESIGN_LIMITS.outline),
     shadow: design.shadow === true,
     opacity: clampTo(design.opacity, DESIGN_LIMITS.opacity),
+    ...(design.arms
+      ? {
+          arms: {
+            up: design.arms.up !== false,
+            down: design.arms.down !== false,
+            left: design.arms.left !== false,
+            right: design.arms.right !== false,
+          },
+        }
+      : {}),
   };
   return { ...next, size: Math.min(next.size, maxDesignSize(next)) };
 }
@@ -166,7 +189,38 @@ export function designFillMask(input: CrosshairDesign): Uint8Array {
     }
   };
 
-  if (design.style === "cross") {
+  if (design.style === "arms") {
+    for (const direction of ["up", "down", "left", "right"] as const) {
+      if (design.arms?.[direction] !== false) drawArm(direction);
+    }
+  } else if (design.style === "split") {
+    drawArm("up");
+    drawArm("down");
+    drawArm("left");
+    drawArm("right");
+    for (let y = 0; y < SIZE; y += 1)
+      for (let x = 0; x < SIZE; x += 1) {
+        const d = Math.max(Math.abs(x - 31.5), Math.abs(y - 31.5));
+        if (Math.abs(d - (design.gap + design.size / 2)) < Math.max(1, design.thickness / 2))
+          mask[y * SIZE + x] = 0;
+      }
+  } else if (design.style === "chevron" || design.style === "diamond") {
+    for (let y = 0; y < SIZE; y += 1)
+      for (let x = 0; x < SIZE; x += 1) {
+        const dx = x - 31.5,
+          dy = y - 31.5;
+        const edge =
+          design.style === "diamond"
+            ? Math.abs(dx) + Math.abs(dy) - design.size
+            : Math.abs(dx) - dy - design.size / 2;
+        if (
+          Math.abs(edge) / Math.SQRT2 <= design.thickness / 2 &&
+          Math.abs(dx) <= design.size &&
+          Math.abs(dy) <= design.size
+        )
+          set(x, y);
+      }
+  } else if (design.style === "cross") {
     drawArm("up");
     drawArm("down");
     drawArm("left");
@@ -192,7 +246,7 @@ export function designFillMask(input: CrosshairDesign): Uint8Array {
         }
       }
     }
-  } else if (design.style === "circle") {
+  } else if (design.style === "circle" || design.style === "ring-cross") {
     const radius = design.size;
     const half = design.thickness / 2;
     for (let y = 0; y < SIZE; y += 1) {
@@ -204,6 +258,10 @@ export function designFillMask(input: CrosshairDesign): Uint8Array {
           set(x, y);
         }
       }
+    }
+    if (design.style === "ring-cross") {
+      fillRect(tickStart, center - design.size, tickEnd, center + design.size - 1);
+      fillRect(center - design.size, tickStart, center + design.size - 1, tickEnd);
     }
   }
 

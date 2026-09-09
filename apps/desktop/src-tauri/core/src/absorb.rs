@@ -30,6 +30,57 @@ use crate::switch::{live_candidates, live_path};
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
 
+#[cfg(test)]
+type TestProcessSampler = Box<dyn FnMut() -> Vec<String>>;
+
+#[cfg(test)]
+thread_local! {
+    static TEST_ABSORB_PROCESS_SAMPLER: std::cell::RefCell<Option<TestProcessSampler>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Re-sample at each absorb-owned mutation boundary. The entry-point snapshot
+/// is still checked first; this closes the gap where TF2 starts after that
+/// check but before a later restore, repair, cleanup, or config publication.
+fn absorb_live_process_names() -> Vec<String> {
+    #[cfg(test)]
+    {
+        let sampled = TEST_ABSORB_PROCESS_SAMPLER.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            slot.as_mut().map(|sampler| sampler())
+        });
+        if let Some(names) = sampled {
+            return names;
+        }
+    }
+    live_process_names()
+}
+
+fn refuse_absorb_mutation() -> Result<Vec<String>, ProfileError> {
+    let running = absorb_live_process_names();
+    refuse_if_running_among(&running)?;
+    Ok(running)
+}
+
+#[cfg(test)]
+fn with_absorb_process_sampler<R>(
+    sampler: impl FnMut() -> Vec<String> + 'static,
+    run: impl FnOnce() -> R,
+) -> R {
+    struct RestoreSampler(Option<TestProcessSampler>);
+    impl Drop for RestoreSampler {
+        fn drop(&mut self) {
+            TEST_ABSORB_PROCESS_SAMPLER.with(|slot| {
+                *slot.borrow_mut() = self.0.take();
+            });
+        }
+    }
+
+    let previous = TEST_ABSORB_PROCESS_SAMPLER.with(|slot| slot.replace(Some(Box::new(sampler))));
+    let _restore = RestoreSampler(previous);
+    run()
+}
+
 /// Prefix of every pack the app builds and manages itself (viewmodels,
 /// crosshairs, hitsounds, mods). The user adds and removes these through the
 /// app, so one going missing is a failed write, not a deletion they made.
@@ -118,6 +169,7 @@ pub fn write_config_cfg_dual_to(
     steam_roots: &[PathBuf],
 ) -> Result<(), ProfileError> {
     let live = tf2_root.join("tf").join("cfg").join("config.cfg");
+    refuse_absorb_mutation()?;
     write_bytes(tf2_root, &live, bytes)?;
     if let Some(cloud) = cloud_config_path_from(steam_roots) {
         let cloud_root = steam_roots
@@ -126,6 +178,7 @@ pub fn write_config_cfg_dual_to(
             .ok_or_else(|| {
                 ProfileError::Io("Steam Cloud config resolved outside every Steam root".into())
             })?;
+        refuse_absorb_mutation()?;
         write_bytes(cloud_root, &cloud, bytes)?;
     }
     Ok(())
@@ -397,7 +450,10 @@ fn repair_interrupted_writes(
     profile_id: &str,
     running: &[String],
 ) -> Result<Vec<String>, ProfileError> {
+    refuse_if_running_among(running)?;
+    refuse_absorb_mutation()?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
+    crate::hud::recover_legacy_hud_backups_to(profiles_dir, tf2_root, profile_id, running)?;
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     let before_files = manifest.files.len();
     // Older builds could accidentally claim Valve/global/junk entries. Drop
@@ -407,8 +463,10 @@ fn repair_interrupted_writes(
         .retain(|file| is_profile_ownable_rel_path(&file.path));
     let mut repaired_packs = BTreeSet::new();
     let mut repaired_files = Vec::new();
+    let inactive_huds = crate::hud::inactive_hud_packs(&manifest);
     for file in &manifest.files {
         if is_stock_custom_entry(&file.path)
+            || pack_key(&file.path).is_some_and(|pack| inactive_huds.contains(&pack))
             || live_candidates(tf2_root, &file.path)
                 .iter()
                 .any(|path| path.exists())
@@ -426,6 +484,7 @@ fn repair_interrupted_writes(
         let Ok(source) = manifest_source_path(profiles_dir, profile_id, file) else {
             continue;
         };
+        refuse_absorb_mutation()?;
         copy_verified_atomic_within(tf2_root, &source, &dest, &file.sha256)
             .map_err(|e| ProfileError::Io(e.to_string()))?;
         match pack {
@@ -444,7 +503,8 @@ fn repair_interrupted_writes(
         .ignored_packs
         .retain(|pack| !is_stock_custom_pack(pack) && !repaired_packs.contains(pack));
     if manifest.ignored_packs.len() != before || manifest.files.len() != before_files {
-        crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)?;
+        let fresh_running = refuse_absorb_mutation()?;
+        crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &fresh_running)?;
     }
 
     let mut repaired: Vec<String> = repaired_packs.into_iter().collect();
@@ -470,6 +530,14 @@ fn remove_stray_parts(tf2_root: &Path, dir: &Path) -> Result<(), ProfileError> {
             continue;
         };
         let path = entry.path();
+        if path.parent() == Some(tf2_root.join("tf/custom").as_path())
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(crate::surface::HUD_BACKUP_CONTAINER)
+        {
+            continue;
+        }
         if kind.is_dir() {
             remove_stray_parts(tf2_root, &path)?;
         } else if kind.is_file()
@@ -479,6 +547,7 @@ fn remove_stray_parts(tf2_root: &Path, dir: &Path) -> Result<(), ProfileError> {
                 .to_ascii_lowercase()
                 .ends_with(PART_SUFFIX)
         {
+            refuse_absorb_mutation()?;
             remove_file_force_within(tf2_root, &path)
                 .map_err(|e| ProfileError::Io(e.to_string()))?;
         }
@@ -498,6 +567,7 @@ fn write_library_files_to_live(
         return Ok(());
     }
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let inactive_huds = crate::hud::inactive_hud_packs(&manifest);
     for path in paths {
         let Some(file) = manifest.files.iter().find(|file| &file.path == path) else {
             continue;
@@ -505,7 +575,11 @@ fn write_library_files_to_live(
         if !is_profile_ownable_rel_path(path) {
             return Err(ProfileError::ForbiddenPath(path.clone()));
         }
+        if pack_key(path).is_some_and(|pack| inactive_huds.contains(&pack)) {
+            continue;
+        }
         let source = manifest_source_path(profiles_dir, profile_id, file)?;
+        refuse_absorb_mutation()?;
         copy_verified_atomic_within(tf2_root, &source, &live_path(tf2_root, path), &file.sha256)
             .map_err(|e| ProfileError::Io(e.to_string()))?;
     }
@@ -543,6 +617,7 @@ fn classify(
     let cloud = resolve_inventory_cloud(options);
     let inventory = inventory_live_surface_for_absorb(tf2_root, cloud.as_deref())?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let inactive_huds = crate::hud::inactive_hud_packs(&manifest);
     let manifest_paths: BTreeSet<String> = manifest
         .files
         .iter()
@@ -574,7 +649,7 @@ fn classify(
                 // deletion. Left in the manifest it never gets removed, and the
                 // next switch back rewrites the file the user deleted.
                 // `packs_removed` only fires when the whole pack key is gone.
-                Some(pack) if live_pack_keys.contains(&pack) => {
+                Some(pack) if live_pack_keys.contains(&pack) && !inactive_huds.contains(&pack) => {
                     owned_missing.push(file.path.clone());
                 }
                 Some(_) => {}
@@ -633,6 +708,7 @@ fn classify(
         .collect();
     let packs_removed: Vec<String> = manifest_packs
         .difference(&live_packs)
+        .filter(|pack| !inactive_huds.contains(*pack))
         .filter(|pack| !ignored.contains(*pack))
         .cloned()
         .collect();
@@ -657,12 +733,12 @@ fn classify(
 
 /// The live tree keyed by the spelling the manifest uses for each pack.
 ///
-/// A pack is the same pack whether its folder is `hud` or `-hud` (the Source
-/// disable prefix), and on Windows whether it is `RaysHUD` or `rayshud`. The
-/// switch itself writes a profile's second HUD as `-hud` while the manifest
-/// keeps `hud`; matched by exact path, the next absorb read that as "hud was
+/// A pack keeps its legacy identity whether its folder is `hud` or `-hud`,
+/// and on Windows whether it is `RaysHUD` or `rayshud`. Older switches wrote
+/// a profile's second HUD as `-hud` while the manifest kept `hud`; matched by
+/// exact path, the next absorb read that as "hud was
 /// deleted, -hud is new", removed the library copy and re-added it under the
-/// disabled name — and the following switch wrote both HUDs disabled. Keying
+/// dashed name — and the following switch wrote both HUDs dashed. Keying
 /// live files by the manifest's spelling makes the folder name a live-only
 /// detail: the library copy keeps the manifest path, and the twin's bytes are
 /// what get hashed against it.
@@ -820,6 +896,7 @@ where
     if batch.is_empty() && remove_paths.is_empty() {
         return Ok(());
     }
+    refuse_absorb_mutation()?;
     mutate_profile_files_to(
         profiles_dir,
         tf2_root,
@@ -887,7 +964,9 @@ pub(crate) fn set_cloud_sync_pending(
         return Ok(());
     }
     manifest.cloud_sync_pending = pending;
-    crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, running)
+    refuse_if_running_among(running)?;
+    let fresh_running = refuse_absorb_mutation()?;
+    crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &fresh_running)
 }
 
 /// Live `config.cfg` and its Steam Cloud copy. Atomic like every other write
@@ -906,6 +985,8 @@ mod tests {
         SaveCurrentOptions,
     };
     use std::io::Write;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     fn unlocked() -> [&'static str; 1] {
         ["bash"]
@@ -1390,6 +1471,172 @@ mod tests {
             fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
             b"cloudless\n"
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn config_dual_write_stops_before_cloud_when_tf2_starts_mid_operation() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let steam = dir.join("Steam");
+        write_file(
+            &steam
+                .join("userdata")
+                .join("111")
+                .join("config")
+                .join("localconfig.vdf"),
+            &localconfig("-novid"),
+        );
+        let cloud = steam
+            .join("userdata")
+            .join("111")
+            .join("440")
+            .join("remote")
+            .join("cfg")
+            .join("config.cfg");
+        write_live(&root.join("tf/cfg/config.cfg"), "old live\n");
+        write_live(&cloud, "old cloud\n");
+
+        let samples = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::clone(&samples);
+        let result = with_absorb_process_sampler(
+            move || {
+                if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    unlocked().iter().map(|name| (*name).to_string()).collect()
+                } else {
+                    vec![tf2_name().to_string()]
+                }
+            },
+            || write_config_cfg_dual_to(&root, b"new config\n", std::slice::from_ref(&steam)),
+        );
+
+        assert_eq!(result.unwrap_err(), ProfileError::GameRunning);
+        assert_eq!(
+            fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+            b"new config\n"
+        );
+        assert_eq!(fs::read(cloud).unwrap(), b"old cloud\n");
+        assert_eq!(samples.load(Ordering::SeqCst), 2);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn restore_stops_between_files_when_tf2_starts() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/first.vpk"), "first\n");
+        write_live(&root.join("tf/custom/second.vpk"), "second\n");
+        let id = save_main(&profiles, &root);
+        fs::remove_file(root.join("tf/custom/first.vpk")).unwrap();
+        fs::remove_file(root.join("tf/custom/second.vpk")).unwrap();
+
+        let samples = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::clone(&samples);
+        let paths = vec![
+            "tf/custom/first.vpk".to_string(),
+            "tf/custom/second.vpk".to_string(),
+        ];
+        let result = with_absorb_process_sampler(
+            move || {
+                if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    unlocked().iter().map(|name| (*name).to_string()).collect()
+                } else {
+                    vec![tf2_name().to_string()]
+                }
+            },
+            || write_library_files_to_live(&profiles, &root, &id, &paths),
+        );
+
+        assert_eq!(result.unwrap_err(), ProfileError::GameRunning);
+        assert_eq!(
+            fs::read(root.join("tf/custom/first.vpk")).unwrap(),
+            b"first\n"
+        );
+        assert!(!root.join("tf/custom/second.vpk").exists());
+        assert_eq!(load_manifest(&profiles, &id).unwrap().files.len(), 3);
+
+        write_library_files_to_live(&profiles, &root, &id, &paths).unwrap();
+        assert_eq!(
+            fs::read(root.join("tf/custom/second.vpk")).unwrap(),
+            b"second\n"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn interrupted_write_repair_stops_and_remains_retryable_when_tf2_starts() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        write_live(&root.join("tf/custom/execs-first.vpk"), "first\n");
+        write_live(&root.join("tf/custom/execs-second.vpk"), "second\n");
+        let id = save_main(&profiles, &root);
+        fs::remove_file(root.join("tf/custom/execs-first.vpk")).unwrap();
+        fs::remove_file(root.join("tf/custom/execs-second.vpk")).unwrap();
+
+        let samples = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::clone(&samples);
+        let result = with_absorb_process_sampler(
+            move || {
+                if calls.fetch_add(1, Ordering::SeqCst) < 2 {
+                    unlocked().iter().map(|name| (*name).to_string()).collect()
+                } else {
+                    vec![tf2_name().to_string()]
+                }
+            },
+            || repair_interrupted_writes(&profiles, &root, &id, &[unlocked()[0].to_string()]),
+        );
+
+        assert_eq!(result.unwrap_err(), ProfileError::GameRunning);
+        assert_eq!(
+            fs::read(root.join("tf/custom/execs-first.vpk")).unwrap(),
+            b"first\n"
+        );
+        assert!(!root.join("tf/custom/execs-second.vpk").exists());
+
+        let repaired =
+            repair_interrupted_writes(&profiles, &root, &id, &[unlocked()[0].to_string()]).unwrap();
+        assert_eq!(repaired, vec!["execs-second.vpk".to_string()]);
+        assert_eq!(
+            fs::read(root.join("tf/custom/execs-second.vpk")).unwrap(),
+            b"second\n"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn stray_part_cleanup_stops_between_removals_when_tf2_starts() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let custom = root.join("tf/custom");
+        write_live(&custom.join("a.vpk.execs-part"), "a\n");
+        write_live(&custom.join("b.vpk.execs-part"), "b\n");
+
+        let samples = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::clone(&samples);
+        let result = with_absorb_process_sampler(
+            move || {
+                if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    unlocked().iter().map(|name| (*name).to_string()).collect()
+                } else {
+                    vec![tf2_name().to_string()]
+                }
+            },
+            || remove_stray_parts(&root, &custom),
+        );
+
+        assert_eq!(result.unwrap_err(), ProfileError::GameRunning);
+        let remaining = fs::read_dir(&custom)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().is_file())
+            .count();
+        assert_eq!(remaining, 1);
+        remove_stray_parts(&root, &custom).unwrap();
+        assert_eq!(fs::read_dir(&custom).unwrap().count(), 0);
         cleanup(&dir);
     }
 

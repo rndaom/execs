@@ -82,6 +82,13 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   // a user file invokes it — the finding anchors at the invocation site, but
   // the dangerous text belongs to the provider.
   const payloadOriginStack: string[] = [];
+  const isAdvisorySource = (at: Command): boolean => {
+    const origin = payloadOriginStack[payloadOriginStack.length - 1];
+    return (
+      advisoryPaths.has(normalizePath(at.file)) ||
+      (origin !== undefined && advisoryPaths.has(normalizePath(origin)))
+    );
+  };
 
   const report = (
     tier: Finding["tier"],
@@ -96,13 +103,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     const key = `${ruleId}|${at.file}|${at.line}|${at.col}|${via ?? ""}|${at.name}`;
     if (seenFindings.has(key)) return;
     seenFindings.add(key);
-    const origin = payloadOriginStack[payloadOriginStack.length - 1];
     // Provided (non-user) content never blocks: demote to an advisory warn.
-    if (
-      tier === "block" &&
-      (advisoryPaths.has(normalizePath(at.file)) ||
-        (origin !== undefined && advisoryPaths.has(normalizePath(origin))))
-    ) {
+    if (tier === "block" && isAdvisorySource(at)) {
       findings.push({
         ruleId,
         tier: "warn",
@@ -224,9 +226,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     if (name === "unbindall") {
       if (isEngineManagedTopLevel) return;
       report(
-        "block",
+        ctx.via && (trust === "provided" || isAdvisorySource(cmd)) ? "block" : "warn",
         "unbindall",
-        "`unbindall` wipes every key bind (classic griefing payload)",
+        ctx.via
+          ? `\`unbindall\` inside ${ctx.via} clears every key bind when that payload runs`
+          : "`unbindall` clears existing binds; this is normal before a config declares its complete bind set",
         cmd,
         ctx.via,
       );
@@ -253,16 +257,6 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         "block",
         "console-lockout",
         "`con_enable 0` disables the console, blocking recovery",
-        cmd,
-        ctx.via,
-      );
-      return;
-    }
-    if (name === "sv_cheats" && value !== undefined && value !== "0") {
-      report(
-        "block",
-        "sv-cheats",
-        "`sv_cheats` has no place in a shared client config",
         cmd,
         ctx.via,
       );
