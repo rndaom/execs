@@ -5,10 +5,6 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-### Fixed
-
-- Crosshair: preserve the preview sprite's aspect ratio in the scene layout.
-
 ## [0.1.4] - 2026-09-08
 
 ### Added
@@ -24,6 +20,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Crosshair: preserve the preview sprite's aspect ratio in the scene layout.
 - Crosshair: label Weapon default correctly, recover sprite previews after
   interrupted loading, and preserve unbuilt designs through color and size saves.
 - Crosshair: build custom packs explicitly, retain imported assets and remove
