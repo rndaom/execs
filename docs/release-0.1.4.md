@@ -49,6 +49,12 @@ image was inspected; it contains no baked crosshair. No Valve image is vendored.
 
 Local Windows checks:
 
+- Final candidate code: `c030623c4f77d9226dffcb677736273980bbb852`.
+  [Release preparation PR #44](https://github.com/rndaom/execs/pull/44) and
+  [private verification run](https://github.com/rndaom/execs/actions/runs/34293583908).
+- 413 desktop tests, 105 cfglint tests and 19 release-script tests pass;
+  Windows native validation passes 679 tests plus the explicit installed-asset
+  test. The candidate's frontend, Windows and Linux CI also pass.
 - Frontend/cfglint and release-script tests; Biome; TypeScript/Vite production
   build; Rust formatting, workspace tests and Clippy with warnings denied.
 - New UI tests cover explicit mode/build actions, rejected builds, deferred
@@ -57,6 +63,8 @@ Local Windows checks:
   cover coalescing, failed/retried writes and changes during an in-flight save.
 - The real SettingsHost reproduces leaving during the first stock decode,
   accepts the replacement response and ignores an obsolete response.
+- Discard restores the stored design preview, preview caches reset by profile,
+  and a legacy dot can shrink below its previous hidden geometry floor.
 - Native round-trip checks include a 31×47 VTF, byte preservation, saved sizes,
   the TF2 write lock, failed builds, external drift refusal, inactive ZIP
   export/import, switching, absorb and reactivation.
@@ -74,12 +82,32 @@ Local Windows checks:
 Publication is not authorized by this preparation task. No public tag or
 release is created as part of implementation.
 
-- [ ] Exact candidate Windows/Linux CI and package builds
-- [ ] Signed updater and installer smoke from public 0.1.3 Hotfix 1
-- [ ] Candidate asset/feed verification
+- [x] Exact candidate Windows/Linux CI and package builds
+- [x] Signed updater and installer smoke from public 0.1.3 Hotfix 1
+- [x] Candidate asset/feed verification
 - [ ] Owner review of the crosshair workflow and live in-game appearance
-- [ ] Carry the patch into the 0.2.0 branch
+- [x] Prepare the maintenance integration into the 0.2.0 branch
+- [ ] Review and merge PRs #44 and #45
 - [ ] Owner-authorized tag/publication, then milestone closure
 
 The cumulative live-game/Steam Cloud/Casual matrix remains tracked by RND-251.
 Fixture and isolated-asset tests do not claim that live multiplayer matrix.
+
+Saved reports from the candidate run:
+[Windows](audits/2026-09-08-0.1.4/windows-package-smoke.json) and
+[Linux](audits/2026-09-08-0.1.4/linux-package-smoke.json). Both report source
+version `0.1.3+1`, target `0.1.4`, verified signatures, installed updates,
+packaged startup/notices, preserved user data and no repeat offer.
+
+The complete candidate workflow passed; its publish job was skipped. The
+draft's `release-commit.json` matches the code commit and run above. Its signed
+feed points to Windows NSIS and Linux AppImage assets (including updater
+compatibility aliases); `.deb` is absent from self-update. GitHub's temporary
+draft browser slug was validated by the release verifier. No `v0.1.4` Git tag
+exists, and public latest remains `v0.1.3+1`.
+
+The maintenance integration is prepared in
+[draft PR #45](https://github.com/rndaom/execs/pull/45), with 418 desktop tests,
+690 native tests and frontend/Windows/Linux CI passing. It preserves the
+creator-review and profile-preloader work on the minor track. Merge review
+remains open; see `docs/forwardport-0.1.4.md` on that branch.
