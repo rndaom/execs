@@ -5,11 +5,6 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-### Fixed
-
-- Crosshair: restore saved previews when discarding designs, keep preview caches
-  scoped to each profile, and give dot designs a working radius control.
-
 ## [0.1.4] - 2026-09-08
 
 ### Added
@@ -25,6 +20,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Crosshair: restore saved previews when discarding designs, keep preview caches
+  scoped to each profile, and give dot designs a working radius control.
 - Crosshair: preserve the preview sprite's aspect ratio in the scene layout.
 - Crosshair: label Weapon default correctly, recover sprite previews after
   interrupted loading, and preserve unbuilt designs through color and size saves.
