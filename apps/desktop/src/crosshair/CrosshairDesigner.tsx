@@ -117,15 +117,30 @@ export function CrosshairDesigner({
         </div>
 
         <div className="grid content-start gap-3">
-          <DesignerSlider
-            id="designer-size"
-            label={design.style === "circle" ? "Radius" : "Length"}
-            value={design.size}
-            min={DESIGN_LIMITS.size.min}
-            max={sizeMax}
-            note={sizeCapped ? `Capped at ${sizeMax} px by thickness, gap and outline.` : undefined}
-            onChange={(size) => patch({ size })}
-          />
+          {design.style === "dot" ? (
+            <DesignerSlider
+              id="designer-dot-radius"
+              label="Radius"
+              value={Math.max(design.dotSize, design.size / 4)}
+              min={DESIGN_LIMITS.dotSize.min}
+              max={DESIGN_LIMITS.dotSize.max}
+              onChange={(dotSize) => patch({ dotSize, size: dotSize * 4 })}
+            />
+          ) : (
+            <DesignerSlider
+              id="designer-size"
+              label={
+                ["circle", "ring-cross", "diamond"].includes(design.style) ? "Radius" : "Length"
+              }
+              value={design.size}
+              min={DESIGN_LIMITS.size.min}
+              max={sizeMax}
+              note={
+                sizeCapped ? `Capped at ${sizeMax} px by thickness, gap and outline.` : undefined
+              }
+              onChange={(size) => patch({ size })}
+            />
+          )}
           {design.style !== "dot" ? (
             <DesignerSlider
               id="designer-thickness"

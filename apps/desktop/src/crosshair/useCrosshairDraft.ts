@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
+import { type Dispatch, type SetStateAction, useMemo } from "react";
 import { draftRecordKey, useSeededDraft } from "../hooks/useSeededDraft";
 import type { CrosshairAssetPayload, CrosshairRecord, StockCrosshairSprite } from "../lib/bridge";
 import { communityLibraryName } from "../lib/community-crosshairs";
@@ -22,6 +22,7 @@ export type CrosshairDraftApi = {
   draft: CrosshairDraft;
   setDraft: Dispatch<SetStateAction<CrosshairDraft>>;
   seeded: CrosshairDraft;
+  discard: () => void;
   /** Local pixels for library entries added this session. */
   previewFor: (name: string) => PreviewPixels | null;
   addCommunity: (id: string, preview: PreviewPixels, bytes: number[]) => void;
@@ -55,7 +56,11 @@ export function useCrosshairDraft(
     (value) => JSON.stringify(value),
     draftRecordKey(profileId, "custom-crosshair"),
   );
-  const [fetchedPreviews, setFetchedPreviews] = useState<Record<string, PreviewPixels>>({});
+  const [fetchedPreviews, setFetchedPreviews] = useSeededDraft<Record<string, PreviewPixels>>(
+    {},
+    JSON.stringify,
+    draftRecordKey(profileId, "crosshair-previews"),
+  );
 
   function previewFor(name: string): PreviewPixels | null {
     const fetched = fetchedPreviews[name];
@@ -171,6 +176,10 @@ export function useCrosshairDraft(
     draft,
     setDraft,
     seeded,
+    discard: () => {
+      setDraft(seeded);
+      setFetchedPreviews({});
+    },
     previewFor,
     addCommunity,
     removeLibraryEntry,
