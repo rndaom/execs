@@ -6,8 +6,11 @@ import { CrosshairPane } from "../CrosshairPane";
 import { AppStatusProvider } from "../hooks/useAppStatus";
 import { AutosavePending } from "../hooks/useAutosave";
 import type { CrosshairRecord } from "../lib/bridge";
+import { defaultCrosshairDesign, renderCrosshairDesign } from "../lib/crosshair-designer";
 import { ColorPicker } from "./ColorPicker";
+import { CrosshairDesigner } from "./CrosshairDesigner";
 import { CrosshairPreview } from "./CrosshairPreview";
+import { type CrosshairDraftApi, useCrosshairDraft } from "./useCrosshairDraft";
 
 let root: Root;
 let box: HTMLDivElement;
@@ -152,6 +155,50 @@ describe("0.1.4 crosshair workflow", () => {
       true,
     );
     expect(box.textContent).toContain("not been built");
+  });
+  it("discards edited pixels and never carries a preview into another profile", async () => {
+    let api: CrosshairDraftApi | undefined;
+    function Probe({ profileId, width }: { profileId: string; width: number }) {
+      api = useCrosshairDraft(
+        profileId,
+        {
+          id: "execs-crosshairs",
+          shape: "design-kept",
+          assignments: {},
+          library: { "design-kept": "rgba" },
+        },
+        { "design-kept": { width, height: 1, rgba: Array(width * 4).fill(255) } },
+      );
+      return null;
+    }
+    await act(async () => root.render(<Probe profileId="A" width={1} />));
+    await act(async () => api?.saveDesign(defaultCrosshairDesign(), "kept"));
+    expect(api?.previewFor("design-kept")?.width).toBe(64);
+    await act(async () => api?.discard());
+    expect(api?.previewFor("design-kept")?.width).toBe(1);
+    await act(async () => api?.saveDesign(defaultCrosshairDesign(), "kept"));
+    await act(async () => root.render(<Probe profileId="B" width={2} />));
+    expect(api?.previewFor("design-kept")?.width).toBe(2);
+  });
+  it("lets a legacy dot shrink below its hidden geometry floor", async () => {
+    const saved = vi.fn();
+    const initial = { ...defaultCrosshairDesign(), style: "dot" as const, size: 24, dotSize: 8 };
+    await act(async () =>
+      root.render(
+        <CrosshairDesigner open initial={initial} color={null} onSave={saved} onClose={() => {}} />,
+      ),
+    );
+    expect(box.querySelector("#designer-size")).toBeNull();
+    await input("#designer-dot-radius", "1");
+    await click('[data-testid="crosshair-designer-save"]');
+    const next = saved.mock.calls[0][0];
+    expect(next.dotSize).toBe(1);
+    expect(next.size).toBe(4);
+    const visible = (pixels: Uint8ClampedArray) =>
+      pixels.filter((_, i) => i % 4 === 3 && pixels[i] > 0).length;
+    expect(visible(renderCrosshairDesign(next))).toBeLessThan(
+      visible(renderCrosshairDesign(initial)),
+    );
   });
   it("keeps the complete non-square sprite and scales each intrinsic dimension", async () => {
     await act(async () =>

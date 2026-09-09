@@ -92,6 +92,7 @@ export function CrosshairPane({
     setImportedPng,
     libraryPayload,
     acknowledge,
+    discard,
   } = useCrosshairDraft(profileId, record, packPreviews);
   // A pane the user only looked at must never write a pack on its own, so this
   // is a plain diff: with nothing installed the seed is the default draft, and
@@ -171,7 +172,7 @@ export function CrosshairPane({
     return () => reportPending?.(draftId, false);
   }, [reportPending, draftId, pendingPack]);
   function discardPack() {
-    setDraft(seeded);
+    discard();
     setMode(activeMode);
     if (mode !== activeMode) controls.reset();
   }
@@ -325,7 +326,7 @@ export function CrosshairPane({
                 previewFor={previewFor}
                 locked={locked}
                 canBrowseCommunity={isTauri()}
-                hasDesign={draft.design !== null}
+                hasDesign={Boolean(designLibrary(draft.design)[draft.shape])}
                 showDesigner={source === "designs"}
                 showCommunity={source === "community"}
                 onSelect={(shape) => setDraft((current) => ({ ...current, shape }))}

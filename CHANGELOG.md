@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Crosshair: restore saved previews when discarding designs, keep preview caches
+  scoped to each profile, and give dot designs a working radius control.
+
 ## [0.1.4] - 2026-09-08
 
 ### Added
