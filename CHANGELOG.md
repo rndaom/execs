@@ -5,6 +5,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Crosshair: preserve the preview sprite's aspect ratio in the scene layout.
+
 ## [0.1.4] - 2026-09-08
 
 ### Added

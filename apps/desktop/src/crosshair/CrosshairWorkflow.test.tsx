@@ -168,7 +168,7 @@ describe("0.1.4 crosshair workflow", () => {
     const canvas = element<HTMLCanvasElement>("canvas");
     expect([canvas.width, canvas.height]).toEqual([31, 47]);
     expect(canvas.style.width).toBe(`${(62 / 1280) * 100}%`);
-    expect(canvas.style.height).toBe(`${(94 / 720) * 100}%`);
+    expect(canvas.style.height).toBe("auto");
   });
   it("preserves invalid hex as an editable field without saving it and accepts pasted exact RGB", async () => {
     const change = vi.fn();

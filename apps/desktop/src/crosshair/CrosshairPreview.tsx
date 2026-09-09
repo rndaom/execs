@@ -57,8 +57,7 @@ export function CrosshairPreview({
           className="relative"
           style={{
             width: `${(Math.round((pixels.width * scale) / 32) / 1280) * 100}%`,
-            height: `${(Math.round((pixels.height * scale) / 32) / 720) * 100}%`,
-            imageRendering: "pixelated",
+            height: "auto",
           }}
         />
       ) : (
