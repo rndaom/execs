@@ -26,7 +26,7 @@ function renderGameplay() {
   );
 }
 
-function renderCrosshair(running = false, managedText?: string) {
+function renderCrosshair(running = false, managedText?: string, custom = false) {
   return renderToStaticMarkup(
     createElement(
       AppStatusProvider,
@@ -46,7 +46,7 @@ function renderCrosshair(running = false, managedText?: string) {
             "cl_crosshair_green 20",
             "cl_crosshair_blue 30",
           ].join("\n"),
-        record: null,
+        record: custom ? { id: "execs-crosshairs", shape: "cross", assignments: {} } : null,
         onSaveStock: async () => undefined,
         onApply: async () => undefined,
         onRemove: () => undefined,
@@ -69,19 +69,20 @@ describe("crosshair settings placement", () => {
     expect(markup).not.toMatch(/data-testid="gameplay-fov"[^>]*disabled=""/);
   });
 
-  it("places default crosshair controls before the custom crosshair builder", () => {
+  it("shows only the active in-game mode with one color owner", () => {
     const markup = renderCrosshair();
     const stockStart = markup.indexOf('data-testid="stock-crosshair-settings"');
     const builderStart = markup.indexOf("Custom crosshairs");
 
     expect(stockStart).toBeGreaterThanOrEqual(0);
-    expect(builderStart).toBeGreaterThan(stockStart);
+    expect(builderStart).toBe(-1);
     expect(markup).toContain('data-testid="stock-crosshair-file"');
     // Every stock file is a picture, not a dropdown line.
     expect(markup).toContain('data-testid="stock-crosshair-file-crosshair7"');
     expect(markup).not.toContain("<select");
-    expect(markup).toContain('data-testid="crosshair-preview"');
-    expect(markup).toContain('data-testid="crosshair-color"');
+    expect(markup).not.toContain('data-testid="crosshair-preview"');
+    expect(markup).toContain("Hex color");
+    expect(markup).toContain("Weapon default");
   });
 
   it("renders the selected stock crosshair shape in the live preview", () => {
@@ -103,16 +104,18 @@ describe("crosshair settings placement", () => {
     expect(crosshair7).not.toContain("<circle");
   });
 
-  it("offers an all-classes tab with per-slot assignment", () => {
-    const markup = renderCrosshair();
+  it("offers an all-classes tab with per-slot assignment in Custom", () => {
+    const markup = renderCrosshair(false, undefined, true);
     expect(markup).toContain('id="crosshair-class-tab-all"');
     expect(markup).toContain('data-testid="crosshair-all-classes"');
     expect(markup).toContain('data-testid="crosshair-slot-primary"');
     expect(markup).toContain('data-testid="crosshair-slot-melee"');
   });
 
-  it("saves by itself, with no Apply button on either half", () => {
-    const markup = renderCrosshair();
+  it("requires an explicit custom build and hides in-game choices", () => {
+    const markup = renderCrosshair(false, undefined, true);
+    expect(markup).toContain('data-testid="crosshair-build"');
+    expect(markup).not.toContain('data-testid="stock-crosshair-file"');
 
     expect(markup).not.toContain('data-testid="crosshair-apply"');
     expect(markup).not.toContain('data-testid="stock-crosshair-apply"');

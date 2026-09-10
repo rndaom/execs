@@ -530,7 +530,16 @@ fn run_studiomdl(
     let errors = log
         .try_clone()
         .map_err(|err| ProfileError::Io(err.to_string()))?;
-    let mut child = std::process::Command::new(studiomdl)
+    let mut command = std::process::Command::new(studiomdl);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        // Redirecting output alone still opens a console for each class compile.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = command
         .arg("-game")
         .arg(game_dir)
         .arg("-nop4")

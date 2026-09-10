@@ -11,8 +11,8 @@ const FLAT: LintOptions = { bundleRelativeExec: true };
 
 describe("case and quoting evasion", () => {
   it("catches UNBINDALL regardless of case", () => {
-    expect(ids(one("UNBINDALL"))).toContain("block:unbindall");
-    expect(ids(one("UnBindAll"))).toContain("block:unbindall");
+    expect(ids(one("UNBINDALL"))).toContain("warn:unbindall");
+    expect(ids(one("UnBindAll"))).toContain("warn:unbindall");
   });
 
   it("catches quit bound with mixed case and quoted key", () => {
@@ -21,7 +21,7 @@ describe("case and quoting evasion", () => {
   });
 
   it("catches a fully quoted command name", () => {
-    expect(ids(one('"unbindall"'))).toContain("block:unbindall");
+    expect(ids(one('"unbindall"'))).toContain("warn:unbindall");
   });
 
   it("catches connect inside an alias defined but never bound", () => {
@@ -103,7 +103,7 @@ describe("exec hidden inside a payload", () => {
       { path: "tf/cfg/payload.cfg", text: "unbindall\nrcon_password pwned\n" },
     ];
     const found = ids(files);
-    expect(found).toContain("block:unbindall");
+    expect(found).toContain("warn:unbindall");
     expect(found).toContain("block:rcon-password");
     expect(found).not.toContain("block:exec-external");
   });
@@ -224,11 +224,11 @@ describe("immediate execution and misc", () => {
     for (const path of ["modules.cfg", "overrides/modules.cfg", "tf/cfg/overrides/modules.cfg"]) {
       expect(lint([{ path, text: "unbindall\n" }]).findings).toEqual([]);
     }
-    // A pack shipping this name anywhere else does not get a free pass.
+    // A cfg with that name elsewhere is still inspected normally.
     for (const path of ["tf/custom/x/cfg/modules.cfg", "tf/cfg/modules.cfg"]) {
       const result = lint([{ path, text: "unbindall\n" }]);
-      expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("block:unbindall");
-      expect(result.ok).toBe(false);
+      expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("warn:unbindall");
+      expect(result.ok).toBe(true);
     }
   });
 

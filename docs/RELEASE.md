@@ -3,7 +3,25 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.0** (2026-09-03).
+Current public version: **0.1.3 Hotfix 1** (`0.1.3+1`, published 2026-09-07
+at 22:23 UTC). Windows/Linux validation, package builds, signed upgrades from
+the original 0.1.3, startup, data preservation and no-repeat-offer checks pass.
+Public downloads and the updater feed are verified. The original 0.1.3 tag
+and assets remain intact. See `docs/release-0.1.3.md` for evidence, including
+the release-script correction used for final verification and publication.
+
+Private candidate: **0.1.4**, based on that public maintenance baseline.
+The owner-assigned crosshair scope, engine size correction, compatibility
+checks and remaining publication gates are in `docs/release-0.1.4.md`.
+
+0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
+Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
+also found three patch-class regressions in public 0.1.2: absorb must stop if
+TF2 starts mid-operation, a catalog-matched imported HUD must keep its editable
+local tree, and an exported profile with a small highly compressible asset must
+import again. Creator-profile ZIP imports and profile-scoped preloader metadata
+remain on 0.2.0. See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and
+implementation evidence.
 Next minor: **0.2.0**, first Thursday of the month, skipped if the budget is empty.
 
 ## Who sees what
@@ -28,22 +46,59 @@ profile format unless you asked for it.
 ## Versioning
 
 `0.Y.Z` until a yearly review promotes **1.0.0**. The four product files
-always match the tag `v0.Y.Z`:
+always match the release tag (without its `v` prefix):
 
 - `apps/desktop/package.json`
 - `apps/desktop/src-tauri/tauri.conf.json`
 - `apps/desktop/src-tauri/Cargo.toml`
 - `apps/desktop/src-tauri/core/Cargo.toml`
 
+An explicitly requested hotfix may retain the product version and increment
+only a build revision: **0.1.3 Hotfix 1** is `0.1.3+1` in these files, the
+changelog heading, updater manifest and new `v0.1.3+1` tag. Local bundle names
+retain `+1`. Upload paths can retain `+` or normalize it to `.`, so verification
+and previous-installer selection read the actual release asset names.
+Use positive numeric revisions from 1 through 65535, without leading zeros.
+The app footer stays `v0.1.3`; release notes and update copy identify the hotfix.
+Diagnostics, staged notes and install matching retain the complete revision.
+
+This works with the updater already shipped in 0.1.3: its pinned Rust semver
+comparison orders build metadata, even though general SemVer precedence does
+not. Numeric metadata also supplies the Windows installer's fourth version
+component. Keep both the native comparison probes and signed upgrade smoke
+green; do not assume another updater implementation treats metadata the same.
+The smoke source is the immediately preceding changelog release, so the first
+hotfix tests the actual 0.1.3 installer, and a second hotfix tests the first.
+An identical revision must not be offered again.
+
+Keep the original published tag and artifacts intact. Build the hotfix in its
+own private draft, then publish it as the latest stable release through the
+existing workflow, feed URL and signing key. This adds no prerelease channel.
+The owner requested this delivery for the September 7 0.1.3 fixes.
+
+GitHub can give a draft an `untagged-...` browser URL despite its exact
+`tag_name`. Verification binds that temporary URL to the draft's `html_url`,
+requires the feed to use the corresponding stable API asset URL, and still
+checks the exact product tag, file revision, signatures and bytes. A temporary
+draft browser URL must never be left in the published updater feed.
+
 | Bump | When | Features | Data / write surface |
 |---|---|---|---|
-| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | None. | No schema change. Old profiles load unchanged. |
-| **Minor** `0.Y+1.0` | Monthly train (below). Skip if nothing is ready. | At most **three** user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
+| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | Bug fixes by default. A bounded feature or polish item may ship when the owner explicitly assigns it to that named patch. | No incompatible schema or new write target. Older profiles and exports still work; additive internal recovery metadata is allowed. |
+| **Minor** `0.Y+1.0` | Monthly train (below). Skip if nothing is ready. | At most **three** planned user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
 | **1.0.0** | Yearly review says the contracts are stable. | — | Profile format, write surface, updater URL, and OS matrix are promises. |
 
 A user-visible feature is something a player notices in a pane or on
 first run. Refactors, tests, copy, and process docs are not features and
 do not wait for a train.
+
+Patches stay small and bugfix-led; they are not a second feature train.
+The owner may nevertheless put a specific, bounded, non-breaking feature or
+polish change into a named patch when that update is the right delivery unit.
+Record that decision and the complete scope in the Linear milestone. The
+explicit assignment controls the update; do not move the item back to a minor
+solely because it is user-visible, and do not use the exception to infer extra
+scope the owner did not request.
 
 **Breaking** (new minor at minimum, plus a migration note in
 `CHANGELOG.md`): changing which files we write, a profile or manifest
@@ -75,8 +130,9 @@ Linear is private planning. GitHub is the public desk.
 3. If it is real work, open a Linear issue on the execs project, label
    `from-github`, and paste the GitHub URL. Add `compat` when it applies.
    Bug / Feature / Improvement stay the type labels.
-4. Commit it to a version milestone only when it is in that minor's
-   feature budget, or when it is patch-class and you will ship it now.
+4. Commit it to a version milestone when it is in that minor's feature
+   budget, when it is a patch-class fix you will ship now, or when the owner
+   explicitly assigns the bounded work to a named patch.
 5. When the version that contains it is published, comment the version
    on the GitHub thread and close it.
 
@@ -126,11 +182,16 @@ When you do ship:
 
 ### Anytime (a patch)
 
-A patch is a bug the last public version has, with no feature attached.
-Bump `Z`, write the changelog section, tag, done. If `main` already has
-an unreleased breaking change, cut `release/0.Y` from the last tag,
-patch there, and tag from that branch. Until that happens, patch from
-`main`.
+A patch is normally a focused set of bugs in the last public version. It may
+also contain a bounded, non-breaking feature or polish item that the owner
+explicitly assigned to that named patch. Freeze exactly that recorded milestone
+scope; an exception is not permission to sweep in adjacent backlog work.
+
+Bump `Z`, write the changelog section, tag, done. If `main` already has an
+unreleased breaking change or work outside the frozen patch scope, cut the patch
+branch from the last public tag and tag from that branch. Otherwise patch from
+`main`. Older profiles and exports must remain readable, write targets must not
+expand, and every breaking change still waits for a minor.
 
 ### Once a year (the first Thursday of September)
 
@@ -147,6 +208,10 @@ patch there, and tag from that branch. Until that happens, patch from
 
 ## Ship checklist
 
+Candidate preparation and platform evidence may be completed before the tag.
+Tag, workflow publication, public-inbox closure, and milestone closure remain
+unchecked until the owner authorizes the release and the publish succeeds.
+
 - [ ] Milestone frozen; leftover issues moved off it
 - [ ] Compatibility list walked
 - [ ] `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section
@@ -157,8 +222,11 @@ patch there, and tag from that branch. Until that happens, patch from
 - [ ] Linear milestone issues are Done
 - [ ] Next milestone exists with a theme and a budget of three
 
-`workflow_dispatch` builds a draft for the current version and never
-publishes. Use it to inspect installers. To ship, push a tag.
+`workflow_dispatch` requires the matching `vX.Y.Z` release tag as its
+`release_tag` input, builds that version's private draft, and never publishes.
+The input gives candidate and tag runs the same concurrency lock, so they cannot
+mutate one draft at the same time. Use it to inspect installers. To ship, push
+the tag.
 
 ## Changelog
 

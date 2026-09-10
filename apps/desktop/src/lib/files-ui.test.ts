@@ -150,9 +150,9 @@ describe("findingTierClass", () => {
 });
 
 describe("lintBundle", () => {
-  it("blocks unbindall and sv_cheats 1", () => {
-    expect(lintBundle([{ path: "autoexec.cfg", text: "unbindall" }]).ok).toBe(false);
-    expect(lintBundle([{ path: "autoexec.cfg", text: "sv_cheats 1" }]).ok).toBe(false);
+  it("allows top-level unbindall and sv_cheats", () => {
+    expect(lintBundle([{ path: "autoexec.cfg", text: "unbindall" }]).ok).toBe(true);
+    expect(lintBundle([{ path: "autoexec.cfg", text: "sv_cheats 1" }]).ok).toBe(true);
   });
 
   it("allows fov_desired 90", () => {
@@ -179,13 +179,13 @@ describe("lintBundle", () => {
     expect(result.findings.filter((finding) => finding.tier === "block")).toEqual([]);
   });
 
-  it("still blocks reset and lockout commands in user-authored cfg files", () => {
+  it("allows a bind-table reset but still blocks lockout commands", () => {
     expect(
       lintBundle([
         { path: "tf/cfg/config.cfg", text: 'unbindall\nbind escape "cancelselect"' },
         { path: "tf/cfg/overrides/autoexec.cfg", text: "unbindall" },
       ]).ok,
-    ).toBe(false);
+    ).toBe(true);
     expect(lintBundle([{ path: "tf/cfg/config.cfg", text: 'bind escape "kill"' }]).ok).toBe(false);
   });
 
@@ -193,13 +193,16 @@ describe("lintBundle", () => {
     const result = lintBundle(
       [
         { path: "tf/cfg/overrides/autoexec.cfg", text: "fov_desired 90" },
-        { path: "tf/custom/rayshud/cfg/hud_reset.cfg", text: "unbindall\nsv_cheats 1" },
+        {
+          path: "tf/custom/rayshud/cfg/hud_reset.cfg",
+          text: 'bind mouse2 "unbindall"\nsv_cheats 1',
+        },
       ],
       "rayshud",
     );
     expect(result.ok).toBe(true);
     const demoted = result.findings.filter((finding) => finding.advisory);
-    expect(demoted.length).toBeGreaterThanOrEqual(2);
+    expect(demoted).toHaveLength(1);
     for (const finding of demoted) {
       expect(finding.tier).toBe("warn");
       expect(finding.file).toBe("tf/custom/rayshud/cfg/hud_reset.cfg");

@@ -36,7 +36,7 @@ export function paintCrosshair(
     exact(customRgba);
     return;
   }
-  if (isBuiltinCrosshairShape(shape)) {
+  if (isBuiltinCrosshairShape(shape) && shape !== CUSTOM_CROSSHAIR_SHAPE) {
     exact(renderCrosshairRgba(shape));
     return;
   }

@@ -28,4 +28,19 @@ fn main() {
     let windows = tauri_build::WindowsAttributes::new().app_manifest(WINDOWS_MANIFEST);
     tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
         .expect("failed to run tauri-build");
+    // tauri-winres links resources to binaries, not Cargo examples. The updater
+    // probe also needs Common Controls v6 for TaskDialogIndirect at process load.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+        && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
+        && std::env::var_os("CARGO_FEATURE_RELEASE_PROBES").is_some()
+    {
+        let manifest = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+            .join("updater-probe.manifest");
+        std::fs::write(&manifest, WINDOWS_MANIFEST).expect("write updater probe manifest");
+        println!("cargo:rustc-link-arg-examples=/MANIFEST:EMBED");
+        println!(
+            "cargo:rustc-link-arg-examples=/MANIFESTINPUT:{}",
+            manifest.display()
+        );
+    }
 }

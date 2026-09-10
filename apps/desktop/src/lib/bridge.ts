@@ -293,6 +293,9 @@ export type HudRecord = {
 
 export type CrosshairRecord = {
   id: string;
+  inactive?: boolean;
+  scale?: number;
+  stock?: { file: string; scale: number };
   shape: string;
   assignments: Record<string, string>;
   /** Pack tint carried by `cl_crosshair_red/green/blue`; null/undefined = white. */
@@ -436,6 +439,26 @@ export async function writeOwnedFile(
   return call<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
 }
 
+export async function writeManagedCfg(
+  path: string,
+  text: string,
+  expectedProfileId: string,
+  scope?: "gameplay" | "crosshair" | "sounds",
+): Promise<ProfileDetail> {
+  if (!editorPathFits(path)) {
+    throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+  }
+  if (editorTextBytes(text) === null) {
+    throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+  }
+  return call<ProfileDetail>("write_managed_cfg", {
+    path,
+    text,
+    expectedProfileId,
+    scope: scope ?? null,
+  });
+}
+
 export type ComfigState = {
   preset: ComfigPreset;
   modules: Record<string, string>;
@@ -572,6 +595,7 @@ export async function applyCrosshairs(
   color?: [number, number, number] | null,
   library?: Record<string, CrosshairAssetPayload>,
   design?: string | null,
+  settings?: { scale: number; stock: { file: string; scale: number }; libraryNames?: string[] },
 ): Promise<ProfileDetail> {
   // Tauri v2 matches invoke keys in camelCase only — a snake_case key here
   // deserializes the Option as permanently-None.
@@ -582,6 +606,7 @@ export async function applyCrosshairs(
     color: color ?? null,
     library: library ?? null,
     design: design ?? null,
+    settings: settings ?? null,
   });
 }
 
@@ -629,6 +654,10 @@ export async function getStockCrosshairSprites(): Promise<Record<string, StockCr
 
 export async function removeCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_crosshairs");
+}
+
+export async function deactivateCrosshairs(): Promise<ProfileDetail> {
+  return call<ProfileDetail>("deactivate_crosshairs");
 }
 
 /** "full" hides the weapon and the arms; "weapon" keeps the hands animating. */

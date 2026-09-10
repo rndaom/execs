@@ -111,15 +111,14 @@ export function installedModSelection(status: PreloaderStatusPayload | null): Mo
 /**
  * Drop picks whose source is gone — the pack was removed while it was ticked.
  * Nothing on screen could untick them any more, so Apply would stay lit over an
- * id the backend cannot satisfy. An id that is still installed stays: the
- * backend has it, and the selection still matches what is on disk.
+ * id the backend cannot satisfy. Installed patches are global in 0.1.3, so
+ * their recorded IDs are not evidence that this profile still owns a source.
  */
 export function visibleModSelection(
   selection: ModSelection,
   sources: ParticleSource[],
-  installed: string[],
 ): ModSelection {
-  const known = new Set([...sources.map((source) => source.modId), ...installed]);
+  const known = new Set(sources.map((source) => source.modId));
   const kept = selection.profileParticleMods.filter((id) => known.has(id));
   return kept.length === selection.profileParticleMods.length
     ? selection
@@ -154,7 +153,10 @@ export function modsApplyEnabled(
   status: PreloaderStatusPayload | null,
   selection: ModSelection,
 ): boolean {
-  if (!status?.modsCached || status.recoveryRequired === true) {
+  if (!status || status.recoveryRequired === true) {
+    return false;
+  }
+  if (!status.modsCached && (selection.addons.length > 0 || selection.particleMods.length > 0)) {
     return false;
   }
   return selectionDirty(status, selection) || status.status.stale === true;
@@ -172,7 +174,11 @@ export function modsStatusLine(
   if (status?.recoveryRequired) {
     return "Finish interrupted recovery first";
   }
-  if (status && !status.modsCached) {
+  if (
+    status &&
+    !status.modsCached &&
+    (selection.addons.length > 0 || selection.particleMods.length > 0)
+  ) {
     return "Download the mod library first";
   }
   if (selectionDirty(status, selection)) {

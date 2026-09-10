@@ -14,12 +14,19 @@ export type AppUpdateProgress = "downloading" | "installing" | "restarting";
 
 export type UpdateCheckKind = "latest" | "error";
 
+/** Display only: updater comparisons, storage and release links keep the full version. */
 export function appVersionCopy(version: string): string {
-  return `execs ${version}`;
+  return `v${version.split("+", 1)[0]}`;
+}
+
+/** Numeric build revisions are hotfixes of the same product version. */
+export function releaseVersionCopy(version: string): string {
+  const hotfix = version.match(/^(\d+\.\d+\.\d+)\+([1-9]\d*)$/);
+  return hotfix ? `${hotfix[1]} · Hotfix ${hotfix[2]}` : version.split("+", 1)[0];
 }
 
 export function updateBannerCopy(version: string): string {
-  return `Update available — execs ${version}`;
+  return `Update available — execs ${releaseVersionCopy(version)}`;
 }
 
 export function updateProgressCopy(step: AppUpdateProgress): string {

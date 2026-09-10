@@ -2,7 +2,7 @@
 //! the particles back in, and report what was skipped.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
+use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,6 @@ use crate::vpk::{
     map_vpk_entries, patch_vpk_entry_if_unchanged, write_vpk_v2, VpkEntryLocation, VpkError,
 };
 
-use super::catalog::zip_archive;
 use super::gameinfo::{
     gameinfo_bypass_state, preflight_gameinfo_bypass, set_gameinfo_bypass_with_sampler,
 };
@@ -41,6 +40,42 @@ use super::{
 };
 use crate::mods::{profile_particle_sources_from, read_mod_pcf, ParticleSource};
 use crate::profile::{load_library_from, profiles_dir};
+
+trait ModLibraryReader: Read + Seek {}
+impl<T: Read + Seek> ModLibraryReader for T {}
+type SelectionArchive = zip::ZipArchive<Box<dyn ModLibraryReader>>;
+
+/// Empty/profile-only selections need no default-library download. An empty
+/// archive lets the same preflight and rollback path restore old patches.
+fn selection_archive(
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+) -> Result<SelectionArchive, String> {
+    let reader: Box<dyn ModLibraryReader> =
+        if selection.addons.is_empty() && selection.particle_mods.is_empty() {
+            let cursor = zip::ZipWriter::new(Cursor::new(Vec::new()))
+                .finish()
+                .map_err(|err| format!("Could not prepare an empty mod selection: {err}"))?;
+            Box::new(cursor)
+        } else {
+            Box::new(
+                std::fs::File::open(zip_path)
+                    .map_err(|err| format!("Could not open the mod library: {err}"))?,
+            )
+        };
+    zip::ZipArchive::new(reader).map_err(|err| format!("Could not read the mod library: {err}"))
+}
+
+fn selection_catalog(
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+) -> Result<super::ModsCatalog, String> {
+    if selection.addons.is_empty() && selection.particle_mods.is_empty() {
+        Ok(super::ModsCatalog::default())
+    } else {
+        read_mods_catalog(zip_path)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -227,7 +262,7 @@ pub(super) fn prepare_preloader_selection(
     entries: &BTreeMap<String, VpkEntryLocation>,
     profile: Option<&ProfileContext>,
 ) -> Result<BTreeSet<String>, String> {
-    let catalog = read_mods_catalog(zip_path)?;
+    let catalog = selection_catalog(zip_path, selection)?;
     for name in &selection.addons {
         if !catalog.addons.iter().any(|addon| &addon.id == name) {
             return Err(format!("Unknown addon: {name}"));
@@ -252,7 +287,7 @@ pub(super) fn prepare_preloader_selection(
         ));
     }
 
-    let mut archive = zip_archive(zip_path)?;
+    let mut archive = selection_archive(zip_path, selection)?;
     let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();
     for mod_name in &selection.particle_mods {
         let prefix = format!("mods/particles/{mod_name}/actual_particles/");
@@ -494,6 +529,33 @@ pub fn apply_preloader_selection(
     )
 }
 
+/// Build the smallest replacement selection that removes particle sources
+/// unavailable on the active profile. Pass no IDs before switching profiles:
+/// 0.1.3 stores patches globally and cannot carry those source choices across
+/// a switch. Library addons and particles remain selected and are rebuilt so
+/// a profile mod that overrode a library particle cannot leave its bytes live.
+/// This is read-only; the caller applies the plan under the existing write gate.
+pub fn profile_particle_cleanup_selection(
+    data_dir: &Path,
+    available_mod_ids: &[String],
+) -> Result<Option<PreloaderSelection>, String> {
+    let state = load_state(data_dir)?;
+    let retained: Vec<_> = state
+        .profile_particle_mods
+        .iter()
+        .filter(|id| available_mod_ids.contains(id))
+        .cloned()
+        .collect();
+    if retained.len() == state.profile_particle_mods.len() {
+        return Ok(None);
+    }
+    Ok(Some(PreloaderSelection {
+        addons: state.addons,
+        particle_mods: state.particle_mods,
+        profile_particle_mods: retained,
+    }))
+}
+
 pub fn apply_preloader_selection_with_sampler(
     tf2_root: &Path,
     data_dir: &Path,
@@ -632,7 +694,7 @@ fn apply_preloader_selection_inner(
 
     // Validate the selection BEFORE the destructive restore pass: a stale UI
     // selection must fail without having uninstalled the user's mods first.
-    let catalog = read_mods_catalog(zip_path)?;
+    let catalog = selection_catalog(zip_path, selection)?;
     for name in &selection.addons {
         if !catalog.addons.iter().any(|addon| &addon.id == name) {
             return Err(format!("Unknown addon: {name}"));
@@ -709,7 +771,7 @@ fn apply_preloader_selection_inner(
             .map_err(|err| format!("Could not remove the previous {PRELOADER_VPK}: {err}"))?;
     }
 
-    let mut archive = zip_archive(zip_path)?;
+    let mut archive = selection_archive(zip_path, selection)?;
 
     // Particle worklist: selection order, later mods win a contested file.
     let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();
@@ -1032,7 +1094,7 @@ fn apply_preloader_selection_inner(
     // Custom content: particle-mod support files plus the selected addons.
     // Inner paths keep their game-relative shape (materials/…, scripts/…).
     let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    let copy_zip_tree = |archive: &mut zip::ZipArchive<std::fs::File>,
+    let copy_zip_tree = |archive: &mut SelectionArchive,
                          prefix: &str,
                          custom: &mut BTreeMap<String, Vec<u8>>,
                          allow: &dyn Fn(&str) -> bool|
@@ -1411,7 +1473,8 @@ pub struct PreloaderStatus {
     pub patched_files: Vec<String>,
     pub addons: Vec<String>,
     pub particle_mods: Vec<String>,
-    /// Ids of the active profile's own mods whose particles are installed.
+    /// Source mod IDs from the last Apply. Patches are global in 0.1.3 and
+    /// these IDs can outlive their profile or pack until reconciled.
     #[serde(default)]
     pub profile_particle_mods: Vec<String>,
     pub skipped: Vec<SkipNotice>,

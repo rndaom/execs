@@ -8,9 +8,9 @@ describe("cfglint workspace link", () => {
     expect(result.effective.get("fov_desired")?.value).toBe("90");
   });
 
-  it("blocks unbindall", () => {
+  it("warns about unbindall without refusing the config", () => {
     const result = lint([{ path: "autoexec.cfg", text: "unbindall" }]);
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(result.findings.some((finding) => finding.ruleId === "unbindall")).toBe(true);
   });
 });

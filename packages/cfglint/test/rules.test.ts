@@ -14,10 +14,10 @@ const rules = (files: CfgFile[], opts: LintOptions = {}) => {
 const FLAT: LintOptions = { bundleRelativeExec: true };
 
 describe("block-tier rules", () => {
-  it("blocks unbindall", () => {
+  it("warns about a top-level unbindall without refusing the config", () => {
     const { result, ids } = rules(one("unbindall"));
-    expect(ids).toContain("block:unbindall");
-    expect(result.ok).toBe(false);
+    expect(ids).toContain("warn:unbindall");
+    expect(result.ok).toBe(true);
   });
 
   it("blocks connect/password server redirects", () => {
@@ -65,7 +65,9 @@ describe("block-tier rules", () => {
     ].join("\n");
     const result = lint(one(source, path), { engineManagedConfigPaths: [path] });
 
-    expect(lint(one(source, path)).ok).toBe(false);
+    expect(
+      lint(one(source, path)).findings.map((finding) => `${finding.tier}:${finding.ruleId}`),
+    ).toContain("warn:unbindall");
     expect(result.ok).toBe(true);
     expect(result.findings.filter((finding) => finding.tier === "block")).toEqual([]);
     expect(result.binds.get("escape")).toBe("cancelselect");
@@ -86,7 +88,7 @@ describe("block-tier rules", () => {
     expect(lint(one('bind escape "kill"', path), opts).ok).toBe(false);
     expect(lint(one("unbind escape", path), opts).ok).toBe(false);
     expect(lint(one("connect 203.0.113.7", path), opts).ok).toBe(false);
-    expect(lint(one("unbindall", "tf/cfg/autoexec.cfg"), opts).ok).toBe(false);
+    expect(lint(one("unbindall", "tf/cfg/autoexec.cfg"), opts).ok).toBe(true);
   });
 
   it("blocks quit bound to a gameplay key, warns on other keys", () => {
@@ -94,9 +96,9 @@ describe("block-tier rules", () => {
     expect(rules(one('bind f11 "quit"')).ids).toContain("warn:disruptive-bind");
   });
 
-  it("blocks sv_cheats", () => {
-    expect(rules(one("sv_cheats 1")).ids).toContain("block:sv-cheats");
-    expect(rules(one("sv_cheats 0")).ids).not.toContain("block:sv-cheats");
+  it("allows sv_cheats as a normal server-controlled cvar", () => {
+    expect(rules(one("sv_cheats 1")).ids).not.toContain("block:sv-cheats");
+    expect(rules(one("sv_cheats 1")).result.ok).toBe(true);
   });
 
   it("blocks aliases that shadow engine commands", () => {
@@ -258,7 +260,7 @@ describe("clean configs and metadata", () => {
   });
 
   it("sorts findings block first", () => {
-    const { result } = rules(one("sensitivity 2\nunbindall"));
+    const { result } = rules(one("unbindall\nconnect 203.0.113.7"));
     expect(result.findings[0].tier).toBe("block");
   });
 });
@@ -266,11 +268,14 @@ describe("clean configs and metadata", () => {
 describe("advisory (provided-file) paths", () => {
   it("demotes block findings in advisory files to advisory warns and keeps ok true", () => {
     const files: CfgFile[] = [
-      { path: "tf/custom/somehud/cfg/hud_reset.cfg", text: "unbindall\nsv_cheats 1\n" },
+      {
+        path: "tf/custom/somehud/cfg/hud_reset.cfg",
+        text: 'bind mouse2 "unbindall"\nsv_cheats 1\n',
+      },
     ];
     const result = lint(files, { advisoryPaths: ["tf/custom/somehud/cfg/hud_reset.cfg"] });
     const demoted = result.findings.filter((f) => f.advisory);
-    expect(demoted.length).toBeGreaterThanOrEqual(2);
+    expect(demoted).toHaveLength(1);
     for (const finding of demoted) {
       expect(finding.tier).toBe("warn");
     }
@@ -280,7 +285,7 @@ describe("advisory (provided-file) paths", () => {
 
   it("keeps blocking the same content in non-advisory files", () => {
     const files: CfgFile[] = [
-      { path: "tf/cfg/overrides/autoexec.cfg", text: "unbindall\n" },
+      { path: "tf/cfg/overrides/autoexec.cfg", text: 'bind mouse2 "unbindall"\n' },
       { path: "tf/custom/somehud/cfg/hud_reset.cfg", text: "unbindall\n" },
     ];
     const result = lint(files, { advisoryPaths: ["tf/custom/somehud/cfg/hud_reset.cfg"] });
@@ -290,7 +295,7 @@ describe("advisory (provided-file) paths", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("demotes a block finding when a user file invokes an alias authored by an advisory file", () => {
+  it("demotes a dynamic reset authored by an advisory file", () => {
     const files: CfgFile[] = [
       { path: "tf/custom/somehud/cfg/hud_extra.cfg", text: 'alias hud_reset "unbindall"\n' },
       { path: "tf/cfg/overrides/autoexec.cfg", text: "hud_reset\n" },
@@ -299,7 +304,10 @@ describe("advisory (provided-file) paths", () => {
     expect(result.findings.some((f) => f.tier === "block")).toBe(false);
     expect(
       result.findings.some(
-        (f) => f.advisory && f.ruleId === "unbindall" && f.file === "tf/cfg/overrides/autoexec.cfg",
+        (f) =>
+          f.advisory &&
+          f.ruleId === "unbindall" &&
+          f.file === "tf/custom/somehud/cfg/hud_extra.cfg",
       ),
     ).toBe(true);
     expect(result.ok).toBe(true);

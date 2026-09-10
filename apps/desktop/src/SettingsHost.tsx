@@ -1,24 +1,20 @@
 import { engineManagedLintOptions, lint } from "@execs/cfglint";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { useToast } from "./components/ui/Toast";
+import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
+import { AutosaveActivity, AutosaveDiscard, AutosavePending } from "./hooks/useAutosave";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
 import {
-  autoexecFilePath,
   bindsFilePath,
   configBindsFromFiles,
-  EXECS_BINDS_STEM,
-  EXECS_GAMEPLAY_STEM,
-  ensureAutoexecExecLine,
-  MANAGED_EXEC_STEMS,
-  managedCfgPath,
   shouldSyncTrackedBinds,
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
@@ -32,7 +28,6 @@ import {
   type PreloaderReport,
   type PreloaderStatusPayload,
   type ProfileDetail,
-  parseInvokeError,
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
@@ -42,7 +37,13 @@ import {
   hasBaseVpk,
   toggleComfigAddon,
 } from "./lib/comfig-ui";
+import {
+  createFilesDraftStore,
+  type DirtyFileDraft,
+  type FilesDraftStore,
+} from "./lib/files-drafts";
 import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
+import { blockingFindingsForFile, cfgFileMeta, lintBundle } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
 import { HudReloadQueue } from "./lib/hud-reload-ui";
 import { emptyHudState } from "./lib/hud-ui";
@@ -83,6 +84,9 @@ function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
 
 export function SettingsHost({
   api,
+  filesDraftStore: suppliedFilesDraftStore,
+  filesSaver,
+  filesCloseReady = true,
   tab,
   running,
   externalBusy,
@@ -90,9 +94,14 @@ export function SettingsHost({
   bindSyncRequest,
   onBindSyncHandled,
   onBusyChange,
+  onWriteBusyChange,
+  onPendingChange,
   onError,
 }: {
   api: Api;
+  filesDraftStore?: FilesDraftStore;
+  filesCloseReady?: boolean;
+  filesSaver?: { current: ((draft: DirtyFileDraft) => Promise<boolean>) | null };
   tab: SettingsTab;
   running: boolean;
   externalBusy: boolean;
@@ -100,6 +109,8 @@ export function SettingsHost({
   bindSyncRequest: number | null;
   onBindSyncHandled: (request: number) => void;
   onBusyChange: (busy: boolean) => void;
+  onWriteBusyChange?: (busy: boolean) => void;
+  onPendingChange?: (pending: boolean) => void;
   onError: (message: string | null) => void;
 }) {
   const { error } = useAppStatus();
@@ -108,6 +119,15 @@ export function SettingsHost({
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [files, setFiles] = useState<CfgText[]>([]);
   const [filesLimited, setFilesLimited] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const loadBlocked = useRef(true);
+  const detailRef = useRef<ProfileDetail | null>(null);
+  const launchRef = useRef(recommendedLaunchOptions());
+  const launchSeedRef = useRef(recommendedLaunchOptions());
+  const localFilesDraftStore = useRef(createFilesDraftStore()).current;
+  const filesDraftStore = suppliedFilesDraftStore ?? localFilesDraftStore;
+  const visited = useRef({ profile: null as string | null, tabs: new Set<SettingsTab>() });
   const [comfig, setComfig] = useState<ComfigUiState>(defaultComfigState);
   const [launch, setLaunch] = useState(recommendedLaunchOptions);
   /** What the profile actually holds — the pane's draft is diffed against it. */
@@ -140,6 +160,18 @@ export function SettingsHost({
   /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
   const loadRequest = useRef(0);
 
+  const pendingIds = useRef(new Set<string>());
+  const discardAutosaves = useRef(false);
+  const reportPending = useCallback(
+    (id: string, pending: boolean) => {
+      if (pending) pendingIds.current.add(id);
+      else pendingIds.current.delete(id);
+      onPendingChange?.(pendingIds.current.size > 0);
+    },
+    [onPendingChange],
+  );
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
+
   const repairBusy = modsPayload?.repairInProgress === true;
 
   // Queue work and Steam verification both own the write surface. Reflect both
@@ -148,6 +180,10 @@ export function SettingsHost({
   useEffect(() => {
     onBusyChange(queueBusy || repairBusy);
   }, [onBusyChange, queueBusy, repairBusy]);
+  useEffect(() => {
+    onWriteBusyChange?.(queueBusy);
+    return () => onWriteBusyChange?.(false);
+  }, [onWriteBusyChange, queueBusy]);
 
   // A write in flight when this host unmounts still calls release() on the dead
   // instance, which would otherwise leave App.settingsBusy latched true.
@@ -157,7 +193,11 @@ export function SettingsHost({
     };
   }, [onBusyChange]);
 
-  const busy = externalBusy || queueBusy || repairBusy;
+  const busy = externalBusy || queueBusy || repairBusy || loading || filesLimited;
+  // A switch leaves the old pane visible until its replacement snapshot loads.
+  // Own saves keep inputs live so their responses cannot interrupt newer edits.
+  const inputsBlocked =
+    externalBusy || (!queueBusy && (loadBlocked.current || loading || loadError !== null));
   const layer = detail?.layer ?? "comfig";
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
@@ -172,25 +212,26 @@ export function SettingsHost({
     const request = ++loadRequest.current;
     const stale = () => request !== loadRequest.current;
 
-    const next = await api.getActiveProfileDetail();
-    if (stale()) {
-      return;
-    }
-    setDetail(next);
-    const candidates = editorCfgCandidates(next?.files ?? []);
-    const loaded: CfgText[] = [];
-    let totalBytes = 0;
-    let wasLimited = candidates.limited;
-    for (const file of candidates.files) {
-      // One unreadable cfg must not abort the whole load: `files` would keep
-      // its stale value and every pane would reseed from its defaults, which
-      // reads to the user as "my settings reverted".
-      try {
-        const content = await api.readProfileFile(file.path);
-        if (stale()) {
-          return;
-        }
-        if (content.text !== null) {
+    loadBlocked.current = true;
+    setLoading(true);
+    try {
+      const next = await api.getActiveProfileDetail();
+      if (stale()) {
+        return;
+      }
+      const candidates = editorCfgCandidates(next?.files ?? []);
+      const loaded: CfgText[] = [];
+      let totalBytes = 0;
+      const missing: string[] = [];
+      let wasLimited = candidates.limited;
+      for (const file of candidates.files) {
+        try {
+          const content = await api.readProfileFile(file.path);
+          if (stale()) return;
+          if (content.text === null) {
+            missing.push(file.path);
+            continue;
+          }
           const nextTotal = addEditorTextToBudget(totalBytes, content.text);
           if (nextTotal === null) {
             wasLimited = true;
@@ -198,50 +239,71 @@ export function SettingsHost({
           }
           totalBytes = nextTotal;
           loaded.push({ path: content.path, text: content.text });
-        }
-      } catch (error) {
-        // Tracked but unreadable (missing blob, path outside the profile).
-        const code = parseInvokeError(error).code;
-        if (code === "FileTooLarge" || code === "InvalidPath") {
-          wasLimited = true;
+        } catch {
+          if (stale()) return;
+          missing.push(file.path);
         }
       }
-    }
-    setFilesLimited(wasLimited);
-    let nextFiles = loaded;
-    const nextLayer = next?.layer ?? "comfig";
-    // Never derive a managed binds rewrite from a deliberately partial file
-    // bundle: a size/count refusal can omit config.cfg or an included exec.
-    if (opts?.syncBinds && !running && !wasLimited) {
-      const bindsPath = bindsFilePath(nextLayer);
-      const managed = nextFiles.find((file) => file.path === bindsPath)?.text ?? "";
-      const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
-      if (synced !== managed) {
-        await api.writeOwnedFile(bindsPath, synced);
-        if (stale()) {
-          return;
-        }
-        nextFiles = upsertFile(nextFiles, bindsPath, synced);
+      if (wasLimited || missing.length > 0) {
+        setFilesLimited(true);
+        throw new Error(
+          missing.length > 0
+            ? `Could not read settings: ${missing.join(", ")}. Retry before saving.`
+            : "Some cfg files exceed the editor limits. Settings cannot be saved from an incomplete load.",
+        );
       }
+      const state = await api.getComfigState();
+      if (stale()) return;
+      const nextLaunch = next?.launchOptions ?? (await api.getProfileLaunchOptions());
+      if (stale()) return;
+      const verified = await api.getActiveProfileDetail();
+      if (stale()) return;
+      if (verified?.id !== next?.id)
+        throw new Error("The active profile changed. Retry loading settings.");
+      let nextFiles = loaded;
+      const nextLayer = next?.layer ?? "comfig";
+      if (opts?.syncBinds && !running) {
+        const bindsPath = bindsFilePath(nextLayer);
+        const managed = nextFiles.find((file) => file.path === bindsPath)?.text ?? "";
+        const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
+        if (synced !== managed) {
+          await api.writeOwnedFile(bindsPath, synced);
+          if (stale()) return;
+          nextFiles = upsertFile(nextFiles, bindsPath, synced);
+        }
+      }
+      // Publish every seed in the same React batch, only after the complete read.
+      const changedProfile = detailRef.current?.id !== next?.id;
+      if (changedProfile || launchRef.current === launchSeedRef.current) {
+        launchRef.current = nextLaunch;
+        setLaunch(nextLaunch);
+      }
+      if (changedProfile) {
+        setLaunchSaved(null);
+        setSteamWrite(null);
+      }
+      launchSeedRef.current = nextLaunch;
+      detailRef.current = next;
+      setDetail(next);
+      setFiles(nextFiles);
+      setFilesLimited(false);
+      setComfig(
+        state
+          ? { preset: state.preset, modules: state.modules, addons: state.addons }
+          : defaultComfigState(),
+      );
+      setLaunchSeed(nextLaunch);
+      loadBlocked.current = false;
+      setLoadError(null);
+    } catch (err) {
+      if (!stale()) {
+        loadBlocked.current = true;
+        setLoadError(err instanceof Error ? err.message : "Could not load settings.");
+      }
+      throw err;
+    } finally {
+      if (!stale()) setLoading(false);
     }
-    setFiles(nextFiles);
-    const state = await api.getComfigState();
-    if (stale()) {
-      return;
-    }
-    // A vanilla-layer profile returns null: clear the pane rather than leaving
-    // the previous profile's preset and addons on screen.
-    setComfig(
-      state
-        ? { preset: state.preset, modules: state.modules, addons: state.addons }
-        : defaultComfigState(),
-    );
-    const nextLaunch = next?.launchOptions || (await api.getProfileLaunchOptions());
-    if (stale()) {
-      return;
-    }
-    setLaunch(nextLaunch);
-    setLaunchSeed(nextLaunch);
   }
 
   async function reloadHud(refresh: boolean, showCatalogProgress = false) {
@@ -335,6 +397,8 @@ export function SettingsHost({
       });
     return () => {
       cancelled = true;
+      loadRequest.current += 1;
+      loadBlocked.current = true;
     };
     // Ordinary mounts and profile refreshes only reload. A bind sync request is
     // issued after absorb confirms that config.cfg actually drifted.
@@ -383,11 +447,12 @@ export function SettingsHost({
         }
       })
       .catch(() => {
-        stockSpritesRequested.current = false;
+        if (!cancelled) stockSpritesRequested.current = false;
         /* geometry fallback stays in place */
       });
     return () => {
       cancelled = true;
+      stockSpritesRequested.current = false;
     };
   }, [api, tab]);
 
@@ -398,11 +463,12 @@ export function SettingsHost({
   const crosshairLibraryKey = JSON.stringify([
     detail?.id ?? null,
     detail?.crosshair?.library ?? null,
+    detail?.files.filter((file) => file.path.includes("execs-crosshairs/")),
   ]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by profile + library content.
   useEffect(() => {
     setPackPreviews(null);
-    if (tab !== "crosshair" || !detail?.crosshair?.library) {
+    if (tab !== "crosshair" || !detail?.crosshair) {
       return;
     }
     let cancelled = false;
@@ -437,14 +503,22 @@ export function SettingsHost({
     // because one is in flight silently dropped clicks the panes had already
     // applied optimistically. Only an *external* operation still blocks, and
     // it says so instead of no-oping.
-    if (externalBusy) {
+    if (externalBusy || loadBlocked.current) {
       toast.failSave("another change is still saving", copy?.failure);
       return false;
     }
+    const expectedProfileId = profileId;
     onError(null);
     toast.startSave();
     try {
       await settingsBusyQueue.run(async () => {
+        if (
+          loadBlocked.current ||
+          detailRef.current?.id !== expectedProfileId ||
+          (await api.getActiveProfileDetail())?.id !== expectedProfileId
+        ) {
+          throw new Error("The active profile changed. Your draft has not been saved.");
+        }
         await work();
         await reload();
       });
@@ -455,6 +529,31 @@ export function SettingsHost({
       return false;
     }
   }
+
+  async function saveFileDraft(draft: DirtyFileDraft): Promise<boolean> {
+    if (running || draft.profile !== profileId || !files.some((file) => file.path === draft.path))
+      return false;
+    if (!cfgFileMeta(draft.path, detail?.hud?.id).editable) return false;
+    const bundle = files.map((file) =>
+      file.path === draft.path ? { path: file.path, text: draft.text } : file,
+    );
+    if (
+      blockingFindingsForFile(lintBundle(bundle, detail?.hud?.id).findings, draft.path).length > 0
+    ) {
+      onError("Resolve blocking findings in Files before saving.");
+      return false;
+    }
+    return runWrite(async () => {
+      await api.writeOwnedFile(draft.path, draft.text);
+    });
+  }
+  useEffect(() => {
+    if (!filesSaver) return;
+    filesSaver.current = saveFileDraft;
+    return () => {
+      filesSaver.current = null;
+    };
+  });
 
   // Preloader state is global (game files + app data), not part of the
   // profile detail, so the Mods tab loads it separately.
@@ -509,30 +608,13 @@ export function SettingsHost({
   async function writeManaged(
     path: string,
     text: string,
-    stem: typeof EXECS_BINDS_STEM | typeof EXECS_GAMEPLAY_STEM,
+    scope?: "gameplay" | "crosshair" | "sounds",
   ) {
-    await api.writeOwnedFile(path, text);
-    const autoPath = autoexecFilePath(layer);
-    const existing = files.find((file) => file.path === autoPath)?.text ?? "";
-    // autoexec.cfg is written whole, so it has to carry every managed stem we
-    // own. Patching only the stem being written drops the other pane's exec
-    // line — that is how a gameplay apply silently unhooked saved binds.
-    let next = ensureAutoexecExecLine(existing, stem, layer);
-    for (const sibling of MANAGED_EXEC_STEMS) {
-      if (sibling === stem) {
-        continue;
-      }
-      const siblingPath = managedCfgPath(layer, sibling);
-      if (siblingPath === path || files.some((file) => file.path === siblingPath)) {
-        next = ensureAutoexecExecLine(next, sibling, layer);
-      }
-    }
-    if (next !== existing) {
-      await api.writeOwnedFile(autoPath, next);
-    }
+    if (!profileId) throw new Error("Select a profile before saving.");
+    await api.writeManagedCfg(path, text, profileId, scope);
   }
 
-  function pane() {
+  function pane(tab: SettingsTab) {
     if (tab === "comfig") {
       return (
         <ComfigPane
@@ -578,12 +660,13 @@ export function SettingsHost({
       const path = bindsFilePath(layer);
       return (
         <BindsPane
+          profileId={profileId}
           layer={layer}
           effectiveBinds={maps.binds}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSave={(bindsText) => {
-            void runWrite(async () => {
-              await writeManaged(path, bindsText, EXECS_BINDS_STEM);
+            return runWrite(async () => {
+              await writeManaged(path, bindsText);
             });
           }}
         />
@@ -610,7 +693,7 @@ export function SettingsHost({
           }}
           onSave={(gameplayText) =>
             runWrite(async () => {
-              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+              await writeManaged(path, gameplayText, "gameplay");
             })
           }
         />
@@ -705,16 +788,30 @@ export function SettingsHost({
           layer={layer}
           effective={maps.effective}
           stockSprites={stockSprites}
+          scene={<CrosshairScene api={api} />}
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSaveStock={(gameplayText) =>
             runWrite(async () => {
-              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+              await writeManaged(path, gameplayText, "crosshair");
             })
           }
-          onApply={(shape, assignments, customRgba, color, library, design) =>
+          onApply={(shape, assignments, customRgba, color, library, design, settings) =>
             runWrite(async () => {
-              await api.applyCrosshairs(shape, assignments, customRgba, color, library, design);
+              await api.applyCrosshairs(
+                shape,
+                assignments,
+                customRgba,
+                color,
+                library,
+                design,
+                settings,
+              );
+            })
+          }
+          onDeactivate={() =>
+            runWrite(async () => {
+              await api.deactivateCrosshairs();
             })
           }
           onRemove={() => {
@@ -777,7 +874,7 @@ export function SettingsHost({
           // are one write: two would mean two toasts for one edit.
           onSave={(gameplayText, pack) =>
             runWrite(async () => {
-              await writeManaged(path, gameplayText, EXECS_GAMEPLAY_STEM);
+              await writeManaged(path, gameplayText, "sounds");
               if (pack) {
                 await api.applyHitsounds(pack.hit, pack.kill);
               }
@@ -992,12 +1089,12 @@ export function SettingsHost({
         <FilesPane
           profileId={profileId}
           files={files}
+          draftStore={filesDraftStore}
+          closeReady={filesCloseReady}
           limited={filesLimited}
           hudId={detail?.hud?.id ?? null}
           onSave={(path, text) => {
-            void runWrite(async () => {
-              await api.writeOwnedFile(path, text);
-            });
+            return saveFileDraft({ profile: profileId, path, text });
           }}
         />
       );
@@ -1010,6 +1107,7 @@ export function SettingsHost({
         steamWrite={steamWrite}
         lastSave={launchSaved}
         onChange={(next) => {
+          launchRef.current = next;
           setLaunch(next);
           setLaunchSaved(null);
         }}
@@ -1017,7 +1115,12 @@ export function SettingsHost({
           const sent = launch;
           return runWrite(async () => {
             const result = await api.setProfileLaunchOptions(sent);
-            setLaunch(result.launchOptions);
+            if (detailRef.current?.id !== profileId) return;
+            if (launchRef.current === sent) {
+              launchRef.current = result.launchOptions;
+              setLaunch(result.launchOptions);
+            }
+            launchSeedRef.current = result.launchOptions;
             setLaunchSeed(result.launchOptions);
             setLaunchSaved({ sent, saved: result.launchOptions });
             setSteamWrite(result.steamWrite);
@@ -1027,9 +1130,50 @@ export function SettingsHost({
     );
   }
 
+  if (visited.current.profile !== profileId) {
+    visited.current = { profile: profileId, tabs: new Set() };
+  }
+  if (profileId) visited.current.tabs.add(tab);
+
   return (
-    <AppStatusProvider value={{ error, setError: onError, busy, running }}>
-      {pane()}
+    <AppStatusProvider
+      value={{
+        error,
+        setError: onError,
+        busy,
+        running: running || loading || filesLimited || loadError !== null,
+      }}
+    >
+      {loadError ? (
+        <div role="alert" className="mb-4 text-warn">
+          <p>{loadError}</p>
+          <button
+            type="button"
+            className="btn btn-ghost mt-2"
+            disabled={loading || externalBusy}
+            onClick={() => void reload().catch(() => {})}
+          >
+            Retry loading settings
+          </button>
+        </div>
+      ) : null}
+      {!profileId && loading ? <p>Loading settings…</p> : null}
+      <AutosaveDiscard.Provider value={discardAutosaves}>
+        <AutosavePending.Provider value={reportPending}>
+          {[...visited.current.tabs].map((paneTab) => (
+            <div
+              key={`${profileId}:${paneTab}`}
+              hidden={tab !== paneTab}
+              inert={inputsBlocked}
+              data-testid={`settings-surface-${paneTab}`}
+            >
+              <AutosaveActivity.Provider value={tab === paneTab && !inputsBlocked}>
+                {pane(paneTab)}
+              </AutosaveActivity.Provider>
+            </div>
+          ))}
+        </AutosavePending.Provider>
+      </AutosaveDiscard.Provider>
     </AppStatusProvider>
   );
 }

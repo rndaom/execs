@@ -38,6 +38,7 @@ export const PREVIEW_STATES = [
   "settings-locked",
   "update-available",
   "update-installing",
+  "release-notes",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -78,6 +79,7 @@ const READY: PreviewState[] = [
   "settings-locked",
   "update-available",
   "update-installing",
+  "release-notes",
 ];
 
 export function previewStateFromSearch(search: string): PreviewState | null {
@@ -187,6 +189,7 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
       return "launch";
     case "update-available":
     case "update-installing":
+    case "release-notes":
       return "comfig";
     default:
       return null;

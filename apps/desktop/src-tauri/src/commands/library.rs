@@ -62,6 +62,18 @@ pub async fn switch_profile(
     with_root(move |root| {
         let library = execs_core::load_library(Some(&root))?;
         refuse_different_pending_target(library.pending_switch_profile_id.as_deref(), &id)?;
+        // Validate all target paths and hashes before changing the current
+        // particle set. A corrupt target must leave the old install intact.
+        execs_core::switch::validate_profile_switch_target(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+        )?;
+        if library.active_profile_id.as_deref() != Some(id.as_str()) {
+            super::preloader::clear_profile_particles_before_switch(&root)?;
+        } else {
+            super::preloader::reconcile_active_profile_particles(&root)?;
+        }
         Ok(execs_core::switch_profile_with_progress(
             &root,
             &id,
