@@ -5,7 +5,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-## [0.1.4] - 2026-09-08
+## [0.1.4] - 2026-09-09
 
 ### Added
 
@@ -19,6 +19,9 @@ User-facing changes only. The release workflow publishes the matching
   split-cross and adjustable-arm designs.
 
 ### Fixed
+
+- Linux: prevent AppImage startup crashes and blank windows caused by bundled
+  Wayland libraries conflicting with newer graphics drivers.
 
 - Crosshair: restore saved previews when discarding designs, keep preview caches
   scoped to each profile, and give dot designs a working radius control.
