@@ -79,8 +79,10 @@ Local Windows checks:
 
 ## Release gates
 
-Publication is not authorized by this preparation task. No public tag or
-release is created as part of implementation.
+On September 9 the owner authorized a PR for the Linux startup fix and
+publication of 0.1.4 with that fix once the combined candidate passes release
+verification. The earlier candidate reports below predate this fix and must
+be refreshed before publication.
 
 - [x] Exact candidate Windows/Linux CI and package builds
 - [x] Signed updater and installer smoke from public 0.1.3 Hotfix 1
@@ -111,3 +113,28 @@ The maintenance integration is prepared in
 690 native tests and frontend/Windows/Linux CI passing. It preserves the
 creator-review and profile-preloader work on the minor track. Merge review
 remains open; see `docs/forwardport-0.1.4.md` on that branch.
+
+## September 9 Linux startup fix
+
+Public 0.1.3 Hotfix 1 aborts during WebKit startup on Omarchy with current
+NVIDIA/Mesa drivers. Loader diagnostics identify missing
+`wl_fixes_interface` and `wl_display_create_queue_with_name` when host EGL
+drivers load against the AppImage's older bundled Wayland client library.
+Removing the bundled Wayland libraries makes the extracted app and a rebuilt
+AppImage render without graphics environment overrides on the affected host.
+The unchanged public image also renders when its process preloads the host
+Wayland client library; no system graphics settings are changed.
+
+The before-bundle hook installs an output-plugin wrapper in the Cargo target
+directory's `.tauri` cache (`bundle.useLocalToolsDir`). It removes only Wayland
+shared libraries after GTK/GStreamer deployment and before SquashFS packaging
+and Tauri signing. WebKit, GStreamer, application data and the Windows package
+are unchanged. The upstream output plugin is SHA-256 pinned; a moved upstream
+asset fails closed and requires reviewing/updating the pin.
+
+Regression tests cover multiarch and versioned libraries, symlink containment,
+plugin discovery, argument forwarding and packaging failures. Installer smoke
+also checks the actual extracted candidate for bundled Wayland libraries.
+The release still requires signed Windows/Linux upgrade verification on the
+combined revision; local repackaging is diagnostic evidence, not a public
+installer or a substitute for signature verification.
