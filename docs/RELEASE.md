@@ -3,16 +3,14 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.3 Hotfix 1** (`0.1.3+1`, published 2026-09-07
-at 22:23 UTC). Windows/Linux validation, package builds, signed upgrades from
-the original 0.1.3, startup, data preservation and no-repeat-offer checks pass.
-Public downloads and the updater feed are verified. The original 0.1.3 tag
-and assets remain intact. See `docs/release-0.1.3.md` for evidence, including
-the release-script correction used for final verification and publication.
-
-Private candidate: **0.1.4**, based on that public maintenance baseline.
-The owner-assigned crosshair scope, engine size correction, compatibility
-checks and remaining publication gates are in `docs/release-0.1.4.md`.
+Current public version: **0.1.4** (`v0.1.4`, published 2026-09-10 at
+01:32 UTC; September 9 in America/New_York). This release includes the
+owner-assigned crosshair update and Linux AppImage startup fix. Frontend and
+Windows/Linux validation, package builds, signed upgrades from 0.1.3 Hotfix 1,
+startup, data preservation and no-repeat-offer checks pass. Anonymous public
+downloads, signatures and the updater feed are independently verified. See
+`docs/release-0.1.4.md` for final publication evidence. PRs #44 and #46 are
+merged, and PR #45 carries the maintenance fixes into the unreleased 0.2.0 track.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
