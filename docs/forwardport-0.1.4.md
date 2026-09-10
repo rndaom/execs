@@ -16,13 +16,19 @@ The creator trust test now expects the credential warning first, matching the
 maintained cfg validator. Reviewed imports preserve exact bytes, export still
 refuses credentials, and a changed ZIP invalidates approval.
 
-Local validation: 690 Windows Rust tests; frontend/cfglint and release tests;
-Biome, production build, Rust formatting and Clippy. CI provides the separate
-Linux check. The 0.1.4 private release candidate is built from its maintenance
-branch, independently of this integration. Neither branch authorizes a tag,
-public release, or closing the cumulative live-game validation gate.
+[PR #45](https://github.com/rndaom/execs/pull/45) merged into main at
+`f0bfa7a14346baca1ea9f1edd0d269f9581d77f3`. Final local validation passes
+418 desktop, 105 cfglint, 24 release-script and 700 Linux native/integration
+tests, plus Biome, the production build, Rust formatting and Clippy. Frontend,
+Windows and Linux CI also pass.
 
-The September 9 integration also carries PR #46: the Linux AppImage output
-wrapper, host Wayland policy, and artifact regression check. The development
-version remains 0.2.0; only the separately verified 0.1.4 maintenance candidate
-is authorized for publication.
+The integration includes [PR #46](https://github.com/rndaom/execs/pull/46):
+the Linux AppImage output wrapper, host Wayland policy and artifact regression
+check. The separately verified maintenance release
+[0.1.4](https://github.com/rndaom/execs/releases/tag/v0.1.4) was published on
+September 10 at 01:32 UTC (September 9 in America/New_York), following owner
+authorization. See `docs/release-0.1.4.md` for signed upgrade, public download
+and affected-host launch evidence.
+
+The development version remains 0.2.0 and is not released. RND-251 remains
+open for the cumulative live-game, Steam Cloud and Casual validation matrix.

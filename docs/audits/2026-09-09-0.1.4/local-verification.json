@@ -1,0 +1,32 @@
+{
+  "commit": "86e5c1044ae93282d3dc2146747211c815670eb6",
+  "platform": "Omarchy x86_64",
+  "date": "2026-09-10T00:50:34.443Z",
+  "frontendTests": 413,
+  "cfglintTests": 105,
+  "scriptTests": 24,
+  "nativeTests": 689,
+  "installedAssetTest": true,
+  "sourceVpkHashesPreserved": true,
+  "rustfmt": true,
+  "clippy": true,
+  "biome": true,
+  "frontendBuild": true,
+  "packagingReproduction": "Bundled Wayland lacks wl_fixes_interface / wl_display_create_queue_with_name required by host EGL drivers",
+  "repackedAppImageStartupWithoutGraphicsOverrides": true,
+  "browserPreviewSizes": [
+    "1280x900",
+    "960x640"
+  ],
+  "limitations": [
+    "Browser previews use fixture data.",
+    "Live multiplayer and Steam Cloud matrix not performed."
+  ],
+  "signed014Candidate": {
+    "sha256": "121c158f6c972db5af0604fa8aa3d4eb1aee5f8944ee3cf36584b17cb262e8d3",
+    "signatureVerified": true,
+    "nativeStartupRendered": true,
+    "graphicsOverrides": false,
+    "isolatedDataAndSessionBus": true
+  }
+}
