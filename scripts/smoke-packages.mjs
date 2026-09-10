@@ -178,6 +178,13 @@ try {
     );
     await run(executable, ["--appimage-extract"], { cwd: scratch });
     const tree = join(scratch, "squashfs-root");
+    assert.equal(
+      execFileSync("find", [join(tree, "usr"), "-name", "libwayland-*.so*"], {
+        encoding: "utf8",
+      }).trim(),
+      "",
+      "AppImage bundles Wayland libraries that can conflict with host EGL drivers",
+    );
     assert.ok(
       execFileSync("find", [tree, "-name", "DEPENDENCIES.txt"], { encoding: "utf8" }).trim(),
       "AppImage notices missing",

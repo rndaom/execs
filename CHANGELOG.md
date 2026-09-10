@@ -5,6 +5,34 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-09
+
+### Added
+
+- Crosshair: choose In-game or Custom mode, with saved custom packs and weapon
+  assignments retained when switching back to in-game crosshairs.
+- Crosshair: adjust custom display size, choose colors with a themed picker and
+  precise hex entry, and preview the result against a game scene at a labeled
+  reference resolution.
+- Crosshair: browse Built-in, My designs, Community and Import PNG separately;
+  save named designs, search the library, and use chevron, diamond, ring-cross,
+  split-cross and adjustable-arm designs.
+
+### Fixed
+
+- Linux: prevent AppImage startup crashes and blank windows caused by bundled
+  Wayland libraries conflicting with newer graphics drivers.
+
+- Crosshair: restore saved previews when discarding designs, keep preview caches
+  scoped to each profile, and give dot designs a working radius control.
+- Crosshair: preserve the preview sprite's aspect ratio in the scene layout.
+- Crosshair: label Weapon default correctly, recover sprite previews after
+  interrupted loading, and preserve unbuilt designs through color and size saves.
+- Crosshair: build custom packs explicitly, retain imported assets and remove
+  deleted library entries reliably when rebuilding.
+- Settings: remove the flickering pending-save banner while preserving autosave
+  feedback and the guards that protect profile changes and game launch.
+
 ## [0.1.3+1] - 2026-09-07
 
 0.1.3 Hotfix 1. Installs through the normal updater and keeps the displayed

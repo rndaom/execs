@@ -271,6 +271,9 @@ export type HudRecord = {
 
 export type CrosshairRecord = {
   id: string;
+  inactive?: boolean;
+  scale?: number;
+  stock?: { file: string; scale: number };
   shape: string;
   assignments: Record<string, string>;
   /** Pack tint carried by `cl_crosshair_red/green/blue`; null/undefined = white. */
@@ -570,6 +573,7 @@ export async function applyCrosshairs(
   color?: [number, number, number] | null,
   library?: Record<string, CrosshairAssetPayload>,
   design?: string | null,
+  settings?: { scale: number; stock: { file: string; scale: number }; libraryNames?: string[] },
 ): Promise<ProfileDetail> {
   // Tauri v2 matches invoke keys in camelCase only — a snake_case key here
   // deserializes the Option as permanently-None.
@@ -580,6 +584,7 @@ export async function applyCrosshairs(
     color: color ?? null,
     library: library ?? null,
     design: design ?? null,
+    settings: settings ?? null,
   });
 }
 
@@ -627,6 +632,10 @@ export async function getStockCrosshairSprites(): Promise<Record<string, StockCr
 
 export async function removeCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_crosshairs");
+}
+
+export async function deactivateCrosshairs(): Promise<ProfileDetail> {
+  return call<ProfileDetail>("deactivate_crosshairs");
 }
 
 /** "full" hides the weapon and the arms; "weapon" keeps the hands animating. */

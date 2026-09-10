@@ -335,6 +335,24 @@ where
     } else {
         bytes.to_vec()
     };
+    if matches!(scope, Some(ManagedCfgScope::Crosshair)) {
+        if manifest
+            .crosshair
+            .as_ref()
+            .is_some_and(|record| !record.inactive)
+            && crate::managed_cfg::scalar(&cfg, "cl_crosshair_file")
+                .is_some_and(|file| !file.is_empty())
+        {
+            return Err(ProfileError::Io(
+                "Switch to In-game before selecting an in-game crosshair.".into(),
+            ));
+        }
+        let scale = crate::managed_cfg::scalar(&cfg, "cl_crosshair_scale")
+            .and_then(|value| value.parse::<u32>().ok());
+        if scale.is_none_or(|value| !(16..=64).contains(&value)) {
+            return Err(ProfileError::Io("Crosshair size must be 16–64.".into()));
+        }
+    }
     let mut merged = current_managed_bytes(profiles_dir, tf2_root, &manifest, &auto_path)?;
     crate::managed_cfg::validate_quotes(&merged)?;
     for stem in stems {
@@ -360,12 +378,42 @@ where
         &[],
         ProfileLiveProjection::MirrorIfActive,
         &running,
-        |_| Ok(()),
+        |manifest| {
+            if matches!(scope, Some(ManagedCfgScope::Crosshair)) {
+                if let Some(record) = &mut manifest.crosshair {
+                    let scale = crate::managed_cfg::scalar(&cfg, "cl_crosshair_scale")
+                        .and_then(|v| v.parse().ok());
+                    if record.inactive {
+                        record.stock = Some(crate::profile::CrosshairStockSettings {
+                            file: crate::managed_cfg::scalar(&cfg, "cl_crosshair_file")
+                                .unwrap_or_default(),
+                            scale: scale.unwrap_or(32),
+                        });
+                    } else {
+                        record.scale = scale;
+                        let rgb: Option<Vec<u8>> = [
+                            "cl_crosshair_red",
+                            "cl_crosshair_green",
+                            "cl_crosshair_blue",
+                        ]
+                        .into_iter()
+                        .map(|key| {
+                            crate::managed_cfg::scalar(&cfg, key).and_then(|v| v.parse().ok())
+                        })
+                        .collect();
+                        if let Some(rgb) = rgb {
+                            record.color = Some([rgb[0], rgb[1], rgb[2]]);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        },
     )?;
     Ok(detail_from_manifest(&manifest))
 }
 
-fn current_managed_bytes(
+pub(crate) fn current_managed_bytes(
     profiles_dir: &Path,
     tf2_root: &Path,
     manifest: &crate::profile::ProfileManifest,

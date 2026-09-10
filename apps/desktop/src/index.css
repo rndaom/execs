@@ -284,6 +284,12 @@ a:focus-visible,
     width: 100%;
   }
 
+  @media (min-width: 960px) {
+    .hero-row.crosshair-hero {
+      grid-template-columns: minmax(0, 1fr) var(--hero-preview);
+    }
+  }
+
   @media (max-width: 1100px) {
     .hero-row {
       grid-template-columns: minmax(0, 1fr);

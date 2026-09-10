@@ -697,6 +697,7 @@ pub fn run() {
             commands::crosshair::get_pack_crosshair_previews,
             commands::crosshair::get_stock_crosshair_sprites,
             commands::crosshair::remove_crosshairs,
+            commands::crosshair::deactivate_crosshairs,
             commands::viewmodel::build_viewmodel_pack,
             commands::viewmodel::import_viewmodels,
             commands::viewmodel::remove_viewmodels,
