@@ -105,6 +105,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 ## Gotchas worth remembering
 
 - On Windows, launching the dev executable directly from packaged Codex can inherit its MSIX AppData virtualization and mix real profiles with `OpenAI.Codex_*/LocalCache/Roaming/execs` copies. Launch through the existing Explorer desktop's `Document.Application.ShellExecute` instead; confirm `GetPackageFullName` returns `APPMODEL_ERROR_NO_PACKAGE` (15700). Keep profile containment checks intact and do not merge or delete either library to work around this launch-context problem.
+- Linux AppImages use the host Wayland libraries with the host EGL drivers. The before-bundle hook installs a project-local output plugin wrapper that removes only bundled Wayland libraries after deployment and before packaging/signing; keep the artifact check in installer smoke.
+
 - Viewmodel compiler launches use Windows `CREATE_NO_WINDOW`; redirecting stdout/stderr alone still flashes a console for each class.
 
 - Launching the real game for a test must not pass video flags (`-w`, `-h`, `-windowed`, `-noborder`, `-fullscreen`, `-dxlevel`): Source persists them into `HKCU\Software\Valve\Source\tf\Settings`. `-condebug` is fine; `-console` persists `con_enable`.

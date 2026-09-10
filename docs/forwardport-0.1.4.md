@@ -21,3 +21,8 @@ Biome, production build, Rust formatting and Clippy. CI provides the separate
 Linux check. The 0.1.4 private release candidate is built from its maintenance
 branch, independently of this integration. Neither branch authorizes a tag,
 public release, or closing the cumulative live-game validation gate.
+
+The September 9 integration also carries PR #46: the Linux AppImage output
+wrapper, host Wayland policy, and artifact regression check. The development
+version remains 0.2.0; only the separately verified 0.1.4 maintenance candidate
+is authorized for publication.

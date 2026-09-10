@@ -12,13 +12,15 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Linux: inherit the 0.1.4 AppImage startup fix for current graphics drivers.
+
 - Profiles: switch shared preloader selections with the target profile.
 - Profiles: import split creator folders together, seed missing config.cfg
   from TF2 defaults, and place legacy hitsounds under sound/ui.
 - Crosshair and settings: inherit the 0.1.4 workflow and draft-integrity fixes,
   together with the previously published maintenance fixes.
 
-## [0.1.4] - 2026-09-08
+## [0.1.4] - 2026-09-09
 
 ### Added
 
@@ -32,6 +34,9 @@ User-facing changes only. The release workflow publishes the matching
   split-cross and adjustable-arm designs.
 
 ### Fixed
+
+- Linux: prevent AppImage startup crashes and blank windows caused by bundled
+  Wayland libraries conflicting with newer graphics drivers.
 
 - Crosshair: restore saved previews when discarding designs, keep preview caches
   scoped to each profile, and give dot designs a working radius control.
