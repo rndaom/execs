@@ -29,6 +29,12 @@ User-facing changes only. The release workflow publishes the matching
   each file's encoding and platform-specific values.
 - HUD: identify the option and relative file when an option save fails, while
   keeping malformed or unsupported edits out of the profile and live HUD.
+- Settings: preserve startup values when other cfg files or uninvoked binds and
+  aliases change the same controls; reflect executed bind removals correctly.
+- Files: bound repeated cfg and payload execution to keep analysis responsive,
+  and prevent incomplete startup results from being saved as settings.
+- Gameplay: retain viewmodel FOV values from 0.1 to 179.9, including decimals,
+  when another control changes.
 
 ## [0.1.4] - 2026-09-09
 

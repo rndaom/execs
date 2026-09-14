@@ -1,4 +1,5 @@
 import { lookupCvar } from "./corpus.ts";
+import { evaluateStartup } from "./execution.ts";
 import { parseCommands } from "./parser.ts";
 import {
   ALIAS_SHADOW_DENYLIST,
@@ -10,7 +11,9 @@ import {
   GAMEPLAY_KEYS,
   MAX_ALIAS_DEPTH,
   MAX_ALIAS_EXPANSIONS,
+  MAX_COMMAND_VISITS,
   MAX_EXEC_DEPTH,
+  MAX_EXEC_VISITS,
   MOUSE_CVARS,
   NET_CVAR_RANGES,
   NETWORK_HIJACK_COMMANDS,
@@ -21,7 +24,6 @@ import { buildSummary } from "./summary.ts";
 import type {
   CfgFile,
   Command,
-  CvarValue,
   Finding,
   FindingTier,
   LintOptions,
@@ -61,8 +63,6 @@ function isModulesData(path: string): boolean {
 export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const findings: Finding[] = [];
   const seenFindings = new Set<string>();
-  const effective = new Map<string, CvarValue>();
-  const binds = new Map<string, string>();
   const moduleLevels: Record<string, string> = {};
   const aliases = new Map<string, AliasDef>();
   const externalAllow = new Set(
@@ -120,10 +120,52 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     findings.push({ ruleId, tier, message, file: at.file, line: at.line, col: at.col, via });
   };
 
+  // Count every command and file visit across both passes. Exec depth does not
+  // bound repeated fanout, and payloads must share the same limits as files.
+  let commandVisits = 0;
+  let execVisits = 0;
+  let workExhausted = false;
+  function takeWork(kind: "command" | "exec", at: Command, via?: string): boolean {
+    if (workExhausted) return false;
+    const count = kind === "command" ? commandVisits++ : execVisits++;
+    const limit = kind === "command" ? MAX_COMMAND_VISITS : MAX_EXEC_VISITS;
+    if (count < limit) return true;
+    workExhausted = true;
+    report(
+      selfTrusted,
+      "analysis-budget",
+      `Cfg analysis stopped at the ${limit} ${kind} visit limit; results are incomplete`,
+      at,
+      via,
+    );
+    return false;
+  }
+
+  // A repeated alias/exec may visit the same large payload many times. Parse
+  // each distinct payload once; the visit budget still counts every command.
+  const payloadCache = new WeakMap<Command, Map<string, Command[]>>();
+  function payloadCommands(payload: string, site: Command): Command[] {
+    let siteCache = payloadCache.get(site);
+    if (!siteCache) {
+      siteCache = new Map();
+      payloadCache.set(site, siteCache);
+    }
+    let commands = siteCache.get(payload);
+    if (!commands) {
+      commands = parseCommands(payload, site.file).map((inner) => ({
+        ...inner,
+        line: site.line,
+        col: site.col,
+      }));
+      siteCache.set(payload, commands);
+    }
+    return commands;
+  }
+
   // ---- parse all files ------------------------------------------------------
   const parsed = new Map<string, { file: CfgFile; commands: Command[] }>();
   for (const file of files) {
-    const norm = file.path.replace(/\\/g, "/").toLowerCase();
+    const norm = normalizePath(file.path);
     parsed.set(norm, { file, commands: parseCommands(file.text, file.path) });
   }
 
@@ -142,13 +184,19 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   // overrides/autoexec.cfg does NOT find overrides/execs_binds.cfg in game,
   // so it must not resolve here either. `bundleRelativeExec` re-enables the
   // exact-path match for flat bundles with no cfg/ folder at all.
+  const execResolutionCache = new Map<string, string | null>();
   const resolveExec = (target: string): string | null => {
     let t = target.replace(/\\/g, "/").toLowerCase().replace(/^\.\//, "");
     if (!t.endsWith(".cfg")) t += ".cfg";
+    if (execResolutionCache.has(t)) return execResolutionCache.get(t) ?? null;
     if (opts.bundleRelativeExec && parsed.has(t)) return t;
     for (const path of parsed.keys()) {
-      if (path.endsWith(`/cfg/${t}`)) return path;
+      if (path.endsWith(`/cfg/${t}`)) {
+        execResolutionCache.set(t, path);
+        return path;
+      }
     }
+    execResolutionCache.set(t, null);
     return null;
   };
 
@@ -186,6 +234,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   };
 
   const checkCommand = (cmd: Command, ctx: ScanContext, aliasStack: string[]): void => {
+    if (!takeWork("command", cmd, ctx.via)) return;
     const { name } = cmd;
     const value = cmd.args[0]?.toLowerCase();
     const isEngineManagedTopLevel =
@@ -250,7 +299,6 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       // `con_enable` is archived by Source into config.cfg. A zero there is a
       // saved user preference, not a command smuggled into an executed script.
       if (isEngineManagedTopLevel) {
-        effective.set(name, { value: cmd.args.join(" "), file: cmd.file, line: cmd.line });
         return;
       }
       report(
@@ -320,14 +368,13 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       }
       const payload = cmd.args.slice(1).join(" ");
       if (payload) {
-        binds.set(key, payload);
         scanPayload(payload, cmd, { via: `bind ${key}`, bindKey: key }, aliasStack);
       }
       return;
     }
 
     if (name === "exec") {
-      // Top-level execs belong to the evaluation walk below, which owns the
+      // Top-level execs belong to the safety walk below, which owns the
       // exec graph. An exec *inside a bind or alias payload* never reaches
       // that walk, so it is resolved and followed here — hiding a payload
       // behind `bind f "exec sketchy"` must not launder it.
@@ -392,7 +439,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     // `sensitivity` and the `m_*` family are archived too, so every config.cfg
     // carries them. Warning there would pin a notice to the player's own
     // settings snapshot that they could never clear. This branch falls through
-    // either way, so the value still reaches the effective state below.
+    // either way; startup evaluation is independent of these safety findings.
     if (MOUSE_CVARS.has(name) && !isEngineManagedTopLevel) {
       report(
         "warn",
@@ -418,9 +465,6 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 
     const entry = lookupCvar(name);
     if (entry) {
-      if (entry.c === 0 && cmd.args.length >= 1) {
-        effective.set(name, { value: cmd.args.join(" "), file: cmd.file, line: cmd.line });
-      }
       return;
     }
 
@@ -471,14 +515,13 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   };
 
   function scanPayload(payload: string, site: Command, ctx: ScanContext, aliasStack: string[]) {
-    for (const inner of parseCommands(payload, site.file)) {
-      // Payload positions are relative to the payload string; anchor to the site.
-      const anchored = { ...inner, line: site.line, col: site.col };
-      checkCommand(anchored, ctx, aliasStack);
+    for (const inner of payloadCommands(payload, site)) {
+      if (workExhausted) break;
+      checkCommand(inner, ctx, aliasStack);
     }
   }
 
-  // ---- evaluation walk (effective state + exec graph) -----------------------
+  // ---- safety walk (all files, including dormant files and payloads) --------
   const execdFrom = new Set<string>();
   for (const { commands } of parsed.values()) {
     for (const cmd of commands) {
@@ -493,6 +536,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   function walkFile(path: string, depth: number, chain: string[]): void {
     const entry = parsed.get(path);
     if (!entry) return;
+    const at = entry.commands[0];
+    if (workExhausted || (at && !takeWork("exec", at))) return;
     visited.add(path);
     const prevDepth = execDepth;
     const prevChain = execChain;
@@ -500,7 +545,9 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     execChain = chain;
     try {
       for (const cmd of entry.commands) {
+        if (workExhausted) break;
         if (cmd.name === "exec" && cmd.args[0]) {
+          if (!takeWork("command", cmd)) break;
           const target = cmd.args[0];
           const resolved = resolveExec(target);
           if (!resolved) {
@@ -531,14 +578,37 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const roots = [...parsed.keys()].filter((p) => !execdFrom.has(p) && !isModulesData(p));
   roots.sort((a, b) => rootRank(a) - rootRank(b) || a.localeCompare(b));
   for (const root of roots) {
+    if (workExhausted) break;
     walkFile(root, 0, [root]);
   }
   // Files only reachable through exec cycles have no root — sweep them too.
   for (const path of parsed.keys()) {
+    if (workExhausted) break;
     if (!visited.has(path) && !isModulesData(path)) {
       walkFile(path, 0, [path]);
     }
   }
+
+  // ---- actual supported startup execution ---------------------------------
+  // Defaults cover flat bundles and the live vanilla profile. The desktop
+  // supplies exact layer-aware entry points for mastercomfig overrides.
+  const entryPoints = (
+    opts.entryPoints ?? ["config.cfg", "tf/cfg/config.cfg", "autoexec.cfg", "tf/cfg/autoexec.cfg"]
+  )
+    .map(normalizePath)
+    .filter((path) => parsed.has(path) && !isModulesData(path));
+  const execution: ReturnType<typeof evaluateStartup> = workExhausted
+    ? { effective: new Map(), binds: new Map(), executionComplete: false }
+    : evaluateStartup({
+        files: parsed,
+        entryPoints,
+        resolveExec,
+        payloadCommands,
+        takeCommand: (at) => takeWork("command", at),
+        takeExec: (at) => takeWork("exec", at),
+        incomplete: (rule, message, at) => report("warn", rule, message, at),
+      });
+  const { effective, binds, executionComplete } = execution;
 
   // ---- metadata -------------------------------------------------------------
   const classesTouched = [
@@ -568,6 +638,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     findings,
     effective,
     binds,
+    executionComplete,
     moduleLevels,
     classesTouched,
     get summary(): SummarySection[] {

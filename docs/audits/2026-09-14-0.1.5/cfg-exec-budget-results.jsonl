@@ -1,0 +1,3 @@
+{"fanout":10,"files":5,"bytes":498,"elapsedMs":6.588899999999995,"executionComplete":false,"findings":["analysis-budget"]}
+{"fanout":30,"files":5,"bytes":1458,"elapsedMs":6.222799999999992,"executionComplete":false,"findings":["analysis-budget"]}
+{"fanout":100,"files":5,"bytes":4818,"elapsedMs":7.328199999999995,"executionComplete":false,"findings":["analysis-budget"]}
