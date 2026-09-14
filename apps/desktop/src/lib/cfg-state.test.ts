@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mapsFromFiles } from "./cfg-state";
+import { editorCfgCandidates } from "./files-limits";
+import { createPreviewApi } from "./preview-bridge";
 
 describe("profile startup settings", () => {
   it("uses the mastercomfig hook order and its override autoexec", () => {
@@ -28,4 +30,51 @@ describe("profile startup settings", () => {
     ];
     expect(mapsFromFiles(files, "comfig").effective.viewmodel_fov).toBe("54");
   });
+
+  it("derives complete settings from the standard locked preview through its profile API", async () => {
+    const api = createPreviewApi("settings-locked");
+    const detail = await api.getActiveProfileDetail();
+    if (!detail) throw new Error("Preview profile missing");
+    const candidates = editorCfgCandidates(detail.files);
+    expect(candidates.limited).toBe(false);
+    const files = await Promise.all(
+      candidates.files.map(async ({ path }) => {
+        const content = await api.readProfileFile(path);
+        if (content.text === null) throw new Error(`Preview cfg unreadable: ${path}`);
+        return { path: content.path, text: content.text };
+      }),
+    );
+    expect(mapsFromFiles(files, detail.layer)).toMatchObject({
+      complete: true,
+      effective: { fov_desired: "90", viewmodel_fov: "70" },
+      binds: { w: "+forward", ctrl: "+duck" },
+    });
+  });
+
+  it("resolves a startup exec into a loose custom cfg without executing another pack file", () => {
+    const files = [
+      { path: "tf/cfg/autoexec.cfg", text: "exec hud_settings" },
+      { path: "tf/custom/hud/cfg/hud_settings.cfg", text: "viewmodel_fov 120" },
+      { path: "tf/custom/other/cfg/optional.cfg", text: "viewmodel_fov 45" },
+    ];
+    expect(mapsFromFiles(files, "vanilla")).toMatchObject({
+      complete: true,
+      effective: { viewmodel_fov: "120" },
+    });
+  });
+
+  it.each(["config_default", "undo360controller", "pack_only"])(
+    "keeps unavailable startup cfg %s incomplete",
+    (target) => {
+      const files = [
+        { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
+        { path: "tf/cfg/autoexec.cfg", text: `exec ${target}` },
+      ];
+      expect(mapsFromFiles(files, "vanilla")).toEqual({
+        complete: false,
+        effective: {},
+        binds: {},
+      });
+    },
+  );
 });
