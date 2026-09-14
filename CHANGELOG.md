@@ -9,6 +9,14 @@ User-facing changes only. The release workflow publishes the matching
 
 - Updates: stop stalled installer downloads, release the update lock and allow
   retrying without restarting execs.
+- Crosshair: keep imported PNG and design bytes available when Build pack fails
+  or is refused, so retrying builds the complete draft.
+- Sounds: preserve newer volume, pitch, boost and sound selections while an
+  earlier boost save finishes.
+- Comfig: show saved preset, module and addon selections after a failed change,
+  with the failed choice available to retry.
+- Imports: cancelling HUD, mod, viewmodel or comfig-custom pickers no longer
+  reports a successful import or displays Saving while choosing files.
 
 ## [0.1.4] - 2026-09-09
 

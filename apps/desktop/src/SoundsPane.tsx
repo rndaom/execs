@@ -110,10 +110,15 @@ export function SoundsPane({
   const locked = false;
   const removeLocked = running || busy;
   const cvars = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
-  const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
-  // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
-  const seeded = useMemo(() => seedSoundsDraft(record, cvars), [recordKey, cvars]);
-  const [draft, setDraft] = useSeededDraft(seeded, serializeSoundsDraft, recordKey);
+  const seeded = useMemo(() => seedSoundsDraft(record, cvars), [record, cvars]);
+  // A boost changes the installed bytes, not the owner of this draft. The
+  // seed acknowledges saved content while later volume, pitch or source edits
+  // remain queued by useAutosave's submitted-version token.
+  const [draft, setDraft] = useSeededDraft(
+    seeded,
+    serializeSoundsDraft,
+    draftRecordKey(profileId, "sounds"),
+  );
   const player = useSoundPlayer(api);
   const canAudition = isTauri();
 

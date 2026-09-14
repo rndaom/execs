@@ -471,8 +471,8 @@ export async function updateComfigVpks(id?: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("update_comfig_vpks", { id: id ?? null });
 }
 
-export async function importComfigCustom(id?: string): Promise<ProfileDetail> {
-  return call<ProfileDetail>("import_comfig_custom", { id: id ?? null });
+export async function importComfigCustom(id?: string): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_comfig_custom", { id: id ?? null });
 }
 
 export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
@@ -652,8 +652,8 @@ export async function buildViewmodelPack(
   return call<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
 }
 
-export async function importViewmodels(preload: boolean): Promise<ProfileDetail> {
-  return call<ProfileDetail>("import_viewmodels", { preload });
+export async function importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_viewmodels", { preload });
 }
 
 export async function removeViewmodels(): Promise<ProfileDetail> {

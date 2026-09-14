@@ -138,3 +138,9 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - Inactive custom assets remain under `tf/custom/execs-crosshairs/inactive/`, where their `materials` and `scripts` trees are outside Source's mounted content roots. Deactivation and reactivation use the existing recoverable profile transaction, preserving designs, library assets and per-weapon assignments in exports. Old crosshair records default to active; optional scale and stock-selection metadata preserve inactive settings.
 - Custom display size uses `cl_crosshair_scale` (16–64), with original weapon-script width/height retained. Valve's HUD reader uses width/height for texture coordinates as well as display dimensions, so changing only those fields crops the image. Both stock and weapon-defined sprites apply the scale cvar; previews retain intrinsic dimensions against a labeled 1280×720 reference scene fetched through the existing pinned CompVMInstaller source.
 - The designer retains old single-design parameters and accepts a named design map in the existing opaque design field. Textures remain untinted; the shared RGB cvars own color. The pending-save banner is removed; pending-save transition guards and the Files Save / Discard / Cancel contract remain.
+
+## 0.1.5 mutation outcomes
+
+- Crosshair builds release draft asset bytes only after a confirmed successful host result. Sounds drafts belong to the profile and sound slots; a changed installed record acknowledges content without resetting newer edits.
+- Comfig controls and previews show the complete persisted snapshot. Failed preset, module and addon selections stay available to retry and never enter later write payloads as if saved.
+- Import picker cancellation remains `null` through the bridge and write runner. Cancelled imports skip reload and completion feedback; picker commands reserve no Saving indicator while the user is choosing.

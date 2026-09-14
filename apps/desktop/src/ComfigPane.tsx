@@ -1,5 +1,5 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import presetHigh from "./assets/presets/high.webp";
 import presetLow from "./assets/presets/low.webp";
 import presetMedium from "./assets/presets/medium.webp";
@@ -13,7 +13,6 @@ import { OptionTile } from "./components/ui/OptionTile";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   type ComfigPreset,
   type OfficialAddon,
@@ -129,25 +128,17 @@ export function ComfigPane({
 }: {
   detail: ProfileDetail | null;
   state: ComfigUiState;
-  onApplyPreset: (preset: ComfigPreset) => void;
-  onApplyModules: (modules: Record<string, string>) => void;
-  onToggleAddon: (id: OfficialAddon) => void;
+  onApplyPreset: (preset: ComfigPreset) => Promise<boolean>;
+  onApplyModules: (modules: Record<string, string>) => Promise<boolean>;
+  onToggleAddon: (id: OfficialAddon) => Promise<boolean>;
   onUpdatePackages: () => void;
   onImportCustom: () => void;
 }) {
   const { running, busy } = useAppStatus();
-  const incoming = useMemo(
-    () => ({ preset: state.preset, modules: state.modules, addons: state.addons }),
-    [state],
-  );
-  // This pane is instant-apply and holds no user-typed draft, so the shared
-  // seed guard only has to answer "did the incoming bytes change" — plus the
-  // profile key, so a switch never leaves the previous preset on screen.
-  const [draft, setDraft] = useSeededDraft(
-    incoming,
-    (value) => JSON.stringify(value),
-    draftRecordKey(detail?.id ?? null),
-  );
+  // These are explicit writes. Keep the selected controls and preview on the
+  // persisted snapshot until the host confirms it with a complete reload.
+  // A failed choice remains available to select again, including after a
+  // hidden-pane visit; it cannot leak into a later module/addon payload.
   const [activeGroupId, setActiveGroupId] = useState<ComfigModuleGroupId>("graphics");
   const [moduleSearch, setModuleSearch] = useState("");
   const [showAllModules, setShowAllModules] = useState(false);
@@ -157,10 +148,10 @@ export function ComfigPane({
   const paths = detail?.files.map((file) => file.path) ?? [];
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
-  const presetsExpanded = presetListExpanded(draft.preset, showAllPresets);
-  const visiblePresets = visibleComfigPresets(draft.preset, showAllPresets);
-  const selectedPresetLabel = comfigPresetLabel(draft.preset);
-  const presetImage = draft.preset === "none" ? null : PRESET_IMAGES[draft.preset];
+  const presetsExpanded = presetListExpanded(state.preset, showAllPresets);
+  const visiblePresets = visibleComfigPresets(state.preset, showAllPresets);
+  const selectedPresetLabel = comfigPresetLabel(state.preset);
+  const presetImage = state.preset === "none" ? null : PRESET_IMAGES[state.preset];
   const activeGroup =
     COMFIG_MODULE_GROUPS.find((group) => group.id === activeGroupId) ?? COMFIG_MODULE_GROUPS[0];
   const normalizedSearch = moduleSearch.trim().toLowerCase();
@@ -181,9 +172,8 @@ export function ComfigPane({
   const hiddenModuleCount = matchingModules.length - displayedModules.length;
 
   function updateModule(id: string, value: string) {
-    const modules = setModuleLevel(draft.modules, id, value);
-    setDraft({ ...draft, modules });
-    onApplyModules(modules);
+    const modules = setModuleLevel(state.modules, id, value);
+    void onApplyModules(modules);
   }
 
   // Saving is reported in the toast, once, for every pane — the header only
@@ -242,18 +232,17 @@ export function ComfigPane({
                 value={item.id}
                 title={item.label}
                 description={item.description}
-                selected={draft.preset === item.id}
+                selected={state.preset === item.id}
                 disabled={locked}
                 onSelect={() => {
-                  setDraft({ ...draft, preset: item.id });
-                  onApplyPreset(item.id);
+                  void onApplyPreset(item.id);
                 }}
               />
             ))}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {FEATURED_PRESETS.has(draft.preset) ? (
+            {FEATURED_PRESETS.has(state.preset) ? (
               <button
                 type="button"
                 onClick={() => setShowAllPresets((current) => !current)}
@@ -351,7 +340,7 @@ export function ComfigPane({
                   <div key={module.id} className="border-b border-edge">
                     <ModuleControl
                       module={module}
-                      value={draft.modules[module.id] ?? ""}
+                      value={state.modules[module.id] ?? ""}
                       locked={locked}
                       onChange={(value) => updateModule(module.id, value)}
                     />
@@ -399,11 +388,11 @@ export function ComfigPane({
       <PaneSection
         id="comfig-addons"
         title="Official addons"
-        meta={<span className="tnum">{draft.addons.length} selected</span>}
+        meta={<span className="tnum">{state.addons.length} selected</span>}
       >
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {OFFICIAL_ADDONS.map((item) => {
-            const selected = draft.addons.includes(item.id);
+            const selected = state.addons.includes(item.id);
             return (
               <OptionTile
                 key={item.id}
@@ -415,11 +404,7 @@ export function ComfigPane({
                 selected={selected}
                 disabled={locked}
                 onSelect={() => {
-                  const addons = selected
-                    ? draft.addons.filter((addon) => addon !== item.id)
-                    : [...draft.addons, item.id];
-                  setDraft({ ...draft, addons });
-                  onToggleAddon(item.id);
+                  void onToggleAddon(item.id);
                 }}
               />
             );

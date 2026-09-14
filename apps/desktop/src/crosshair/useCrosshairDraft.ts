@@ -37,11 +37,10 @@ export type CrosshairDraftApi = {
 /**
  * The crosshair builder's draft and every mutation on it.
  *
- * Seeded through `useSeededDraft` keyed by the profile plus the record's
- * CONTENT: an unrelated write (a stock-crosshair apply, say) reloads the
- * profile detail with fresh object identities, and reseeding on identity would
- * wipe un-applied work — an imported PNG, a colour, a page of weapon
- * overrides. A profile switch is a different key and does discard the draft.
+ * The profile and slot own this draft. The record's content updates its seed:
+ * an unrelated write reloads fresh objects without clearing unbuilt PNGs,
+ * library bytes or weapon overrides. A profile switch changes ownership and
+ * discards the old draft; a confirmed build acknowledges only the sent version.
  */
 export function useCrosshairDraft(
   profileId: string | null,

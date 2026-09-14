@@ -496,8 +496,10 @@ export function SettingsHost({
    * ("Pack built"); `failure` carries their verb ("Could not apply").
    */
   async function runWrite(
-    work: () => Promise<void>,
+    // biome-ignore lint/suspicious/noConfusingVoidType: Ordinary write callbacks return void; null explicitly means a cancelled picker.
+    work: () => Promise<void | null>,
     copy?: { success?: string; failure?: string },
+    options?: { picker?: boolean },
   ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
     // because one is in flight silently dropped clicks the panes had already
@@ -509,9 +511,12 @@ export function SettingsHost({
     }
     const expectedProfileId = profileId;
     onError(null);
-    toast.startSave();
+    // Picker commands include the native dialog. They must not say Saving
+    // while the player is still choosing, or complete when no file was chosen.
+    let started = !options?.picker;
+    if (started) toast.startSave();
     try {
-      await settingsBusyQueue.run(async () => {
+      const applied = await settingsBusyQueue.run(async () => {
         if (
           loadBlocked.current ||
           detailRef.current?.id !== expectedProfileId ||
@@ -519,12 +524,24 @@ export function SettingsHost({
         ) {
           throw new Error("The active profile changed. Your draft has not been saved.");
         }
-        await work();
+        if ((await work()) === null) return false;
+        if (!started) {
+          toast.startSave();
+          started = true;
+        }
         await reload();
+        return true;
       });
+      if (!applied) {
+        if (started) toast.cancelSave();
+        return false;
+      }
       toast.finishSave(copy?.success);
       return true;
     } catch (err) {
+      // Balance this operation's feedback accounting even if it failed while
+      // picking or reading, before a save indicator was reserved.
+      if (!started) toast.startSave();
       toast.failSave(err, copy?.failure);
       return false;
     }
@@ -621,18 +638,18 @@ export function SettingsHost({
           detail={detail}
           state={comfig}
           onApplyPreset={(preset) => {
-            void runWrite(async () => {
+            return runWrite(async () => {
               await api.setComfigPreset(preset);
             });
           }}
           onApplyModules={(modules) => {
-            void runWrite(async () => {
+            return runWrite(async () => {
               await api.setComfigModules(modules);
             });
           }}
           onToggleAddon={(id) => {
             const addons = toggleComfigAddon(comfig.addons, id);
-            void runWrite(async () => {
+            return runWrite(async () => {
               await api.setComfigAddons(addons);
             });
           }}
@@ -645,11 +662,12 @@ export function SettingsHost({
             );
           }}
           onImportCustom={() => {
-            void runWrite(
+            return runWrite(
               async () => {
-                await api.importComfigCustom();
+                if ((await api.importComfigCustom()) === null) return null;
               },
               { success: "comfig-custom imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
         />
@@ -755,24 +773,23 @@ export function SettingsHost({
             })
           }
           onImportArchive={() => {
-            void runWrite(
+            return runWrite(
               async () => {
-                // Cancelling the dialog is a no-op, not an error.
-                if (await api.importHudArchive()) {
-                  await reloadHud(false);
-                }
+                if ((await api.importHudArchive()) === null) return null;
+                await reloadHud(false);
               },
               { success: "HUD imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onImportFolder={() => {
-            void runWrite(
+            return runWrite(
               async () => {
-                if (await api.importHudFolder()) {
-                  await reloadHud(false);
-                }
+                if ((await api.importHudFolder()) === null) return null;
+                await reloadHud(false);
               },
               { success: "HUD imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
         />
@@ -841,11 +858,12 @@ export function SettingsHost({
             );
           }}
           onImport={(preload) => {
-            void runWrite(
+            return runWrite(
               async () => {
-                await api.importViewmodels(preload);
+                if ((await api.importViewmodels(preload)) === null) return null;
               },
               { success: "Pack imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onRemove={() => {
@@ -1039,24 +1057,23 @@ export function SettingsHost({
             void api.openExternal(PRELOADER_REPO_URL);
           }}
           onImportArchive={() => {
-            void runWrite(
+            return runWrite(
               async () => {
-                // Cancelling the dialog is a no-op, not an error.
-                if (await api.importModArchive()) {
-                  await refreshModsStatus().catch(() => {});
-                }
+                if ((await api.importModArchive()) === null) return null;
+                await refreshModsStatus().catch(() => {});
               },
               { success: "Mod imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onImportFolder={() => {
-            void runWrite(
+            return runWrite(
               async () => {
-                if (await api.importModFolder()) {
-                  await refreshModsStatus().catch(() => {});
-                }
+                if ((await api.importModFolder()) === null) return null;
+                await refreshModsStatus().catch(() => {});
               },
               { success: "Mod imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onRemoveMod={(id) => {

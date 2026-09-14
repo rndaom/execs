@@ -48,7 +48,7 @@ function renderCrosshair(running = false, managedText?: string, custom = false) 
           ].join("\n"),
         record: custom ? { id: "execs-crosshairs", shape: "cross", assignments: {} } : null,
         onSaveStock: async () => undefined,
-        onApply: async () => undefined,
+        onApply: async () => true,
         onRemove: () => undefined,
       }),
     ),

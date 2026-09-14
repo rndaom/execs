@@ -377,7 +377,7 @@ export function createPreviewApi(state: PreviewState): Api {
     async updateComfigVpks() {
       return requireDetail();
     },
-    async importComfigCustom() {
+    async importComfigCustom(): Promise<ProfileDetail | null> {
       comfig = { ...comfig, hasComfigCustom: true };
       return requireDetail();
     },
@@ -536,7 +536,7 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return requireDetail();
     },
-    async importViewmodels(preload: boolean) {
+    async importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
       viewmodel = { id: "preview", source: "imported", preload, options: {} };
       return requireDetail();
     },
