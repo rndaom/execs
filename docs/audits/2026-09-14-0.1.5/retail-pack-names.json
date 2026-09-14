@@ -7,11 +7,7 @@
   "exitCode": 0,
   "completeMarker": true,
   "packedCfgMarker": true,
-  "mountedFolders": [
-    "mod-materials",
-    "mod-materials-2",
-    "hud-resource"
-  ],
+  "mountedFolders": ["mod-materials", "mod-materials-2", "hud-resource"],
   "changedOriginalFiles": [],
   "originalHashes": {
     "tf/cfg/config.cfg": "24CE604466C6AE752C40FEEFA993C3E0CA8CDAA3166F349397A92621A1CD1B78",

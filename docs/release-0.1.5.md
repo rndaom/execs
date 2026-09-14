@@ -32,18 +32,25 @@ candidate and reviewed after integration.
 
 ## Required release evidence
 
-- [ ] Original 22 issues and linked RND-283 implemented and reviewed
-- [ ] Frontend tests, Biome and production build
-- [ ] Windows Rust format, clippy and workspace tests
+- [x] Original 22 issues and linked RND-283 implemented and reviewed
+- [x] Frontend tests, Biome and production build
+- [x] Windows Rust format, clippy and workspace tests
 - [ ] Linux CI, package build and smoke
 - [ ] Previous-public-profile import/export and integrity checks
-- [ ] Browser interaction checks for changed flows
+- [x] Browser interaction checks for changed flows
 - [ ] Signed candidate installers and updater upgrade from public 0.1.4
 - [ ] Startup, app-data preservation and no repeat update offer
 - [ ] Forward-port PR and maintenance PR prepared with passing checks
 - [x] Four product versions, Cargo lockfile and release notes prepared for 0.1.5
 
 ## Verification records
+
+The combined release branch passes 521 desktop, 140 cfglint, 21 release-script
+and 720 Windows native/integration tests. Three platform-specific script checks
+and eight opt-in native cases are excluded from the default Windows run; the
+published mastercomfig asset fixture also passed its explicit opt-in run.
+Biome, production TypeScript/Vite build, Rust formatting and workspace clippy
+pass. [Local check summary](audits/2026-09-14-0.1.5/local-verification.json).
 
 The [audit index](audits/2026-09-14-0.1.5/README.md) links each workstream's
 primary-source research, implementation plan, regression tests and limitations.
