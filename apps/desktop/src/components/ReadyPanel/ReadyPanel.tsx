@@ -17,6 +17,9 @@ export function ReadyPanel({
   draftName,
   launching,
   recoveryTargetId,
+  launchBlockReason,
+  launchBlockAction,
+  onLaunchBlocked,
   settings,
   onDraftName,
   onSave,
@@ -31,6 +34,9 @@ export function ReadyPanel({
   draftName: string;
   launching: boolean;
   recoveryTargetId: string | null;
+  launchBlockReason?: string | null;
+  launchBlockAction?: string;
+  onLaunchBlocked?: () => void;
   settings?: ReactNode;
   onDraftName: (name: string) => void;
   onSave: () => void;
@@ -51,6 +57,16 @@ export function ReadyPanel({
         running={running}
         launching={launching}
         disabled={controlsBusy || recoveryTargetId !== null}
+        blockedReason={
+          launchBlockReason ??
+          (controlsBusy
+            ? "Wait for the current operation to finish."
+            : recoveryTargetId
+              ? "Finish the interrupted profile switch before launching TF2."
+              : undefined)
+        }
+        blockedAction={launchBlockAction}
+        onBlocked={onLaunchBlocked}
         onLaunch={onLaunch}
         onCancelLaunch={onCancelLaunch}
         menu={
