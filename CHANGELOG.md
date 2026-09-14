@@ -19,6 +19,8 @@ User-facing changes only. The release workflow publishes the matching
   from TF2 defaults, and place legacy hitsounds under sound/ui.
 - Crosshair and settings: inherit the 0.1.4 workflow and draft-integrity fixes,
   together with the previously published maintenance fixes.
+- Updates: stop stalled installer downloads, release the update lock and allow
+  retrying without restarting execs.
 
 ## [0.1.4] - 2026-09-09
 
