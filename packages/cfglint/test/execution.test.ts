@@ -44,16 +44,79 @@ describe("startup execution is separate from safety scanning", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("executes config before autoexec and leaves optional/class/pack cfgs dormant", () => {
+  it("executes config before autoexec and leaves optional/class cfgs dormant", () => {
     const result = profile([
       { path: "tf/cfg/z_optional.cfg", text: "r_drawviewmodel 0\nunbindall" },
       autoexec("r_drawviewmodel 1\nbind x +jump"),
       { path: "tf/cfg/medic.cfg", text: "r_drawviewmodel 0\nbind x +attack2" },
-      { path: "tf/custom/pack/cfg/autoexec.cfg", text: "r_drawviewmodel 0" },
+      { path: "tf/custom/pack/cfg/optional.cfg", text: "r_drawviewmodel 0" },
       { path: "tf/cfg/config.cfg", text: "r_drawviewmodel 0\nbind x +attack" },
     ]);
     expect(result.effective.get("r_drawviewmodel")?.value).toBe("1");
     expect(result.binds.get("x")).toBe("+jump");
+  });
+
+  it("resolves startup autoexec from the first mounted custom root", () => {
+    const result = profile([
+      { path: "tf/cfg/config.cfg", text: "viewmodel_fov 54\nbind x +jump" },
+      autoexec("viewmodel_fov 45\nunbindall"),
+      { path: "tf/custom/alpha/cfg/autoexec.cfg", text: "viewmodel_fov 120" },
+      { path: "tf/custom/-alpha/cfg/autoexec.cfg", text: "viewmodel_fov 100" },
+    ]);
+    expect(result.executionComplete).toBe(true);
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("100");
+    expect(result.binds.get("x")).toBe("+jump");
+  });
+
+  it.each([false, true])("uses mounted cfg precedence for nested execs (reverse=%s)", (reverse) => {
+    const files = [
+      autoexec("exec personal/settings"),
+      { path: "tf/cfg/personal/settings.cfg", text: "viewmodel_fov 45" },
+      { path: "tf/custom/alpha/cfg/personal/settings.cfg", text: "viewmodel_fov 120" },
+      { path: "tf/custom/Zeta/cfg/personal/settings.cfg", text: "viewmodel_fov 150" },
+      { path: "tf/custom/-alpha/cfg/personal/settings.cfg", text: "viewmodel_fov 100" },
+    ];
+    const result = profile(reverse ? files.reverse() : files);
+    expect(result.executionComplete).toBe(true);
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("100");
+  });
+
+  it.each([
+    ["alpha", "alpha-beta"],
+    ["alpha", "Alpha_2"],
+    ["_alpha", "Zeta"],
+  ])("orders mount names before appending cfg paths: %s then %s", (first, second) => {
+    const result = profile([
+      autoexec("exec selected"),
+      { path: `tf/custom/${second}/cfg/selected.cfg`, text: "viewmodel_fov 45" },
+      { path: `tf/custom/${first}/cfg/selected.cfg`, text: "viewmodel_fov 100" },
+    ]);
+    expect(result.executionComplete).toBe(true);
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("100");
+  });
+
+  it.each([
+    "tf/custom/pack/inactive/cfg/optional.cfg",
+    "tf/custom/execs-hud-backups/token/hud/cfg/optional.cfg",
+    "tf/custom/.disabled/cfg/optional.cfg",
+  ])("does not resolve an unmounted cfg-looking path: %s", (path) => {
+    const result = profile([autoexec("exec optional"), { path, text: "viewmodel_fov 100" }]);
+    expect(result.executionComplete).toBe(false);
+    expect(result.effective.size).toBe(0);
+    expect(result.findings.some((finding) => finding.ruleId === "execution-incomplete")).toBe(true);
+  });
+
+  it("refuses ambiguous case-colliding mounted roots instead of choosing manifest order", () => {
+    const result = profile([
+      autoexec("exec optional"),
+      { path: "tf/custom/Alpha/cfg/optional.cfg", text: "viewmodel_fov 100" },
+      { path: "tf/custom/alpha/cfg/other.cfg", text: "viewmodel_fov 45" },
+    ]);
+    expect(result.executionComplete).toBe(false);
+    expect(result.effective.size).toBe(0);
+    expect(result.findings.some((finding) => finding.ruleId === "execution-search-path")).toBe(
+      true,
+    );
   });
 
   it("only makes aliases available when their definitions execute", () => {

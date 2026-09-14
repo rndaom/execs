@@ -59,6 +59,9 @@ User-facing changes only. The release workflow publishes the matching
   preserving the existing export when validation fails.
 - Profiles: retain cfg files inside nested folders named `user`, `app`, or
   `overrides` when saving, exporting and switching setups.
+- Settings: follow mounted custom cfg precedence and block saves when a pack
+  overrides the managed startup files or preserved HUD copies make the active
+  cfg sources uncertain.
 
 ## [0.1.4] - 2026-09-09
 

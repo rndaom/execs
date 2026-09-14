@@ -154,6 +154,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 ## 0.1.5 cfg integrity
 
 - Cfg safety scanning includes dormant files and bind/alias payloads without changing derived settings. Settings evaluate only known startup entry points and invoked exec/alias chains in order; definitions do not execute their payloads, and executed unbind operations remove bindings. A shared command/exec budget bounds both passes; incomplete execution blocks derived settings writes while Files remains available.
+- Loose cfg startup and exec resolution uses immediate non-dot `tf/custom/<pack>/cfg` roots in case-insensitive ASCII mount-name order before `tf/cfg`; nested inactive/backup cfg folders do not become mounts. Case-colliding or unsupported mount order refuses inference. Derived saves stay blocked when a pack shadows the managed startup or settings files because native saves never rewrite provided packs.
+- A legacy manifest with multiple HUD roots and HUD cfg files does not establish which cfg trees project live. Derived settings remain blocked with Save current as… recovery until a complete mounted setup is captured; Files stays available and no frontend HUD projection is guessed.
 - Gameplay preserves `viewmodel_fov` throughout Source's 0.1–179.9 range without rounding incoming decimals. World FOV retains its separate 54–90 control.
 ## 0.1.5 pack and cfg integrity
 

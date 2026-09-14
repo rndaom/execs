@@ -70,10 +70,38 @@ describe("profile startup settings", () => {
         { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
         { path: "tf/cfg/autoexec.cfg", text: `exec ${target}` },
       ];
-      expect(mapsFromFiles(files, "vanilla")).toEqual({
+      expect(mapsFromFiles(files, "vanilla")).toMatchObject({
         complete: false,
         effective: {},
         binds: {},
+      });
+    },
+  );
+
+  it("keeps Source mount priority independent of editor file priority", () => {
+    const files = [
+      { path: "tf/cfg/config.cfg", text: "viewmodel_fov 54" },
+      { path: "tf/cfg/autoexec.cfg", text: "exec personal/settings" },
+      { path: "tf/cfg/personal/settings.cfg", text: "viewmodel_fov 45" },
+      { path: "tf/custom/-alpha/cfg/personal/settings.cfg", text: "viewmodel_fov 100" },
+    ];
+    expect(mapsFromFiles(editorCfgCandidates(files).files, "vanilla")).toMatchObject({
+      complete: true,
+      effective: { viewmodel_fov: "100" },
+    });
+  });
+
+  it.each(["autoexec", "execs_binds", "execs_gameplay"])(
+    "refuses a shadowed managed write route: %s",
+    (stem) => {
+      const files = [
+        { path: "tf/cfg/autoexec.cfg", text: "viewmodel_fov 45" },
+        { path: `tf/custom/-alpha/cfg/${stem}.cfg`, text: "viewmodel_fov 100" },
+      ];
+      expect(mapsFromFiles(files, "vanilla")).toMatchObject({
+        complete: false,
+        effective: {},
+        reason: expect.stringContaining("custom pack overrides"),
       });
     },
   );

@@ -14,12 +14,27 @@ read or written; UI tests use in-memory IPC doubles.
   a later alias definition cannot affect an earlier invocation. Repeated execs
   retain their effect within the work budget. Executed `unbind`, `unbindall`
   and explicitly empty binds remove bindings; a bare `bind key` is a query.
-- The desktop evaluates `tf/cfg/config.cfg` followed by the selected layer's
-  startup files. Vanilla uses `tf/cfg/autoexec.cfg`; mastercomfig uses its
+- The desktop resolves `config.cfg` followed by the selected layer's startup
+  files. Vanilla uses `autoexec.cfg`; mastercomfig uses its
   `overrides/pre_init.cfg`, `overrides/setup_hook.cfg` and
   `overrides/autoexec.cfg` hooks in order. Optional/class files are included
   only through an actual startup invocation. The generic linter defaults to
-  root/`tf/cfg` config and autoexec paths and accepts explicit entry paths.
+  config and autoexec targets through the supported mounts and accepts exact
+  entry paths. Startup and nested execs share one resolver: immediate,
+  non-dot custom children in ASCII case-insensitive mount-name order, then
+  `tf/cfg`. The resolver never confuses editor priority with mount priority.
+  Nested inactive/backup cfg folders do not become mounts. Portable path
+  collisions and unsupported non-ASCII mount ordering refuse inference.
+- A provided custom autoexec or managed cfg can shadow the files native saves
+  update. Derived controls stay blocked in that situation with a specific
+  explanation. This change does not rewrite provided packs or claim that
+  saving an unexecuted root file applied a setting.
+- Legacy profiles can retain multiple HUD trees while native switching only
+  projects the selected HUD. The host passes the complete manifest inventory
+  so the adapter recognizes those uncertain cfg sources via native HUD marker
+  rules (`info.vdf` or `resource/ui/`). It refuses derived saves with a
+  **Save current as…** recovery path and leaves Files available. It does not
+  duplicate native HUD selection rules or silently mount a preserved copy.
 - Both passes share ceilings of 25,000 command visits and 5,000 cfg visits,
   including alias/bind payloads. The existing exec depth 4, alias depth 8 and
   scan expansion 5,000 limits remain. Repeated payloads and exec resolution
@@ -47,6 +62,11 @@ read or written; UI tests use in-memory IPC doubles.
 - [Valve button event handling](https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/game/client/in_main.cpp#L89-L97):
   key events issue their bound button commands. Storing the binding is a
   distinct operation.
+- [Valve wildcard search-path expansion](https://github.com/ValveSoftware/source-sdk-2013/blob/b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/public/filesystem_init.cpp#L743):
+  immediate non-dot children are sorted by `SortStricmp` before mounting.
+  The helper appends them with `PATH_ADD_TO_TAIL`; names with leading dashes
+  remain distinct mounted roots. Sorting uses the mount name before appending
+  `cfg/`, preserving short-name precedence such as `alpha` before `alpha-beta`.
 - [mastercomfig customization documentation](https://github.com/mastercomfig/mastercomfig/blob/develop/docs/customization/custom_configs.md):
   launch autoexec, class-switch cfgs, local-server cfgs and game override hooks
   have different triggers; user files belong in `overrides`.
@@ -123,6 +143,22 @@ and confirms complete inferred settings. Additional adapter checks cover an
 invoked loose custom cfg and incomplete stock/VPK-only targets.
 Follow-up verification passed: 443 desktop tests, TypeScript with `--noEmit`,
 `pnpm check` (220 files), and `git diff --check`.
+
+The mounted-source review reproduced root `personal/settings.cfg` (FOV 45)
+being incorrectly selected over `tf/custom/-alpha/cfg/personal/settings.cfg`
+(FOV 100), plus a custom autoexec being ignored and nested inactive/dot-root
+cfg files being resolved as mounted. The final regressions cover those paths,
+literal `-alpha`/`alpha` and prefix mount ordering, both editor enumeration
+directions, case collisions, and real Gameplay autosaves for vanilla and
+mastercomfig. The real host preserves FOV 100 on an unrelated toggle; a
+shadowed managed route or uncertain legacy HUD projection cannot write.
+The routing run passed 140 cfglint tests, 451 desktop tests, 21 release tests
+(three Windows skips), production build and Biome (221 files). The final
+legacy-HUD guard added one real-host case; its focused adapter/host run has
+34 passing cases, the final full desktop run passes all 452 tests, and
+TypeScript passes. The existing large-bundle advisory
+remains. No native production code, profile library or live game files were
+changed by this routing follow-up.
 
 Local git hooks are `.githooks`; the repository identity is Random. No Cloud
 Agent co-author hook was found in the accessible managed-hook locations.
