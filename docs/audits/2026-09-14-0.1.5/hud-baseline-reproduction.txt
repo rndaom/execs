@@ -1,0 +1,74 @@
+
+> @execs/desktop@0.1.4 test G:\Projects\execs-015-hud-repro\apps\desktop
+> vitest run "SettingsHost.hud-regression.test.ts"
+
+
+ RUN  v3.2.7 G:/Projects/execs-015-hud-repro/apps/desktop
+
+ ❯ src/SettingsHost.hud-regression.test.ts (18 tests | 2 failed) 122ms
+   × HUD baseline regressions > loads installed state while the catalog is offline 26ms
+     → expected "spy" to be called at least once
+   × HUD baseline regressions > clears A's schema when B's schema fetch fails 7ms
+     → expected { author: 'A', sections: [] } to be null
+   ✓ settings snapshot integrity > retries stock decoding after leaving during the first request and ignores obsolete results 6ms
+   ✓ settings snapshot integrity > retries a failed stock decode on the next visit 6ms
+   ✓ settings snapshot integrity > publishes the new profile identity only with its complete cfg seed 5ms
+   ✓ settings snapshot integrity > preserves newer launch typing through a save response and reload 4ms
+   ✓ settings snapshot integrity > retains the last complete snapshot after Io and blocks saves until recovery 6ms
+   ✓ settings snapshot integrity > retains the last complete snapshot after FileTooLarge and blocks saves until recovery 4ms
+   ✓ settings snapshot integrity > retains the last complete snapshot after InvalidPath and blocks saves until recovery 6ms
+   ✓ settings snapshot integrity > retains the last complete snapshot after NotFound and blocks saves until recovery 5ms
+   ✓ settings snapshot integrity > refuses unknown initial cfg bytes instead of mounting default controls 2ms
+   ✓ settings snapshot integrity > ignores a late superseded profile read 4ms
+   ✓ settings snapshot integrity > serializes managed writes and sends profile identity to the atomic backend operation 4ms
+   ✓ settings snapshot integrity > does not publish cfg seeds when later comfig loading fails 4ms
+   ✓ settings snapshot integrity > rejects a retained save callback after active profile identity changes 4ms
+   ✓ settings snapshot integrity > blocks the old pane throughout a profile transition and releases the complete replacement 15ms
+   ✓ settings snapshot integrity > keeps controls live during an own save and its reload, and after a running-state reload 5ms
+   ✓ settings snapshot integrity > keeps a failed replacement snapshot inaccessible until retry succeeds 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/SettingsHost.hud-regression.test.ts > HUD baseline regressions > loads installed state while the catalog is offline
+AssertionError: expected "spy" to be called at least once
+ ❯ src/SettingsHost.hud-regression.test.ts:129:29
+    127|     api.getHudCatalog.mockRejectedValue(new Error("offline"));
+    128|     await render({ tab: "hud" });
+    129|     expect(api.getHudState).toHaveBeenCalled();
+       |                             ^
+    130|   });
+    131|   it("clears A's schema when B's schema fetch fails", async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/SettingsHost.hud-regression.test.ts > HUD baseline regressions > clears A's schema when B's schema fetch fails
+AssertionError: expected { author: 'A', sections: [] } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "author": "A",
+  "sections": [],
+}
+
+ ❯ src/SettingsHost.hud-regression.test.ts:140:38
+    138|     await render({ refreshKey: 2 });
+    139|     expect(capture.panes.hud.state.installed.id).toBe("budhud");
+    140|     expect(capture.panes.hud.schema).toBeNull();
+       |                                      ^
+    141|   });
+    142| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  19:16:19
+   Duration  1.92s (transform 446ms, setup 0ms, collect 1.42s, tests 122ms, environment 0ms, prepare 134ms)
+
+G:\Projects\execs-015-hud-repro\apps\desktop:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @execs/desktop@0.1.4 test: `vitest run "SettingsHost.hud-regression.test.ts"`
+Exit status 1

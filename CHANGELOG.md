@@ -45,6 +45,10 @@ User-facing changes only. The release workflow publishes the matching
 - Settings: detect the executable mastercomfig loader before using overrides;
   standalone addons and leftover overrides use vanilla cfgs, and snapshots
   retain safe nested user cfgs in either setup.
+- HUD: keep the installed HUD and available local options accessible offline,
+  clear obsolete option schemas, and preserve unsaved options when retrying.
+- HUD: report failed and partial catalog or statistics refreshes while keeping
+  available cached entries and values visible.
 
 ## [0.1.4] - 2026-09-09
 

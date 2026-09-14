@@ -396,19 +396,23 @@ export function createPreviewApi(state: PreviewState): Api {
 
     // --- HUD ----------------------------------------------------------------
     async getHudCatalog() {
-      return hudCatalog;
+      return { entries: hudCatalog, warning: null };
     },
     async getHudState() {
-      return hudState;
+      return { ...hudState, profileId: requireDetail().id };
     },
     async getHudAlbum() {
       return [];
     },
     async getHudStats() {
-      if (state === "settings-hud-browser") return PREVIEW_HUD_BROWSER_STATS;
+      if (state === "settings-hud-browser")
+        return { stats: PREVIEW_HUD_BROWSER_STATS, warning: null };
       return {
-        rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
-        toonhud: { updated: "2024-03-02" },
+        stats: {
+          rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
+          toonhud: { updated: "2024-03-02" },
+        },
+        warning: null,
       };
     },
     async installHud(id: string) {
@@ -442,10 +446,16 @@ export function createPreviewApi(state: PreviewState): Api {
       }
       return requireDetail();
     },
-    async getHudSchema() {
+    async getHudSchema(expectedProfileId, expectedHudId) {
+      if (requireDetail().id !== expectedProfileId || hudState.installed?.id !== expectedHudId) {
+        throw new Error("The installed HUD changed. Reload HUD options.");
+      }
       return hudState.schemaSupported ? PREVIEW_HUD_SCHEMA : null;
     },
-    async applyHudOptions(options: Record<string, string>) {
+    async applyHudOptions(options, expectedProfileId, expectedHudId) {
+      if (requireDetail().id !== expectedProfileId || hudState.installed?.id !== expectedHudId) {
+        throw new Error("The installed HUD changed. Reload HUD options.");
+      }
       if (hudState.installed) {
         hudState = { ...hudState, installed: { ...hudState.installed, options } };
       }

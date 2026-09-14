@@ -51,9 +51,9 @@ function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "v
     readProfileFile: vi.fn(async (path: string) => ({ path, text: files[path] })),
     getComfigState: vi.fn(async () => null),
     getProfileLaunchOptions: vi.fn(async () => "-novid"),
-    getHudCatalog: vi.fn(async () => []),
-    getHudState: vi.fn(async () => ({ installed: null, schemaSupported: false })),
-    getHudStats: vi.fn(async () => ({})),
+    getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
+    getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
+    getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),
     getHudSchema: vi.fn(async () => null),
     writeManagedCfg,
   } as unknown as Api;

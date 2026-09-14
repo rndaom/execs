@@ -131,11 +131,11 @@ it("keeps multiple panes protected until each resolves, and explicit discard res
 
 it("keeps launch and discard blocked during the actual write, then releases both after completion", async () => {
   let finish!: () => void;
-  vi.spyOn(api, "applyHudOptions").mockImplementation(async (options) => {
+  vi.spyOn(api, "applyHudOptions").mockImplementation(async (...args) => {
     await new Promise<void>((resolve) => {
       finish = resolve;
     });
-    return applyHud(options);
+    return applyHud(...args);
   });
   await clickId("hud-opt-minmode");
   await debounce();
@@ -247,11 +247,11 @@ it("clears a discarded draft's failure while preserving an unrelated pane's fail
 
 it("joins an actual in-flight autosave on native close and waits for its queue release", async () => {
   let finish!: () => void;
-  const apply = vi.spyOn(api, "applyHudOptions").mockImplementation(async (options) => {
+  const apply = vi.spyOn(api, "applyHudOptions").mockImplementation(async (...args) => {
     await new Promise<void>((resolve) => {
       finish = resolve;
     });
-    return applyHud(options);
+    return applyHud(...args);
   });
   await clickId("hud-opt-minmode");
   await debounce();

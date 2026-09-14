@@ -64,6 +64,15 @@ pub struct HudStatsCache {
     pub complete: bool,
     #[serde(default)]
     pub source_version: u32,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HudStatsPayload {
+    pub stats: BTreeMap<String, HudStat>,
+    pub warning: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -71,6 +80,19 @@ fn default_true() -> bool {
 }
 
 impl HudStatsCache {
+    fn payload(&self) -> HudStatsPayload {
+        HudStatsPayload {
+            stats: self.stats.clone(),
+            warning: if !self.warnings.is_empty() {
+                Some(self.warnings.join(" "))
+            } else if !self.complete {
+                Some("The cached dates and popularity are incomplete. Retry Refresh to load the rest.".into())
+            } else {
+                None
+            },
+        }
+    }
+
     /// Whether the cache is young enough to serve: a day for a whole read,
     /// an hour for a partial one.
     fn is_fresh(&self, now: u64) -> bool {
@@ -109,14 +131,14 @@ fn now_secs() -> u64 {
 /// The cached map when it is fresh, otherwise a new read of both sources.
 /// A failure on one source keeps the other's numbers; a failure on both
 /// keeps the stale cache rather than blanking every sort.
-pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, String> {
+pub fn load_or_fetch_stats(refresh: bool) -> Result<HudStatsPayload, String> {
     let now = now_secs();
     let root = execs_core::try_execs_data_dir()?;
     let cached = load_stats_cache(&root, now)?;
     if !refresh {
         if let Some(cache) = &cached {
             if cache.is_fresh(now) {
-                return Ok(cache.stats.clone());
+                return Ok(cache.payload());
             }
         }
     }
@@ -143,13 +165,42 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
             walk.complete = false;
         }
     }
+    finish_stats_refresh(&root, now, cached.as_ref(), updated, counts)
+}
+
+fn source_warning<T>(source: &Result<Walk<T>, String>, name: &str) -> Option<String> {
+    match source {
+        Err(_) => Some(format!("{name} could not be refreshed.")),
+        Ok(walk) if !walk.complete => Some(format!("{name} were only partly refreshed; some values may be stale or missing. Retry Refresh to load the rest.")),
+        Ok(_) => None,
+    }
+}
+
+fn finish_stats_refresh(
+    root: &std::path::Path,
+    now: u64,
+    cached: Option<&HudStatsCache>,
+    updated: Result<Walk<BTreeMap<String, String>>, String>,
+    counts: Result<Walk<Counts>, String>,
+) -> Result<HudStatsPayload, String> {
+    let warnings: Vec<_> = [
+        source_warning(&updated, "Update dates from comfig.app"),
+        source_warning(&counts, "Download and view counts from tf2huds.dev"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     let complete = matches!(&updated, Ok(walk) if walk.complete)
         && matches!(&counts, Ok(walk) if walk.complete);
-    if let (Err(err), Err(_)) = (&updated, &counts) {
+    if updated.is_err() && counts.is_err() {
         if let Some(cache) = cached {
-            return Ok(cache.stats);
+            // Keep its original age. A failed Refresh must not renew the TTL.
+            return Ok(HudStatsPayload {
+                stats: cache.stats.clone(),
+                warning: Some(warnings.join(" ")),
+            });
         }
-        return Err(err.clone());
+        return Err(warnings.join(" "));
     }
     let mut stats = cached
         .as_ref()
@@ -170,11 +221,12 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<BTreeMap<String, HudStat>, S
         stats: stats.clone(),
         complete,
         source_version: STATS_SOURCE_VERSION,
+        warnings,
     };
     let text = serde_json::to_string(&cache).map_err(|err| err.to_string())?;
-    net::write_cache_file_within(&root, &cache_file(&root), text.as_bytes())
+    net::write_cache_file_within(root, &cache_file(root), text.as_bytes())
         .map_err(|err| format!("Could not save HUD statistics ({err})."))?;
-    Ok(stats)
+    Ok(cache.payload())
 }
 
 fn load_stats_cache(root: &std::path::Path, now: u64) -> Result<Option<HudStatsCache>, String> {
@@ -804,6 +856,105 @@ mod tests {
     use super::*;
 
     #[test]
+    fn refresh_result_discloses_failed_partial_and_recovered_sources_without_losing_cached_values()
+    {
+        let root =
+            std::env::temp_dir().join(format!("execs-stats-refresh-result-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("hud-catalog")).unwrap();
+        let cached = HudStatsCache {
+            fetched_at: 1,
+            stats: BTreeMap::from([(
+                "hud".into(),
+                HudStat {
+                    updated: Some("2026-01-01".into()),
+                    downloads: Some(10),
+                    views: Some(20),
+                },
+            )]),
+            complete: true,
+            source_version: STATS_SOURCE_VERSION,
+            warnings: Vec::new(),
+        };
+        std::fs::write(cache_file(&root), serde_json::to_vec(&cached).unwrap()).unwrap();
+        fn failed<T>() -> Result<T, String> {
+            Err("fixture source offline".into())
+        }
+        let both = finish_stats_refresh(&root, 50, Some(&cached), failed(), failed()).unwrap();
+        assert_eq!(both.stats, cached.stats);
+        let warning = both.warning.unwrap();
+        assert!(warning.contains("comfig.app") && warning.contains("tf2huds.dev"));
+        assert_eq!(
+            load_stats_cache(&root, 50).unwrap().unwrap().fetched_at,
+            1,
+            "failed refresh must not renew cache age"
+        );
+        let no_cache = finish_stats_refresh(&root, 50, None, failed(), failed()).unwrap_err();
+        assert!(no_cache.contains("comfig.app") && no_cache.contains("tf2huds.dev"));
+
+        let dates = || {
+            Ok(Walk {
+                found: BTreeMap::from([("hud".into(), "2026-09-14".into())]),
+                complete: true,
+            })
+        };
+        let one = finish_stats_refresh(&root, 60, Some(&cached), dates(), failed()).unwrap();
+        assert_eq!(one.stats["hud"].updated.as_deref(), Some("2026-09-14"));
+        assert_eq!(one.stats["hud"].views, Some(20));
+        assert!(one.warning.as_deref().unwrap().contains("tf2huds.dev"));
+        assert!(!one.warning.as_deref().unwrap().contains("comfig.app"));
+        assert!(load_stats_cache(&root, 60)
+            .unwrap()
+            .unwrap()
+            .payload()
+            .warning
+            .is_some());
+
+        let counts = || {
+            Ok(Walk {
+                found: BTreeMap::from([("hud".into(), Some((30, 40)))]),
+                complete: true,
+            })
+        };
+        let one = finish_stats_refresh(&root, 70, Some(&cached), failed(), counts()).unwrap();
+        assert_eq!(one.stats["hud"].updated, cached.stats["hud"].updated);
+        assert_eq!(one.stats["hud"].views, Some(40));
+        assert!(one.warning.as_deref().unwrap().contains("comfig.app"));
+        assert!(!one.warning.as_deref().unwrap().contains("tf2huds.dev"));
+
+        let truncated = finish_stats_refresh(
+            &root,
+            80,
+            Some(&cached),
+            Ok(Walk {
+                found: BTreeMap::new(),
+                complete: false,
+            }),
+            counts(),
+        )
+        .unwrap();
+        assert_eq!(truncated.stats["hud"].updated, cached.stats["hud"].updated);
+        assert!(truncated
+            .warning
+            .as_deref()
+            .unwrap()
+            .contains("only partly refreshed"));
+        let partial = load_stats_cache(&root, 80).unwrap().unwrap();
+        assert!(!partial.complete);
+        let recovered = finish_stats_refresh(&root, 90, Some(&partial), dates(), counts()).unwrap();
+        assert_eq!(
+            recovered.stats["hud"].updated.as_deref(),
+            Some("2026-09-14")
+        );
+        assert_eq!(recovered.stats["hud"].views, Some(40));
+        assert!(recovered.warning.is_none());
+        assert!(load_stats_cache(&root, 90).unwrap().unwrap().complete);
+        let json = serde_json::to_value(recovered).unwrap();
+        assert_eq!(json["stats"]["hud"]["views"], 40);
+        assert!(json["warning"].is_null());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn listing_only_requests_huds_and_distinguishes_malformed_from_empty() {
         let listing = r#"{"nodes":[{"data":[{"huds":1},[2],{"id":3,"name":3,"cover":4},"LOL-!!-HUD",{"id":5,"name":6},"image-uuid","cover.png"]}]}"#;
         assert_eq!(tf2huds_list_ids(listing), Some(vec!["LOL-!!-HUD".into()]));
@@ -939,6 +1090,7 @@ mod tests {
             )]),
             complete: false,
             source_version: STATS_SOURCE_VERSION - 1,
+            warnings: Vec::new(),
         };
         std::fs::write(cache_file(&root), serde_json::to_vec(&cache).unwrap()).unwrap();
         assert!(load_stats_cache(&root, 100_000).unwrap().is_none());
@@ -1006,6 +1158,7 @@ mod tests {
             stats: BTreeMap::new(),
             complete: true,
             source_version: STATS_SOURCE_VERSION,
+            warnings: Vec::new(),
         };
         let partial = HudStatsCache {
             complete: false,

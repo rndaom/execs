@@ -497,12 +497,16 @@ export async function setProfileLaunchOptions(
   return call<SetLaunchResult>("set_profile_launch_options", { options, id: id ?? null });
 }
 
-export async function getHudCatalog(refresh = false): Promise<HudCatalogEntry[]> {
-  return call<HudCatalogEntry[]>("get_hud_catalog", { refresh });
+export type HudCatalogPayload = { entries: HudCatalogEntry[]; warning: string | null };
+export type HudStatsPayload = { stats: Record<string, HudStat>; warning: string | null };
+export type HudStatePayload = HudUiState & { profileId: string };
+
+export async function getHudCatalog(refresh = false): Promise<HudCatalogPayload> {
+  return call<HudCatalogPayload>("get_hud_catalog", { refresh });
 }
 
-export async function getHudState(): Promise<HudUiState> {
-  return call<HudUiState>("get_hud_state");
+export async function getHudState(): Promise<HudStatePayload> {
+  return call<HudStatePayload>("get_hud_state");
 }
 
 /** One picture from a HUD's external album, resolved to a direct image URL. */
@@ -522,8 +526,8 @@ export type HudStat = {
 };
 
 /** Per-HUD popularity and recency, keyed by hud-db id; cached for a day. */
-export async function getHudStats(refresh = false): Promise<Record<string, HudStat>> {
-  return call<Record<string, HudStat>>("get_hud_stats", { refresh });
+export async function getHudStats(refresh = false): Promise<HudStatsPayload> {
+  return call<HudStatsPayload>("get_hud_stats", { refresh });
 }
 
 /** The pictures behind a HUD's Imgur album or GitHub showcase page. */
@@ -553,12 +557,19 @@ export async function updateHud(): Promise<ProfileDetail> {
   return call<ProfileDetail>("update_hud");
 }
 
-export async function getHudSchema(): Promise<HudSchemaView | null> {
-  return call<HudSchemaView | null>("get_hud_schema");
+export async function getHudSchema(
+  expectedProfileId: string,
+  expectedHudId: string,
+): Promise<HudSchemaView | null> {
+  return call<HudSchemaView | null>("get_hud_schema", { expectedProfileId, expectedHudId });
 }
 
-export async function applyHudOptions(options: Record<string, string>): Promise<ProfileDetail> {
-  return call<ProfileDetail>("apply_hud_options", { options });
+export async function applyHudOptions(
+  options: Record<string, string>,
+  expectedProfileId: string,
+  expectedHudId: string,
+): Promise<ProfileDetail> {
+  return call<ProfileDetail>("apply_hud_options", { options, expectedProfileId, expectedHudId });
 }
 
 export type CrosshairAssetPayload = {

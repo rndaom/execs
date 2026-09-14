@@ -103,9 +103,9 @@ beforeEach(() => {
     getComfigState: vi.fn(async () => null),
     getProfileLaunchOptions: vi.fn(async () => "-novid"),
     getStockCrosshairSprites: vi.fn(async () => ({})),
-    getHudCatalog: vi.fn(async () => []),
-    getHudState: vi.fn(async () => ({ installed: null, schemaSupported: false })),
-    getHudStats: vi.fn(async () => ({})),
+    getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
+    getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
+    getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),
     getHudSchema: vi.fn(async () => null),
     writeOwnedFile: vi.fn(async () => ({})),
     writeManagedCfg: vi.fn(async () => ({})),
@@ -129,6 +129,26 @@ afterEach(async () => {
 });
 
 describe("settings snapshot integrity", () => {
+  it("binds a retained HUD options callback to its original HUD identity", async () => {
+    api.getHudState.mockResolvedValue({
+      profileId: "A",
+      installed: { id: "rayshud", options: {} },
+      schemaSupported: true,
+    });
+    api.getHudSchema.mockResolvedValue({ author: "A", sections: [] });
+    await render({ tab: "hud" });
+    const oldSave = capture.panes.hud.onApplyOptions;
+    api.getHudState.mockResolvedValue({
+      profileId: "A",
+      installed: { id: "budhud", options: {} },
+      schemaSupported: true,
+    });
+    await render({ refreshKey: 2 });
+    api.applyHudOptions = vi.fn().mockRejectedValue(new Error("The installed HUD changed."));
+    await act(async () => expect(oldSave({ option: "A" })).resolves.toBe(false));
+    expect(api.applyHudOptions).toHaveBeenCalledWith({ option: "A" }, "A", "rayshud");
+  });
+
   it("retries stock decoding after leaving during the first request and ignores obsolete results", async () => {
     const first = deferred<any>();
     const second = deferred<any>();
