@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-14
+
 ### Fixed
 
 - Updates: stop stalled installer downloads, release the update lock and allow
