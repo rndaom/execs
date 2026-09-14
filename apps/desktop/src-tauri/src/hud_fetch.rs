@@ -75,7 +75,24 @@ struct CatalogCache {
     fetched_at: u64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HudCatalogPayload {
+    pub entries: Vec<HudCatalogEntry>,
+    pub warning: Option<String>,
+}
+
 impl CatalogCache {
+    fn payload(&self) -> HudCatalogPayload {
+        HudCatalogPayload {
+            entries: self.entries.clone(),
+            warning: (self.failures > 0).then(|| format!(
+                "The catalog is incomplete: {} HUD {} could not be refreshed. Available cached entries are still shown. Retry Refresh to load the rest.",
+                self.failures, if self.failures == 1 { "document" } else { "documents" }
+            )),
+        }
+    }
+
     /// Whether the cache can stand in for a fresh read of the same tree.
     fn covers(&self, tree_sha: &str) -> bool {
         self.tree_sha == tree_sha && !self.entries.is_empty() && self.failures == 0
@@ -119,8 +136,20 @@ fn load_catalog_cache(root: &Path, dir: &Path) -> Result<Option<CatalogCache>, S
 }
 
 pub fn load_cached_catalog() -> Result<Option<Vec<HudCatalogEntry>>, String> {
+    Ok(load_cached_catalog_payload()?.map(|payload| payload.entries))
+}
+
+pub fn load_cached_catalog_payload() -> Result<Option<HudCatalogPayload>, String> {
     let root = execs_core::try_execs_data_dir()?;
-    Ok(load_catalog_cache(&root, &root.join("hud-catalog"))?.map(|cache| cache.entries))
+    Ok(
+        load_catalog_cache(&root, &root.join("hud-catalog"))?.map(|cache| {
+            let mut payload = cache.payload();
+            if !cache.is_fresh(now_secs()) && payload.warning.is_none() {
+                payload.warning = Some("The cached catalog has not been refreshed yet.".into());
+            }
+            payload
+        }),
+    )
 }
 
 fn save_catalog_cache(root: &Path, dir: &Path, cache: &CatalogCache) -> Result<(), String> {
@@ -136,13 +165,17 @@ fn save_catalog_cache(root: &Path, dir: &Path, cache: &CatalogCache) -> Result<(
 }
 
 pub fn load_or_fetch_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, String> {
+    Ok(load_catalog_payload(refresh)?.entries)
+}
+
+pub fn load_catalog_payload(refresh: bool) -> Result<HudCatalogPayload, String> {
     let root = execs_core::try_execs_data_dir()?;
     let dir = root.join("hud-catalog");
     let cached = load_catalog_cache(&root, &dir)?;
     if !refresh {
         if let Some(cache) = &cached {
             if cache.is_fresh(now_secs()) {
-                return Ok(cache.entries.clone());
+                return Ok(cache.payload());
             }
         }
     }
@@ -150,7 +183,13 @@ pub fn load_or_fetch_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, Stri
         Ok(entries) => Ok(entries),
         // An automatic refresh may use a semantically valid stale catalog
         // when the network is unavailable. Explicit Refresh reports failure.
-        Err(_) if !refresh && cached.is_some() => Ok(cached.unwrap().entries),
+        Err(err) if !refresh && cached.is_some() => {
+            let mut payload = cached.unwrap().payload();
+            payload.warning = Some(format!(
+                "Could not refresh the catalog. {err} Available cached entries are still shown."
+            ));
+            Ok(payload)
+        }
         Err(err) => Err(err),
     }
 }
@@ -159,7 +198,7 @@ fn refresh_catalog(
     root: &Path,
     dir: &Path,
     cached: Option<&CatalogCache>,
-) -> Result<Vec<HudCatalogEntry>, String> {
+) -> Result<HudCatalogPayload, String> {
     let client = net::api_client()?;
     let tree: GitTree = net::get_json_for(&client, TREE_URL, RemoteSource::GitHubApi)
         .map_err(|err| format!("Could not read hud-db ({err})"))?;
@@ -176,7 +215,7 @@ fn refresh_catalog(
             let mut renewed = cache.clone();
             renewed.fetched_at = now_secs();
             save_catalog_cache(root, dir, &renewed)?;
-            return Ok(renewed.entries);
+            return Ok(renewed.payload());
         }
     }
     let documents = catalog_documents(&tree.sha, &tree.tree);
@@ -186,24 +225,57 @@ fn refresh_catalog(
             documents.len()
         ));
     }
-    let (mut entries, failures) =
+    let (entries, failures) =
         fetch_catalog_entries(&client, &documents, Instant::now() + CATALOG_DEADLINE)?;
+    finish_catalog_refresh(
+        root,
+        dir,
+        &tree.sha,
+        &documents,
+        (entries, failures),
+        cached,
+    )
+}
+
+fn finish_catalog_refresh(
+    root: &Path,
+    dir: &Path,
+    tree_sha: &str,
+    documents: &[(String, String)],
+    fetched: (Vec<HudCatalogEntry>, usize),
+    cached: Option<&CatalogCache>,
+) -> Result<HudCatalogPayload, String> {
+    let (mut entries, failures) = fetched;
+    // The current tree establishes existence. Keep a cached entry only when its
+    // document still exists but this read failed, never for a removed HUD.
+    if failures > 0 {
+        if let Some(cache) = cached {
+            let read_ids: HashSet<_> = entries.iter().map(|entry| entry.id.clone()).collect();
+            let listed_ids: HashSet<_> = documents.iter().map(|(id, _)| id.as_str()).collect();
+            entries.extend(
+                cache
+                    .entries
+                    .iter()
+                    .filter(|entry| {
+                        listed_ids.contains(entry.id.as_str()) && !read_ids.contains(&entry.id)
+                    })
+                    .cloned(),
+            );
+        }
+    }
     entries.sort_by(|a, b| {
         a.name
             .to_ascii_lowercase()
             .cmp(&b.name.to_ascii_lowercase())
     });
-    save_catalog_cache(
-        root,
-        dir,
-        &CatalogCache {
-            tree_sha: tree.sha,
-            entries: entries.clone(),
-            failures,
-            fetched_at: now_secs(),
-        },
-    )?;
-    Ok(entries)
+    let cache = CatalogCache {
+        tree_sha: tree_sha.into(),
+        entries,
+        failures,
+        fetched_at: now_secs(),
+    };
+    save_catalog_cache(root, dir, &cache)?;
+    Ok(cache.payload())
 }
 
 fn catalog_documents(commit: &str, tree: &[GitTreeEntry]) -> Vec<(String, String)> {
@@ -262,6 +334,22 @@ fn fetch_catalog_entries(
     documents: &[(String, String)],
     deadline: Instant,
 ) -> Result<(Vec<HudCatalogEntry>, usize), String> {
+    fetch_catalog_entries_with(documents, deadline, |id, url| {
+        let raw = net::get_text_for_limit(
+            client,
+            url,
+            RemoteSource::GitHubRaw,
+            CATALOG_DOCUMENT_MAX_BYTES,
+        )?;
+        catalog_entry_from_json(id, &raw).map_err(|err| err.message().to_string())
+    })
+}
+
+fn fetch_catalog_entries_with(
+    documents: &[(String, String)],
+    deadline: Instant,
+    fetch: impl Fn(&str, &str) -> Result<HudCatalogEntry, String> + Sync,
+) -> Result<(Vec<HudCatalogEntry>, usize), String> {
     if documents.is_empty() {
         return Ok((Vec::new(), 0));
     }
@@ -273,7 +361,7 @@ fn fetch_catalog_entries(
         let handles = documents
             .chunks(chunk_size)
             .map(|chunk| {
-                let client = client.clone();
+                let fetch = &fetch;
                 let cancelled = &cancelled;
                 let count = chunk.len();
                 let handle = scope.spawn(move || {
@@ -285,16 +373,7 @@ fn fetch_catalog_entries(
                             failures += chunk.len() - entries.len() - failures;
                             break;
                         }
-                        let Ok(raw) = net::get_text_for_limit(
-                            &client,
-                            url,
-                            RemoteSource::GitHubRaw,
-                            CATALOG_DOCUMENT_MAX_BYTES,
-                        ) else {
-                            failures += 1;
-                            continue;
-                        };
-                        match catalog_entry_from_json(id, &raw) {
+                        match fetch(id, url) {
                             Ok(entry) => entries.push(entry),
                             Err(_) => failures += 1,
                         }
@@ -1110,6 +1189,80 @@ mod tests {
             ..whole
         };
         assert!(!empty.covers("sha1"));
+    }
+
+    #[test]
+    fn partial_catalog_refresh_discloses_failures_and_keeps_only_still_listed_cached_entries() {
+        let root = temp_dir("partial-refresh");
+        let old = CatalogCache {
+            tree_sha: "0123456789abcdef0123456789abcdef01234567".into(),
+            entries: vec![entry("cached"), entry("removed")],
+            failures: 0,
+            fetched_at: 1,
+        };
+        let documents = vec![
+            ("fresh".into(), "fixture:fresh".into()),
+            ("cached".into(), "fixture:broken".into()),
+        ];
+        let fetched = fetch_catalog_entries_with(
+            &documents,
+            Instant::now() + Duration::from_secs(1),
+            |id, _| {
+                if id == "cached" {
+                    Err("metadata unavailable".into())
+                } else {
+                    Ok(entry(id))
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(fetched.1, 1);
+        let result =
+            finish_catalog_refresh(&root, &root, &old.tree_sha, &documents, fetched, Some(&old))
+                .unwrap();
+        assert_eq!(
+            result
+                .entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(["cached", "fresh"])
+        );
+        assert!(result
+            .warning
+            .as_deref()
+            .unwrap()
+            .contains("1 HUD document"));
+        let cached = load_catalog_cache(&root, &root).unwrap().unwrap();
+        assert_eq!(cached.failures, 1);
+        assert!(
+            cached.payload().warning.is_some(),
+            "partial cache hits retain disclosure"
+        );
+        let recovered = finish_catalog_refresh(
+            &root,
+            &root,
+            &old.tree_sha,
+            &documents,
+            (vec![entry("fresh"), entry("cached")], 0),
+            Some(&cached),
+        )
+        .unwrap();
+        assert!(recovered.warning.is_none());
+        assert!(load_catalog_cache(&root, &root)
+            .unwrap()
+            .unwrap()
+            .covers(&old.tree_sha));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_expired_catalog_walk_reports_failure_without_fetching() {
+        let documents = vec![("rayshud".into(), "fixture:unused".into())];
+        let result = fetch_catalog_entries_with(&documents, Instant::now(), |_, _| {
+            panic!("expired walk fetched a document")
+        });
+        assert!(result.unwrap_err().contains("1 of 1 documents failed"));
     }
 
     #[test]

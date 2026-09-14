@@ -57,9 +57,9 @@ beforeEach(() => {
   api = {
     getActiveProfileDetail: vi.fn(async () => detail),
     getComfigState: vi.fn(async () => null),
-    getHudCatalog: vi.fn(async () => []),
-    getHudStats: vi.fn(async () => ({})),
-    getHudState: vi.fn(async () => ({ installed: null, schemaSupported: false })),
+    getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
+    getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),
+    getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
     getHudSchema: vi.fn(async () => null),
     getPreloaderStatus: vi.fn(async () => ({})),
     ...Object.fromEntries(cases.map(([, , command]) => [command, vi.fn(async () => detail)])),

@@ -91,7 +91,7 @@ describe("HudPane catalog status", () => {
     const failed = renderHudPane(false, null, PREVIEW_HUD_CATALOG, {
       statsError: "The source timed out.",
     });
-    expect(failed).toContain("Could not refresh dates and popularity.");
+    expect(failed).toContain("Dates and popularity refresh is incomplete.");
     expect(failed).toContain("The source timed out.");
     expect(failed).toContain('data-testid="hud-card-rayshud"');
     expect(failed).not.toContain('data-testid="hud-catalog-error"');

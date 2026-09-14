@@ -9,6 +9,7 @@ import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
+import { useHudResources } from "./hooks/useHudResources";
 import type { SetOperationError } from "./hooks/useOperationErrors";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
@@ -19,10 +20,6 @@ import {
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
 import {
-  type HudCatalogEntry,
-  type HudSchemaView,
-  type HudStat,
-  type HudUiState,
   isTauri,
   type ModsCatalog,
   type PreloaderReport,
@@ -46,8 +43,6 @@ import {
 import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
 import { blockingFindingsForFile, cfgFileMeta, lintBundle } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
-import { HudReloadQueue } from "./lib/hud-reload-ui";
-import { emptyHudState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
@@ -122,14 +117,6 @@ export function SettingsHost({
   const [launchSeed, setLaunchSeed] = useState(recommendedLaunchOptions);
   const [launchSaved, setLaunchSaved] = useState<{ sent: string; saved: string } | null>(null);
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
-  const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
-  const [hudStats, setHudStats] = useState<Record<string, HudStat>>({});
-  const [hudStatsLoading, setHudStatsLoading] = useState(false);
-  const [hudStatsError, setHudStatsError] = useState<string | null>(null);
-  const [hudState, setHudState] = useState<HudUiState>(emptyHudState);
-  const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(null);
-  const [hudCatalogLoading, setHudCatalogLoading] = useState(true);
-  const [hudCatalogError, setHudCatalogError] = useState<string | null>(null);
   const [stockSprites, setStockSprites] = useState<Record<string, StockCrosshairSprite> | null>(
     null,
   );
@@ -142,10 +129,7 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
-  const hudRequest = useRef(0);
-  const hudReloadQueue = useRef(new HudReloadQueue());
-  const hudStatsReloadQueue = useRef(new HudReloadQueue());
-  /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
+  /** Rejects obsolete profile snapshots. */
   const loadRequest = useRef(0);
 
   const [localSettingsDraftStore] = useState(createSettingsDraftStore);
@@ -200,6 +184,7 @@ export function SettingsHost({
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
   const profileId = detail?.id ?? null;
+  const hud = useHudResources(api, profileId, tab === "hud" && !externalBusy, refreshKey);
   const maps = useMemo(() => mapsFromFiles(files, layer), [files, layer]);
   const cfgComplete = useRef(maps.complete);
   cfgComplete.current = maps.complete;
@@ -307,67 +292,6 @@ export function SettingsHost({
     }
   }
 
-  async function reloadHud(refresh: boolean, showCatalogProgress = false) {
-    const request = ++hudRequest.current;
-    setHudStatsLoading(true);
-    setHudStatsError(null);
-    if (showCatalogProgress) {
-      setHudCatalogLoading(true);
-      setHudCatalogError(null);
-    }
-    return hudReloadQueue.current.enqueue(async () => {
-      let statsQueued = false;
-      try {
-        const nextCatalog = await api.getHudCatalog(refresh);
-        // Keep the catalog usable while stats load, but serialize cache reads
-        // behind refreshes so an older request cannot overwrite fresh numbers.
-        statsQueued = true;
-        void hudStatsReloadQueue.current.enqueue(async () => {
-          if (request !== hudRequest.current && !refresh) return;
-          try {
-            const nextStats = await api.getHudStats(refresh);
-            if (request === hudRequest.current) setHudStats(nextStats);
-          } catch (err) {
-            if (request === hudRequest.current) {
-              setHudStatsError(
-                err instanceof Error ? err.message : "Check your connection and try again.",
-              );
-            }
-          } finally {
-            if (request === hudRequest.current) setHudStatsLoading(false);
-          }
-        });
-        if (request !== hudRequest.current) return;
-        setHudCatalogError(null);
-        const nextState = await api.getHudState();
-        if (request !== hudRequest.current) return;
-        setHudCatalog(nextCatalog);
-        setHudState(nextState);
-        if (nextState.schemaSupported) {
-          const nextSchema = await api.getHudSchema();
-          if (request === hudRequest.current) {
-            setHudSchema(nextSchema);
-          }
-        } else {
-          setHudSchema(null);
-        }
-        if (request === hudRequest.current) onError(null, "hud:read");
-      } catch (err) {
-        if (request === hudRequest.current) {
-          if (!statsQueued) setHudStatsLoading(false);
-          setHudCatalogError(
-            err instanceof Error ? err.message : "Check your connection and try again.",
-          );
-        }
-        throw err;
-      } finally {
-        if (request === hudRequest.current) {
-          setHudCatalogLoading(false);
-        }
-      }
-    });
-  }
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: refresh exactly when the profile/TF2 state key changes.
   useEffect(() => {
     if (externalBusy) {
@@ -405,34 +329,6 @@ export function SettingsHost({
     // Ordinary mounts and profile refreshes only reload. A bind sync request is
     // issued after absorb confirms that config.cfg actually drifted.
   }, [refreshKey, bindSyncRequest, running, externalBusy]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload the catalog only on HUD entry or an external refresh.
-  useEffect(() => {
-    if (tab !== "hud" || externalBusy) {
-      return;
-    }
-    let cancelled = false;
-    reloadHud(false, true)
-      .then(() => {
-        if (!cancelled) {
-          onError(null, "hud:read");
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          onError(
-            err instanceof Error ? err.message : "Could not load the HUD catalog.",
-            "hud:read",
-          );
-        }
-      });
-    return () => {
-      cancelled = true;
-      hudRequest.current += 1;
-      setHudCatalogLoading(false);
-      setHudStatsLoading(false);
-    };
-  }, [tab, refreshKey, externalBusy]);
 
   // Decode Valve's stock crosshair sprites on the first Crosshair visit —
   // pixel-perfect previews straight from the user's own game files. A failure
@@ -767,30 +663,27 @@ export function SettingsHost({
         <HudPane
           api={api}
           profileId={profileId}
-          catalogLoading={hudCatalogLoading}
-          catalogError={hudCatalogError}
-          catalog={hudCatalog}
-          stats={hudStats}
-          statsLoading={hudStatsLoading}
-          statsError={hudStatsError}
+          catalogLoading={hud.catalogLoading}
+          catalogError={hud.catalogError}
+          catalogWarning={hud.catalogWarning}
+          catalog={hud.catalog}
+          stats={hud.stats}
+          statsLoading={hud.statsLoading}
+          statsError={hud.statsError}
           previewData={import.meta.env.DEV && !isTauri()}
-          state={hudState}
-          schema={hudSchema}
-          onRefresh={() => {
-            void reloadHud(true, true)
-              .then(() => onError(null, "hud:read"))
-              .catch((err) => {
-                onError(
-                  err instanceof Error ? err.message : "Could not refresh the HUD catalog.",
-                  "hud:read",
-                );
-              });
-          }}
+          state={hud.state}
+          schema={hud.schema}
+          stateLoading={hud.stateLoading}
+          stateError={hud.stateError}
+          schemaLoading={hud.schemaLoading}
+          schemaError={hud.schemaError}
+          onRetryLocal={() => void hud.reloadLocal()}
+          onRefresh={() => hud.reload(true)}
           onInstall={(id) => {
             void write(
               async () => {
                 await api.installHud(id);
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { success: "HUD installed", failure: "Could not install" },
             );
@@ -799,7 +692,7 @@ export function SettingsHost({
             void write(
               async () => {
                 await api.updateHud();
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { success: "HUD updated", failure: "Could not update" },
             );
@@ -808,22 +701,24 @@ export function SettingsHost({
             void write(
               async () => {
                 await api.matchHudCatalog(id);
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { failure: "Could not match" },
             );
           }}
-          onApplyOptions={(options) =>
-            write(async () => {
-              await api.applyHudOptions(options);
-              await reloadHud(false);
-            })
-          }
+          onApplyOptions={(options) => {
+            const installed = hud.state.installed;
+            if (!profileId || !installed || !hud.schema) return Promise.resolve(false);
+            return write(async () => {
+              await api.applyHudOptions(options, profileId, installed.id);
+              await hud.reloadLocal();
+            });
+          }}
           onImportArchive={() => {
             return write(
               async () => {
                 if ((await api.importHudArchive()) === null) return null;
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { success: "HUD imported", failure: "Could not import" },
               { picker: true },
@@ -833,7 +728,7 @@ export function SettingsHost({
             return write(
               async () => {
                 if ((await api.importHudFolder()) === null) return null;
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { success: "HUD imported", failure: "Could not import" },
               { picker: true },
