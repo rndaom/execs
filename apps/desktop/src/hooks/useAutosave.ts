@@ -211,7 +211,12 @@ export function useAutosave({
         locked: lockedRef.current,
       });
     }
-    if (!state.current.dirty && !state.current.saving) toast.resolveDraft(pendingId);
+    if (!state.current.dirty && !state.current.saving) {
+      // Reverting ends this draft's notice. Another edit during the same game
+      // session must announce its new pending draft again.
+      state.current = { ...state.current, announced: false };
+      toast.resolveDraft(pendingId);
+    }
   }, [reportPending, pendingId, flushControl, toast]);
 
   saveRef.current = save;

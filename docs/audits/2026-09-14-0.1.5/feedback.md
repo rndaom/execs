@@ -87,3 +87,25 @@ the `update:install` error source.
 Repository-local hooks use `.githooks`, the configured identity is Random, and
 no Cloud Agent co-author hook exists in the checked native Windows Codex hook
 locations. No co-author trailer is included.
+
+## Stable single-draft navigation follow-up
+
+Verified from integrated commit `11338b9` in an isolated worktree with the real
+SettingsHost, pane lifecycle, pending registry and ToastProvider. The preview
+adapter is the only IPC boundary; `settings-locked` supplies in-memory data.
+
+The first locked Gameplay Draw viewmodel edit retained its notice and pending
+state after visiting a clean Sounds pane. The reported off/on/off sequence
+reproduced: reverting removed the obsolete notice, but the scheduler's
+`announced` marker stayed set, so a new draft during the same lock could not
+announce itself. Navigation did not cause the missing notice.
+
+Resolving the last work for a hook now resets its announcement marker. The
+regression covers both first-edit and revert/re-edit sequences, a five-second
+wait on the first visit to Sounds, reopening Gameplay with the unsaved edit
+intact, reverting that edit, and zero managed writes while locked. The
+revert/re-edit case failed on the unchanged baseline and passes with the fix.
+
+Focused feedback, autosave, close/launch and import/mutation verification passed
+86 tests across 8 files. TypeScript and Biome (235 files) pass. Root release
+files and live TF2 data were not modified during this isolated follow-up.
