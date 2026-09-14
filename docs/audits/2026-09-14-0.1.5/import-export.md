@@ -74,3 +74,5 @@ The Windows retail check covers mounting and packed cfg lookup, not every possib
 ## Release-branch integration
 
 The combined ReadyPanel retains named launch blockers and adds an explicit folder-name reason. Repair failures belong to their review dialog; unrelated export/settings errors are not copied into it or cleared by repair. Plan-read errors have their own source identity. Focused profile, pending-settings and feedback checks passed (28 tests), along with TypeScript and Rust formatting.
+
+Combined native checks exposed a fixture precondition conflict: the new cfg-loader inspection already rejects malformed signed VPKs during capture. The export regression now seeds a historical library record with matching hashes after capturing the supported opaque legacy form, then independently verifies export refusal and destination preservation. The focused regression passes; production validation is unchanged.

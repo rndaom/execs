@@ -2208,13 +2208,35 @@ mod tests {
             let root = dir.join("tf2");
             seed_live(&root);
             write_live(&root.join("tf/cfg/config.cfg"), "password \"0\"\n");
-            fs::write(root.join("tf/custom/legacy.vpk"), &bytes).unwrap();
+            // New captures already reject malformed signed VPKs while reading
+            // the cfg loader. Seed the old opaque format first, then model a
+            // historical library record to exercise export's independent guard.
+            fs::write(
+                root.join("tf/custom/legacy.vpk"),
+                b"legacy opaque placeholder",
+            )
+            .unwrap();
             let saved = save_current_as_to(
                 &profiles,
                 &root,
                 "Legacy",
                 unlocked(),
                 SaveCurrentOptions::default(),
+            )
+            .unwrap();
+            let id = &saved.profiles[0].id;
+            let rel = "tf/custom/legacy.vpk";
+            fs::write(exclusive_file_path(&profiles, id, rel), &bytes).unwrap();
+            let mut manifest = load_manifest(&profiles, id).unwrap();
+            manifest
+                .files
+                .iter_mut()
+                .find(|file| file.path == rel)
+                .unwrap()
+                .sha256 = sha256_hex(&bytes);
+            fs::write(
+                crate::profile::manifest_file(&profiles, id),
+                serde_json::to_vec(&manifest).unwrap(),
             )
             .unwrap();
             let destination = dir.join("existing.zip");
