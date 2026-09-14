@@ -86,7 +86,8 @@ export interface LintOptions {
   /**
    * Ordered, exact bundle paths to execute when deriving settings. Other files
    * and deferred bind/alias payloads are still scanned for safety. Defaults to
-   * config.cfg then autoexec.cfg at the bundle root or in tf/cfg.
+   * config.cfg then autoexec.cfg through the supported loose Source search
+   * paths (mounted custom roots before tf/cfg), or the flat bundle root.
    */
   entryPoints?: string[];
   /** Who wrote these files. Default `"provided"`. See {@link LintTrust}. */

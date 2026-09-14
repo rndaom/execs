@@ -10,6 +10,7 @@ export {
   normalizeCfgPath,
 } from "./lint-options.ts";
 export { parseCommands } from "./parser.ts";
+export { createCfgResolver } from "./search-paths.ts";
 export { tokenizeCommands } from "./tokenizer.ts";
 export type {
   CfgFile,

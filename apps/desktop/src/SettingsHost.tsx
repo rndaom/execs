@@ -185,7 +185,10 @@ export function SettingsHost({
   // on screen, even when the two profiles hold identical content.
   const profileId = detail?.id ?? null;
   const hud = useHudResources(api, profileId, tab === "hud" && !externalBusy, refreshKey);
-  const maps = useMemo(() => mapsFromFiles(files, layer), [files, layer]);
+  const maps = useMemo(
+    () => mapsFromFiles(files, layer, detail?.files),
+    [files, layer, detail?.files],
+  );
   const cfgComplete = useRef(maps.complete);
   cfgComplete.current = maps.complete;
 
@@ -1132,7 +1135,7 @@ export function SettingsHost({
       {!profileId && loading ? <p>Loading settings…</p> : null}
       {!maps.complete && usesCfgState(tab) ? (
         <p role="alert" className="mb-4 text-warn">
-          {CFG_INCOMPLETE_MESSAGE}
+          {maps.reason ?? CFG_INCOMPLETE_MESSAGE}
         </p>
       ) : null}
       {[...visited.current.tabs].map((paneTab) => (

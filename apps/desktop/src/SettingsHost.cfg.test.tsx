@@ -88,6 +88,72 @@ function control<T extends HTMLElement>(selector: string): T {
 }
 
 describe("real Gameplay save preserves cfg settings", () => {
+  it.each(["vanilla", "comfig"] as const)(
+    "preserves mounted custom cfg precedence through an unrelated %s Gameplay save",
+    async (layer) => {
+      const prefix = layer === "comfig" ? "overrides/" : "";
+      const { render, writeManagedCfg } = fixture(
+        {
+          "tf/cfg/config.cfg": "viewmodel_fov 54\n",
+          [`tf/cfg/${prefix}autoexec.cfg`]: "exec personal/settings\n",
+          "tf/cfg/personal/settings.cfg": "viewmodel_fov 45\n",
+          "tf/custom/alpha/cfg/personal/settings.cfg": "viewmodel_fov 120\n",
+          "tf/custom/-alpha/cfg/personal/settings.cfg": "viewmodel_fov 100\n",
+          "tf/custom/.disabled/cfg/personal/settings.cfg": "viewmodel_fov 20\n",
+        },
+        layer,
+      );
+      await render();
+      expect(control<HTMLInputElement>("#gameplay-viewmodel-fov").value).toBe("100");
+      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await act(async () => vi.advanceTimersByTimeAsync(701));
+      expect(writeManagedCfg).toHaveBeenCalledOnce();
+      expect(writeManagedCfg.mock.calls[0][0]).toBe(`tf/cfg/${prefix}execs_gameplay.cfg`);
+      expect(writeManagedCfg.mock.calls[0][1]).toContain("viewmodel_fov 100\n");
+      expect(writeManagedCfg.mock.calls[0][1]).toContain("tf_use_min_viewmodels 1\n");
+    },
+  );
+
+  it.each(["vanilla", "comfig"] as const)(
+    "blocks saving when a custom autoexec shadows the %s managed startup route",
+    async (layer) => {
+      const { render, writeManagedCfg } = fixture(
+        {
+          "tf/cfg/config.cfg": "viewmodel_fov 54\n",
+          "tf/cfg/autoexec.cfg": "viewmodel_fov 45\n",
+          "tf/cfg/overrides/autoexec.cfg": "viewmodel_fov 70\n",
+          "tf/custom/-alpha/cfg/autoexec.cfg": "viewmodel_fov 100\n",
+        },
+        layer,
+      );
+      await render();
+      expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(true);
+      expect(node.textContent).toContain("custom pack overrides");
+      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await act(async () => vi.advanceTimersByTimeAsync(701));
+      expect(writeManagedCfg).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses uncertain legacy HUD projection and keeps Files available for review", async () => {
+    const { render, writeManagedCfg } = fixture({
+      "tf/cfg/config.cfg": "viewmodel_fov 54\n",
+      "tf/cfg/autoexec.cfg": "exec hud_settings\n",
+      "tf/custom/a_old/info.vdf": "HUD marker",
+      "tf/custom/a_old/cfg/hud_settings.cfg": "viewmodel_fov 45\n",
+      "tf/custom/z_new/Resource/UI/main.res": "HUD marker",
+      "tf/custom/z_new/cfg/hud_settings.cfg": "viewmodel_fov 100\n",
+    });
+    await render();
+    expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(true);
+    expect(node.textContent).toContain("Save current as…");
+    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(writeManagedCfg).not.toHaveBeenCalled();
+    await render("files");
+    expect(control('[data-testid="settings-surface-files"]').hasAttribute("inert")).toBe(false);
+  });
+
   it.each([
     'bind f "r_drawviewmodel 0"',
     'alias hidehands "r_drawviewmodel 0"',

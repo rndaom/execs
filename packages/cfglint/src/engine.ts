@@ -20,6 +20,7 @@ import {
   RCON_NAMES,
   SELF_HARM_COMMANDS,
 } from "./rules-data.ts";
+import { createCfgResolver } from "./search-paths.ts";
 import { buildSummary } from "./summary.ts";
 import type {
   CfgFile,
@@ -178,27 +179,21 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     }
   }
 
-  // exec target -> bundle path resolution (case-insensitive). The engine
-  // resolves exec targets relative to each search path's cfg folder, never
-  // relative to the exec'ing file — `exec execs_binds` issued from
-  // overrides/autoexec.cfg does NOT find overrides/execs_binds.cfg in game,
-  // so it must not resolve here either. `bundleRelativeExec` re-enables the
-  // exact-path match for flat bundles with no cfg/ folder at all.
-  const execResolutionCache = new Map<string, string | null>();
-  const resolveExec = (target: string): string | null => {
-    let t = target.replace(/\\/g, "/").toLowerCase().replace(/^\.\//, "");
-    if (!t.endsWith(".cfg")) t += ".cfg";
-    if (execResolutionCache.has(t)) return execResolutionCache.get(t) ?? null;
-    if (opts.bundleRelativeExec && parsed.has(t)) return t;
-    for (const path of parsed.keys()) {
-      if (path.endsWith(`/cfg/${t}`)) {
-        execResolutionCache.set(t, path);
-        return path;
-      }
-    }
-    execResolutionCache.set(t, null);
-    return null;
-  };
+  const search = createCfgResolver(
+    files.map((file) => file.path),
+    opts.bundleRelativeExec,
+  );
+  const resolveExec = search.resolve;
+  if (search.problem) {
+    report("warn", "execution-search-path", search.problem.message, {
+      name: "exec",
+      args: [],
+      tokens: [],
+      file: search.problem.file,
+      line: 1,
+      col: 1,
+    });
+  }
 
   // ---- alias table (pre-pass, last definition wins) -------------------------
   for (const { commands } of parsed.values()) {
@@ -590,24 +585,26 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   }
 
   // ---- actual supported startup execution ---------------------------------
-  // Defaults cover flat bundles and the live vanilla profile. The desktop
-  // supplies exact layer-aware entry points for mastercomfig overrides.
+  // Startup uses the same mounted namespace as nested execs. Exact entry
+  // paths remain available for callers that already resolved layer hooks.
   const entryPoints = (
-    opts.entryPoints ?? ["config.cfg", "tf/cfg/config.cfg", "autoexec.cfg", "tf/cfg/autoexec.cfg"]
+    opts.entryPoints ??
+    [search.startup("config"), search.startup("autoexec")].filter((path) => path !== null)
   )
     .map(normalizePath)
     .filter((path) => parsed.has(path) && !isModulesData(path));
-  const execution: ReturnType<typeof evaluateStartup> = workExhausted
-    ? { effective: new Map(), binds: new Map(), executionComplete: false }
-    : evaluateStartup({
-        files: parsed,
-        entryPoints,
-        resolveExec,
-        payloadCommands,
-        takeCommand: (at) => takeWork("command", at),
-        takeExec: (at) => takeWork("exec", at),
-        incomplete: (rule, message, at) => report("warn", rule, message, at),
-      });
+  const execution: ReturnType<typeof evaluateStartup> =
+    workExhausted || search.problem
+      ? { effective: new Map(), binds: new Map(), executionComplete: false }
+      : evaluateStartup({
+          files: parsed,
+          entryPoints,
+          resolveExec,
+          payloadCommands,
+          takeCommand: (at) => takeWork("command", at),
+          takeExec: (at) => takeWork("exec", at),
+          incomplete: (rule, message, at) => report("warn", rule, message, at),
+        });
   const { effective, binds, executionComplete } = execution;
 
   // ---- metadata -------------------------------------------------------------
