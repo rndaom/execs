@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 import { AutosaveActivity, AutosaveDiscard, AutosavePending } from "../hooks/useAutosave";
 import type { PendingSave, SettingsDraftStore } from "../lib/settings-drafts";
 import type { SettingsTab } from "../lib/settings-ui";
+import { useToast } from "./ui/Toast";
 
 /** A discard resets exactly the named pane to its latest persisted props. */
 export function SettingsDraftBoundary({
@@ -22,6 +23,7 @@ export function SettingsDraftBoundary({
   children: ReactNode;
 }) {
   const id = useId();
+  const toast = useToast();
   const [generation, setGeneration] = useState(() => ({ id: 0, discard: { current: false } }));
   const owner = `${id}:${generation.id}`;
   const reset = useRef(onDiscard);
@@ -36,11 +38,12 @@ export function SettingsDraftBoundary({
     () =>
       store.register(owner, () => {
         generation.discard.current = true;
+        toast.clearSource(`${profile}:${tab}:save`);
         reset.current?.();
         store.removeOwner(owner);
         setGeneration({ id: generation.id + 1, discard: { current: false } });
       }),
-    [store, owner, generation],
+    [store, owner, generation, toast, profile, tab],
   );
   return (
     <div hidden={!active} inert={blocked} data-testid={`settings-surface-${tab}`}>

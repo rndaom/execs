@@ -44,10 +44,11 @@ export function useFilesExitGuard(
       native &&
       store.dirty().length === 0 &&
       !running &&
-      !operationBusy &&
+      !busy &&
+      settings.getSnapshot().length > 0 &&
       settings.getSnapshot().every((entry) => entry.save && !entry.save.locked)
     ) {
-      void finish(true);
+      void finish(true, true);
     }
   }
   function cancel() {
@@ -55,8 +56,8 @@ export function useFilesExitGuard(
     action.current = null;
     setOpen(false);
   }
-  async function finish(save: boolean) {
-    if (saving.current || latest.current.busy || settings.isWriting()) return;
+  async function finish(save: boolean, awaitSettings = false) {
+    if (saving.current || latest.current.busy || (settings.isWriting() && !awaitSettings)) return;
     saving.current = true;
     setWorking(true);
     setError(null);
