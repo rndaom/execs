@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::hud::{normalize_hud_rel, HudTree};
 use crate::profile::ProfileError;
 use crate::surface::CfgLayer;
-use crate::vdf::{parse_vdf, serialize_vdf, VdfMap, VdfValue};
+use crate::vdf::{parse_hud_vdf, serialize_hud_vdf, VdfMap, VdfValue};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HudSchema {
@@ -348,7 +348,19 @@ pub fn apply_hud_options_for_layer(
                 hud_id,
                 layer,
                 &mut cfg_writes,
-            )?;
+            )
+            .map_err(|error| match error {
+                ProfileError::Io(reason) => ProfileError::Io(format!(
+                    "HUD option \"{}\" ({}): {reason}",
+                    if control.label.is_empty() {
+                        &control.name
+                    } else {
+                        &control.label
+                    },
+                    control.name
+                )),
+                other => other,
+            })?;
         }
     }
     let exec_stems = cfg_writes
@@ -444,7 +456,7 @@ fn apply_control(
                 }
             }
             if let Some(files) = &control.files {
-                merge_files(tree, files, if on { "1" } else { "0" })?;
+                merge_files(tree, files, if on { "1" } else { "0" }, Some(on))?;
             }
             if let Some(write) = &control.write_file {
                 let text = if on {
@@ -513,7 +525,7 @@ fn apply_value_files(
         swap_custom_file(tree, custom, enabled, file_name, true);
     }
     if let Some(files) = &control.files {
-        merge_files(tree, files, current)?;
+        merge_files(tree, files, current, None)?;
     }
     if let Some(write) = &control.write_file {
         tree.insert(
@@ -588,37 +600,218 @@ fn merge_files(
     tree: &mut HudTree,
     files: &serde_json::Value,
     value: &str,
+    toggle: Option<bool>,
 ) -> Result<(), ProfileError> {
     let Some(map) = files.as_object() else {
-        return Ok(());
+        return Err(ProfileError::Io(
+            "Files must be an object of relative HUD paths".into(),
+        ));
     };
     for (path, patch) in map {
-        let rel = normalize_hud_rel(path);
-        if let Some(base) = patch.get("#base") {
-            write_base_file(tree, &rel, base, value)?;
-            continue;
-        }
-        let (existing, encoding) = match tree.get(&rel) {
-            Some(bytes) => decode_hud_text(&rel, bytes)?,
-            None => (String::new(), TextEncoding::Utf8),
-        };
-        let (bases, rest) = split_base_lines(&existing);
-        let mut vdf = if rest.trim().is_empty() {
-            VdfMap::default()
-        } else {
-            parse_vdf(&rest).map_err(ProfileError::Io)?
-        };
-        let patch_map = json_to_vdf(patch, value);
-        vdf.merge_from(&patch_map);
-        let mut out = String::new();
-        for line in bases {
-            out.push_str(&line);
-            out.push('\n');
-        }
-        out.push_str(&serialize_vdf(&vdf));
-        tree.insert(rel, encode_hud_text(&out, encoding));
+        // Schema paths allow either slash spelling, including doubled
+        // backslashes. Resolve to the existing spelling on every OS.
+        let normalized = path.replace('\\', "/");
+        let rel = normalized
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("/");
+        let result = (|| {
+            if normalized.starts_with('/') || normalized.ends_with('/') {
+                return Err(ProfileError::Io("Expected a relative HUD file path".into()));
+            }
+            crate::profile::normalize_rel_path(&rel)
+                .map_err(|_| ProfileError::Io("Invalid relative HUD file path".into()))?;
+            let matches = tree
+                .files
+                .keys()
+                .filter(|key| key.eq_ignore_ascii_case(&rel))
+                .collect::<Vec<_>>();
+            if matches.len() > 1 {
+                return Err(ProfileError::Io(
+                    "HUD file path has conflicting case spellings".into(),
+                ));
+            }
+            let target = matches
+                .first()
+                .map_or(rel.as_str(), |path| path.as_str())
+                .to_string();
+            merge_file(tree, &target, patch, value, toggle)
+        })();
+        result.map_err(|error| match error {
+            ProfileError::Io(reason) => ProfileError::Io(format!("{rel}: {reason}")),
+            other => other,
+        })?;
     }
     Ok(())
+}
+
+fn merge_file(
+    tree: &mut HudTree,
+    rel: &str,
+    patch: &serde_json::Value,
+    value: &str,
+    toggle: Option<bool>,
+) -> Result<(), ProfileError> {
+    let patch = patch
+        .as_object()
+        .ok_or_else(|| ProfileError::Io("HUD file edits must be an object".into()))?;
+    let animation = Path::new(rel)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"));
+    if animation {
+        let bytes = tree
+            .get(rel)
+            .ok_or_else(|| ProfileError::Io("Animation file is missing".into()))?;
+        let (text, encoding) = decode_hud_text(rel, bytes)?;
+        let out = edit_animation_lines(&text, patch, toggle)?;
+        tree.insert(rel, encode_hud_text(&out, encoding));
+        return Ok(());
+    }
+    if let Some(base) = patch.get("#base") {
+        if patch.len() != 1 {
+            return Err(ProfileError::Io(
+                "Combining #base and resource edits is not supported".into(),
+            ));
+        }
+        return write_base_file(tree, rel, base, value);
+    }
+    let (existing, encoding) = match tree.get(rel) {
+        Some(bytes) => decode_hud_text(rel, bytes)?,
+        None => (String::new(), TextEncoding::Utf8),
+    };
+    let (bases, rest) = split_base_lines(&existing)?;
+    let mut vdf = parse_hud_vdf(&rest).map_err(ProfileError::Io)?;
+    let patch_map = json_to_vdf(patch, value, toggle)?;
+    // TF2HUD.Editor resource patches omit a file-named root header; the
+    // existing header owns the edited panels, including its conditionals.
+    let headers = vdf
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, (key, _))| normalize_hud_rel(key).eq_ignore_ascii_case(rel))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    match headers.as_slice() {
+        [] => merge_hud_map(&mut vdf, &patch_map),
+        [index] => {
+            let VdfValue::Obj(root) = &mut vdf.entries[*index].1 else {
+                return Err(ProfileError::Io(
+                    "HUD resource header must contain an object".into(),
+                ));
+            };
+            merge_hud_map(root, &patch_map);
+        }
+        _ => {
+            return Err(ProfileError::Io(
+                "HUD resource has ambiguous file headers".into(),
+            ))
+        }
+    }
+    let mut out = String::new();
+    for line in bases {
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out.push_str(&serialize_hud_vdf(&vdf).map_err(ProfileError::Io)?);
+    tree.insert(rel, encode_hud_text(&out, encoding));
+    Ok(())
+}
+
+/// Comment only lines with the requested command-token prefix. Whitespace,
+/// inline comments, line endings and unrelated comment state survive. A
+/// checkbox reverses its directives when off; a selected combo choice applies
+/// them directly even when the choice's value is "0".
+fn edit_animation_lines(
+    text: &str,
+    patch: &serde_json::Map<String, serde_json::Value>,
+    toggle: Option<bool>,
+) -> Result<String, ProfileError> {
+    let mut directives = Vec::new();
+    for (kind, targets) in patch {
+        if !matches!(kind.as_str(), "comment" | "uncomment") {
+            return Err(ProfileError::Io("Unsupported animation directive; only comment and uncomment line edits are supported".into()));
+        }
+        let targets = targets.as_array().ok_or_else(|| {
+            ProfileError::Io(
+                "Animation comment directives must be lists of command prefixes".into(),
+            )
+        })?;
+        for target in targets {
+            let target = target.as_str().ok_or_else(|| {
+                ProfileError::Io("Animation command prefixes must be strings".into())
+            })?;
+            if target.trim().is_empty()
+                || target.contains(['\r', '\n', '\0'])
+                || target.trim_start().starts_with("//")
+            {
+                return Err(ProfileError::Io(
+                    "Animation command prefixes must contain one uncommented line".into(),
+                ));
+            }
+            directives.push((
+                target.split_whitespace().collect::<Vec<_>>(),
+                (kind == "comment") == toggle.unwrap_or(true),
+            ));
+        }
+    }
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_start_matches([' ', '\t']);
+        let indent = &line[..line.len() - body.len()];
+        let uncommented = body.strip_prefix("//");
+        let command = uncommented.unwrap_or(body);
+        let mut desired = None;
+        for (prefix, comment) in &directives {
+            if command
+                .split_whitespace()
+                .take(prefix.len())
+                .eq(prefix.iter().copied())
+            {
+                if desired.is_some_and(|other| other != *comment) {
+                    return Err(ProfileError::Io(
+                        "Conflicting animation comment directives".into(),
+                    ));
+                }
+                desired = Some(*comment);
+            }
+        }
+        out.push_str(indent);
+        match (desired, uncommented) {
+            (Some(true), None) => {
+                out.push_str("//");
+                out.push_str(body);
+            }
+            (Some(false), Some(command)) => out.push_str(command),
+            _ => out.push_str(body),
+        }
+    }
+    Ok(out)
+}
+
+/// A HUD patch owns one conditional variant, never an unrelated platform's
+/// value with the same key. Steam's last-key merge behavior stays unchanged.
+fn merge_hud_map(target: &mut VdfMap, patch: &VdfMap) {
+    for (patch_index, (key, value)) in patch.entries.iter().enumerate() {
+        let condition = patch.condition_at(patch_index);
+        let index = target
+            .entries
+            .iter()
+            .enumerate()
+            .rfind(|(index, (existing, _))| {
+                existing.eq_ignore_ascii_case(key) && target.condition_at(*index) == condition
+            })
+            .map(|(index, _)| index);
+        if let Some(index) = index {
+            match (&mut target.entries[index].1, value) {
+                (VdfValue::Obj(target), VdfValue::Obj(patch)) => merge_hud_map(target, patch),
+                (target, value) => *target = value.clone(),
+            }
+        } else {
+            target.entries.push((key.clone(), value.clone()));
+            target.set_condition(target.entries.len() - 1, condition.map(str::to_string));
+        }
+    }
 }
 
 /// Which encoding a HUD `.res` file arrived in. Plenty of shipped HUD resource
@@ -639,6 +832,11 @@ fn decode_hud_text(rel: &str, bytes: &[u8]) -> Result<(String, TextEncoding), Pr
             .ok()
     };
     if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        if rest.len() % 2 != 0 {
+            return Err(ProfileError::Io(format!(
+                "{rel} has an incomplete UTF-16LE code unit"
+            )));
+        }
         let mut units = rest
             .as_chunks::<2>()
             .0
@@ -649,6 +847,11 @@ fn decode_hud_text(rel: &str, bytes: &[u8]) -> Result<(String, TextEncoding), Pr
             .ok_or_else(|| ProfileError::Io(format!("{rel} is not valid UTF-16LE")));
     }
     if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        if rest.len() % 2 != 0 {
+            return Err(ProfileError::Io(format!(
+                "{rel} has an incomplete UTF-16BE code unit"
+            )));
+        }
         let mut units = rest
             .as_chunks::<2>()
             .0
@@ -708,22 +911,35 @@ fn write_base_file(
     base: &serde_json::Value,
     value: &str,
 ) -> Result<(), ProfileError> {
-    let template = match base {
-        serde_json::Value::String(text) => text.clone(),
-        other => json_to_string(other),
-    };
-    let line = format!("#base \"{}\"", substitute(&template, value));
+    let template = base
+        .as_str()
+        .ok_or_else(|| ProfileError::Io("#base must be a path string".into()))?;
+    let target = substitute(template, value);
+    if target.is_empty() || target.contains(['"', '\0', '\r', '\n']) {
+        return Err(ProfileError::Io("Invalid #base path".into()));
+    }
+    let line = format!("#base \"{target}\"");
     let Some(bytes) = tree.get(path) else {
         tree.insert(path, format!("{line}\n").into_bytes());
         return Ok(());
     };
     let (existing, encoding) = decode_hud_text(path, bytes)?;
-    let (mut bases, rest) = split_base_lines(&existing);
+    let (mut bases, rest) = split_base_lines(&existing)?;
     match bases
         .iter_mut()
-        .find(|current| base_line_matches(current, &template))
+        .find(|current| base_line_matches(current, template))
     {
-        Some(slot) => *slot = line,
+        Some(slot) => {
+            // Keep indentation, conditional suffix and trailing comment on
+            // the include this control owns.
+            let range = base_target_range(slot).expect("base_line_matches validated the target");
+            let quoted = range.start > 0 && slot.as_bytes()[range.start - 1] == b'"';
+            if quoted {
+                slot.replace_range(range, &target);
+            } else {
+                slot.replace_range(range, &format!("\"{target}\""));
+            }
+        }
         None => bases.push(line),
     }
     let mut out = String::new();
@@ -753,57 +969,109 @@ fn base_line_matches(line: &str, template: &str) -> bool {
 }
 
 fn base_line_target(line: &str) -> Option<&str> {
-    let rest = line.trim_start();
-    let rest = rest
-        .strip_prefix("#base")
-        .or_else(|| rest.strip_prefix("#Base"))?
-        .trim();
-    match rest.strip_prefix('"') {
-        Some(quoted) => quoted.split('"').next(),
-        None => Some(rest.trim()),
+    base_target_range(line).map(|range| &line[range])
+}
+
+fn base_target_range(line: &str) -> Option<std::ops::Range<usize>> {
+    let trimmed = line.trim_start();
+    let keyword = trimmed.split_whitespace().next()?;
+    if !keyword.eq_ignore_ascii_case("#base") {
+        return None;
+    }
+    let rest = trimmed[keyword.len()..].trim_start();
+    let offset = line.len() - rest.len();
+    if let Some(quoted) = rest.strip_prefix('"') {
+        let end = quoted.find('"')?;
+        Some(offset + 1..offset + 1 + end)
+    } else {
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        (end > 0).then_some(offset..offset + end)
     }
 }
 
-fn split_base_lines(text: &str) -> (Vec<String>, String) {
+fn split_base_lines(text: &str) -> Result<(Vec<String>, String), ProfileError> {
     let mut bases = Vec::new();
     let mut rest = String::new();
     for line in text.lines() {
         let trimmed = line.trim_start();
-        if trimmed.starts_with("#base") || trimmed.starts_with("#Base") {
+        if trimmed
+            .split_whitespace()
+            .next()
+            .is_some_and(|word| word.eq_ignore_ascii_case("#base"))
+        {
+            parse_hud_vdf(line).map_err(ProfileError::Io)?;
             bases.push(line.to_string());
         } else {
             rest.push_str(line);
             rest.push('\n');
         }
     }
-    (bases, rest)
+    Ok((bases, rest))
 }
 
-fn json_to_vdf(value: &serde_json::Value, substitute_with: &str) -> VdfMap {
+fn json_to_vdf(
+    object: &serde_json::Map<String, serde_json::Value>,
+    substitute_with: &str,
+    toggle: Option<bool>,
+) -> Result<VdfMap, ProfileError> {
     let mut map = VdfMap::default();
-    let Some(object) = value.as_object() else {
-        return map;
-    };
     for (key, child) in object {
-        if key == "#base" {
-            continue;
-        }
-        match child {
-            serde_json::Value::Object(_) => {
-                map.entries.push((
-                    key.clone(),
-                    VdfValue::Obj(json_to_vdf(child, substitute_with)),
-                ));
+        // Conditional keys address exactly one OS variant.
+        let (key, condition) = match key.split_once('^') {
+            Some((key, condition)) => {
+                if !condition.starts_with('[')
+                    || !condition.ends_with(']')
+                    || condition[1..condition.len() - 1]
+                        .chars()
+                        .any(|ch| !(ch.is_ascii_alphanumeric() || matches!(ch, '$' | '!' | '_')))
+                {
+                    return Err(ProfileError::Io("Invalid HUD conditional suffix".into()));
+                }
+                (key, Some(condition.to_string()))
             }
-            other => {
-                map.entries.push((
-                    key.clone(),
-                    VdfValue::Str(substitute(&json_to_string(other), substitute_with)),
-                ));
+            None => (key.as_str(), None),
+        };
+        let child = match child.as_object() {
+            Some(branches) if branches.contains_key("true") || branches.contains_key("false") => {
+                if toggle.is_none() || branches.keys().any(|key| key != "true" && key != "false") {
+                    return Err(ProfileError::Io(
+                        "HUD true/false values require a checkbox and only true/false branches"
+                            .into(),
+                    ));
+                }
+                branches
+                    .get(if toggle == Some(true) {
+                        "true"
+                    } else {
+                        "false"
+                    })
+                    .ok_or_else(|| {
+                        ProfileError::Io(
+                            "HUD checkbox value is missing its selected true/false branch".into(),
+                        )
+                    })?
             }
-        }
+            _ => child,
+        };
+        let value =
+            match child {
+                serde_json::Value::Object(object) => {
+                    VdfValue::Obj(json_to_vdf(object, substitute_with, toggle)?)
+                }
+                serde_json::Value::String(_)
+                | serde_json::Value::Number(_)
+                | serde_json::Value::Bool(_) => {
+                    VdfValue::Str(substitute(&json_to_string(child), substitute_with))
+                }
+                _ => return Err(ProfileError::Io(
+                    "Unsupported HUD resource value; expected a string, number, boolean or object"
+                        .into(),
+                )),
+            };
+        map.entries.push((key.to_string(), value));
+        map.set_condition(map.entries.len() - 1, condition);
     }
-    map
+    Ok(map)
 }
 
 fn json_to_string(value: &serde_json::Value) -> String {
@@ -849,6 +1117,236 @@ fn normalize_folder(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const OPTION_SCHEMA: &str = include_str!("../fixtures/hud-options/schema.json");
+    const ANIMATIONS: &str = include_str!("../fixtures/hud-options/hudanimations_custom.txt");
+    const RESOURCE: &str =
+        include_str!("../fixtures/hud-options/huditemeffectmeter_killstreak.res");
+    const ANIMATION_PATH: &str = "scripts/hudanimations_custom.txt";
+    const RESOURCE_PATH: &str = "resource/ui/huditemeffectmeter_killstreak.res";
+
+    #[test]
+    fn reported_control_shapes_apply_both_checkbox_states_and_every_combo_choice() {
+        let schema = parse_hud_schema(OPTION_SCHEMA).unwrap();
+        for encoding in [
+            TextEncoding::Utf8,
+            TextEncoding::Utf8Bom,
+            TextEncoding::Utf16Le,
+            TextEncoding::Utf16Be,
+        ] {
+            let mut tree = HudTree::default();
+            // Deliberately use mixed case and CRLF, both common on Windows.
+            tree.insert(
+                ANIMATION_PATH,
+                encode_hud_text(&ANIMATIONS.replace('\n', "\r\n"), encoding),
+            );
+            tree.insert(
+                "Resource/UI/HudItemEffectMeter_Killstreak.res",
+                encode_hud_text(RESOURCE, encoding),
+            );
+            for on in [false, true, false] {
+                for choice in ["0", "1", "2", "3", "0"] {
+                    let options = BTreeMap::from([
+                        ("fh_toggle_disguise_image".into(), on.to_string()),
+                        ("fh_val_hud_style".into(), on.to_string()),
+                        ("fh_val_health_style".into(), choice.into()),
+                    ]);
+                    apply_hud_options(&mut tree, &schema, "fixture", &options).unwrap();
+                    let (animation, actual_encoding) =
+                        decode_hud_text(ANIMATION_PATH, tree.get(ANIMATION_PATH).unwrap()).unwrap();
+                    assert_eq!(actual_encoding, encoding);
+                    let active = |prefix: &str| {
+                        animation
+                            .lines()
+                            .any(|line| line.trim_start().starts_with(prefix))
+                    };
+                    assert_eq!(active("Animate\tPlayerStatusSpyOutlineImage"), !on);
+                    assert_eq!(
+                        active("RunEvent FixtureText\t"),
+                        matches!(choice, "0" | "3")
+                    );
+                    assert_eq!(active("RunEvent FixtureBox "), choice == "1");
+                    assert!(animation.contains("\tRunEvent FixtureTextExtra 0.1\r\n"));
+                    assert!(
+                        animation.contains("\t//Animate Unrelated Alpha \"0\" Linear 0.0 1.0\r\n")
+                    );
+                    assert!(animation.contains("0.0 // keep timing and comment\r\n"));
+                    assert_eq!(
+                        animation.matches('\n').count(),
+                        animation.matches("\r\n").count()
+                    );
+
+                    let (resource, actual_encoding) = decode_hud_text(
+                        RESOURCE_PATH,
+                        tree.get("Resource/UI/HudItemEffectMeter_Killstreak.res")
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(actual_encoding, encoding);
+                    assert!(
+                        tree.get(RESOURCE_PATH).is_none(),
+                        "must retain the original path spelling"
+                    );
+                    assert!(
+                        resource.contains("#base \"base\\keep.res\" [$WIN32] // keep this include")
+                    );
+                    let (_, rest) = split_base_lines(&resource).unwrap();
+                    let parsed = parse_hud_vdf(&rest).unwrap();
+                    assert_eq!(
+                        parsed.entries.len(),
+                        1,
+                        "panels belong inside their resource header"
+                    );
+                    let root = parsed.entries[0].1.as_obj().unwrap();
+                    for icon in ["StreakIcon", "StreakIconShadow"] {
+                        assert_eq!(
+                            root.get(icon)
+                                .unwrap()
+                                .as_obj()
+                                .unwrap()
+                                .get("labelText")
+                                .unwrap()
+                                .as_str(),
+                            Some("\\")
+                        );
+                    }
+                    let meter = root.get("HudItemEffectMeter").unwrap().as_obj().unwrap();
+                    assert_eq!(
+                        meter.entries[0].1.as_str(),
+                        Some(if on { "r100" } else { "c50" })
+                    );
+                    assert_eq!(meter.entries[1].1.as_str(), Some("c75"));
+                    assert_eq!(meter.condition_at(1), Some("[$POSIX]"));
+                    let once = tree.clone();
+                    apply_hud_options(&mut tree, &schema, "fixture", &options).unwrap();
+                    assert_eq!(tree, once, "repeat application must be byte-idempotent");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn line_edits_preserve_comment_spacing_no_final_newline_and_checkbox_inversion() {
+        let patch = serde_json::json!({"uncomment": ["RunEvent Fixture"]});
+        let text = "  //\tRunEvent\tFixture 0.2 // note\n// unrelated\n  RunEvent FixtureMore 0.0";
+        let enabled = edit_animation_lines(text, patch.as_object().unwrap(), Some(true)).unwrap();
+        assert_eq!(
+            enabled,
+            "  \tRunEvent\tFixture 0.2 // note\n// unrelated\n  RunEvent FixtureMore 0.0"
+        );
+        assert_eq!(
+            edit_animation_lines(&enabled, patch.as_object().unwrap(), Some(true)).unwrap(),
+            enabled
+        );
+        let disabled =
+            edit_animation_lines(&enabled, patch.as_object().unwrap(), Some(false)).unwrap();
+        assert_eq!(
+            disabled,
+            "  \t//RunEvent\tFixture 0.2 // note\n// unrelated\n  RunEvent FixtureMore 0.0"
+        );
+    }
+
+    #[test]
+    fn unsupported_animation_or_malformed_directives_fail_with_parent_control_and_path() {
+        for patch in [
+            serde_json::json!({"event": []}),
+            serde_json::json!({"comment": "RunEvent Fixture"}),
+            serde_json::json!({"comment": [123]}),
+            serde_json::json!({"comment": [" "]}),
+            serde_json::json!({"comment": ["RunEvent\nFixture"]}),
+            serde_json::json!({"comment": ["RunEvent FixtureText"], "uncomment": ["RunEvent FixtureText"]}),
+        ] {
+            let mut schema = parse_hud_schema(OPTION_SCHEMA).unwrap();
+            schema
+                .controls
+                .get_mut("Customizations")
+                .unwrap()
+                .drain(..2);
+            let choice = &mut schema.controls.get_mut("Customizations").unwrap()[0]
+                .options
+                .as_mut()
+                .unwrap()[0];
+            choice.files = Some(serde_json::json!({ANIMATION_PATH: patch}));
+            let mut tree = HudTree::default();
+            tree.insert(ANIMATION_PATH, ANIMATIONS.as_bytes().to_vec());
+            let before = tree.clone();
+            let error =
+                apply_hud_options(&mut tree, &schema, "fixture", &BTreeMap::new()).unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains("Health Style\" (fh_val_health_style)"),
+                "{error:?}"
+            );
+            assert!(error.message().contains(ANIMATION_PATH), "{error:?}");
+            assert!(!error.message().contains("keep timing and comment"));
+            assert_eq!(tree, before);
+        }
+    }
+
+    #[test]
+    fn malformed_resource_and_incomplete_utf16_fail_without_replacing_the_file() {
+        let schema = parse_hud_schema(OPTION_SCHEMA).unwrap();
+        for bytes in [
+            b"\"Unclosed\" { \"leaf\"".to_vec(),
+            b"\"valid\" \"value\" /* unfinished comment".to_vec(),
+            b"#base \"unfinished path\n\"valid\" \"value\"".to_vec(),
+            vec![0xff, 0xfe, b'x'],
+            vec![0xfe, 0xff, b'x'],
+            vec![0xff, 0xfe, 0x00, 0xd8],
+            vec![0xfe, 0xff, 0xd8, 0x00],
+        ] {
+            let mut tree = HudTree::default();
+            tree.insert(ANIMATION_PATH, ANIMATIONS.as_bytes().to_vec());
+            tree.insert(RESOURCE_PATH, bytes.clone());
+            let error =
+                apply_hud_options(&mut tree, &schema, "fixture", &BTreeMap::new()).unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains("Cornered Health/Ammo\" (fh_val_hud_style)"),
+                "{error:?}"
+            );
+            assert!(error.message().contains(RESOURCE_PATH), "{error:?}");
+            assert_eq!(tree.get(RESOURCE_PATH).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn hash_base_change_keeps_literal_slashes_condition_and_comment() {
+        let mut tree = HudTree::default();
+        tree.insert("resource/menu.res", b"  #BASE \"backgrounds\\dark.res\" [$WIN32] // owned\n#base \"keep.res\"\n\"Menu\" { \"icon\" \"\\\" }\n".to_vec());
+        let files = serde_json::json!({"resource/menu.res": {"#base": "backgrounds\\$value.res"}});
+        merge_files(&mut tree, &files, "light", None).unwrap();
+        let once = tree.clone();
+        merge_files(&mut tree, &files, "light", None).unwrap();
+        assert_eq!(tree, once);
+        assert_eq!(std::str::from_utf8(tree.get("resource/menu.res").unwrap()).unwrap(), "  #BASE \"backgrounds\\light.res\" [$WIN32] // owned\n#base \"keep.res\"\n\"Menu\" { \"icon\" \"\\\" }\n");
+    }
+
+    #[test]
+    fn explicit_platform_patch_changes_only_that_condition() {
+        let mut tree = HudTree::default();
+        tree.insert(
+            "resource/fixture.res",
+            b"\"xpos\" \"1\"\n\"xpos\" \"2\" [$WIN32]\n\"xpos\" \"3\" [$POSIX]\n".to_vec(),
+        );
+        let files = serde_json::json!({"resource/fixture.res": {"xpos^[$WIN32]": "4"}});
+        merge_files(&mut tree, &files, "", None).unwrap();
+        let parsed =
+            parse_hud_vdf(std::str::from_utf8(tree.get("resource/fixture.res").unwrap()).unwrap())
+                .unwrap();
+        assert_eq!(
+            parsed
+                .entries
+                .iter()
+                .map(|(_, value)| value.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["1", "4", "3"]
+        );
+        assert_eq!(parsed.condition_at(1), Some("[$WIN32]"));
+        assert_eq!(parsed.condition_at(2), Some("[$POSIX]"));
+    }
 
     #[test]
     fn hud_exec_lines_append_rewrite_and_prune() {
