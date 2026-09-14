@@ -9,6 +9,7 @@ import {
   toggleAddon,
 } from "../lib/first-run-ui";
 import { wizardSpec } from "../SetupWizard";
+import type { SetOperationError } from "./useOperationErrors";
 import type { SwitchProgressController } from "./useSwitchProgress";
 
 export type FirstRunState = {
@@ -49,7 +50,7 @@ export function useFirstRun(
     busy: boolean;
     running: boolean;
     progress: SwitchProgressController;
-    setError: (message: string | null) => void;
+    setError: SetOperationError;
     setBusy: (busy: boolean) => void;
     setLibrary: (library: ProfileLibrary) => void;
     /** `?preview=create` opens straight into the Create-new wizard. */
@@ -83,11 +84,15 @@ export function useFirstRun(
         if (!cancelled) {
           setKind(result.kind);
           setReasons(result.reasons);
+          setError(null, "setup:read");
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not check this install.");
+          setError(
+            err instanceof Error ? err.message : "Could not check this install.",
+            "setup:read",
+          );
         }
       });
     return () => {
@@ -102,16 +107,15 @@ export function useFirstRun(
 
   const openCreate = useCallback(() => {
     setCreating(true);
-    setError(null);
     setPreset("medium");
     setAddons([]);
     setChosenStartFrom(null);
     progress.cancel();
-  }, [progress, setError]);
+  }, [progress]);
 
   const cancelCreate = useCallback(() => {
     setCreating(false);
-    setError(null);
+    setError(null, "setup:apply");
     progress.cancel();
   }, [progress, setError]);
 
@@ -120,7 +124,6 @@ export function useFirstRun(
       if (!canApplyWizard(name, running, busy) || progress.state.active) {
         return false;
       }
-      setError(null);
       progress.start();
       setBusy(true);
       try {
@@ -133,6 +136,7 @@ export function useFirstRun(
             : await api.applyUnusedWizard(spec),
         );
         progress.complete();
+        setError(null, "setup:apply");
         setCreating(false);
         clear();
         return true;
@@ -154,7 +158,7 @@ export function useFirstRun(
         } catch {
           /* Preserve the original, more useful switch error. */
         }
-        setError(message);
+        setError(message, "setup:apply");
         progress.cancel();
         return false;
       } finally {

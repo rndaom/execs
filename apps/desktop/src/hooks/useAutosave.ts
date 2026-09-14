@@ -216,6 +216,7 @@ export function useAutosave({
       if (mounted.current) {
         reportPending?.(pendingId, next.state.dirty || next.state.saving);
       }
+      if (!next.state.dirty && !next.state.saving) toast.resolveDraft(pendingId);
       if (next.effect === "arm") {
         cancel();
         timer.current = window.setTimeout(() => {
@@ -225,7 +226,7 @@ export function useAutosave({
         return;
       }
       if (next.effect === "defer") {
-        toast.deferDraft();
+        toast.deferDraft(pendingId);
         return;
       }
       if (next.effect === "save") {
@@ -258,6 +259,7 @@ export function useAutosave({
       cancel();
       state.current = { ...state.current, dirty: false, due: false };
       reportPending?.(pendingId, state.current.saving);
+      if (!state.current.saving) toast.resolveDraft(pendingId);
       return;
     }
     // A save that came back and reseeded the pane is not a new edit.
@@ -265,7 +267,7 @@ export function useAutosave({
       return;
     }
     dispatch({ type: "change", locked: lockedRef.current });
-  }, [dirty, token, dispatch, cancel, reportPending, pendingId]);
+  }, [dirty, token, dispatch, cancel, reportPending, pendingId, toast]);
 
   useEffect(() => {
     if (locked) {
@@ -276,8 +278,11 @@ export function useAutosave({
     // A save refused while the game was up must be retried, not treated as an
     // echo of itself.
     attempted.current = undefined;
+    // The write may still fail, but this draft is no longer waiting for TF2.
+    // Pending/failed draft protection is independent of the deferred notice.
+    toast.resolveDraft(pendingId);
     dispatch({ type: "unlocked" });
-  }, [locked, dispatch, cancel]);
+  }, [locked, dispatch, cancel, toast, pendingId]);
 
   const flush = useCallback(() => {
     dispatch({ type: "flush", locked: lockedRef.current });
@@ -302,6 +307,7 @@ export function useAutosave({
       cancel();
       mounted.current = false;
       reportPending?.(pendingId, false);
+      toast.resolveDraft(pendingId);
     };
   }, []);
 

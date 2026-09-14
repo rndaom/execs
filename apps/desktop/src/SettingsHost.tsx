@@ -10,6 +10,7 @@ import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity, AutosaveDiscard, AutosavePending } from "./hooks/useAutosave";
+import type { SetOperationError } from "./hooks/useOperationErrors";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
 import {
@@ -50,7 +51,7 @@ import { emptyHudState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
-import type { SettingsTab } from "./lib/settings-ui";
+import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
@@ -111,9 +112,9 @@ export function SettingsHost({
   onBusyChange: (busy: boolean) => void;
   onWriteBusyChange?: (busy: boolean) => void;
   onPendingChange?: (pending: boolean) => void;
-  onError: (message: string | null) => void;
+  onError: SetOperationError;
 }) {
-  const { error } = useAppStatus();
+  const { error, dismissError } = useAppStatus();
   const toast = useToast();
   const [queueBusy, setQueueBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
@@ -295,6 +296,7 @@ export function SettingsHost({
       setLaunchSeed(nextLaunch);
       loadBlocked.current = false;
       setLoadError(null);
+      onError(null, "settings:read");
     } catch (err) {
       if (!stale()) {
         loadBlocked.current = true;
@@ -350,6 +352,7 @@ export function SettingsHost({
         } else {
           setHudSchema(null);
         }
+        if (request === hudRequest.current) onError(null, "hud:read");
       } catch (err) {
         if (request === hudRequest.current) {
           if (!statsQueued) setHudStatsLoading(false);
@@ -384,7 +387,7 @@ export function SettingsHost({
     operation
       .then(() => {
         if (!cancelled) {
-          onError(null);
+          onError(null, "settings:read");
           if (syncBinds && bindSyncRequest !== null) {
             onBindSyncHandled(bindSyncRequest);
           }
@@ -392,7 +395,7 @@ export function SettingsHost({
       })
       .catch((err) => {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : "Could not load settings.");
+          onError(err instanceof Error ? err.message : "Could not load settings.", "settings:read");
         }
       });
     return () => {
@@ -413,12 +416,15 @@ export function SettingsHost({
     reloadHud(false, true)
       .then(() => {
         if (!cancelled) {
-          onError(null);
+          onError(null, "hud:read");
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : "Could not load the HUD catalog.");
+          onError(
+            err instanceof Error ? err.message : "Could not load the HUD catalog.",
+            "hud:read",
+          );
         }
       });
     return () => {
@@ -498,7 +504,7 @@ export function SettingsHost({
   async function runWrite(
     // biome-ignore lint/suspicious/noConfusingVoidType: Ordinary write callbacks return void; null explicitly means a cancelled picker.
     work: () => Promise<void | null>,
-    copy?: { success?: string; failure?: string },
+    copy?: { success?: string; failure?: string; source?: string },
     options?: { picker?: boolean },
   ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
@@ -506,15 +512,14 @@ export function SettingsHost({
     // applied optimistically. Only an *external* operation still blocks, and
     // it says so instead of no-oping.
     if (externalBusy || loadBlocked.current) {
-      toast.failSave("another change is still saving", copy?.failure);
+      toast.failSave("another change is still saving", copy?.failure, copy?.source, false);
       return false;
     }
     const expectedProfileId = profileId;
-    onError(null);
     // Picker commands include the native dialog. They must not say Saving
     // while the player is still choosing, or complete when no file was chosen.
     let started = !options?.picker;
-    if (started) toast.startSave();
+    if (started) toast.startSave(copy?.source);
     try {
       const applied = await settingsBusyQueue.run(async () => {
         if (
@@ -526,23 +531,22 @@ export function SettingsHost({
         }
         if ((await work()) === null) return false;
         if (!started) {
-          toast.startSave();
+          toast.startSave(copy?.source);
           started = true;
         }
         await reload();
         return true;
       });
       if (!applied) {
-        if (started) toast.cancelSave();
+        if (started) toast.cancelSave(copy?.source);
         return false;
       }
-      toast.finishSave(copy?.success);
+      toast.finishSave(copy?.success, copy?.source);
       return true;
     } catch (err) {
-      // Balance this operation's feedback accounting even if it failed while
-      // picking or reading, before a save indicator was reserved.
-      if (!started) toast.startSave();
-      toast.failSave(err, copy?.failure);
+      // A failure before picker completion did not reserve a save counter.
+      // Other queued sources still own their active-write feedback.
+      toast.failSave(err, copy?.failure, copy?.source, started);
       return false;
     }
   }
@@ -557,12 +561,23 @@ export function SettingsHost({
     if (
       blockingFindingsForFile(lintBundle(bundle, detail?.hud?.id).findings, draft.path).length > 0
     ) {
-      onError("Resolve blocking findings in Files before saving.");
+      onError(
+        "Resolve blocking findings in Files before saving.",
+        `files:validation:${draft.profile}:${draft.path}`,
+      );
       return false;
     }
-    return runWrite(async () => {
-      await api.writeOwnedFile(draft.path, draft.text);
-    });
+    const saved = await runWrite(
+      async () => {
+        await api.writeOwnedFile(draft.path, draft.text);
+      },
+      {
+        source: `${draft.profile}:files:${draft.path}`,
+        failure: `Could not save Files (${draft.path})`,
+      },
+    );
+    if (saved) onError(null, `files:validation:${draft.profile}:${draft.path}`);
+    return saved;
   }
   useEffect(() => {
     if (!filesSaver) return;
@@ -587,6 +602,7 @@ export function SettingsHost({
           return;
         }
         setModsPayload(payload);
+        onError(null, "mods:status");
         if (payload.modsCached) {
           setModsLoading(true);
           api
@@ -594,11 +610,15 @@ export function SettingsHost({
             .then((mods) => {
               if (!cancelled) {
                 setModsCatalog(mods.catalog);
+                onError(null, "mods:library");
               }
             })
             .catch((err) => {
               if (!cancelled) {
-                onError(err instanceof Error ? err.message : "Could not read the mod library.");
+                onError(
+                  err instanceof Error ? err.message : "Could not read the mod library.",
+                  "mods:library",
+                );
               }
             })
             .finally(() => {
@@ -610,7 +630,10 @@ export function SettingsHost({
       })
       .catch((err) => {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : "Could not read the preloader state.");
+          onError(
+            err instanceof Error ? err.message : "Could not read the preloader state.",
+            "mods:status",
+          );
         }
       });
     return () => {
@@ -620,6 +643,7 @@ export function SettingsHost({
 
   async function refreshModsStatus() {
     setModsPayload(await api.getPreloaderStatus());
+    onError(null, "mods:status");
   }
 
   async function writeManaged(
@@ -632,29 +656,49 @@ export function SettingsHost({
   }
 
   function pane(tab: SettingsTab) {
+    // This closure belongs to the originating retained pane, even after the
+    // user navigates elsewhere while its save is queued or in flight.
+    const label = tab === "hud" ? "HUD options" : SETTINGS_TAB_LABELS[tab];
+    function write(
+      // biome-ignore lint/suspicious/noConfusingVoidType: null preserves native picker cancellation through the pane wrapper.
+      work: () => Promise<void | null>,
+      copy?: { success?: string; failure?: string },
+      options?: { picker?: boolean },
+    ) {
+      return runWrite(
+        work,
+        {
+          source: `${profileId}:${tab}:${copy?.success ?? copy?.failure ?? "save"}`,
+          success: `${label} saved`,
+          failure: `Could not save ${label}`,
+          ...copy,
+        },
+        options,
+      );
+    }
     if (tab === "comfig") {
       return (
         <ComfigPane
           detail={detail}
           state={comfig}
           onApplyPreset={(preset) => {
-            return runWrite(async () => {
+            return write(async () => {
               await api.setComfigPreset(preset);
             });
           }}
           onApplyModules={(modules) => {
-            return runWrite(async () => {
+            return write(async () => {
               await api.setComfigModules(modules);
             });
           }}
           onToggleAddon={(id) => {
             const addons = toggleComfigAddon(comfig.addons, id);
-            return runWrite(async () => {
+            return write(async () => {
               await api.setComfigAddons(addons);
             });
           }}
           onUpdatePackages={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.updateComfigVpks();
               },
@@ -662,7 +706,7 @@ export function SettingsHost({
             );
           }}
           onImportCustom={() => {
-            return runWrite(
+            return write(
               async () => {
                 if ((await api.importComfigCustom()) === null) return null;
               },
@@ -683,7 +727,7 @@ export function SettingsHost({
           effectiveBinds={maps.binds}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSave={(bindsText) => {
-            return runWrite(async () => {
+            return write(async () => {
               await writeManaged(path, bindsText);
             });
           }}
@@ -705,12 +749,12 @@ export function SettingsHost({
           canUseComfigAddons={canUseComfigAddons}
           onToggleTransparentViewmodels={() => {
             const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
-            void runWrite(async () => {
+            void write(async () => {
               await api.setComfigAddons(addons);
             });
           }}
           onSave={(gameplayText) =>
-            runWrite(async () => {
+            write(async () => {
               await writeManaged(path, gameplayText, "gameplay");
             })
           }
@@ -734,13 +778,16 @@ export function SettingsHost({
           schema={hudSchema}
           onRefresh={() => {
             void reloadHud(true, true)
-              .then(() => onError(null))
+              .then(() => onError(null, "hud:read"))
               .catch((err) => {
-                onError(err instanceof Error ? err.message : "Could not refresh the HUD catalog.");
+                onError(
+                  err instanceof Error ? err.message : "Could not refresh the HUD catalog.",
+                  "hud:read",
+                );
               });
           }}
           onInstall={(id) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.installHud(id);
                 await reloadHud(false);
@@ -749,7 +796,7 @@ export function SettingsHost({
             );
           }}
           onUpdate={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.updateHud();
                 await reloadHud(false);
@@ -758,7 +805,7 @@ export function SettingsHost({
             );
           }}
           onMatch={(id) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.matchHudCatalog(id);
                 await reloadHud(false);
@@ -767,13 +814,13 @@ export function SettingsHost({
             );
           }}
           onApplyOptions={(options) =>
-            runWrite(async () => {
+            write(async () => {
               await api.applyHudOptions(options);
               await reloadHud(false);
             })
           }
           onImportArchive={() => {
-            return runWrite(
+            return write(
               async () => {
                 if ((await api.importHudArchive()) === null) return null;
                 await reloadHud(false);
@@ -783,7 +830,7 @@ export function SettingsHost({
             );
           }}
           onImportFolder={() => {
-            return runWrite(
+            return write(
               async () => {
                 if ((await api.importHudFolder()) === null) return null;
                 await reloadHud(false);
@@ -809,12 +856,12 @@ export function SettingsHost({
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSaveStock={(gameplayText) =>
-            runWrite(async () => {
+            write(async () => {
               await writeManaged(path, gameplayText, "crosshair");
             })
           }
           onApply={(shape, assignments, customRgba, color, library, design, settings) =>
-            runWrite(async () => {
+            write(async () => {
               await api.applyCrosshairs(
                 shape,
                 assignments,
@@ -827,12 +874,12 @@ export function SettingsHost({
             })
           }
           onDeactivate={() =>
-            runWrite(async () => {
+            write(async () => {
               await api.deactivateCrosshairs();
             })
           }
           onRemove={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeCrosshairs();
               },
@@ -850,7 +897,7 @@ export function SettingsHost({
           profileId={profileId}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.buildViewmodelPack(hidden, preload, hideMode);
               },
@@ -858,7 +905,7 @@ export function SettingsHost({
             );
           }}
           onImport={(preload) => {
-            return runWrite(
+            return write(
               async () => {
                 if ((await api.importViewmodels(preload)) === null) return null;
               },
@@ -867,7 +914,7 @@ export function SettingsHost({
             );
           }}
           onRemove={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeViewmodels();
               },
@@ -891,7 +938,7 @@ export function SettingsHost({
           // The cvars and the sound files are one change to the user, so they
           // are one write: two would mean two toasts for one edit.
           onSave={(gameplayText, pack) =>
-            runWrite(async () => {
+            write(async () => {
               await writeManaged(path, gameplayText, "sounds");
               if (pack) {
                 await api.applyHitsounds(pack.hit, pack.kill);
@@ -899,7 +946,7 @@ export function SettingsHost({
             })
           }
           onRemove={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeHitsounds();
               },
@@ -922,20 +969,22 @@ export function SettingsHost({
           report={modsReport}
           onDownloadLibrary={() => {
             setModsLoading(true);
-            onError(null);
             api
               .downloadDefaultMods()
               .then((mods) => {
                 setModsCatalog(mods.catalog);
-                return refreshModsStatus();
+                return refreshModsStatus().then(() => onError(null, "mods:download"));
               })
               .catch((err) => {
-                onError(err instanceof Error ? err.message : "Could not download the mod library.");
+                onError(
+                  err instanceof Error ? err.message : "Could not download the mod library.",
+                  "mods:download",
+                );
               })
               .finally(() => setModsLoading(false));
           }}
           onApply={(addons, particleMods, profileParticleMods) => {
-            void runWrite(
+            void write(
               async () => {
                 try {
                   setModsReport(
@@ -951,17 +1000,17 @@ export function SettingsHost({
             );
           }}
           onToggleBypass={(enabled) => {
-            void runWrite(async () => {
+            void write(async () => {
               setModsPayload(await api.setGameinfoBypass(enabled));
             });
           }}
           onTogglePreload={(enabled) => {
-            void runWrite(async () => {
+            void write(async () => {
               setModsPayload(await api.setProfilePreload(enabled));
             });
           }}
           onRevert={() => {
-            void runWrite(
+            void write(
               async () => {
                 try {
                   await api.revertPreloader();
@@ -974,7 +1023,7 @@ export function SettingsHost({
             );
           }}
           onRecover={() => {
-            void runWrite(
+            void write(
               async () => {
                 setModsPayload(await api.recoverPreloader());
               },
@@ -982,30 +1031,35 @@ export function SettingsHost({
             );
           }}
           onRepair={async () => {
-            onError(null);
             setModsPayload((current) =>
               current ? { ...current, repairInProgress: true } : current,
             );
             try {
               await api.repairGameFiles();
               await refreshModsStatus();
+              onError(null, "mods:repair");
             } catch (err) {
               // A retry can fail to reopen Steam while an older verification
               // lease is still valid. Ask the backend instead of optimistically
               // unlocking the renderer.
               await refreshModsStatus().catch(() => {});
-              onError(err instanceof Error ? err.message : "Could not start the repair.");
+              onError(
+                err instanceof Error ? err.message : "Could not start the repair.",
+                "mods:repair",
+              );
               throw err;
             }
           }}
           onCompleteRepair={async (selection: ModSelection) => {
-            onError(null);
             let released = false;
             try {
               const complete = await api.completeGameFileRepair();
               if (!complete) {
                 await refreshModsStatus();
-                onError("Steam's repair is still changing TF2 files. Wait, then confirm again.");
+                onError(
+                  "Steam's repair is still changing TF2 files. Wait, then confirm again.",
+                  "mods:repair",
+                );
                 return false;
               }
               released = true;
@@ -1023,9 +1077,13 @@ export function SettingsHost({
                 );
               }
               await refreshModsStatus();
+              onError(null, "mods:repair");
               return true;
             } catch (err) {
-              onError(err instanceof Error ? err.message : "Could not confirm the repair.");
+              onError(
+                err instanceof Error ? err.message : "Could not confirm the repair.",
+                "mods:repair",
+              );
               await refreshModsStatus().catch(() => {});
               // Completion may have safely released maintenance before
               // re-applying the selection failed. Do not resurrect a repair
@@ -1037,16 +1095,17 @@ export function SettingsHost({
             }
           }}
           onCancelRepair={async () => {
-            onError(null);
             try {
               const cancelled = await api.cancelGameFileRepair();
               await refreshModsStatus();
+              if (cancelled) onError(null, "mods:repair");
               return cancelled;
             } catch (err) {
               onError(
                 err instanceof Error
                   ? err.message
                   : "Could not cancel the repair lock. Close Steam and TF2 first.",
+                "mods:repair",
               );
               await refreshModsStatus().catch(() => {});
               throw err;
@@ -1057,7 +1116,7 @@ export function SettingsHost({
             void api.openExternal(PRELOADER_REPO_URL);
           }}
           onImportArchive={() => {
-            return runWrite(
+            return write(
               async () => {
                 if ((await api.importModArchive()) === null) return null;
                 await refreshModsStatus().catch(() => {});
@@ -1067,7 +1126,7 @@ export function SettingsHost({
             );
           }}
           onImportFolder={() => {
-            return runWrite(
+            return write(
               async () => {
                 if ((await api.importModFolder()) === null) return null;
                 await refreshModsStatus().catch(() => {});
@@ -1077,7 +1136,7 @@ export function SettingsHost({
             );
           }}
           onRemoveMod={(id) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeMod(id);
                 // Removing a pack can take its particle sources with it.
@@ -1089,7 +1148,7 @@ export function SettingsHost({
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
           onInstallGameBananaMod={async (id) => {
-            await runWrite(
+            await write(
               async () => {
                 await api.installGameBananaMod(id);
                 await refreshModsStatus().catch(() => {});
@@ -1130,7 +1189,7 @@ export function SettingsHost({
         }}
         onSave={() => {
           const sent = launch;
-          return runWrite(async () => {
+          return write(async () => {
             const result = await api.setProfileLaunchOptions(sent);
             if (detailRef.current?.id !== profileId) return;
             if (launchRef.current === sent) {
@@ -1157,6 +1216,7 @@ export function SettingsHost({
       value={{
         error,
         setError: onError,
+        dismissError,
         busy,
         running: running || loading || filesLimited || loadError !== null,
       }}

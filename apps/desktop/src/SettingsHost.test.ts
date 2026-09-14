@@ -8,7 +8,13 @@ import { SettingsHost } from "./SettingsHost";
 
 const capture = vi.hoisted(() => ({
   panes: {} as Record<string, any>,
-  toast: { deferDraft: vi.fn(), startSave: vi.fn(), finishSave: vi.fn(), failSave: vi.fn() },
+  toast: {
+    deferDraft: vi.fn(),
+    resolveDraft: vi.fn(),
+    startSave: vi.fn(),
+    finishSave: vi.fn(),
+    failSave: vi.fn(),
+  },
 }));
 vi.mock("./components/ui/Toast", () => ({ useToast: () => capture.toast }));
 vi.mock("./hooks/useAppStatus", () => ({

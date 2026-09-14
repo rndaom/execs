@@ -15,6 +15,7 @@ import {
   hasPackChanges,
   newlyImportedProfile,
 } from "../lib/library-ui";
+import type { SetOperationError } from "./useOperationErrors";
 import type { SwitchProgressController } from "./useSwitchProgress";
 
 export type ProfileLibraryState = {
@@ -62,7 +63,7 @@ export function useProfileLibrary(
     busy: boolean;
     quitNonce: number;
     progress: SwitchProgressController;
-    setError: (message: string | null) => void;
+    setError: SetOperationError;
     setBusy: (busy: boolean) => void;
   },
 ): ProfileLibraryState {
@@ -100,11 +101,15 @@ export function useProfileLibrary(
       .then((next) => {
         if (!cancelled) {
           setLibrary(next);
+          setError(null, "profiles:read");
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not read the profile library.");
+          setError(
+            err instanceof Error ? err.message : "Could not read the profile library.",
+            "profiles:read",
+          );
         }
       });
     return () => {
@@ -126,11 +131,15 @@ export function useProfileLibrary(
       .then((next) => {
         if (!cancelled) {
           setLibrary(next);
+          setError(null, "profiles:init");
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not create the profile library.");
+          setError(
+            err instanceof Error ? err.message : "Could not create the profile library.",
+            "profiles:init",
+          );
         }
       });
     return () => {
@@ -192,10 +201,14 @@ export function useProfileLibrary(
           setBindSyncRequest((current) => (current ?? 0) + 1);
         }
         control.configDrift = false;
+        setError(null, "profiles:absorb");
       })
       .catch((err) => {
         if (control.live && generation === control.generation && gate === control.gate) {
-          setError(err instanceof Error ? err.message : "Could not absorb live changes.");
+          setError(
+            err instanceof Error ? err.message : "Could not absorb live changes.",
+            "profiles:absorb",
+          );
         }
       })
       .finally(() => {
@@ -223,13 +236,16 @@ export function useProfileLibrary(
       if (!library || !canSaveCurrent(library, running, name)) {
         return false;
       }
-      setError(null);
       setBusy(true);
       try {
         setLibrary(await api.saveCurrentAs(name));
+        setError(null, "profiles:save-current");
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save that profile.");
+        setError(
+          err instanceof Error ? err.message : "Could not save that profile.",
+          "profiles:save-current",
+        );
         return false;
       } finally {
         setBusy(false);
@@ -241,7 +257,6 @@ export function useProfileLibrary(
   const importProfile = useCallback(async () => {
     if (!library || busy || importInFlight.current || !canImportProfile(library, running)) return;
     importInFlight.current = true;
-    setError(null);
     setImportedProfile(null);
     setImportReview(null);
     setImportError(null);
@@ -262,7 +277,7 @@ export function useProfileLibrary(
       unlisten?.();
       importInFlight.current = false;
     }
-  }, [api, library, running, busy, setError, setBusy]);
+  }, [api, library, running, busy, setBusy]);
 
   const confirmImport = useCallback(async () => {
     if (!importReview || !library || running || importInFlight.current) return;
@@ -305,12 +320,15 @@ export function useProfileLibrary(
       if (!library || !canExportProfile(library, running)) {
         return;
       }
-      setError(null);
       setBusy(true);
       try {
-        await api.exportProfile(id);
+        const exported = await api.exportProfile(id);
+        if (exported !== null) setError(null, `profiles:export:${id}`);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not export that profile.");
+        setError(
+          err instanceof Error ? err.message : "Could not export that profile.",
+          `profiles:export:${id}`,
+        );
       } finally {
         setBusy(false);
       }
@@ -323,7 +341,6 @@ export function useProfileLibrary(
       if (!library || running || busy || progress.state.active || library.activeProfileId === id) {
         return;
       }
-      setError(null);
       // The native switch reconciles the outgoing profile. A fresh absorb of
       // the target will report its own delta when the switch settles.
       progress.start();
@@ -333,11 +350,15 @@ export function useProfileLibrary(
         setImportedProfile(null);
         setImportStage(null);
         setImportReview(null);
+        setError(null, "profiles:switch");
         progress.complete();
         setPackPrompt(null);
         setPackPromptDeferred(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not switch profiles.");
+        setError(
+          err instanceof Error ? err.message : "Could not switch profiles.",
+          "profiles:switch",
+        );
         // A failure after the durable switch marker was written clears the
         // active profile on disk. Never leave the renderer showing the stale
         // pre-switch active id; the refreshed library also exposes recovery.
@@ -357,15 +378,15 @@ export function useProfileLibrary(
   const answerPackPrompt = useCallback(
     async (choice: PackChoice) => {
       if (!packPrompt || packPromptProfile !== activeProfileId || running || busy) return;
-      setError(null);
       setBusy(true);
       try {
         setLibrary(await api.absorbPacks(choice));
+        setError(null, "profiles:packs");
         setPackPrompt(null);
         setPackPromptDeferred(false);
         setAbsorbNonce((value) => value + 1);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not update packs.");
+        setError(err instanceof Error ? err.message : "Could not update packs.", "profiles:packs");
       } finally {
         setBusy(false);
       }
