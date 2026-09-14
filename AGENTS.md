@@ -148,3 +148,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - Crosshair builds release draft asset bytes only after a confirmed successful host result. Sounds drafts belong to the profile and sound slots; a changed installed record acknowledges content without resetting newer edits.
 - Comfig controls and previews show the complete persisted snapshot. Failed preset, module and addon selections stay available to retry and never enter later write payloads as if saved.
 - Import picker cancellation remains `null` through the bridge and write runner. Cancelled imports skip reload and completion feedback; picker commands reserve no Saving indicator while the user is choosing.
+
+## 0.1.5 cfg integrity
+
+- Cfg safety scanning includes dormant files and bind/alias payloads without changing derived settings. Settings evaluate only known startup entry points and invoked exec/alias chains in order; definitions do not execute their payloads, and executed unbind operations remove bindings. A shared command/exec budget bounds both passes; incomplete execution blocks derived settings writes while Files remains available.
+- Gameplay preserves `viewmodel_fov` throughout Source's 0.1–179.9 range without rounding incoming decimals. World FOV retains its separate 54–90 control.

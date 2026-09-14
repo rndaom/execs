@@ -1,4 +1,3 @@
-import { engineManagedLintOptions, lint } from "@execs/cfglint";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
@@ -32,6 +31,7 @@ import {
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
+import { CFG_INCOMPLETE_MESSAGE, mapsFromFiles, usesCfgState } from "./lib/cfg-state";
 import {
   type ComfigUiState,
   defaultComfigState,
@@ -57,24 +57,6 @@ import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
 type CfgText = { path: string; text: string };
-
-function mapsFromFiles(files: CfgText[]): {
-  binds: Record<string, string>;
-  effective: Record<string, string>;
-} {
-  // Same options as the Files pane, so config.cfg's engine-managed ESCAPE bind
-  // and archived console preference reach the derived maps.
-  const result = lint(files, engineManagedLintOptions(files));
-  const binds: Record<string, string> = {};
-  for (const [key, value] of result.binds) {
-    binds[key] = value;
-  }
-  const effective: Record<string, string> = {};
-  for (const [name, entry] of result.effective) {
-    effective[name] = entry.value;
-  }
-  return { binds, effective };
-}
 
 function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
   if (files.some((file) => file.path === path)) {
@@ -203,7 +185,9 @@ export function SettingsHost({
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
   const profileId = detail?.id ?? null;
-  const maps = useMemo(() => mapsFromFiles(files), [files]);
+  const maps = useMemo(() => mapsFromFiles(files, layer), [files, layer]);
+  const cfgComplete = useRef(maps.complete);
+  cfgComplete.current = maps.complete;
 
   async function reload(opts?: { syncBinds?: boolean }) {
     // Every profile file is a separate IPC round trip, so a switch can easily
@@ -652,6 +636,7 @@ export function SettingsHost({
     scope?: "gameplay" | "crosshair" | "sounds",
   ) {
     if (!profileId) throw new Error("Select a profile before saving.");
+    if (!cfgComplete.current) throw new Error(CFG_INCOMPLETE_MESSAGE);
     await api.writeManagedCfg(path, text, profileId, scope);
   }
 
@@ -1235,16 +1220,25 @@ export function SettingsHost({
         </div>
       ) : null}
       {!profileId && loading ? <p>Loading settings…</p> : null}
+      {!maps.complete && usesCfgState(tab) ? (
+        <p role="alert" className="mb-4 text-warn">
+          {CFG_INCOMPLETE_MESSAGE}
+        </p>
+      ) : null}
       <AutosaveDiscard.Provider value={discardAutosaves}>
         <AutosavePending.Provider value={reportPending}>
           {[...visited.current.tabs].map((paneTab) => (
             <div
               key={`${profileId}:${paneTab}`}
               hidden={tab !== paneTab}
-              inert={inputsBlocked}
+              inert={inputsBlocked || (!maps.complete && usesCfgState(paneTab))}
               data-testid={`settings-surface-${paneTab}`}
             >
-              <AutosaveActivity.Provider value={tab === paneTab && !inputsBlocked}>
+              <AutosaveActivity.Provider
+                value={
+                  tab === paneTab && !inputsBlocked && (maps.complete || !usesCfgState(paneTab))
+                }
+              >
                 {pane(paneTab)}
               </AutosaveActivity.Provider>
             </div>
