@@ -36,6 +36,11 @@ User-facing changes only. The release workflow publishes the matching
   discarded or saved, and keep other panes' pending drafts visible.
 - Errors: keep export failures visible through background settings reloads,
   with a consistent dismissal control that preserves draft and recovery guards.
+- HUD: save FlawHUD options with animation comment toggles and literal-backslash
+  labels, apply checkbox choices inside the correct resource header, and retain
+  each file's encoding and platform-specific values.
+- HUD: identify the option and relative file when an option save fails, while
+  keeping malformed or unsupported edits out of the profile and live HUD.
 
 ## [0.1.4] - 2026-09-09
 

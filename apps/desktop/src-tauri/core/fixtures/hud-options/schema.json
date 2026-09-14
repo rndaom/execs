@@ -1,0 +1,78 @@
+{
+  "Author": "execs regression fixture",
+  "Controls": {
+    "Customizations": [
+      {
+        "Name": "fh_toggle_disguise_image",
+        "Label": "Hide Disguise Outline",
+        "Type": "Checkbox",
+        "Value": "false",
+        "Files": {
+          "scripts/hudanimations_custom.txt": {
+            "comment": ["Animate PlayerStatusSpyOutlineImage"]
+          }
+        }
+      },
+      {
+        "Name": "fh_val_hud_style",
+        "Label": "Cornered Health/Ammo",
+        "Type": "Checkbox",
+        "Value": "false",
+        "Files": {
+          "resource\\ui\\huditemeffectmeter_killstreak.res": {
+            "HudItemEffectMeter": {
+              "xpos": { "true": "r100", "false": "c50" }
+            }
+          }
+        }
+      },
+      {
+        "Name": "fh_val_health_style",
+        "Label": "Health Style",
+        "Type": "ComboBox",
+        "Value": "0",
+        "Options": [
+          {
+            "Label": "Text",
+            "Value": "0",
+            "Files": {
+              "scripts/hudanimations_custom.txt": {
+                "comment": ["RunEvent FixtureBox"],
+                "uncomment": ["RunEvent FixtureText"]
+              }
+            }
+          },
+          {
+            "Label": "Box",
+            "Value": "1",
+            "Files": {
+              "scripts/hudanimations_custom.txt": {
+                "comment": ["RunEvent FixtureText"],
+                "uncomment": ["RunEvent FixtureBox"]
+              }
+            }
+          },
+          {
+            "Label": "Cross",
+            "Value": "2",
+            "Files": {
+              "scripts/hudanimations_custom.txt": {
+                "comment": ["RunEvent FixtureText", "RunEvent FixtureBox"]
+              }
+            }
+          },
+          {
+            "Label": "Text without box",
+            "Value": "3",
+            "Files": {
+              "scripts/hudanimations_custom.txt": {
+                "comment": ["RunEvent FixtureBox"],
+                "uncomment": ["RunEvent FixtureText"]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

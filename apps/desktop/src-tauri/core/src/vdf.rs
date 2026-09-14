@@ -1,4 +1,4 @@
-//! Minimal Valve KeyValues (VDF) reader for Steam library files.
+//! Valve KeyValues reader with separate Steam and HUD escape semantics.
 
 use std::collections::HashSet;
 
@@ -159,19 +159,46 @@ fn set_path_rec(map: &mut VdfMap, keys: &[&str], value: String) {
 /// Quoted KeyValues. Objects use the Steam brace-on-next-line layout.
 pub fn serialize_vdf(map: &VdfMap) -> String {
     let mut out = String::new();
-    write_map(&mut out, map, 0);
+    write_map(&mut out, map, 0, true);
     out
 }
 
-fn write_map(out: &mut String, map: &VdfMap, indent: usize) {
+/// HUD resources use KeyValues' default, escape-disabled mode. In particular,
+/// a single backslash label must not become two backslashes on every save.
+/// Quotes have no representation in this mode: refuse a schema value that
+/// would produce an invalid document instead of silently escaping it.
+pub fn serialize_hud_vdf(map: &VdfMap) -> Result<String, String> {
+    fn validate(map: &VdfMap) -> Result<(), String> {
+        for (key, value) in &map.entries {
+            let strings = [Some(key.as_str()), value.as_str()];
+            if strings
+                .into_iter()
+                .flatten()
+                .any(|s| s.contains(['"', '\0']))
+            {
+                return Err("HUD KeyValues cannot contain a quote or NUL in a string".into());
+            }
+            if let VdfValue::Obj(child) = value {
+                validate(child)?;
+            }
+        }
+        Ok(())
+    }
+    validate(map)?;
+    let mut out = String::new();
+    write_map(&mut out, map, 0, false);
+    Ok(out)
+}
+
+fn write_map(out: &mut String, map: &VdfMap, indent: usize, escapes: bool) {
     for (index, (key, value)) in map.entries.iter().enumerate() {
         let condition = map.condition_at(index);
         write_indent(out, indent);
-        write_quoted(out, key);
+        write_quoted(out, key, escapes);
         match value {
             VdfValue::Str(s) => {
                 out.push_str("\t\t");
-                write_quoted(out, s);
+                write_quoted(out, s, escapes);
                 if let Some(condition) = condition {
                     out.push(' ');
                     out.push_str(condition);
@@ -186,7 +213,7 @@ fn write_map(out: &mut String, map: &VdfMap, indent: usize) {
                 out.push('\n');
                 write_indent(out, indent);
                 out.push_str("{\n");
-                write_map(out, obj, indent + 1);
+                write_map(out, obj, indent + 1, escapes);
                 write_indent(out, indent);
                 out.push_str("}\n");
             }
@@ -206,9 +233,13 @@ fn write_indent(out: &mut String, n: usize) {
     }
 }
 
-fn write_quoted(out: &mut String, s: &str) {
+fn write_quoted(out: &mut String, s: &str, escapes: bool) {
     out.push('"');
     for ch in s.chars() {
+        if !escapes {
+            out.push(ch);
+            continue;
+        }
         match ch {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
@@ -235,13 +266,31 @@ pub struct SteamLibrary {
 const MAX_DEPTH: usize = 64;
 
 pub fn parse_vdf(input: &str) -> Result<VdfMap, String> {
+    parse_with_escapes(input, true)
+}
+
+/// Source HUD KeyValues leave backslashes literal unless the consumer opts in
+/// to escape sequences. Steam VDF callers keep using `parse_vdf` above.
+pub fn parse_hud_vdf(input: &str) -> Result<VdfMap, String> {
+    if input.contains('\0') {
+        return Err("HUD KeyValues contains a NUL".into());
+    }
+    parse_with_escapes(input, false)
+}
+
+fn parse_with_escapes(input: &str, escapes: bool) -> Result<VdfMap, String> {
     let mut parser = Parser {
         chars: input.chars().collect(),
         i: 0,
         depth: 0,
+        escapes,
+        unterminated_comment: false,
     };
     let map = parser.parse_pairs_until_end(false)?;
     parser.skip_ws_and_comments();
+    if parser.unterminated_comment && !escapes {
+        return Err("unterminated HUD KeyValues comment".into());
+    }
     if parser.peek().is_some() {
         return Err("unexpected trailing VDF content".into());
     }
@@ -302,6 +351,8 @@ struct Parser {
     /// Objects currently open, so a runaway file fails instead of overflowing
     /// the stack.
     depth: usize,
+    escapes: bool,
+    unterminated_comment: bool,
 }
 
 impl Parser {
@@ -333,6 +384,8 @@ impl Parser {
                 }
                 if self.starts_with("*/") {
                     self.i += 2;
+                } else {
+                    self.unterminated_comment = true;
                 }
                 continue;
             }
@@ -429,7 +482,7 @@ impl Parser {
                 match self.bump() {
                     None => return Err("unterminated VDF string".into()),
                     Some('"') => return Ok(out),
-                    Some('\\') => match self.bump() {
+                    Some('\\') if self.escapes => match self.bump() {
                         Some('n') => out.push('\n'),
                         Some('t') => out.push('\t'),
                         Some('r') => out.push('\r'),
@@ -442,7 +495,7 @@ impl Parser {
         }
         let mut out = String::new();
         while let Some(ch) = self.peek() {
-            if ch.is_whitespace() || ch == '{' || ch == '}' {
+            if ch.is_whitespace() || ch == '{' || ch == '}' || ch == '"' {
                 break;
             }
             out.push(ch);
@@ -458,6 +511,48 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hud_literal_backslashes_round_trip_without_changing_steam_escapes() {
+        let hud = r#""icon" "\" "path" "fonts\new\test" "double" "\\" "linux" "/home/user/hud""#;
+        let parsed = parse_hud_vdf(hud).unwrap();
+        assert_eq!(parsed.get("icon").unwrap().as_str(), Some("\\"));
+        assert_eq!(
+            parsed.get("path").unwrap().as_str(),
+            Some(r"fonts\new\test")
+        );
+        assert_eq!(parsed.get("double").unwrap().as_str(), Some(r"\\"));
+        let saved = serialize_hud_vdf(&parsed).unwrap();
+        assert_eq!(parse_hud_vdf(&saved).unwrap(), parsed);
+        assert_eq!(
+            serialize_hud_vdf(&parse_hud_vdf(&saved).unwrap()).unwrap(),
+            saved
+        );
+
+        let steam = r#""LaunchOptions" "-novid +exec \"cfg\\test.cfg\"" "path" "C:\\Steam\\steamapps" "newline" "one\ntwo""#;
+        let parsed = parse_vdf(steam).unwrap();
+        assert_eq!(
+            parsed.get("LaunchOptions").unwrap().as_str(),
+            Some("-novid +exec \"cfg\\test.cfg\"")
+        );
+        assert_eq!(
+            parsed.get("path").unwrap().as_str(),
+            Some(r"C:\Steam\steamapps")
+        );
+        assert_eq!(parsed.get("newline").unwrap().as_str(), Some("one\ntwo"));
+        assert_eq!(parse_vdf(&serialize_vdf(&parsed)).unwrap(), parsed);
+    }
+
+    #[test]
+    fn hud_serializer_refuses_values_that_literal_mode_cannot_represent() {
+        for value in ["a\"b", "a\0b"] {
+            let mut map = VdfMap::default();
+            map.set_path(&["root", "label"], value);
+            assert!(serialize_hud_vdf(&map).is_err());
+        }
+        assert!(parse_hud_vdf("\"a\" \"b\0c\"").is_err());
+        assert!(parse_hud_vdf("\"a\" \"b\" /* unfinished").is_err());
+    }
 
     const MODERN: &str = r#"
 "libraryfolders"
