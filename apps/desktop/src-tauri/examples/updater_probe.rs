@@ -37,11 +37,12 @@ fn main() {
                         .timeout(Duration::from_secs(120))
                         .endpoints(vec![args[0].parse()?])?
                         .build()?;
-                    let update = updater
+                    let mut update = updater
                         .check()
                         .await?
                         .ok_or_else(|| format!("No update offered from {}", args[4]))?;
                     assert_eq!(update.version, args[3]);
+                    update.timeout = Some(Duration::from_secs(600));
                     let bytes = update.download(|_, _| {}, || {}).await?;
                     std::fs::write(
                         &marker,

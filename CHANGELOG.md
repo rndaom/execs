@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Updates: stop stalled installer downloads, release the update lock and allow
+  retrying without restarting execs.
+
 ## [0.1.4] - 2026-09-09
 
 ### Added
