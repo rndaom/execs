@@ -415,7 +415,7 @@ where
         &running,
         |_| Ok(()),
     )?;
-    Ok(crate::apply::detail_from_manifest(&manifest))
+    crate::apply::detail_from_manifest(profiles_dir, &manifest)
 }
 
 pub fn import_comfig_custom(
@@ -498,7 +498,7 @@ fn apply_collected_comfig_custom_to(
         running,
         |_| Ok(()),
     )?;
-    Ok(crate::apply::detail_from_manifest(&manifest))
+    crate::apply::detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn refuse_untracked_live_comfig_custom(
@@ -623,7 +623,7 @@ where
         &running,
         |_| Ok(()),
     )?;
-    Ok(crate::apply::detail_from_manifest(&manifest))
+    crate::apply::detail_from_manifest(profiles_dir, &manifest)
 }
 
 /// Apply every downloaded official VPK as one profile/live transaction. The
@@ -678,7 +678,7 @@ where
         &running,
         |_| Ok(()),
     )?;
-    Ok(crate::apply::detail_from_manifest(&manifest))
+    crate::apply::detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn is_official_vpk_rel(path: &str) -> bool {
