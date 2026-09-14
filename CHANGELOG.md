@@ -12,6 +12,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Profiles: retain saved particle selections when repairing custom folder names,
+  including profiles that are not active.
 - Linux: inherit the 0.1.4 AppImage startup fix for current graphics drivers.
 
 - Profiles: switch shared preloader selections with the target profile.

@@ -74,3 +74,24 @@ The Windows retail check covers mounting and packed cfg lookup, not every possib
 ## Release-branch integration
 
 The combined ReadyPanel retains named launch blockers and adds an explicit folder-name reason. Repair failures belong to their review dialog; unrelated export/settings errors are not copied into it or cleared by repair. Plan-read errors have their own source identity. Focused profile, pending-settings and feedback checks passed (28 tests), along with TypeScript and Rust formatting.
+
+## 0.2.0 forward port
+
+The minor track retains creator review, approval tied to exact ZIP bytes, and
+profile-owned preloader selections. VPK validation combines the new hash-bound
+inspection with the existing creator trust policy. A regression fixture imports
+an approved VPK with saved credentials byte-for-byte, refuses its export without
+replacing the destination, and rejects malformed or changed source archives.
+
+Folder repairs remap saved profile particle IDs in the same transaction as their
+mod records. Active and inactive profiles retain all other selections. Installed
+particle sources still require explicit clearing or restoring; an inactive
+profile that owns the shared projection also refuses repair. Tests verify both
+profile states, unrelated profile and projection isolation, and rollback/retry
+after the old live folder has moved. All eight folder-repair tests pass.
+
+The forward-port frontend check passes 517 desktop tests, 130 cfglint tests and
+21 release-script tests (three platform-specific skips). Biome, TypeScript/Vite,
+Rust formatting and core clippy with warnings denied pass. Full native regression
+verification is recorded separately after integrating the combined-branch legacy
+VPK fixture correction. These checks use synthetic temporary libraries only.

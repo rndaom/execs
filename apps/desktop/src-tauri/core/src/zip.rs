@@ -1677,6 +1677,40 @@ mod tests {
     }
 
     #[test]
+    fn creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        write_live(&root.join("tf/cfg/config_default.cfg"), "password \"0\"\n");
+        let path = dir.join("creator.zip");
+        let pack = crate::vpk::write_vpk_v2(&BTreeMap::from([(
+            "cfg/autoexec.cfg".into(),
+            b"password saved-server-password\nsv_cheats 1\n".to_vec(),
+        )]));
+        write_raw_zip(&path, &[("custom/creator.vpk", &pack)]);
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        assert!(review.warnings.iter().any(|warning|
+            warning.contains("creator.vpk/cfg/autoexec.cfg") && warning.contains("password")));
+        let imported =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        let id = &imported.profiles[0].id;
+        assert_eq!(fs::read(exclusive_file_path(&profiles, id, "tf/custom/creator.vpk")).unwrap(), pack);
+        let destination = dir.join("export.zip");
+        fs::write(&destination, b"keep existing export").unwrap();
+        assert!(export_profile_to(&profiles, &root, id, &destination)
+            .unwrap_err().message().contains("password"));
+        assert_eq!(fs::read(&destination).unwrap(), b"keep existing export");
+
+        let before = snapshot_tree(&profiles);
+        write_raw_zip(&path, &[("custom/creator.vpk", &0x55aa_1234u32.to_le_bytes())]);
+        assert!(creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).is_err());
+        assert!(import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).is_err());
+        assert_eq!(snapshot_tree(&profiles), before);
+        cleanup(&dir);
+    }
+
+    #[test]
     fn creator_review_never_waives_archive_integrity() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");

@@ -190,6 +190,15 @@ where
     let manifest = load_manifest(profiles_dir, id)?;
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     let active = library.active_profile_id.as_deref() == Some(id);
+    let renamed_mod_ids: BTreeMap<_, _> = manifest
+        .mods
+        .iter()
+        .filter_map(|record| {
+            plan.iter()
+                .find(|rename| record.pack.eq_ignore_ascii_case(&rename.from))
+                .map(|rename| (record.id.clone(), rename.to.clone()))
+        })
+        .collect();
     if active {
         let available: Vec<String> = manifest
             .mods
@@ -208,6 +217,15 @@ where
         {
             return Err(ProfileError::Io("Turn off profile-sourced particles in Mods and choose Apply mods, or Restore stock files, before repairing these folder names.".into()));
         }
+    } else if crate::preloader::selection_for_export(profiles_dir, id)?.is_some_and(|selection| {
+        selection
+            .profile_particle_mods
+            .iter()
+            .any(|id| renamed_mod_ids.contains_key(id))
+    }) {
+        // A prior owner can still hold the shared projection after interrupted
+        // work. A library-only repair cannot rename that projection's sources.
+        return Err(ProfileError::Io("Restore stock files in Mods before repairing this profile's folder names; its particle sources are still installed.".into()));
     }
     let mut sources = Vec::new();
     let mut remove = Vec::new();
@@ -325,6 +343,13 @@ where
                 next.ignored_packs
                     .retain(|pack| !pack.eq_ignore_ascii_case(&rename.from));
             }
+            if let Some(selection) = &mut next.preloader {
+                for id in &mut selection.profile_particle_mods {
+                    if let Some(renamed) = renamed_mod_ids.get(id) {
+                        *id = renamed.clone();
+                    }
+                }
+            }
             Ok(())
         },
     )?;
@@ -397,6 +422,115 @@ mod tests {
         }
         visit(root, root, &mut files);
         files
+    }
+
+    fn save_particle_selection(
+        profiles: &Path,
+        root: &Path,
+        id: &str,
+    ) -> crate::preloader::PreloaderSelection {
+        let mut manifest = load_manifest(profiles, id).unwrap();
+        for (id, pack) in [("author-materials", "materials"), ("unchanged", "custom-materials")] {
+            manifest.mods.push(crate::mods::ModRecord {
+                id: id.into(),
+                name: id.into(),
+                source: crate::mods::ModSource::Local,
+                pack: pack.into(),
+                files: 1,
+                bytes: 16,
+                installed_at: "2026-09-14T00:00:00Z".into(),
+            });
+        }
+        let selection = crate::preloader::PreloaderSelection {
+            addons: vec!["library-addon".into()],
+            particle_mods: vec!["library-particles".into()],
+            profile_particle_mods: vec!["author-materials".into(), "unchanged".into()],
+        };
+        manifest.preloader = Some(selection.clone());
+        save_manifest(profiles, root, &manifest, Vec::<String>::new()).unwrap();
+        selection
+    }
+
+    #[test]
+    fn saved_particle_selections_follow_repaired_mod_ids_for_active_and_inactive_profiles() {
+        for active in [true, false] {
+            let (area, profiles, root, id) = fixture();
+            let library = save_current_as_to(
+                &profiles,
+                &root,
+                "Other",
+                Vec::<String>::new(),
+                SaveCurrentOptions::default(),
+            )
+            .unwrap();
+            let other_id = &library.profiles.iter().find(|profile| profile.id != id).unwrap().id;
+            let mut expected = save_particle_selection(&profiles, &root, &id);
+            save_particle_selection(&profiles, &root, other_id);
+            if !active {
+                crate::profile::set_active_profile_to(&profiles, &root, other_id, Vec::<String>::new())
+                    .unwrap();
+                let state_path = area.join("preloader/state.json");
+                fs::create_dir_all(state_path.parent().unwrap()).unwrap();
+                fs::write(
+                    state_path,
+                    serde_json::to_vec(&crate::preloader::PreloaderState {
+                        selection_profile: Some(other_id.clone()),
+                        profile_particle_mods: vec!["author-materials".into()],
+                        ..Default::default()
+                    })
+                    .unwrap(),
+                )
+                .unwrap();
+            }
+            let live_before = snapshot(&root);
+            let other_before = snapshot(&profiles.join(other_id));
+            let preloader_before = snapshot(&area.join("preloader"));
+            let plan = plan_custom_folder_repair_to(&profiles, &root, &id).unwrap();
+            repair_custom_folders_to(&profiles, &root, &id, &plan, Vec::<String>::new()).unwrap();
+            expected.profile_particle_mods[0] = plan[0].to.clone();
+            assert_eq!(load_manifest(&profiles, &id).unwrap().preloader, Some(expected));
+            assert_eq!(snapshot(&profiles.join(other_id)), other_before);
+            assert_eq!(snapshot(&area.join("preloader")), preloader_before);
+            if !active {
+                assert_eq!(snapshot(&root), live_before);
+            }
+            fs::remove_dir_all(area).unwrap();
+        }
+    }
+
+    #[test]
+    fn an_inactive_profile_with_installed_particle_sources_refuses_repair() {
+        let (area, profiles, root, id) = fixture();
+        save_particle_selection(&profiles, &root, &id);
+        let library = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Other",
+            Vec::<String>::new(),
+        )
+        .unwrap();
+        let other = library.profiles.iter().find(|profile| profile.id != id).unwrap();
+        crate::profile::set_active_profile_to(&profiles, &root, &other.id, Vec::<String>::new())
+            .unwrap();
+        let state_path = area.join("preloader/state.json");
+        fs::create_dir_all(state_path.parent().unwrap()).unwrap();
+        fs::write(
+            state_path,
+            serde_json::to_vec(&crate::preloader::PreloaderState {
+                selection_profile: Some(id.clone()),
+                profile_particle_mods: vec!["author-materials".into()],
+                ..Default::default()
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let plan = plan_custom_folder_repair_to(&profiles, &root, &id).unwrap();
+        let before = snapshot(&area);
+        let error = repair_custom_folders_to(&profiles, &root, &id, &plan, Vec::<String>::new())
+            .unwrap_err();
+        assert!(error.message().contains("Restore stock files"));
+        assert_eq!(snapshot(&area), before);
+        fs::remove_dir_all(area).unwrap();
     }
 
     #[test]
@@ -497,6 +631,7 @@ mod tests {
     #[test]
     fn repair_rolls_back_after_the_live_folder_moves() {
         let (area, profiles, root, id) = fixture();
+        let mut expected = save_particle_selection(&profiles, &root, &id);
         let plan = plan_custom_folder_repair_to(&profiles, &root, &id).unwrap();
         let before = snapshot(&area);
         let original = root.join("tf/custom/materials");
@@ -516,6 +651,8 @@ mod tests {
         assert!(moved.get());
         assert_eq!(snapshot(&area), before);
         repair_custom_folders_to(&profiles, &root, &id, &plan, Vec::<String>::new()).unwrap();
+        expected.profile_particle_mods[0] = plan[0].to.clone();
+        assert_eq!(load_manifest(&profiles, &id).unwrap().preloader, Some(expected));
         fs::remove_dir_all(area).unwrap();
     }
 
