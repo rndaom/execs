@@ -105,3 +105,12 @@ including the combined-branch legacy VPK fixture correction. These checks use
 synthetic temporary libraries only. Frontend and core test logs are
 `G:/Projects/execs-015-evidence/forward-port-frontend-tests.log` and
 `G:/Projects/execs-015-evidence/forward-port-core-tests.log`.
+
+The final Windows workspace run also passes all 734 native tests: 105 desktop
+crate tests, 609 core unit tests and 20 integration tests, with nine existing
+explicitly ignored tests. Workspace clippy covers all targets with warnings
+denied. Logs: `G:/Projects/execs-015-evidence/forward-port-workspace-tests.log` and
+`G:/Projects/execs-015-evidence/forward-port-clippy.log`. The isolated Cargo target
+is `G:/Projects/execs-015-evidence/target-forward-port`. All four product versions
+remain `0.2.0`; creator import and profile-scoped preloader support remain on the
+minor track. Linux CI and packaged runtime checks are separate parent-task gates.
