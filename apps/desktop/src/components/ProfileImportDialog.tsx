@@ -17,12 +17,14 @@ export function ProfileImportDialog({
     | "cancelImport"
     | "confirmImport"
     | "switchProfile"
+    | "reviewFolderRepair"
   >;
   running: boolean;
 }) {
   const { importStage: stage, importReview: review, importedProfile } = profiles;
   if (!stage || stage === "selecting") return null;
   const complete = stage === "done";
+  const needsRepair = (importedProfile?.unsafeCustomFolders?.length ?? 0) > 0;
   const working = stage === "reading" || stage === "saving";
   const index = stage === "reading" ? 0 : stage === "review" ? 1 : 2;
   const title = complete
@@ -43,7 +45,9 @@ export function ProfileImportDialog({
       testId="profile-import-dialog"
       description={
         complete
-          ? `${importedProfile?.name ?? review?.name} is ready to use.`
+          ? needsRepair
+            ? `${importedProfile?.name ?? review?.name} needs folder repair before switching.`
+            : `${importedProfile?.name ?? review?.name} is ready to use.`
           : "Create a profile from a ZIP."
       }
       className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
@@ -158,12 +162,15 @@ export function ProfileImportDialog({
             onClick={() => {
               if (complete && importedProfile) {
                 profiles.dismissImport();
-                void profiles.switchProfile(importedProfile.id);
+                if (needsRepair) void profiles.reviewFolderRepair(importedProfile.id);
+                else void profiles.switchProfile(importedProfile.id);
               } else void profiles.confirmImport();
             }}
           >
             {complete
-              ? "Switch to profile"
+              ? needsRepair
+                ? "Repair folder names"
+                : "Switch to profile"
               : review?.creator
                 ? "Trust and import"
                 : "Import profile"}

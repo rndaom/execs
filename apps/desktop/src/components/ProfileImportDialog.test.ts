@@ -1,11 +1,13 @@
-import { type ComponentProps, createElement } from "react";
+// @vitest-environment jsdom
+import { act, type ComponentProps, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ProfileLibraryState } from "../hooks/useProfileLibrary";
 import { ProfileImportDialog } from "./ProfileImportDialog";
 
-function render(stage: ProfileLibraryState["importStage"], running = false, creator = true) {
-  const profiles = {
+function fixture(stage: ProfileLibraryState["importStage"], creator = true, needsRepair = false) {
+  return {
     importStage: stage,
     importReview: {
       token: "review",
@@ -17,12 +19,25 @@ function render(stage: ProfileLibraryState["importStage"], running = false, crea
       notes: [],
     },
     importedProfile:
-      stage === "done" ? { id: "new", name: "Creator", createdAt: "", updatedAt: "" } : null,
+      stage === "done"
+        ? {
+            id: "new",
+            name: "Creator",
+            createdAt: "",
+            updatedAt: "",
+            unsafeCustomFolders: needsRepair ? ["materials"] : [],
+          }
+        : null,
     dismissImport: () => {},
     cancelImport: async () => {},
     confirmImport: async () => {},
     switchProfile: async () => {},
+    reviewFolderRepair: async () => {},
   } satisfies ComponentProps<typeof ProfileImportDialog>["profiles"];
+}
+
+function render(stage: ProfileLibraryState["importStage"], running = false, creator = true) {
+  const profiles = fixture(stage, creator);
   return renderToStaticMarkup(createElement(ProfileImportDialog, { profiles, running }));
 }
 
@@ -57,5 +72,40 @@ describe("profile import dialog", () => {
     expect(render("done")).toContain('aria-valuenow="3"');
     expect(render("done")).toContain('aria-busy="false"');
     expect(render("selecting")).toBe("");
+  });
+
+  it("routes an imported unsafe profile to its repair review after TF2 closes", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const box = document.createElement("div");
+    document.body.append(box);
+    const root = createRoot(box);
+    const profiles = {
+      ...fixture("done", true, true),
+      dismissImport: vi.fn(),
+      switchProfile: vi.fn(async () => {}),
+      reviewFolderRepair: vi.fn(async () => {}),
+    };
+    try {
+      await act(async () =>
+        root.render(createElement(ProfileImportDialog, { profiles, running: true })),
+      );
+      const primary = () => box.querySelector<HTMLButtonElement>(".btn-primary");
+      expect(primary()?.textContent).toBe("Repair folder names");
+      expect(primary()?.disabled).toBe(true);
+      expect(box.textContent).toContain("needs folder repair before switching");
+      await act(async () => primary()?.click());
+      expect(profiles.reviewFolderRepair).not.toHaveBeenCalled();
+      await act(async () =>
+        root.render(createElement(ProfileImportDialog, { profiles, running: false })),
+      );
+      await act(async () => primary()?.click());
+      expect(profiles.dismissImport).toHaveBeenCalledOnce();
+      expect(profiles.reviewFolderRepair).toHaveBeenCalledWith("new");
+      expect(profiles.switchProfile).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => root.unmount());
+      box.remove();
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -92,8 +92,16 @@ profile that owns the shared projection also refuses repair. Tests verify both
 profile states, unrelated profile and projection isolation, and rollback/retry
 after the old live folder has moved. All eight folder-repair tests pass.
 
-The forward-port frontend check passes 517 desktop tests, 130 cfglint tests and
+Completed imports with unsafe folders lead directly to the existing repair review
+instead of offering a switch that the native guard must refuse. A real DOM test
+verifies the imported profile ID reaches the repair action, the switch callback
+stays unused, and the TF2 lock still disables the action.
+
+The forward-port frontend check passes 527 desktop tests, 140 cfglint tests and
 21 release-script tests (three platform-specific skips). Biome, TypeScript/Vite,
-Rust formatting and core clippy with warnings denied pass. Full native regression
-verification is recorded separately after integrating the combined-branch legacy
-VPK fixture correction. These checks use synthetic temporary libraries only.
+Rust formatting and workspace clippy with warnings denied pass. The core suite
+passes 609 unit tests and 20 integration tests (five opt-in fixtures ignored),
+including the combined-branch legacy VPK fixture correction. These checks use
+synthetic temporary libraries only. Frontend and core test logs are
+`G:/Projects/execs-015-evidence/forward-port-frontend-tests.log` and
+`G:/Projects/execs-015-evidence/forward-port-core-tests.log`.
