@@ -40,6 +40,11 @@ User-facing changes only. The release workflow publishes the matching
 - Launch: explain which pending settings prevent TF2 from starting, with actions
   to review the drafts, return to their pane, retry saving, or discard them.
 - Preview: keep settings available with correctly rooted managed cfg paths.
+- Profiles: preserve distinct dashed and undashed custom packs during capture,
+  absorb, export and removal, including independent Keep and Restore choices.
+- Settings: detect the executable mastercomfig loader before using overrides;
+  standalone addons and leftover overrides use vanilla cfgs, and snapshots
+  retain safe nested user cfgs in either setup.
 
 ## [0.1.4] - 2026-09-09
 

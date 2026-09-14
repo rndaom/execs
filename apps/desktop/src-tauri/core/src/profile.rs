@@ -2032,23 +2032,7 @@ fn profile_live_path(tf2_root: &Path, rel: &str) -> PathBuf {
 }
 
 fn profile_live_candidates(rel: &str) -> Vec<String> {
-    let mut candidates = vec![rel.to_string()];
-    let Some(rest) = rel.strip_prefix("tf/custom/") else {
-        return candidates;
-    };
-    let (pack, tail) = rest.split_once('/').unwrap_or((rest, ""));
-    let alternate_pack = if let Some(enabled) = pack.strip_prefix('-') {
-        enabled.to_string()
-    } else {
-        format!("-{pack}")
-    };
-    let alternate = if tail.is_empty() {
-        format!("tf/custom/{alternate_pack}")
-    } else {
-        format!("tf/custom/{alternate_pack}/{tail}")
-    };
-    candidates.push(alternate);
-    candidates
+    vec![rel.to_string()]
 }
 
 fn profile_entry_source(profiles_dir: &Path, profile_id: &str, file: &ProfileFile) -> PathBuf {
@@ -6130,7 +6114,7 @@ mod tests {
             &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
             "hud\n",
         );
-        write_live(&root.join("tf/custom/mastercomfig-base.vpk"), "shared-vpk");
+        crate::cfg_layer::write_test_base(&root);
         write_live(&root.join("tf/cfg/video.txt"), "video\n");
         write_live(&root.join("tf/steam.inf"), "appID=440\n");
         let before = snapshot_tree(&root);
@@ -6186,7 +6170,10 @@ mod tests {
             .find(|file| file.path == "tf/custom/mastercomfig-base.vpk")
             .unwrap();
         assert_eq!(shared.storage, FileStorage::Shared);
-        assert_eq!(shared.sha256, sha256_hex(b"shared-vpk"));
+        assert_eq!(
+            shared.sha256,
+            sha256_hex(&crate::cfg_layer::test_base_vpk())
+        );
         assert!(crate::blob::blob_path(&profiles, &shared.sha256).is_file());
         assert!(!exclusive_file_path(&profiles, id, "tf/custom/mastercomfig-base.vpk").exists());
         cleanup(&dir);

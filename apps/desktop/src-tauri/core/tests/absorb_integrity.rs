@@ -305,22 +305,22 @@ fn a_locked_global_pack_is_still_excluded_from_capture() {
 }
 
 #[test]
-fn a_case_renamed_file_in_a_disabled_pack_keeps_its_bytes_and_ownership() {
+fn a_case_renamed_file_in_a_dashed_pack_keeps_its_bytes_and_ownership() {
     let f = Fixture::new();
-    let id = f.save();
-    let target = f.empty_profile(&id);
     fs::rename(
         f.root.join("tf/custom/mypack"),
         f.root.join("tf/custom/-mypack"),
     )
     .unwrap();
+    let id = f.save();
+    let target = f.empty_profile(&id);
     let renamed = "tf/custom/-mypack/resource/Menu.res";
     fs::rename(
         f.root.join("tf/custom/-mypack/resource/menu.res"),
         f.root.join(renamed),
     )
     .unwrap();
-    fs::write(f.root.join(renamed), "disabled edit").unwrap();
+    fs::write(f.root.join(renamed), "dashed edit").unwrap();
     f.absorb();
     f.switch(&target);
     assert!(!f.root.join(renamed).exists());
@@ -329,13 +329,10 @@ fn a_case_renamed_file_in_a_disabled_pack_keeps_its_bytes_and_ownership() {
     let saved = manifest
         .files
         .iter()
-        .find(|p| p.path.to_lowercase() == MENU)
+        .find(|p| p.path.to_lowercase() == MENU.replace("mypack", "-mypack"))
         .unwrap();
-    assert_eq!(
-        fs::read(f.root.join(&saved.path)).unwrap(),
-        b"disabled edit"
-    );
-    assert!(!saved.path.contains("-mypack"));
+    assert_eq!(fs::read(f.root.join(&saved.path)).unwrap(), b"dashed edit");
+    assert!(saved.path.contains("-mypack"));
 }
 
 #[test]

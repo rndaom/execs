@@ -135,8 +135,8 @@ pub struct AbsorbOptions<'a> {
     pub steam_roots: Option<&'a [PathBuf]>,
 }
 
-/// Top-level `tf/custom/` pack identity. A leading `-` is the Source disable
-/// prefix. Entries that belong to Valve or to an interrupted write of ours are
+/// Top-level `tf/custom/` pack identity. Source mounts leading-dash names as
+/// distinct search paths. Entries belonging to Valve or interrupted writes are
 /// not packs at all: this is the one gate both the live scan and the manifest
 /// go through, so junk can never be prompted for, absorbed, or grouped.
 pub fn pack_key(rel: &str) -> Option<String> {
@@ -148,14 +148,10 @@ pub fn pack_key(rel: &str) -> Option<String> {
     if first.is_empty() {
         return None;
     }
-    let name = first.strip_prefix('-').unwrap_or(first);
-    if name.is_empty() {
-        return None;
-    }
     if cfg!(windows) {
-        Some(name.to_ascii_lowercase())
+        Some(first.to_ascii_lowercase())
     } else {
-        Some(name.to_string())
+        Some(first.to_string())
     }
 }
 
@@ -731,62 +727,16 @@ fn classify(
     })
 }
 
-/// The live tree keyed by the spelling the manifest uses for each pack.
-///
-/// A pack keeps its legacy identity whether its folder is `hud` or `-hud`,
-/// and on Windows whether it is `RaysHUD` or `rayshud`. Older switches wrote
-/// a profile's second HUD as `-hud` while the manifest kept `hud`; matched by
-/// exact path, the next absorb read that as "hud was
-/// deleted, -hud is new", removed the library copy and re-added it under the
-/// dashed name — and the following switch wrote both HUDs dashed. Keying
-/// live files by the manifest's spelling makes the folder name a live-only
-/// detail: the library copy keeps the manifest path, and the twin's bytes are
-/// what get hashed against it.
-///
-/// When both spellings are live at once (a user keeping `hud` and `-hud`
-/// side by side), the one matching the manifest keeps its key and the other
-/// stays under its own name, exactly as before.
+/// The live tree retains literal pack names. Only Windows case-only changes
+/// reconcile to existing manifest spellings; a leading dash is never a rename.
 fn live_by_manifest_spelling(
     entries: Vec<crate::surface::InventoryEntry>,
-    manifest_paths: &BTreeSet<String>,
+    _manifest_paths: &BTreeSet<String>,
 ) -> Result<HashMap<String, PathBuf>, ProfileError> {
-    let mut manifest_first_segment: BTreeMap<String, String> = BTreeMap::new();
-    for path in manifest_paths {
-        if let (Some(pack), Some(first)) = (pack_key(path), custom_first_segment(path)) {
-            manifest_first_segment
-                .entry(pack)
-                .or_insert_with(|| first.to_string());
-        }
-    }
-    let mut live: HashMap<String, PathBuf> = HashMap::new();
-    let mut rekeyed = Vec::new();
-    for entry in entries {
-        let target = pack_key(&entry.dest_rel)
-            .and_then(|pack| manifest_first_segment.get(&pack))
-            .and_then(|spelling| {
-                let first = custom_first_segment(&entry.dest_rel)?;
-                if first == spelling {
-                    return None;
-                }
-                let rest = &entry.dest_rel["tf/custom/".len() + first.len()..];
-                Some(format!("tf/custom/{spelling}{rest}"))
-            });
-        match target {
-            Some(target) => rekeyed.push((target, entry)),
-            None => {
-                live.insert(entry.dest_rel, entry.source);
-            }
-        }
-    }
-    for (target, entry) in rekeyed {
-        // Exact spellings win: never shadow a live file that already carries
-        // the manifest's own name.
-        if live.contains_key(&target) {
-            live.insert(entry.dest_rel, entry.source);
-        } else {
-            live.insert(target, entry.source);
-        }
-    }
+    let live: HashMap<String, PathBuf> = entries
+        .into_iter()
+        .map(|entry| (entry.dest_rel, entry.source))
+        .collect();
     // Portable profiles cannot represent two case-distinct paths, even on
     // Linux. Refuse an ambiguous scan instead of replacing one with the other.
     let mut identities = HashSet::new();
@@ -798,17 +748,16 @@ fn live_by_manifest_spelling(
         }
     }
     // On Windows a case-only rename is still the same file. Reconcile every
-    // component, after the disabled-pack mapping, so it cannot become a put
+    // component so it cannot become a put
     // followed by a removal of the same portable identity. Linux keeps the
     // actual spelling; its rename is committed as one addition/removal batch.
     #[cfg(windows)]
     {
-        let spellings = manifest_paths
+        let spellings = _manifest_paths
             .iter()
             .map(|path| Ok((portable_path_key(path)?, path)))
             .collect::<Result<HashMap<_, _>, ProfileError>>()?;
-        live = live
-            .into_iter()
+        live.into_iter()
             .map(|(path, source)| {
                 let key = portable_path_key(&path)?;
                 let path = spellings
@@ -816,20 +765,10 @@ fn live_by_manifest_spelling(
                     .map_or(path, |spelling| (*spelling).clone());
                 Ok((path, source))
             })
-            .collect::<Result<_, ProfileError>>()?;
+            .collect::<Result<_, ProfileError>>()
     }
+    #[cfg(not(windows))]
     Ok(live)
-}
-
-/// The folder name directly under `tf/custom/`, as spelled.
-fn custom_first_segment(rel: &str) -> Option<&str> {
-    let rest = rel.strip_prefix("tf/custom/")?;
-    let first = rest.split('/').next()?;
-    if first.is_empty() {
-        None
-    } else {
-        Some(first)
-    }
 }
 
 fn manifest_pack_keys(files: &[ProfileFile]) -> BTreeSet<String> {
@@ -1072,9 +1011,14 @@ mod tests {
     }
 
     #[test]
-    fn pack_key_strips_disable_prefix() {
+    fn pack_key_preserves_leading_dash() {
         assert_eq!(pack_key("tf/custom/hud/resource/ui/x"), Some("hud".into()));
-        assert_eq!(pack_key("tf/custom/-hud/info.vdf"), Some("hud".into()));
+        assert_eq!(pack_key("tf/custom/-hud/info.vdf"), Some("-hud".into()));
+        assert_eq!(
+            pack_key("tf/custom/-workshop/a.txt"),
+            Some("-workshop".into())
+        );
+        assert_eq!(pack_key("tf/custom/-"), Some("-".into()));
         assert_eq!(
             pack_key("tf/custom/mastercomfig-base.vpk"),
             Some("mastercomfig-base.vpk".into())
@@ -1089,7 +1033,20 @@ mod tests {
             pack_key("tf/custom/Hud/info.vdf"),
             pack_key("tf/custom/hud/info.vdf")
         );
+        assert_ne!(
+            pack_key("tf/custom/-Hud/info.vdf"),
+            pack_key("tf/custom/Hud/info.vdf")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_pack_keys_fold_case_but_preserve_dashes() {
         assert_eq!(
+            pack_key("tf/custom/Hud/info.vdf"),
+            pack_key("tf/custom/hud/info.vdf")
+        );
+        assert_ne!(
             pack_key("tf/custom/-Hud/info.vdf"),
             pack_key("tf/custom/Hud/info.vdf")
         );
@@ -1307,12 +1264,10 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// The switch writes a profile's second HUD as `-hud` while the manifest
-    /// keeps `hud`. Matched by exact path, the next absorb deleted the library
-    /// copy of `hud` and re-added it as `-hud`; a later switch then wrote both
-    /// HUDs disabled.
+    /// A manual dash rename is an addition/removal decision, never automatic
+    /// attribution of another pack's bytes to the previous manifest identity.
     #[test]
-    fn a_disabled_twin_keeps_the_manifest_spelling_and_its_library_copy() {
+    fn a_dashed_rename_waits_for_update_before_changing_library_identity() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1321,22 +1276,15 @@ mod tests {
         write_live(&root.join("tf/custom/hud/resource/ui/a.res"), "a\n");
         let id = save_main(&profiles, &root);
         fs::rename(root.join("tf/custom/hud"), root.join("tf/custom/-hud")).unwrap();
-        // Edited and added while the pack sat disabled.
+        // Edited and added after the literal pack rename.
         write_live(&root.join("tf/custom/-hud/resource/ui/a.res"), "a2\n");
         write_live(&root.join("tf/custom/-hud/resource/ui/b.res"), "b\n");
 
         let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
 
         assert!(result.delta.owned_missing.is_empty(), "{:?}", result.delta);
-        assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
-        let manifest = load_manifest(&profiles, &id).unwrap();
-        let paths: Vec<&str> = manifest.files.iter().map(|f| f.path.as_str()).collect();
-        assert!(paths.contains(&"tf/custom/hud/info.vdf"));
-        assert!(paths.contains(&"tf/custom/hud/resource/ui/b.res"));
-        assert!(
-            !paths.iter().any(|p| p.starts_with("tf/custom/-hud/")),
-            "{paths:?}"
-        );
+        assert_eq!(result.delta.packs_added, ["-hud"]);
+        assert_eq!(result.delta.packs_removed, ["hud"]);
         assert_eq!(
             fs::read(exclusive_file_path(
                 &profiles,
@@ -1344,9 +1292,27 @@ mod tests {
                 "tf/custom/hud/resource/ui/a.res"
             ))
             .unwrap(),
+            b"a\n"
+        );
+        absorb_packs_to(&profiles, &root, PackChoice::Update, unlocked(), opts(None)).unwrap();
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        let paths: Vec<&str> = manifest.files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"tf/custom/-hud/info.vdf"));
+        assert!(paths.contains(&"tf/custom/-hud/resource/ui/b.res"));
+        assert!(
+            !paths.iter().any(|p| p.starts_with("tf/custom/hud/")),
+            "{paths:?}"
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/-hud/resource/ui/a.res"
+            ))
+            .unwrap(),
             b"a2\n"
         );
-        assert!(exclusive_file_path(&profiles, &id, "tf/custom/hud/info.vdf").is_file());
+        assert!(exclusive_file_path(&profiles, &id, "tf/custom/-hud/info.vdf").is_file());
         cleanup(&dir);
     }
 
@@ -1360,6 +1326,7 @@ mod tests {
         write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
         write_live(&root.join("tf/cfg/overrides/modules.cfg"), "x\n");
         write_live(&root.join("tf/cfg/user/autoexec.cfg"), "legacy\n");
+        crate::cfg_layer::write_test_base(&root);
         let id = save_main(&profiles, &root);
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert!(
@@ -1399,7 +1366,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_prefix_is_same_pack() {
+    fn leading_dash_is_a_distinct_pack() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1408,8 +1375,8 @@ mod tests {
         save_main(&profiles, &root);
         fs::rename(root.join("tf/custom/hud"), root.join("tf/custom/-hud")).unwrap();
         let delta = scan_absorb_delta_to(&profiles, &root, opts(None)).unwrap();
-        assert!(!delta.packs_added.contains(&"hud".into()));
-        assert!(!delta.packs_removed.contains(&"hud".into()));
+        assert_eq!(delta.packs_added, ["-hud"]);
+        assert_eq!(delta.packs_removed, ["hud"]);
         cleanup(&dir);
     }
 

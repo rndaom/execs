@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use crate::apply::{cfg_layer_from_files, detail_from_manifest, ProfileDetail};
+use crate::apply::{cfg_layer_from_manifest, detail_from_manifest, ProfileDetail};
 use crate::finder::discover_steam_roots;
 use crate::hash::{metadata_is_link, validate_dir_within, validate_file_within};
 use crate::launch::{
@@ -238,7 +238,7 @@ where
     let next_launch = if keep_preload {
         None
     } else {
-        let plan = preload_plan(&manifest, preload);
+        let plan = preload_plan(profiles_dir, &manifest, preload)?;
         remove_paths.extend(plan.remove_paths);
         if let Some(path) = plan.put_path {
             puts.push((path.to_string(), FileSource::Bytes(preload_cfg.as_bytes())));
@@ -291,7 +291,7 @@ where
             fresh_steam_process_check,
         )?;
     }
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 pub fn remove_viewmodels(tf2_root: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
@@ -372,11 +372,13 @@ where
         .is_some_and(|record| record.preload);
     let update_preload = preload_was && !keep_preload;
     let mut remove_paths = viewmodel_paths(&before, update_preload);
-    let next_launch = update_preload.then(|| {
-        let plan = preload_plan(&before, false);
+    let next_launch = if update_preload {
+        let plan = preload_plan(profiles_dir, &before, false)?;
         remove_paths.extend(plan.remove_paths);
-        plan.next_launch_options
-    });
+        Some(plan.next_launch_options)
+    } else {
+        None
+    };
     remove_paths.sort();
     remove_paths.dedup();
     validate_viewmodel_snapshot_budget(profiles_dir, tf2_root, profile_id, &before, &remove_paths)?;
@@ -410,7 +412,7 @@ where
             fresh_steam_process_check,
         )?;
     }
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 /// Whether the profile carries the shared preload cfg (either layer).
@@ -437,7 +439,7 @@ pub fn set_profile_preload(
     let steam_roots = discover_steam_roots();
     let before = load_manifest(&profiles_dir, profile_id)?;
     let preload_cfg = serialize_preload_cfg();
-    let plan = preload_plan(&before, enabled);
+    let plan = preload_plan(&profiles_dir, &before, enabled)?;
     let puts = plan
         .put_path
         .map(|path| vec![(path.to_string(), FileSource::Bytes(preload_cfg.as_bytes()))])
@@ -470,7 +472,7 @@ pub fn set_profile_preload(
         &steam_roots,
         true,
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(&profiles_dir, &manifest)
 }
 
 /// The mods preloader needs the shared preload cfg + launch token too, with
@@ -604,7 +606,7 @@ where
         enabled || !preload_is_wanted(data_dir, tf2_root).map_err(ProfileError::Io)?;
     let preload_cfg = serialize_preload_cfg();
     let (puts, remove_paths, next_launch) = if update_shared_preload {
-        let plan = preload_plan(&manifest, enabled);
+        let plan = preload_plan(profiles_dir, &manifest, enabled)?;
         let puts = plan
             .put_path
             .map(|path| vec![(path.to_string(), FileSource::Bytes(preload_cfg.as_bytes()))])
@@ -645,7 +647,7 @@ where
             fresh_steam_process_check,
         )?;
     }
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn set_preload_state(
@@ -660,7 +662,7 @@ fn set_preload_state(
     refuse_if_running_among(running).map_err(ProfileError::from)?;
     let before = load_manifest(profiles_dir, profile_id)?;
     let preload_cfg = serialize_preload_cfg();
-    let plan = preload_plan(&before, enabled);
+    let plan = preload_plan(profiles_dir, &before, enabled)?;
     let puts = plan
         .put_path
         .map(|path| vec![(path.to_string(), FileSource::Bytes(preload_cfg.as_bytes()))])
@@ -699,9 +701,13 @@ struct PreloadPlan {
     next_launch_options: String,
 }
 
-fn preload_plan(manifest: &ProfileManifest, enabled: bool) -> PreloadPlan {
-    let (path, launch_stem) = preload_target(manifest);
-    PreloadPlan {
+fn preload_plan(
+    profiles_dir: &Path,
+    manifest: &ProfileManifest,
+    enabled: bool,
+) -> Result<PreloadPlan, ProfileError> {
+    let (path, launch_stem) = preload_target(profiles_dir, manifest)?;
+    Ok(PreloadPlan {
         put_path: enabled.then_some(path),
         remove_paths: manifest
             .files
@@ -714,7 +720,7 @@ fn preload_plan(manifest: &ProfileManifest, enabled: bool) -> PreloadPlan {
             enabled,
             launch_stem,
         ),
-    }
+    })
 }
 
 /// Steam owns `localconfig.vdf`, so it cannot join the profile mutation
@@ -761,11 +767,14 @@ fn sync_launch_after_commit(
     }
 }
 
-fn preload_target(manifest: &crate::profile::ProfileManifest) -> (&'static str, &'static str) {
-    match cfg_layer_from_files(&manifest.files) {
+fn preload_target(
+    profiles_dir: &Path,
+    manifest: &crate::profile::ProfileManifest,
+) -> Result<(&'static str, &'static str), ProfileError> {
+    Ok(match cfg_layer_from_manifest(profiles_dir, manifest)? {
         CfgLayer::Comfig => (EXECS_PRELOAD_COMFIG_PATH, EXECS_PRELOAD_OVERRIDES_STEM),
         CfgLayer::Vanilla => (EXECS_PRELOAD_VANILLA_PATH, EXECS_PRELOAD_STEM),
-    }
+    })
 }
 
 fn validate_viewmodel_import_metadata(
@@ -1171,6 +1180,7 @@ mod tests {
     #[test]
     fn comfig_preload_uses_the_overrides_exec_target() {
         let (root, profiles, tf2, id) = setup();
+        crate::cfg_layer::install_test_base(&profiles, &tf2, &id);
         write_owned_file_to(
             &profiles,
             &tf2,

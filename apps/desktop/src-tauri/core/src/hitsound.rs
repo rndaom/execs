@@ -857,7 +857,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn validate_prepared_change(change: &HitsoundChange) -> Result<(), ProfileError> {

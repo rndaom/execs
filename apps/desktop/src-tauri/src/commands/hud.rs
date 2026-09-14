@@ -438,7 +438,7 @@ fn install_fetched_hud(
             "The installed HUD changed while its update was downloading. Try again.",
         ));
     }
-    let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);
+    let layer = execs_core::apply::cfg_layer_from_manifest(&execs_core::profiles_dir(), &manifest)?;
     let mut options = BTreeMap::new();
     if preserve_options {
         if let Some(hud) = manifest.hud {

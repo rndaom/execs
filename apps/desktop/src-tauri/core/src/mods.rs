@@ -742,7 +742,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 pub fn remove_mod(
@@ -807,7 +807,7 @@ where
             prune_empty_parents(&live_path(tf2_root, path), tf2_root);
         }
     }
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn pack_files(manifest: &ProfileManifest, pack: &str) -> Vec<crate::profile::ProfileFile> {

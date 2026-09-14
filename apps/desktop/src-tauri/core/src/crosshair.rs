@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::apply::{cfg_layer_from_files, detail_from_manifest, ProfileDetail};
+use crate::apply::{cfg_layer_from_manifest, detail_from_manifest, ProfileDetail};
 use crate::archive::read_regular_file_bounded_within;
 use crate::hash::{metadata_is_link, validate_dir_within};
 use crate::ice::{decrypt_weapon_ctx, encrypt_weapon_ctx};
@@ -156,10 +156,10 @@ where
     refuse_if_running_among(&running)?;
     let manifest = load_manifest(profiles, id)?;
     let Some(record) = &manifest.crosshair else {
-        return Ok(detail_from_manifest(&manifest));
+        return detail_from_manifest(profiles, &manifest);
     };
     if record.inactive {
-        return Ok(detail_from_manifest(&manifest));
+        return detail_from_manifest(profiles, &manifest);
     }
     refuse_untracked_live_pack_files(profiles, root, id, &manifest)?;
     let previous = pack_paths(profiles, id)?;
@@ -185,7 +185,7 @@ where
         let bytes = crate::apply::profile_file_bytes_from(profiles, id, path)?;
         prepared.push((format!("{prefix}inactive/{}", &path[prefix.len()..]), bytes));
     }
-    let path = if cfg_layer_from_files(&manifest.files) == CfgLayer::Comfig {
+    let path = if cfg_layer_from_manifest(profiles, &manifest)? == CfgLayer::Comfig {
         GAMEPLAY_COMFIG_PATH
     } else {
         GAMEPLAY_VANILLA_PATH
@@ -231,7 +231,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&result))
+    detail_from_manifest(profiles, &result)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -651,7 +651,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn validate_crosshair_request(
@@ -933,7 +933,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -1327,7 +1327,7 @@ fn prepare_empty_stock_crosshair(
     color: Option<[u8; 3]>,
 ) -> Result<(String, Vec<u8>), ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    let layer = cfg_layer_from_files(&manifest.files);
+    let layer = cfg_layer_from_manifest(profiles_dir, &manifest)?;
     let path = match layer {
         CfgLayer::Comfig => GAMEPLAY_COMFIG_PATH,
         CfgLayer::Vanilla => GAMEPLAY_VANILLA_PATH,

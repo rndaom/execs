@@ -576,22 +576,10 @@ fn dual_write_target_config(
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
 }
 
-/// Where a manifest path can be found live: its own path, plus the Source
-/// legacy dash-prefixed spelling a user or older build renamed a pack to.
+/// A manifest owns only its literal path. Legacy HUD backup recovery has its
+/// own explicit policy; generic removal must never claim a dashed peer.
 pub(crate) fn live_candidates(tf2_root: &Path, rel: &str) -> Vec<PathBuf> {
-    let mut out = vec![live_path(tf2_root, rel)];
-    if let Some(disabled) = disabled_custom_rel(rel) {
-        out.push(live_path(tf2_root, &disabled));
-    }
-    out
-}
-
-fn disabled_custom_rel(rel: &str) -> Option<String> {
-    let rest = rel.strip_prefix("tf/custom/")?;
-    if rest.starts_with('-') {
-        return None;
-    }
-    Some(format!("tf/custom/-{rest}"))
+    vec![live_path(tf2_root, rel)]
 }
 
 pub(crate) fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
@@ -1746,7 +1734,7 @@ mod tests {
             "manually edited oxide\n",
         );
         let mut before = load_manifest(&profiles, &oxide).unwrap();
-        before.ignored_packs.push("grape-oxide".into());
+        before.ignored_packs.push("-grape-oxide".into());
         crate::profile::save_manifest(&profiles, &root, &before, unlocked()).unwrap();
         switch_profile_to(&profiles, &root, &colly, unlocked(), no_steam(), |_| {}).unwrap();
         let mounted = crate::hud::live_hud_names(&root);
