@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
+import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
-import { AutosaveActivity, AutosaveDiscard, AutosavePending } from "./hooks/useAutosave";
 import type { SetOperationError } from "./hooks/useOperationErrors";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
@@ -51,6 +51,7 @@ import { emptyHudState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
+import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
@@ -70,6 +71,7 @@ export function SettingsHost({
   filesDraftStore: suppliedFilesDraftStore,
   filesSaver,
   filesCloseReady = true,
+  settingsDraftStore: suppliedSettingsDraftStore,
   tab,
   running,
   externalBusy,
@@ -79,11 +81,13 @@ export function SettingsHost({
   onBusyChange,
   onWriteBusyChange,
   onPendingChange,
+  onRecoveryChange,
   onError,
 }: {
   api: Api;
   filesDraftStore?: FilesDraftStore;
   filesCloseReady?: boolean;
+  settingsDraftStore?: SettingsDraftStore;
   filesSaver?: { current: ((draft: DirtyFileDraft) => Promise<boolean>) | null };
   tab: SettingsTab;
   running: boolean;
@@ -94,6 +98,7 @@ export function SettingsHost({
   onBusyChange: (busy: boolean) => void;
   onWriteBusyChange?: (busy: boolean) => void;
   onPendingChange?: (pending: boolean) => void;
+  onRecoveryChange?: (recovery: boolean) => void;
   onError: SetOperationError;
 }) {
   const { error, dismissError } = useAppStatus();
@@ -143,19 +148,27 @@ export function SettingsHost({
   /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
   const loadRequest = useRef(0);
 
-  const pendingIds = useRef(new Set<string>());
-  const discardAutosaves = useRef(false);
-  const reportPending = useCallback(
-    (id: string, pending: boolean) => {
-      if (pending) pendingIds.current.add(id);
-      else pendingIds.current.delete(id);
-      onPendingChange?.(pendingIds.current.size > 0);
-    },
-    [onPendingChange],
+  const [localSettingsDraftStore] = useState(createSettingsDraftStore);
+  const settingsDraftStore = suppliedSettingsDraftStore ?? localSettingsDraftStore;
+  useEffect(
+    () => settingsDraftStore.registerWriteGuard(() => settingsBusyQueue.active),
+    [settingsDraftStore, settingsBusyQueue],
   );
-  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
+  useEffect(() => {
+    const report = () => onPendingChange?.(settingsDraftStore.getSnapshot().length > 0);
+    report();
+    const stop = settingsDraftStore.subscribe(report);
+    return () => {
+      stop();
+      onPendingChange?.(false);
+    };
+  }, [settingsDraftStore, onPendingChange]);
 
   const repairBusy = modsPayload?.repairInProgress === true;
+  useEffect(() => {
+    onRecoveryChange?.(modsPayload?.recoveryRequired === true);
+    return () => onRecoveryChange?.(false);
+  }, [onRecoveryChange, modsPayload?.recoveryRequired]);
 
   // Queue work and Steam verification both own the write surface. Reflect both
   // in App so launch, profile switches, update install, and every pane disable
@@ -180,7 +193,9 @@ export function SettingsHost({
   // A switch leaves the old pane visible until its replacement snapshot loads.
   // Own saves keep inputs live so their responses cannot interrupt newer edits.
   const inputsBlocked =
-    externalBusy || (!queueBusy && (loadBlocked.current || loading || loadError !== null));
+    !filesCloseReady ||
+    externalBusy ||
+    (!queueBusy && (loadBlocked.current || loading || loadError !== null));
   const layer = detail?.layer ?? "comfig";
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
@@ -1225,26 +1240,27 @@ export function SettingsHost({
           {CFG_INCOMPLETE_MESSAGE}
         </p>
       ) : null}
-      <AutosaveDiscard.Provider value={discardAutosaves}>
-        <AutosavePending.Provider value={reportPending}>
-          {[...visited.current.tabs].map((paneTab) => (
-            <div
-              key={`${profileId}:${paneTab}`}
-              hidden={tab !== paneTab}
-              inert={inputsBlocked || (!maps.complete && usesCfgState(paneTab))}
-              data-testid={`settings-surface-${paneTab}`}
-            >
-              <AutosaveActivity.Provider
-                value={
-                  tab === paneTab && !inputsBlocked && (maps.complete || !usesCfgState(paneTab))
+      {[...visited.current.tabs].map((paneTab) => (
+        <SettingsDraftBoundary
+          key={`${profileId}:${paneTab}`}
+          store={settingsDraftStore}
+          profile={profileId}
+          tab={paneTab}
+          active={tab === paneTab}
+          blocked={inputsBlocked || (!maps.complete && usesCfgState(paneTab))}
+          onDiscard={
+            paneTab === "launch"
+              ? () => {
+                  launchRef.current = launchSeedRef.current;
+                  setLaunch(launchSeedRef.current);
+                  setLaunchSaved(null);
                 }
-              >
-                {pane(paneTab)}
-              </AutosaveActivity.Provider>
-            </div>
-          ))}
-        </AutosavePending.Provider>
-      </AutosaveDiscard.Provider>
+              : undefined
+          }
+        >
+          {pane(paneTab)}
+        </SettingsDraftBoundary>
+      ))}
     </AppStatusProvider>
   );
 }
