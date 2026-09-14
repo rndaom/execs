@@ -195,7 +195,7 @@ it("keeps the consumed drift signal through a failed refresh retry", async () =>
   expect(state.bindSyncRequest).toBeNull();
   busy = false;
   await render();
-  expect(setError).toHaveBeenCalledWith("read refused");
+  expect(setError).toHaveBeenCalledWith("read refused", "profiles:absorb");
   expect(absorb).toHaveBeenCalledTimes(2);
   busy = true;
   await render();

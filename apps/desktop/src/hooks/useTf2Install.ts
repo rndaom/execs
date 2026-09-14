@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Api } from "../lib/api";
 import type { Tf2Install } from "../lib/bridge";
+import type { SetOperationError } from "./useOperationErrors";
 
 export type Screen = "finder" | "ready";
 
@@ -24,7 +25,7 @@ export function useTf2Install(
     setBusy,
     onChanged,
   }: {
-    setError: (message: string | null) => void;
+    setError: SetOperationError;
     setBusy: (busy: boolean) => void;
     /** Leaving for the finder must clear every install-scoped screen. */
     onChanged: () => void;
@@ -54,12 +55,13 @@ export function useTf2Install(
           return;
         }
         setInstalls(found);
+        setError(null, "install:scan");
         if (!stored && found.length === 1) {
           setSelected(found[0].path);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not scan for TF2.");
+          setError(err instanceof Error ? err.message : "Could not scan for TF2.", "install:scan");
         }
       } finally {
         if (!cancelled) {
@@ -74,7 +76,6 @@ export function useTf2Install(
   }, [api, setError]);
 
   const browse = useCallback(async () => {
-    setError(null);
     setBusy(true);
     try {
       const picked = await api.browseTf2Root();
@@ -85,8 +86,12 @@ export function useTf2Install(
         current.some((item) => item.path === picked.path) ? current : [...current, picked],
       );
       setSelected(picked.path);
+      setError(null, "install:browse");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "That folder is not a TF2 install.");
+      setError(
+        err instanceof Error ? err.message : "That folder is not a TF2 install.",
+        "install:browse",
+      );
     } finally {
       setBusy(false);
     }
@@ -96,21 +101,23 @@ export function useTf2Install(
     if (!selected) {
       return;
     }
-    setError(null);
     setBusy(true);
     try {
       const stored = await api.confirmTf2Root(selected);
       setConfirmed(stored);
       setScreen("ready");
+      setError(null, "install:confirm");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remember that install.");
+      setError(
+        err instanceof Error ? err.message : "Could not remember that install.",
+        "install:confirm",
+      );
     } finally {
       setBusy(false);
     }
   }, [api, selected, setError, setBusy]);
 
   const change = useCallback(() => {
-    setError(null);
     setScreen("finder");
     setConfirmed(null);
     setSelected((current) => {
@@ -120,7 +127,7 @@ export function useTf2Install(
       return installs.length === 1 ? installs[0].path : null;
     });
     onChanged();
-  }, [installs, setError, onChanged]);
+  }, [installs, onChanged]);
 
   return {
     screen,

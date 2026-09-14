@@ -4,6 +4,7 @@ import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
 import { libraryStatusCopy } from "../../lib/library-ui";
 import { SwitchProgressList } from "../SwitchProgressList";
+import { OperationError } from "../ui/OperationError";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
 import { ReadyHeader } from "./ReadyHeader";
@@ -38,7 +39,7 @@ export function ReadyPanel({
   onLaunch: () => void;
   onCancelLaunch: () => void;
 }) {
-  const { error, busy, running } = useAppStatus();
+  const { error, dismissError, busy, running } = useAppStatus();
   const controlsBusy = busy || progress.state.active;
   const { library } = profiles;
   const recoveryTarget = library?.profiles.find((profile) => profile.id === recoveryTargetId);
@@ -81,14 +82,7 @@ export function ReadyPanel({
         </div>
       ) : null}
 
-      {error ? (
-        <div
-          role="alert"
-          className="t-body shrink-0 border-b border-error/50 bg-error/10 px-5 py-2 text-ink"
-        >
-          {error}
-        </div>
-      ) : null}
+      <OperationError message={error} onDismiss={dismissError} />
 
       <PackPrompt
         delta={running || profiles.packPromptDeferred ? null : profiles.packPrompt}

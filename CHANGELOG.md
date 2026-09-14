@@ -17,6 +17,13 @@ User-facing changes only. The release workflow publishes the matching
   with the failed choice available to retry.
 - Imports: cancelling HUD, mod, viewmodel or comfig-custom pickers no longer
   reports a successful import or displays Saving while choosing files.
+- Save feedback: identify the originating pane after navigation, keep each
+  operation's failure until it succeeds or is dismissed, and give every save
+  completion its full display time.
+- Draft feedback: remove obsolete waiting notices when edits are reverted,
+  discarded or saved, and keep other panes' pending drafts visible.
+- Errors: keep export failures visible through background settings reloads,
+  with a consistent dismissal control that preserves draft and recovery guards.
 
 ## [0.1.4] - 2026-09-09
 

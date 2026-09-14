@@ -7,6 +7,7 @@ import {
   TOAST_SAVED_MS,
   type Toast,
   toastDismissible,
+  toastInitial,
   toastLingerMs,
   toastStep,
 } from "./toast-ui";
@@ -16,53 +17,94 @@ const ERROR: Toast = { kind: "error", message: "Could not save — TF2 is runnin
 
 describe("toastStep", () => {
   it("shows the saving pill only once a save is judged slow", () => {
-    expect(toastStep(null, { type: "slow" })).toEqual(SAVING);
+    expect(toastStep(toastInitial(), { type: "slow" }).toast).toEqual(SAVING);
   });
 
   it("replaces the pill with Saved when the write lands", () => {
-    expect(toastStep(SAVING, { type: "done" })).toEqual({ kind: "saved", message: SAVED_MESSAGE });
+    expect(toastStep({ ...toastInitial(), toast: SAVING }, { type: "done" }).toast).toEqual({
+      kind: "saved",
+      message: SAVED_MESSAGE,
+    });
   });
 
   it("carries a pane's own completion wording", () => {
-    expect(toastStep(null, { type: "done", message: "Pack built" })).toEqual({
+    expect(toastStep(toastInitial(), { type: "done", message: "Pack built" }).toast).toEqual({
       kind: "saved",
       message: "Pack built",
     });
   });
 
   it("keeps a failure on screen while the next attempt runs", () => {
-    expect(toastStep(ERROR, { type: "slow" })).toBe(ERROR);
-    expect(toastStep(ERROR, { type: "defer" })).toBe(ERROR);
+    const failed = toastStep(toastInitial(), { type: "fail", message: ERROR.message });
+    expect(toastStep(failed, { type: "slow" }).toast).toBe(failed.toast);
+    expect(toastStep(failed, { type: "defer" }).toast).toBe(failed.toast);
   });
 
-  it("clears a failure on the next successful save", () => {
-    expect(toastStep(ERROR, { type: "done" })).toEqual({ kind: "saved", message: SAVED_MESSAGE });
+  it("clears a failure only on that source's next successful save", () => {
+    const failed = toastStep(toastInitial(), {
+      type: "fail",
+      source: "hud",
+      message: ERROR.message,
+    });
+    expect(toastStep(failed, { type: "done", source: "sounds" }).toast).toBe(failed.toast);
+    expect(toastStep(failed, { type: "done", source: "hud" }).toast).toMatchObject({
+      kind: "saved",
+      message: SAVED_MESSAGE,
+    });
   });
 
   it("clears a failure when the user dismisses it", () => {
-    expect(toastStep(ERROR, { type: "hide" })).toBeNull();
+    const failed = toastStep(toastInitial(), { type: "fail", message: ERROR.message });
+    expect(toastStep(failed, { type: "hide" }).toast).toBeNull();
   });
 
   it("says the draft is kept once, not on every keystroke", () => {
-    const first = toastStep(null, { type: "defer" });
-    expect(first).toEqual({ kind: "deferred", message: DEFERRED_MESSAGE });
+    const first = toastStep(toastInitial(), { type: "defer" });
+    expect(first.toast).toEqual({ kind: "deferred", message: DEFERRED_MESSAGE });
     // Same object: React re-renders nothing on the next keystroke.
     expect(toastStep(first, { type: "defer" })).toBe(first);
   });
 
   it("replaces the draft notice with Saved once the lock lifts", () => {
-    const deferred = toastStep(null, { type: "defer" });
-    expect(toastStep(deferred, { type: "done" })).toEqual({
+    const deferred = toastStep(toastInitial(), { type: "defer" });
+    expect(toastStep(deferred, { type: "done" }).toast).toEqual({
       kind: "saved",
       message: SAVED_MESSAGE,
     });
   });
 
   it("lets a later failure replace the saving pill", () => {
-    expect(toastStep(SAVING, { type: "fail", message: "Could not save — disk full" })).toEqual({
+    expect(
+      toastStep(
+        { ...toastInitial(), toast: SAVING },
+        { type: "fail", message: "Could not save — disk full" },
+      ).toast,
+    ).toEqual({
       kind: "error",
       message: "Could not save — disk full",
+      source: "default",
     });
+  });
+
+  it("cannot hide newer feedback with a timeout captured for an older success", () => {
+    const first = toastStep(toastInitial(), { type: "done" });
+    const latest = toastStep(first, { type: "fail", message: "HUD options failed" });
+    expect(toastStep(latest, { type: "hide", expected: first.toast ?? undefined })).toBe(latest);
+  });
+
+  it("retains other failed sources when resolving or dismissing one failure", () => {
+    const first = toastStep(toastInitial(), { type: "fail", source: "hud", message: "HUD failed" });
+    const second = toastStep(first, { type: "fail", source: "sounds", message: "Sounds failed" });
+    expect(toastStep(second, { type: "hide" }).toast).toBe(first.toast);
+    expect(toastStep(second, { type: "clear-source", source: "sounds" }).toast).toBe(first.toast);
+  });
+
+  it("clears deferred feedback only after the final associated draft is resolved", () => {
+    const first = toastStep(toastInitial(), { type: "defer", source: "hud" });
+    const second = toastStep(first, { type: "defer", source: "sounds" });
+    const oneLeft = toastStep(second, { type: "resolve-draft", source: "hud" });
+    expect(oneLeft.toast?.kind).toBe("deferred");
+    expect(toastStep(oneLeft, { type: "resolve-draft", source: "sounds" }).toast).toBeNull();
   });
 });
 

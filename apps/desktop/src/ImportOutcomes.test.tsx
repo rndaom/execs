@@ -128,10 +128,16 @@ describe("picker cancellation through SettingsHost and ToastProvider", () => {
       expect(box.querySelector('[data-testid="toast"]')?.textContent).toContain(
         "injected import failure",
       );
+      api[command].mockResolvedValueOnce(null);
+      await act(async () => expect(capture.panes[tab][callback](false)).resolves.toBe(false));
+      expect(props.onBusyChange).toHaveBeenLastCalledWith(false);
+      expect(box.querySelector('[data-testid="toast"]')?.textContent).toContain(
+        "injected import failure",
+      );
       await act(async () => expect(capture.panes[tab][callback](false)).resolves.toBe(true));
       expect(props.onBusyChange).toHaveBeenLastCalledWith(false);
       expect(box.querySelector('[data-testid="toast"]')?.textContent).toBe(message);
-      expect(api[command]).toHaveBeenCalledTimes(3);
+      expect(api[command]).toHaveBeenCalledTimes(4);
     },
   );
 });

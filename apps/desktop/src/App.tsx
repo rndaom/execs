@@ -13,6 +13,7 @@ import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useFilesExitGuard } from "./hooks/useFilesExitGuard";
 import { useFirstRun } from "./hooks/useFirstRun";
 import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
+import { useOperationErrors } from "./hooks/useOperationErrors";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useReleaseNotes } from "./hooks/useReleaseNotes";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
@@ -36,7 +37,7 @@ import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
 
 export function App({ api, preview }: { api: Api; preview: PreviewState }) {
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, dismissError } = useOperationErrors();
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsWriting, setSettingsWriting] = useState(false);
@@ -235,11 +236,11 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         launching={launchPending}
         recoveryTargetId={recoveryTargetId}
         onLaunch={() => {
-          setError(null);
           setLaunching(true);
           void api
             .launchTf2()
-            .catch((err) => setError(invokeErrorMessage(err)))
+            .then(() => setError(null, "tf2:launch"))
+            .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
             .finally(() => {
               setLaunching(false);
               void lifecycle.refresh();
@@ -253,11 +254,13 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           ) {
             return;
           }
-          setError(null);
           void api
             .cancelTf2Launch()
-            .then(() => lifecycle.refresh())
-            .catch((err) => setError(invokeErrorMessage(err)));
+            .then(() => {
+              setError(null, "tf2:cancel-launch");
+              return lifecycle.refresh();
+            })
+            .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
         }}
         settings={
           showSettingsChrome(profiles.library) ? (
@@ -296,6 +299,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       value={{
         error,
         setError,
+        dismissError,
         busy: anyBusy || progress.state.active,
         running: lock.running,
       }}
@@ -305,7 +309,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           api={api}
           release={releaseNotes.release}
           onClose={releaseNotes.dismiss}
-          onError={(message) => setError(message)}
+          onError={(message) => setError(message, "release:open")}
         />
         {filesExit.modal}
         {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
@@ -349,6 +353,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 installs={install.installs}
                 selected={install.selected}
                 error={error}
+                onDismissError={dismissError}
                 canConfirm={confirmEnabled(install.selected, install.scanning || busy)}
                 busy={busy}
                 onSelect={install.select}

@@ -46,18 +46,26 @@ describe("update download failure recovery", () => {
         attempt = state?.install();
       });
       expect(state?.progress).toBe("downloading");
+      expect(localStorage.getItem("execs:pending-release-notes")).toContain('"version":"0.1.5"');
       await act(async () => {
         rejectDownload?.(new Error("The update download timed out. Try Install update again."));
         await attempt;
       });
       expect(state?.progress).toBeNull();
       expect(state?.available?.version).toBe("0.1.5");
+      expect(localStorage.getItem("execs:pending-release-notes")).toBeNull();
       expect(setError).toHaveBeenCalledWith(
         "The update download timed out. Try Install update again.",
+        "update:install",
       );
       await act(async () => state?.install());
       expect(install).toHaveBeenCalledTimes(2);
       expect(state?.progress).toBe("installing");
+      expect(setError).toHaveBeenLastCalledWith(null, "update:install");
+      expect(JSON.parse(localStorage.getItem("execs:pending-release-notes") ?? "null")).toEqual({
+        version: "0.1.5",
+        notes: "Repair update",
+      });
     } finally {
       await act(async () => root.unmount());
     }
