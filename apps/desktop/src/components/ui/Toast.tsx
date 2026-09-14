@@ -20,6 +20,8 @@ import {
 export type ToastApi = {
   /** A write started: arms the delayed "Saving…" pill. */
   startSave: () => void;
+  /** A reserved operation was cancelled without a write or completion. */
+  cancelSave: () => void;
   /** A write landed. `message` names what happened when it was not a save. */
   finishSave: (message?: string) => void;
   /** A write failed; `prefix` carries the verb ("Could not apply"). */
@@ -36,6 +38,7 @@ export type ToastApi = {
  */
 const NO_TOAST: ToastApi = {
   startSave: () => undefined,
+  cancelSave: () => undefined,
   finishSave: () => undefined,
   failSave: () => undefined,
   deferDraft: () => undefined,
@@ -69,6 +72,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
   const api = useMemo<ToastApi>(
     () => ({
       startSave: () => setInFlight((count) => count + 1),
+      cancelSave: () => setInFlight((count) => Math.max(0, count - 1)),
       finishSave: (message?: string) => {
         setInFlight((count) => Math.max(0, count - 1));
         send({ type: "done", message });

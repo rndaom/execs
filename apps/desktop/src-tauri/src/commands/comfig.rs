@@ -193,7 +193,7 @@ fn stale_package_selection() -> CommandError {
 pub async fn import_comfig_custom(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
-) -> Result<ProfileDetail, CommandError> {
+) -> Result<Option<ProfileDetail>, CommandError> {
     let context = with_profile(|root, profile_id| {
         execs_core::refuse_if_running()?;
         Ok(ActiveContext::capture(&root, &profile_id))
@@ -207,25 +207,21 @@ pub async fn import_comfig_custom(
     })
     .await
     .map_err(|err| CommandError::unknown(err.to_string()))?;
-    let _guard = gate.lock_for_write().await?;
     let Some(picked) = picked else {
-        return blocking(|| {
-            let root = confirmed_root()?;
-            execs_core::get_active_profile_detail(&root)?
-                .ok_or_else(|| CommandError::unknown("Save or switch to a profile first."))
-        })
-        .await;
+        return Ok(None);
     };
     let path = picked
         .into_path()
         .map_err(|err| CommandError::unknown(err.to_string()))?;
     // The recursive folder copy is the expensive part; keep it off the
     // async runtime's worker.
+    let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         Ok(execs_core::import_comfig_custom(&root, &profile_id, &path)?)
     })
     .await
+    .map(Some)
 }
 
 #[cfg(test)]
