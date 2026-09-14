@@ -1,6 +1,6 @@
 # 0.1.5 cfg execution and viewmodel FOV fixes
 
-Scope: RND-281, RND-282 and RND-284. Implemented from maintenance baseline
+Scope: RND-281, RND-282, RND-283 and RND-284. Implemented from maintenance baseline
 `fae34cf` in `codex/0.1.5-cfg-execution`. No game files or profile libraries were
 read or written; UI tests use in-memory IPC doubles.
 
@@ -104,6 +104,25 @@ expansion/traversal after parsing. No worker, live game test, native write,
 profile migration or new write surface is introduced. Native/Rust release
 checks belong to the parent 0.1.5 integration run because this change edits
 only TypeScript, UI tests and documentation.
+
+The native loader returns profile manifest files (`detail_from_manifest` and
+`read_profile_file_from` in `apply.rs`). SettingsHost reads its loose `.cfg`
+entries, including cfg files in custom packs. It does not extract VPK cfg
+entries or read stock game cfg files. An explicit startup call to an unavailable
+file therefore blocks derived settings, including `config_default` and
+`undo360controller`: allowing those names in the safety review does not make
+their unknown execution a no-op. Resolving them needs actual bounded file
+reads and Source search-path precedence; that native extension is outside
+this change. Normal mastercomfig user hooks are evaluated directly and do not
+require the omitted packaged core autoexec to be loaded.
+
+The browser review caught legacy bare exec paths in the shared preview seed.
+Those paths now use `overrides/execs_binds` and `overrides/execs_gameplay`.
+An adapter regression loads the locked preview through its real profile API
+and confirms complete inferred settings. Additional adapter checks cover an
+invoked loose custom cfg and incomplete stock/VPK-only targets.
+Follow-up verification passed: 443 desktop tests, TypeScript with `--noEmit`,
+`pnpm check` (220 files), and `git diff --check`.
 
 Local git hooks are `.githooks`; the repository identity is Random. No Cloud
 Agent co-author hook was found in the accessible managed-hook locations.

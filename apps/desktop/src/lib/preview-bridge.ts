@@ -69,7 +69,7 @@ import { previewViewmodelRecord } from "./viewmodel-ui";
 const PREVIEW_FILES: { path: string; text: string }[] = [
   {
     path: "tf/cfg/overrides/autoexec.cfg",
-    text: "exec execs_binds // execs:managed\nexec execs_gameplay // execs:managed\nhost_writeconfig\n",
+    text: "exec overrides/execs_binds // execs:managed\nexec overrides/execs_gameplay // execs:managed\nhost_writeconfig\n",
   },
   {
     path: "tf/cfg/overrides/danger.cfg",
