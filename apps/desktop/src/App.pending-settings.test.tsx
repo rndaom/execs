@@ -225,3 +225,42 @@ it("keeps manual crosshair changes explicit when closing and discards only after
   expect(native.destroy).toHaveBeenCalledOnce();
   expect(build).not.toHaveBeenCalled();
 });
+
+it("clears a discarded draft's failure while preserving an unrelated pane's failure", async () => {
+  vi.spyOn(api, "applyHudOptions").mockRejectedValue(Error("HUD refused"));
+  vi.spyOn(api, "writeManagedCfg").mockRejectedValue(Error("sounds refused"));
+  await clickId("hud-opt-minmode");
+  await debounce();
+  await clickId("settings-tab-sounds");
+  await clickId("sounds-hit-enabled");
+  await debounce();
+  await clickId("sounds-hit-enabled");
+  expect(reason()).toContain("HUD: save failed");
+  await click("Review changes");
+  await click("Discard and continue");
+  expect(launch().disabled).toBe(false);
+  const feedback = element('[data-testid="toast"]');
+  expect(feedback.textContent).toContain("sounds refused");
+  await act(async () => feedback.click());
+  expect(box.querySelector('[data-testid="toast"]')).toBeNull();
+});
+
+it("joins an actual in-flight autosave on native close and waits for its queue release", async () => {
+  let finish!: () => void;
+  const apply = vi.spyOn(api, "applyHudOptions").mockImplementation(async (options) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return applyHud(options);
+  });
+  await clickId("hud-opt-minmode");
+  await debounce();
+  const event = { preventDefault: vi.fn() };
+  await act(async () => close(event));
+  expect(event.preventDefault).toHaveBeenCalledOnce();
+  expect(native.destroy).not.toHaveBeenCalled();
+  expect(button("Discard and continue").disabled).toBe(true);
+  await act(async () => finish());
+  expect(apply).toHaveBeenCalledOnce();
+  expect(native.destroy).toHaveBeenCalledOnce();
+});

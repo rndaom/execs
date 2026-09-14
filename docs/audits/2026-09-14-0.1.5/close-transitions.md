@@ -19,7 +19,8 @@ TF2 file, game process or Steam launch was used for these checks.
 - Native close observes both Files and settings drafts synchronously. Unlocked
   autosaves flush before window destruction. Locked, failed and manual-apply
   drafts have a usable Save / Discard / Cancel dialog and links to their panes.
-  A live write opens the wait dialog; it cannot be discarded mid-operation.
+  Close joins an in-flight autosave and awaits it. Other live work opens the
+  wait dialog; no write can be discarded mid-operation.
   Settings editing waits for the close listener to register.
 - The existing Files decision remains explicit. A mixed decision saves settings
   and then each file; any remaining/newer draft, save refusal, changed owner or
@@ -60,6 +61,7 @@ preview API and mocked native window:
 - Discard releases a later profile switch.
 - Steam verification has its own reason and Open Mods action.
 - Native close from the App flushes HUD before the debounce expires.
+- Native close joins a live HUD autosave and awaits the actual queue release.
 - Two retained failed panes save successfully through the host's native queue.
 - Manual crosshair mode changes do not build implicitly on close; the user
   explicitly chooses whether to discard them.
@@ -68,12 +70,11 @@ preview API and mocked native window:
 
 | Check | Result |
 | --- | --- |
-| Full desktop Vitest suite, two workers | 428 tests in 59 files pass; before the extra manual-crosshair close regression |
-| Focused close/launch/Files/autosave suites | 57 tests in 7 files pass; before that extra regression |
-| App launch and native close integration, with manual crosshair regression | 8 tests pass |
+| Full desktop Vitest suite with feedback integration, two workers | 446 tests in 61 files pass |
+| Focused App/native close/Files guard integration | 22 tests in 3 files pass |
 | `tsc --noEmit` | Pass |
-| `pnpm check` | Pass, 218 files |
-| `pnpm build` | Pass; existing large main-chunk advisory remains (902.95 kB) |
+| `pnpm check` with feedback integration | Pass, 222 files |
+| `pnpm build` with feedback integration | Pass; existing large main-chunk advisory remains (907.43 kB) |
 
 Tauri's current official [window API documentation](https://tauri.app/reference/javascript/api/namespacewindow/)
 confirms `onCloseRequested`, synchronous `preventDefault` and explicit listener
@@ -86,7 +87,9 @@ native process detection require the root release-verification environment.
 No installer or Linux runtime claim is made here. No Rust/native write behavior
 changes in this branch.
 
-Feedback integration: RND-266/269/271/272 separately supplies source-aware toast
-lifetimes. On integration, retain its per-draft deferred-ID cleanup in
-`useAutosave` and clear the source `${profile}:${tab}:save` in the boundary's
-explicit discard callback. Routine unmount must not clear unrelated failures.
+Feedback integration includes RND-266/269/271/272 commit `23bac1e` (locally
+resolved as `67b2ac4`). The merged hook retains per-draft deferred-ID cleanup,
+including unlock, and the boundary clears `${profile}:${tab}:save` only on
+explicit discard. An App regression discards a failed HUD draft while retaining
+another pane's unrelated failure until explicit dismissal. Routine unmount
+does not clear unrelated failures.

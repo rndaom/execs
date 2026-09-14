@@ -35,7 +35,7 @@ User-facing changes only. The release workflow publishes the matching
   and prevent incomplete startup results from being saved as settings.
 - Gameplay: retain viewmodel FOV values from 0.1 to 179.9, including decimals,
   when another control changes.
-- Settings: save pending autosaves before closing execs, and keep locked or failed
+- Settings: await pending and in-flight autosaves before closing execs, and keep locked or failed
   drafts until you retry, cancel closing, or explicitly discard them.
 - Launch: explain which pending settings prevent TF2 from starting, with actions
   to review the drafts, return to their pane, retry saving, or discard them.
