@@ -198,6 +198,42 @@ describe("retained settings feedback", () => {
     expect(toast()).toBeNull();
   });
 
+  it.each([false, true])(
+    "keeps one locked Gameplay draft visible through a first visit to clean Sounds (reverted first: %s)",
+    async (revertedFirst) => {
+      api = createPreviewApi("settings-locked");
+      tab = "gameplay";
+      running = true;
+      const save = vi.spyOn(api, "writeManagedCfg");
+      await render();
+      expect(element("gameplay-draw-viewmodel").getAttribute("aria-checked")).toBe("true");
+      if (revertedFirst) {
+        await click("gameplay-draw-viewmodel");
+        expect(toast()).toBe("Draft kept until TF2 closes");
+        await click("gameplay-draw-viewmodel");
+        expect(toast()).toBeNull();
+        expect(pending).toBe(false);
+      }
+      await click("gameplay-draw-viewmodel");
+      tab = "sounds";
+      await render();
+      await advance(5000);
+      expect(element("settings-surface-gameplay").hidden).toBe(true);
+      expect(toast()).toBe("Draft kept until TF2 closes");
+      expect(pending).toBe(true);
+      expect(save).not.toHaveBeenCalled();
+      tab = "gameplay";
+      await render();
+      expect(element("gameplay-draw-viewmodel").getAttribute("aria-checked")).toBe("false");
+      expect(toast()).toBe("Draft kept until TF2 closes");
+      expect(pending).toBe(true);
+      await click("gameplay-draw-viewmodel");
+      expect(toast()).toBeNull();
+      expect(pending).toBe(false);
+      expect(save).not.toHaveBeenCalled();
+    },
+  );
+
   it("keeps deferred feedback until every retained pane has reverted its draft", async () => {
     running = true;
     await render();

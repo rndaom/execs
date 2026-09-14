@@ -34,6 +34,8 @@ User-facing changes only. The release workflow publishes the matching
   completion its full display time.
 - Draft feedback: remove obsolete waiting notices when edits are reverted,
   discarded or saved, and keep other panes' pending drafts visible.
+- Draft feedback: show the waiting notice again after reverting and re-editing
+  settings while TF2 remains open, including after switching panes.
 - Errors: keep export failures visible through background settings reloads,
   with a consistent dismissal control that preserves draft and recovery guards.
 - HUD: save FlawHUD options with animation comment toggles and literal-backslash
