@@ -3,19 +3,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "./components/ui/Toast";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import type { SettingsTab } from "./lib/settings-ui";
 import { SettingsHost } from "./SettingsHost";
 
-vi.mock("./components/ui/Toast", () => ({
-  useToast: () => ({
-    deferDraft: vi.fn(),
-    startSave: vi.fn(),
-    finishSave: vi.fn(),
-    failSave: vi.fn(),
-  }),
-}));
 vi.mock("./LaunchPane", () => ({ LaunchPane: () => null }));
 vi.mock("./CrosshairPane", () => ({ CrosshairPane: () => null }));
 vi.mock("./HudPane", () => ({ HudPane: () => null }));
@@ -67,19 +60,21 @@ function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "v
   const render = async (tab: SettingsTab = "gameplay") => {
     await act(async () =>
       root.render(
-        <AppStatusProvider value={{ error: null, setError: noop, running: false, busy: false }}>
-          <SettingsHost
-            api={api}
-            tab={tab}
-            running={false}
-            externalBusy={false}
-            refreshKey={1}
-            bindSyncRequest={null}
-            onBindSyncHandled={noop}
-            onBusyChange={noop}
-            onError={noop}
-          />
-        </AppStatusProvider>,
+        <ToastProvider>
+          <AppStatusProvider value={{ error: null, setError: noop, running: false, busy: false }}>
+            <SettingsHost
+              api={api}
+              tab={tab}
+              running={false}
+              externalBusy={false}
+              refreshKey={1}
+              bindSyncRequest={null}
+              onBindSyncHandled={noop}
+              onBusyChange={noop}
+              onError={noop}
+            />
+          </AppStatusProvider>
+        </ToastProvider>,
       ),
     );
   };

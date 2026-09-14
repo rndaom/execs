@@ -93,3 +93,29 @@ including unlock, and the boundary clears `${profile}:${tab}:save` only on
 explicit discard. An App regression discards a failed HUD draft while retaining
 another pane's unrelated failure until explicit dismissal. Routine unmount
 does not clear unrelated failures.
+
+## Release-branch integration
+
+Integrated the standalone close/launch change and its explicit-discard follow-up
+after the feedback, mutation, HUD schema and cfg-startup fixes. The combined
+SettingsHost retains the cfg maps adapter and blocks each cfg-derived pane on
+an incomplete startup snapshot. The settings boundary preserves that block
+and the write path still rejects a queued event from an incomplete snapshot.
+The nullable picker work, picker-option forwarding, boolean write results and
+source-owned toast counters are unchanged by this merge.
+
+The shared browser fixture still used old bare managed-cfg exec names. They now
+use `overrides/execs_binds` and `overrides/execs_gameplay`, matching the native
+writer and TF2's cfg-relative resolution. A regression verifies the fixture's
+complete startup maps; another fault-injects an edit through an inert pane and
+confirms no cfg write reaches IPC. The guard itself remains strict.
+
+Mixed close, launch, Files, feedback, mutation, import and cfg integration:
+103 tests across 11 files passed. This includes both pending and in-flight
+native close, multiple failed panes, explicit discard, unrelated failures,
+profile changes and incomplete-cfg rejection.
+
+The cfg host suite now mounts the actual ToastProvider; its older mock lacked
+the combined API's draft-resolution callback. All 18 cfg host cases pass with
+the real feedback provider and settings boundary. TypeScript (`tsc --noEmit`)
+and Biome (`pnpm check`, 235 files) also pass on the integrated tree.

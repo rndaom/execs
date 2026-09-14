@@ -135,6 +135,22 @@ afterEach(async () => {
 });
 
 describe("retained settings feedback", () => {
+  it("keeps incomplete startup cfgs blocked through the retained-pane boundary", async () => {
+    tab = "gameplay";
+    await api.writeOwnedFile("tf/cfg/overrides/autoexec.cfg", "exec overrides/missing\n");
+    const save = vi.spyOn(api, "writeManagedCfg");
+    await render();
+    expect(element("settings-surface-gameplay").hasAttribute("inert")).toBe(true);
+    expect(box.textContent).toContain("Startup settings could not be resolved");
+    // Fault-inject a queued input despite the inert UI. The write path must
+    // still reject an incomplete snapshot, including a retained-pane flush.
+    await click("gameplay-draw-viewmodel");
+    await advance(700);
+    expect(save).not.toHaveBeenCalled();
+    expect(toast()).toContain("Startup settings could not be resolved");
+    expect(pending).toBe(true);
+  });
+
   it("attributes delayed HUD failures after navigation, keeps them through Sounds success and resolves HUD retry", async () => {
     const first = deferred<Awaited<ReturnType<typeof api.applyHudOptions>>>();
     const save = vi.spyOn(api, "applyHudOptions").mockReturnValueOnce(first.promise);
