@@ -85,6 +85,28 @@ correctly refused writes with `GameRunning`; the complete passing rerun above
 took place after it exited. The final checks use an isolated Cargo target,
 avoiding cross-worktree executable/fingerprint reuse.
 
+### Nested-folder review follow-up
+
+The integration review found that the existing recursive vanilla collector
+applied its special `user`, `app`, and `overrides` directory rules at every
+depth. A fresh API regression failed on missing
+`tf/cfg/personal/user/aim.cfg`; these nested paths were profile-ownable but
+silently omitted by capture. The exclusions now apply only to immediate
+`tf/cfg` children.
+
+`nested_cfg_folder_names_survive_capture_export_and_switch` passes for both
+vanilla and mastercomfig. It checks nested `user`, `app`, and `overrides`
+payloads through capture, export/import, removal and reapplication; root
+overrides remain captured. Root `user` and `app` files retain their original
+live bytes, and only their migrated copies enter the manifest.
+
+Follow-up checks passed: all **11** pack integration tests (including the
+explicit public-asset probe), all **13** surface unit tests, core all-targets
+clippy, workspace formatting and `git diff --check`. Logs are
+`G:/Projects/execs-015-evidence/pack-nested-regressions.log`,
+`pack-nested-surface-tests.log`, and `pack-nested-clippy.log`. The parent task
+runs the full native matrix after integration.
+
 ## Limits
 
 The detector recognizes the supported direct startup loader; it does not

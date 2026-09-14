@@ -487,7 +487,9 @@ fn walk_vanilla_cfgs(
             continue;
         }
         if path.is_dir() {
-            if !is_skip_cfg_dir(&name) {
+            // Only these immediate tf/cfg children have separate collection or
+            // migration rules. Identical names deeper in a user tree are literal.
+            if depth > 0 || !is_skip_cfg_dir(&name) {
                 walk_vanilla_cfgs(
                     &path,
                     tf2_root,

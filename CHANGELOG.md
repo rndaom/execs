@@ -69,6 +69,8 @@ User-facing changes only. The release workflow publishes the matching
   from starting, and offer a reviewed repair for affected saved profiles.
 - Profiles: refuse exports containing saved credentials inside VPK cfg files,
   preserving the existing export when validation fails.
+- Profiles: retain cfg files inside nested folders named `user`, `app`, or
+  `overrides` when saving, exporting and switching setups.
 
 ## [0.1.4] - 2026-09-09
 
