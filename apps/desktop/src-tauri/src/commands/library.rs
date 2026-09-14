@@ -51,6 +51,41 @@ pub async fn save_current_as(
 }
 
 #[tauri::command]
+pub async fn plan_custom_folder_repair(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+) -> Result<Vec<execs_core::custom_folders::CustomFolderRepair>, CommandError> {
+    let _guard = gate.lock_for_library_read().await?;
+    with_root(move |root| {
+        Ok(execs_core::custom_folders::plan_custom_folder_repair_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn repair_custom_folders(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    reviewed: Vec<execs_core::custom_folders::CustomFolderRepair>,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        Ok(execs_core::custom_folders::repair_custom_folders_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            &reviewed,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn switch_profile(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,

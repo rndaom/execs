@@ -55,7 +55,7 @@ where
                 FileStorage::Exclusive => &payload.exclusive[&file.path],
                 FileStorage::Shared => &payload.blobs[&file.sha256],
             };
-            if let Err(err) = validate_imported_profile_file(&file.path, staged, false) {
+            if let Err(err) = validate_imported_profile_file(&file.path, staged, &file.sha256, false) {
                 let message = match err {
                     ProfileError::Io(message) => message,
                     other => other.message(),

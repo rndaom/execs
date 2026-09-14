@@ -6,6 +6,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use same_file::Handle as SameFileHandle;
+use sha2::Digest;
 
 use crate::hash::metadata_is_link;
 
@@ -190,6 +191,14 @@ fn limits_for_path(path: &Path) -> TreeLimits {
 /// first copying all 500 MiB into memory.
 fn read_tree_from_path(path: &Path, limits: TreeLimits) -> Result<(Vec<u8>, u64), VpkError> {
     let (mut file, metadata, identity, canonical_parent) = open_regular_no_follow(path, false)?;
+    let result = read_tree_from_file(&mut file, limits)?;
+    verify_open_identity(path, &file, &metadata, &identity, &canonical_parent)?;
+    Ok(result)
+}
+
+fn read_tree_from_file(file: &mut File, limits: TreeLimits) -> Result<(Vec<u8>, u64), VpkError> {
+    file.seek(SeekFrom::Start(0))
+        .map_err(|err| VpkError(err.to_string()))?;
     let on_disk_len = file
         .metadata()
         .map_err(|err| VpkError(err.to_string()))?
@@ -229,8 +238,93 @@ fn read_tree_from_path(path: &Path, limits: TreeLimits) -> Result<(Vec<u8>, u64)
         .map_err(|err| VpkError(err.to_string()))?;
     file.read_exact(&mut bytes)
         .map_err(|err| VpkError(err.to_string()))?;
-    verify_open_identity(path, &file, &metadata, &identity, &canonical_parent)?;
     Ok((bytes, on_disk_len))
+}
+
+/// Inspect a single-file community VPK through an already-open handle. Only
+/// selected members are retained; the tree and every remaining byte are hashed
+/// in the same forward read that supplies those members. Comparing this digest
+/// with the manifest binds inspection to exact source bytes, even if another
+/// process changes the source between export's verification and copy passes.
+pub fn read_vpk_file_filtered_hashed(
+    file: &mut File,
+    keep: &dyn Fn(&str) -> bool,
+    max_entry_bytes: u64,
+) -> Result<(VpkArchive, String), VpkError> {
+    let (tree, on_disk_len) = read_tree_from_file(file, IMPORT_LIMITS)?;
+    let mut files = BTreeMap::new();
+    let mut ranges = Vec::new();
+    let mut materialized = 0;
+    let budget = materialize_budget(on_disk_len);
+    let tree_end = walk_vpk_tree(&tree, on_disk_len, IMPORT_LIMITS, &mut |entry| {
+        if !keep(&entry.rel) {
+            return Ok(());
+        }
+        let total_len = entry.preload.len() as u64 + u64::from(entry.length);
+        if total_len > max_entry_bytes.min(MAX_VPK_ENTRY_BYTES) {
+            return Err(VpkError(format!("{} is too large to inspect.", entry.rel)));
+        }
+        charge(&mut materialized, budget, total_len as usize)?;
+        if entry.length > 0 && entry.archive_index != DIR_ARCHIVE {
+            return Err(VpkError("Cannot inspect a split profile VPK.".into()));
+        }
+        let mut body = Vec::new();
+        body.try_reserve_exact(total_len as usize)
+            .map_err(|_| VpkError("Not enough memory for a VPK entry.".into()))?;
+        body.extend_from_slice(entry.preload);
+        if entry.length > 0 {
+            let start = entry.data_base + u64::from(entry.offset);
+            let end = start + u64::from(entry.length);
+            if end > on_disk_len {
+                return Err(VpkError("VPK file data is truncated.".into()));
+            }
+            ranges.push((start, end, entry.rel.clone()));
+        }
+        files.insert(entry.rel, body);
+        Ok(())
+    })?;
+    if tree_end != tree.len() {
+        return Err(VpkError(
+            "VPK changed while its tree was being inspected.".into(),
+        ));
+    }
+    ranges.sort_unstable();
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&tree);
+    let mut offset = tree.len() as u64;
+    let mut buffer = [0u8; 64 * 1024];
+    let mut first = 0;
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|err| VpkError(err.to_string()))?;
+        if read == 0 {
+            break;
+        }
+        let end = offset + read as u64;
+        if end > on_disk_len {
+            return Err(VpkError("VPK changed while it was being inspected.".into()));
+        }
+        hasher.update(&buffer[..read]);
+        while first < ranges.len() && ranges[first].1 <= offset {
+            first += 1;
+        }
+        for (start, stop, path) in ranges[first..].iter().take_while(|range| range.0 < end) {
+            let from = (*start).max(offset);
+            let to = (*stop).min(end);
+            if from < to {
+                files
+                    .get_mut(path)
+                    .expect("selected member")
+                    .extend_from_slice(&buffer[(from - offset) as usize..(to - offset) as usize]);
+            }
+        }
+        offset = end;
+    }
+    if offset != on_disk_len {
+        return Err(VpkError("VPK changed while it was being inspected.".into()));
+    }
+    Ok((VpkArchive { files }, format!("{:x}", hasher.finalize())))
 }
 
 /// Open a VPK component without following a final symlink/reparse point and
@@ -1354,6 +1448,48 @@ mod tests {
     #[test]
     fn rejects_bad_signature() {
         assert!(read_vpk_dir_bytes(b"not a vpk").is_err());
+    }
+
+    #[test]
+    fn hashed_filtered_reader_keeps_preloads_and_data_across_stream_chunks() {
+        let dir = crate::test_temp_dir();
+        let path = dir.join("preload.vpk");
+        let preload = b"echo ";
+        let body = vec![b'a'; 160 * 1024];
+        let mut tree = Vec::new();
+        write_cstring(&mut tree, "cfg");
+        write_cstring(&mut tree, "cfg");
+        for (name, data) in [("only", &[][..]), ("streamed", body.as_slice())] {
+            write_cstring(&mut tree, name);
+            tree.extend_from_slice(&0u32.to_le_bytes());
+            tree.extend_from_slice(&(preload.len() as u16).to_le_bytes());
+            tree.extend_from_slice(&DIR_ARCHIVE.to_le_bytes());
+            tree.extend_from_slice(&0u32.to_le_bytes());
+            tree.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            tree.extend_from_slice(&0xffffu16.to_le_bytes());
+            tree.extend_from_slice(preload);
+        }
+        tree.extend_from_slice(&[0, 0, 0]);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&SIGNATURE.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&tree);
+        bytes.extend_from_slice(&body);
+        fs::write(&path, &bytes).unwrap();
+        let mut source = File::open(&path).unwrap();
+        let (archive, hash) =
+            read_vpk_file_filtered_hashed(&mut source, &|path| path.ends_with(".cfg"), 256 * 1024)
+                .unwrap();
+        assert_eq!(hash, crate::hash::sha256_hex(&bytes));
+        assert_eq!(archive.files["cfg/only.cfg"], preload);
+        assert_eq!(
+            archive.files["cfg/streamed.cfg"],
+            [preload.as_slice(), &body].concat()
+        );
+        let error = read_vpk_file_filtered_hashed(&mut source, &|_| true, 1024).unwrap_err();
+        assert!(error.message().contains("too large"));
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -179,6 +179,7 @@ where
         crate::preloader::capture_installed_selections(profiles_dir, tf2_root, &running)?;
     }
     let target = load_manifest(profiles_dir, profile_id)?;
+    crate::custom_folders::validate_custom_mounts(&target.files)?;
     preflight_target(profiles_dir, profile_id, &target)?;
     let preloader =
         crate::preloader::prepare_profile_preloader(profiles_dir, tf2_root, profile_id)?;
@@ -438,6 +439,7 @@ fn preflight_target(
     profile_id: &str,
     target: &ProfileManifest,
 ) -> Result<(), ProfileError> {
+    crate::custom_folders::validate_custom_mounts(&target.files)?;
     if target.id != profile_id {
         return Err(ProfileError::Io(
             "profile manifest id does not match its library record".into(),

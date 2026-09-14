@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Api } from "../lib/api";
 import type {
   AbsorbDelta,
+  CustomFolderRepair,
   PackChoice,
   ProfileImportReview,
   ProfileLibrary,
@@ -42,6 +43,10 @@ export type ProfileLibraryState = {
   dismissImport: () => void;
   exportProfile: (id: string) => Promise<void>;
   switchProfile: (id: string) => Promise<void>;
+  folderRepair: { id: string; name: string; plan: CustomFolderRepair[]; error?: string } | null;
+  reviewFolderRepair: (id: string) => Promise<void>;
+  repairFolders: () => Promise<void>;
+  cancelFolderRepair: () => void;
   answerPackPrompt: (choice: PackChoice) => Promise<void>;
   setLibrary: (library: ProfileLibrary) => void;
   reset: () => void;
@@ -68,6 +73,7 @@ export function useProfileLibrary(
   },
 ): ProfileLibraryState {
   const [library, setLibrary] = useState<ProfileLibrary | null>(null);
+  const [folderRepair, setFolderRepair] = useState<ProfileLibraryState["folderRepair"]>(null);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(null);
   const [packPromptProfile, setPackPromptProfile] = useState<string | null>(null);
   const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
@@ -394,8 +400,50 @@ export function useProfileLibrary(
     [api, packPrompt, packPromptProfile, activeProfileId, running, busy, setError, setBusy],
   );
 
+  const reviewFolderRepair = useCallback(
+    async (id: string) => {
+      if (running || busy) return;
+      const profile = library?.profiles.find((profile) => profile.id === id);
+      if (!profile) return;
+      setBusy(true);
+      try {
+        const plan = await api.planCustomFolderRepair(id);
+        if (plan.length) setFolderRepair({ id, name: profile.name, plan });
+        else setLibrary(await api.getProfileLibrary());
+        setError(null, `profiles:folder-review:${id}`);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not review folder names.",
+          `profiles:folder-review:${id}`,
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, library, running, busy, setBusy, setError],
+  );
+
+  const repairFolders = useCallback(async () => {
+    if (!folderRepair || running || busy) return;
+    setBusy(true);
+    try {
+      setLibrary(await api.repairCustomFolders(folderRepair.id, folderRepair.plan));
+      setFolderRepair(null);
+      setPackPrompt(null);
+      setAbsorbNonce((value) => value + 1);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "Could not repair folder names.";
+      setFolderRepair((current) =>
+        current?.id === folderRepair.id ? { ...current, error } : current,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [api, folderRepair, running, busy, setBusy]);
+
   const reset = useCallback(() => {
     setLibrary(null);
+    setFolderRepair(null);
     setPackPrompt(null);
     setPackPromptProfile(null);
     setPackPromptDeferred(false);
@@ -437,6 +485,10 @@ export function useProfileLibrary(
     },
     exportProfile,
     switchProfile,
+    folderRepair,
+    reviewFolderRepair,
+    repairFolders,
+    cancelFolderRepair: () => setFolderRepair(null),
     answerPackPrompt,
     setLibrary,
     reset,

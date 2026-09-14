@@ -161,6 +161,9 @@ pub struct ProfileSummary {
     pub name: String,
     pub created_at: String,
     pub updated_at: String,
+    /// Read-time diagnostics; old schema-1 indexes have no such field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unsafe_custom_folders: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -994,7 +997,15 @@ pub fn load_library_from(
     let confirmed = confirmed_root.map(user_path_string);
     match load_index(profiles_dir)? {
         None => Ok(empty_library(false, confirmed_root.is_some(), confirmed)),
-        Some(index) => Ok(library_from_index(index, confirmed_root, confirmed)),
+        Some(index) => {
+            let mut library = library_from_index(index, confirmed_root, confirmed);
+            for profile in &mut library.profiles {
+                profile.unsafe_custom_folders = load_manifest(profiles_dir, &profile.id)
+                    .map(|manifest| crate::custom_folders::unsafe_custom_folders(&manifest.files))
+                    .unwrap_or_default();
+            }
+            Ok(library)
+        }
     }
 }
 
@@ -1154,6 +1165,7 @@ where
             name: name.clone(),
             created_at: now.clone(),
             updated_at: now,
+            unsafe_custom_folders: Vec::new(),
         };
         let mut manifest = ProfileManifest {
             schema: LIBRARY_SCHEMA,

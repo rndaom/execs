@@ -24,6 +24,7 @@ export function ProfileMenu({
   onSwitch,
   onExport,
   onImport,
+  onRepair,
   onCreateNew,
   onChangeInstall,
 }: {
@@ -37,6 +38,7 @@ export function ProfileMenu({
   onSwitch: (id: string) => void;
   onExport: (id: string) => void;
   onImport: () => void;
+  onRepair: (id: string) => void;
   onCreateNew: () => void;
   onChangeInstall: () => void;
 }) {
@@ -136,8 +138,10 @@ export function ProfileMenu({
           <ul className="mt-2 max-h-52 overflow-y-auto">
             {library.profiles.map((profile) => {
               const active = library.activeProfileId === profile.id;
+              const unsafeFolders = (profile.unsafeCustomFolders?.length ?? 0) > 0;
               const canSwitch =
                 !active &&
+                !unsafeFolders &&
                 !running &&
                 !controlsBusy &&
                 (!recoveryPending || profile.id === recoveryTargetId);
@@ -162,9 +166,22 @@ export function ProfileMenu({
                     />
                     <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
                     <span className="text-[12px] text-ink-faint">
-                      {active ? "Current" : "Switch"}
+                      {unsafeFolders ? "Needs repair" : active ? "Current" : "Switch"}
                     </span>
                   </button>
+                  {unsafeFolders ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={running || controlsBusy || recoveryPending}
+                      onClick={() => {
+                        if (detailsRef.current) detailsRef.current.open = false;
+                        onRepair(profile.id);
+                      }}
+                    >
+                      Repair folder names
+                    </button>
+                  ) : null}
                   {showExport ? (
                     <button
                       type="button"
