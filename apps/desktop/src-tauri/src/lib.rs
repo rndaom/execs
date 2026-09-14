@@ -668,6 +668,8 @@ pub fn run() {
             commands::library::switch_profile,
             commands::library::export_profile,
             commands::library::import_profile,
+            commands::library::plan_custom_folder_repair,
+            commands::library::repair_custom_folders,
             commands::absorb::absorb_owned,
             commands::absorb::absorb_packs,
             commands::first_run::classify_first_run,

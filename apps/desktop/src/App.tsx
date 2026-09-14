@@ -270,6 +270,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           switchProfile: async (id) => {
             filesExit.request(() => profiles.switchProfile(id));
           },
+          repairFolders: async () => {
+            filesExit.request(() => profiles.repairFolders());
+          },
         }}
         progress={progress}
         draftName={draftName}

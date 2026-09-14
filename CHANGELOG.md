@@ -49,6 +49,10 @@ User-facing changes only. The release workflow publishes the matching
   clear obsolete option schemas, and preserve unsaved options when retrying.
 - HUD: report failed and partial catalog or statistics refreshes while keeping
   available cached entries and values visible.
+- Profiles: prevent imported mods and HUDs from using folder names that stop TF2
+  from starting, and offer a reviewed repair for affected saved profiles.
+- Profiles: refuse exports containing saved credentials inside VPK cfg files,
+  preserving the existing export when validation fails.
 
 ## [0.1.4] - 2026-09-09
 

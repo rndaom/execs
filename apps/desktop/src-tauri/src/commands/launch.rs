@@ -48,6 +48,11 @@ pub async fn launch_tf2(gate: tauri::State<'_, WriteGate>) -> Result<(), Command
     let already_running = match super::shared::blocking(|| {
         let root = confirmed_root()?;
         refuse_pending_switch(&root)?;
+        let library = execs_core::load_library(Some(&root))?;
+        if let Some(id) = library.active_profile_id {
+            let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &id)?;
+            execs_core::custom_folders::validate_custom_mounts(&manifest.files)?;
+        }
         Ok(execs_core::is_tf2_running())
     })
     .await

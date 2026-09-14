@@ -356,6 +356,18 @@ pub fn schema_file_name(id: &str) -> Option<&'static str> {
 }
 
 pub fn sanitize_hud_id(id: &str) -> Result<String, ProfileError> {
+    let id = sanitize_stored_hud_id(id)?;
+    if crate::custom_folders::is_reserved_source_folder(&id) {
+        return Err(ProfileError::Io(format!(
+            "TF2 cannot mount a HUD folder named {id}. Use hud-{id} instead."
+        )));
+    }
+    Ok(id)
+}
+
+/// Legacy profiles stay readable so the explicit folder repair can migrate
+/// them. New installation additionally enforces Source's mount-name policy.
+pub(crate) fn sanitize_stored_hud_id(id: &str) -> Result<String, ProfileError> {
     let id = id.trim().to_ascii_lowercase();
     if id.is_empty()
         || id.starts_with('-')
@@ -533,6 +545,8 @@ pub fn hud_id_from_name(name: &str) -> String {
     let id = id.trim_matches('-').to_string();
     if id.is_empty() {
         "custom-hud".to_string()
+    } else if crate::custom_folders::is_reserved_source_folder(&id) {
+        format!("hud-{id}")
     } else {
         id
     }
@@ -1801,6 +1815,27 @@ mod tests {
         assert_eq!(hud_id_from_name("--!!"), "custom-hud");
         assert_eq!(hud_id_from_name("flawhud_2024"), "flawhud_2024");
         assert!(sanitize_hud_id(&hud_id_from_name("weird name?")).is_ok());
+    }
+
+    #[test]
+    fn new_hud_containers_avoid_all_source_reserved_names() {
+        for name in [
+            "MATERIALS",
+            "Maps",
+            "resource",
+            "Scripts",
+            "SOUND",
+            "models",
+        ] {
+            assert!(sanitize_hud_id(name).is_err());
+            let generated = hud_id_from_name(&format!("{name}.zip"));
+            assert_eq!(generated, format!("hud-{}", name.to_ascii_lowercase()));
+            assert_eq!(sanitize_hud_id(&generated).unwrap(), generated);
+            assert_eq!(
+                sanitize_stored_hud_id(&name.to_ascii_lowercase()).unwrap(),
+                name.to_ascii_lowercase()
+            );
+        }
     }
 
     #[test]

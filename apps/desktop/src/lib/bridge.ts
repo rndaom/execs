@@ -21,6 +21,7 @@ export type ProfileSummary = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  unsafeCustomFolders?: string[];
 };
 
 export type ProfileLibrary = {
@@ -194,6 +195,19 @@ export async function exportProfile(id: string): Promise<string | null> {
 
 export async function importProfile(): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("import_profile");
+}
+
+export type CustomFolderRepair = { from: string; to: string };
+
+export async function planCustomFolderRepair(id: string): Promise<CustomFolderRepair[]> {
+  return call<CustomFolderRepair[]>("plan_custom_folder_repair", { id });
+}
+
+export async function repairCustomFolders(
+  id: string,
+  reviewed: CustomFolderRepair[],
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("repair_custom_folders", { id, reviewed });
 }
 
 export type FirstRunKind = "unused" | "existing";

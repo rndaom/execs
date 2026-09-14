@@ -269,6 +269,20 @@ export function createPreviewApi(state: PreviewState): Api {
     async importProfile() {
       return addProfile(`Imported ${(library?.profiles.length ?? 0) + 1}`, false);
     },
+    async planCustomFolderRepair(id) {
+      return (
+        library?.profiles.find((profile) => profile.id === id)?.unsafeCustomFolders ?? []
+      ).map((from) => ({ from, to: `custom-${from.toLowerCase()}` }));
+    },
+    async repairCustomFolders(id) {
+      library = {
+        ...(library ?? emptyLibrary(BROWSED.path, true)),
+        profiles: (library?.profiles ?? []).map((profile) =>
+          profile.id === id ? { ...profile, unsafeCustomFolders: [] } : profile,
+        ),
+      };
+      return library;
+    },
 
     // --- first run ----------------------------------------------------------
     async classifyFirstRun() {

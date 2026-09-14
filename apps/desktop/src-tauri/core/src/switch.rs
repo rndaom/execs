@@ -175,6 +175,7 @@ where
     let pending = pending_switch_to(profiles_dir, tf2_root)?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
     let target = load_manifest(profiles_dir, profile_id)?;
+    crate::custom_folders::validate_custom_mounts(&target.files)?;
     if pending.is_none() && library.active_profile_id.as_deref() == Some(profile_id) {
         let (steam_write, steam_write_error) = if target.launch_sync_pending {
             let steam_roots = match options.steam_roots {
@@ -425,6 +426,7 @@ fn preflight_target(
     profile_id: &str,
     target: &ProfileManifest,
 ) -> Result<(), ProfileError> {
+    crate::custom_folders::validate_custom_mounts(&target.files)?;
     if target.id != profile_id {
         return Err(ProfileError::Io(
             "profile manifest id does not match its library record".into(),
