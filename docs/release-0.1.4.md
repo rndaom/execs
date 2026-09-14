@@ -1,10 +1,12 @@
-# 0.1.4 preparation
+# 0.1.4 release
 
 Scope: Linear milestone **0.1.4**, RND-211, RND-216, RND-224, RND-238,
 RND-260, RND-261, RND-262 and RND-263. The owner assigned this bounded
 crosshair update to the patch. Work starts at maintenance commit `6d09490`,
 which contains public **0.1.3 Hotfix 1** and its publication evidence.
 Unrelated creator-profile and profile-preloader work stays on the minor track.
+The owner added the Linux AppImage startup fix on September 9 and authorized
+publication after verification.
 
 ## Behavior
 
@@ -45,11 +47,11 @@ The scene is the existing `scout_blank.jpg` from CompVMInstaller commit
 `b215a5cdfcd809ec3c2d71529e7a1eb22a72a39e`, fetched at runtime. The source
 image was inspected; it contains no baked crosshair. No Valve image is vendored.
 
-## Verification
+## September 8 crosshair verification
 
-Local Windows checks:
+Historical candidate checks, before the Linux packaging fix:
 
-- Final candidate code: `c030623c4f77d9226dffcb677736273980bbb852`.
+- Crosshair candidate code: `c030623c4f77d9226dffcb677736273980bbb852`.
   [Release preparation PR #44](https://github.com/rndaom/execs/pull/44) and
   [private verification run](https://github.com/rndaom/execs/actions/runs/34293583908).
 - 413 desktop tests, 105 cfglint tests and 19 release-script tests pass;
@@ -77,42 +79,63 @@ Local Windows checks:
   the 960×640 minimum window. The designer's expanded options use a grid;
   the crosshair hero retains its preview beside the controls at that width.
 
-## Release gates
+## Combined candidate verification
 
-On September 9 the owner authorized a PR for the Linux startup fix and
-publication of 0.1.4 with that fix once the combined candidate passes release
-verification. The earlier candidate reports below predate this fix and must
-be refreshed before publication.
+[PR #46](https://github.com/rndaom/execs/pull/46) adds the Linux startup fix
+at `86e5c1044ae93282d3dc2146747211c815670eb6`.
+[Private candidate run 34422345530](https://github.com/rndaom/execs/actions/runs/34422345530)
+passed frontend, Linux and Windows validation, both package builds, signed
+upgrades from 0.1.3 Hotfix 1 and final signed asset/feed verification.
+Publication was skipped for that rehearsal.
 
-- [x] Exact candidate Windows/Linux CI and package builds
-- [x] Signed updater and installer smoke from public 0.1.3 Hotfix 1
-- [x] Candidate asset/feed verification
-- [ ] Owner review of the crosshair workflow and live in-game appearance
-- [x] Prepare the maintenance integration into the 0.2.0 branch
-- [ ] Review and merge PRs #44 and #45
-- [ ] Owner-authorized tag/publication, then milestone closure
+The combined revision passes 413 desktop, 105 cfglint, 24 release-script and
+689 Linux native/integration tests, plus formatting, Clippy, Biome and the
+production build. The explicit installed-asset test reads actual TF2 sprites
+and scripts, writes only an isolated profile/root, and leaves both source VPK
+hashes unchanged. Browser fixture layouts were checked at 1280×900 and 960×640.
 
-The cumulative live-game/Steam Cloud/Casual matrix remains tracked by RND-251.
-Fixture and isolated-asset tests do not claim that live multiplayer matrix.
+The exact signed Linux candidate rendered on the affected Omarchy host without
+any graphics environment overrides, using isolated application data and a
+private session bus. Its SHA-256 is
+`121c158f6c972db5af0604fa8aa3d4eb1aee5f8944ee3cf36584b17cb262e8d3`.
 
-Saved reports from the candidate run:
-[Windows](audits/2026-09-08-0.1.4/windows-package-smoke.json) and
-[Linux](audits/2026-09-08-0.1.4/linux-package-smoke.json). Both report source
-version `0.1.3+1`, target `0.1.4`, verified signatures, installed updates,
-packaged startup/notices, preserved user data and no repeat offer.
+PRs #46 and [#44](https://github.com/rndaom/execs/pull/44) are merged.
+[PR #45](https://github.com/rndaom/execs/pull/45) is merged into main, preserving
+creator review and profile-owned preloaders for the unreleased 0.2.0 track.
+Its final integration passes 418 desktop, 105 cfglint, 24 release-script and
+700 Linux native/integration tests, as well as frontend/Windows/Linux CI.
 
-The complete candidate workflow passed; its publish job was skipped. The
-draft's `release-commit.json` matches the code commit and run above. Its signed
-feed points to Windows NSIS and Linux AppImage assets (including updater
-compatibility aliases); `.deb` is absent from self-update. GitHub's temporary
-draft browser slug was validated by the release verifier. No `v0.1.4` Git tag
-exists, and public latest remains `v0.1.3+1`.
+The original September 8 reports under `audits/2026-09-08-0.1.4/` are historical
+crosshair-candidate evidence. The combined candidate and tagged workflow
+supersede them for the released artifact.
 
-The maintenance integration is prepared in
-[draft PR #45](https://github.com/rndaom/execs/pull/45), with 418 desktop tests,
-690 native tests and frontend/Windows/Linux CI passing. It preserves the
-creator-review and profile-preloader work on the minor track. Merge review
-remains open; see `docs/forwardport-0.1.4.md` on that branch.
+## Publication
+
+Tag `v0.1.4` points to `12bb5a8effb8aebe77c6cfc4d8cd03d9bef45cdd`, the PR #44
+merge commit. Its complete tree matches the verified combined candidate.
+[Tagged workflow 34424094674](https://github.com/rndaom/execs/actions/runs/34424094674)
+passed all validation, builds, signed upgrade checks, verification and
+publication. [0.1.4](https://github.com/rndaom/execs/releases/tag/v0.1.4) was
+published as the latest stable release on September 10, 2026 at 01:32 UTC
+(September 9 in America/New_York).
+
+Unauthenticated downloads through the actual Windows and Linux updater URLs
+passed independent Minisign verification, size and SHA-256 checks. Public
+`latest.json` contains both supported platforms and excludes `.deb` from
+self-update. Public `release-commit.json` matches the tag and publishing run.
+The final public AppImage also rendered on the affected Omarchy host without
+graphics overrides, using isolated data; TF2's path was not confirmed and no
+live game files were written.
+
+Final evidence:
+[Windows upgrade](audits/2026-09-09-0.1.4/windows-package-smoke.json),
+[Linux upgrade](audits/2026-09-09-0.1.4/linux-package-smoke.json),
+[public downloads and native launch](audits/2026-09-09-0.1.4/public-verification.json),
+and [local validation](audits/2026-09-09-0.1.4/local-verification.json).
+
+The cumulative live-game/Steam Cloud/Casual matrix remains tracked by RND-251
+before 0.2.0. Fixture previews and isolated installed-asset tests do not claim
+live multiplayer coverage or the owner's subjective in-game appearance review.
 
 ## September 9 Linux startup fix
 
@@ -135,6 +158,6 @@ asset fails closed and requires reviewing/updating the pin.
 Regression tests cover multiarch and versioned libraries, symlink containment,
 plugin discovery, argument forwarding and packaging failures. Installer smoke
 also checks the actual extracted candidate for bundled Wayland libraries.
-The release still requires signed Windows/Linux upgrade verification on the
-combined revision; local repackaging is diagnostic evidence, not a public
-installer or a substitute for signature verification.
+The combined candidate passed signed Windows/Linux upgrade verification.
+Local repackaging established the diagnosis; only the workflow-built, signed
+artifacts are distributed to users.

@@ -1,0 +1,32 @@
+{
+  "version": "0.1.4",
+  "commit": "12bb5a8effb8aebe77c6cfc4d8cd03d9bef45cdd",
+  "publishedAt": "2026-09-10T01:32:04Z",
+  "checkedAt": "2026-09-10T01:32:53.868Z",
+  "assets": [
+    {
+      "platform": "windows-x86_64",
+      "name": "execs_0.1.4_x64-setup.exe",
+      "size": 6038008,
+      "sha256": "b181536fe7baaa0f40a3333e30c465d62c0e50163f722a1b72b474a2fd69c7b0",
+      "signatureVerified": true,
+      "anonymousDownload": true
+    },
+    {
+      "platform": "linux-x86_64",
+      "name": "execs_0.1.4_amd64.AppImage",
+      "size": 99490296,
+      "sha256": "7af6434bb5f9bffb00893b0003c61ff3fd55080223e16b59d32116d387465e94",
+      "signatureVerified": true,
+      "anonymousDownload": true
+    }
+  ],
+  "run": "34424094674",
+  "nativeLinuxCheck": {
+    "rendered": true,
+    "graphicsOverrides": false,
+    "isolatedDataAndSessionBus": true,
+    "confirmedTf2Path": false,
+    "liveTf2Writes": false
+  }
+}
