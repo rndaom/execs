@@ -320,6 +320,105 @@ fn loader_files() -> std::collections::BTreeMap<String, Vec<u8>> {
 }
 
 #[test]
+fn nested_cfg_folder_names_survive_capture_export_and_switch() {
+    for comfig in [false, true] {
+        let f = Fixture::new();
+        let prefix = if comfig { "overrides/" } else { "" };
+        let auto_path = format!("tf/cfg/{prefix}autoexec.cfg");
+        let startup =
+            b"exec personal/user/aim\nexec personal/app/aim\nexec personal/deeper/overrides/aim\n";
+        f.write(&auto_path, startup);
+        if comfig {
+            f.write(
+                "tf/custom/mastercomfig-base.vpk",
+                &execs_core::vpk::write_vpk_v2(&loader_files()),
+            );
+        }
+        let retained = [
+            (
+                "tf/cfg/personal/user/aim.cfg",
+                b"echo nested user\n".as_slice(),
+            ),
+            (
+                "tf/cfg/personal/app/aim.cfg",
+                b"echo nested app\n".as_slice(),
+            ),
+            (
+                "tf/cfg/personal/deeper/overrides/aim.cfg",
+                b"echo nested overrides\n".as_slice(),
+            ),
+            (
+                "tf/cfg/overrides/retained.cfg",
+                b"echo root overrides\n".as_slice(),
+            ),
+        ];
+        let legacy = [
+            ("user", "legacy_user.cfg", b"echo legacy user\n".as_slice()),
+            ("app", "legacy_app.cfg", b"echo legacy app\n".as_slice()),
+        ];
+        for (rel, bytes) in retained {
+            f.write(rel, bytes);
+        }
+        for (folder, name, bytes) in legacy {
+            f.write(&format!("tf/cfg/{folder}/{name}"), bytes);
+        }
+        let inventory = inventory_live_surface(&f.root).unwrap();
+        for (rel, _) in retained {
+            assert!(
+                inventory.entries.iter().any(|entry| entry.dest_rel == rel),
+                "missing {rel}, comfig={comfig}"
+            );
+        }
+
+        let id = f.save();
+        let manifest = load_manifest(&f.profiles, &id).unwrap();
+        assert!(!manifest.files.iter().any(|file| {
+            file.path.starts_with("tf/cfg/user/") || file.path.starts_with("tf/cfg/app/")
+        }));
+        for (rel, bytes) in retained {
+            assert_eq!(f.stored(&id, rel), bytes);
+        }
+        for (_, name, bytes) in legacy {
+            assert_eq!(f.stored(&id, &format!("tf/cfg/{prefix}{name}")), bytes);
+        }
+
+        let zip = f.base.join("nested-cfg.zip");
+        export_profile_to(&f.profiles, &f.root, &id, &zip).unwrap();
+        let imported_dir = f.base.join("imported");
+        let imported = import_profile_from(&imported_dir, &f.root, &zip, unlocked()).unwrap();
+        let imported_id = &imported.profiles[0].id;
+        assert_eq!(
+            load_manifest(&imported_dir, imported_id).unwrap().files,
+            manifest.files
+        );
+        for (rel, bytes) in retained {
+            assert_eq!(
+                fs::read(exclusive_file_path(&imported_dir, imported_id, rel)).unwrap(),
+                bytes
+            );
+        }
+
+        let empty = f.empty_profile(&id);
+        f.switch(&empty);
+        for (rel, _) in retained {
+            assert!(!f.root.join(rel).exists());
+        }
+        f.switch(&id);
+        for (rel, bytes) in retained {
+            assert_eq!(fs::read(f.root.join(rel)).unwrap(), bytes);
+        }
+        assert_eq!(fs::read(f.root.join(auto_path)).unwrap(), startup);
+        // Legacy root folders are read for migration, never projected or removed.
+        for (folder, name, bytes) in legacy {
+            assert_eq!(
+                fs::read(f.root.join(format!("tf/cfg/{folder}/{name}"))).unwrap(),
+                bytes
+            );
+        }
+    }
+}
+
+#[test]
 fn installed_renamed_and_extracted_loaders_agree_and_preserve_nested_cfgs() {
     for pack in [
         "mastercomfig-base.vpk",
