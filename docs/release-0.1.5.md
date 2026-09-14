@@ -1,12 +1,13 @@
 # 0.1.5 release preparation
 
-Status: implementation and verification in progress. Public latest remains
+Status: final integration and verification in progress. Public latest remains
 0.1.4. No 0.1.5 tag or public release is authorized by preparation alone.
 
 ## Scope and baseline
 
 The owner requested implementation of the complete Linear 0.1.5 milestone on
-September 14, 2026: 22 existing repair issues. This patch starts from public
+September 14, 2026: 22 existing repair issues, plus the directly linked RND-283
+bind-removal subtask permitted by its acceptance criteria. This patch starts from public
 `v0.1.4` (`12bb5a8effb8aebe77c6cfc4d8cd03d9bef45cdd`), preserves older profiles
 and exports, and adds no live write targets. Each fix also goes into the
 unreleased 0.2.0 track without carrying that track's features into this patch.
@@ -19,7 +20,7 @@ unreleased 0.2.0 track without carrying that track's features into this patch.
 | Imports and export privacy | RND-277, RND-278 | Avoid Source-reserved loose container names; inspect packed cfg credentials before export. Check archive limits, rejected-input atomicity and older-profile round trips. |
 | HUD resource editing | RND-265 | Apply animation directives as line edits and use HUD-specific KeyValues escape behavior. Check real FlawHUD schema and first-party regression fixtures. |
 | HUD loading and refresh | RND-239, RND-243, RND-289 | Separate installed HUD from network availability, invalidate stale schemas and report partial refresh failures. Exercise offline, stale-request and cached-data paths. |
-| Effective cfg and FOV | RND-281, RND-282, RND-284 | Separate safety scanning from execution, bound traversal, preserve valid viewmodel FOV values. Check dormant/payload/actual execution and an adversarial small graph. |
+| Effective cfg and FOV | RND-281, RND-282, RND-283, RND-284 | Separate safety scanning from execution, bound traversal, apply executed bind removals, and preserve valid viewmodel FOV values. Check dormant/payload/actual execution, mounted search paths and an adversarial small graph. |
 | Mutation outcomes and drafts | RND-270, RND-279, RND-280, RND-285 | Honor cancellation/failure, preserve retry asset bytes and newer sound edits, and reconcile failed Comfig choices. Test real host result conventions. |
 | Feedback and transitions | RND-266, RND-268, RND-269, RND-271, RND-272, RND-273 | Attribute and retain failures, renew success timers, clear obsolete deferred feedback, recover pending launch blockers and protect pending settings on close. Test concurrent drafts and Files guard integration. |
 | Updater deadline | RND-288 | Bound payload download time, release lifecycle ownership and allow retry. Test stalled loopback payloads and signed upgrade behavior. |
@@ -31,7 +32,7 @@ candidate and reviewed after integration.
 
 ## Required release evidence
 
-- [ ] All 22 issue acceptance criteria implemented and reviewed
+- [ ] Original 22 issues and linked RND-283 implemented and reviewed
 - [ ] Frontend tests, Biome and production build
 - [ ] Windows Rust format, clippy and workspace tests
 - [ ] Linux CI, package build and smoke
@@ -40,7 +41,22 @@ candidate and reviewed after integration.
 - [ ] Signed candidate installers and updater upgrade from public 0.1.4
 - [ ] Startup, app-data preservation and no repeat update offer
 - [ ] Forward-port PR and maintenance PR prepared with passing checks
-- [ ] Four product versions and release notes prepared for 0.1.5
+- [x] Four product versions, Cargo lockfile and release notes prepared for 0.1.5
+
+## Verification records
+
+The [audit index](audits/2026-09-14-0.1.5/README.md) links each workstream's
+primary-source research, implementation plan, regression tests and limitations.
+All work is isolated from the original checkout's untracked audit files and
+the owner's real profile library.
+
+Windows retail TF2 mounted the generated mod/HUD fixture and executed its VPK
+cfg, then exited successfully. Hashes of the protected original install files
+were unchanged. See [the recorded result](audits/2026-09-14-0.1.5/retail-pack-names.json).
+
+The owner selected Linux CI and explicitly left the live Linux Steam URI
+handoff/native TF2 check outstanding. It is a remaining RND-268 runtime check;
+CI package/updater results do not substitute for it.
 
 ## Publication
 
