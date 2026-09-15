@@ -1,0 +1,12 @@
+{
+  "version": "0.1.5",
+  "platform": "linux",
+  "oldVersion": "0.1.4",
+  "artifact": "execs_0.1.5_amd64.AppImage",
+  "signatureVerified": true,
+  "updateInstalled": true,
+  "noRepeatOffer": true,
+  "userDataPreserved": true,
+  "packagedNotices": true,
+  "packagedStartup": true
+}

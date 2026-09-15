@@ -16,13 +16,14 @@ User-facing changes only. The release workflow publishes the matching
   including profiles that are not active.
 - Profiles: offer folder repair before switching to an imported setup with
   unsupported custom folder names.
-- Linux: inherit the 0.1.4 AppImage startup fix for current graphics drivers.
-
 - Profiles: switch shared preloader selections with the target profile.
 - Profiles: import split creator folders together, seed missing config.cfg
   from TF2 defaults, and place legacy hitsounds under sound/ui.
-- Crosshair and settings: inherit the 0.1.4 workflow and draft-integrity fixes,
-  together with the previously published maintenance fixes.
+
+## [0.1.5] - 2026-09-14
+
+### Fixed
+
 - Updates: stop stalled installer downloads, release the update lock and allow
   retrying without restarting execs.
 - Crosshair: keep imported PNG and design bytes available when Build pack fails
