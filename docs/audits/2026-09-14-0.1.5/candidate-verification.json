@@ -1,0 +1,69 @@
+{
+  "version": "0.1.5",
+  "sourceCommit": "a9646b1119ad76eb98f0279632a4fad7fc3aca2b",
+  "checkedAt": "2026-09-15T00:43:23.238Z",
+  "workflow": "https://github.com/rndaom/execs/actions/runs/34912770058",
+  "candidateDraft": true,
+  "published": false,
+  "artifacts": [
+    {
+      "name": "execs_0.1.5_amd64.AppImage",
+      "bytes": 99576312,
+      "sha256": "4faeba51a29e7ea4ffea4eeb383b2906825c2593ac5609b9ccc184e1e3d5a487",
+      "productionSignatureVerified": true
+    },
+    {
+      "name": "execs_0.1.5_amd64.deb",
+      "bytes": 12799854,
+      "sha256": "b3f683d7b62cfdb5094216d0004e17e4b898982e61864bba74187a9b5b120f86",
+      "productionSignatureVerified": true
+    },
+    {
+      "name": "execs_0.1.5_x64-setup.exe",
+      "bytes": 6112175,
+      "sha256": "563125968db8c65aca896bd0438d00c53fb1bf175215a4f6314a17d5df9d3c86",
+      "productionSignatureVerified": true
+    }
+  ],
+  "packageSmoke": {
+    "windows": {
+      "version": "0.1.5",
+      "platform": "win32",
+      "oldVersion": "0.1.4",
+      "artifact": "execs_0.1.5_x64-setup.exe",
+      "signatureVerified": true,
+      "updateInstalled": true,
+      "noRepeatOffer": true,
+      "userDataPreserved": true,
+      "packagedNotices": true,
+      "packagedStartup": true
+    },
+    "linux": {
+      "version": "0.1.5",
+      "platform": "linux",
+      "oldVersion": "0.1.4",
+      "artifact": "execs_0.1.5_amd64.AppImage",
+      "signatureVerified": true,
+      "updateInstalled": true,
+      "noRepeatOffer": true,
+      "userDataPreserved": true,
+      "packagedNotices": true,
+      "packagedStartup": true
+    }
+  },
+  "updaterFeed": {
+    "signaturesMatchSidecars": true,
+    "exactVersionAndAssetIdentity": true,
+    "notesMatchChangelog": true,
+    "debEntryAbsent": true
+  },
+  "maintenanceRuntimeSourceUnchangedSinceCandidate": true,
+  "documentationAndTestChangesSinceCandidate": [
+    "docs/audits/2026-09-14-0.1.5/README.md",
+    "docs/release-0.1.5.md"
+  ],
+  "limits": [
+    "Live Linux Steam URI/TF2 handoff remains outstanding by owner instruction.",
+    "Synthetic compatibility and package smoke do not establish remote Steam Cloud or a Casual session."
+  ]
+}

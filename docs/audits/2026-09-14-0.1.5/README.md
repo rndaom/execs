@@ -4,6 +4,15 @@ The release starts from public v0.1.4. Eight parallel workstreams implement the
 22 assigned repair issues and linked RND-283. Source fixes and tests are reviewed
 again after integration; the 0.2.0 forward-port preserves its existing features.
 
+The workstream notes preserve their individual branch checks. The
+[release record](../../release-0.1.5.md) contains the combined commit identities,
+PRs, platform CI and signed candidate results.
+
+All automated gates pass. [Candidate verification](candidate-verification.json)
+records the exact source commit, all three installer hashes/signatures, Windows
+and Linux upgrade results, startup/notices, app-data preservation and no repeat
+offer. The live Linux Steam/TF2 handoff remains outstanding by owner choice.
+
 | Issues | Research, behavior and regression evidence |
 | --- | --- |
 | RND-239, RND-243, RND-289 | [Independent local HUD loading, schema identity and refresh disclosure](hud-loading.md) |

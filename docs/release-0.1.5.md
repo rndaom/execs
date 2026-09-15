@@ -1,7 +1,8 @@
 # 0.1.5 release preparation
 
-Status: final integration and verification in progress. Public latest remains
-0.1.4. No 0.1.5 tag or public release is authorized by preparation alone.
+Status: implementation and private signed candidate verification complete. All
+automated release gates pass. The owner-selected live Linux check remains
+outstanding below. Public latest remains 0.1.4; preparation does not publish it.
 
 ## Scope and baseline
 
@@ -35,15 +36,38 @@ candidate and reviewed after integration.
 - [x] Original 22 issues and linked RND-283 implemented and reviewed
 - [x] Frontend tests, Biome and production build
 - [x] Windows Rust format, clippy and workspace tests
-- [ ] Linux CI, package build and smoke
+- [x] Linux CI, package build and smoke
 - [x] Previous-public-profile import/export and integrity checks
 - [x] Browser interaction checks for changed flows
-- [ ] Signed candidate installers and updater upgrade from public 0.1.4
-- [ ] Startup, app-data preservation and no repeat update offer
-- [ ] Forward-port PR and maintenance PR prepared with passing checks
+- [x] Signed candidate installers and updater upgrade from public 0.1.4
+- [x] Startup, app-data preservation and no repeat update offer
+- [x] Forward-port PR and maintenance PR prepared with passing checks
 - [x] Four product versions, Cargo lockfile and release notes prepared for 0.1.5
 
 ## Verification records
+
+- [Maintenance PR #47](https://github.com/rndaom/execs/pull/47) targets
+  `rndaom/release-0.1.3`. [Frontend, Windows and Linux CI](https://github.com/rndaom/execs/actions/runs/34912754230)
+  passes at `a9646b1119ad76eb98f0279632a4fad7fc3aca2b`.
+- [Forward-port PR #48](https://github.com/rndaom/execs/pull/48) targets `main`.
+  [All three CI jobs](https://github.com/rndaom/execs/actions/runs/34912773562)
+  pass at `45df066fccd449117992f7c4865b856823331dfd`. Its four product versions
+  remain 0.2.0; creator trust review and profile preloader behavior are retained.
+- [Private candidate workflow](https://github.com/rndaom/execs/actions/runs/34912770058)
+  passes validation, both package builds, updater probes, signed upgrades and
+  final asset verification at the maintenance commit above. Publication is
+  skipped for this private workflow dispatch.
+
+The candidate's Windows NSIS and Linux AppImage upgrades from the actual public
+0.1.4 installers pass signature, installation, startup, packaged-notice,
+app-data sentinel and no-repeat-offer checks. Linux also installs and starts the
+Debian package. Independent downloaded-artifact verification confirms all three
+production signatures, sizes and SHA-256 hashes; exact version, source commit
+and run identity; matching updater signature sidecars; changelog notes; and no
+Debian updater entry. [Machine-readable evidence](audits/2026-09-14-0.1.5/candidate-verification.json).
+
+The signed candidate is built from `a9646b1`. Later evidence/documentation
+commits do not change application code; the PRs carry their own final checks.
 
 The combined release branch passes 521 desktop, 140 cfglint, 21 release-script
 and 720 Windows native/integration tests. Three platform-specific script checks
@@ -73,6 +97,8 @@ CI package/updater results do not substitute for it.
 
 ## Publication
 
-Tagging and publication remain separate from this preparation. Record remaining
-live-platform or game-specific evidence honestly; automated fixtures do not
-establish a real Steam Cloud server round trip or Casual session.
+The 23 Linear records remain In Review with implementation and verification
+links. Merge/tag/publication remain separate from this preparation and follow
+`docs/RELEASE.md`. No 0.1.5 tag or public release was created. The broader
+Steam Cloud/Casual matrix remains RND-251; these automated fixtures and the
+Windows mount check do not establish that live coverage.

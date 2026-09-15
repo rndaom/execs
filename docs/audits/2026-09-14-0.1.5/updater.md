@@ -50,5 +50,7 @@ and Rust's [stream mode API](https://doc.rust-lang.org/std/net/struct.TcpStream.
 The change is confined to the `release-probes` fixture; ordinary app builds do
 not include that module. Independent review confirmed the feature guard and
 unchanged timeout/signature/lease assertions. The corrected Windows probe build
-and all discovery/download smoke assertions pass locally. The corrected
-candidate is rerun through both platforms.
+and all discovery/download smoke assertions pass locally, including four
+concurrent runs. The [corrected candidate](https://github.com/rndaom/execs/actions/runs/34912770058)
+passes both platforms' discovery/download probes and actual signed 0.1.4 → 0.1.5
+installer upgrades, startup, notices, app-data preservation and no repeat offer.
