@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { lookupCvar } from "../src/corpus.ts";
+import { describe, expect, it, vi } from "vitest";
+import * as corpus from "../src/corpus.ts";
 import { lint } from "../src/engine.ts";
+import { MAX_ALIAS_DEPTH, MAX_ALIAS_EXPANSIONS } from "../src/rules-data.ts";
 import type { CfgFile, LintOptions } from "../src/types.ts";
+import { ALIAS_FANOUT, ALIAS_FANOUT_LEVELS, ALIAS_FANOUT_WIDTH } from "./fixtures/alias-fanout.ts";
 
 const one = (text: string, path = "autoexec.cfg"): CfgFile[] => [{ path, text }];
 const ids = (files: CfgFile[], opts: LintOptions = {}) =>
@@ -130,24 +132,37 @@ describe("exec hidden inside a payload", () => {
 });
 
 describe("alias expansion budget", () => {
-  // The audit's fan-out fixture: 6^7 expansions if nothing bounds breadth.
-  const FANOUT = [
-    ...Array.from({ length: 6 }, (_, i) => `alias a${i + 1} "${`a${i + 2}; `.repeat(6).trim()}"`),
-    'alias a7 "unbindall"',
-    "bind mouse1 a1",
-  ].join("\n");
-
   it("stops expanding and reports once", () => {
-    const result = lint(one(FANOUT));
+    const result = lint(one(ALIAS_FANOUT));
     const budget = result.findings.filter((f) => f.ruleId === "alias-budget");
     expect(budget).toHaveLength(1);
     expect(budget[0].tier).toBe("warn");
   });
 
-  it("lints the fan-out in well under 50 ms", () => {
-    const started = performance.now();
-    lint(one(FANOUT));
-    expect(performance.now() - started).toBeLessThan(50);
+  it("bounds alias inspections by the expansion cap and remaining finite siblings", () => {
+    // Every alias declaration/invocation reaches this real lookup before the
+    // expansion guard. Count actual work without depending on runner scheduling.
+    const lookup = vi.spyOn(corpus, "lookupCvar");
+    try {
+      const result = lint(one(ALIAS_FANOUT));
+      // After the cap, only pending stack siblings, unvisited declaration
+      // payloads, the declarations themselves and the final bind can remain.
+      const remainingInspections =
+        ALIAS_FANOUT_WIDTH * MAX_ALIAS_DEPTH +
+        ALIAS_FANOUT_WIDTH * (ALIAS_FANOUT_LEVELS - 1) +
+        ALIAS_FANOUT_LEVELS +
+        1;
+      expect(lookup.mock.calls.length).toBeGreaterThanOrEqual(MAX_ALIAS_EXPANSIONS);
+      expect(lookup.mock.calls.length).toBeLessThanOrEqual(
+        MAX_ALIAS_EXPANSIONS + remainingInspections,
+      );
+      const rules = result.findings.map((finding) => finding.ruleId);
+      expect(rules.filter((rule) => rule === "alias-budget")).toHaveLength(1);
+      expect(rules).not.toContain("analysis-budget");
+      expect(rules).toContain("unbindall");
+    } finally {
+      lookup.mockRestore();
+    }
   });
 
   it("never reports the budget for an ordinary config", () => {
@@ -264,9 +279,9 @@ describe("immediate execution and misc", () => {
   });
 
   it("knows real cvars and rejects fakes", () => {
-    expect(lookupCvar("cl_interp")).toBeDefined();
-    expect(lookupCvar("CL_INTERP")).toBeDefined();
-    expect(lookupCvar("not_a_real_cvar_xyz")).toBeUndefined();
+    expect(corpus.lookupCvar("cl_interp")).toBeDefined();
+    expect(corpus.lookupCvar("CL_INTERP")).toBeDefined();
+    expect(corpus.lookupCvar("not_a_real_cvar_xyz")).toBeUndefined();
   });
 
   it("includes corpus help text in summary entries when available", () => {

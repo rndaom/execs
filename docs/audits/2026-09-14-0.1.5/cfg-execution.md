@@ -163,3 +163,31 @@ changed by this routing follow-up.
 Local git hooks are `.githooks`; the repository identity is Random. No Cloud
 Agent co-author hook was found in the accessible managed-hook locations.
 Commits contain no co-author trailers.
+
+## Deterministic alias-budget CI regression
+
+Forward-port CI's existing single-run 50 ms assertion failed at 51.81567 ms
+(`G:/Projects/execs-015-evidence/forward-port-ci-frontend.log`). The production
+scanner still caps alias expansion at 5,000; the failure does not demonstrate
+unbounded traversal. This follow-up changes only tests and audit evidence.
+
+The adversarial regression now spies on the real corpus lookup, which every
+alias declaration and invocation reaches before the expansion guard. It
+requires the fixture to reach the cap, then limits inspections to 5,092:
+5,000 expansions, at most 6 × 8 pending stack siblings, 6 × 6 remaining
+declaration-payload commands, seven declarations and the final bind. It also
+requires exactly one alias-budget finding, a retained unbindall finding, and
+no fallback to the larger shared command budget. Thus exponential traversal
+fails deterministically without depending on the runner's scheduling.
+
+The unit test and [child-process benchmark](cfg-exec-budget.mjs) now share the
+same seven-level alias fixture. The benchmark retains its 2.5-second child
+timeout and records five fresh-process alias samples rather than asserting a
+hardware-wide 50 ms latency target. This Windows run measured 20.2–32.0 ms
+(median 20.8 ms); exec fanout 10 / 30 / 100 measured 5.1 / 5.9 / 12.8 ms.
+Every child completed and reported its respective expansion/work limit.
+[Raw measurements](cfg-work-budget-results.jsonl) retain all samples.
+
+Verification: `pnpm --filter @execs/cfglint test` passed all 140 tests;
+`node docs/audits/2026-09-14-0.1.5/cfg-exec-budget.mjs` completed all eight
+children; `pnpm check` passed 222 files; `git diff --check` passed.
