@@ -2,7 +2,7 @@
 
 Date: 14 September 2026. Scope: [RND-277](https://linear.app/rndaom/issue/RND-277/avoid-source-reserved-directory-names-when-installing-loose-mods-and) and [RND-278](https://linear.app/rndaom/issue/RND-278/refuse-profile-export-when-vpk-cfg-members-contain-server-credentials).
 
-Implementation starts at maintenance commit `fae34cf5f6bcb248e6144dadc20ca8ba3fd90692`, in `codex/0.1.5-import-export`. The starting findings and reproducer are in [core-integrity.md](../2026-09-14-project/core-integrity.md) and [core-repro.rs](../2026-09-14-project/core-repro.rs). This work changes no product version and does not publish a build.
+Implementation starts at maintenance commit `fae34cf5f6bcb248e6144dadc20ca8ba3fd90692`, in `codex/0.1.5-import-export`. The linked Linear issues retain the starting findings; the production-core regression tests and reproductions below provide the checked-in evidence. This workstream does not publish a build; the combined release branch prepares version 0.1.5 separately.
 
 ## Source and reproduced failures
 

@@ -30,6 +30,9 @@ These checks do not invoke native IPC or change real profiles.
   identity, cached catalog/statistics and distinct partial-source warnings.
   Restoring sources and refreshing clears those warnings. A recovered local
   option saves through the real host and displays "HUD options saved".
+- With no catalog cache, the installed HUD and Import HUD remain available.
+  A schema-source failure exposes Retry loading options without stale controls;
+  restoring that source and retrying recovers the correct HUD options.
 
 ## Runtime boundaries
 
@@ -37,7 +40,10 @@ The [retail Windows result](retail-pack-names.json) proves fixture mounting and
 packed cfg execution with protected original hashes unchanged. It does not
 establish every HUD's appearance, a Casual session, or a remote Steam Cloud
 round trip. The previous-public-format ZIP fixture exercises unchanged bytes,
-repair and export/reimport through production core APIs.
+repair and export/reimport through production core APIs. An additional
+[cross-version probe](public-compat/README.md) uses the actual public 0.1.4
+exporter: 0.1.5 imports it without activation and produces a byte-identical
+re-export, preserving an existing active profile and all source bytes.
 
 The owner chose Linux CI for package/updater verification and explicitly left
 the live Linux Steam URI handoff and native TF2 check outstanding. See the

@@ -36,7 +36,7 @@ candidate and reviewed after integration.
 - [x] Frontend tests, Biome and production build
 - [x] Windows Rust format, clippy and workspace tests
 - [ ] Linux CI, package build and smoke
-- [ ] Previous-public-profile import/export and integrity checks
+- [x] Previous-public-profile import/export and integrity checks
 - [x] Browser interaction checks for changed flows
 - [ ] Signed candidate installers and updater upgrade from public 0.1.4
 - [ ] Startup, app-data preservation and no repeat update offer
@@ -56,6 +56,12 @@ The [audit index](audits/2026-09-14-0.1.5/README.md) links each workstream's
 primary-source research, implementation plan, regression tests and limitations.
 All work is isolated from the original checkout's untracked audit files and
 the owner's real profile library.
+
+The actual public 0.1.4 exporter produced an 11-file synthetic profile ZIP.
+The 0.1.5 core imported it into empty and existing-active libraries without
+activation, preserved every byte/hash and HUD/mod record, and re-exported an
+identical ZIP. The subsequent re-import also passed. See
+[the compatibility report and reproducible helper](audits/2026-09-14-0.1.5/public-compat/README.md).
 
 Windows retail TF2 mounted the generated mod/HUD fixture and executed its VPK
 cfg, then exited successfully. Hashes of the protected original install files
