@@ -3,22 +3,24 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.4** (`v0.1.4`, published 2026-09-10 at
-01:32 UTC; September 9 in America/New_York). This release includes the
-owner-assigned crosshair update and Linux AppImage startup fix. Frontend and
-Windows/Linux validation, package builds, signed upgrades from 0.1.3 Hotfix 1,
-startup, data preservation and no-repeat-offer checks pass. Anonymous public
-downloads, signatures and the updater feed are independently verified. See
-`docs/release-0.1.4.md` for final publication evidence. PRs #44 and #46 are
-merged, and PR #45 carries the maintenance fixes into the unreleased 0.2.0 track.
+Current public version: **0.1.5** (`v0.1.5`, published 2026-09-15 at
+01:26 UTC; September 14 in America/New_York). All 23 repair records are Done.
+Frontend and Windows/Linux validation, signed packages, upgrades from public
+0.1.4, startup/notices, app-data preservation and no-repeat-offer checks pass.
+Anonymous public downloads, all three installer signatures and hashes, the
+actual updater URLs and exact release provenance are independently verified.
+The owner confirmed Linux is good and authorized release. See
+`docs/release-0.1.5.md` for final publication evidence and the X announcement.
 
-0.1.5 is prepared in PR #47 from that public baseline, with the separate main
-forward-port in PR #48. All 23 repair records, combined local checks,
-Windows/Linux CI, signed candidate packages, upgrades from public 0.1.4,
-startup/notices, app-data preservation, no-repeat-offer checks and public-export
-compatibility pass. The owner chose Linux CI and left the live Linux Steam
-handoff outstanding. See `docs/release-0.1.5.md` for evidence and exact commits.
-Public latest stays 0.1.4 until publication is authorized and succeeds.
+PR #47 is merged into maintenance; immutable tag `v0.1.5` points to its merge
+commit. PR #48 is merged into main, retaining the unreleased 0.2.0 versions,
+creator trust review and profile-owned preloaders. Main's changelog records
+0.1.5 as the next release's previous-public upgrade baseline. The existing
+0.1.6 sound-fix milestone and three-feature 0.2.0 plan retain their scope.
+
+0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
+fix. Its publication and compatibility evidence remains in
+`docs/release-0.1.4.md`.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
