@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from "@phosphor-icons/react";
 import { useState } from "react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
-import { Alert } from "./components/ui/Alert";
+import { OperationError } from "./components/ui/OperationError";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
@@ -45,7 +45,7 @@ export function SetupWizard({
   onApply: () => void;
   onCancel?: () => void;
 }) {
-  const { running, busy, error } = useAppStatus();
+  const { running, busy, error, dismissError } = useAppStatus();
   const [showAllPresets, setShowAllPresets] = useState(false);
   const canApply = canApplyWizard(draftName, running, busy);
   const presets = visibleComfigPresets(preset, showAllPresets);
@@ -219,11 +219,7 @@ export function SetupWizard({
           .
         </p>
 
-        {error ? (
-          <Alert tone="error" className="mt-6">
-            {error}
-          </Alert>
-        ) : null}
+        <OperationError message={error} onDismiss={dismissError} className="mt-6" />
       </form>
     </OnboardingFrame>
   );

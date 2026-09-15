@@ -195,7 +195,7 @@ it("keeps the consumed drift signal through a failed refresh retry", async () =>
   expect(state.bindSyncRequest).toBeNull();
   busy = false;
   await render();
-  expect(setError).toHaveBeenCalledWith("read refused");
+  expect(setError).toHaveBeenCalledWith("read refused", "profiles:absorb");
   expect(absorb).toHaveBeenCalledTimes(2);
   busy = true;
   await render();
@@ -225,4 +225,51 @@ it("rejects a stale result even after the original profile is selected again", a
   expect(absorb).toHaveBeenCalledTimes(2);
   expect(state.bindSyncRequest).toBeNull();
   expect(state.packPrompt).toBeNull();
+});
+
+it("reviews folder repair without writing, retains failed review, and refreshes after repair", async () => {
+  await render();
+  const id = state.library?.profiles[0].id;
+  if (!id) throw new Error("missing fixture profile");
+  const plan = [{ from: "materials", to: "custom-materials-2" }];
+  const review = vi.spyOn(api, "planCustomFolderRepair").mockResolvedValue(plan);
+  const repair = vi
+    .spyOn(api, "repairCustomFolders")
+    .mockRejectedValueOnce(Error("Source changed"));
+  const before = state.refreshKey;
+  await act(async () => state.reviewFolderRepair(id));
+  expect(review).toHaveBeenCalledWith(id);
+  expect(repair).not.toHaveBeenCalled();
+  expect(state.folderRepair?.plan).toEqual(plan);
+  await act(async () => state.repairFolders());
+  expect(state.folderRepair?.error).toBe("Source changed");
+  expect(setError).toHaveBeenLastCalledWith(null, `profiles:folder-review:${id}`);
+  expect(state.folderRepair?.plan).toEqual(plan);
+  expect(state.refreshKey).toBe(before);
+  if (!state.library) throw new Error("missing fixture library");
+  repair.mockResolvedValueOnce(state.library);
+  await act(async () => state.repairFolders());
+  expect(repair).toHaveBeenLastCalledWith(id, plan);
+  expect(state.folderRepair).toBeNull();
+  expect(state.refreshKey).not.toBe(before);
+});
+
+it("cancelling a folder review and the game lock never run the repair", async () => {
+  await render();
+  const id = state.library?.profiles[0].id;
+  if (!id) throw new Error("missing fixture profile");
+  vi.spyOn(api, "planCustomFolderRepair").mockResolvedValue([
+    { from: "resource", to: "custom-resource" },
+  ]);
+  const repair = vi.spyOn(api, "repairCustomFolders");
+  await act(async () => state.reviewFolderRepair(id));
+  await act(async () => state.cancelFolderRepair());
+  await act(async () => state.repairFolders());
+  expect(repair).not.toHaveBeenCalled();
+  await act(async () => state.reviewFolderRepair(id));
+  running = true;
+  await render();
+  await act(async () => state.repairFolders());
+  expect(repair).not.toHaveBeenCalled();
+  expect(state.folderRepair).not.toBeNull();
 });

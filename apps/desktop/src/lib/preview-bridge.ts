@@ -69,7 +69,7 @@ import { previewViewmodelRecord } from "./viewmodel-ui";
 const PREVIEW_FILES: { path: string; text: string }[] = [
   {
     path: "tf/cfg/overrides/autoexec.cfg",
-    text: "exec execs_binds // execs:managed\nexec execs_gameplay // execs:managed\nhost_writeconfig\n",
+    text: "exec overrides/execs_binds // execs:managed\nexec overrides/execs_gameplay // execs:managed\nhost_writeconfig\n",
   },
   {
     path: "tf/cfg/overrides/danger.cfg",
@@ -269,6 +269,20 @@ export function createPreviewApi(state: PreviewState): Api {
     async importProfile() {
       return addProfile(`Imported ${(library?.profiles.length ?? 0) + 1}`, false);
     },
+    async planCustomFolderRepair(id) {
+      return (
+        library?.profiles.find((profile) => profile.id === id)?.unsafeCustomFolders ?? []
+      ).map((from) => ({ from, to: `custom-${from.toLowerCase()}` }));
+    },
+    async repairCustomFolders(id) {
+      library = {
+        ...(library ?? emptyLibrary(BROWSED.path, true)),
+        profiles: (library?.profiles ?? []).map((profile) =>
+          profile.id === id ? { ...profile, unsafeCustomFolders: [] } : profile,
+        ),
+      };
+      return library;
+    },
 
     // --- first run ----------------------------------------------------------
     async classifyFirstRun() {
@@ -377,7 +391,7 @@ export function createPreviewApi(state: PreviewState): Api {
     async updateComfigVpks() {
       return requireDetail();
     },
-    async importComfigCustom() {
+    async importComfigCustom(): Promise<ProfileDetail | null> {
       comfig = { ...comfig, hasComfigCustom: true };
       return requireDetail();
     },
@@ -396,19 +410,23 @@ export function createPreviewApi(state: PreviewState): Api {
 
     // --- HUD ----------------------------------------------------------------
     async getHudCatalog() {
-      return hudCatalog;
+      return { entries: hudCatalog, warning: null };
     },
     async getHudState() {
-      return hudState;
+      return { ...hudState, profileId: requireDetail().id };
     },
     async getHudAlbum() {
       return [];
     },
     async getHudStats() {
-      if (state === "settings-hud-browser") return PREVIEW_HUD_BROWSER_STATS;
+      if (state === "settings-hud-browser")
+        return { stats: PREVIEW_HUD_BROWSER_STATS, warning: null };
       return {
-        rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
-        toonhud: { updated: "2024-03-02" },
+        stats: {
+          rayshud: { updated: "2026-01-11", downloads: 398380, views: 1168295 },
+          toonhud: { updated: "2024-03-02" },
+        },
+        warning: null,
       };
     },
     async installHud(id: string) {
@@ -442,10 +460,16 @@ export function createPreviewApi(state: PreviewState): Api {
       }
       return requireDetail();
     },
-    async getHudSchema() {
+    async getHudSchema(expectedProfileId, expectedHudId) {
+      if (requireDetail().id !== expectedProfileId || hudState.installed?.id !== expectedHudId) {
+        throw new Error("The installed HUD changed. Reload HUD options.");
+      }
       return hudState.schemaSupported ? PREVIEW_HUD_SCHEMA : null;
     },
-    async applyHudOptions(options: Record<string, string>) {
+    async applyHudOptions(options, expectedProfileId, expectedHudId) {
+      if (requireDetail().id !== expectedProfileId || hudState.installed?.id !== expectedHudId) {
+        throw new Error("The installed HUD changed. Reload HUD options.");
+      }
       if (hudState.installed) {
         hudState = { ...hudState, installed: { ...hudState.installed, options } };
       }
@@ -536,7 +560,7 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return requireDetail();
     },
-    async importViewmodels(preload: boolean) {
+    async importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
       viewmodel = { id: "preview", source: "imported", preload, options: {} };
       return requireDetail();
     },

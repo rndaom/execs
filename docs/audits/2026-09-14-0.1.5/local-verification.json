@@ -1,0 +1,32 @@
+{
+  "sourceCommit": "ca3ac2977798ec7cfc895b374a64494a7829cf77",
+  "version": "0.1.5",
+  "checkedAt": "2026-09-14T23:50:53.8241602Z",
+  "platform": "Windows",
+  "frontend": {
+    "releaseScriptsPassed": 21,
+    "cfglintPassed": 140,
+    "desktopPassed": 521,
+    "releaseScriptsSkipped": 3
+  },
+  "native": {
+    "totalPassed": 720,
+    "integrationPassed": 20,
+    "corePassed": 597,
+    "appPassed": 103,
+    "ignoredOptIn": 8
+  },
+  "checks": {
+    "rustFmt": "passed",
+    "productionBuild": "passed",
+    "workspaceTests": "passed",
+    "diffCheck": "passed",
+    "biome": "passed",
+    "workspaceClippy": "passed"
+  },
+  "notes": [
+    "The Vite large-chunk advisory remains.",
+    "Default native opt-in skips cover live sources, installed/reference assets and pinned mastercomfig assets; the latter was also verified explicitly.",
+    "Live Linux Steam URI handoff is outstanding by owner instruction."
+  ]
+}

@@ -655,7 +655,13 @@ where
         selection_budget.add(&content)?;
 
         let display = display_name(&name);
-        let id = unique_mod_id(&mod_id_from_name(&display), &taken);
+        let mut base = mod_id_from_name(&display);
+        if matches!(&content, ModContent::Tree(_))
+            && crate::custom_folders::is_reserved_source_folder(&base)
+        {
+            base = format!("mod-{base}");
+        }
+        let id = unique_mod_id(&base, &taken);
         taken.insert(pack_identity(&id));
 
         let (pack, files) = match content {
@@ -742,7 +748,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 pub fn remove_mod(
@@ -807,7 +813,7 @@ where
             prune_empty_parents(&live_path(tf2_root, path), tf2_root);
         }
     }
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 fn pack_files(manifest: &ProfileManifest, pack: &str) -> Vec<crate::profile::ProfileFile> {
@@ -1031,6 +1037,74 @@ mod tests {
             rels,
             vec!["materials/models/a.vmt", "models/a.mdl", "readme.txt"]
         );
+    }
+
+    #[test]
+    fn loose_mods_avoid_source_reserved_names_and_collisions_but_vpks_keep_their_name() {
+        let (area, profiles, root, id) = setup();
+        fs::create_dir_all(root.join("tf/custom/mod-materials")).unwrap();
+        fs::write(root.join("tf/custom/mod-materials/keep.txt"), b"keep").unwrap();
+        for name in [
+            "MATERIALS",
+            "Maps",
+            "resource",
+            "Scripts",
+            "SOUND",
+            "models",
+        ] {
+            let detail = install_mod_to(
+                &profiles,
+                &root,
+                &id,
+                &format!("{name}.zip"),
+                ModContent::Tree(vec![(
+                    "materials/audit/sample.vmt".into(),
+                    b"dummy".to_vec(),
+                )]),
+                ModSource::Local,
+                unlocked(),
+            )
+            .unwrap();
+            let record = detail.mods.last().unwrap();
+            assert!(!crate::custom_folders::is_reserved_source_folder(
+                &record.pack
+            ));
+            assert!(!root.join("tf/custom").join(name).exists());
+            assert_eq!(
+                fs::read(root.join(format!(
+                    "tf/custom/{}/materials/audit/sample.vmt",
+                    record.pack
+                )))
+                .unwrap(),
+                b"dummy"
+            );
+        }
+        assert_eq!(
+            fs::read(root.join("tf/custom/mod-materials/keep.txt")).unwrap(),
+            b"keep"
+        );
+        assert!(root
+            .join("tf/custom/mod-materials-2/materials/audit/sample.vmt")
+            .exists());
+        let vpk = write_vpk_v1(&BTreeMap::from([(
+            "materials/a.vmt".into(),
+            b"vmt".to_vec(),
+        )]));
+        let detail = install_mod_to(
+            &profiles,
+            &root,
+            &id,
+            "materials.vpk",
+            ModContent::Vpk(vpk),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(detail
+            .mods
+            .iter()
+            .any(|record| record.pack == "materials.vpk"));
+        cleanup(&area);
     }
 
     #[test]

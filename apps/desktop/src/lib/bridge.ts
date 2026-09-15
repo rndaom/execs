@@ -21,6 +21,7 @@ export type ProfileSummary = {
   name: string;
   createdAt: string;
   updatedAt: string;
+  unsafeCustomFolders?: string[];
 };
 
 export type ProfileLibrary = {
@@ -194,6 +195,19 @@ export async function exportProfile(id: string): Promise<string | null> {
 
 export async function importProfile(): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("import_profile");
+}
+
+export type CustomFolderRepair = { from: string; to: string };
+
+export async function planCustomFolderRepair(id: string): Promise<CustomFolderRepair[]> {
+  return call<CustomFolderRepair[]>("plan_custom_folder_repair", { id });
+}
+
+export async function repairCustomFolders(
+  id: string,
+  reviewed: CustomFolderRepair[],
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("repair_custom_folders", { id, reviewed });
 }
 
 export type FirstRunKind = "unused" | "existing";
@@ -471,8 +485,8 @@ export async function updateComfigVpks(id?: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("update_comfig_vpks", { id: id ?? null });
 }
 
-export async function importComfigCustom(id?: string): Promise<ProfileDetail> {
-  return call<ProfileDetail>("import_comfig_custom", { id: id ?? null });
+export async function importComfigCustom(id?: string): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_comfig_custom", { id: id ?? null });
 }
 
 export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
@@ -497,12 +511,16 @@ export async function setProfileLaunchOptions(
   return call<SetLaunchResult>("set_profile_launch_options", { options, id: id ?? null });
 }
 
-export async function getHudCatalog(refresh = false): Promise<HudCatalogEntry[]> {
-  return call<HudCatalogEntry[]>("get_hud_catalog", { refresh });
+export type HudCatalogPayload = { entries: HudCatalogEntry[]; warning: string | null };
+export type HudStatsPayload = { stats: Record<string, HudStat>; warning: string | null };
+export type HudStatePayload = HudUiState & { profileId: string };
+
+export async function getHudCatalog(refresh = false): Promise<HudCatalogPayload> {
+  return call<HudCatalogPayload>("get_hud_catalog", { refresh });
 }
 
-export async function getHudState(): Promise<HudUiState> {
-  return call<HudUiState>("get_hud_state");
+export async function getHudState(): Promise<HudStatePayload> {
+  return call<HudStatePayload>("get_hud_state");
 }
 
 /** One picture from a HUD's external album, resolved to a direct image URL. */
@@ -522,8 +540,8 @@ export type HudStat = {
 };
 
 /** Per-HUD popularity and recency, keyed by hud-db id; cached for a day. */
-export async function getHudStats(refresh = false): Promise<Record<string, HudStat>> {
-  return call<Record<string, HudStat>>("get_hud_stats", { refresh });
+export async function getHudStats(refresh = false): Promise<HudStatsPayload> {
+  return call<HudStatsPayload>("get_hud_stats", { refresh });
 }
 
 /** The pictures behind a HUD's Imgur album or GitHub showcase page. */
@@ -553,12 +571,19 @@ export async function updateHud(): Promise<ProfileDetail> {
   return call<ProfileDetail>("update_hud");
 }
 
-export async function getHudSchema(): Promise<HudSchemaView | null> {
-  return call<HudSchemaView | null>("get_hud_schema");
+export async function getHudSchema(
+  expectedProfileId: string,
+  expectedHudId: string,
+): Promise<HudSchemaView | null> {
+  return call<HudSchemaView | null>("get_hud_schema", { expectedProfileId, expectedHudId });
 }
 
-export async function applyHudOptions(options: Record<string, string>): Promise<ProfileDetail> {
-  return call<ProfileDetail>("apply_hud_options", { options });
+export async function applyHudOptions(
+  options: Record<string, string>,
+  expectedProfileId: string,
+  expectedHudId: string,
+): Promise<ProfileDetail> {
+  return call<ProfileDetail>("apply_hud_options", { options, expectedProfileId, expectedHudId });
 }
 
 export type CrosshairAssetPayload = {
@@ -652,8 +677,8 @@ export async function buildViewmodelPack(
   return call<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
 }
 
-export async function importViewmodels(preload: boolean): Promise<ProfileDetail> {
-  return call<ProfileDetail>("import_viewmodels", { preload });
+export async function importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
+  return call<ProfileDetail | null>("import_viewmodels", { preload });
 }
 
 export async function removeViewmodels(): Promise<ProfileDetail> {

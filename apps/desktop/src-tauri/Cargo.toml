@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "execs"
-version = "0.1.4"
+version = "0.1.5"
 description = "TF2 desktop companion"
 authors = ["rndaom"]
 edition = "2021"
@@ -34,7 +34,11 @@ tauri-plugin-updater = "2"
 tokio = { version = "1", features = ["sync"] }
 
 [features]
-release-probes = []
+release-probes = ["tauri/test"]
+
+[[example]]
+name = "updater_download_probe"
+required-features = ["release-probes"]
 
 [[example]]
 name = "updater_probe"

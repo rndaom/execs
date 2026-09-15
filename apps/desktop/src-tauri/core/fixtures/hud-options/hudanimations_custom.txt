@@ -1,0 +1,9 @@
+// First-party regression animation; these names are only test events.
+event FixtureHealth
+{
+	RunEvent FixtureText	0.0 // keep timing and comment
+	//RunEvent FixtureBox 0.5
+	RunEvent FixtureTextExtra 0.1
+	Animate	PlayerStatusSpyOutlineImage	Alpha "200" Linear 0.0 0.2
+	//Animate Unrelated Alpha "0" Linear 0.0 1.0
+}

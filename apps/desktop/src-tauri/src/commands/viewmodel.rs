@@ -8,8 +8,7 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{
-    active_manifest, blocking, confirmed_root, read_bounded_file, vpk_too_large, with_profile,
-    ActiveContext,
+    active_manifest, blocking, read_bounded_file, vpk_too_large, with_profile, ActiveContext,
 };
 use crate::error::CommandError;
 use crate::WriteGate;
@@ -104,7 +103,7 @@ pub async fn import_viewmodels(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
     preload: bool,
-) -> Result<ProfileDetail, CommandError> {
+) -> Result<Option<ProfileDetail>, CommandError> {
     let (context, initial_viewmodel) = with_profile(|root, profile_id| {
         execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
@@ -125,12 +124,7 @@ pub async fn import_viewmodels(
     .map_err(|err| CommandError::unknown(err.to_string()))?;
     let Some(picked) = picked else {
         // Cancelling the picker is a no-op, not an error.
-        return blocking(|| {
-            let root = confirmed_root()?;
-            execs_core::get_active_profile_detail(&root)?
-                .ok_or_else(|| CommandError::unknown("Save or switch to a profile first."))
-        })
-        .await;
+        return Ok(None);
     };
     let path = picked
         .into_path()
@@ -152,6 +146,7 @@ pub async fn import_viewmodels(
         )?)
     })
     .await
+    .map(Some)
 }
 
 fn ensure_viewmodel_unchanged(

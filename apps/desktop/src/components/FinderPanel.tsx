@@ -2,7 +2,7 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 import type { Tf2Install } from "../lib/bridge";
 import { formatInstallLabel } from "../lib/finder-ui";
 import { OnboardingFrame } from "./OnboardingFrame";
-import { Alert } from "./ui/Alert";
+import { OperationError } from "./ui/OperationError";
 
 /**
  * Find TF2. Flat rows separated by hairlines — the install list is a list, not
@@ -13,6 +13,7 @@ export function FinderPanel({
   installs,
   selected,
   error,
+  onDismissError,
   canConfirm,
   busy,
   onSelect,
@@ -23,6 +24,7 @@ export function FinderPanel({
   installs: Tf2Install[];
   selected: string | null;
   error: string | null;
+  onDismissError?: () => void;
   canConfirm: boolean;
   busy: boolean;
   onSelect: (path: string) => void;
@@ -86,11 +88,7 @@ export function FinderPanel({
         </ul>
       )}
 
-      {error ? (
-        <Alert tone="error" className="mt-6">
-          {error}
-        </Alert>
-      ) : null}
+      <OperationError message={error} onDismiss={onDismissError} className="mt-6" />
     </OnboardingFrame>
   );
 }

@@ -4,6 +4,8 @@ import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
 import { libraryStatusCopy } from "../../lib/library-ui";
 import { SwitchProgressList } from "../SwitchProgressList";
+import { OperationError } from "../ui/OperationError";
+import { FolderRepair } from "./FolderRepair";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
 import { ReadyHeader } from "./ReadyHeader";
@@ -16,6 +18,9 @@ export function ReadyPanel({
   draftName,
   launching,
   recoveryTargetId,
+  launchBlockReason,
+  launchBlockAction,
+  onLaunchBlocked,
   settings,
   onDraftName,
   onSave,
@@ -30,6 +35,9 @@ export function ReadyPanel({
   draftName: string;
   launching: boolean;
   recoveryTargetId: string | null;
+  launchBlockReason?: string | null;
+  launchBlockAction?: string;
+  onLaunchBlocked?: () => void;
   settings?: ReactNode;
   onDraftName: (name: string) => void;
   onSave: () => void;
@@ -38,10 +46,14 @@ export function ReadyPanel({
   onLaunch: () => void;
   onCancelLaunch: () => void;
 }) {
-  const { error, busy, running } = useAppStatus();
+  const { error, dismissError, busy, running } = useAppStatus();
   const controlsBusy = busy || progress.state.active;
   const { library } = profiles;
   const recoveryTarget = library?.profiles.find((profile) => profile.id === recoveryTargetId);
+  const unsafeActive = library?.profiles.find(
+    (profile) =>
+      profile.id === library.activeProfileId && (profile.unsafeCustomFolders?.length ?? 0) > 0,
+  );
 
   return (
     <section className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
@@ -49,7 +61,19 @@ export function ReadyPanel({
         path={path}
         running={running}
         launching={launching}
-        disabled={controlsBusy || recoveryTargetId !== null}
+        disabled={controlsBusy || recoveryTargetId !== null || unsafeActive !== undefined}
+        blockedReason={
+          launchBlockReason ??
+          (controlsBusy
+            ? "Wait for the current operation to finish."
+            : recoveryTargetId
+              ? "Finish the interrupted profile switch before launching TF2."
+              : unsafeActive
+                ? "Repair this profile's custom folder names before launching TF2."
+                : undefined)
+        }
+        blockedAction={launchBlockAction}
+        onBlocked={onLaunchBlocked}
         onLaunch={onLaunch}
         onCancelLaunch={onCancelLaunch}
         menu={
@@ -64,10 +88,38 @@ export function ReadyPanel({
             onSwitch={(id) => void profiles.switchProfile(id)}
             onExport={(id) => void profiles.exportProfile(id)}
             onImport={() => void profiles.importProfile()}
+            onRepair={(id) => void profiles.reviewFolderRepair(id)}
             onCreateNew={onCreateNew}
             onChangeInstall={onChangeInstall}
           />
         }
+      />
+
+      {unsafeActive ? (
+        <div
+          role="alert"
+          className="t-body flex items-center justify-between gap-4 border-b border-warn/50 bg-warn/10 px-5 py-2 text-ink"
+        >
+          <span>
+            TF2 cannot mount this profile’s custom folders:{" "}
+            {unsafeActive.unsafeCustomFolders?.join(", ")}.
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={controlsBusy || running || recoveryTargetId !== null}
+            onClick={() => void profiles.reviewFolderRepair(unsafeActive.id)}
+          >
+            Repair folder names
+          </button>
+        </div>
+      ) : null}
+      <FolderRepair
+        review={profiles.folderRepair}
+        busy={controlsBusy || running}
+        error={profiles.folderRepair?.error ?? null}
+        onRepair={() => void profiles.repairFolders()}
+        onCancel={profiles.cancelFolderRepair}
       />
 
       {recoveryTargetId ? (
@@ -81,14 +133,7 @@ export function ReadyPanel({
         </div>
       ) : null}
 
-      {error ? (
-        <div
-          role="alert"
-          className="t-body shrink-0 border-b border-error/50 bg-error/10 px-5 py-2 text-ink"
-        >
-          {error}
-        </div>
-      ) : null}
+      <OperationError message={error} onDismiss={dismissError} />
 
       <PackPrompt
         delta={running || profiles.packPromptDeferred ? null : profiles.packPrompt}

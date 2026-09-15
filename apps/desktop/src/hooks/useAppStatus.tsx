@@ -1,9 +1,11 @@
 import { createContext, type ReactNode, useContext } from "react";
 import { canWrite } from "../lib/write-gate";
+import type { SetOperationError } from "./useOperationErrors";
 
 export type AppStatus = {
   error: string | null;
-  setError: (message: string | null) => void;
+  setError: SetOperationError;
+  dismissError?: () => void;
   /** A profile or settings write is in flight. */
   busy: boolean;
   /** TF2 is running — the whole live surface is read-only. */

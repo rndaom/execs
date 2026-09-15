@@ -1,0 +1,117 @@
+{
+  "files": [
+    {
+      "path": "tf/cfg/config.cfg",
+      "sha256": "32bc8feee4a2010472427979e3e17f14d8e44ca299a73af9dd1c715c76058c57",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/autoexec.cfg",
+      "sha256": "04fb7b9197083beaefbea1f33eccb157c2fcd9c195dbfdc91392851aa4c5cd91",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/compat_nested/profile.cfg",
+      "sha256": "69b6da15e2ebd7a71332b62aa230cec819563d02b9135c8ff735c216083f0773",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/execs_gameplay.cfg",
+      "sha256": "55c175931d335990951929583029091cd12ab28f3a0825874f9d7c6c099f714b",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/-compat-pack/materials/fixture.vmt",
+      "sha256": "eb5a98c50f333d1d634b25a7d8d469ffd15bfc1350d3357fe15e7dcadcd9e233",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/-compat-vpk.vpk",
+      "sha256": "29c9a7fe48975390286a23a39d2b7547bdcf58b7d803417943d857cebb1bed56",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/compat-hud/info.vdf",
+      "sha256": "62009bc66f06a1aa4f7f696b8bf37062dd1f83383c1786eccf0300d3a582331c",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/compat-hud/resource/ui/HudLayout.res",
+      "sha256": "159aaa78554706f986b1350c02a99cae91fec0cb0f4c0007e9bcc02bd2cc7df4",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/compat-pack/materials/fixture.vmt",
+      "sha256": "4fb0d25150eab74cde798cec8da6488ae2e26a0ef9b61b2d44daa190bd708ab5",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/compat-vpk.vpk",
+      "sha256": "e7d425ba043e0d69a51dd142a61d7ffcd52a5c14e6ee879a7e84c37a09cefa10",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/mastercomfig-base.vpk",
+      "sha256": "95747ce0a647326bf9c7b32e9261ed4eaf93a5c49e022ad3edc062150bccbd24",
+      "storage": "shared"
+    }
+  ],
+  "hud": {
+    "id": "compat-hud",
+    "options": {
+      "accentColor": "128 180 255 255",
+      "minmode": "true"
+    },
+    "source": "local"
+  },
+  "ignoredPacks": ["compat-kept-out", "-compat-kept-out"],
+  "launchOptions": "-novid -nojoy",
+  "mods": [
+    {
+      "bytes": 64,
+      "files": 1,
+      "id": "compat-pack",
+      "installedAt": "2026-09-14T00:00:00Z",
+      "name": "Public export compat-pack",
+      "pack": "compat-pack",
+      "source": {
+        "kind": "local"
+      }
+    },
+    {
+      "bytes": 74,
+      "files": 1,
+      "id": "-compat-pack",
+      "installedAt": "2026-09-14T00:00:00Z",
+      "name": "Public export -compat-pack",
+      "pack": "-compat-pack",
+      "source": {
+        "kind": "local"
+      }
+    },
+    {
+      "bytes": 164,
+      "files": 1,
+      "id": "compat-vpk",
+      "installedAt": "2026-09-14T00:00:00Z",
+      "name": "Public export compat-vpk.vpk",
+      "pack": "compat-vpk.vpk",
+      "source": {
+        "kind": "local"
+      }
+    },
+    {
+      "bytes": 174,
+      "files": 1,
+      "id": "-compat-vpk",
+      "installedAt": "2026-09-14T00:00:00Z",
+      "name": "Public export -compat-vpk.vpk",
+      "pack": "-compat-vpk.vpk",
+      "source": {
+        "kind": "local"
+      }
+    }
+  ],
+  "name": "Public 0.1.4 compatibility fixture",
+  "schema": 1
+}

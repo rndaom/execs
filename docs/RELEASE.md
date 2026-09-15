@@ -12,6 +12,14 @@ downloads, signatures and the updater feed are independently verified. See
 `docs/release-0.1.4.md` for final publication evidence. PRs #44 and #46 are
 merged, and PR #45 carries the maintenance fixes into the unreleased 0.2.0 track.
 
+0.1.5 is prepared in PR #47 from that public baseline, with the separate main
+forward-port in PR #48. All 23 repair records, combined local checks,
+Windows/Linux CI, signed candidate packages, upgrades from public 0.1.4,
+startup/notices, app-data preservation, no-repeat-offer checks and public-export
+compatibility pass. The owner chose Linux CI and left the live Linux Steam
+handoff outstanding. See `docs/release-0.1.5.md` for evidence and exact commits.
+Public latest stays 0.1.4 until publication is authorized and succeeds.
+
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
 also found three patch-class regressions in public 0.1.2: absorb must stop if

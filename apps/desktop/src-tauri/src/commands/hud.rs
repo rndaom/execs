@@ -16,8 +16,10 @@ use crate::hud_fetch::HUD_ZIP_MAX_BYTES;
 use crate::WriteGate;
 
 #[tauri::command]
-pub async fn get_hud_catalog(refresh: bool) -> Result<Vec<HudCatalogEntry>, CommandError> {
-    blocking(move || Ok(crate::hud_fetch::load_or_fetch_catalog(refresh)?)).await
+pub async fn get_hud_catalog(
+    refresh: bool,
+) -> Result<crate::hud_fetch::HudCatalogPayload, CommandError> {
+    blocking(move || Ok(crate::hud_fetch::load_catalog_payload(refresh)?)).await
 }
 
 /// `HudUiState` plus one honest bit. When the catalog cannot be read (offline
@@ -29,6 +31,7 @@ pub struct HudStatePayload {
     #[serde(flatten)]
     pub state: HudUiState,
     pub catalog_unavailable: bool,
+    pub profile_id: String,
 }
 
 /// Popularity and recency per HUD id, from comfig.app (last updated) and
@@ -36,7 +39,7 @@ pub struct HudStatePayload {
 #[tauri::command]
 pub async fn get_hud_stats(
     refresh: bool,
-) -> Result<BTreeMap<String, crate::hud_stats::HudStat>, CommandError> {
+) -> Result<crate::hud_stats::HudStatsPayload, CommandError> {
     blocking(move || Ok(crate::hud_stats::load_or_fetch_stats(refresh)?)).await
 }
 
@@ -57,13 +60,18 @@ pub async fn get_hud_album(id: String) -> Result<Vec<crate::hud_fetch::AlbumImag
 #[tauri::command]
 pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
     with_profile(|_root, profile_id| {
-        let catalog = crate::hud_fetch::load_or_fetch_catalog(false);
-        let catalog_unavailable = catalog.is_err();
-        let catalog = catalog.unwrap_or_default();
+        // This command is local even with an empty/offline catalog. The UI
+        // refreshes the catalog independently and asks for update state again.
+        let catalog = crate::hud_fetch::load_cached_catalog_payload()
+            .ok()
+            .flatten();
+        let catalog_unavailable = catalog.as_ref().is_none_or(|value| value.warning.is_some());
+        let catalog = catalog.map(|value| value.entries).unwrap_or_default();
         let manifest = active_manifest(&profile_id)?;
         Ok(HudStatePayload {
             state: execs_core::hud_ui_state(&manifest, &catalog),
             catalog_unavailable,
+            profile_id,
         })
     })
     .await
@@ -314,12 +322,27 @@ pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDeta
 }
 
 #[tauri::command]
-pub async fn get_hud_schema() -> Result<Option<HudSchemaView>, CommandError> {
-    with_profile(|_root, profile_id| {
+pub async fn get_hud_schema(
+    expected_profile_id: String,
+    expected_hud_id: String,
+) -> Result<Option<HudSchemaView>, CommandError> {
+    with_profile(move |_root, profile_id| {
+        if profile_id != expected_profile_id {
+            return Err(CommandError::new(
+                "ProfileChanged",
+                "The active profile changed. Reload HUD options.",
+            ));
+        }
         let manifest = active_manifest(&profile_id)?;
         let Some(status) = execs_core::resolve_hud(&manifest) else {
             return Ok(None);
         };
+        if status.record.id != expected_hud_id {
+            return Err(CommandError::new(
+                "ProfileChanged",
+                "The installed HUD changed. Reload HUD options.",
+            ));
+        }
         if !execs_core::schema_supported(&status.record.id) {
             return Ok(None);
         }
@@ -334,13 +357,21 @@ pub async fn get_hud_schema() -> Result<Option<HudSchemaView>, CommandError> {
 pub async fn apply_hud_options(
     gate: tauri::State<'_, WriteGate>,
     options: BTreeMap<String, String>,
+    expected_profile_id: String,
+    expected_hud_id: String,
 ) -> Result<ProfileDetail, CommandError> {
-    let (context, initial_hud, schema) = with_profile(|root, profile_id| {
+    let (context, initial_hud, schema) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
         let initial_hud = manifest.hud.clone();
         let status = execs_core::resolve_hud(&manifest)
             .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
+        ensure_hud_identity(
+            &profile_id,
+            &status.record.id,
+            &expected_profile_id,
+            &expected_hud_id,
+        )?;
         if !execs_core::schema_supported(&status.record.id) {
             return Err(CommandError::unknown("This HUD has no in-app options."));
         }
@@ -380,6 +411,22 @@ fn ensure_hud_unchanged(
         Ok(())
     } else {
         Err(CommandError::new("ProfileChanged", message))
+    }
+}
+
+fn ensure_hud_identity(
+    profile_id: &str,
+    hud_id: &str,
+    expected_profile_id: &str,
+    expected_hud_id: &str,
+) -> Result<(), CommandError> {
+    if profile_id == expected_profile_id && hud_id == expected_hud_id {
+        Ok(())
+    } else {
+        Err(CommandError::new(
+            "ProfileChanged",
+            "The profile or installed HUD changed. Reload HUD options before saving.",
+        ))
     }
 }
 
@@ -438,7 +485,7 @@ fn install_fetched_hud(
             "The installed HUD changed while its update was downloading. Try again.",
         ));
     }
-    let layer = execs_core::apply::cfg_layer_from_files(&manifest.files);
+    let layer = execs_core::apply::cfg_layer_from_manifest(&execs_core::profiles_dir(), &manifest)?;
     let mut options = BTreeMap::new();
     if preserve_options {
         if let Some(hud) = manifest.hud {
@@ -476,6 +523,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn queued_options_refuse_another_profile_or_hud_before_fetching_or_writing() {
+        assert!(ensure_hud_identity("profile-a", "rayshud", "profile-a", "rayshud").is_ok());
+        for (profile, hud) in [("profile-b", "rayshud"), ("profile-a", "budhud")] {
+            let error = ensure_hud_identity(profile, hud, "profile-a", "rayshud").unwrap_err();
+            assert_eq!(error.code, "ProfileChanged");
+            assert!(error.message.contains("before saving"));
+        }
+    }
+
+    #[test]
     fn rejected_hud_input_keeps_guidance_without_claiming_a_profile_write_failed() {
         let guidance = "This download contains multiple HUD folders: CRUELTY DEATH, CRUELTY LIFE. Extract it, then import the one HUD folder you want.";
         let error = hud_input_error(execs_core::ProfileError::Io(guidance.into()));
@@ -510,9 +567,11 @@ mod tests {
                 update_available: false,
             },
             catalog_unavailable: true,
+            profile_id: "profile-a".into(),
         };
         let json = serde_json::to_value(payload).unwrap();
         assert_eq!(json["catalogUnavailable"], true);
+        assert_eq!(json["profileId"], "profile-a");
         assert_eq!(json["schemaSupported"], true);
         assert_eq!(json["updateAvailable"], false);
         assert!(json.get("state").is_none(), "the state must stay flat");

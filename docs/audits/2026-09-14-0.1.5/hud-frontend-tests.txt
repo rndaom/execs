@@ -1,0 +1,15 @@
+
+> @execs/desktop@0.1.4 test G:\Projects\execs-015-hud\apps\desktop
+> vitest run "SettingsHost" "HudPane"
+
+
+ RUN  v3.2.7 G:/Projects/execs-015-hud/apps/desktop
+
+ ✓ src/SettingsHost.test.ts (17 tests) 79ms
+ ✓ src/HudPane.test.ts (5 tests) 30ms
+ ✓ src/SettingsHost.hud-loading.test.tsx (11 tests) 294ms
+
+ Test Files  3 passed (3)
+      Tests  33 passed (33)
+   Start at  19:23:34
+   Duration  3.20s (transform 565ms, setup 0ms, collect 5.41s, tests 402ms, environment 0ms, prepare 206ms)

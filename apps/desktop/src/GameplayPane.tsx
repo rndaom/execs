@@ -17,6 +17,8 @@ import {
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
+  VIEWMODEL_FOV_MAX,
+  VIEWMODEL_FOV_MIN,
 } from "./lib/gameplay-ui";
 
 export type GameplayPaneProps = {
@@ -90,8 +92,9 @@ export function GameplayPane({
           testId="gameplay-viewmodel-fov"
           label="Viewmodel FOV"
           value={draft.viewmodel_fov}
-          min={FOV_MIN}
-          max={FOV_MAX}
+          min={VIEWMODEL_FOV_MIN}
+          max={VIEWMODEL_FOV_MAX}
+          step={0.1}
           suffix="°"
           onChange={(viewmodel_fov) => patch({ viewmodel_fov })}
         />
@@ -178,6 +181,7 @@ function SliderRow({
   value,
   min,
   max,
+  step = 1,
   suffix = "",
   onChange,
 }: {
@@ -187,6 +191,7 @@ function SliderRow({
   value: number;
   min: number;
   max: number;
+  step?: number;
   suffix?: string;
   onChange: (value: number) => void;
 }) {
@@ -207,7 +212,7 @@ function SliderRow({
         type="range"
         min={min}
         max={max}
-        step={1}
+        step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
         className="range mt-4 w-full"

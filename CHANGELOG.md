@@ -5,6 +5,64 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-14
+
+### Fixed
+
+- Updates: stop stalled installer downloads, release the update lock and allow
+  retrying without restarting execs.
+- Crosshair: keep imported PNG and design bytes available when Build pack fails
+  or is refused, so retrying builds the complete draft.
+- Sounds: preserve newer volume, pitch, boost and sound selections while an
+  earlier boost save finishes.
+- Comfig: show saved preset, module and addon selections after a failed change,
+  with the failed choice available to retry.
+- Imports: cancelling HUD, mod, viewmodel or comfig-custom pickers no longer
+  reports a successful import or displays Saving while choosing files.
+- Save feedback: identify the originating pane after navigation, keep each
+  operation's failure until it succeeds or is dismissed, and give every save
+  completion its full display time.
+- Draft feedback: remove obsolete waiting notices when edits are reverted,
+  discarded or saved, and keep other panes' pending drafts visible.
+- Draft feedback: show the waiting notice again after reverting and re-editing
+  settings while TF2 remains open, including after switching panes.
+- Errors: keep export failures visible through background settings reloads,
+  with a consistent dismissal control that preserves draft and recovery guards.
+- HUD: save FlawHUD options with animation comment toggles and literal-backslash
+  labels, apply checkbox choices inside the correct resource header, and retain
+  each file's encoding and platform-specific values.
+- HUD: identify the option and relative file when an option save fails, while
+  keeping malformed or unsupported edits out of the profile and live HUD.
+- Settings: preserve startup values when other cfg files or uninvoked binds and
+  aliases change the same controls; reflect executed bind removals correctly.
+- Files: bound repeated cfg and payload execution to keep analysis responsive,
+  and prevent incomplete startup results from being saved as settings.
+- Gameplay: retain viewmodel FOV values from 0.1 to 179.9, including decimals,
+  when another control changes.
+- Settings: await pending and in-flight autosaves before closing execs, and keep
+  locked or failed drafts until you retry, cancel closing, or explicitly discard them.
+- Launch: explain which pending settings prevent TF2 from starting, with actions
+  to review the drafts, return to their pane, retry saving, or discard them.
+- Preview: keep settings available with correctly rooted managed cfg paths.
+- Profiles: preserve distinct dashed and undashed custom packs during capture,
+  absorb, export and removal, including independent Keep and Restore choices.
+- Settings: detect the executable mastercomfig loader before using overrides;
+  standalone addons and leftover overrides use vanilla cfgs, and snapshots
+  retain safe nested user cfgs in either setup.
+- HUD: keep the installed HUD and available local options accessible offline,
+  clear obsolete option schemas, and preserve unsaved options when retrying.
+- HUD: report failed and partial catalog or statistics refreshes while keeping
+  available cached entries and values visible.
+- Profiles: prevent imported mods and HUDs from using folder names that stop TF2
+  from starting, and offer a reviewed repair for affected saved profiles.
+- Profiles: refuse exports containing saved credentials inside VPK cfg files,
+  preserving the existing export when validation fails.
+- Profiles: retain cfg files inside nested folders named `user`, `app`, or
+  `overrides` when saving, exporting and switching setups.
+- Settings: follow mounted custom cfg precedence and block saves when a pack
+  overrides the managed startup files or preserved HUD copies make the active
+  cfg sources uncertain.
+
 ## [0.1.4] - 2026-09-09
 
 ### Added

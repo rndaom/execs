@@ -10,6 +10,38 @@ const probe = resolve(
   "apps/desktop/src-tauri/target/debug/examples",
   process.platform === "win32" ? "updater_check_probe.exe" : "updater_check_probe",
 );
+const downloadProbe = resolve(
+  "apps/desktop/src-tauri/target/debug/examples",
+  process.platform === "win32" ? "updater_download_probe.exe" : "updater_download_probe",
+);
+
+function runProbe(executable, args) {
+  return new Promise((done, fail) => {
+    const child = spawn(executable, args, {
+      stdio: "inherit",
+      windowsHide: true,
+      env: {
+        ...process.env,
+        APPDATA: join(scratch, "roaming"),
+        LOCALAPPDATA: join(scratch, "local"),
+        XDG_DATA_HOME: join(scratch, "data"),
+        XDG_CONFIG_HOME: join(scratch, "config"),
+      },
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      fail(new Error("Updater probe timed out"));
+    }, 30000);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      fail(error);
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      code === 0 ? done() : fail(new Error(`Updater probe exited ${code}`));
+    });
+  });
+}
 let advertised = "0.1.3+1";
 let artifactRequests = 0;
 const server = createServer((request, response) => {
@@ -42,37 +74,16 @@ try {
     ["0.1.3+10", "0.1.4", "0.1.4"],
   ]) {
     advertised = remote;
-    await new Promise((done, fail) => {
-      const child = spawn(
-        probe,
-        [`http://127.0.0.1:${server.address().port}/latest.json`, installed, expected],
-        {
-          stdio: "inherit",
-          windowsHide: true,
-          env: {
-            ...process.env,
-            APPDATA: join(scratch, "roaming"),
-            LOCALAPPDATA: join(scratch, "local"),
-            XDG_DATA_HOME: join(scratch, "data"),
-            XDG_CONFIG_HOME: join(scratch, "config"),
-          },
-        },
-      );
-      const timer = setTimeout(() => {
-        child.kill();
-        fail(new Error("Updater check timed out"));
-      }, 30000);
-      child.on("error", (error) => {
-        clearTimeout(timer);
-        fail(error);
-      });
-      child.on("exit", (code) => {
-        clearTimeout(timer);
-        code === 0 ? done() : fail(new Error(`Updater check exited ${code}`));
-      });
-    });
+    await runProbe(probe, [
+      `http://127.0.0.1:${server.address().port}/latest.json`,
+      installed,
+      expected,
+    ]);
   }
   assert.equal(artifactRequests, 0, "Version checks must never download an installer");
+  // This independent fixture downloads only first-party text, verifies its
+  // disposable signature and never runs an installer or opens an app window.
+  await runProbe(downloadProbe, []);
 } finally {
   await new Promise((done) => server.close(done));
   assert.equal(dirname(resolve(scratch)), resolve(tmpdir()));

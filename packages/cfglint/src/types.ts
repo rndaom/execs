@@ -83,6 +83,13 @@ export interface SummarySection {
 export type LintTrust = "self" | "provided";
 
 export interface LintOptions {
+  /**
+   * Ordered, exact bundle paths to execute when deriving settings. Other files
+   * and deferred bind/alias payloads are still scanned for safety. Defaults to
+   * config.cfg then autoexec.cfg through the supported loose Source search
+   * paths (mounted custom roots before tf/cfg), or the flat bundle root.
+   */
+  entryPoints?: string[];
   /** Who wrote these files. Default `"provided"`. See {@link LintTrust}. */
   trust?: LintTrust;
   /** exec targets outside the bundle that are considered safe. */
@@ -119,10 +126,12 @@ export interface LintOptions {
 
 export interface LintResult {
   findings: Finding[];
-  /** Last-write-wins cvar state across the evaluated bundle. */
+  /** Known startup cvars, in execution order; empty when execution is incomplete. */
   effective: Map<string, CvarValue>;
   /** key (lowercased) -> payload of the final bind. */
   binds: Map<string, string>;
+  /** False when a work limit or unresolved startup exec prevents safe settings inference. */
+  executionComplete: boolean;
   /** mastercomfig modules.cfg levels, e.g. { texture_quality: "high" }. */
   moduleLevels: Record<string, string>;
   classesTouched: TfClass[];

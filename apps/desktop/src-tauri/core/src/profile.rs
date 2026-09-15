@@ -161,6 +161,9 @@ pub struct ProfileSummary {
     pub name: String,
     pub created_at: String,
     pub updated_at: String,
+    /// Read-time diagnostics; old schema-1 indexes have no such field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unsafe_custom_folders: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -991,7 +994,15 @@ pub fn load_library_from(
     let confirmed = confirmed_root.map(user_path_string);
     match load_index(profiles_dir)? {
         None => Ok(empty_library(false, confirmed_root.is_some(), confirmed)),
-        Some(index) => Ok(library_from_index(index, confirmed_root, confirmed)),
+        Some(index) => {
+            let mut library = library_from_index(index, confirmed_root, confirmed);
+            for profile in &mut library.profiles {
+                profile.unsafe_custom_folders = load_manifest(profiles_dir, &profile.id)
+                    .map(|manifest| crate::custom_folders::unsafe_custom_folders(&manifest.files))
+                    .unwrap_or_default();
+            }
+            Ok(library)
+        }
     }
 }
 
@@ -1151,6 +1162,7 @@ where
             name: name.clone(),
             created_at: now.clone(),
             updated_at: now,
+            unsafe_custom_folders: Vec::new(),
         };
         let mut manifest = ProfileManifest {
             schema: LIBRARY_SCHEMA,
@@ -2032,23 +2044,7 @@ fn profile_live_path(tf2_root: &Path, rel: &str) -> PathBuf {
 }
 
 fn profile_live_candidates(rel: &str) -> Vec<String> {
-    let mut candidates = vec![rel.to_string()];
-    let Some(rest) = rel.strip_prefix("tf/custom/") else {
-        return candidates;
-    };
-    let (pack, tail) = rest.split_once('/').unwrap_or((rest, ""));
-    let alternate_pack = if let Some(enabled) = pack.strip_prefix('-') {
-        enabled.to_string()
-    } else {
-        format!("-{pack}")
-    };
-    let alternate = if tail.is_empty() {
-        format!("tf/custom/{alternate_pack}")
-    } else {
-        format!("tf/custom/{alternate_pack}/{tail}")
-    };
-    candidates.push(alternate);
-    candidates
+    vec![rel.to_string()]
 }
 
 fn profile_entry_source(profiles_dir: &Path, profile_id: &str, file: &ProfileFile) -> PathBuf {
@@ -6130,7 +6126,7 @@ mod tests {
             &root.join("tf/custom/hud/resource/ui/hudlayout.res"),
             "hud\n",
         );
-        write_live(&root.join("tf/custom/mastercomfig-base.vpk"), "shared-vpk");
+        crate::cfg_layer::write_test_base(&root);
         write_live(&root.join("tf/cfg/video.txt"), "video\n");
         write_live(&root.join("tf/steam.inf"), "appID=440\n");
         let before = snapshot_tree(&root);
@@ -6186,7 +6182,10 @@ mod tests {
             .find(|file| file.path == "tf/custom/mastercomfig-base.vpk")
             .unwrap();
         assert_eq!(shared.storage, FileStorage::Shared);
-        assert_eq!(shared.sha256, sha256_hex(b"shared-vpk"));
+        assert_eq!(
+            shared.sha256,
+            sha256_hex(&crate::cfg_layer::test_base_vpk())
+        );
         assert!(crate::blob::blob_path(&profiles, &shared.sha256).is_file());
         assert!(!exclusive_file_path(&profiles, id, "tf/custom/mastercomfig-base.vpk").exists());
         cleanup(&dir);

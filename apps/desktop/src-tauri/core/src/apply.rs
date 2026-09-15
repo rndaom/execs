@@ -58,40 +58,24 @@ pub struct WriteOwnedOptions<'a> {
 
 pub use crate::profile::is_file_safe_rel_path;
 
-pub fn detail_from_manifest(manifest: &crate::profile::ProfileManifest) -> ProfileDetail {
-    ProfileDetail {
+pub use crate::cfg_layer::cfg_layer_from_manifest;
+
+pub fn detail_from_manifest(
+    profiles_dir: &Path,
+    manifest: &crate::profile::ProfileManifest,
+) -> Result<ProfileDetail, ProfileError> {
+    Ok(ProfileDetail {
         id: manifest.id.clone(),
         name: manifest.name.clone(),
         launch_options: manifest.launch_options.clone(),
-        layer: cfg_layer_from_files(&manifest.files),
+        layer: cfg_layer_from_manifest(profiles_dir, manifest)?,
         files: manifest.files.clone(),
         hud: manifest.hud.clone(),
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
         hitsound: manifest.hitsound.clone(),
         mods: manifest.mods.clone(),
-    }
-}
-
-pub fn cfg_layer_from_files(files: &[ProfileFile]) -> CfgLayer {
-    if files.iter().any(|file| file_implies_comfig(&file.path)) {
-        CfgLayer::Comfig
-    } else {
-        CfgLayer::Vanilla
-    }
-}
-
-fn file_implies_comfig(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    if lower.starts_with("tf/cfg/overrides/") {
-        return true;
-    }
-    if let Some(name) = lower.rsplit('/').next() {
-        return lower.starts_with("tf/custom/")
-            && name.starts_with("mastercomfig-")
-            && name.ends_with(".vpk");
-    }
-    false
+    })
 }
 
 pub fn get_active_profile_detail(tf2_root: &Path) -> Result<Option<ProfileDetail>, ProfileError> {
@@ -246,7 +230,7 @@ where
         }
         return profile_detail_from(profiles_dir, profile_id);
     }
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 pub fn write_managed_cfg(
@@ -314,7 +298,13 @@ where
         return Err(ProfileError::UnknownProfile);
     }
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    let prefix = match cfg_layer_from_files(&manifest.files) {
+    let layer = cfg_layer_from_manifest(profiles_dir, &manifest)?;
+    if crate::surface::inventory_live_surface_for_absorb(tf2_root, None)?.layer != layer {
+        return Err(ProfileError::Io(
+            "TF2's cfg loader changed. Update the profile from disk before saving settings.".into(),
+        ));
+    }
+    let prefix = match layer {
         CfgLayer::Comfig => "overrides/",
         CfgLayer::Vanilla => "",
     };
@@ -410,7 +400,7 @@ where
             Ok(())
         },
     )?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 pub(crate) fn current_managed_bytes(
@@ -446,7 +436,7 @@ fn profile_detail_from(
     profile_id: &str,
 ) -> Result<ProfileDetail, ProfileError> {
     let manifest = load_manifest(profiles_dir, profile_id)?;
-    Ok(detail_from_manifest(&manifest))
+    detail_from_manifest(profiles_dir, &manifest)
 }
 
 /// Where the library keeps one manifest file: the profile's exclusive tree or
@@ -524,6 +514,9 @@ mod tests {
                     create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
                 let id = &library.profiles[0].id;
                 set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+                if comfig {
+                    crate::cfg_layer::install_test_base(&profiles, &root, id);
+                }
                 let prefix = if comfig { "overrides/" } else { "" };
                 let auto = format!("tf/cfg/{prefix}autoexec.cfg");
                 write_owned_file_to(
@@ -750,7 +743,7 @@ mod tests {
             WriteOwnedOptions::default(),
         )
         .unwrap();
-        assert_eq!(detail.layer, CfgLayer::Comfig);
+        assert_eq!(detail.layer, CfgLayer::Vanilla);
         assert_eq!(detail.files[0].path, "tf/cfg/overrides/autoexec.cfg");
         assert_eq!(
             fs::read_to_string(root.join("tf/cfg/overrides/autoexec.cfg")).unwrap(),
@@ -1040,12 +1033,26 @@ mod tests {
 
     #[test]
     fn layer_from_comfig_vpk() {
-        let files = vec![ProfileFile {
-            path: "tf/custom/mastercomfig-base.vpk".into(),
-            sha256: "abc".into(),
-            storage: FileStorage::Shared,
-        }];
-        assert_eq!(cfg_layer_from_files(&files), CfgLayer::Comfig);
-        assert_eq!(cfg_layer_from_files(&[]), CfgLayer::Vanilla);
+        let dir = test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = tf2_root(&dir);
+        crate::cfg_layer::write_test_base(&root);
+        let library = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        let manifest = load_manifest(&profiles, &library.profiles[0].id).unwrap();
+        assert_eq!(
+            cfg_layer_from_manifest(&profiles, &manifest).unwrap(),
+            CfgLayer::Comfig
+        );
+        cleanup(&dir);
     }
 }

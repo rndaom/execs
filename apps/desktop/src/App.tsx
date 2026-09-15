@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { AppFooter } from "./components/AppFooter";
 import { FinderPanel } from "./components/FinderPanel";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
@@ -13,6 +13,7 @@ import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useFilesExitGuard } from "./hooks/useFilesExitGuard";
 import { useFirstRun } from "./hooks/useFirstRun";
 import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
+import { useOperationErrors } from "./hooks/useOperationErrors";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useReleaseNotes } from "./hooks/useReleaseNotes";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
@@ -30,17 +31,24 @@ import {
   previewSettingsTab,
   previewUpdateProgress,
 } from "./lib/preview";
-import { type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
+import { createSettingsDraftStore } from "./lib/settings-drafts";
+import { SETTINGS_TAB_LABELS, type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
 
 export function App({ api, preview }: { api: Api; preview: PreviewState }) {
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, dismissError } = useOperationErrors();
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsWriting, setSettingsWriting] = useState(false);
-  const [settingsPending, setSettingsPending] = useState(false);
+  const [settingsDraftStore] = useState(createSettingsDraftStore);
+  const settingsDrafts = useSyncExternalStore(
+    settingsDraftStore.subscribe,
+    settingsDraftStore.getSnapshot,
+  );
+  const settingsPending = settingsDrafts.length > 0;
+  const [preloaderRecovery, setPreloaderRecovery] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
@@ -71,7 +79,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const filesExit = useFilesExitGuard(
     filesDraftStore,
     lock.running,
-    busy || settingsWriting || progress.state.active || update.progress !== null,
+    busy || progress.state.active || update.progress !== null,
+    settingsDraftStore,
+    setSettingsTab,
   );
   const anyBusy =
     busy ||
@@ -79,6 +89,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     settingsPending ||
     launchPending ||
     lifecycleBusy ||
+    preloaderRecovery ||
     update.progress !== null;
 
   const install = useTf2Install(api, {
@@ -117,6 +128,36 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     setBusy,
   });
   const recoveryTargetId = profiles.library?.pendingSwitchProfileId ?? null;
+  const pendingPanes = [
+    ...new Set(settingsDrafts.map((entry) => SETTINGS_TAB_LABELS[entry.tab])),
+  ].join(", ");
+  const failedPanes = [
+    ...new Set(
+      settingsDrafts
+        .filter((entry) => entry.save?.failed)
+        .map((entry) => SETTINGS_TAB_LABELS[entry.tab]),
+    ),
+  ].join(", ");
+  const launchBlockReason =
+    recoveryTargetId !== null
+      ? "Finish profile switch recovery before launching TF2."
+      : progress.state.active
+        ? "Wait for the profile switch to finish before launching TF2."
+        : preloaderRecovery
+          ? "Finish preloader recovery in Mods before launching TF2."
+          : lifecycle.steamVerification
+            ? "Finish or cancel Steam verification in Mods before launching TF2."
+            : lifecycle.installingUpdate || update.progress !== null
+              ? "Wait for the update installation to finish."
+              : !lifecycle.available
+                ? "Waiting for the maintenance state before launching TF2."
+                : settingsWriting
+                  ? "Wait for the current settings write to finish."
+                  : busy || settingsBusy
+                    ? "Wait for the current operation to finish."
+                    : settingsPending
+                      ? `${failedPanes || pendingPanes}: ${failedPanes ? "save failed" : "unsaved changes"}. Review changes before launching TF2.`
+                      : null;
 
   const firstRun = useFirstRun(api, {
     confirmed: install.confirmed,
@@ -229,17 +270,35 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           switchProfile: async (id) => {
             filesExit.request(() => profiles.switchProfile(id));
           },
+          repairFolders: async () => {
+            filesExit.request(() => profiles.repairFolders());
+          },
         }}
         progress={progress}
         draftName={draftName}
         launching={launchPending}
         recoveryTargetId={recoveryTargetId}
+        launchBlockReason={launchBlockReason}
+        launchBlockAction={
+          settingsPending
+            ? "Review changes"
+            : preloaderRecovery || lifecycle.steamVerification
+              ? "Open Mods"
+              : undefined
+        }
+        onLaunchBlocked={
+          settingsPending
+            ? () => filesExit.request(() => {})
+            : preloaderRecovery || lifecycle.steamVerification
+              ? () => setSettingsTab("mods")
+              : undefined
+        }
         onLaunch={() => {
-          setError(null);
           setLaunching(true);
           void api
             .launchTf2()
-            .catch((err) => setError(invokeErrorMessage(err)))
+            .then(() => setError(null, "tf2:launch"))
+            .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
             .finally(() => {
               setLaunching(false);
               void lifecycle.refresh();
@@ -253,11 +312,13 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           ) {
             return;
           }
-          setError(null);
           void api
             .cancelTf2Launch()
-            .then(() => lifecycle.refresh())
-            .catch((err) => setError(invokeErrorMessage(err)));
+            .then(() => {
+              setError(null, "tf2:cancel-launch");
+              return lifecycle.refresh();
+            })
+            .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
         }}
         settings={
           showSettingsChrome(profiles.library) ? (
@@ -267,6 +328,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 filesDraftStore={filesDraftStore}
                 filesSaver={filesExit.saver}
                 filesCloseReady={filesExit.ready}
+                settingsDraftStore={settingsDraftStore}
                 tab={settingsTab}
                 running={lock.running}
                 externalBusy={
@@ -277,7 +339,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 onBindSyncHandled={profiles.onBindSyncHandled}
                 onBusyChange={setSettingsBusy}
                 onWriteBusyChange={setSettingsWriting}
-                onPendingChange={setSettingsPending}
+                onRecoveryChange={setPreloaderRecovery}
                 onError={setError}
               />
             </SettingsLayout>
@@ -296,6 +358,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       value={{
         error,
         setError,
+        dismissError,
         busy: anyBusy || progress.state.active,
         running: lock.running,
       }}
@@ -305,7 +368,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           api={api}
           release={releaseNotes.release}
           onClose={releaseNotes.dismiss}
-          onError={(message) => setError(message)}
+          onError={(message) => setError(message, "release:open")}
         />
         {filesExit.modal}
         {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
@@ -349,6 +412,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 installs={install.installs}
                 selected={install.selected}
                 error={error}
+                onDismissError={dismissError}
                 canConfirm={confirmEnabled(install.selected, install.scanning || busy)}
                 busy={busy}
                 onSelect={install.select}

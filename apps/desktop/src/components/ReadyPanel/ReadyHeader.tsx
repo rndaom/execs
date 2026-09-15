@@ -1,5 +1,5 @@
 import { Check, Copy, Play } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { formatInstallLabel } from "../../lib/finder-ui";
 
@@ -15,6 +15,9 @@ export function ReadyHeader({
   running,
   launching,
   disabled,
+  blockedReason,
+  blockedAction,
+  onBlocked,
   menu,
   onLaunch,
   onCancelLaunch,
@@ -23,11 +26,15 @@ export function ReadyHeader({
   running: boolean;
   launching: boolean;
   disabled: boolean;
+  blockedReason?: string | null;
+  blockedAction?: string;
+  onBlocked?: () => void;
   menu: ReactNode;
   onLaunch: () => void;
   onCancelLaunch: () => void;
 }) {
   const { feedback, copy } = useCopyFeedback();
+  const reasonId = useId();
 
   return (
     <header className="relative z-40 flex min-h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 sm:px-6">
@@ -69,19 +76,36 @@ export function ReadyHeader({
           <span className="hidden sm:inline">Game running</span>
         </div>
       ) : (
-        <button
-          type="button"
-          data-testid="launch-tf2"
-          onClick={launching ? onCancelLaunch : onLaunch}
-          disabled={launching ? false : disabled}
-          className="btn btn-ghost ml-auto shrink-0 gap-1.5 text-[13px]"
-          title={
-            launching ? "Cancel only after cancelling the launch and closing Steam" : undefined
-          }
-        >
-          <Play size={13} weight="fill" />
-          {launching ? "Cancel launch wait" : "Launch TF2"}
-        </button>
+        <div className="ml-auto flex max-w-md flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            data-testid="launch-tf2"
+            onClick={launching ? onCancelLaunch : onLaunch}
+            disabled={launching ? false : disabled}
+            aria-describedby={!launching && disabled && blockedReason ? reasonId : undefined}
+            className="btn btn-ghost shrink-0 gap-1.5 text-[13px]"
+            title={
+              launching
+                ? "Cancel only after cancelling the launch and closing Steam"
+                : (blockedReason ?? undefined)
+            }
+          >
+            <Play size={13} weight="fill" />
+            {launching ? "Cancel launch wait" : "Launch TF2"}
+          </button>
+          {!launching && disabled && blockedReason ? (
+            <>
+              {onBlocked && blockedAction ? (
+                <button type="button" className="btn btn-ghost" onClick={onBlocked}>
+                  {blockedAction}
+                </button>
+              ) : null}
+              <p id={reasonId} role="status" className="t-meta w-full pb-1 text-right">
+                {blockedReason}
+              </p>
+            </>
+          ) : null}
+        </div>
       )}
     </header>
   );

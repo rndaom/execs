@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-14",
+  "platform": "Windows",
+  "retailPatchVersion": "10828683",
+  "fixture": "Synthetic isolated -game root; real stock assets read as fallback",
+  "finished": true,
+  "exitCode": 0,
+  "completeMarker": true,
+  "packedCfgMarker": true,
+  "mountedFolders": ["mod-materials", "mod-materials-2", "hud-resource"],
+  "changedOriginalFiles": [],
+  "originalHashes": {
+    "tf/cfg/config.cfg": "24CE604466C6AE752C40FEEFA993C3E0CA8CDAA3166F349397A92621A1CD1B78",
+    "tf/cfg/autoexec.cfg": null,
+    "tf/gameinfo.txt": "CA2585EF571E4C06C0D97558C2FF3242B60626D238AC90B7BA1B716C16022372",
+    "tf/tf2_textures_dir.vpk": "888BD2E894E59CD92DDA248224E322B9828E92BF6B658D714494B7B7C4A8E368",
+    "tf/tf2_misc_dir.vpk": "63F7DB0D1C509E303CA9002FEE9E3D805E9220EA5AFDD639D8A6B68B8A3710B9"
+  },
+  "videoFlagsUsed": false,
+  "writesToRealCustomOrCfg": false
+}

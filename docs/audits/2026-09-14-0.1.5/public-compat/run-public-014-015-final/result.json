@@ -1,0 +1,143 @@
+{
+  "activeLibraryImport": {
+    "activeIdAfter": "3a247b04-1d68-4abb-9d8e-b55001e2014e",
+    "activeIdBefore": "3a247b04-1d68-4abb-9d8e-b55001e2014e",
+    "imported": {
+      "fileCount": 11,
+      "hud": {
+        "id": "compat-hud",
+        "options": {
+          "accentColor": "128 180 255 255",
+          "minmode": "true"
+        },
+        "source": "local"
+      },
+      "id": "65ad2f20-e87f-47e5-9757-fdbce0fdf409",
+      "launchSyncPending": true,
+      "modCount": 4,
+      "unsafeCustomFolders": []
+    }
+  },
+  "allPayloadBytesAndHashesPreserved": true,
+  "emptyLibraryImport": {
+    "fileCount": 11,
+    "hud": {
+      "id": "compat-hud",
+      "options": {
+        "accentColor": "128 180 255 255",
+        "minmode": "true"
+      },
+      "source": "local"
+    },
+    "id": "5fbfa7fe-4a85-478e-84fc-ebaefe24e946",
+    "launchSyncPending": true,
+    "modCount": 4,
+    "unsafeCustomFolders": []
+  },
+  "existingActiveProfileUnchanged": true,
+  "fileCount": 11,
+  "hudAndModMetadataPreserved": true,
+  "ignoredPacksPreserved": true,
+  "independentPacks": ["compat-pack", "-compat-pack", "compat-vpk.vpk", "-compat-vpk.vpk"],
+  "limits": [
+    "Small synthetic fixture, not every public profile",
+    "Core API verification on Windows; no packaged UI, Steam handoff, actual TF2, or installed profile library exercised"
+  ],
+  "modCount": 4,
+  "nestedCfgPreserved": true,
+  "newSource": {
+    "commit": "a76646b01e4d35023cfe28f6805d579dba2cbbe4",
+    "coreTree": "f2d03158fd4435d931db1f55fc50da1b2ef67478"
+  },
+  "newSourceAfter": {
+    "commit": "a76646b01e4d35023cfe28f6805d579dba2cbbe4",
+    "coreTree": "f2d03158fd4435d931db1f55fc50da1b2ef67478"
+  },
+  "oldSource": {
+    "commit": "12bb5a8effb8aebe77c6cfc4d8cd03d9bef45cdd",
+    "coreTree": "97a40e8e7b4886e5536570a3cbea65b22736980e"
+  },
+  "output": "G:\\Projects\\execs-015-evidence\\compat-public\\run-public-014-015-final",
+  "payload": [
+    {
+      "bytes": 100,
+      "path": "tf/cfg/config.cfg",
+      "sha256": "32bc8feee4a2010472427979e3e17f14d8e44ca299a73af9dd1c715c76058c57"
+    },
+    {
+      "bytes": 67,
+      "path": "tf/cfg/overrides/autoexec.cfg",
+      "sha256": "04fb7b9197083beaefbea1f33eccb157c2fcd9c195dbfdc91392851aa4c5cd91"
+    },
+    {
+      "bytes": 60,
+      "path": "tf/cfg/overrides/compat_nested/profile.cfg",
+      "sha256": "69b6da15e2ebd7a71332b62aa230cec819563d02b9135c8ff735c216083f0773"
+    },
+    {
+      "bytes": 58,
+      "path": "tf/cfg/overrides/execs_gameplay.cfg",
+      "sha256": "55c175931d335990951929583029091cd12ab28f3a0825874f9d7c6c099f714b"
+    },
+    {
+      "bytes": 74,
+      "path": "tf/custom/-compat-pack/materials/fixture.vmt",
+      "sha256": "eb5a98c50f333d1d634b25a7d8d469ffd15bfc1350d3357fe15e7dcadcd9e233"
+    },
+    {
+      "bytes": 174,
+      "path": "tf/custom/-compat-vpk.vpk",
+      "sha256": "29c9a7fe48975390286a23a39d2b7547bdcf58b7d803417943d857cebb1bed56"
+    },
+    {
+      "bytes": 34,
+      "path": "tf/custom/compat-hud/info.vdf",
+      "sha256": "62009bc66f06a1aa4f7f696b8bf37062dd1f83383c1786eccf0300d3a582331c"
+    },
+    {
+      "bytes": 57,
+      "path": "tf/custom/compat-hud/resource/ui/HudLayout.res",
+      "sha256": "159aaa78554706f986b1350c02a99cae91fec0cb0f4c0007e9bcc02bd2cc7df4"
+    },
+    {
+      "bytes": 64,
+      "path": "tf/custom/compat-pack/materials/fixture.vmt",
+      "sha256": "4fb0d25150eab74cde798cec8da6488ae2e26a0ef9b61b2d44daa190bd708ab5"
+    },
+    {
+      "bytes": 164,
+      "path": "tf/custom/compat-vpk.vpk",
+      "sha256": "e7d425ba043e0d69a51dd142a61d7ffcd52a5c14e6ee879a7e84c37a09cefa10"
+    },
+    {
+      "bytes": 158,
+      "path": "tf/custom/mastercomfig-base.vpk",
+      "sha256": "95747ce0a647326bf9c7b32e9261ed4eaf93a5c49e022ad3edc062150bccbd24"
+    }
+  ],
+  "publicZipSha256": "f6f6b71cdb9a106c72730701c40bd8fa986afcac4a1b757c2c9cb633b21da62e",
+  "reexportAllEntryBytesIdentical": true,
+  "reexportRoundtrip": {
+    "fileCount": 11,
+    "hud": {
+      "id": "compat-hud",
+      "options": {
+        "accentColor": "128 180 255 255",
+        "minmode": "true"
+      },
+      "source": "local"
+    },
+    "id": "fe90c699-7b08-4661-89a9-8be1dc5e7bed",
+    "launchSyncPending": true,
+    "modCount": 4,
+    "unsafeCustomFolders": []
+  },
+  "reexportZipBytesIdentical": true,
+  "reexportZipSha256": "f6f6b71cdb9a106c72730701c40bd8fa986afcac4a1b757c2c9cb633b21da62e",
+  "result": "PASS",
+  "schema": 1,
+  "scope": "actual public v0.1.4 export -> integrated 0.1.5 import -> re-export -> re-import, synthetic filesystem only",
+  "sharedBlobPreserved": true,
+  "sourceLibraryUnchanged": true,
+  "syntheticInstallTreesUnchanged": true
+}

@@ -11,6 +11,7 @@ import {
   canInstallUpdate,
   updateCheckCopy,
 } from "../lib/updater-ui";
+import type { SetOperationError } from "./useOperationErrors";
 
 export type AppUpdateState = {
   /** Empty when `get_app_version` failed — Check for updates stays available. */
@@ -29,7 +30,7 @@ export function useAppUpdate(
   {
     setError,
     seedProgress = null,
-  }: { setError: (message: string | null) => void; seedProgress?: AppUpdateProgress | null },
+  }: { setError: SetOperationError; seedProgress?: AppUpdateProgress | null },
 ): AppUpdateState {
   const [version, setVersion] = useState("");
   const [available, setAvailable] = useState<AppUpdateInfo | null>(null);
@@ -88,10 +89,14 @@ export function useAppUpdate(
       // Progress is driven by the adapter's own callback, so a backend that
       // cannot install never strands the banner on "Downloading".
       await api.installAppUpdate((step) => setProgress(step));
+      setError(null, "update:install");
     } catch (err) {
       clearPendingRelease(releaseNotesStorage(), available.version);
       setProgress(null);
-      setError(err instanceof Error ? err.message : "Could not install the update.");
+      setError(
+        err instanceof Error ? err.message : "Could not install the update.",
+        "update:install",
+      );
     }
   }, [api, available, progress, setError]);
 
