@@ -36,3 +36,19 @@ game files or real installers are used by the loopback test.
 
 Full integrated CI and signed candidate upgrades are recorded in
 `docs/release-0.1.5.md` after they finish.
+
+## Windows candidate fixture correction
+
+The [first private candidate](https://github.com/rndaom/execs/actions/runs/34910750976)
+passed Linux's signed installer/upgrade and startup
+smoke. Its Windows download probe exposed a loopback-fixture portability bug:
+an accepted socket inherited the listener's nonblocking mode and read before
+request bytes arrived. The worker now explicitly restores blocking mode before
+applying its existing two-second read deadline. This follows Microsoft's
+[accepted-socket contract](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept)
+and Rust's [stream mode API](https://doc.rust-lang.org/std/net/struct.TcpStream.html#method.set_nonblocking).
+The change is confined to the `release-probes` fixture; ordinary app builds do
+not include that module. Independent review confirmed the feature guard and
+unchanged timeout/signature/lease assertions. The corrected Windows probe build
+and all discovery/download smoke assertions pass locally. The corrected
+candidate is rerun through both platforms.

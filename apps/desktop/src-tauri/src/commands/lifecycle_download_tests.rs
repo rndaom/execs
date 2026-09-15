@@ -41,6 +41,9 @@ impl Server {
                 let origin = origin.clone();
                 let payload_requests = Arc::clone(&payload_requests);
                 std::thread::spawn(move || {
+                    // Windows accepts inherit the listener's nonblocking mode.
+                    // This worker waits for a request under the read deadline.
+                    socket.set_nonblocking(false).unwrap();
                     socket
                         .set_read_timeout(Some(Duration::from_secs(2)))
                         .unwrap();
