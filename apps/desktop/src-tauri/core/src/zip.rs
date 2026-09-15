@@ -28,7 +28,7 @@ use crate::profile::{
     profiles_dir, CrosshairRecord, FileSource, FileStorage, HudRecord, ProfileError, ProfileFile,
     ProfileLibrary, ProfileManifest, ViewmodelRecord,
 };
-use crate::vpk::read_vpk_dir_file_filtered;
+use crate::vpk::read_vpk_file_filtered_hashed;
 
 mod creator;
 pub use creator::{import_reviewed_profile, inspect_profile_import, ProfileImportReview};
@@ -800,7 +800,7 @@ fn validate_payload_with_trust(
             if sha256_file(staged).map_err(io_err)? != hash {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
-            validate_imported_profile_file(&path, staged, trust_creator)?;
+            validate_imported_profile_file(&path, staged, &hash, trust_creator)?;
             required_blobs.insert(hash);
         } else {
             if file.storage != FileStorage::Exclusive {
@@ -813,7 +813,7 @@ fn validate_payload_with_trust(
             if sha256_file(staged).map_err(io_err)? != file.sha256.to_ascii_lowercase() {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
-            validate_imported_profile_file(&path, staged, trust_creator)?;
+            validate_imported_profile_file(&path, staged, &file.sha256, trust_creator)?;
             required_exclusive.insert(path);
         }
     }
@@ -835,6 +835,7 @@ fn validate_payload_with_trust(
 fn validate_imported_profile_file(
     path: &str,
     staged: &Path,
+    expected_hash: &str,
     trust_creator: bool,
 ) -> Result<(), ProfileError> {
     let validate_cfg = if trust_creator {
@@ -846,27 +847,8 @@ fn validate_imported_profile_file(
         let bytes = read_cfg_for_scan(staged, path)?;
         validate_cfg(path, &bytes)?;
     } else if has_extension(path, "vpk") {
-        // Old profiles may carry opaque `.vpk`-named files that TF2 simply
-        // ignores. Preserve only that narrow compatibility: once the file has
-        // Source's VPK signature, every parse, count and materialization error
-        // is security-relevant and must fail closed before TF2 can mount it.
-        let mut signature = [0u8; 4];
         let mut source = fs::File::open(staged).map_err(io_err)?;
-        let signed_vpk = match source.read_exact(&mut signature) {
-            Ok(()) => u32::from_le_bytes(signature) == 0x55aa_1234,
-            Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => false,
-            Err(err) => return Err(io_err(err)),
-        };
-        if !signed_vpk {
-            return Ok(());
-        }
-        let cfgs = read_vpk_dir_file_filtered(staged, &|entry| has_extension(entry, "cfg"))
-            .map_err(|err| {
-                invalid_zip(format!("invalid imported VPK {path}: {}", err.message()))
-            })?;
-        for (entry, bytes) in cfgs.files {
-            validate_cfg(&format!("{path}/{entry}"), &bytes)?;
-        }
+        inspect_profile_vpk(path, &mut source, expected_hash, validate_cfg)?;
     }
     Ok(())
 }
@@ -880,7 +862,7 @@ fn validate_imported_metadata(
         selection.validate()?;
     }
     if let Some(hud) = &manifest.hud {
-        let sanitized = crate::hud::sanitize_hud_id(&hud.id)?;
+        let sanitized = crate::hud::sanitize_stored_hud_id(&hud.id)?;
         if sanitized != hud.id {
             return Err(invalid_zip("invalid HUD id in profile metadata"));
         }
@@ -1132,6 +1114,11 @@ fn read_validated_export_cfg_source(
     expected_len: u64,
     expected_hash: &str,
 ) -> Result<Option<Vec<u8>>, ProfileError> {
+    if has_extension(path, "vpk") {
+        inspect_profile_vpk(path, source, expected_hash, validate_cfg_has_no_secrets)?;
+        source.seek(SeekFrom::Start(0)).map_err(io_err)?;
+        return Ok(None);
+    }
     if !has_extension(path, "cfg") {
         return Ok(None);
     }
@@ -1153,6 +1140,54 @@ fn read_validated_export_cfg_source(
     }
     validate_cfg_has_no_secrets(path, &bytes)?;
     Ok(Some(bytes))
+}
+
+fn inspect_profile_vpk(
+    path: &str,
+    source: &mut fs::File,
+    expected_hash: &str,
+    validate_cfg: fn(&str, &[u8]) -> Result<(), ProfileError>,
+) -> Result<(), ProfileError> {
+    // Narrow legacy compatibility: only files without Source's four-byte
+    // magic remain opaque. A signed VPK must satisfy every parser and member
+    // budget; malformed archives never turn into permission to skip scanning.
+    let mut signature = Vec::with_capacity(4);
+    std::io::Read::by_ref(source)
+        .take(4)
+        .read_to_end(&mut signature)
+        .map_err(io_err)?;
+    let signed_vpk = signature.as_slice() == 0x55aa_1234u32.to_le_bytes();
+    if !signed_vpk {
+        // Hash the bytes that decided the opaque exception, together with the
+        // rest of this read. A second independent signature read would allow
+        // a changing source to hide its magic only during inspection.
+        let mut observed = std::io::Cursor::new(&signature)
+            .chain(std::io::Read::by_ref(source).take(MAX_ENTRY_UNCOMPRESSED + 1));
+        if !sha256_reader(&mut observed)
+            .map_err(io_err)?
+            .eq_ignore_ascii_case(expected_hash)
+        {
+            return Err(ProfileError::Io(format!(
+                "{path} changed while it was being inspected."
+            )));
+        }
+        return Ok(());
+    }
+    let (cfgs, actual_hash) = read_vpk_file_filtered_hashed(
+        source,
+        &|entry| has_extension(entry, "cfg"),
+        MAX_IMPORTED_CFG_BYTES as u64,
+    )
+    .map_err(|err| invalid_zip(format!("invalid profile VPK {path}: {}", err.message())))?;
+    if !actual_hash.eq_ignore_ascii_case(expected_hash) {
+        return Err(ProfileError::Io(format!(
+            "{path} changed while it was being inspected."
+        )));
+    }
+    for (entry, bytes) in cfgs.files {
+        validate_cfg(&format!("{path}/{entry}"), &bytes)?;
+    }
+    Ok(())
 }
 
 fn charge_export_bytes(total: &mut u64, len: u64, label: &str) -> Result<(), ProfileError> {
@@ -1636,6 +1671,53 @@ mod tests {
                 .unwrap_err()
                 .message()
                 .contains("changed after review")
+        );
+        assert_eq!(snapshot_tree(&profiles), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        write_live(&root.join("tf/cfg/config_default.cfg"), "password \"0\"\n");
+        let path = dir.join("creator.zip");
+        let pack = crate::vpk::write_vpk_v2(&BTreeMap::from([(
+            "cfg/autoexec.cfg".into(),
+            b"password saved-server-password\nsv_cheats 1\n".to_vec(),
+        )]));
+        write_raw_zip(&path, &[("custom/creator.vpk", &pack)]);
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        assert!(review
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("creator.vpk/cfg/autoexec.cfg")
+                && warning.contains("password")));
+        let imported =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        let id = &imported.profiles[0].id;
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/custom/creator.vpk")).unwrap(),
+            pack
+        );
+        let destination = dir.join("export.zip");
+        fs::write(&destination, b"keep existing export").unwrap();
+        assert!(export_profile_to(&profiles, &root, id, &destination)
+            .unwrap_err()
+            .message()
+            .contains("password"));
+        assert_eq!(fs::read(&destination).unwrap(), b"keep existing export");
+
+        let before = snapshot_tree(&profiles);
+        write_raw_zip(
+            &path,
+            &[("custom/creator.vpk", &0x55aa_1234u32.to_le_bytes())],
+        );
+        assert!(creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).is_err());
+        assert!(
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).is_err()
         );
         assert_eq!(snapshot_tree(&profiles), before);
         cleanup(&dir);
@@ -2559,7 +2641,7 @@ mod tests {
         );
 
         let err = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
-        assert!(err.message().contains("invalid imported VPK"), "{err:?}");
+        assert!(err.message().contains("invalid profile VPK"), "{err:?}");
         assert!(load_library_from(&profiles, Some(&root))
             .unwrap()
             .profiles
@@ -2594,6 +2676,273 @@ mod tests {
                 .to_string_lossy()
                 .starts_with(".existing.zip.")
         }));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn export_inspects_exclusive_and_shared_vpk_cfgs_before_replacing_destination() {
+        for pack in ["private-config.vpk", "mastercomfig-base.vpk"] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("profiles");
+            let root = dir.join("tf2");
+            seed_live(&root);
+            let private = crate::vpk::write_vpk_v2(&BTreeMap::from([(
+                "cfg/private-server.cfg".into(),
+                b"rcon_password audit_dummy_never_a_real_secret\n".to_vec(),
+            )]));
+            fs::write(root.join("tf/custom").join(pack), &private).unwrap();
+            let saved = save_current_as_to(
+                &profiles,
+                &root,
+                "Private",
+                unlocked(),
+                SaveCurrentOptions::default(),
+            )
+            .unwrap();
+            let before = snapshot_tree(&profiles);
+            let destination = dir.join("existing.zip");
+            fs::write(&destination, b"previous export").unwrap();
+            let err = export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination)
+                .unwrap_err();
+            let message = err.message();
+            assert!(
+                message.contains(&format!("{pack}/cfg/private-server.cfg")),
+                "{message}"
+            );
+            assert!(message.contains("credential"), "{message}");
+            assert!(!message.contains("audit_dummy_never_a_real_secret"));
+            assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+            assert_eq!(snapshot_tree(&profiles), before);
+            assert!(!fs::read_dir(&dir)
+                .unwrap()
+                .flatten()
+                .any(|entry| entry.file_name().to_string_lossy().contains("execs-part")));
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn malformed_signed_vpk_export_fails_but_opaque_legacy_packs_roundtrip() {
+        for bytes in [
+            vec![0x34, 0x12, 0xaa, 0x55],
+            b"legacy opaque placeholder".to_vec(),
+        ] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("profiles");
+            let root = dir.join("tf2");
+            seed_live(&root);
+            write_live(&root.join("tf/cfg/config.cfg"), "password \"0\"\n");
+            // New captures already reject malformed signed VPKs while reading
+            // the cfg loader. Seed the old opaque format first, then model a
+            // historical library record to exercise export's independent guard.
+            fs::write(
+                root.join("tf/custom/legacy.vpk"),
+                b"legacy opaque placeholder",
+            )
+            .unwrap();
+            let saved = save_current_as_to(
+                &profiles,
+                &root,
+                "Legacy",
+                unlocked(),
+                SaveCurrentOptions::default(),
+            )
+            .unwrap();
+            let id = &saved.profiles[0].id;
+            let rel = "tf/custom/legacy.vpk";
+            fs::write(exclusive_file_path(&profiles, id, rel), &bytes).unwrap();
+            let mut manifest = load_manifest(&profiles, id).unwrap();
+            manifest
+                .files
+                .iter_mut()
+                .find(|file| file.path == rel)
+                .unwrap()
+                .sha256 = sha256_hex(&bytes);
+            fs::write(
+                crate::profile::manifest_file(&profiles, id),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+            let destination = dir.join("existing.zip");
+            fs::write(&destination, b"previous export").unwrap();
+            let result = export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination);
+            if bytes.len() == 4 {
+                assert!(result
+                    .unwrap_err()
+                    .message()
+                    .contains("invalid profile VPK"));
+                assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+            } else {
+                result.unwrap();
+                let imported =
+                    import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
+                assert_eq!(imported.profiles.len(), 2);
+            }
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn valid_vpk_export_roundtrips_exact_members_and_engine_unset_password() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        write_live(&root.join("tf/cfg/config.cfg"), "password \"0\"\n");
+        let pack = crate::vpk::write_vpk_v2(&BTreeMap::from([
+            ("cfg/settings.cfg".into(), b"sensitivity 2\n".to_vec()),
+            (
+                "materials/private.txt".into(),
+                b"rcon_password not_a_cfg\n".to_vec(),
+            ),
+        ]));
+        fs::write(root.join("tf/custom/materials.vpk"), &pack).unwrap();
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Safe",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let destination = dir.join("safe.zip");
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
+        let imported = import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
+        let id = &imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != saved.profiles[0].id)
+            .unwrap()
+            .id;
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                id,
+                "tf/custom/materials.vpk"
+            ))
+            .unwrap(),
+            pack
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn vpk_inspection_and_copy_both_refuse_changed_sources() {
+        let dir = crate::test_temp_dir();
+        let path = dir.join("source.vpk");
+        let original = crate::vpk::write_vpk_v2(&BTreeMap::from([(
+            "cfg/settings.cfg".into(),
+            b"sensitivity 2\n".to_vec(),
+        )]));
+        let changed = crate::vpk::write_vpk_v2(&BTreeMap::from([(
+            "cfg/settings.cfg".into(),
+            b"sensitivity 3\n".to_vec(),
+        )]));
+        fs::write(&path, &original).unwrap();
+        let hash = sha256_hex(&original);
+        let (mut source, len) = open_verified_source(&dir, &path, &hash, "source.vpk").unwrap();
+        fs::write(&path, &changed).unwrap();
+        let err =
+            read_validated_export_cfg_source("source.vpk", &mut source, len, &hash).unwrap_err();
+        assert!(err.message().contains("changed"), "{err:?}");
+        fs::write(&path, &original).unwrap();
+        source.seek(SeekFrom::Start(0)).unwrap();
+        read_validated_export_cfg_source("source.vpk", &mut source, len, &hash).unwrap();
+        fs::write(&path, &changed).unwrap();
+        let mut zip = ZipWriter::new(fs::File::create(dir.join("temporary.zip")).unwrap());
+        zip.start_file("pack.vpk", file_options()).unwrap();
+        assert!(
+            copy_into_zip_verified(&mut source, &mut zip, len, &hash, "source.vpk")
+                .unwrap_err()
+                .message()
+                .contains("changed")
+        );
+        drop(zip);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn public_schema_one_zip_without_new_fields_can_be_repaired_and_roundtripped() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        init_library_to(&profiles, &root, unlocked()).unwrap();
+        let before_live = snapshot_tree(&root);
+        let cfg = b"password \"0\"\nsensitivity 2\n";
+        let info = b"\"Legacy HUD\" { \"ui_version\" \"3\" }\n";
+        // Literal public schema-1 format: no new diagnostic/recovery fields,
+        // no metadata inferred from the current Rust struct serializer.
+        let manifest = format!(
+            r#"{{
+          "schema": 1, "name": "Previous public profile",
+          "files": [
+            {{"path":"tf/cfg/config.cfg","sha256":"{}","storage":"exclusive"}},
+            {{"path":"tf/custom/resource/info.vdf","sha256":"{}","storage":"exclusive"}}
+          ],
+          "hud": {{"id":"resource","source":"local"}}
+        }}"#,
+            sha256_hex(cfg),
+            sha256_hex(info)
+        );
+        let original = dir.join("previous-public.zip");
+        write_raw_zip(
+            &original,
+            &[
+                (ZIP_MANIFEST_NAME, manifest.as_bytes()),
+                ("files/tf/cfg/config.cfg", cfg),
+                ("files/tf/custom/resource/info.vdf", info),
+            ],
+        );
+        let original_hash = sha256_file(&original).unwrap();
+        let imported = import_profile_from(&profiles, &root, &original, unlocked()).unwrap();
+        assert!(imported.active_profile_id.is_none());
+        assert_eq!(imported.profiles[0].unsafe_custom_folders, ["resource"]);
+        let id = &imported.profiles[0].id;
+        let before = load_manifest(&profiles, id).unwrap();
+        assert_eq!(before.hud.as_ref().unwrap().id, "resource");
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                id,
+                "tf/custom/resource/info.vdf"
+            ))
+            .unwrap(),
+            info
+        );
+        assert!(crate::switch::validate_profile_switch_target(&profiles, &root, id).is_err());
+        let plan =
+            crate::custom_folders::plan_custom_folder_repair_to(&profiles, &root, id).unwrap();
+        crate::custom_folders::repair_custom_folders_to(&profiles, &root, id, &plan, unlocked())
+            .unwrap();
+        let repaired = load_manifest(&profiles, id).unwrap();
+        assert_eq!(repaired.schema, before.schema);
+        assert_eq!(repaired.hud.as_ref().unwrap().id, "custom-resource");
+        assert_eq!(snapshot_tree(&root), before_live);
+        assert_eq!(sha256_file(&original).unwrap(), original_hash);
+        let exported = dir.join("repaired.zip");
+        export_profile_to(&profiles, &root, id, &exported).unwrap();
+        let again = import_profile_from(&profiles, &root, &exported, unlocked()).unwrap();
+        let second = &again
+            .profiles
+            .iter()
+            .find(|profile| &profile.id != id)
+            .unwrap()
+            .id;
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                second,
+                "tf/custom/custom-resource/info.vdf"
+            ))
+            .unwrap(),
+            info
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, second, "tf/cfg/config.cfg")).unwrap(),
+            cfg
+        );
+        crate::switch::validate_profile_switch_target(&profiles, &root, second).unwrap();
         cleanup(&dir);
     }
 

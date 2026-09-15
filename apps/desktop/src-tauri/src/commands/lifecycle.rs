@@ -7,6 +7,9 @@ use tauri::Emitter;
 use tauri_plugin_updater::UpdaterExt;
 
 const UPDATE_CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+// Installer payloads can be large. Keep the same ten-minute total transfer
+// budget as our other bulk downloads, independently of the metadata check.
+const UPDATE_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 const MAX_UPDATE_VERSION_BYTES: usize = 64;
 const UPDATE_PROGRESS_EVENT: &str = "app-update-progress";
 
@@ -72,6 +75,27 @@ fn updater_error(action: &str) -> CommandError {
     )
 }
 
+async fn download_update(
+    update: &mut tauri_plugin_updater::Update,
+    timeout: std::time::Duration,
+) -> Result<Vec<u8>, CommandError> {
+    // The pinned updater does not copy UpdaterBuilder::timeout into Update.
+    // Set the payload request deadline explicitly; it covers streamed bodies
+    // too. This deadline ends before installer handoff, where cancellation
+    // would no longer be safe.
+    update.timeout = Some(timeout);
+    update.download(|_, _| {}, || {}).await.map_err(|error| {
+        if matches!(&error, tauri_plugin_updater::Error::Reqwest(error) if error.is_timeout()) {
+            CommandError::new(
+                "UpdateDownloadTimedOut",
+                "The update download timed out. Check your connection and try Install update again.",
+            )
+        } else {
+            updater_error("download or verify")
+        }
+    })
+}
+
 /// Own the entire updater handoff behind the process-wide gate. The renderer
 /// can still perform the read-only update check, but has no capability for a
 /// raw plugin install or process restart.
@@ -103,7 +127,7 @@ pub async fn install_app_update(
         .timeout(UPDATE_CHECK_TIMEOUT)
         .build()
         .map_err(|_| updater_error("prepare"))?;
-    let update = updater
+    let mut update = updater
         .check()
         .await
         .map_err(|_| updater_error("check for"))?
@@ -116,10 +140,7 @@ pub async fn install_app_update(
     }
 
     let _ = app.emit(UPDATE_PROGRESS_EVENT, "downloading");
-    let bytes = update
-        .download(|_, _| {}, || {})
-        .await
-        .map_err(|_| updater_error("download or verify"))?;
+    let bytes = download_update(&mut update, UPDATE_DOWNLOAD_TIMEOUT).await?;
     let _ = app.emit(UPDATE_PROGRESS_EVENT, "installing");
     blocking(move || update.install(bytes).map_err(|_| updater_error("install"))).await?;
 
@@ -128,6 +149,10 @@ pub async fn install_app_update(
     app.request_restart();
     Ok(())
 }
+
+#[cfg(feature = "release-probes")]
+#[path = "lifecycle_download_tests.rs"]
+pub(crate) mod download_tests;
 
 #[cfg(test)]
 mod tests {

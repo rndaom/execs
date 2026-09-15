@@ -1,15 +1,16 @@
-import { engineManagedLintOptions, lint } from "@execs/cfglint";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
+import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
-import { AutosaveActivity, AutosaveDiscard, AutosavePending } from "./hooks/useAutosave";
+import { useHudResources } from "./hooks/useHudResources";
+import type { SetOperationError } from "./hooks/useOperationErrors";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
 import {
@@ -19,10 +20,6 @@ import {
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
 import {
-  type HudCatalogEntry,
-  type HudSchemaView,
-  type HudStat,
-  type HudUiState,
   isTauri,
   type ModsCatalog,
   type PreloaderReport,
@@ -31,6 +28,7 @@ import {
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
+import { CFG_INCOMPLETE_MESSAGE, mapsFromFiles, usesCfgState } from "./lib/cfg-state";
 import {
   type ComfigUiState,
   defaultComfigState,
@@ -45,35 +43,16 @@ import {
 import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
 import { blockingFindingsForFile, cfgFileMeta, lintBundle } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
-import { HudReloadQueue } from "./lib/hud-reload-ui";
-import { emptyHudState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
-import type { SettingsTab } from "./lib/settings-ui";
+import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
+import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
 type CfgText = { path: string; text: string };
-
-function mapsFromFiles(files: CfgText[]): {
-  binds: Record<string, string>;
-  effective: Record<string, string>;
-} {
-  // Same options as the Files pane, so config.cfg's engine-managed ESCAPE bind
-  // and archived console preference reach the derived maps.
-  const result = lint(files, engineManagedLintOptions(files));
-  const binds: Record<string, string> = {};
-  for (const [key, value] of result.binds) {
-    binds[key] = value;
-  }
-  const effective: Record<string, string> = {};
-  for (const [name, entry] of result.effective) {
-    effective[name] = entry.value;
-  }
-  return { binds, effective };
-}
 
 function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
   if (files.some((file) => file.path === path)) {
@@ -87,6 +66,7 @@ export function SettingsHost({
   filesDraftStore: suppliedFilesDraftStore,
   filesSaver,
   filesCloseReady = true,
+  settingsDraftStore: suppliedSettingsDraftStore,
   tab,
   running,
   externalBusy,
@@ -96,11 +76,13 @@ export function SettingsHost({
   onBusyChange,
   onWriteBusyChange,
   onPendingChange,
+  onRecoveryChange,
   onError,
 }: {
   api: Api;
   filesDraftStore?: FilesDraftStore;
   filesCloseReady?: boolean;
+  settingsDraftStore?: SettingsDraftStore;
   filesSaver?: { current: ((draft: DirtyFileDraft) => Promise<boolean>) | null };
   tab: SettingsTab;
   running: boolean;
@@ -111,9 +93,10 @@ export function SettingsHost({
   onBusyChange: (busy: boolean) => void;
   onWriteBusyChange?: (busy: boolean) => void;
   onPendingChange?: (pending: boolean) => void;
-  onError: (message: string | null) => void;
+  onRecoveryChange?: (recovery: boolean) => void;
+  onError: SetOperationError;
 }) {
-  const { error } = useAppStatus();
+  const { error, dismissError } = useAppStatus();
   const toast = useToast();
   const [queueBusy, setQueueBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
@@ -134,14 +117,6 @@ export function SettingsHost({
   const [launchSeed, setLaunchSeed] = useState(recommendedLaunchOptions);
   const [launchSaved, setLaunchSaved] = useState<{ sent: string; saved: string } | null>(null);
   const [steamWrite, setSteamWrite] = useState<SteamWriteStatus | null>(null);
-  const [hudCatalog, setHudCatalog] = useState<HudCatalogEntry[]>([]);
-  const [hudStats, setHudStats] = useState<Record<string, HudStat>>({});
-  const [hudStatsLoading, setHudStatsLoading] = useState(false);
-  const [hudStatsError, setHudStatsError] = useState<string | null>(null);
-  const [hudState, setHudState] = useState<HudUiState>(emptyHudState);
-  const [hudSchema, setHudSchema] = useState<HudSchemaView | null>(null);
-  const [hudCatalogLoading, setHudCatalogLoading] = useState(true);
-  const [hudCatalogError, setHudCatalogError] = useState<string | null>(null);
   const [stockSprites, setStockSprites] = useState<Record<string, StockCrosshairSprite> | null>(
     null,
   );
@@ -154,25 +129,30 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
-  const hudRequest = useRef(0);
-  const hudReloadQueue = useRef(new HudReloadQueue());
-  const hudStatsReloadQueue = useRef(new HudReloadQueue());
-  /** Guards `reload()` the way `hudRequest` guards `reloadHud()`. */
+  /** Rejects obsolete profile snapshots. */
   const loadRequest = useRef(0);
 
-  const pendingIds = useRef(new Set<string>());
-  const discardAutosaves = useRef(false);
-  const reportPending = useCallback(
-    (id: string, pending: boolean) => {
-      if (pending) pendingIds.current.add(id);
-      else pendingIds.current.delete(id);
-      onPendingChange?.(pendingIds.current.size > 0);
-    },
-    [onPendingChange],
+  const [localSettingsDraftStore] = useState(createSettingsDraftStore);
+  const settingsDraftStore = suppliedSettingsDraftStore ?? localSettingsDraftStore;
+  useEffect(
+    () => settingsDraftStore.registerWriteGuard(() => settingsBusyQueue.active),
+    [settingsDraftStore, settingsBusyQueue],
   );
-  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
+  useEffect(() => {
+    const report = () => onPendingChange?.(settingsDraftStore.getSnapshot().length > 0);
+    report();
+    const stop = settingsDraftStore.subscribe(report);
+    return () => {
+      stop();
+      onPendingChange?.(false);
+    };
+  }, [settingsDraftStore, onPendingChange]);
 
   const repairBusy = modsPayload?.repairInProgress === true;
+  useEffect(() => {
+    onRecoveryChange?.(modsPayload?.recoveryRequired === true);
+    return () => onRecoveryChange?.(false);
+  }, [onRecoveryChange, modsPayload?.recoveryRequired]);
 
   // Queue work and Steam verification both own the write surface. Reflect both
   // in App so launch, profile switches, update install, and every pane disable
@@ -197,12 +177,20 @@ export function SettingsHost({
   // A switch leaves the old pane visible until its replacement snapshot loads.
   // Own saves keep inputs live so their responses cannot interrupt newer edits.
   const inputsBlocked =
-    externalBusy || (!queueBusy && (loadBlocked.current || loading || loadError !== null));
+    !filesCloseReady ||
+    externalBusy ||
+    (!queueBusy && (loadBlocked.current || loading || loadError !== null));
   const layer = detail?.layer ?? "comfig";
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
   const profileId = detail?.id ?? null;
-  const maps = useMemo(() => mapsFromFiles(files), [files]);
+  const hud = useHudResources(api, profileId, tab === "hud" && !externalBusy, refreshKey);
+  const maps = useMemo(
+    () => mapsFromFiles(files, layer, detail?.files),
+    [files, layer, detail?.files],
+  );
+  const cfgComplete = useRef(maps.complete);
+  cfgComplete.current = maps.complete;
 
   async function reload(opts?: { syncBinds?: boolean }) {
     // Every profile file is a separate IPC round trip, so a switch can easily
@@ -295,6 +283,7 @@ export function SettingsHost({
       setLaunchSeed(nextLaunch);
       loadBlocked.current = false;
       setLoadError(null);
+      onError(null, "settings:read");
     } catch (err) {
       if (!stale()) {
         loadBlocked.current = true;
@@ -304,66 +293,6 @@ export function SettingsHost({
     } finally {
       if (!stale()) setLoading(false);
     }
-  }
-
-  async function reloadHud(refresh: boolean, showCatalogProgress = false) {
-    const request = ++hudRequest.current;
-    setHudStatsLoading(true);
-    setHudStatsError(null);
-    if (showCatalogProgress) {
-      setHudCatalogLoading(true);
-      setHudCatalogError(null);
-    }
-    return hudReloadQueue.current.enqueue(async () => {
-      let statsQueued = false;
-      try {
-        const nextCatalog = await api.getHudCatalog(refresh);
-        // Keep the catalog usable while stats load, but serialize cache reads
-        // behind refreshes so an older request cannot overwrite fresh numbers.
-        statsQueued = true;
-        void hudStatsReloadQueue.current.enqueue(async () => {
-          if (request !== hudRequest.current && !refresh) return;
-          try {
-            const nextStats = await api.getHudStats(refresh);
-            if (request === hudRequest.current) setHudStats(nextStats);
-          } catch (err) {
-            if (request === hudRequest.current) {
-              setHudStatsError(
-                err instanceof Error ? err.message : "Check your connection and try again.",
-              );
-            }
-          } finally {
-            if (request === hudRequest.current) setHudStatsLoading(false);
-          }
-        });
-        if (request !== hudRequest.current) return;
-        setHudCatalogError(null);
-        const nextState = await api.getHudState();
-        if (request !== hudRequest.current) return;
-        setHudCatalog(nextCatalog);
-        setHudState(nextState);
-        if (nextState.schemaSupported) {
-          const nextSchema = await api.getHudSchema();
-          if (request === hudRequest.current) {
-            setHudSchema(nextSchema);
-          }
-        } else {
-          setHudSchema(null);
-        }
-      } catch (err) {
-        if (request === hudRequest.current) {
-          if (!statsQueued) setHudStatsLoading(false);
-          setHudCatalogError(
-            err instanceof Error ? err.message : "Check your connection and try again.",
-          );
-        }
-        throw err;
-      } finally {
-        if (request === hudRequest.current) {
-          setHudCatalogLoading(false);
-        }
-      }
-    });
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refresh exactly when the profile/TF2 state key changes.
@@ -384,7 +313,7 @@ export function SettingsHost({
     operation
       .then(() => {
         if (!cancelled) {
-          onError(null);
+          onError(null, "settings:read");
           if (syncBinds && bindSyncRequest !== null) {
             onBindSyncHandled(bindSyncRequest);
           }
@@ -392,7 +321,7 @@ export function SettingsHost({
       })
       .catch((err) => {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : "Could not load settings.");
+          onError(err instanceof Error ? err.message : "Could not load settings.", "settings:read");
         }
       });
     return () => {
@@ -403,31 +332,6 @@ export function SettingsHost({
     // Ordinary mounts and profile refreshes only reload. A bind sync request is
     // issued after absorb confirms that config.cfg actually drifted.
   }, [refreshKey, bindSyncRequest, running, externalBusy]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload the catalog only on HUD entry or an external refresh.
-  useEffect(() => {
-    if (tab !== "hud" || externalBusy) {
-      return;
-    }
-    let cancelled = false;
-    reloadHud(false, true)
-      .then(() => {
-        if (!cancelled) {
-          onError(null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          onError(err instanceof Error ? err.message : "Could not load the HUD catalog.");
-        }
-      });
-    return () => {
-      cancelled = true;
-      hudRequest.current += 1;
-      setHudCatalogLoading(false);
-      setHudStatsLoading(false);
-    };
-  }, [tab, refreshKey, externalBusy]);
 
   // Decode Valve's stock crosshair sprites on the first Crosshair visit —
   // pixel-perfect previews straight from the user's own game files. A failure
@@ -496,22 +400,26 @@ export function SettingsHost({
    * ("Pack built"); `failure` carries their verb ("Could not apply").
    */
   async function runWrite(
-    work: () => Promise<void>,
-    copy?: { success?: string; failure?: string },
+    // biome-ignore lint/suspicious/noConfusingVoidType: Ordinary write callbacks return void; null explicitly means a cancelled picker.
+    work: () => Promise<void | null>,
+    copy?: { success?: string; failure?: string; source?: string },
+    options?: { picker?: boolean },
   ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
     // because one is in flight silently dropped clicks the panes had already
     // applied optimistically. Only an *external* operation still blocks, and
     // it says so instead of no-oping.
     if (externalBusy || loadBlocked.current) {
-      toast.failSave("another change is still saving", copy?.failure);
+      toast.failSave("another change is still saving", copy?.failure, copy?.source, false);
       return false;
     }
     const expectedProfileId = profileId;
-    onError(null);
-    toast.startSave();
+    // Picker commands include the native dialog. They must not say Saving
+    // while the player is still choosing, or complete when no file was chosen.
+    let started = !options?.picker;
+    if (started) toast.startSave(copy?.source);
     try {
-      await settingsBusyQueue.run(async () => {
+      const applied = await settingsBusyQueue.run(async () => {
         if (
           loadBlocked.current ||
           detailRef.current?.id !== expectedProfileId ||
@@ -519,13 +427,24 @@ export function SettingsHost({
         ) {
           throw new Error("The active profile changed. Your draft has not been saved.");
         }
-        await work();
+        if ((await work()) === null) return false;
+        if (!started) {
+          toast.startSave(copy?.source);
+          started = true;
+        }
         await reload();
+        return true;
       });
-      toast.finishSave(copy?.success);
+      if (!applied) {
+        if (started) toast.cancelSave(copy?.source);
+        return false;
+      }
+      toast.finishSave(copy?.success, copy?.source);
       return true;
     } catch (err) {
-      toast.failSave(err, copy?.failure);
+      // A failure before picker completion did not reserve a save counter.
+      // Other queued sources still own their active-write feedback.
+      toast.failSave(err, copy?.failure, copy?.source, started);
       return false;
     }
   }
@@ -540,12 +459,23 @@ export function SettingsHost({
     if (
       blockingFindingsForFile(lintBundle(bundle, detail?.hud?.id).findings, draft.path).length > 0
     ) {
-      onError("Resolve blocking findings in Files before saving.");
+      onError(
+        "Resolve blocking findings in Files before saving.",
+        `files:validation:${draft.profile}:${draft.path}`,
+      );
       return false;
     }
-    return runWrite(async () => {
-      await api.writeOwnedFile(draft.path, draft.text);
-    });
+    const saved = await runWrite(
+      async () => {
+        await api.writeOwnedFile(draft.path, draft.text);
+      },
+      {
+        source: `${draft.profile}:files:${draft.path}`,
+        failure: `Could not save Files (${draft.path})`,
+      },
+    );
+    if (saved) onError(null, `files:validation:${draft.profile}:${draft.path}`);
+    return saved;
   }
   useEffect(() => {
     if (!filesSaver) return;
@@ -570,6 +500,7 @@ export function SettingsHost({
           return;
         }
         setModsPayload(payload);
+        onError(null, "mods:status");
         if (payload.modsCached) {
           setModsLoading(true);
           api
@@ -577,11 +508,15 @@ export function SettingsHost({
             .then((mods) => {
               if (!cancelled) {
                 setModsCatalog(mods.catalog);
+                onError(null, "mods:library");
               }
             })
             .catch((err) => {
               if (!cancelled) {
-                onError(err instanceof Error ? err.message : "Could not read the mod library.");
+                onError(
+                  err instanceof Error ? err.message : "Could not read the mod library.",
+                  "mods:library",
+                );
               }
             })
             .finally(() => {
@@ -593,7 +528,10 @@ export function SettingsHost({
       })
       .catch((err) => {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : "Could not read the preloader state.");
+          onError(
+            err instanceof Error ? err.message : "Could not read the preloader state.",
+            "mods:status",
+          );
         }
       });
     return () => {
@@ -603,6 +541,7 @@ export function SettingsHost({
 
   async function refreshModsStatus() {
     setModsPayload(await api.getPreloaderStatus());
+    onError(null, "mods:status");
   }
 
   async function writeManaged(
@@ -611,33 +550,54 @@ export function SettingsHost({
     scope?: "gameplay" | "crosshair" | "sounds",
   ) {
     if (!profileId) throw new Error("Select a profile before saving.");
+    if (!cfgComplete.current) throw new Error(CFG_INCOMPLETE_MESSAGE);
     await api.writeManagedCfg(path, text, profileId, scope);
   }
 
   function pane(tab: SettingsTab) {
+    // This closure belongs to the originating retained pane, even after the
+    // user navigates elsewhere while its save is queued or in flight.
+    const label = tab === "hud" ? "HUD options" : SETTINGS_TAB_LABELS[tab];
+    function write(
+      // biome-ignore lint/suspicious/noConfusingVoidType: null preserves native picker cancellation through the pane wrapper.
+      work: () => Promise<void | null>,
+      copy?: { success?: string; failure?: string },
+      options?: { picker?: boolean },
+    ) {
+      return runWrite(
+        work,
+        {
+          source: `${profileId}:${tab}:${copy?.success ?? copy?.failure ?? "save"}`,
+          success: `${label} saved`,
+          failure: `Could not save ${label}`,
+          ...copy,
+        },
+        options,
+      );
+    }
     if (tab === "comfig") {
       return (
         <ComfigPane
           detail={detail}
           state={comfig}
           onApplyPreset={(preset) => {
-            void runWrite(async () => {
+            return write(async () => {
               await api.setComfigPreset(preset);
             });
           }}
           onApplyModules={(modules) => {
-            void runWrite(async () => {
+            return write(async () => {
               await api.setComfigModules(modules);
             });
           }}
           onToggleAddon={(id) => {
             const addons = toggleComfigAddon(comfig.addons, id);
-            void runWrite(async () => {
+            return write(async () => {
               await api.setComfigAddons(addons);
             });
           }}
           onUpdatePackages={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.updateComfigVpks();
               },
@@ -645,11 +605,12 @@ export function SettingsHost({
             );
           }}
           onImportCustom={() => {
-            void runWrite(
+            return write(
               async () => {
-                await api.importComfigCustom();
+                if ((await api.importComfigCustom()) === null) return null;
               },
               { success: "comfig-custom imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
         />
@@ -665,7 +626,7 @@ export function SettingsHost({
           effectiveBinds={maps.binds}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSave={(bindsText) => {
-            return runWrite(async () => {
+            return write(async () => {
               await writeManaged(path, bindsText);
             });
           }}
@@ -687,12 +648,12 @@ export function SettingsHost({
           canUseComfigAddons={canUseComfigAddons}
           onToggleTransparentViewmodels={() => {
             const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
-            void runWrite(async () => {
+            void write(async () => {
               await api.setComfigAddons(addons);
             });
           }}
           onSave={(gameplayText) =>
-            runWrite(async () => {
+            write(async () => {
               await writeManaged(path, gameplayText, "gameplay");
             })
           }
@@ -705,74 +666,75 @@ export function SettingsHost({
         <HudPane
           api={api}
           profileId={profileId}
-          catalogLoading={hudCatalogLoading}
-          catalogError={hudCatalogError}
-          catalog={hudCatalog}
-          stats={hudStats}
-          statsLoading={hudStatsLoading}
-          statsError={hudStatsError}
+          catalogLoading={hud.catalogLoading}
+          catalogError={hud.catalogError}
+          catalogWarning={hud.catalogWarning}
+          catalog={hud.catalog}
+          stats={hud.stats}
+          statsLoading={hud.statsLoading}
+          statsError={hud.statsError}
           previewData={import.meta.env.DEV && !isTauri()}
-          state={hudState}
-          schema={hudSchema}
-          onRefresh={() => {
-            void reloadHud(true, true)
-              .then(() => onError(null))
-              .catch((err) => {
-                onError(err instanceof Error ? err.message : "Could not refresh the HUD catalog.");
-              });
-          }}
+          state={hud.state}
+          schema={hud.schema}
+          stateLoading={hud.stateLoading}
+          stateError={hud.stateError}
+          schemaLoading={hud.schemaLoading}
+          schemaError={hud.schemaError}
+          onRetryLocal={() => void hud.reloadLocal()}
+          onRefresh={() => hud.reload(true)}
           onInstall={(id) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.installHud(id);
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { success: "HUD installed", failure: "Could not install" },
             );
           }}
           onUpdate={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.updateHud();
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { success: "HUD updated", failure: "Could not update" },
             );
           }}
           onMatch={(id) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.matchHudCatalog(id);
-                await reloadHud(false);
+                await hud.reloadLocal();
               },
               { failure: "Could not match" },
             );
           }}
-          onApplyOptions={(options) =>
-            runWrite(async () => {
-              await api.applyHudOptions(options);
-              await reloadHud(false);
-            })
-          }
+          onApplyOptions={(options) => {
+            const installed = hud.state.installed;
+            if (!profileId || !installed || !hud.schema) return Promise.resolve(false);
+            return write(async () => {
+              await api.applyHudOptions(options, profileId, installed.id);
+              await hud.reloadLocal();
+            });
+          }}
           onImportArchive={() => {
-            void runWrite(
+            return write(
               async () => {
-                // Cancelling the dialog is a no-op, not an error.
-                if (await api.importHudArchive()) {
-                  await reloadHud(false);
-                }
+                if ((await api.importHudArchive()) === null) return null;
+                await hud.reloadLocal();
               },
               { success: "HUD imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onImportFolder={() => {
-            void runWrite(
+            return write(
               async () => {
-                if (await api.importHudFolder()) {
-                  await reloadHud(false);
-                }
+                if ((await api.importHudFolder()) === null) return null;
+                await hud.reloadLocal();
               },
               { success: "HUD imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
         />
@@ -792,12 +754,12 @@ export function SettingsHost({
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSaveStock={(gameplayText) =>
-            runWrite(async () => {
+            write(async () => {
               await writeManaged(path, gameplayText, "crosshair");
             })
           }
           onApply={(shape, assignments, customRgba, color, library, design, settings) =>
-            runWrite(async () => {
+            write(async () => {
               await api.applyCrosshairs(
                 shape,
                 assignments,
@@ -810,12 +772,12 @@ export function SettingsHost({
             })
           }
           onDeactivate={() =>
-            runWrite(async () => {
+            write(async () => {
               await api.deactivateCrosshairs();
             })
           }
           onRemove={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeCrosshairs();
               },
@@ -833,7 +795,7 @@ export function SettingsHost({
           profileId={profileId}
           record={detail?.viewmodel ?? null}
           onBuild={(hidden, preload, hideMode) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.buildViewmodelPack(hidden, preload, hideMode);
               },
@@ -841,15 +803,16 @@ export function SettingsHost({
             );
           }}
           onImport={(preload) => {
-            void runWrite(
+            return write(
               async () => {
-                await api.importViewmodels(preload);
+                if ((await api.importViewmodels(preload)) === null) return null;
               },
               { success: "Pack imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onRemove={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeViewmodels();
               },
@@ -873,7 +836,7 @@ export function SettingsHost({
           // The cvars and the sound files are one change to the user, so they
           // are one write: two would mean two toasts for one edit.
           onSave={(gameplayText, pack) =>
-            runWrite(async () => {
+            write(async () => {
               await writeManaged(path, gameplayText, "sounds");
               if (pack) {
                 await api.applyHitsounds(pack.hit, pack.kill);
@@ -881,7 +844,7 @@ export function SettingsHost({
             })
           }
           onRemove={() => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeHitsounds();
               },
@@ -904,20 +867,22 @@ export function SettingsHost({
           report={modsReport}
           onDownloadLibrary={() => {
             setModsLoading(true);
-            onError(null);
             api
               .downloadDefaultMods()
               .then((mods) => {
                 setModsCatalog(mods.catalog);
-                return refreshModsStatus();
+                return refreshModsStatus().then(() => onError(null, "mods:download"));
               })
               .catch((err) => {
-                onError(err instanceof Error ? err.message : "Could not download the mod library.");
+                onError(
+                  err instanceof Error ? err.message : "Could not download the mod library.",
+                  "mods:download",
+                );
               })
               .finally(() => setModsLoading(false));
           }}
           onApply={(addons, particleMods, profileParticleMods) => {
-            void runWrite(
+            void write(
               async () => {
                 try {
                   setModsReport(
@@ -933,17 +898,17 @@ export function SettingsHost({
             );
           }}
           onToggleBypass={(enabled) => {
-            void runWrite(async () => {
+            void write(async () => {
               setModsPayload(await api.setGameinfoBypass(enabled));
             });
           }}
           onTogglePreload={(enabled) => {
-            void runWrite(async () => {
+            void write(async () => {
               setModsPayload(await api.setProfilePreload(enabled));
             });
           }}
           onRevert={() => {
-            void runWrite(
+            void write(
               async () => {
                 try {
                   await api.revertPreloader();
@@ -956,7 +921,7 @@ export function SettingsHost({
             );
           }}
           onRecover={() => {
-            void runWrite(
+            void write(
               async () => {
                 setModsPayload(await api.recoverPreloader());
               },
@@ -964,30 +929,35 @@ export function SettingsHost({
             );
           }}
           onRepair={async () => {
-            onError(null);
             setModsPayload((current) =>
               current ? { ...current, repairInProgress: true } : current,
             );
             try {
               await api.repairGameFiles();
               await refreshModsStatus();
+              onError(null, "mods:repair");
             } catch (err) {
               // A retry can fail to reopen Steam while an older verification
               // lease is still valid. Ask the backend instead of optimistically
               // unlocking the renderer.
               await refreshModsStatus().catch(() => {});
-              onError(err instanceof Error ? err.message : "Could not start the repair.");
+              onError(
+                err instanceof Error ? err.message : "Could not start the repair.",
+                "mods:repair",
+              );
               throw err;
             }
           }}
           onCompleteRepair={async (selection: ModSelection) => {
-            onError(null);
             let released = false;
             try {
               const complete = await api.completeGameFileRepair();
               if (!complete) {
                 await refreshModsStatus();
-                onError("Steam's repair is still changing TF2 files. Wait, then confirm again.");
+                onError(
+                  "Steam's repair is still changing TF2 files. Wait, then confirm again.",
+                  "mods:repair",
+                );
                 return false;
               }
               released = true;
@@ -1005,9 +975,13 @@ export function SettingsHost({
                 );
               }
               await refreshModsStatus();
+              onError(null, "mods:repair");
               return true;
             } catch (err) {
-              onError(err instanceof Error ? err.message : "Could not confirm the repair.");
+              onError(
+                err instanceof Error ? err.message : "Could not confirm the repair.",
+                "mods:repair",
+              );
               await refreshModsStatus().catch(() => {});
               // Completion may have safely released maintenance before
               // re-applying the selection failed. Do not resurrect a repair
@@ -1019,16 +993,17 @@ export function SettingsHost({
             }
           }}
           onCancelRepair={async () => {
-            onError(null);
             try {
               const cancelled = await api.cancelGameFileRepair();
               await refreshModsStatus();
+              if (cancelled) onError(null, "mods:repair");
               return cancelled;
             } catch (err) {
               onError(
                 err instanceof Error
                   ? err.message
                   : "Could not cancel the repair lock. Close Steam and TF2 first.",
+                "mods:repair",
               );
               await refreshModsStatus().catch(() => {});
               throw err;
@@ -1039,28 +1014,27 @@ export function SettingsHost({
             void api.openExternal(PRELOADER_REPO_URL);
           }}
           onImportArchive={() => {
-            void runWrite(
+            return write(
               async () => {
-                // Cancelling the dialog is a no-op, not an error.
-                if (await api.importModArchive()) {
-                  await refreshModsStatus().catch(() => {});
-                }
+                if ((await api.importModArchive()) === null) return null;
+                await refreshModsStatus().catch(() => {});
               },
               { success: "Mod imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onImportFolder={() => {
-            void runWrite(
+            return write(
               async () => {
-                if (await api.importModFolder()) {
-                  await refreshModsStatus().catch(() => {});
-                }
+                if ((await api.importModFolder()) === null) return null;
+                await refreshModsStatus().catch(() => {});
               },
               { success: "Mod imported", failure: "Could not import" },
+              { picker: true },
             );
           }}
           onRemoveMod={(id) => {
-            void runWrite(
+            void write(
               async () => {
                 await api.removeMod(id);
                 // Removing a pack can take its particle sources with it.
@@ -1072,7 +1046,7 @@ export function SettingsHost({
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
           onInstallGameBananaMod={async (id) => {
-            await runWrite(
+            await write(
               async () => {
                 await api.installGameBananaMod(id);
                 await refreshModsStatus().catch(() => {});
@@ -1113,7 +1087,7 @@ export function SettingsHost({
         }}
         onSave={() => {
           const sent = launch;
-          return runWrite(async () => {
+          return write(async () => {
             const result = await api.setProfileLaunchOptions(sent);
             if (detailRef.current?.id !== profileId) return;
             if (launchRef.current === sent) {
@@ -1140,6 +1114,7 @@ export function SettingsHost({
       value={{
         error,
         setError: onError,
+        dismissError,
         busy,
         running: running || loading || filesLimited || loadError !== null,
       }}
@@ -1158,22 +1133,32 @@ export function SettingsHost({
         </div>
       ) : null}
       {!profileId && loading ? <p>Loading settings…</p> : null}
-      <AutosaveDiscard.Provider value={discardAutosaves}>
-        <AutosavePending.Provider value={reportPending}>
-          {[...visited.current.tabs].map((paneTab) => (
-            <div
-              key={`${profileId}:${paneTab}`}
-              hidden={tab !== paneTab}
-              inert={inputsBlocked}
-              data-testid={`settings-surface-${paneTab}`}
-            >
-              <AutosaveActivity.Provider value={tab === paneTab && !inputsBlocked}>
-                {pane(paneTab)}
-              </AutosaveActivity.Provider>
-            </div>
-          ))}
-        </AutosavePending.Provider>
-      </AutosaveDiscard.Provider>
+      {!maps.complete && usesCfgState(tab) ? (
+        <p role="alert" className="mb-4 text-warn">
+          {maps.reason ?? CFG_INCOMPLETE_MESSAGE}
+        </p>
+      ) : null}
+      {[...visited.current.tabs].map((paneTab) => (
+        <SettingsDraftBoundary
+          key={`${profileId}:${paneTab}`}
+          store={settingsDraftStore}
+          profile={profileId}
+          tab={paneTab}
+          active={tab === paneTab}
+          blocked={inputsBlocked || (!maps.complete && usesCfgState(paneTab))}
+          onDiscard={
+            paneTab === "launch"
+              ? () => {
+                  launchRef.current = launchSeedRef.current;
+                  setLaunch(launchSeedRef.current);
+                  setLaunchSaved(null);
+                }
+              : undefined
+          }
+        >
+          {pane(paneTab)}
+        </SettingsDraftBoundary>
+      ))}
     </AppStatusProvider>
   );
 }

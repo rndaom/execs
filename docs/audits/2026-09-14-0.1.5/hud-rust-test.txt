@@ -1,0 +1,36 @@
+   Compiling execs v0.1.4 (G:\Projects\execs-015-hud\apps\desktop\src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 24.02s
+     Running unittests src\lib.rs (G:/Projects/execs-015-evidence/target-hud\debug\deps\execs_lib-b2697f7e67fa3b49.exe)
+
+running 29 tests
+test hud_fetch::tests::stale_live_thread_ids_do_not_resolve_a_reply_as_a_hud_download ... ignored, live network regression
+test commands::hud::tests::the_payload_is_hud_ui_state_plus_one_camel_case_flag ... ok
+test commands::hud::tests::rejected_hud_input_keeps_guidance_without_claiming_a_profile_write_failed ... ok
+test hud_fetch::tests::recursive_tree_responses_must_be_complete_and_commit_addressable ... ok
+test hud_fetch::tests::imgur_ids_come_out_of_every_album_spelling ... ok
+test hud_fetch::tests::a_partial_catalog_cache_never_stands_in_for_a_refresh ... ok
+test hud_fetch::tests::github_hud_sources_require_https_exact_repo_and_full_commit ... ok
+test hud_fetch::tests::dropbox_links_are_forced_to_direct_download ... ok
+test hud_fetch::tests::the_schema_url_and_cache_name_are_both_pinned_to_the_commit ... ok
+test hud_fetch::tests::a_thread_yields_only_the_last_archive_anchor_by_the_original_author ... ok
+test hud_fetch::tests::catalog_documents_only_selects_top_level_hud_json_blobs ... ok
+test hud_fetch::tests::showcase_pages_resolve_to_raw_image_urls ... ok
+test hud_stats::tests::a_partial_or_failed_source_preserves_stale_fields_until_a_complete_walk ... ok
+test hud_fetch::tests::an_expired_catalog_walk_reports_failure_without_fetching ... ok
+test hud_stats::tests::comfig_listing_pairs_ids_with_dates ... ok
+test hud_stats::tests::a_partial_read_is_served_for_an_hour_and_a_whole_one_for_a_day ... ok
+test hud_stats::tests::comfig_pagination_requires_an_explicit_last_page ... ok
+test hud_stats::tests::duplicate_source_records_cannot_overwrite_or_sum_a_huds_counts ... ok
+test hud_stats::tests::listing_only_requests_huds_and_distinguishes_malformed_from_empty ... ok
+test hud_stats::tests::repository_relations_are_followed_without_guessing_display_names ... ok
+test hud_stats::tests::repository_joins_are_exact_unique_and_subordinate_to_explicit_links ... ok
+test hud_stats::tests::tf2huds_devalue_documents_decode ... ok
+test hud_stats::tests::comfig_listing_returns_only_an_overflow_sentinel ... ok
+test hud_stats::tests::tf2huds_devalue_arrays_are_bounded_during_deserialization ... ok
+test hud_fetch::tests::showcase_parsing_is_bounded_for_hostile_markdown ... ok
+test hud_stats::tests::legacy_source_cache_cannot_be_used_as_stale_refresh_input ... ok
+test hud_fetch::tests::the_catalog_cache_round_trips_and_reads_core_shaped_files ... ok
+test hud_fetch::tests::partial_catalog_refresh_discloses_failures_and_keeps_only_still_listed_cached_entries ... ok
+test hud_stats::tests::refresh_result_discloses_failed_partial_and_recovered_sources_without_losing_cached_values ... ok
+
+test result: ok. 28 passed; 0 failed; 1 ignored; 0 measured; 77 filtered out; finished in 0.62s

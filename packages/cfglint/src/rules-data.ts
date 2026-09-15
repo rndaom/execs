@@ -98,6 +98,9 @@ export const MAX_ALIAS_DEPTH = 8;
  */
 export const MAX_ALIAS_EXPANSIONS = 5000;
 export const MAX_EXEC_DEPTH = 4;
+/** Shared ceilings for safety scanning and startup evaluation, including payloads. */
+export const MAX_COMMAND_VISITS = 25_000;
+export const MAX_EXEC_VISITS = 5_000;
 
 /** Sane ranges for net cvars; outside → warn. */
 export const NET_CVAR_RANGES: Record<string, { min: number; max: number }> = {

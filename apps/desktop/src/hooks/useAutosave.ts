@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef } from "react";
 import { useToast } from "../components/ui/Toast";
+import type { PendingSave } from "../lib/settings-drafts";
 
 /** How long the user has to stop changing things before a save goes out. */
 export const AUTOSAVE_DELAY_MS = 700;
@@ -7,7 +8,9 @@ export const AUTOSAVE_DELAY_MS = 700;
 /** Retained panes flush their debounce when hidden, and still observe unlocks. */
 export const AutosaveActivity = createContext(true);
 
-export const AutosavePending = createContext<((id: string, pending: boolean) => void) | null>(null);
+export const AutosavePending = createContext<
+  ((id: string, pending: boolean, save?: PendingSave) => void) | null
+>(null);
 
 /** Set before explicitly discarding/remounting retained panes. */
 export const AutosaveDiscard = createContext<Readonly<{ current: boolean }> | null>(null);
@@ -179,7 +182,7 @@ export function useAutosave({
   save,
   token,
   delay = AUTOSAVE_DELAY_MS,
-}: AutosaveOptions): { flush: () => void } {
+}: AutosaveOptions): { flush: () => Promise<boolean> } {
   const active = useContext(AutosaveActivity);
   const reportPending = useContext(AutosavePending);
   const discard = useContext(AutosaveDiscard);
@@ -194,6 +197,27 @@ export function useAutosave({
   const tokenRef = useRef(token);
   /** The draft we last handed to the write path, so its echo is not re-saved. */
   const attempted = useRef<string | undefined>(undefined);
+  const failed = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
+  const flushRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
+  const flushControl = useCallback(() => flushRef.current(), []);
+
+  const report = useCallback(() => {
+    if (mounted.current) {
+      reportPending?.(pendingId, state.current.dirty || state.current.saving, {
+        flush: flushControl,
+        saving: state.current.saving,
+        failed: failed.current,
+        locked: lockedRef.current,
+      });
+    }
+    if (!state.current.dirty && !state.current.saving) {
+      // Reverting ends this draft's notice. Another edit during the same game
+      // session must announce its new pending draft again.
+      state.current = { ...state.current, announced: false };
+      toast.resolveDraft(pendingId);
+    }
+  }, [reportPending, pendingId, flushControl, toast]);
 
   saveRef.current = save;
   tokenRef.current = token;
@@ -208,14 +232,14 @@ export function useAutosave({
 
   const dispatch = useCallback(
     function run(event: AutosaveEvent) {
-      if (discarded.current) {
+      if (discarded.current || discard?.current) {
         return;
       }
       const next = autosaveStep(state.current, event);
       state.current = next.state;
-      if (mounted.current) {
-        reportPending?.(pendingId, next.state.dirty || next.state.saving);
-      }
+      if (event.type === "failed") failed.current = true;
+      if (next.effect === "save") failed.current = false;
+      report();
       if (next.effect === "arm") {
         cancel();
         timer.current = window.setTimeout(() => {
@@ -225,7 +249,7 @@ export function useAutosave({
         return;
       }
       if (next.effect === "defer") {
-        toast.deferDraft();
+        toast.deferDraft(pendingId);
         return;
       }
       if (next.effect === "save") {
@@ -234,8 +258,8 @@ export function useAutosave({
         const submit = saveRef.current;
         // The write path owns the success and failure toasts; a rejection here
         // would only be a second report of the same thing.
-        Promise.resolve()
-          .then(() => (discarded.current ? false : submit()))
+        const work = Promise.resolve()
+          .then(() => (discarded.current || discard?.current ? false : submit()))
           .then((result) => {
             if (result === false) {
               attempted.current = undefined;
@@ -247,17 +271,22 @@ export function useAutosave({
           .catch(() => {
             attempted.current = undefined;
             run({ type: "failed", locked: lockedRef.current });
+          })
+          .finally(() => {
+            if (inFlight.current === work) inFlight.current = null;
           });
+        inFlight.current = work;
       }
     },
-    [cancel, delay, toast, reportPending, pendingId],
+    [cancel, delay, toast, report, discard, pendingId],
   );
 
   useEffect(() => {
     if (!dirty) {
       cancel();
       state.current = { ...state.current, dirty: false, due: false };
-      reportPending?.(pendingId, state.current.saving);
+      failed.current = false;
+      report();
       return;
     }
     // A save that came back and reseeded the pane is not a new edit.
@@ -265,7 +294,7 @@ export function useAutosave({
       return;
     }
     dispatch({ type: "change", locked: lockedRef.current });
-  }, [dirty, token, dispatch, cancel, reportPending, pendingId]);
+  }, [dirty, token, dispatch, cancel, report]);
 
   useEffect(() => {
     if (locked) {
@@ -276,12 +305,30 @@ export function useAutosave({
     // A save refused while the game was up must be retried, not treated as an
     // echo of itself.
     attempted.current = undefined;
+    // The write may still fail, but this draft is no longer waiting for TF2.
+    // Pending/failed draft protection is independent of the deferred notice.
+    toast.resolveDraft(pendingId);
     dispatch({ type: "unlocked" });
-  }, [locked, dispatch, cancel]);
+  }, [locked, dispatch, cancel, toast, pendingId]);
 
-  const flush = useCallback(() => {
+  const flush = useCallback(async () => {
+    const requestedToken = tokenRef.current;
+    cancel();
     dispatch({ type: "flush", locked: lockedRef.current });
-  }, [dispatch]);
+    // Include any coalesced follow-up already owed when this flush began.
+    while (inFlight.current) {
+      await inFlight.current;
+      if (tokenRef.current !== requestedToken) return false;
+    }
+    return (
+      mounted.current &&
+      !discarded.current &&
+      !state.current.dirty &&
+      !state.current.saving &&
+      tokenRef.current === requestedToken
+    );
+  }, [dispatch, cancel]);
+  flushRef.current = flush;
 
   useEffect(() => {
     if (!active) {
@@ -302,6 +349,7 @@ export function useAutosave({
       cancel();
       mounted.current = false;
       reportPending?.(pendingId, false);
+      toast.resolveDraft(pendingId);
     };
   }, []);
 

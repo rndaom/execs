@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { isTauri } from "../lib/bridge";
 import type { FilesDraftStore } from "../lib/files-drafts";
+import type { SettingsDraftStore } from "../lib/settings-drafts";
 
 /** Editing starts only after native close requests can be intercepted. */
 export function useNativeCloseGuard(
   store: FilesDraftStore,
   request: (next: () => Promise<void>) => void,
   busy = false,
+  settings?: SettingsDraftStore,
 ) {
   const [ready, setReady] = useState(() => !isTauri());
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +19,12 @@ export function useNativeCloseGuard(
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (busyRef.current || store.dirty().length > 0) {
+      if (
+        busyRef.current ||
+        settings?.isWriting() ||
+        store.dirty().length > 0 ||
+        settings?.getSnapshot().length
+      ) {
         event.preventDefault();
         event.returnValue = "";
       }
@@ -36,7 +43,13 @@ export function useNativeCloseGuard(
               event.preventDefault();
               return;
             }
-            if (!busyRef.current && store.dirty().length === 0) return;
+            if (
+              !busyRef.current &&
+              !settings?.isWriting() &&
+              store.dirty().length === 0 &&
+              !settings?.getSnapshot().length
+            )
+              return;
             event.preventDefault();
             requestRef.current(() => current.destroy());
           });
@@ -51,7 +64,7 @@ export function useNativeCloseGuard(
           if (!cancelled) {
             setReady(false);
             setError(
-              "Files editing is unavailable because close protection could not start. Restart execs to retry.",
+              "Settings editing is unavailable because close protection could not start. Restart execs to retry.",
             );
           }
         });
@@ -61,7 +74,7 @@ export function useNativeCloseGuard(
       unlisten?.();
       window.removeEventListener("beforeunload", beforeUnload);
     };
-  }, [store]);
+  }, [store, settings]);
 
   return { ready, error };
 }

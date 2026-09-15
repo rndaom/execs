@@ -10,6 +10,14 @@ mod mods_fetch;
 mod net;
 mod viewmodel_fetch;
 
+/// Isolated release verification; absent from ordinary application builds.
+#[cfg(feature = "release-probes")]
+#[doc(hidden)]
+pub fn verify_updater_download_recovery() {
+    commands::lifecycle::download_tests::stalled_payload_releases_lease_and_signed_retry_reaches_handoff();
+    commands::lifecycle::download_tests::stale_update_lease_cannot_clear_a_new_operation();
+}
+
 use std::io::Read as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -661,6 +669,8 @@ pub fn run() {
             commands::library::import_profile,
             commands::library::confirm_profile_import,
             commands::library::cancel_profile_import,
+            commands::library::plan_custom_folder_repair,
+            commands::library::repair_custom_folders,
             commands::absorb::absorb_owned,
             commands::absorb::absorb_packs,
             commands::first_run::classify_first_run,

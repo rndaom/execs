@@ -30,7 +30,7 @@ describe("gameplay clamp", () => {
       cl_crosshair_green: 300,
       cl_crosshair_blue: 12.2,
     });
-    expect(next.viewmodel_fov).toBe(90);
+    expect(next.viewmodel_fov).toBe(179.9);
     expect(next.cl_crosshair_scale).toBe(16);
     expect(next.cl_crosshair_red).toBe(0);
     expect(next.cl_crosshair_green).toBe(255);
@@ -119,6 +119,20 @@ describe("gameplay paths", () => {
 });
 
 describe("gameplay seed", () => {
+  it.each([0.1, 45, 54.12345, 100, 179.9])(
+    "preserves viewmodel FOV %s through unrelated edits",
+    (value) => {
+      for (const seeded of [
+        seedGameplay(`viewmodel_fov ${value}\n`, {}),
+        seedGameplay("", { viewmodel_fov: String(value) }),
+      ]) {
+        expect(seeded.viewmodel_fov).toBe(value);
+        expect(serializeGameplay({ ...seeded, tf_use_min_viewmodels: 1 })).toContain(
+          `viewmodel_fov ${value}\n`,
+        );
+      }
+    },
+  );
   it("lets the managed file win over effective cvars", () => {
     const seeded = seedGameplay("fov_desired 70\n", {
       fov_desired: "90",

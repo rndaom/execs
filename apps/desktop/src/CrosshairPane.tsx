@@ -1,4 +1,4 @@
-import { type ReactNode, useContext, useEffect, useId, useState } from "react";
+import { type ReactNode, useContext, useEffect, useId, useRef, useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { Segmented } from "./components/ui/Segmented";
@@ -71,12 +71,14 @@ export function CrosshairPane({
     library: Record<string, CrosshairAssetPayload>,
     design: string | null,
     settings?: { scale: number; stock: { file: string; scale: number }; libraryNames?: string[] },
-  ) => Promise<unknown>;
+  ) => Promise<boolean>;
   onRemove: () => void;
   onDeactivate?: () => Promise<unknown>;
   scene?: ReactNode;
 }) {
   const { running, busy } = useAppStatus();
+  const currentProfile = useRef(profileId);
+  currentProfile.current = profileId;
   // Nothing that feeds the pack is disabled — it is a draft, and the lock only
   // defers the write. Removing the pack is a different kind of act and waits.
   const locked = false;
@@ -198,7 +200,7 @@ export function CrosshairPane({
   async function build() {
     const stock = stockSelection;
     const sent = draft;
-    await onApply(
+    const applied = await onApply(
       draft.shape,
       draft.assignments,
       draft.customRgba ?? undefined,
@@ -207,6 +209,9 @@ export function CrosshairPane({
       draft.design,
       { scale: controls.draft.cl_crosshair_scale, stock, libraryNames: Object.keys(draft.library) },
     );
+    // The host catches native failures/refusals and resolves false. Only a
+    // confirmed write owns these bytes now; keep them for every failed retry.
+    if (applied !== true || currentProfile.current !== profileId) return;
     acknowledge(sent, color);
     controls.patch({ cl_crosshair_file: "" });
   }

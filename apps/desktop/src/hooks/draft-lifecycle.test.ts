@@ -7,7 +7,7 @@ import { AutosaveActivity, AutosaveDiscard, useAutosave } from "./useAutosave";
 import { useSeededDraft } from "./useSeededDraft";
 
 vi.mock("../components/ui/Toast", () => {
-  const toast = { deferDraft: vi.fn() };
+  const toast = { deferDraft: vi.fn(), resolveDraft: vi.fn() };
   return { useToast: () => toast };
 });
 

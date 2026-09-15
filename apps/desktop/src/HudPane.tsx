@@ -68,6 +68,7 @@ export function HudPane({
   profileId,
   catalogLoading,
   catalogError,
+  catalogWarning = null,
   catalog,
   stats,
   statsLoading = false,
@@ -75,6 +76,11 @@ export function HudPane({
   previewData = false,
   state,
   schema,
+  stateLoading = false,
+  stateError = null,
+  schemaLoading = false,
+  schemaError = null,
+  onRetryLocal,
   onRefresh,
   onInstall,
   onUpdate,
@@ -88,6 +94,7 @@ export function HudPane({
   profileId: string | null;
   catalogLoading: boolean;
   catalogError: string | null;
+  catalogWarning?: string | null;
   catalog: HudCatalogEntry[];
   /** Popularity and recency per id; empty until the stats have loaded. */
   stats: Record<string, HudStat>;
@@ -96,6 +103,11 @@ export function HudPane({
   previewData?: boolean;
   state: HudUiState;
   schema: HudSchemaView | null;
+  stateLoading?: boolean;
+  stateError?: string | null;
+  schemaLoading?: boolean;
+  schemaError?: string | null;
+  onRetryLocal?: () => void;
   onRefresh: () => void;
   onInstall: (id: string) => void;
   onUpdate: () => void;
@@ -115,12 +127,19 @@ export function HudPane({
   });
   const [viewer, setViewer] = useState<HudViewer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const seeded = useMemo(() => seedHudOptions(schema, state.installed), [schema, state.installed]);
-  const [draft, setDraft] = useSeededDraft(
-    seeded,
-    (value) => JSON.stringify(value),
-    installedKeyOf(profileId, state),
+  const recordKey = installedKeyOf(profileId, state);
+  const incomingSeed = useMemo(
+    () => seedHudOptions(schema, state.installed),
+    [schema, state.installed],
   );
+  const [optionSeed, setOptionSeed] = useState({ key: recordKey, value: incomingSeed });
+  // A failed same-HUD schema read is not an empty saved option set. Retain
+  // its last valid baseline and draft until retry; a different HUD resets it.
+  const seeded = schema ? incomingSeed : optionSeed.key === recordKey ? optionSeed.value : {};
+  if (optionSeed.key !== recordKey || JSON.stringify(optionSeed.value) !== JSON.stringify(seeded)) {
+    setOptionSeed({ key: recordKey, value: seeded });
+  }
+  const [draft, setDraft] = useSeededDraft(seeded, (value) => JSON.stringify(value), recordKey);
   const matching = useMemo(() => filterHudCatalog(catalog, query), [catalog, query]);
   const filtered = useMemo(() => sortHudCatalog(matching, stats, sort), [matching, stats, sort]);
   const paged = paginateHudCatalog(filtered, page);
@@ -133,8 +152,8 @@ export function HudPane({
   useAutosave({
     dirty,
     locked: running,
-    token: JSON.stringify(draft),
-    save: () => onApplyOptions(draft),
+    token: JSON.stringify([draft, schema !== null]),
+    save: () => (schema ? onApplyOptions(draft) : false),
   });
   const installedId = state.installed?.id ?? null;
   const installedLabel = installedHudLabel(state);
@@ -170,7 +189,22 @@ export function HudPane({
         }
       />
 
-      {state.catalogUnavailable ? (
+      {stateError ? (
+        <Alert tone="error" testId="hud-state-error" className="mt-6">
+          Could not load the installed HUD. {stateError}{" "}
+          <button type="button" className="underline" onClick={onRetryLocal}>
+            Retry loading HUD
+          </button>
+        </Alert>
+      ) : null}
+
+      {stateLoading ? (
+        <p role="status" className="t-meta mt-4">
+          Loading installed HUD…
+        </p>
+      ) : null}
+
+      {state.installed && state.catalogUnavailable ? (
         <Alert tone="warn" testId="hud-state-catalog-unavailable" className="mt-6">
           The installed HUD loaded, but its update status could not be checked. Refresh the catalog
           when the connection is available.
@@ -244,6 +278,20 @@ export function HudPane({
               </button>
             ) : null}
           </div>
+
+          {schemaLoading ? (
+            <p role="status" className="t-meta section">
+              Loading HUD options…
+            </p>
+          ) : null}
+          {schemaError ? (
+            <Alert tone="warn" testId="hud-schema-error" className="mt-4">
+              HUD options are unavailable. {schemaError}{" "}
+              <button type="button" className="underline" onClick={onRetryLocal}>
+                Retry loading options
+              </button>
+            </Alert>
+          ) : null}
 
           {state.installed && state.schemaSupported && schema ? (
             <Disclosure
@@ -462,12 +510,12 @@ export function HudPane({
             </p>
           ) : null}
         </section>
-      ) : (
+      ) : !stateLoading && !stateError ? (
         <div>
           <p className="eyebrow">Active HUD</p>
           <h2 className="t-pane mt-2 text-[22px]">Stock Team Fortress 2</h2>
         </div>
-      )}
+      ) : null}
 
       <p className="t-meta mt-3">Custom materials may not work on Valve Casual servers.</p>
 
@@ -532,7 +580,7 @@ export function HudPane({
           </p>
         ) : statsError ? (
           <Alert tone="warn" testId="hud-stats-error" className="mt-3 py-2">
-            Could not refresh dates and popularity. {statsError} Available data is still shown.
+            Dates and popularity refresh is incomplete. {statsError} Available data is still shown.
           </Alert>
         ) : null}
 
@@ -582,6 +630,12 @@ export function HudPane({
               ? "Loading catalog…"
               : `Refreshing… showing ${catalog.length} cached HUDs.`}
           </p>
+        ) : null}
+
+        {catalogWarning ? (
+          <Alert tone="warn" testId="hud-catalog-warning" className="mt-4 py-2">
+            {catalogWarning}
+          </Alert>
         ) : null}
 
         {catalogError ? (

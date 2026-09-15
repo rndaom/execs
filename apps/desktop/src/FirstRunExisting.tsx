@@ -1,6 +1,6 @@
 import { ArrowLeft, ShieldCheck } from "@phosphor-icons/react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
-import { Alert } from "./components/ui/Alert";
+import { OperationError } from "./components/ui/OperationError";
 import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { formatInstallLabel } from "./lib/finder-ui";
@@ -25,7 +25,7 @@ export function FirstRunExisting({
   onSave: () => void;
   onChange: () => void;
 }) {
-  const { running, busy, error } = useAppStatus();
+  const { running, busy, error, dismissError } = useAppStatus();
   const canSave = !running && !busy && draftName.trim().length > 0;
 
   return (
@@ -100,11 +100,7 @@ export function FirstRunExisting({
         ) : null}
       </PaneSection>
 
-      {error ? (
-        <Alert tone="error" className="mt-6">
-          {error}
-        </Alert>
-      ) : null}
+      <OperationError message={error} onDismiss={dismissError} className="mt-6" />
     </OnboardingFrame>
   );
 }

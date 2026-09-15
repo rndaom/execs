@@ -7,9 +7,8 @@
  * message appears and what it may replace have to live in one place too.
  *
  * Precedence, in order:
- *  - a failure always wins, and stands until the next successful save or an
- *    explicit dismissal — a retry in flight does not quietly clear it;
- *  - a success always wins, including over a failure;
+ *  - failures stand until their own operation succeeds or is dismissed;
+ *  - other completions cannot hide an outstanding failure;
  *  - "Saving…" and "Draft kept until TF2 closes" are only shown when nothing
  *    more important is on screen, and the draft notice is said once per locked
  *    stretch rather than on every keystroke.
@@ -23,7 +22,17 @@ export const TOAST_SAVED_MS = 1600;
 
 export type ToastKind = "saving" | "saved" | "error" | "deferred";
 
-export type Toast = { kind: ToastKind; message: string };
+export type Toast = { kind: ToastKind; message: string; source?: string };
+
+export type ToastState = {
+  toast: Toast | null;
+  failures: Record<string, Toast>;
+  deferred: string[];
+};
+
+export function toastInitial(): ToastState {
+  return { toast: null, failures: {}, deferred: [] };
+}
 
 export const SAVING_MESSAGE = "Saving…";
 export const SAVED_MESSAGE = "Saved";
@@ -33,12 +42,15 @@ export type ToastEvent =
   /** A save has been running longer than `TOAST_SAVING_DELAY_MS`. */
   | { type: "slow" }
   /** A write finished; `message` names what happened when it was not a save. */
-  | { type: "done"; message?: string }
-  | { type: "fail"; message: string }
+  | { type: "done"; message?: string; source?: string }
+  | { type: "fail"; message: string; source?: string }
   /** TF2 is running and a dirty draft is waiting for it to close. */
-  | { type: "defer" }
+  | { type: "defer"; source?: string }
+  | { type: "resolve-draft"; source: string }
+  | { type: "clear-source"; source: string }
+  | { type: "cancel" }
   /** Escape, a click, or the "Saved" linger elapsing. */
-  | { type: "hide" };
+  | { type: "hide"; expected?: Toast };
 
 /**
  * "Could not save — the reason the backend gave", or the bare line when it
@@ -56,25 +68,79 @@ export function failureMessage(reason: unknown, prefix = "Could not save"): stri
   return text.length > 0 ? `${prefix} — ${text}` : `${prefix}.`;
 }
 
-export function toastStep(state: Toast | null, event: ToastEvent): Toast | null {
+function remaining(state: ToastState): Toast | null {
+  return (
+    Object.values(state.failures).at(-1) ??
+    (state.deferred.length > 0 ? { kind: "deferred", message: DEFERRED_MESSAGE } : null)
+  );
+}
+
+function withoutFailure(state: ToastState, source: string): ToastState {
+  const failures = { ...state.failures };
+  delete failures[source];
+  return { ...state, failures };
+}
+
+export function toastStep(state: ToastState, event: ToastEvent): ToastState {
   switch (event.type) {
-    case "hide":
-      return null;
-    case "fail":
-      return { kind: "error", message: event.message };
-    case "done":
-      return { kind: "saved", message: event.message ?? SAVED_MESSAGE };
+    case "hide": {
+      if (event.expected && event.expected !== state.toast) return state;
+      const next =
+        state.toast?.kind === "error"
+          ? withoutFailure(state, state.toast.source ?? "default")
+          : state;
+      return { ...next, toast: remaining(next) };
+    }
+    case "fail": {
+      const source = event.source ?? "default";
+      const toast: Toast = { kind: "error", message: event.message, source };
+      const next = withoutFailure(state, source);
+      return { ...next, failures: { ...next.failures, [source]: toast }, toast };
+    }
+    case "done": {
+      const next = withoutFailure(state, event.source ?? "default");
+      return {
+        ...next,
+        toast: Object.values(next.failures).at(-1) ?? {
+          kind: "saved",
+          message: event.message ?? SAVED_MESSAGE,
+          source: event.source,
+        },
+      };
+    }
     case "slow":
       // A failure is not cleared by the retry that follows it — only by that
       // retry actually succeeding.
-      return state?.kind === "error" ? state : { kind: "saving", message: SAVING_MESSAGE };
-    case "defer":
+      return state.toast?.kind === "error"
+        ? state
+        : { ...state, toast: { kind: "saving", message: SAVING_MESSAGE } };
+    case "defer": {
       // Said once while the lock is on, not on every keystroke. Returning the
       // same object keeps React from re-rendering the toast.
-      if (state?.kind === "error" || state?.kind === "deferred") {
-        return state;
-      }
-      return { kind: "deferred", message: DEFERRED_MESSAGE };
+      const source = event.source ?? "default";
+      const next = state.deferred.includes(source)
+        ? state
+        : { ...state, deferred: [...state.deferred, source] };
+      return state.toast?.kind === "error" || state.toast?.kind === "deferred"
+        ? next
+        : { ...next, toast: { kind: "deferred", message: DEFERRED_MESSAGE } };
+    }
+    case "resolve-draft": {
+      if (!state.deferred.includes(event.source)) return state;
+      const next = {
+        ...state,
+        deferred: state.deferred.filter((source) => source !== event.source),
+      };
+      return state.toast?.kind === "deferred" ? { ...next, toast: remaining(next) } : next;
+    }
+    case "clear-source": {
+      const next = withoutFailure(state, event.source);
+      return state.toast?.kind === "error" && state.toast.source === event.source
+        ? { ...next, toast: remaining(next) }
+        : next;
+    }
+    case "cancel":
+      return state.toast?.kind === "saving" ? { ...state, toast: remaining(state) } : state;
   }
 }
 

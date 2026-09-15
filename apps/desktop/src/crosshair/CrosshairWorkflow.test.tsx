@@ -18,7 +18,7 @@ let record: CrosshairRecord | null;
 let running: boolean;
 let managed: string;
 const save = vi.fn(async (_text: string) => undefined);
-const build = vi.fn(async (..._args: unknown[]) => undefined);
+const build = vi.fn(async (..._args: unknown[]) => true);
 const deactivate = vi.fn(async () => undefined);
 const pending = vi.fn();
 

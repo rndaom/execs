@@ -19,6 +19,7 @@ export const PREVIEW_STATES = [
   "absorb",
   "switch",
   "import",
+  "folder-repair",
   "first-existing",
   "first-unused",
   "first-unused-locked",
@@ -53,6 +54,7 @@ const MANY: Tf2Install[] = [
 ];
 
 const READY: PreviewState[] = [
+  "folder-repair",
   "confirmed",
   "locked",
   "library",
@@ -130,6 +132,15 @@ export function previewFirstRunReasons(state: PreviewState): string[] {
 }
 
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
+  if (state === "folder-repair") {
+    const library = previewSavedLibrary(ONE.path);
+    return {
+      ...library,
+      profiles: library.profiles.map((profile, index) =>
+        index === 0 ? { ...profile, unsafeCustomFolders: ["materials", "resource"] } : profile,
+      ),
+    };
+  }
   if (state === "switch") {
     return previewSwitchLibrary(ONE.path);
   }
@@ -165,6 +176,7 @@ export function previewCreating(state: PreviewState): boolean {
 export function previewSettingsTab(state: PreviewState): SettingsTab | null {
   switch (state) {
     case "settings-comfig":
+    case "folder-repair":
     case "settings-locked":
       return "comfig";
     case "settings-binds":

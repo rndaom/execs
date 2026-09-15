@@ -204,9 +204,8 @@ pub const HUD_BACKUP_CONTAINER: &str = "execs-hud-backups";
 /// recognised and dropped.
 pub fn is_stock_custom_pack(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    let lower = lower.strip_prefix('-').unwrap_or(&lower);
     lower.ends_with(PART_SUFFIX)
-        || STOCK_CUSTOM_ENTRIES.contains(&lower)
+        || STOCK_CUSTOM_ENTRIES.contains(&lower.as_str())
         || lower == HUD_BACKUP_CONTAINER
 }
 
@@ -286,7 +285,6 @@ fn inventory_live_surface_opts_with_limits(
     migrate_legacy: bool,
     limits: InventoryLimits,
 ) -> Result<LiveInventory, ProfileError> {
-    let layer = detect_layer(tf2_root, limits)?;
     let mut dests = BTreeMap::new();
     let mut skipped = Vec::new();
     let mut visited = HashSet::new();
@@ -300,24 +298,27 @@ fn inventory_live_surface_opts_with_limits(
         &mut budget,
         true,
     )?;
-    if layer == CfgLayer::Comfig {
-        collect_overrides(
-            tf2_root,
-            &mut dests,
-            &mut skipped,
-            &mut visited,
-            &mut budget,
-        )?;
-        collect_root_user_cfgs(tf2_root, &mut dests, &mut skipped, &mut budget, true)?;
-    } else {
-        collect_vanilla_cfgs(tf2_root, &mut dests, &mut skipped, &mut budget, true)?;
-    }
+    // Safe nested user cfgs and leftover overrides belong to the snapshot in
+    // either layer. Their presence does not establish an executable loader.
+    collect_overrides(
+        tf2_root,
+        &mut dests,
+        &mut skipped,
+        &mut visited,
+        &mut budget,
+    )?;
+    collect_vanilla_cfgs(tf2_root, &mut dests, &mut skipped, &mut budget, true)?;
     collect_custom(
         tf2_root,
         &mut dests,
         &mut skipped,
         &mut visited,
         &mut budget,
+    )?;
+    let layer = crate::cfg_layer::cfg_layer_from_sources(
+        dests
+            .values()
+            .map(|entry| (entry.dest_rel.as_str(), entry.source.as_path())),
     )?;
     if migrate_legacy {
         collect_migrate(
@@ -345,31 +346,6 @@ fn inventory_live_surface_opts_with_limits(
         entries: dests.into_values().collect(),
         skipped,
     })
-}
-
-fn detect_layer(tf2_root: &Path, limits: InventoryLimits) -> Result<CfgLayer, ProfileError> {
-    let overrides = tf2_root.join("tf").join("cfg").join("overrides");
-    if !is_symlink(&overrides) && is_within_root(&overrides, tf2_root) && overrides.is_dir() {
-        return Ok(CfgLayer::Comfig);
-    }
-    let custom = tf2_root.join("tf").join("custom");
-    if !is_symlink(&custom) && is_within_root(&custom, tf2_root) {
-        if let Ok(entries) = fs::read_dir(&custom) {
-            let mut budget = InventoryBudget::new(limits);
-            for entry in entries.flatten() {
-                budget.visit_entry(tf2_root, &entry.path())?;
-                if entry.file_name().to_str().is_some_and(is_mastercomfig_vpk) {
-                    return Ok(CfgLayer::Comfig);
-                }
-            }
-        }
-    }
-    Ok(CfgLayer::Vanilla)
-}
-
-fn is_mastercomfig_vpk(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    lower.starts_with("mastercomfig-") && lower.ends_with(".vpk")
 }
 
 fn collect_config_cfg(
@@ -424,61 +400,6 @@ fn collect_overrides(
     walk_tree(
         &dir, tf2_root, dests, skipped, visited, budget, true, false, false, 0,
     )
-}
-
-fn collect_root_user_cfgs(
-    tf2_root: &Path,
-    dests: &mut BTreeMap<String, InventoryEntry>,
-    skipped: &mut Vec<String>,
-    budget: &mut InventoryBudget,
-    critical: bool,
-) -> Result<(), ProfileError> {
-    let cfg = tf2_root.join("tf").join("cfg");
-    if !cfg.is_dir() {
-        return Ok(());
-    }
-    if is_symlink(&cfg) || !is_within_root(&cfg, tf2_root) {
-        return Err(ProfileError::InvalidPath);
-    }
-    let entries = match fs::read_dir(&cfg) {
-        Ok(entries) => entries,
-        Err(err) => {
-            return if critical {
-                Err(ProfileError::Io(err.to_string()))
-            } else {
-                budget.skip(skipped, format!("tf/cfg ({err})"));
-                Ok(())
-            };
-        }
-    };
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(err) => {
-                if critical {
-                    return Err(ProfileError::Io(err.to_string()));
-                }
-                budget.skip(skipped, format!("tf/cfg ({err})"));
-                continue;
-            }
-        };
-        let path = entry.path();
-        budget.visit_entry(tf2_root, &path)?;
-        if !path.is_file() {
-            continue;
-        }
-        let name = entry
-            .file_name()
-            .into_string()
-            .map_err(|_| ProfileError::InvalidPath)?;
-        if !is_user_cfg(&name) {
-            continue;
-        }
-        take_file(
-            tf2_root, &path, None, dests, skipped, budget, critical, false,
-        )?;
-    }
-    Ok(())
 }
 
 fn collect_vanilla_cfgs(
@@ -566,7 +487,9 @@ fn walk_vanilla_cfgs(
             continue;
         }
         if path.is_dir() {
-            if !is_skip_cfg_dir(&name) {
+            // Only these immediate tf/cfg children have separate collection or
+            // migration rules. Identical names deeper in a user tree are literal.
+            if depth > 0 || !is_skip_cfg_dir(&name) {
                 walk_vanilla_cfgs(
                     &path,
                     tf2_root,
@@ -1121,7 +1044,7 @@ mod tests {
     }
 
     #[test]
-    fn comfig_mode_from_overrides_and_shared_vpk_name() {
+    fn comfig_mode_from_loader_contents_and_shared_vpk_name() {
         let dir = crate::test_temp_dir();
         let root = dir.join("Team Fortress 2");
         write_file(
@@ -1130,7 +1053,7 @@ mod tests {
         );
         write_file(&root.join("tf/cfg/overrides/modules.cfg"), "modules\n");
         write_file(&root.join("tf/cfg/binds.cfg"), "bind w +forward\n");
-        write_file(&root.join("tf/custom/Mastercomfig-Base.vpk"), "vpk\n");
+        crate::cfg_layer::write_test_base(&root);
         write_file(&root.join("tf/custom/mastercomfig-high.vpk"), "high\n");
         write_file(&root.join("tf/custom/toonhud.vpk"), "hud\n");
 
@@ -1168,6 +1091,7 @@ mod tests {
         write_file(&root.join("tf/cfg/user/autoexec.cfg"), "old autoexec\n");
         write_file(&root.join("tf/cfg/user/extra/net.cfg"), "old net\n");
         write_file(&root.join("tf/cfg/app/scout.cfg"), "old scout\n");
+        crate::cfg_layer::write_test_base(&root);
 
         let inventory = inventory_live_surface(&root).unwrap();
         assert_eq!(inventory.layer, CfgLayer::Comfig);

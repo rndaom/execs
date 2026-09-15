@@ -20,6 +20,9 @@ export const ALL_TRACERS_NOTE = "Ignored on live servers; needs sv_cheats.";
 
 export const FOV_MIN = 54;
 export const FOV_MAX = 90;
+/** TF2's viewmodel ConVar limits are independent of world FOV and menu limits. */
+export const VIEWMODEL_FOV_MIN = 0.1;
+export const VIEWMODEL_FOV_MAX = 179.9;
 export const CROSSHAIR_SCALE_MIN = 16;
 export const CROSSHAIR_SCALE_MAX = 64;
 export const COLOR_MIN = 0;
@@ -151,7 +154,9 @@ export function clampInt(value: number, min: number, max: number): number {
 export function clampGameplay(settings: GameplaySettings): GameplaySettings {
   return {
     fov_desired: clampInt(settings.fov_desired, FOV_MIN, FOV_MAX),
-    viewmodel_fov: clampInt(settings.viewmodel_fov, FOV_MIN, FOV_MAX),
+    viewmodel_fov: Number.isFinite(settings.viewmodel_fov)
+      ? Math.min(VIEWMODEL_FOV_MAX, Math.max(VIEWMODEL_FOV_MIN, settings.viewmodel_fov))
+      : VIEWMODEL_FOV_MIN,
     tf_use_min_viewmodels: settings.tf_use_min_viewmodels ? 1 : 0,
     r_drawviewmodel: settings.r_drawviewmodel ? 1 : 0,
     r_drawtracers_firstperson: settings.r_drawtracers_firstperson ? 1 : 0,
@@ -295,7 +300,8 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   }
   const viewmodel = read("viewmodel_fov");
   if (viewmodel !== undefined) {
-    next.viewmodel_fov = parseIntish(viewmodel, next.viewmodel_fov);
+    const value = Number(String(viewmodel).trim());
+    if (Number.isFinite(value)) next.viewmodel_fov = value;
   }
   const minView = read("tf_use_min_viewmodels");
   if (minView !== undefined) {
