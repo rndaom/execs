@@ -430,7 +430,10 @@ mod tests {
         id: &str,
     ) -> crate::preloader::PreloaderSelection {
         let mut manifest = load_manifest(profiles, id).unwrap();
-        for (id, pack) in [("author-materials", "materials"), ("unchanged", "custom-materials")] {
+        for (id, pack) in [
+            ("author-materials", "materials"),
+            ("unchanged", "custom-materials"),
+        ] {
             manifest.mods.push(crate::mods::ModRecord {
                 id: id.into(),
                 name: id.into(),
@@ -463,12 +466,22 @@ mod tests {
                 SaveCurrentOptions::default(),
             )
             .unwrap();
-            let other_id = &library.profiles.iter().find(|profile| profile.id != id).unwrap().id;
+            let other_id = &library
+                .profiles
+                .iter()
+                .find(|profile| profile.id != id)
+                .unwrap()
+                .id;
             let mut expected = save_particle_selection(&profiles, &root, &id);
             save_particle_selection(&profiles, &root, other_id);
             if !active {
-                crate::profile::set_active_profile_to(&profiles, &root, other_id, Vec::<String>::new())
-                    .unwrap();
+                crate::profile::set_active_profile_to(
+                    &profiles,
+                    &root,
+                    other_id,
+                    Vec::<String>::new(),
+                )
+                .unwrap();
                 let state_path = area.join("preloader/state.json");
                 fs::create_dir_all(state_path.parent().unwrap()).unwrap();
                 fs::write(
@@ -488,7 +501,10 @@ mod tests {
             let plan = plan_custom_folder_repair_to(&profiles, &root, &id).unwrap();
             repair_custom_folders_to(&profiles, &root, &id, &plan, Vec::<String>::new()).unwrap();
             expected.profile_particle_mods[0] = plan[0].to.clone();
-            assert_eq!(load_manifest(&profiles, &id).unwrap().preloader, Some(expected));
+            assert_eq!(
+                load_manifest(&profiles, &id).unwrap().preloader,
+                Some(expected)
+            );
             assert_eq!(snapshot(&profiles.join(other_id)), other_before);
             assert_eq!(snapshot(&area.join("preloader")), preloader_before);
             if !active {
@@ -509,7 +525,11 @@ mod tests {
             Vec::<String>::new(),
         )
         .unwrap();
-        let other = library.profiles.iter().find(|profile| profile.id != id).unwrap();
+        let other = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap();
         crate::profile::set_active_profile_to(&profiles, &root, &other.id, Vec::<String>::new())
             .unwrap();
         let state_path = area.join("preloader/state.json");
@@ -652,7 +672,10 @@ mod tests {
         assert_eq!(snapshot(&area), before);
         repair_custom_folders_to(&profiles, &root, &id, &plan, Vec::<String>::new()).unwrap();
         expected.profile_particle_mods[0] = plan[0].to.clone();
-        assert_eq!(load_manifest(&profiles, &id).unwrap().preloader, Some(expected));
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().preloader,
+            Some(expected)
+        );
         fs::remove_dir_all(area).unwrap();
     }
 

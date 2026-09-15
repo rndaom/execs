@@ -114,3 +114,12 @@ denied. Logs: `G:/Projects/execs-015-evidence/forward-port-workspace-tests.log` 
 is `G:/Projects/execs-015-evidence/target-forward-port`. All four product versions
 remain `0.2.0`; creator import and profile-scoped preloader support remain on the
 minor track. Linux CI and packaged runtime checks are separate parent-task gates.
+
+### CI formatting correction
+
+The earlier formatting claim used `cargo fmt --manifest-path` without `--all`,
+which omitted the core workspace member. PR #48 CI correctly found formatting
+changes in `custom_folders.rs`, `zip/creator.rs` and `zip.rs`. Applied
+`cargo fmt --all --manifest-path apps/desktop/src-tauri/Cargo.toml`; the matching
+`--all --check` and `git diff --check` now pass. This follow-up changes formatting
+only; the native behavior and existing test results are unchanged.

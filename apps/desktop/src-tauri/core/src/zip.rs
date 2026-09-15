@@ -1690,22 +1690,35 @@ mod tests {
         write_raw_zip(&path, &[("custom/creator.vpk", &pack)]);
         let review =
             creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
-        assert!(review.warnings.iter().any(|warning|
-            warning.contains("creator.vpk/cfg/autoexec.cfg") && warning.contains("password")));
+        assert!(review
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("creator.vpk/cfg/autoexec.cfg")
+                && warning.contains("password")));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
         let id = &imported.profiles[0].id;
-        assert_eq!(fs::read(exclusive_file_path(&profiles, id, "tf/custom/creator.vpk")).unwrap(), pack);
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/custom/creator.vpk")).unwrap(),
+            pack
+        );
         let destination = dir.join("export.zip");
         fs::write(&destination, b"keep existing export").unwrap();
         assert!(export_profile_to(&profiles, &root, id, &destination)
-            .unwrap_err().message().contains("password"));
+            .unwrap_err()
+            .message()
+            .contains("password"));
         assert_eq!(fs::read(&destination).unwrap(), b"keep existing export");
 
         let before = snapshot_tree(&profiles);
-        write_raw_zip(&path, &[("custom/creator.vpk", &0x55aa_1234u32.to_le_bytes())]);
+        write_raw_zip(
+            &path,
+            &[("custom/creator.vpk", &0x55aa_1234u32.to_le_bytes())],
+        );
         assert!(creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).is_err());
-        assert!(import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).is_err());
+        assert!(
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).is_err()
+        );
         assert_eq!(snapshot_tree(&profiles), before);
         cleanup(&dir);
     }
