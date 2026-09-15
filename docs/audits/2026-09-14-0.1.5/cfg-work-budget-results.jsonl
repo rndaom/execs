@@ -1,0 +1,8 @@
+{"kind":"exec","fanout":10,"files":5,"bytes":498,"elapsedMs":5.070000000000007,"executionComplete":false,"findings":["analysis-budget"]}
+{"kind":"exec","fanout":30,"files":5,"bytes":1458,"elapsedMs":5.852599999999995,"executionComplete":false,"findings":["analysis-budget"]}
+{"kind":"exec","fanout":100,"files":5,"bytes":4818,"elapsedMs":12.833699999999993,"executionComplete":false,"findings":["analysis-budget"]}
+{"kind":"alias","fanout":6,"files":1,"bytes":245,"elapsedMs":20.2085,"executionComplete":true,"findings":["unbindall","alias-budget","unbindall"]}
+{"kind":"alias","fanout":6,"files":1,"bytes":245,"elapsedMs":32.03169999999999,"executionComplete":true,"findings":["unbindall","alias-budget","unbindall"]}
+{"kind":"alias","fanout":6,"files":1,"bytes":245,"elapsedMs":20.7928,"executionComplete":true,"findings":["unbindall","alias-budget","unbindall"]}
+{"kind":"alias","fanout":6,"files":1,"bytes":245,"elapsedMs":20.44380000000001,"executionComplete":true,"findings":["unbindall","alias-budget","unbindall"]}
+{"kind":"alias","fanout":6,"files":1,"bytes":245,"elapsedMs":26.1284,"executionComplete":true,"findings":["unbindall","alias-budget","unbindall"]}
