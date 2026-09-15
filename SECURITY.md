@@ -14,9 +14,6 @@ on this repository. If that form is missing, the owner enables it under
 **Settings → Advanced Security → Private vulnerability reporting**, then
 **Enable**. After that, the Advisories page shows **Report a vulnerability**.
 
-If the form is still missing, use the email on the
-[owner's GitHub profile](https://github.com/rndaom).
-
 Please include the execs version (footer of the app), the OS, and
 whether you have a crash log
 (`%AppData%\execs\logs\panic.log` or `~/.local/share/execs/logs/panic.log`).
