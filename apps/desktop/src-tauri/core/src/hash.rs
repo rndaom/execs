@@ -479,10 +479,30 @@ fn replace_file_once(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 #[cfg(windows)]
-fn replace_file_once(from: &Path, to: &Path) -> io::Result<()> {
+fn windows_move_path(path: &Path) -> io::Result<Vec<u16>> {
     use std::iter;
     use std::os::windows::ffi::OsStrExt;
 
+    let name = path
+        .file_name()
+        .ok_or_else(|| invalid_path("move endpoint has no file name"))?;
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty());
+    // Rust returns an absolute verbatim Windows path (including UNC handling).
+    // Resolve only the parent: the destination may not exist, and resolving the
+    // leaf would change rename semantics for a link. Keep containment checks at
+    // the callers; this conversion only removes MoveFileExW's MAX_PATH limit.
+    let absolute = fs::canonicalize(parent.unwrap_or_else(|| Path::new(".")))?.join(name);
+    Ok(absolute
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect())
+}
+
+#[cfg(windows)]
+fn replace_file_once(from: &Path, to: &Path) -> io::Result<()> {
     const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
     const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
     #[link(name = "kernel32")]
@@ -490,12 +510,8 @@ fn replace_file_once(from: &Path, to: &Path) -> io::Result<()> {
         fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
     }
 
-    let from_wide: Vec<u16> = from
-        .as_os_str()
-        .encode_wide()
-        .chain(iter::once(0))
-        .collect();
-    let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let from_wide = windows_move_path(from)?;
+    let to_wide = windows_move_path(to)?;
     // SAFETY: both pointers reference NUL-terminated buffers that remain alive
     // for the call, and the flags require no additional structures.
     let replaced = unsafe {
@@ -548,21 +564,14 @@ fn move_dir_once(from: &Path, to: &Path) -> io::Result<()> {
 
 #[cfg(windows)]
 fn move_dir_once(from: &Path, to: &Path) -> io::Result<()> {
-    use std::iter;
-    use std::os::windows::ffi::OsStrExt;
-
     const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
     #[link(name = "kernel32")]
     extern "system" {
         fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
     }
 
-    let from_wide: Vec<u16> = from
-        .as_os_str()
-        .encode_wide()
-        .chain(iter::once(0))
-        .collect();
-    let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(iter::once(0)).collect();
+    let from_wide = windows_move_path(from)?;
+    let to_wide = windows_move_path(to)?;
     // SAFETY: both pointers reference NUL-terminated buffers that remain alive
     // for the call, and the flags require no additional structures.
     let moved =
@@ -981,6 +990,25 @@ mod tests {
         );
     }
     use super::*;
+
+    #[test]
+    fn atomic_replace_and_directory_move_support_long_paths() {
+        let root = crate::test_temp_dir();
+        let parent = root.join("deep".repeat(30)).join("nested".repeat(20));
+        let dest = parent.join("objectives_flagpanel_compass_grey_with_red.vtf");
+        assert!(dest.as_os_str().len() > 260);
+        write_atomic_within(&root, &dest, b"first").unwrap();
+        write_atomic_within(&root, &dest, b"replacement").unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"replacement");
+        assert!(!part_path(&dest).exists());
+        let moved = parent.with_file_name("backup".repeat(20));
+        move_dir_no_replace_within(&root, &parent, &moved).unwrap();
+        assert_eq!(
+            fs::read(moved.join(dest.file_name().unwrap())).unwrap(),
+            b"replacement"
+        );
+        assert!(!parent.exists());
+    }
 
     #[test]
     fn hashes_known_vector() {

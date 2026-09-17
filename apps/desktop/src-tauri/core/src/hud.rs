@@ -2841,6 +2841,28 @@ mod tests {
         (profiles, root, id)
     }
 
+    #[test]
+    fn install_and_replace_hud_with_long_staged_asset_paths() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let asset = "materials/vgui/replay/thumbnails/flag_icons/objectives_flagpanel_compass_grey_with_red.vtf";
+        let mut tree = rays_tree();
+        tree.insert(asset, b"original texture".to_vec());
+        install_hud_pack_to(&profiles, &root, &id, &tree, rays_record(), unlocked()).unwrap();
+        tree.insert(asset, b"updated texture".to_vec());
+        install_hud_pack_to(&profiles, &root, &id, &tree, rays_record(), unlocked()).unwrap();
+        let rel = format!("tf/custom/rayshud/{asset}");
+        assert_eq!(fs::read(root.join(&rel)).unwrap(), b"updated texture");
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, &rel)).unwrap(),
+            b"updated texture"
+        );
+        assert_eq!(
+            fs::read(preserved_hud(&root, "rayshud").join(asset)).unwrap(),
+            b"original texture"
+        );
+    }
+
     fn preserved_hud(root: &Path, name: &str) -> PathBuf {
         let found: Vec<PathBuf> = fs::read_dir(root.join("tf/custom").join(HUD_BACKUP_CONTAINER))
             .unwrap()

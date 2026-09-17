@@ -19,6 +19,8 @@ User-facing changes only. The release workflow publishes the matching
 - Profiles: switch shared preloader selections with the target profile.
 - Profiles: import split creator folders together, seed missing config.cfg
   from TF2 defaults, and place legacy hitsounds under sound/ui.
+- HUDs: install packs with deeply nested filenames on Windows without requiring
+  the system's long-path setting, including HypnotizeHUD.
 
 ## [0.1.5] - 2026-09-14
 
