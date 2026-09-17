@@ -131,7 +131,7 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 
 ## 0.1.3 bind and integrity fixes
 
-- Published 0.1.3 is based on the 0.1.2 tag through its maintenance branch; creator-profile and profile-scoped-preloader schema work remains on the minor track. Future patches start from the latest public maintenance baseline.
+- Published 0.1.3 is based on the 0.1.2 tag through its maintenance branch; profile-scoped-preloader schema work remains on the minor track; creator ZIP import is owner-assigned to 0.1.6. Future patches start from the latest public maintenance baseline.
 - Binds records DOM right/middle buttons as Source `mouse2`/`mouse3`, retains profile-scoped drafts while TF2 runs, and synchronizes tracked removals from a complete post-absorb `config.cfg` read.
 - Absorb rechecks the live process before each restore, repair and config/Cloud mutation. Catalog matching keeps an imported HUD's local tree editable, and profile ZIPs apply the bounded small-entry compression exception used by HUD archives.
 
@@ -164,3 +164,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - A leading dash is part of a custom pack's literal identity. Absorb, Keep, removal and switch cleanup never substitute a dashed/undashed peer. Legacy HUD backup recovery requires a recorded inactive undashed HUD, no live undashed peer and no manifest ownership of the dashed path; coexisting or unknown dashed HUDs keep their normal identities.
 - Cfg-layer detection reads the mounted startup autoexec and core cfg through one bounded content check. The supported mastercomfig loader executes `comfig/comfig.cfg` followed by `overrides/autoexec.cfg`; addon names and leftover overrides are not loader evidence. Inventory preserves safe nested user cfgs and overrides in both layers. Managed binds/gameplay writes refuse a live/library loader mismatch until the external change is resolved.
 - Cfg inventory handles `user`, `app`, and `overrides` specially only when they are immediate `tf/cfg` children. The same names deeper in a user cfg tree remain literal profile content.
+
+## 0.1.6 creator imports
+
+- The owner assigns creator cfg/custom ZIP imports (RND-201) to 0.1.6 from public v0.1.5. Import review and confirmation are backported independently of profile-owned preloaders; native profile schema and existing live write targets stay unchanged.
+- Creator ZIPs may wrap cfg/custom trees or split custom folders. Review counts skipped unsupported files such as cfg/user.scr, discloses default config.cfg seeding and legacy hitsound relocation, and requires explicit trust for preserved cfg commands. Backend single-use reviews bind confirmation to the ZIP hash, install and write lock. Import never activates the new profile; native exports retain strict validation.

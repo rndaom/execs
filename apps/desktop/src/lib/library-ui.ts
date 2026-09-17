@@ -45,6 +45,15 @@ export function canImportProfile(library: ProfileLibrary, running: boolean): boo
   return library.usable && !library.rootMismatch && !running;
 }
 
+/** A canceled picker returns the existing library and must not report success. */
+export function newlyImportedProfile(
+  before: ProfileLibrary,
+  after: ProfileLibrary,
+): ProfileSummary | null {
+  const existing = new Set(before.profiles.map((profile) => profile.id));
+  return after.profiles.find((profile) => !existing.has(profile.id)) ?? null;
+}
+
 /** Create new is for people who already have a profile. */
 export function canCreateNew(library: ProfileLibrary): boolean {
   return library.usable && !library.rootMismatch && library.profiles.length > 0;

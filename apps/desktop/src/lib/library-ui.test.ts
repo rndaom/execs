@@ -7,6 +7,7 @@ import {
   emptyLibrary,
   hasPackChanges,
   libraryStatusCopy,
+  newlyImportedProfile,
   previewImportedLibrary,
   previewPackDelta,
   previewSavedLibrary,
@@ -18,6 +19,14 @@ import {
 const ready = emptyLibrary("/tf2", true);
 
 describe("library UI helpers", () => {
+  it("reports a new import by id, including duplicate names, and stays quiet on cancel", () => {
+    const before = previewSavedLibrary("/tf2", "Main");
+    expect(newlyImportedProfile(before, structuredClone(before))).toBeNull();
+    const added = { ...before.profiles[0], id: "new-id" };
+    const after = { ...before, profiles: [...before.profiles, added] };
+    expect(newlyImportedProfile(before, after)).toEqual(added);
+    expect(after.activeProfileId).toBe(before.activeProfileId);
+  });
   it("describes empty, counted, and mismatched libraries", () => {
     expect(libraryStatusCopy(ready)).toBe("No profiles yet");
     expect(
