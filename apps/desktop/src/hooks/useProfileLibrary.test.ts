@@ -57,6 +57,77 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+const creatorReview = {
+  token: "reviewed-creator",
+  name: "Creator config",
+  files: 7,
+  skippedFiles: 1,
+  creator: true,
+  warnings: [],
+  notes: [],
+};
+
+it("reviews creator imports before saving and retains the current active profile", async () => {
+  vi.spyOn(api, "importProfile").mockResolvedValue(creatorReview);
+  const confirm = vi.spyOn(api, "confirmProfileImport");
+  const switchProfile = vi.spyOn(api, "switchProfile");
+  await render();
+  const original = state.library;
+  await act(async () => state.importProfile());
+  expect(state.importStage).toBe("review");
+  expect(state.importReview?.skippedFiles).toBe(1);
+  expect(state.library).toBe(original);
+  expect(confirm).not.toHaveBeenCalled();
+
+  // Use the fixture's normal library creation without its simulated delay.
+  const imported = await api.saveCurrentAs("Creator config");
+  confirm.mockResolvedValue({ ...imported, activeProfileId: original?.activeProfileId ?? null });
+  await act(async () => state.confirmImport());
+  expect(confirm).toHaveBeenCalledWith(creatorReview.token);
+  expect(state.importStage).toBe("done");
+  expect(state.importedProfile?.name).toBe("Creator config");
+  expect(state.library?.activeProfileId).toBe(original?.activeProfileId);
+  expect(switchProfile).not.toHaveBeenCalled();
+});
+
+it("cancels both picker and review without publishing a profile", async () => {
+  const pick = vi.spyOn(api, "importProfile").mockResolvedValue(null);
+  const confirm = vi.spyOn(api, "confirmProfileImport");
+  const cancel = vi.spyOn(api, "cancelProfileImport");
+  await render();
+  const original = state.library;
+  await act(async () => state.importProfile());
+  expect(state.importStage).toBeNull();
+  expect(setBusy).toHaveBeenLastCalledWith(false);
+  pick.mockResolvedValue(creatorReview);
+  await act(async () => state.importProfile());
+  await act(async () => state.cancelImport());
+  expect(cancel).toHaveBeenCalledWith(creatorReview.token);
+  expect(confirm).not.toHaveBeenCalled();
+  expect(state.library).toBe(original);
+  expect(state.importStage).toBeNull();
+});
+
+it("refuses confirmation while TF2 runs and keeps a failed import visible", async () => {
+  vi.spyOn(api, "importProfile").mockResolvedValue(creatorReview);
+  const confirm = vi.spyOn(api, "confirmProfileImport").mockRejectedValue(new Error("ZIP changed"));
+  await render();
+  const original = state.library;
+  await act(async () => state.importProfile());
+  running = true;
+  await render();
+  await act(async () => state.confirmImport());
+  expect(confirm).not.toHaveBeenCalled();
+  expect(state.importStage).toBe("review");
+  running = false;
+  await render();
+  await act(async () => state.confirmImport());
+  expect(state.importError).toBe("ZIP changed");
+  expect(state.importedProfile).toBeNull();
+  expect(state.library).toBe(original);
+  expect(setBusy).toHaveBeenLastCalledWith(false);
+});
+
 it("absorbs once at boot without reloading panes after ordinary settings saves", async () => {
   const absorb = vi.spyOn(api, "absorbOwned");
   await render();

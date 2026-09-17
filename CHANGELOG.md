@@ -5,6 +5,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Profiles: import creator cfg/custom ZIPs instead of rejecting entries such as
+  cfg/user.scr. Review included files and cfg findings before importing; unsupported
+  files are left in the source ZIP and the current profile stays active.
+
 ## [0.1.5] - 2026-09-14
 
 ### Fixed
