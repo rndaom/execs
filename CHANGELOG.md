@@ -12,6 +12,8 @@ User-facing changes only. The release workflow publishes the matching
 - Profiles: import creator cfg/custom ZIPs instead of rejecting entries such as
   cfg/user.scr. Review included files and cfg findings before importing; unsupported
   files are left in the source ZIP and the current profile stays active.
+- Profiles: preserve TF2 Advanced Options customizations in cfg/user.scr through
+  import, Save current, in-game changes, switching and export.
 
 ## [0.1.5] - 2026-09-14
 

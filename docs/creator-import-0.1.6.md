@@ -24,7 +24,8 @@ It excludes profile-owned preloader metadata and switch changes. The native
 profile and ZIP schemas remain unchanged.
 
 Creator cfg/custom roots can be wrapped or split across custom folders.
-Unsupported cfg companions such as `user.scr` are counted as skipped. The
+TF2 Advanced Options definitions in `cfg/user.scr` are preserved byte-for-byte.
+Capture and absorb also retain this file in vanilla and mastercomfig setups. The
 review discloses default config seeding, legacy hitsound relocation and cfg
 findings. Approved cfg bytes remain unchanged. Native exports still use their
 strict validation, including when a manifest is malformed. ZIP hash, root,
@@ -42,7 +43,7 @@ Import creates a new library profile without changing the active setup.
   collisions, compression limits and native schema-one round trips.
 - Hook regressions cover review-before-save, picker/review cancellation,
   no automatic switch, game-running refusal and retained import errors.
-- Windows workspace tests: 729 passed, 9 intentionally ignored.
+- Windows workspace tests: 730 passed, 9 intentionally ignored.
 - Frontend suite: 527 desktop and 140 cfglint tests passed; the subsequent
   expanded import-hook suite passed all 13 tests (three added).
 - Release scripts: 21 passed, three platform-specific skips. Frontend lint,
@@ -54,3 +55,8 @@ Import creates a new library profile without changing the active setup.
 
 Linux CI, packaged installer/updater verification and the reporter's exact ZIP
 remain release/integration checks; this record does not claim they were run.
+
+The owner clarified that user.scr must be supported. The added lifecycle regression
+checks capture, edited bytes (including CRLF), absorb, export/re-import and switching
+to an empty profile and back, in both cfg layers and with case-varied filenames.
+Other unrelated .scr files remain outside the loose cfg inventory.
