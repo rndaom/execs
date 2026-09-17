@@ -1445,6 +1445,12 @@ mod tests {
             let before_library = snapshot_tree(&profiles);
             let zip_path = dir.join("Creator config.zip");
             let entries: Vec<_> = [
+                // The public native-only reader rejected this first entry before
+                // reaching any of the creator's actual cfg/custom content.
+                (
+                    "cfg/user.scr",
+                    b"VERSION 1.0\nDESCRIPTION INFO_OPTIONS\n{\n\"cl_autoreload\" { \"Auto reload\" { BOOL } { \"1\" } }\n}\n".as_slice(),
+                ),
                 (
                     "cfg/config.cfg",
                     b"unbindall\nbind w +forward\npassword 0\n".as_slice(),
@@ -1482,7 +1488,7 @@ mod tests {
                     .unwrap();
             assert!(review.creator);
             assert_eq!(review.name, "Creator config");
-            assert_eq!(review.files, 7);
+            assert_eq!(review.files, 8);
             assert_eq!(review.skipped_files, 4);
             assert!(review.warnings.is_empty());
             // Inspection/cancel leaves both the library and live files intact.
@@ -1501,7 +1507,11 @@ mod tests {
                 .unwrap()
                 .id;
             let manifest = load_manifest(&profiles, id).unwrap();
-            assert_eq!(manifest.files.len(), 7);
+            assert_eq!(manifest.files.len(), 8);
+            assert!(manifest
+                .files
+                .iter()
+                .any(|file| file.path == "tf/cfg/user.scr"));
             assert!(manifest.launch_options.is_empty());
             assert!(manifest
                 .files

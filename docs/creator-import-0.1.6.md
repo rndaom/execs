@@ -1,0 +1,62 @@
+# Creator ZIP import for 0.1.6
+
+The owner reported `unexpected zip entry: cfg/user.scr` when importing another
+player's cfg/custom ZIP on September 17, 2026.
+
+## Cause
+
+Public `v0.1.5` routes every profile ZIP through `classify_zip_entry`, which
+accepts only `execs-profile.json`, `files/` and `blobs/`. A creator ZIP beginning
+with `cfg/user.scr` fails at that format gate, before cfg validation. Removing
+that file alone would only move the failure to the next cfg/custom entry.
+
+Creator detection and review were implemented in PR #40 on main, but kept out
+of the public maintenance releases. The source history establishes a missing
+release feature; it does not establish which earlier build the reporter used.
+The reported source ZIP was not supplied for this investigation.
+
+## Maintenance adaptation
+
+Branch `codex/0.1.6-creator-import` starts at public `v0.1.5`. The owner assigns
+the bounded creator import feature (RND-201) to 0.1.6. It reuses main's import
+reader, themed review, backend-owned single-use token and confirmation flow.
+It excludes profile-owned preloader metadata and switch changes. The native
+profile and ZIP schemas remain unchanged.
+
+Creator cfg/custom roots can be wrapped or split across custom folders.
+TF2 Advanced Options definitions in `cfg/user.scr` are preserved byte-for-byte.
+Capture and absorb also retain this file in vanilla and mastercomfig setups. The
+review discloses default config seeding, legacy hitsound relocation and cfg
+findings. Approved cfg bytes remain unchanged. Native exports still use their
+strict validation, including when a manifest is malformed. ZIP hash, root,
+write lock, traversal, collisions, parser and archive limits remain checked.
+Import creates a new library profile without changing the active setup.
+
+## Validation
+
+- The exact first-entry `cfg/user.scr` fixture passes review, import and explicit
+  switch for root, `tf/`, wrapper and wrapper-plus-`tf/` layouts. It verifies
+  skipped counts, preserved payload hashes and unchanged live/library state
+  during review. Import alone preserves the active profile.
+- Existing ZIP regressions cover split bundles, missing defaults, changed ZIP
+  bytes, cfg trust, VPK privacy, malformed native manifests, traversal,
+  collisions, compression limits and native schema-one round trips.
+- Hook regressions cover review-before-save, picker/review cancellation,
+  no automatic switch, game-running refusal and retained import errors.
+- Windows workspace tests: 730 passed, 9 intentionally ignored.
+- Frontend suite: 527 desktop and 140 cfglint tests passed; the subsequent
+  expanded import-hook suite passed all 13 tests (three added).
+- Release scripts: 21 passed, three platform-specific skips. Frontend lint,
+  TypeScript/production build, Rust formatting and whitespace checks passed.
+- Windows workspace Clippy passed with `--target x86_64-pc-windows-msvc` and
+  warnings denied. The implicit-target invocation failed loading the external
+  `phf_macros` dependency; the explicit target separates host procedural macros
+  from the target's static-CRT build.
+
+Linux CI, packaged installer/updater verification and the reporter's exact ZIP
+remain release/integration checks; this record does not claim they were run.
+
+The owner clarified that user.scr must be supported. The added lifecycle regression
+checks capture, edited bytes (including CRLF), absorb, export/re-import and switching
+to an empty profile and back, in both cfg layers and with case-varied filenames.
+Other unrelated .scr files remain outside the loose cfg inventory.
