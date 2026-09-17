@@ -503,7 +503,11 @@ fn walk_vanilla_cfgs(
             }
             continue;
         }
-        if path.is_file() && is_user_cfg(&name) {
+        // TF2's Advanced Options description lives beside the cfg scripts.
+        // Keep its bytes in both vanilla and comfig snapshots at the original path.
+        if path.is_file()
+            && (is_user_cfg(&name) || (depth == 0 && name.eq_ignore_ascii_case("user.scr")))
+        {
             take_file(
                 tf2_root, &path, None, dests, skipped, budget, critical, false,
             )?;

@@ -206,7 +206,9 @@ pub(super) fn read_creator_zip(
         // Filter the source before any relocation: a workshop or backup file
         // must not become profile-owned merely by having a sound filename.
         if !is_profile_ownable_rel_path(&dest)
-            || (dest.starts_with("tf/cfg/") && !has_extension(&dest, "cfg"))
+            || (dest.starts_with("tf/cfg/")
+                && !has_extension(&dest, "cfg")
+                && !dest.eq_ignore_ascii_case("tf/cfg/user.scr"))
         {
             payload.skipped_files += 1;
             continue;
