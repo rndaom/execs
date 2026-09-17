@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- HUDs: install packs with deeply nested filenames on Windows without requiring
+  the system's long-path setting, including HypnotizeHUD.
+
 ## [0.1.5] - 2026-09-14
 
 ### Fixed

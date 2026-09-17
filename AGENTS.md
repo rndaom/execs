@@ -108,6 +108,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 
 ## Gotchas worth remembering
 
+- Windows atomic file replacements and HUD backup moves pass absolute verbatim paths to `MoveFileExW`; `longPathAware` alone does not lift MAX_PATH when the system long-path policy is disabled. Preserve containment checks and resolve only endpoint parents so absent destinations and leaf rename semantics remain supported.
+
 - Linux AppImages use the host Wayland libraries with the host EGL drivers. The before-bundle hook installs a project-local output plugin wrapper that removes only bundled Wayland libraries after deployment and before packaging/signing; keep the artifact check in installer smoke.
 
 - Viewmodel compiler launches use Windows `CREATE_NO_WINDOW`; redirecting stdout/stderr alone still flashes a console for each class.
