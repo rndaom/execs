@@ -1,8 +1,46 @@
 import { describe, expect, it } from "vitest";
 import type { HitsoundEntry } from "./bridge";
-import { boostOf, packChangeNeeded, type SlotDraft, slotChange } from "./hitsound-ui";
+import { boostOf, packChangeNeeded, type SlotDraft, sameChoice, slotChange } from "./hitsound-ui";
 
 const installed: HitsoundEntry = { name: "quack", source: "community" };
+
+describe("installed source identity", () => {
+  it("distinguishes same-name comfig sounds and accepts the original hash after boost", () => {
+    const installed = {
+      kind: "installed",
+      entry: { source: "comfig", name: "Bubble Pop", hash: "A", boost: 6 },
+    } as const;
+    expect(sameChoice(installed, { kind: "comfig", name: "Bubble Pop", hash: "A" })).toBe(true);
+    expect(sameChoice(installed, { kind: "comfig", name: "Bubble Pop", hash: "B" })).toBe(false);
+    expect(
+      sameChoice(
+        { kind: "installed", entry: { source: "comfig", name: "Bubble Pop" } },
+        { kind: "comfig", name: "Bubble Pop", hash: "A" },
+      ),
+    ).toBe(false);
+  });
+  it("matches picked files by token, never by display name", () => {
+    const installed = {
+      kind: "installed",
+      entry: { source: "file", name: "hit.wav", token: "A" },
+    } as const;
+    const picked = {
+      token: "A",
+      name: "hit.wav",
+      converted: false,
+      info: {
+        formatTag: 1,
+        channels: 1,
+        sampleRate: 44100,
+        bitsPerSample: 16,
+        dataBytes: 2,
+        durationMs: 1,
+      },
+    };
+    expect(sameChoice(installed, { kind: "file", picked })).toBe(true);
+    expect(sameChoice(installed, { kind: "file", picked: { ...picked, token: "B" } })).toBe(false);
+  });
+});
 
 function slot(overrides: Partial<SlotDraft>): SlotDraft {
   return {

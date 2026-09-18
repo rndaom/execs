@@ -14,6 +14,11 @@ User-facing changes only. The release workflow publishes the matching
   files are left in the source ZIP and the current profile stays active.
 - Profiles: preserve TF2 Advanced Options customizations in cfg/user.scr through
   import, Save current, in-game changes, switching and export.
+- Sounds: audition the current profile's installed bytes after switching profiles,
+  replacing, boosting or reinstalling a sound; stop obsolete playback.
+- Sounds: match assigned comfig sounds by source hash, so different sounds with
+  the same name remain selectable.
+- Sounds: identify clips, sources and hit/kill slots in accessible control names.
 
 ## [0.1.5] - 2026-09-14
 

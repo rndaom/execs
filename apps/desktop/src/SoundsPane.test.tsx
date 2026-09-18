@@ -1,0 +1,88 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { expect, it, vi } from "vitest";
+import { ToastProvider } from "./components/ui/Toast";
+import { AppStatusProvider } from "./hooks/useAppStatus";
+import type { Api } from "./lib/api";
+import { SoundsPane } from "./SoundsPane";
+
+it("names clip actions, duplicate sources and slot volumes without changing row focus order", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      play = vi.fn(async () => {});
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const api = {
+    listStockHitsounds: async () => ["hitsound"],
+    comfigHitsoundIndex: async () => [
+      { hash: "A", name: "Bubble Pop", kind: "hit" },
+      { hash: "B", name: "Bubble Pop", kind: "hit" },
+    ],
+    hitsoundBytes: () => new Promise(() => {}),
+  } as unknown as Api;
+  try {
+    await act(async () =>
+      root.render(
+        <ToastProvider>
+          <AppStatusProvider
+            value={{ error: null, setError: vi.fn(), busy: false, running: false }}
+          >
+            <SoundsPane
+              api={api}
+              profileId="A"
+              record={{ hit: { name: "Bubble Pop", source: "comfig", hash: "A" } }}
+              layer="vanilla"
+              effective={{}}
+              managedText=""
+              onSave={async () => {}}
+              onRemove={() => {}}
+            />
+          </AppStatusProvider>
+        </ToastProvider>,
+      ),
+    );
+    const first = box.querySelector('[data-testid="sounds-row-comfig:A"]');
+    const second = box.querySelector('[data-testid="sounds-row-comfig:B"]');
+    if (!first || !second) throw new Error("Sound rows did not load");
+    const buttons = [...second.querySelectorAll("button")];
+    expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Play Bubble Pop (comfig.app, sound 2)",
+      "Assign Bubble Pop (comfig.app, sound 2) as hit sound",
+      "Assign Bubble Pop (comfig.app, sound 2) as kill sound",
+    ]);
+    expect(
+      first.querySelector('[data-testid="sounds-assign-hit-comfig:A"]')?.hasAttribute("disabled"),
+    ).toBe(true);
+    expect(buttons[1].disabled).toBe(false);
+    for (const button of buttons) {
+      expect(button.tabIndex).toBe(0);
+      button.focus();
+      expect(document.activeElement).toBe(button);
+    }
+    await act(async () => buttons[0].click());
+    expect(buttons[0].getAttribute("aria-label")).toBe("Stop Bubble Pop (comfig.app, sound 2)");
+    expect(box.querySelector("#sounds-hit-volume")?.getAttribute("aria-label")).toBe(
+      "Hit sound volume",
+    );
+    expect(box.querySelector("#sounds-kill-volume")?.getAttribute("aria-label")).toBe(
+      "Kill sound volume",
+    );
+    expect(box.querySelector('[data-testid="sounds-hit-play"]')?.getAttribute("aria-label")).toBe(
+      "Play Bubble Pop (hit sound, comfig.app · installed)",
+    );
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});

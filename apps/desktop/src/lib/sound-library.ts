@@ -80,6 +80,25 @@ export function comfigEntries(index: ComfigHitsound[]): SoundLibraryEntry[] {
   }));
 }
 
+/** Stable across filtering/sorting; duplicate source names get a local ordinal. */
+export function soundAccessibleNames(entries: SoundLibraryEntry[]): Map<string, string> {
+  const groups = new Map<string, SoundLibraryEntry[]>();
+  for (const entry of entries) {
+    const key = JSON.stringify([entry.source, entry.label]);
+    const group = groups.get(key) ?? [];
+    group.push(entry);
+    groups.set(key, group);
+  }
+  const names = new Map<string, string>();
+  for (const group of groups.values()) {
+    group.forEach((entry, index) => {
+      const duplicate = group.length > 1 ? `, sound ${index + 1}` : "";
+      names.set(entry.id, `${entry.label} (${SOUND_SOURCE_LABELS[entry.source]}${duplicate})`);
+    });
+  }
+  return names;
+}
+
 /** Search across name and source, then sort. Stable within ties. */
 export function filterSoundLibrary(
   entries: SoundLibraryEntry[],
