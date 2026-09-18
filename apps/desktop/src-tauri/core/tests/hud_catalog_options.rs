@@ -13,7 +13,7 @@ fn fixture(hud: &str) -> (HudTree, HudSchema) {
         .tree;
     let mut schema =
         parse_hud_schema(&fs::read_to_string(dir.join("schema.json")).unwrap()).unwrap();
-    execs_core::hud_schema_compat::adapt_pinned_schema(hud, &mut schema);
+    execs_core::hud_schema_compat::adapt_pinned_schema(hud, &mut schema).unwrap();
     (tree, schema)
 }
 
