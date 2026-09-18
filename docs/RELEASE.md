@@ -3,22 +3,17 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.4** (`v0.1.4`, published 2026-09-10 at
-01:32 UTC; September 9 in America/New_York). This release includes the
-owner-assigned crosshair update and Linux AppImage startup fix. Frontend and
-Windows/Linux validation, package builds, signed upgrades from 0.1.3 Hotfix 1,
-startup, data preservation and no-repeat-offer checks pass. Anonymous public
-downloads, signatures and the updater feed are independently verified. See
-`docs/release-0.1.4.md` for final publication evidence. PRs #44 and #46 are
-merged, and PR #45 carries the maintenance fixes into the unreleased 0.2.0 track.
+Current public version: **0.1.5** (`v0.1.5`, published 2026-09-15 at
+01:26 UTC; September 14 in America/New_York). PR #47 is merged into
+maintenance, and PR #48 carries those repairs into main's unreleased 0.2.0.
+The immutable public tag is the baseline for this patch.
 
-0.1.5 is prepared in PR #47 from that public baseline, with the separate main
-forward-port in PR #48. All 23 repair records, combined local checks,
-Windows/Linux CI, signed candidate packages, upgrades from public 0.1.4,
-startup/notices, app-data preservation, no-repeat-offer checks and public-export
-compatibility pass. The owner chose Linux CI and left the live Linux Steam
-handoff outstanding. See `docs/release-0.1.5.md` for evidence and exact commits.
-Public latest stays 0.1.4 until publication is authorized and succeeds.
+0.1.6 is being prepared in PR #50, with the separate main forward-port in
+PR #51. The owner assigned all 14 milestone issues: sound identity/audition,
+creator ZIP import, Windows HUD paths, and HUD import/customization fixes.
+The existing creator-import PR #49 is incorporated into the combined candidate.
+See `docs/release-0.1.6.md` for the verification record and remaining gates.
+Preparation does not authorize a tag or publication; public latest stays 0.1.5.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
