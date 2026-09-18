@@ -38,12 +38,7 @@
   "fileCount": 11,
   "hudAndModMetadataPreserved": true,
   "ignoredPacksPreserved": true,
-  "independentPacks": [
-    "compat-pack",
-    "-compat-pack",
-    "compat-vpk.vpk",
-    "-compat-vpk.vpk"
-  ],
+  "independentPacks": ["compat-pack", "-compat-pack", "compat-vpk.vpk", "-compat-vpk.vpk"],
   "limits": [
     "Small synthetic fixture, not every public profile",
     "Core API verification; no packaged UI, Steam handoff, actual TF2, or installed profile library exercised"
