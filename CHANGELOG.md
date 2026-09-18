@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- HUD: allow rayshud's Alternate Player Model option to use its direct resource
+  edits without requiring a nonexistent legacy customization file.
+
 ## [0.1.6]
 
 ### Fixed

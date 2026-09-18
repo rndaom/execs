@@ -9,3 +9,10 @@ These MIT-licensed data excerpts verify exact duplicate normalization and are
 test fixtures, not replacement runtime schemas. Runtime schemas remain fetched
 from the pinned upstream. Upstream project and license attribution are recorded
 in the repository's THIRD_PARTY.md.
+# Stale alternate-model filename
+
+`rayshud-alternate-player-model.json` is the exact Alternate Player Model control
+from the same pinned MIT schema. Its nonexistent `hudplayerclass_left.res`
+FileName is redundant with its complete direct `Files` instructions. The
+normalizer removes only that exact pinned record's stale filename; both states
+continue to edit the loaded model and disguise resources.
