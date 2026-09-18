@@ -103,6 +103,57 @@ fn opts() -> AbsorbOptions<'static> {
 }
 
 #[test]
+fn advanced_options_script_survives_capture_absorb_export_and_switch() {
+    for comfig in [false, true] {
+        for name in ["user.scr", "USER.SCR"] {
+            let f = Fixture::new();
+            if comfig {
+                f.write(
+                    "tf/custom/mastercomfig-base.vpk",
+                    &execs_core::vpk::write_vpk_v2(&loader_files()),
+                );
+            }
+            let rel = format!("tf/cfg/{name}");
+            let original = b"VERSION 1.0\nDESCRIPTION INFO_OPTIONS\n{\n\"cl_autoreload\" { \"Auto reload\" { BOOL } { \"0\" } }\n}\n";
+            let edited = b"VERSION 1.0\r\nDESCRIPTION INFO_OPTIONS\r\n{\r\n\"cl_autoreload\" { \"Auto reload\" { BOOL } { \"1\" } }\r\n}\r\n";
+            f.write(&rel, original);
+            f.write("tf/cfg/unrelated.scr", b"not an options script");
+            let saved = f.save();
+            assert_eq!(f.stored(&saved, &rel), original);
+            assert!(!load_manifest(&f.profiles, &saved)
+                .unwrap()
+                .files
+                .iter()
+                .any(|file| file.path == "tf/cfg/unrelated.scr"));
+            f.write(&rel, edited);
+            f.absorb();
+            assert_eq!(f.stored(&saved, &rel), edited);
+
+            let zip = f.base.join("options.zip");
+            export_profile_to(&f.profiles, &f.root, &saved, &zip).unwrap();
+            let library = import_profile_from(&f.profiles, &f.root, &zip, unlocked()).unwrap();
+            let imported = &library.profiles.iter().find(|p| p.id != saved).unwrap().id;
+            assert_eq!(f.stored(imported, &rel), edited);
+            let empty = create_profile_record_to(&f.profiles, &f.root, "Empty", unlocked())
+                .unwrap()
+                .profiles
+                .into_iter()
+                .find(|p| p.name == "Empty")
+                .unwrap()
+                .id;
+            f.switch(&empty);
+            assert!(!f.root.join(&rel).exists());
+            f.switch(imported);
+            assert_eq!(fs::read(f.root.join(&rel)).unwrap(), edited);
+            assert_eq!(
+                fs::read(f.root.join("tf/cfg/unrelated.scr")).unwrap(),
+                b"not an options script"
+            );
+        }
+    }
+}
+
+#[test]
 fn dashed_peers_survive_absorb_export_and_exact_switch() {
     for overlap in [false, true] {
         let f = Fixture::new();

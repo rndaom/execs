@@ -12,6 +12,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- HUD: correct the pinned rayshud Streamer Mode instruction so both scoreboard
+  player lists hide and restore together.
+- HUD: allow rayshud's Alternate Player Model option to use its direct resource
+  edits without requiring a nonexistent legacy customization file.
+
 - Profiles: retain saved particle selections when repairing custom folder names,
   including profiles that are not active.
 - Profiles: offer folder repair before switching to an imported setup with
@@ -19,6 +24,28 @@ User-facing changes only. The release workflow publishes the matching
 - Profiles: switch shared preloader selections with the target profile.
 - Profiles: import split creator folders together, seed missing config.cfg
   from TF2 defaults, and place legacy hitsounds under sound/ui.
+- HUDs: skip backup files and regenerable caches consistently when importing
+  ZIPs, 7z archives or folders, fixing kinhud and m0re Rockz installs.
+- HUDs: install packs with deeply nested filenames on Windows without requiring
+  the system's long-path setting, including HypnotizeHUD.
+- Profiles: import creator cfg/custom ZIPs instead of rejecting entries such as
+  cfg/user.scr. Review included files and cfg findings before importing; unsupported
+  files are left in the source ZIP and the current profile stays active.
+- Profiles: preserve TF2 Advanced Options customizations in cfg/user.scr through
+  import, Save current, in-game changes, switching and export.
+- Sounds: audition the current profile's installed bytes after switching profiles,
+  replacing, boosting or reinstalling a sound; stop obsolete playback.
+- Sounds: match assigned comfig sounds by source hash, so different sounds with
+  the same name remain selectable.
+- Sounds: identify clips, sources and hit/kill slots in accessible control names.
+- HUD: preserve legacy resource bytes, comments and formatting when saving
+  options, and edit included resources inside their logical panel header.
+- HUD: apply and reverse folder-based choices, evaluate cross-control font
+  expressions, and switch HypnotizeHUD checkbox includes without losing other
+  resources. Invalid or incompatible instructions leave all options unchanged.
+- Preserve rayshud options despite duplicate upstream control names, and separate kbnhud's two low-ammo blink colors while retaining older saved values.
+
+- Restore HypnotizeHUD option matching, keep kbnhud crosshair and hitmarker sizes independent, and identify unavailable m0rehud Classic and log-based HUD controls instead of reporting ineffective saves.
 
 ## [0.1.5] - 2026-09-14
 

@@ -62,6 +62,7 @@ Find TF2 through Steam library folders (registry, `libraryfolders.vdf`, `~/.stea
 - **Gameplay** — FOV, viewmodels, tracers, flip; writes `execs_gameplay.cfg`. Transparent viewmodels is an addon VPK toggle, never a cvar.
 - **HUD** — hud-db catalog (paginated, sorted by name / last updated / downloads / views via comfig.app and tf2huds.dev stats, cached a day), one HUD per profile, install kinds by host (GitHub codeload zip, Dropbox `dl=1`, GameBanana download page, teamfortress.tv thread scrape, or link out), import from zip/7z/folder (RAR refused), TF2HUD.Editor schemas consumed as data (parser strips `//` comments, options may lack `Name`). Imgur albums open in the browser; GitHub `showcase.md` albums load in-app.
 - HUD browsing uses six previews per page with numbered navigation and page jumps above and below results; one Import HUD entry offers archive or extracted-folder choices. Imports unwrap a unique nested HUD only when every retained file belongs to it. Multiple HUD roots or sibling files require the user to follow the author's instructions and import one extracted HUD folder. `info.vdf` must declare UI version 3 before install; metadata and payloads are never synthesized or rewritten to imply compatibility. Dropbox download shards are trusted only as Dropbox redirects, one label below `dl.dropboxusercontent.com`.
+- HUD/mod ZIP, 7z and folder imports share the profile ownership junk policy: case-insensitive `.bak`, `.cache`, `.ztmp`, `.execs-part`, VCS/OS metadata and `node_modules` components are skipped before root detection. Payload bytes and archive/path limits remain unchanged.
 - HUD metric sorts rank only entries with a valid selected statistic; coverage and missing counts are explicit, and A to Z includes the full catalog. Statistics reloads serialize independently of the catalog and report loading/failure. tf2huds.dev counts follow its HUD list, then match explicit comfig links or unique GitHub repositories; names and missing values are never guessed into rankings. Browser fixture data is labeled Preview data.
 - HUD option resources use literal-backslash KeyValues for both parsing and serialization; Steam VDF keeps escape processing. Animation comment/uncomment directives edit command lines without parsing animations as KeyValues. Checkbox branches and file-named resource headers follow the schema, errors name the control and relative file, and invalid edits fail before the library/live transaction.
 - HUD installed state reads only the local manifest and catalog cache. Schema reads carry the exact profile and HUD identity; stale or failed reads remove controls while same-HUD drafts survive retry. Catalog and statistics results disclose incomplete sources while retaining valid cached entries and values; source-read failures do not turn a committed local import into a failed install.
@@ -112,16 +113,20 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 ## Gotchas worth remembering
 
 - On Windows, launching the dev executable directly from packaged Codex can inherit its MSIX AppData virtualization and mix real profiles with `OpenAI.Codex_*/LocalCache/Roaming/execs` copies. Launch through the existing Explorer desktop's `Document.Application.ShellExecute` instead; confirm `GetPackageFullName` returns `APPMODEL_ERROR_NO_PACKAGE` (15700). Keep profile containment checks intact and do not merge or delete either library to work around this launch-context problem.
+- Windows atomic file replacements and HUD backup moves pass absolute verbatim paths to `MoveFileExW`; `longPathAware` alone does not lift MAX_PATH when the system long-path policy is disabled. Preserve containment checks and resolve only endpoint parents so absent destinations and leaf rename semantics remain supported.
+
 - Linux AppImages use the host Wayland libraries with the host EGL drivers. The before-bundle hook installs a project-local output plugin wrapper that removes only bundled Wayland libraries after deployment and before packaging/signing; keep the artifact check in installer smoke.
 
 - Viewmodel compiler launches use Windows `CREATE_NO_WINDOW`; redirecting stdout/stderr alone still flashes a console for each class.
 
 - Launching the real game for a test must not pass video flags (`-w`, `-h`, `-windowed`, `-noborder`, `-fullscreen`, `-dxlevel`): Source persists them into `HKCU\Software\Valve\Source\tf\Settings`. `-condebug` is fine; `-console` persists `con_enable`.
+- An isolated `-game` directory does not isolate Steam Cloud: retail TF2 can still overwrite the account's `440/remote/cfg/config.cfg`. Do not use it as a player-state sandbox. Keep native verification in disposable core fixtures unless Cloud isolation is independently established; any approved real-game test must retain exact original bytes as well as hashes before launch.
 - `C_OP_RenderSprites::RenderUnsorted … unimplemented sprite renderer` console floods mean a particle system whose material failed to load, not a PCF bug.
 - comfig.app's CDN challenges empty or bare-library user agents; our UA string is enough.
 - GameBanana's `Generic_LatestAdded` sort does not exist (`Generic_Newest` does); listings carry no download counts.
 - Linux clippy flags imports used only by `#[cfg(windows)]` tests: import inside the test fn.
 - Bash heredocs in the agent environment mangle backslashes; write patch scripts to a file first.
+- **Branches:** keep `main` as the default development branch. Every other branch starts with `rndaom/`, never an agent/tool prefix. `rndaom/release-0.1` is the shared 0.1 maintenance line; use `rndaom/release-X.Y.Z` for a release candidate and `rndaom/forwardport-X.Y.Z` to carry its fixes into main. Topic branches are temporary and are removed remotely after integration; immutable `vX.Y.Z` tags retain published release history.
 - **Commits:** use the repo git identity (`Random`, not `Cursor Agent`). **Never add `Co-authored-by` trailers** — not for the owner, not for Cursor, not for any agent. At the start of every agent session run `git config --local core.hooksPath .githooks` (repo hook strips co-authors) **and** `chmod -x` the Cloud Agent file `commit-msg.cursor.co-author` under the VM's managed hooks dir. If a co-author line lands anyway, amend or rebase it out before push.
 - User-facing changes add a `CHANGELOG.md` `[Unreleased]` line in the same commit.
 
@@ -151,6 +156,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 
 ## 0.1.5 mutation outcomes
 
+- Installed sound auditions read current bytes on each play, invalidate on profile or installed-record changes, and revoke their transient URLs. Draft ownership remains the stable profile/slot identity. Catalog assignment matches source hashes/tokens; legacy unknown identities do not match by display name.
+
 - Crosshair builds release draft asset bytes only after a confirmed successful host result. Sounds drafts belong to the profile and sound slots; a changed installed record acknowledges content without resetting newer edits.
 - Comfig controls and previews show the complete persisted snapshot. Failed preset, module and addon selections stay available to retry and never enter later write payloads as if saved.
 - Import picker cancellation remains `null` through the bridge and write runner. Cancelled imports skip reload and completion feedback; picker commands reserve no Saving indicator while the user is choosing.
@@ -163,6 +170,17 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - Gameplay preserves `viewmodel_fov` throughout Source's 0.1–179.9 range without rounding incoming decimals. World FOV retains its separate 54–90 control.
 ## 0.1.5 pack and cfg integrity
 
+- HUD option apply stages the whole tree before publishing. Resource edits preserve untouched text spans and BOM/legacy bytes; logical `Resource/*.res` and `Scripts/*.res` include headers must be unambiguous. Folder choices use portable validated moves, and schema expressions resolve from one complete option/default snapshot without executing code.
+
 - A leading dash is part of a custom pack's literal identity. Absorb, Keep, removal and switch cleanup never substitute a dashed/undashed peer. Legacy HUD backup recovery requires a recorded inactive undashed HUD, no live undashed peer and no manifest ownership of the dashed path; coexisting or unknown dashed HUDs keep their normal identities.
 - Cfg-layer detection reads the mounted startup autoexec and core cfg through one bounded content check. The supported mastercomfig loader executes `comfig/comfig.cfg` followed by `overrides/autoexec.cfg`; addon names and leftover overrides are not loader evidence. Inventory preserves safe nested user cfgs and overrides in both layers. Managed binds/gameplay writes refuse a live/library loader mismatch until the external change is resolved.
 - Cfg inventory handles `user`, `app`, and `overrides` specially only when they are immediate `tf/cfg` children. The same names deeper in a user cfg tree remain literal profile content.
+
+## 0.1.6 creator imports
+
+- The owner assigns creator cfg/custom ZIP imports (RND-201) to 0.1.6 from public v0.1.5. Import review and confirmation are backported independently of profile-owned preloaders; native profile schema and existing live write targets stay unchanged.
+- Creator ZIPs may wrap cfg/custom trees or split custom folders. Review counts skipped unsupported files, discloses default config.cfg seeding and legacy hitsound relocation, and requires explicit trust for preserved cfg commands. Backend single-use reviews bind confirmation to the ZIP hash, install and write lock. Import never activates the new profile; native exports retain strict validation. TF2 Advanced Options definitions in cfg/user.scr are preserved byte-for-byte through creator import, capture, absorb, switch and export in both cfg layers; they are not parsed or rewritten as console cfg commands.
+## 0.1.6 HUD schema compatibility
+
+- HUD schemas reject duplicate control names. The pinned kbnhud schema corrects crosshair 2 and hitmarker font targets without changing saved keys. Both HypnotizeHUD catalog and legacy IDs resolve the same schema.
+- m0rehud Classic options are unavailable for the incompatible catalog m0rehud payload. Log-based WriteFile controls remain visible with guidance but cannot be edited or write unconsumed snippets; existing values are retained.

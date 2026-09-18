@@ -1445,6 +1445,12 @@ mod tests {
             let before_library = snapshot_tree(&profiles);
             let zip_path = dir.join("Creator config.zip");
             let entries: Vec<_> = [
+                // The public native-only reader rejected this first entry before
+                // reaching any of the creator's actual cfg/custom content.
+                (
+                    "cfg/user.scr",
+                    b"VERSION 1.0\nDESCRIPTION INFO_OPTIONS\n{\n\"cl_autoreload\" { \"Auto reload\" { BOOL } { \"1\" } }\n}\n".as_slice(),
+                ),
                 (
                     "cfg/config.cfg",
                     b"unbindall\nbind w +forward\npassword 0\n".as_slice(),
@@ -1482,7 +1488,7 @@ mod tests {
                     .unwrap();
             assert!(review.creator);
             assert_eq!(review.name, "Creator config");
-            assert_eq!(review.files, 7);
+            assert_eq!(review.files, 8);
             assert_eq!(review.skipped_files, 4);
             assert!(review.warnings.is_empty());
             // Inspection/cancel leaves both the library and live files intact.
@@ -1501,7 +1507,11 @@ mod tests {
                 .unwrap()
                 .id;
             let manifest = load_manifest(&profiles, id).unwrap();
-            assert_eq!(manifest.files.len(), 7);
+            assert_eq!(manifest.files.len(), 8);
+            assert!(manifest
+                .files
+                .iter()
+                .any(|file| file.path == "tf/cfg/user.scr"));
             assert!(manifest.launch_options.is_empty());
             assert!(manifest
                 .files
@@ -1673,6 +1683,47 @@ mod tests {
                 .contains("changed after review")
         );
         assert_eq!(snapshot_tree(&profiles), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn creator_confirmation_rechecks_game_lock_and_library_root() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        let other_root = dir.join("other-tf2");
+        seed_live(&root);
+        seed_live(&other_root);
+        save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let path = dir.join("creator.zip");
+        write_raw_zip(&path, &[("cfg/autoexec.cfg", b"echo creator\n")]);
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        let before_library = snapshot_tree(&profiles);
+        let before_live = snapshot_tree(&root);
+        let before_other = snapshot_tree(&other_root);
+
+        let locked =
+            import_profile_with_review(&profiles, &root, &path, [tf2_name()], Some(&review))
+                .unwrap_err();
+        assert_eq!(locked, ProfileError::GameRunning);
+        assert_eq!(snapshot_tree(&profiles), before_library);
+
+        let moved =
+            import_profile_with_review(&profiles, &other_root, &path, unlocked(), Some(&review))
+                .unwrap_err();
+        assert!(matches!(moved, ProfileError::RootMismatch { .. }));
+        assert_eq!(snapshot_tree(&profiles), before_library);
+        assert_eq!(snapshot_tree(&root), before_live);
+        assert_eq!(snapshot_tree(&other_root), before_other);
+        assert!(!profiles.join(IMPORT_STAGING_DIR).exists());
         cleanup(&dir);
     }
 

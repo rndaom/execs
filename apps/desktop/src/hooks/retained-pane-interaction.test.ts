@@ -181,7 +181,7 @@ describe("retained pane interactions", () => {
     } as unknown as Api;
     let player!: SoundPlayer;
     function Pane() {
-      player = useSoundPlayer(api);
+      player = useSoundPlayer(api, "profile-a");
       return null;
     }
     const render = (active: boolean) =>
@@ -194,6 +194,7 @@ describe("retained pane interactions", () => {
     expect(play).not.toHaveBeenCalled();
     await act(async () => render(true));
     await act(async () => player.play({ kind: "stock", stem: "retained-pane-test" }, 50));
+    await act(async () => bytes(new Uint8Array([1, 2])));
     expect(play).toHaveBeenCalledTimes(1);
     pause.mockClear();
     await act(async () => render(false));

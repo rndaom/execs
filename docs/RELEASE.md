@@ -15,22 +15,54 @@ The owner confirmed Linux is good and authorized release. See
 PR #47 is merged into maintenance; immutable tag `v0.1.5` points to its merge
 commit. PR #48 is merged into main, retaining the unreleased 0.2.0 versions,
 creator trust review and profile-owned preloaders. Main's changelog records
-0.1.5 as the next release's previous-public upgrade baseline. The existing
-0.1.6 sound-fix milestone and three-feature 0.2.0 plan retain their scope.
+0.1.5 as the next release's previous-public upgrade baseline. The unreleased
+0.2.0 profile-owned preloader behavior remains on main.
 
 0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
 fix. Its publication and compatibility evidence remains in
 `docs/release-0.1.4.md`.
+
+0.1.6 is ready for final integration and tagging in PR #52, with the main forward-port in
+PR #53. The owner assigned all 14 milestone issues: sound identity/audition,
+creator ZIP import, Windows HUD paths, and HUD import/customization fixes.
+The existing creator-import PR #49 is incorporated into the combined candidate.
+Automated signed-candidate checks, live HUD rendering and native screen-reader
+speech acceptance pass. See `docs/release-0.1.6.md` for the verification record.
+The owner has authorized publication; public latest stays 0.1.5 until the tagged
+workflow succeeds and its public downloads and updater feed are verified.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
 also found three patch-class regressions in public 0.1.2: absorb must stop if
 TF2 starts mid-operation, a catalog-matched imported HUD must keep its editable
 local tree, and an exported profile with a small highly compressible asset must
-import again. Creator-profile ZIP imports and profile-scoped preloader metadata
-remain on 0.2.0. See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and
-implementation evidence.
+import again. At the 0.1.3 release, creator-profile ZIP imports and profile-scoped
+preloader metadata remained on the minor track. Creator ZIP import is included
+in the owner-assigned 0.1.6 scope; profile-scoped preloaders remain on 0.2.0.
+See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and implementation evidence.
 Next minor: **0.2.0**, first Thursday of the month, skipped if the budget is empty.
+
+## Branch names and release history
+
+`main` remains the default development branch. All other branches use the
+owner's `rndaom/` prefix:
+
+| Branch | Purpose |
+| --- | --- |
+| `rndaom/release-0.1` | Shared maintenance line for published 0.1.x releases. |
+| `rndaom/release-X.Y.Z` | Temporary candidate for one named release. |
+| `rndaom/forwardport-X.Y.Z` | Temporary PR carrying that release's fixes into main. |
+| `rndaom/<topic>` | Temporary implementation work; delete remotely after integration. |
+
+The older `release-0.1.3` name was reused for 0.1.4 and 0.1.5. It has now been
+consolidated into `rndaom/release-0.1` without losing commits. Completed version
+branches are not an archive: immutable `v0.1.0` through `v0.1.5` tags, including
+`v0.1.3+1`, retain the published versions. Missing version branches therefore do
+not mean missing releases. Do not recreate old branches merely to fill gaps.
+
+The owner-requested 0.1.6 branch rename replaced draft PRs #50/#51 with #52/#53;
+the earlier reviews and successful CI remain available on the closed PRs.
+Branch organization does not authorize merging or publishing the candidate.
 
 ## Who sees what
 

@@ -13,6 +13,8 @@ pub mod hash;
 pub mod hitsound;
 pub mod hud;
 pub mod hud_apply;
+pub mod hud_schema_compat;
+mod hud_text_edit;
 pub mod ice;
 pub mod launch;
 mod managed_cfg;
