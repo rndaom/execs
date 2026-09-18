@@ -174,3 +174,7 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 
 - The owner assigns creator cfg/custom ZIP imports (RND-201) to 0.1.6 from public v0.1.5. Import review and confirmation are backported independently of profile-owned preloaders; native profile schema and existing live write targets stay unchanged.
 - Creator ZIPs may wrap cfg/custom trees or split custom folders. Review counts skipped unsupported files, discloses default config.cfg seeding and legacy hitsound relocation, and requires explicit trust for preserved cfg commands. Backend single-use reviews bind confirmation to the ZIP hash, install and write lock. Import never activates the new profile; native exports retain strict validation. TF2 Advanced Options definitions in cfg/user.scr are preserved byte-for-byte through creator import, capture, absorb, switch and export in both cfg layers; they are not parsed or rewritten as console cfg commands.
+## 0.1.6 HUD schema compatibility
+
+- HUD schemas reject duplicate control names. The pinned kbnhud schema corrects crosshair 2 and hitmarker font targets without changing saved keys. Both HypnotizeHUD catalog and legacy IDs resolve the same schema.
+- m0rehud Classic options are unavailable for the incompatible catalog m0rehud payload. Log-based WriteFile controls remain visible with guidance but cannot be edited or write unconsumed snippets; existing values are retained.

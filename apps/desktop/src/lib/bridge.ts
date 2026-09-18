@@ -385,6 +385,7 @@ export type HudSchemaChoice = {
 };
 
 export type HudSchemaControl = {
+  unavailableReason?: string;
   name: string;
   label: string;
   controlType: string;

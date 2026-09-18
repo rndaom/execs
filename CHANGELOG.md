@@ -26,6 +26,7 @@ User-facing changes only. The release workflow publishes the matching
 - HUD: apply and reverse folder-based choices, evaluate cross-control font
   expressions, and switch HypnotizeHUD checkbox includes without losing other
   resources. Invalid or incompatible instructions leave all options unchanged.
+- Restore HypnotizeHUD option matching, keep kbnhud crosshair and hitmarker sizes independent, and identify unavailable m0rehud Classic and log-based HUD controls instead of reporting ineffective saves.
 
 ## [0.1.5] - 2026-09-14
 
