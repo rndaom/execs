@@ -60,3 +60,32 @@ The owner clarified that user.scr must be supported. The added lifecycle regress
 checks capture, edited bytes (including CRLF), absorb, export/re-import and switching
 to an empty profile and back, in both cfg layers and with case-varied filenames.
 Other unrelated .scr files remain outside the loose cfg inventory.
+
+## Independent maintenance audit (September 18)
+
+RND-201's issue history assigns this backport to 0.1.6 and has no discussion
+comments. The audit of `ebf3cce` and `0532160` found no additional production
+change necessary: confirmation consumes the backend token, checks the current
+install and game lock, verifies the opened ZIP before and after extraction, and
+publishes an inactive profile through the existing creation transaction. Native
+ZIP validation and the profile schema remain unchanged. Trusted creator cfg and
+VPK contents are preserved, while private export remains refused.
+
+Valve's installed TF2 `tf2_misc_dir.vpk` indexes `cfg/user_default.scr`, a
+13,979-byte options definition in `tf2_misc_005.vpk`. The inspected app 440
+installation reports PatchVersion 10828683; that definition's SHA-256 is
+`d8f4cf14cebc84082b555fe4277f05aa5959cbd2b2e9f920252f43fe70b6b020`.
+Its documented syntax describes cvar prompts, typed controls and defaults;
+its actual definitions also contain categories, sliders and buttons. This
+supports preserving Advanced Options definitions as opaque bytes instead of
+processing them as console cfg commands. The archive was read only and its
+payload is not vendored. No loose `cfg/user.scr` existed in this installation,
+so this inspection does not claim an in-game custom-options smoke test.
+
+The import dialog, profile-library hook and library helper suites passed all
+30 tests independently. A new native regression checks that a successful review
+cannot bypass a later game lock or library-root mismatch, with byte snapshots
+confirming neither install nor the library changes. Running that regression and
+the existing ZIP/lifecycle suite locally is blocked by Windows Application
+Control (`os error 4551`); Windows and Linux CI must validate the native tests
+before release readiness is claimed.

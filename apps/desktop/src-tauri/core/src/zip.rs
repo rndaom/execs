@@ -1676,6 +1676,57 @@ mod tests {
     }
 
     #[test]
+    fn creator_confirmation_rechecks_game_lock_and_library_root() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("tf2");
+        let other_root = dir.join("other-tf2");
+        seed_live(&root);
+        seed_live(&other_root);
+        save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let path = dir.join("creator.zip");
+        write_raw_zip(&path, &[("cfg/autoexec.cfg", b"echo creator\n")]);
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        let before_library = snapshot_tree(&profiles);
+        let before_live = snapshot_tree(&root);
+        let before_other = snapshot_tree(&other_root);
+
+        let locked = import_profile_with_review(
+            &profiles,
+            &root,
+            &path,
+            [tf2_name()],
+            Some(&review),
+        )
+        .unwrap_err();
+        assert_eq!(locked, ProfileError::GameRunning);
+        assert_eq!(snapshot_tree(&profiles), before_library);
+
+        let moved = import_profile_with_review(
+            &profiles,
+            &other_root,
+            &path,
+            unlocked(),
+            Some(&review),
+        )
+        .unwrap_err();
+        assert!(matches!(moved, ProfileError::RootMismatch { .. }));
+        assert_eq!(snapshot_tree(&profiles), before_library);
+        assert_eq!(snapshot_tree(&root), before_live);
+        assert_eq!(snapshot_tree(&other_root), before_other);
+        assert!(!profiles.join(IMPORT_STAGING_DIR).exists());
+        cleanup(&dir);
+    }
+
+    #[test]
     fn creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");
