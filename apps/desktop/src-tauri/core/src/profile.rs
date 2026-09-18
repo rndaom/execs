@@ -895,23 +895,28 @@ fn is_stock_cfg_name(name: &str) -> bool {
 }
 
 fn is_profile_junk_path(path: &str) -> bool {
-    path.split('/').any(|part| {
-        matches!(
-            part,
-            ".ds_store"
-                | "thumbs.db"
-                | "desktop.ini"
-                | ".git"
-                | ".svn"
-                | ".hg"
-                | "node_modules"
-                | "__macosx"
-                | "sound.cache"
-        ) || part.ends_with(".cache")
-            || part.ends_with(".ztmp")
-            || part.ends_with(".bak")
-            || part.ends_with(crate::hash::PART_SUFFIX)
-    })
+    path.split('/').any(is_profile_junk_name)
+}
+
+/// Shared import/ownership policy for backup files, regenerable caches, and
+/// development or operating-system metadata. Match components, not substrings.
+pub(crate) fn is_profile_junk_name(name: &str) -> bool {
+    let part = name.to_ascii_lowercase();
+    matches!(
+        part.as_str(),
+        ".ds_store"
+            | "thumbs.db"
+            | "desktop.ini"
+            | ".git"
+            | ".svn"
+            | ".hg"
+            | "node_modules"
+            | "__macosx"
+            | "sound.cache"
+    ) || part.ends_with(".cache")
+        || part.ends_with(".ztmp")
+        || part.ends_with(".bak")
+        || part.ends_with(crate::hash::PART_SUFFIX)
 }
 
 /// Strict profile ownership gate. This is narrower than the physical

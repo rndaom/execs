@@ -1255,20 +1255,10 @@ fn keep_entry(raw: &str) -> Result<Option<String>, ProfileError> {
     Ok(Some(rel))
 }
 
-/// VCS metadata, OS droppings, and the game's own regenerable caches. None of
-/// it belongs in a profile, and `__MACOSX` in particular shadows real files.
+/// The same backup/cache/metadata policy used by profile ownership. Filtering
+/// at extraction keeps ZIP, 7z and folder imports from staging unownable files.
 pub fn is_junk_name(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
-        ".git"
-            | ".svn"
-            | ".hg"
-            | ".ds_store"
-            | "thumbs.db"
-            | "desktop.ini"
-            | "sound.cache"
-            | "__macosx"
-    )
+    crate::profile::is_profile_junk_name(name)
 }
 
 /// An archive entry name reduced to forward slashes and checked against every
@@ -1305,6 +1295,50 @@ mod tests {
     use std::io::Write;
     use zip::write::SimpleFileOptions;
     use zip::{CompressionMethod, ZipWriter};
+
+    #[test]
+    fn junk_policy_is_case_insensitive_and_matches_profile_ownership() {
+        for name in [
+            ".git",
+            ".svn",
+            ".hg",
+            ".ds_store",
+            "thumbs.db",
+            "desktop.ini",
+            "node_modules",
+            "__macosx",
+            "sound.cache",
+            "file.cache",
+            "file.ztmp",
+            "file.bak",
+            "file.execs-part",
+        ] {
+            for name in [name.to_owned(), name.to_ascii_uppercase()] {
+                assert!(is_junk_name(&name), "{name}");
+                assert!(!crate::profile::is_profile_ownable_rel_path(&format!(
+                    "tf/custom/hud/{name}"
+                )));
+                assert!(!crate::profile::is_profile_ownable_rel_path(&format!(
+                    "tf/custom/hud/{name}/child.res"
+                )));
+            }
+        }
+        for name in [
+            "backup",
+            "backup_colors.res",
+            "bak.res",
+            "cache",
+            "node_modules.res",
+            "file.bak.res",
+            "#users",
+        ] {
+            assert!(!is_junk_name(name), "{name}");
+            assert!(crate::profile::is_profile_ownable_rel_path(&format!(
+                "tf/custom/hud/{name}/child.res"
+            )));
+        }
+        assert!(keep_entry("hud/../escape.bak").is_err());
+    }
 
     fn limits() -> ArchiveLimits {
         ArchiveLimits::new(100, 1024, 4096)

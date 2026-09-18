@@ -1755,6 +1755,169 @@ mod tests {
     /// A three-file HUD inside a wrapper folder, written with py7zr (LZMA2).
     const HUD_MIN_7Z: &[u8] = include_bytes!("../fixtures/hud-min.7z");
 
+    // Generated with py7zr (LZMA2); all bytes are synthetic, not Valve assets.
+    const HUD_JUNK_7Z: &[u8] = include_bytes!("../fixtures/hud-junk.7z");
+    const HUD_JUNK: &[&str] = &[
+        "resource/clientscheme.res.bak",
+        "scripts/HudAnimations_m0re.txt.BAK",
+        "resource/temporary.CACHE",
+        "materials/texture.ZTMP",
+        "resource/unfinished.EXECS-PART",
+        "node_modules/tool/index.js",
+        "__MACOSX/sidecar",
+        ".git/HEAD",
+    ];
+
+    /// Opt-in real-package regression; see docs/hud-import-0.1.6.md.
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_huds_install_update_and_preserve_payloads() {
+        let archives =
+            PathBuf::from(std::env::var_os("EXECS_HUD_FIXTURES").expect("EXECS_HUD_FIXTURES"));
+        for (name, expected) in [
+            (
+                "hypnotizehud",
+                "73e8ed011c9b912eeb5bdbbae61c6539e14f9f61ddcc7171d2c542995504c241",
+            ),
+            (
+                "kinhud",
+                "6e851dd05357817f3fe1046ef1285069c71787b2bf6160ca90d4e9a1d710e9d0",
+            ),
+            (
+                "m0re-rockz",
+                "5c8a7022d73b6521dd6fd3f269644f4d0723a6db46dfd021b386dc4830c6bba9",
+            ),
+        ] {
+            let bytes = fs::read(archives.join(format!("{name}.zip"))).unwrap();
+            assert_eq!(crate::hash::sha256_hex(&bytes), expected);
+            let tree = extract_hud_archive(&bytes).unwrap().tree;
+            let dir = crate::test_temp_dir();
+            // Exercise transaction staging beyond MAX_PATH even with a short temp root.
+            let profiles = dir.join("profile-library-".repeat(8)).join("profiles");
+            let root = tf2_root(&dir);
+            let library =
+                create_profile_record_to(&profiles, &root, "Catalog fixture", unlocked()).unwrap();
+            let id = &library.profiles[0].id;
+            set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+            let record = HudRecord {
+                id: name.into(),
+                hash: None,
+                source: HudSource::HudDb,
+                options: BTreeMap::new(),
+            };
+            for _ in 0..2 {
+                install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked())
+                    .unwrap();
+                let manifest = load_manifest(&profiles, id).unwrap();
+                for (path, payload) in &tree.files {
+                    let rel = format!("tf/custom/{name}/{path}");
+                    assert_eq!(fs::read(root.join(&rel)).unwrap(), *payload, "live {rel}");
+                    assert_eq!(
+                        fs::read(crate::profile::exclusive_file_path(&profiles, id, &rel)).unwrap(),
+                        *payload,
+                        "library {rel}"
+                    );
+                    assert!(manifest.files.iter().any(|file| file.path == rel));
+                }
+                assert!(manifest
+                    .files
+                    .iter()
+                    .all(|file| crate::profile::is_profile_ownable_rel_path(&file.path)));
+            }
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn zip_7z_and_folder_imports_filter_the_same_profile_junk() {
+        let dir = crate::test_temp_dir();
+        let entries: Vec<_> = [
+            ("hud/info.vdf", info_vdf()),
+            ("hud/resource/ui/hudlayout.res", b"layout {}\n".as_slice()),
+            ("hud/resource/backup_colors.res", b"colors {}\n".as_slice()),
+        ]
+        .into_iter()
+        .map(|(path, bytes)| (path.to_owned(), bytes.to_vec()))
+        .chain(
+            HUD_JUNK
+                .iter()
+                .map(|path| (format!("hud/{path}"), b"junk".to_vec())),
+        )
+        .collect();
+        for (path, bytes) in &entries {
+            let dest = dir.join(path);
+            fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            fs::write(dest, bytes).unwrap();
+        }
+        let zip_entries: Vec<_> = entries
+            .iter()
+            .map(|(p, b)| (p.as_str(), b.as_slice()))
+            .collect();
+        let zipped = extract_hud_archive(&zip_bytes(&zip_entries)).unwrap().tree;
+        let seven = extract_hud_archive(HUD_JUNK_7Z).unwrap().tree;
+        let folder = hud_tree_from_dir(&dir).unwrap().tree;
+        assert_eq!(zipped, folder);
+        assert_eq!(zipped, seven);
+        assert_eq!(zipped.files.len(), 3);
+        for path in zipped.files.keys() {
+            assert!(crate::profile::is_profile_ownable_rel_path(&format!(
+                "tf/custom/hud/{path}"
+            )));
+        }
+        assert!(zipped.get("resource/backup_colors.res").is_some());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn filtered_hud_installs_and_updates_without_weakening_rollback() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = tf2_root(&dir);
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+        set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+        let mut tree = extract_hud_archive(HUD_JUNK_7Z).unwrap().tree;
+        let record = HudRecord {
+            id: "hud".into(),
+            hash: None,
+            source: HudSource::Local,
+            options: BTreeMap::new(),
+        };
+        install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked()).unwrap();
+        let before = load_manifest(&profiles, id).unwrap();
+        tree.insert("resource/ui/hudlayout.res", b"updated {}\n".to_vec());
+        assert!(install_hud_pack_to(
+            &profiles,
+            &root,
+            id,
+            &tree,
+            record.clone(),
+            ["tf_win64.exe"]
+        )
+        .is_err());
+        assert_eq!(before, load_manifest(&profiles, id).unwrap());
+        assert_eq!(
+            fs::read(root.join("tf/custom/hud/resource/ui/hudlayout.res")).unwrap(),
+            b"layout {}\n"
+        );
+        // The ownership gate still rejects callers that bypass extraction.
+        tree.insert("resource/unsafe.BAK", b"junk".to_vec());
+        assert!(
+            install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked()).is_err()
+        );
+        assert_eq!(before, load_manifest(&profiles, id).unwrap());
+        tree.remove("resource/unsafe.BAK");
+        install_hud_pack_to(&profiles, &root, id, &tree, record, unlocked()).unwrap();
+        assert_eq!(
+            fs::read(root.join("tf/custom/hud/resource/ui/hudlayout.res")).unwrap(),
+            b"updated {}\n"
+        );
+        for path in HUD_JUNK {
+            assert!(!root.join("tf/custom/hud").join(path).exists());
+        }
+        cleanup(&dir);
+    }
+
     #[test]
     fn a_7z_hud_archive_unpacks_like_a_zip_with_its_wrapper_stripped() {
         let extracted = extract_hud_archive(HUD_MIN_7Z).unwrap();
