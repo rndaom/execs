@@ -116,6 +116,7 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - Viewmodel compiler launches use Windows `CREATE_NO_WINDOW`; redirecting stdout/stderr alone still flashes a console for each class.
 
 - Launching the real game for a test must not pass video flags (`-w`, `-h`, `-windowed`, `-noborder`, `-fullscreen`, `-dxlevel`): Source persists them into `HKCU\Software\Valve\Source\tf\Settings`. `-condebug` is fine; `-console` persists `con_enable`.
+- An isolated `-game` directory does not isolate Steam Cloud: retail TF2 can still overwrite the account's `440/remote/cfg/config.cfg`. Do not use it as a player-state sandbox. Keep native verification in disposable core fixtures unless Cloud isolation is independently established; any approved real-game test must retain exact original bytes as well as hashes before launch.
 - `C_OP_RenderSprites::RenderUnsorted … unimplemented sprite renderer` console floods mean a particle system whose material failed to load, not a PCF bug.
 - comfig.app's CDN challenges empty or bare-library user agents; our UA string is enough.
 - GameBanana's `Generic_LatestAdded` sort does not exist (`Generic_Newest` does); listings carry no download counts.
