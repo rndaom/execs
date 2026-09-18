@@ -56,7 +56,7 @@ fn rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment() 
     for options in cases {
         let mut tree = original.clone();
         apply_hud_options(&mut tree, &schema, "rayshud", &options)
-            .unwrap_or_else(|error| panic!("{options:?}: {error}"));
+            .unwrap_or_else(|error| panic!("{options:?}: {error:?}"));
         assert!(tree
             .get(path)
             .unwrap()

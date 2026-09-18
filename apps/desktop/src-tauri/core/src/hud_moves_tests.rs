@@ -11,7 +11,7 @@ fn later_missing_move_preserves_the_complete_original_tree() {
     let original = tree.clone();
     let error =
         apply_hud_options(&mut tree, &schema, "imported-hud", &BTreeMap::new()).unwrap_err();
-    assert!(error.to_string().contains("missing_"));
+    assert!(error.message().contains("missing_"));
     assert_eq!(tree, original);
 }
 
@@ -35,7 +35,7 @@ fn unknown_combo_selection_refuses_before_resetting_variants() {
         &BTreeMap::from([("style".into(), "unknown".into())]),
     )
     .unwrap_err();
-    assert!(error.to_string().contains("Unknown HUD selection"));
+    assert!(error.message().contains("Unknown HUD selection"));
     assert_eq!(tree, original);
 }
 
