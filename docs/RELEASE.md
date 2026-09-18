@@ -4,9 +4,23 @@ Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
 Current public version: **0.1.5** (`v0.1.5`, published 2026-09-15 at
-01:26 UTC; September 14 in America/New_York). PR #47 is merged into
-maintenance, and PR #48 carries those repairs into main's unreleased 0.2.0.
-The immutable public tag is the baseline for this patch.
+01:26 UTC; September 14 in America/New_York). All 23 repair records are Done.
+Frontend and Windows/Linux validation, signed packages, upgrades from public
+0.1.4, startup/notices, app-data preservation and no-repeat-offer checks pass.
+Anonymous public downloads, all three installer signatures and hashes, the
+actual updater URLs and exact release provenance are independently verified.
+The owner confirmed Linux is good and authorized release. See
+`docs/release-0.1.5.md` for final publication evidence and the X announcement.
+
+PR #47 is merged into maintenance; immutable tag `v0.1.5` points to its merge
+commit. PR #48 is merged into main, retaining the unreleased 0.2.0 versions,
+creator trust review and profile-owned preloaders. Main's changelog records
+0.1.5 as the next release's previous-public upgrade baseline. The unreleased
+0.2.0 profile-owned preloader behavior remains on main.
+
+0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
+fix. Its publication and compatibility evidence remains in
+`docs/release-0.1.4.md`.
 
 0.1.6 is being prepared in PR #50, with the separate main forward-port in
 PR #51. The owner assigned all 14 milestone issues: sound identity/audition,

@@ -1,0 +1,6 @@
+execs 0.1.5 is out.
+
+A maintenance update for your TF2 setup: safer autosaves, clearer errors, HUD option and offline fixes, safer profile imports, and retries for stalled updates.
+
+Update in-app or download:
+https://github.com/rndaom/execs/releases/tag/v0.1.5

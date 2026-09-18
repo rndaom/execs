@@ -11,7 +11,15 @@ PRs, platform CI and signed candidate results.
 All automated gates pass. [Candidate verification](candidate-verification.json)
 records the exact source commit, all three installer hashes/signatures, Windows
 and Linux upgrade results, startup/notices, app-data preservation and no repeat
-offer. The live Linux Steam/TF2 handoff remains outstanding by owner choice.
+offer. The owner subsequently confirmed Linux is good and authorized release;
+that acceptance supersedes the earlier live-check deferral.
+
+[0.1.5](https://github.com/rndaom/execs/releases/tag/v0.1.5) is published.
+The [tagged workflow](https://github.com/rndaom/execs/actions/runs/34915488347)
+passes all jobs. Final [Windows](windows-package-smoke.json) and
+[Linux](linux-package-smoke.json) upgrade reports and
+[anonymous public verification](public-verification.json) confirm the released
+artifacts. PRs #47/#48 are merged and all 23 issues are Done.
 
 | Issues | Research, behavior and regression evidence |
 | --- | --- |
@@ -54,7 +62,8 @@ repair and export/reimport through production core APIs. An additional
 exporter: 0.1.5 imports it without activation and produces a byte-identical
 re-export, preserving an existing active profile and all source bytes.
 
-The owner chose Linux CI for package/updater verification and explicitly left
-the live Linux Steam URI handoff and native TF2 check outstanding. See the
-[release record](../../release-0.1.5.md) for final combined checks, PRs and the
-private signed candidate. Publication is separate from preparation.
+The owner chose Linux CI for package/updater verification, then confirmed Linux
+is good and authorized publication on September 14. This is owner-provided
+runtime acceptance, separate from automated package evidence. See the
+[release record](../../release-0.1.5.md) for combined checks, merged PRs, the
+private candidate, tagged publication and final public-download evidence.
