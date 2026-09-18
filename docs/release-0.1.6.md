@@ -1,17 +1,18 @@
 # 0.1.6 release preparation
 
-Status: all 14 issues implemented; automated signed-candidate verification passed.
-Gameplay rendering and native screen-reader acceptance remain open, so this is
-not yet unconditional release approval. Publication and a release tag are not
-authorized. Public latest remains 0.1.5.
+Status: all 14 issues implemented and all required candidate acceptance gates
+passed, including live HUD rendering and native screen-reader speech. The owner
+has authorized release, and the candidate is ready for final integration and
+tagging. Publication and its public-download verification are still pending.
+Public latest remains 0.1.5 until the tagged workflow publishes successfully.
 
 ## Scope and baseline
 
 The September 18 owner request covers all 14 issues in Linear's 0.1.6 milestone.
 The candidate starts at public `v0.1.5` (`9976464`) on
 `rndaom/release-0.1.6`, targeting maintenance `rndaom/release-0.1`.
-The existing creator-import PR #49 and Windows long-path branch are retained
-and integrated. Unrelated 0.2.0 work stays on main. The milestone explicitly
+The creator-import work from PR #49 and the Windows long-path fix are integrated
+into this candidate. Unrelated 0.2.0 work stays on main. The milestone explicitly
 assigns creator cfg/custom ZIP import as a bounded, compatible patch addition.
 
 ## Implementation plan
@@ -34,18 +35,18 @@ GitHub Linux CI. Changes are forward-ported to the unreleased minor track.
 | --- | --- |
 | RND-245 | Installed auditions read current bytes; stale replies, replaced URLs, profile changes and removal/reinstall are covered by hook lifecycle tests. |
 | RND-287 | Comfig assignments compare stable source hashes/tokens; same-name and legacy-identity regressions pass. |
-| RND-293 | Clip/source/slot accessible names, stable duplicate ordinals and keyboard focus are tested. Browser layout checked at 1200×800 and 960×640; native spoken output remains open. |
+| RND-293 | Clip/source/slot accessible names, stable duplicate ordinals and keyboard focus are tested. Browser layout checked at 1200×800 and 960×640; Windows WebView2/NVDA and Linux WebKit/Orca actual speech passes. |
 | RND-201 | Creator ZIP review uses a single-use exact-byte token; root/lock/hash are rechecked. `user.scr` remains opaque and survives import/switch/export. Public native exports remain compatible. |
 | RND-303 | Both native Windows move endpoints support extended paths. Actual HypnotizeHUD install/update passes with local long-path policy disabled. |
 | RND-304 | ZIP/7z/folder extraction and ownership share a case-insensitive junk policy. Actual kinhud and m0re Rockz install/update preserve retained payload hashes. |
 | RND-305 | Legacy single-byte and BOM-marked UTF-16 edits preserve unchanged spans. Full default/alternate rayshud matrix passes, including non-ASCII comments. |
 | RND-306 | Validated file/directory choices restore deselected variants, reject collisions atomically and preserve bytes; actual budhud choices round-trip. |
-| RND-307 | Canonical and legacy HypnotizeHUD identities work; all six checkbox include pairs pass both states against the pinned package. |
+| RND-307 | Canonical and legacy HypnotizeHUD identities work; all six checkbox include pairs pass both states against the pinned package and their live rendering checks. |
 | RND-308 | Incompatible m0rehud options are unavailable with guidance. Duplicate identities fail except exact verified pinned-data adaptations; saved options are retained/migrated. |
 | RND-309 | Unsupported log-based controls are disabled with guidance and reject changed IPC values. Full supported FlawHUD matrix passes without creating unused snippet files. |
 | RND-310 | Bounded reference/ternary evaluation rejects unresolved expressions before commit. All four actual font templates resolve to declared fonts. |
 | RND-311 | Logical included-resource headers are edited inside their validated root; ambiguous roots fail. Existing siblings/includes survive and repeated applies are idempotent. |
-| RND-312 | Crosshair 1/2/hitmarker targets retain independent sizes 13/17/23 and outline choices. Actual emitted resources pass; in-game visual confirmation remains open. |
+| RND-312 | Crosshair 1/2/hitmarker targets retain independent sizes 13/17/23 and outline choices. Emitted resources and live A/B rendering pass, including hitmarker activation from actual damage. |
 
 Detailed source research and reproducible commands are in the
 [audit record](audits/2026-09-18-0.1.6/README.md). Unsupported schema controls
@@ -64,8 +65,17 @@ are an explicit supported outcome of RND-308/309, not silently successful saves.
 - [x] Startup, app-data preservation and no-repeat-update checks
 - [x] Maintenance and forward-port product changes pass CI
 - [x] Matching four version files, Cargo lockfile and 0.1.6 changelog section
-- [ ] TF2 gameplay rendering for changed HUD includes and independent crosshairs
-- [ ] Windows WebView2/NVDA and Linux WebKit/Orca announced names
+- [x] TF2 gameplay rendering for changed HUD includes and independent crosshairs
+- [x] Windows WebView2/NVDA and Linux WebKit/Orca announced names
+
+[Windows NVDA](audits/2026-09-18-0.1.6/native-a11y/windows.md) and
+[Linux Orca](audits/2026-09-18-0.1.6/native-a11y/linux.md) verify actual generated
+speech using native WebView engines and the unchanged fixture UI. Playback
+remains disabled in fixtures; this evidence verifies announced names, not audio
+audition. The [live HUD qualification](audits/2026-09-18-0.1.6/native-hud.md)
+records the six HypnotizeHUD controls and kbnhud crosshair/hitmarker A/B checks.
+Transparent viewmodels were observed after applying the HUD author's cvars and
+reloading the map; this does not establish a universal cause or prerequisite.
 
 Local final Windows results: 769 native tests passed; 16 opt-in fixture/network
 tests are excluded from the ordinary suite. The separate pinned-HUD gate passes
@@ -93,8 +103,8 @@ The run passed all validation, both package builds, both updater/installer
 smokes and release verification. Publication was **skipped**. The separate
 [maintenance product CI](https://github.com/rndaom/execs/actions/runs/35353755294)
 and [forward-port CI](https://github.com/rndaom/execs/actions/runs/35355011186)
-also pass. Both PRs are mergeable and remain drafts for the open acceptance
-gates. PR #49 is closed as superseded by #52.
+also pass. Both PRs are mergeable and remain drafts pending final integration
+and tagging. PR #49 is closed as superseded by #52.
 
 Independent downloads verify Minisign signatures for the Windows NSIS,
 Linux AppImage and Debian artifacts, and bind the updater feed to the exact
@@ -105,17 +115,25 @@ See [candidate-verification.json](audits/2026-09-18-0.1.6/candidate-verification
 The draft is not a public prerelease. No `v0.1.6` Git tag exists, and the
 public latest release and downloaded public updater feed still name 0.1.5.
 
-## Retail verification limitation
+## Retail verification and restoration
 
 One attempted disposable `-game` smoke exposed that TF2 still writes Steam
 Cloud. The test stopped immediately after the isolation check failed. The exact
 original local and remote configuration bytes were restored and verified;
 all 369 protected files and captured Source registry settings match the
-pre-run state. No subsequent retail runs were made. The
+pre-run state. No further runs used that failed isolation method. The
 [incident and recovery evidence](audits/2026-09-18-0.1.6/retail-hud-smoke.md)
-records the failed gate. A future gameplay check must establish Steam Cloud
-isolation independently; bootstrap/font loading is not visual acceptance.
+preserves that initial failed gate.
 
-Release tag, publication, public issue closure and milestone completion remain
-pending the owner's later release authorization. Any unavailable real-game or
-platform validation is recorded explicitly; CI is not a claim of live rendering.
+The later [live qualification](audits/2026-09-18-0.1.6/native-hud.md) passed with
+independently verified Cloud isolation. All 363 freshly protected local files
+and the API-read Cloud configuration remained unchanged before restoration.
+Afterward, an independent check verified all 369 protected files and the captured
+Source registry baseline. TF2 changed `ScreenWindowed` and `ScreenNoBorder` during
+runtime despite receiving no video flags; both were restored exactly. The
+original enabled Steam Cloud setting was restored. Live rendering evidence,
+rather than bootstrap or font loading alone, closes the gameplay gate.
+
+The owner's readiness condition is satisfied. Release integration, tag and
+publication remain pending; public issue closure and milestone completion follow
+successful publication and independent public-download/updater verification.

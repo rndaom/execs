@@ -8,13 +8,11 @@ User-facing changes only. The release workflow publishes the matching
 ## [0.1.6]
 
 ### Fixed
+
 - HUD: correct the pinned rayshud Streamer Mode instruction so both scoreboard
   player lists hide and restore together.
-
 - HUD: allow rayshud's Alternate Player Model option to use its direct resource
   edits without requiring a nonexistent legacy customization file.
-
-
 - HUDs: skip backup files and regenerable caches consistently when importing
   ZIPs, 7z archives or folders, fixing kinhud and m0re Rockz installs.
 - HUDs: install packs with deeply nested filenames on Windows without requiring
