@@ -126,6 +126,7 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - GameBanana's `Generic_LatestAdded` sort does not exist (`Generic_Newest` does); listings carry no download counts.
 - Linux clippy flags imports used only by `#[cfg(windows)]` tests: import inside the test fn.
 - Bash heredocs in the agent environment mangle backslashes; write patch scripts to a file first.
+- **Branches:** keep `main` as the default development branch. Every other branch starts with `rndaom/`, never an agent/tool prefix. `rndaom/release-0.1` is the shared 0.1 maintenance line; use `rndaom/release-X.Y.Z` for a release candidate and `rndaom/forwardport-X.Y.Z` to carry its fixes into main. Topic branches are temporary and are removed remotely after integration; immutable `vX.Y.Z` tags retain published release history.
 - **Commits:** use the repo git identity (`Random`, not `Cursor Agent`). **Never add `Co-authored-by` trailers** — not for the owner, not for Cursor, not for any agent. At the start of every agent session run `git config --local core.hooksPath .githooks` (repo hook strips co-authors) **and** `chmod -x` the Cloud Agent file `commit-msg.cursor.co-author` under the VM's managed hooks dir. If a co-author line lands anyway, amend or rebase it out before push.
 - User-facing changes add a `CHANGELOG.md` `[Unreleased]` line in the same commit.
 

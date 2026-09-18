@@ -29,7 +29,7 @@ gates are maintained in [the release record](../../release-0.1.6.md).
 ## Reproducible gates
 
 - On the 0.1.6 maintenance branch, `node scripts/verify-public-profile.mjs`
-  ([source](https://github.com/rndaom/execs/blob/codex/release-0.1.6/scripts/verify-public-profile.mjs)) compiles actual public 0.1.5 and
+  ([source](https://github.com/rndaom/execs/blob/rndaom/release-0.1.6/scripts/verify-public-profile.mjs)) compiles actual public 0.1.5 and
   candidate cores. The public exporter creates the ZIP, and candidate imports,
   re-exports and re-imports compare bytes, hashes, metadata and active-profile
   preservation. Both maintenance GitHub platform jobs run it. This comparison
