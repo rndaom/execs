@@ -1077,13 +1077,15 @@ fn write_base_file(
         };
         let target = substitute(template, value);
         validate_base_path(path, &target)?;
+        let include_lines = top_level_base_lines(&lines);
         let matches: Vec<usize> = lines
             .iter()
             .enumerate()
-            .filter(|(_, line)| {
-                alternatives
-                    .iter()
-                    .any(|candidate| base_line_matches(line, candidate))
+            .filter(|(index, line)| {
+                include_lines[*index]
+                    && alternatives
+                        .iter()
+                        .any(|candidate| base_line_matches(line, candidate))
             })
             .map(|(index, _)| index)
             .collect();
@@ -1132,6 +1134,46 @@ fn write_base_file(
     let out = lines.concat();
     tree.insert(path, encode_hud_text_checked(&out, encoding)?);
     Ok(())
+}
+
+/// A commented or nested #base spelling is not an include owned by a control.
+/// Track lexical state across lines, including multiline strings/comments.
+fn top_level_base_lines(lines: &[String]) -> Vec<bool> {
+    let mut comment = false;
+    let mut quoted = false;
+    let mut depth = 0usize;
+    lines
+        .iter()
+        .map(|line| {
+            let eligible = !comment && !quoted && depth == 0 && base_target_range(line).is_some();
+            let mut chars = line.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if comment {
+                    if ch == '*' && chars.peek() == Some(&'/') {
+                        chars.next();
+                        comment = false;
+                    }
+                } else if quoted {
+                    if ch == '"' {
+                        quoted = false;
+                    }
+                } else {
+                    match ch {
+                        '/' if chars.peek() == Some(&'/') => break,
+                        '/' if chars.peek() == Some(&'*') => {
+                            chars.next();
+                            comment = true;
+                        }
+                        '"' => quoted = true,
+                        '{' => depth += 1,
+                        '}' => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
+                }
+            }
+            eligible
+        })
+        .collect()
 }
 
 fn validate_base_path(file: &str, target: &str) -> Result<(), ProfileError> {
@@ -1234,6 +1276,30 @@ mod maintenance_regressions {
         let before = tree.clone();
         assert!(merge_files(&mut tree, &invalid, "", Some(true)).is_err());
         assert_eq!(tree, before);
+    }
+
+    #[test]
+    fn base_edits_leave_commented_and_nested_spelling_untouched() {
+        let path = "resource/ui/menu.res";
+        let text = "/*\n#base \"backgrounds/old.res\"\n*/\nRoot {\n#base \"backgrounds/old.res\"\n}\n#base \"backgrounds/old.res\"\n";
+        let mut tree = HudTree::default();
+        tree.insert(path, text.as_bytes().to_vec());
+        merge_files(
+            &mut tree,
+            &serde_json::json!({path:{"#base":"backgrounds/$value.res"}}),
+            "new",
+            None,
+        )
+        .unwrap();
+        let expected = text
+            .strip_suffix("#base \"backgrounds/old.res\"\n")
+            .unwrap()
+            .to_string()
+            + "#base \"backgrounds/new.res\"\n";
+        assert_eq!(
+            std::str::from_utf8(tree.get(path).unwrap()).unwrap(),
+            expected
+        );
     }
 }
 
