@@ -174,7 +174,12 @@ fn late_schema_errors_leave_every_library_live_cfg_and_manifest_byte_unchanged()
 fn refused_live_projection_or_game_lock_does_not_publish_options() {
     let fixture = Fixture::new();
     let schema = parse_hud_schema(SCHEMA).unwrap();
-    let options = BTreeMap::from([("fh_toggle_disguise_image".into(), "true".into())]);
+    let options = BTreeMap::from([
+        ("fh_toggle_disguise_image".into(), "true".into()),
+        // Exercise the occupied resource output with a real value change.
+        // Lossless editing no longer rewrites this file for an unrelated toggle.
+        ("fh_val_hud_style".into(), "true".into()),
+    ]);
     let before = fixture.snapshot();
     let error = apply_schema_options_to(
         &fixture.profiles,
