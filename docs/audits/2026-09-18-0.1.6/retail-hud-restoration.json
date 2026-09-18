@@ -1,0 +1,21 @@
+{
+  "checkedAt": "2026-09-18T14:01:45.1489931Z",
+  "candidate": "a83f96be89869a8c6c8fc6e2a3ff7fee6145d8cc",
+  "smokeIsolationPassed": false,
+  "localRestorationVerified": true,
+  "protectedFileCount": 369,
+  "mismatchedFileCount": 0,
+  "sourceRegistryMatchesBefore": true,
+  "tf2Running": false,
+  "originalAndRestoredSha256": "b8e8626f28bd76b548711b9208cc873387d877de628a25d51063a46fb3c34e67",
+  "originalAndRestoredSha1": "490495dd55b03e5c25041e6c884476ee18880e18",
+  "bytes": 4389,
+  "remoteUploadVerified": true,
+  "remoteUploadCompletedLocalTime": "2026-09-18T10:00:29-04:00",
+  "remoteChangeNumber": 62,
+  "remoteSyncState": 1,
+  "apiReadbackMatchedOriginal": true,
+  "runnerQuarantined": true,
+  "additionalRetailRuns": 0,
+  "gameplayVisualAcceptanceVerified": false
+}

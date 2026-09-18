@@ -1,0 +1,14 @@
+21:57:50.513464 - SPEECH OUTPUT: 'Hit sound volume horizontal slider 75.'{'established': False}
+21:57:51.785727 - SPEECH OUTPUT: 'Kill sound volume horizontal slider 75.'{'established': False}
+21:57:53.060627 - SPEECH OUTPUT: 'Assign Bababa (Community pack) as hit sound toggle button not pressed.'{'established': False}
+21:57:53.370030 - SPEECH OUTPUT: 'Assign Bababa (Community pack) as kill sound toggle button not pressed.'{'established': False}
+21:57:54.334051 - SPEECH OUTPUT: 'Assign Beepo (Built into TF2) as hit sound toggle button not pressed.'{'established': False}
+21:57:54.642168 - SPEECH OUTPUT: 'Assign Beepo (Built into TF2) as kill sound toggle button not pressed.'{'established': False}
+21:58:06.097749 - SPEECH OUTPUT: 'Assign Kill bell (comfig.app) as hit sound toggle button not pressed.'{'established': False}
+21:58:06.409253 - SPEECH OUTPUT: 'Assign Kill bell (comfig.app) as kill sound toggle button not pressed.'{'established': False}
+21:58:13.010804 - SPEECH OUTPUT: 'Play Quack (hit sound, Community pack · installed) toggle button not pressed grayed.'{'established': False}
+21:58:13.012524 - SPEECH OUTPUT: 'Needs the desktop app.'{'established': False}
+21:58:14.932575 - SPEECH OUTPUT: 'Play Default ding (kill sound, Built into TF2) toggle button not pressed grayed.'{'established': False}
+21:58:14.934008 - SPEECH OUTPUT: 'Needs the desktop app.'{'established': False}
+21:58:18.933889 - SPEECH OUTPUT: 'Play Bababa (Community pack) toggle button not pressed grayed.'{'established': False}
+21:58:18.935140 - SPEECH OUTPUT: 'Needs the desktop app.'{'established': False}

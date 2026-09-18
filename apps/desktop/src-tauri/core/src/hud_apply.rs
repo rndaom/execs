@@ -5,10 +5,17 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hud::{normalize_hud_rel, HudTree};
+use crate::hud::{normalize_hud_rel, validate_hud_move_path, HudTree};
 use crate::profile::ProfileError;
 use crate::surface::CfgLayer;
-use crate::vdf::{parse_hud_vdf, serialize_hud_vdf, VdfMap, VdfValue};
+use crate::vdf::{parse_hud_vdf, VdfMap, VdfValue};
+
+#[path = "hud_expression.rs"]
+mod expressions;
+
+#[cfg(test)]
+#[path = "hud_moves_tests.rs"]
+mod move_tests;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HudSchema {
@@ -37,6 +44,10 @@ pub struct HudControl {
     pub files: Option<serde_json::Value>,
     #[serde(rename = "FileName")]
     pub file_name: Option<String>,
+    #[serde(rename = "ComboFiles")]
+    pub combo_files: Option<Vec<String>>,
+    #[serde(rename = "ComboDirectories")]
+    pub combo_directories: Option<Vec<String>>,
     #[serde(rename = "RenameFile")]
     pub rename_file: Option<RenameFile>,
     #[serde(rename = "WriteFile")]
@@ -92,6 +103,8 @@ pub struct HudSchemaControl {
     pub value: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<HudSchemaChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -243,7 +256,13 @@ pub fn hud_cfg_stem(file_name: &str) -> String {
 }
 
 pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
-    serde_json::from_str(&strip_json_comments(raw)).map_err(|err| ProfileError::Io(err.to_string()))
+    let mut raw: serde_json::Value = serde_json::from_str(&strip_json_comments(raw))
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    crate::hud_schema_compat::normalize_pinned_duplicates(&mut raw);
+    let schema: HudSchema =
+        serde_json::from_value(raw).map_err(|err| ProfileError::Io(err.to_string()))?;
+    crate::hud_schema_compat::validate_identities(&schema)?;
+    Ok(schema)
 }
 
 /// Some TF2HUD.Editor schemas carry `//` and `/* */` comments, which strict
@@ -331,14 +350,42 @@ pub fn apply_hud_options_for_layer(
     options: &BTreeMap<String, String>,
     layer: CfgLayer,
 ) -> Result<HudApplyResult, ProfileError> {
+    // Validate and resolve the complete schema before changing even the staged
+    // tree. A later control failure must not leave earlier edits in the caller.
+    let migrated_options = crate::hud_schema_compat::migrate_saved_options(hud_id, options);
+    let options = &migrated_options;
+    let schema = expressions::resolve_schema(schema, options)?;
+    let mut staged = tree.clone();
+    let result = apply_resolved_hud_options(&mut staged, &schema, hud_id, options, layer)?;
+    *tree = staged;
+    Ok(result)
+}
+
+fn apply_resolved_hud_options(
+    tree: &mut HudTree,
+    schema: &HudSchema,
+    hud_id: &str,
+    options: &BTreeMap<String, String>,
+    layer: CfgLayer,
+) -> Result<HudApplyResult, ProfileError> {
+    crate::hud_schema_compat::validate_identities(schema)?;
     let custom = schema
         .customizations_folder
         .as_deref()
-        .map(normalize_folder);
-    let enabled = schema.enabled_folder.as_deref().map(normalize_folder);
+        .map(validate_hud_move_path)
+        .transpose()?;
+    let enabled = schema
+        .enabled_folder
+        .as_deref()
+        .map(validate_hud_move_path)
+        .transpose()?;
     let mut cfg_writes = Vec::new();
     for controls in schema.controls.values() {
         for control in controls {
+            // Keep legacy saved values, but never write unconsumed log snippets.
+            if crate::hud_schema_compat::unavailable_reason(control).is_some() {
+                continue;
+            }
             apply_control(
                 tree,
                 control,
@@ -410,6 +457,8 @@ fn view_control(control: &HudControl) -> Option<HudSchemaControl> {
         control_type: kind.to_string(),
         value: control.value.clone(),
         choices,
+        unavailable_reason: crate::hud_schema_compat::unavailable_reason(control)
+            .map(str::to_owned),
         minimum: control.minimum.as_ref().map(json_to_string),
         maximum: control.maximum.as_ref().map(json_to_string),
     })
@@ -434,25 +483,24 @@ fn apply_control(
     // `minimum`/`maximum` were surfaced to the UI but never enforced here, so
     // an out-of-range number went into the HUD file verbatim.
     let current = clamp_to_bounds(control, current);
+    if control.file_name.is_some() && (custom.is_none() || enabled.is_none()) {
+        return Err(ProfileError::Io(
+            "HUD file choices require CustomizationsFolder and EnabledFolder".into(),
+        ));
+    }
     match kind {
         "checkbox" => {
             let on = is_truthy(&current);
             if let (Some(file_name), Some(custom), Some(enabled)) =
                 (control.file_name.as_deref(), custom, enabled)
             {
-                swap_custom_file(tree, custom, enabled, file_name, on);
+                swap_custom_file(tree, custom, enabled, file_name, on)?;
             }
             if let Some(rename) = &control.rename_file {
                 if on {
-                    tree.rename(
-                        &normalize_folder(&rename.old_name),
-                        &normalize_folder(&rename.new_name),
-                    );
+                    tree.rename(&rename.old_name, &rename.new_name)?;
                 } else {
-                    tree.rename(
-                        &normalize_folder(&rename.new_name),
-                        &normalize_folder(&rename.old_name),
-                    );
+                    tree.rename(&rename.new_name, &rename.old_name)?;
                 }
             }
             if let Some(files) = &control.files {
@@ -484,19 +532,63 @@ fn apply_control(
             )?;
         }
         "combo" => {
-            if let Some(choice) = control
+            let choice = control
                 .options
                 .as_ref()
-                .and_then(|options| options.iter().find(|option| option.value == current))
-            {
-                apply_control(
-                    tree, choice, options, custom, enabled, hud_id, layer, cfg_writes,
-                )?;
-            } else {
-                apply_value_files(
-                    tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
-                )?;
+                .and_then(|choices| choices.iter().find(|choice| choice.value == current))
+                .ok_or_else(|| {
+                    ProfileError::Io(format!(
+                        "Unknown HUD selection {current:?}; select one of the available options"
+                    ))
+                })?;
+            // Reset deselected variants before enabling the requested choice.
+            // Nameless options carry operations, not separate saved controls.
+            if let Some(choices) = &control.options {
+                for choice in choices.iter().filter(|choice| choice.value != current) {
+                    if let Some(rename) = &choice.rename_file {
+                        tree.rename(&rename.new_name, &rename.old_name)?;
+                    }
+                }
             }
+            let selected_file = control
+                .options
+                .as_ref()
+                .and_then(|choices| choices.iter().find(|choice| choice.value == current))
+                .and_then(|choice| choice.file_name.as_deref())
+                .map(validate_hud_move_path)
+                .transpose()?;
+            let mut reset_files = std::collections::BTreeSet::new();
+            reset_files.extend(control.combo_files.iter().flatten().map(String::as_str));
+            reset_files.extend(
+                control
+                    .combo_directories
+                    .iter()
+                    .flatten()
+                    .map(String::as_str),
+            );
+            reset_files.extend(
+                control
+                    .options
+                    .iter()
+                    .flatten()
+                    .filter_map(|choice| choice.file_name.as_deref()),
+            );
+            for file in reset_files {
+                let file = validate_hud_move_path(file)?;
+                if !selected_file
+                    .as_ref()
+                    .is_some_and(|selected| selected.eq_ignore_ascii_case(&file))
+                {
+                    let (Some(custom), Some(enabled)) = (custom, enabled) else {
+                        return Err(ProfileError::Io(format!("HUD file choice {file} requires CustomizationsFolder and EnabledFolder")));
+                    };
+                    swap_custom_file(tree, custom, enabled, &file, false)?;
+                }
+            }
+            switch_combo_base_aliases(tree, control, choice)?;
+            apply_control(
+                tree, choice, options, custom, enabled, hud_id, layer, cfg_writes,
+            )?;
         }
         _ => {
             apply_value_files(
@@ -519,10 +611,16 @@ fn apply_value_files(
     cfg_writes: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), ProfileError> {
     let _ = hud_id;
-    if let (Some(file_name), Some(custom), Some(enabled)) =
-        (control.file_name.as_deref(), custom, enabled)
-    {
-        swap_custom_file(tree, custom, enabled, file_name, true);
+    if let Some(file_name) = control.file_name.as_deref() {
+        let (Some(custom), Some(enabled)) = (custom, enabled) else {
+            return Err(ProfileError::Io(
+                "HUD file choices require CustomizationsFolder and EnabledFolder".into(),
+            ));
+        };
+        swap_custom_file(tree, custom, enabled, file_name, true)?;
+    }
+    if let Some(rename) = &control.rename_file {
+        tree.rename(&rename.old_name, &rename.new_name)?;
     }
     if let Some(files) = &control.files {
         merge_files(tree, files, current, None)?;
@@ -538,6 +636,86 @@ fn apply_value_files(
             hud_cfg_path(layer, &hud_cfg_stem(&write.file_name)),
             write.true_text.as_bytes().to_vec(),
         ));
+    }
+    Ok(())
+}
+
+/// Static combo includes own the other choices' targets. Appending instead
+/// leaves Source's first-base merge loading the old choice.
+fn switch_combo_base_aliases(
+    tree: &mut HudTree,
+    control: &HudControl,
+    selected: &HudControl,
+) -> Result<(), ProfileError> {
+    let Some(files) = selected
+        .files
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Ok(());
+    };
+    for (path, patch) in files {
+        let Some(template) = patch.get("#base").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let target = substitute(template, &selected.value);
+        let rel = validate_hud_move_path(path)?;
+        validate_base_path(&rel, &target)?;
+        let aliases: Vec<String> = control
+            .options
+            .iter()
+            .flatten()
+            .filter_map(|choice| {
+                choice
+                    .files
+                    .as_ref()?
+                    .as_object()?
+                    .iter()
+                    .find(|(other, _)| normalize_folder(other).eq_ignore_ascii_case(&rel))?
+                    .1
+                    .get("#base")?
+                    .as_str()
+                    .map(|template| substitute(template, &choice.value))
+            })
+            .collect();
+        let keys: Vec<String> = tree
+            .files
+            .keys()
+            .filter(|key| key.eq_ignore_ascii_case(&rel))
+            .cloned()
+            .collect();
+        let key = match keys.as_slice() {
+            [] => continue,
+            [key] => key,
+            _ => {
+                return Err(ProfileError::Io(
+                    "HUD include file has conflicting case spellings".into(),
+                ))
+            }
+        };
+        let (existing, encoding) = decode_hud_text(key, tree.get(key).expect("existing key"))?;
+        parse_hud_vdf(&existing).map_err(ProfileError::Io)?;
+        let mut lines: Vec<String> = existing.split_inclusive('\n').map(str::to_string).collect();
+        let eligible = top_level_base_lines(&lines);
+        let matches: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(index, line)| {
+                eligible[*index] && aliases.iter().any(|alias| base_line_matches(line, alias))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        match matches.as_slice() {
+            [] => {},
+            [index] => {
+                let line = &mut lines[*index];
+                let range = base_target_range(line).expect("matched include");
+                let quoted = range.start > 0 && line.as_bytes()[range.start-1] == b'"';
+                line.replace_range(range, &if quoted { target } else { format!("\"{target}\"") });
+                tree.insert(key.clone(), encode_hud_text_checked(&lines.concat(),encoding)?);
+            },
+            _ => return Err(ProfileError::Io("Multiple HUD combo includes are active; restore the author's resource before retrying".into()))
+        }
     }
     Ok(())
 }
@@ -582,7 +760,16 @@ fn format_number(value: f64) -> String {
     }
 }
 
-fn swap_custom_file(tree: &mut HudTree, custom: &str, enabled: &str, file_name: &str, on: bool) {
+fn swap_custom_file(
+    tree: &mut HudTree,
+    custom: &str,
+    enabled: &str,
+    file_name: &str,
+    on: bool,
+) -> Result<(), ProfileError> {
+    let custom = validate_hud_move_path(custom)?;
+    let enabled = validate_hud_move_path(enabled)?;
+    let file_name = validate_hud_move_path(file_name)?;
     let from = if on {
         format!("{custom}/{file_name}")
     } else {
@@ -593,7 +780,7 @@ fn swap_custom_file(tree: &mut HudTree, custom: &str, enabled: &str, file_name: 
     } else {
         format!("{custom}/{file_name}")
     };
-    tree.rename(&from, &to);
+    tree.rename(&from, &to)
 }
 
 fn merge_files(
@@ -665,7 +852,7 @@ fn merge_file(
             .ok_or_else(|| ProfileError::Io("Animation file is missing".into()))?;
         let (text, encoding) = decode_hud_text(rel, bytes)?;
         let out = edit_animation_lines(&text, patch, toggle)?;
-        tree.insert(rel, encode_hud_text(&out, encoding));
+        tree.insert(rel, encode_hud_text_checked(&out, encoding)?);
         return Ok(());
     }
     if let Some(base) = patch.get("#base") {
@@ -674,14 +861,14 @@ fn merge_file(
                 "Combining #base and resource edits is not supported".into(),
             ));
         }
-        return write_base_file(tree, rel, base, value);
+        return write_base_file(tree, rel, base, value, toggle);
     }
     let (existing, encoding) = match tree.get(rel) {
         Some(bytes) => decode_hud_text(rel, bytes)?,
         None => (String::new(), TextEncoding::Utf8),
     };
-    let (bases, rest) = split_base_lines(&existing)?;
-    let mut vdf = parse_hud_vdf(&rest).map_err(ProfileError::Io)?;
+    let mut vdf = parse_hud_vdf(&existing).map_err(ProfileError::Io)?;
+    let before = vdf.clone();
     let patch_map = json_to_vdf(patch, value, toggle)?;
     // TF2HUD.Editor resource patches omit a file-named root header; the
     // existing header owns the edited panels, including its conditionals.
@@ -689,7 +876,12 @@ fn merge_file(
         .entries
         .iter()
         .enumerate()
-        .filter(|(_, (key, _))| normalize_hud_rel(key).eq_ignore_ascii_case(rel))
+        .filter(|(_, (key, _))| {
+            let normalized = normalize_hud_rel(key).to_ascii_lowercase();
+            normalized.eq_ignore_ascii_case(rel)
+                || ((normalized.starts_with("resource/") || normalized.starts_with("scripts/"))
+                    && normalized.ends_with(".res"))
+        })
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
     match headers.as_slice() {
@@ -708,13 +900,8 @@ fn merge_file(
             ))
         }
     }
-    let mut out = String::new();
-    for line in bases {
-        out.push_str(&line);
-        out.push('\n');
-    }
-    out.push_str(&serialize_hud_vdf(&vdf).map_err(ProfileError::Io)?);
-    tree.insert(rel, encode_hud_text(&out, encoding));
+    let out = crate::hud_text_edit::edit(&existing, &before, &vdf).map_err(ProfileError::Io)?;
+    tree.insert(rel, encode_hud_text_checked(&out, encoding)?);
     Ok(())
 }
 
@@ -823,6 +1010,9 @@ enum TextEncoding {
     Utf8Bom,
     Utf16Le,
     Utf16Be,
+    /// Reversible byte mapping for legacy, BOM-less resources. This deliberately
+    /// does not guess a code page or replace undecodable bytes.
+    LegacyBytes,
 }
 
 fn decode_hud_text(rel: &str, bytes: &[u8]) -> Result<(String, TextEncoding), ProfileError> {
@@ -866,18 +1056,36 @@ fn decode_hud_text(rel: &str, bytes: &[u8]) -> Result<(String, TextEncoding), Pr
             .map(|text| (text.to_string(), TextEncoding::Utf8Bom))
             .map_err(|err| ProfileError::Io(format!("{rel} is not valid UTF-8: {err}")));
     }
-    std::str::from_utf8(bytes)
-        .map(|text| (text.to_string(), TextEncoding::Utf8))
-        // Never patch over content we could not read.
-        .map_err(|err| {
-            ProfileError::Io(format!(
-                "{rel} is not text we can edit ({err}). Its HUD options were left alone."
+    match std::str::from_utf8(bytes) {
+        Ok(text) => Ok((text.to_string(), TextEncoding::Utf8)),
+        Err(_)
+            if !bytes
+                .iter()
+                .any(|byte| *byte < 32 && !matches!(byte, 9 | 10 | 13)) =>
+        {
+            Ok((
+                bytes.iter().map(|byte| char::from(*byte)).collect(),
+                TextEncoding::LegacyBytes,
             ))
-        })
+        }
+        Err(_) => Err(ProfileError::Io(format!(
+            "{rel} contains non-text bytes; its HUD options were left alone"
+        ))),
+    }
+}
+
+fn encode_hud_text_checked(text: &str, encoding: TextEncoding) -> Result<Vec<u8>, ProfileError> {
+    if encoding == TextEncoding::LegacyBytes && text.chars().any(|ch| u32::from(ch) > 255) {
+        return Err(ProfileError::Io(
+            "An edited value cannot be represented in this legacy HUD resource".into(),
+        ));
+    }
+    Ok(encode_hud_text(text, encoding))
 }
 
 fn encode_hud_text(text: &str, encoding: TextEncoding) -> Vec<u8> {
     match encoding {
+        TextEncoding::LegacyBytes => text.chars().map(|ch| ch as u8).collect(),
         TextEncoding::Utf8 => text.as_bytes().to_vec(),
         TextEncoding::Utf8Bom => {
             let mut out = vec![0xEF, 0xBB, 0xBF];
@@ -910,46 +1118,296 @@ fn write_base_file(
     path: &str,
     base: &serde_json::Value,
     value: &str,
+    toggle: Option<bool>,
 ) -> Result<(), ProfileError> {
-    let template = base
-        .as_str()
-        .ok_or_else(|| ProfileError::Io("#base must be a path string".into()))?;
-    let target = substitute(template, value);
-    if target.is_empty() || target.contains(['"', '\0', '\r', '\n']) {
-        return Err(ProfileError::Io("Invalid #base path".into()));
+    let items = base
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(std::slice::from_ref(base));
+    if items.len() > 128 {
+        return Err(ProfileError::Io("Too many HUD base includes".into()));
     }
-    let line = format!("#base \"{target}\"");
-    let Some(bytes) = tree.get(path) else {
-        tree.insert(path, format!("{line}\n").into_bytes());
-        return Ok(());
+    let (existing, encoding) = match tree.get(path) {
+        Some(bytes) => decode_hud_text(path, bytes)?,
+        None => (String::new(), TextEncoding::Utf8),
     };
-    let (existing, encoding) = decode_hud_text(path, bytes)?;
-    let (mut bases, rest) = split_base_lines(&existing)?;
-    match bases
-        .iter_mut()
-        .find(|current| base_line_matches(current, template))
-    {
-        Some(slot) => {
-            // Keep indentation, conditional suffix and trailing comment on
-            // the include this control owns.
-            let range = base_target_range(slot).expect("base_line_matches validated the target");
-            let quoted = range.start > 0 && slot.as_bytes()[range.start - 1] == b'"';
-            if quoted {
-                slot.replace_range(range, &target);
-            } else {
-                slot.replace_range(range, &format!("\"{target}\""));
+    parse_hud_vdf(&existing).map_err(ProfileError::Io)?;
+    let mut lines: Vec<String> = existing.split_inclusive('\n').map(str::to_string).collect();
+    let mut claimed = std::collections::BTreeSet::new();
+    let mut previous = None;
+    for item in items {
+        let (template, alternatives) = if let Some(template) = item.as_str() {
+            (template, vec![template])
+        } else if let Some(branches) = item.as_object() {
+            if branches.len() != 2
+                || !branches.contains_key("true")
+                || !branches.contains_key("false")
+            {
+                return Err(ProfileError::Io(
+                    "#base checkbox requires true and false path branches".into(),
+                ));
+            }
+            let selected = toggle
+                .ok_or_else(|| ProfileError::Io("Conditional #base requires a checkbox".into()))?;
+            let yes = branches["true"]
+                .as_str()
+                .ok_or_else(|| ProfileError::Io("#base paths must be strings".into()))?;
+            let no = branches["false"]
+                .as_str()
+                .ok_or_else(|| ProfileError::Io("#base paths must be strings".into()))?;
+            (if selected { yes } else { no }, vec![yes, no])
+        } else {
+            return Err(ProfileError::Io(
+                "#base must be a path or ordered list of paths/checkbox branches".into(),
+            ));
+        };
+        let target = substitute(template, value);
+        validate_base_path(path, &target)?;
+        let include_lines = top_level_base_lines(&lines);
+        let matches: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(index, line)| {
+                include_lines[*index]
+                    && alternatives
+                        .iter()
+                        .any(|candidate| base_line_matches(line, candidate))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        match matches.as_slice() {
+            [] => {
+                let index = previous.map_or(0, |index| index + 1);
+                let prefix = if index > 0 && !lines[index - 1].ends_with('\n') {
+                    "\n"
+                } else {
+                    ""
+                };
+                lines.insert(index, format!("{prefix}#base \"{target}\"\n"));
+                claimed = claimed
+                    .into_iter()
+                    .map(|old| if old >= index { old + 1 } else { old })
+                    .collect();
+                claimed.insert(index);
+                previous = Some(index);
+            }
+            [index] if claimed.insert(*index) => {
+                if previous.is_some_and(|previous| previous >= *index) {
+                    return Err(ProfileError::Io(
+                        "HUD base include order conflicts with the schema".into(),
+                    ));
+                }
+                let slot = &mut lines[*index];
+                let range = base_target_range(slot).expect("matched include target");
+                let quoted = range.start > 0 && slot.as_bytes()[range.start - 1] == b'"';
+                slot.replace_range(
+                    range,
+                    &if quoted {
+                        target
+                    } else {
+                        format!("\"{target}\"")
+                    },
+                );
+                previous = Some(*index);
+            }
+            _ => {
+                return Err(ProfileError::Io(
+                    "HUD base includes are ambiguous; no files were changed".into(),
+                ))
             }
         }
-        None => bases.push(line),
     }
-    let mut out = String::new();
-    for base_line in &bases {
-        out.push_str(base_line);
-        out.push('\n');
-    }
-    out.push_str(&rest);
-    tree.insert(path, encode_hud_text(&out, encoding));
+    let out = lines.concat();
+    tree.insert(path, encode_hud_text_checked(&out, encoding)?);
     Ok(())
+}
+
+/// A commented or nested #base spelling is not an include owned by a control.
+/// Track lexical state across lines, including multiline strings/comments.
+fn top_level_base_lines(lines: &[String]) -> Vec<bool> {
+    let mut comment = false;
+    let mut quoted = false;
+    let mut depth = 0usize;
+    lines
+        .iter()
+        .map(|line| {
+            let eligible = !comment && !quoted && depth == 0 && base_target_range(line).is_some();
+            let mut chars = line.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if comment {
+                    if ch == '*' && chars.peek() == Some(&'/') {
+                        chars.next();
+                        comment = false;
+                    }
+                } else if quoted {
+                    if ch == '"' {
+                        quoted = false;
+                    }
+                } else {
+                    match ch {
+                        '/' if chars.peek() == Some(&'/') => break,
+                        '/' if chars.peek() == Some(&'*') => {
+                            chars.next();
+                            comment = true;
+                        }
+                        '"' => quoted = true,
+                        '{' => depth += 1,
+                        '}' => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
+                }
+            }
+            eligible
+        })
+        .collect()
+}
+
+fn validate_base_path(file: &str, target: &str) -> Result<(), ProfileError> {
+    let normalized = target.replace('\\', "/");
+    if normalized.is_empty()
+        || normalized.starts_with('/')
+        || normalized.contains(['"', ':', '\0', '\r', '\n'])
+    {
+        return Err(ProfileError::Io("Invalid #base path".into()));
+    }
+    let mut depth = file.split('/').count().saturating_sub(1);
+    for part in normalized.split('/') {
+        match part {
+            "" | "." => {}
+            ".." if depth > 0 => depth -= 1,
+            ".." => return Err(ProfileError::Io("#base path escapes the HUD".into())),
+            _ => depth += 1,
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod maintenance_regressions {
+    use super::*;
+
+    #[test]
+    fn static_combo_base_choices_replace_the_previous_choice_only() {
+        let schema = parse_hud_schema(r##"{"Controls":{"Layout":[{"Name":"style","Type":"ComboBox","Value":"a","Options":[{"Value":"a","Files":{"customizations/style.res":{"#base":"../resource/a.res"}}},{"Value":"b","Files":{"customizations/style.res":{"#base":"../resource/b.res"}}}]}]}}"##).unwrap();
+        let original = "// note\n#base \"../resource/a.res\" // owned\n#base \"keep.res\"\n";
+        let mut tree = HudTree::default();
+        tree.insert("customizations/style.res", original.as_bytes().to_vec());
+        for choice in ["b", "b", "a"] {
+            apply_hud_options(
+                &mut tree,
+                &schema,
+                "fixture",
+                &BTreeMap::from([("style".into(), choice.into())]),
+            )
+            .unwrap();
+            assert_eq!(
+                std::str::from_utf8(tree.get("customizations/style.res").unwrap()).unwrap(),
+                original.replace("resource/a.res", &format!("resource/{choice}.res"))
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_resource_preserves_every_byte_outside_the_edited_value() {
+        let mut tree = HudTree::default();
+        let original = b"// \xdcBERCHARGE \x81 unknown byte\r\n\"Scheme\" { \"Colors\" { \"Uber\" \"old\" // keep\r\n } }\r\n";
+        tree.insert("resource/colors.res", original.to_vec());
+        let patch = serde_json::json!({"resource/colors.res":{"Scheme":{"Colors":{"Uber":"new"}}}});
+        merge_files(&mut tree, &patch, "", None).unwrap();
+        let expected = original.windows(3).position(|part| part == b"old").unwrap();
+        let mut bytes = original.to_vec();
+        bytes[expected..expected + 3].copy_from_slice(b"new");
+        assert_eq!(tree.get("resource/colors.res").unwrap(), bytes);
+        let once = tree.clone();
+        merge_files(&mut tree, &patch, "", None).unwrap();
+        assert_eq!(tree, once);
+        let invalid =
+            serde_json::json!({"resource/colors.res":{"Scheme":{"Colors":{"Uber":"\u{1f680}"}}}});
+        assert!(merge_files(&mut tree, &invalid, "", None).is_err());
+        assert_eq!(tree, once);
+    }
+
+    #[test]
+    fn included_logical_header_is_edited_and_ambiguous_headers_refuse() {
+        let path = "^customizations/#crosshairs/crosshairs_hudlayout.res";
+        let original = "#base \"keep.res\"\n\"Resource/HudLayout.res\" { \"CustomCrosshair1\" { \"visible\" \"0\" } \"Keep\" {} }\n";
+        let mut tree = HudTree::default();
+        tree.insert(path, original.as_bytes().to_vec());
+        let patch = serde_json::json!({path: {"CustomCrosshair1":{"visible":"1"}}});
+        merge_files(&mut tree, &patch, "", None).unwrap();
+        assert_eq!(
+            std::str::from_utf8(tree.get(path).unwrap()).unwrap(),
+            original.replace("\"0\"", "\"1\"")
+        );
+        let once = tree.clone();
+        merge_files(&mut tree, &patch, "", None).unwrap();
+        assert_eq!(tree, once);
+        tree.insert(
+            path,
+            b"\"Resource/A.res\" {} \"Resource/B.res\" {}".to_vec(),
+        );
+        let before = tree.clone();
+        assert!(merge_files(&mut tree, &patch, "", None).is_err());
+        assert_eq!(tree, before);
+    }
+
+    #[test]
+    fn ordered_base_branches_reverse_without_touching_other_lines() {
+        let path = "customizations/scoreboards.res";
+        let original = "// keep\r\n  #BASE \"../resource/ui/full.res\" [$WIN32] // choice\r\n#base \"keep.res\"\r\n\"Resource/UI/Scoreboard.res\" {}";
+        let mut tree = HudTree::default();
+        tree.insert(path, original.as_bytes().to_vec());
+        let patch = serde_json::json!({path:{"#base":[{"true":"../resource/ui/short.res","false":"../resource/ui/full.res"}, "second.res"]}});
+        merge_files(&mut tree, &patch, "", Some(true)).unwrap();
+        let expected = original.replace("full.res", "short.res").replace(
+            "#base \"keep.res\"",
+            "#base \"second.res\"\n#base \"keep.res\"",
+        );
+        assert_eq!(
+            std::str::from_utf8(tree.get(path).unwrap()).unwrap(),
+            expected
+        );
+        let once = tree.clone();
+        merge_files(&mut tree, &patch, "", Some(true)).unwrap();
+        assert_eq!(tree, once);
+        merge_files(&mut tree, &patch, "", Some(false)).unwrap();
+        assert_eq!(
+            std::str::from_utf8(tree.get(path).unwrap()).unwrap(),
+            original.replace(
+                "#base \"keep.res\"",
+                "#base \"second.res\"\n#base \"keep.res\""
+            )
+        );
+        let invalid =
+            serde_json::json!({path:{"#base":[{"true":"../../escape.res","false":"keep.res"}]}});
+        let before = tree.clone();
+        assert!(merge_files(&mut tree, &invalid, "", Some(true)).is_err());
+        assert_eq!(tree, before);
+    }
+
+    #[test]
+    fn base_edits_leave_commented_and_nested_spelling_untouched() {
+        let path = "resource/ui/menu.res";
+        let text = "/*\n#base \"backgrounds/old.res\"\n*/\nRoot {\n#base \"backgrounds/old.res\"\n}\n#base \"backgrounds/old.res\"\n";
+        let mut tree = HudTree::default();
+        tree.insert(path, text.as_bytes().to_vec());
+        merge_files(
+            &mut tree,
+            &serde_json::json!({path:{"#base":"backgrounds/$value.res"}}),
+            "new",
+            None,
+        )
+        .unwrap();
+        let expected = text
+            .strip_suffix("#base \"backgrounds/old.res\"\n")
+            .unwrap()
+            .to_string()
+            + "#base \"backgrounds/new.res\"\n";
+        assert_eq!(
+            std::str::from_utf8(tree.get(path).unwrap()).unwrap(),
+            expected
+        );
+    }
 }
 
 /// Does this existing `#base` line point at something the schema's template
@@ -989,6 +1447,7 @@ fn base_target_range(line: &str) -> Option<std::ops::Range<usize>> {
     }
 }
 
+#[cfg(test)]
 fn split_base_lines(text: &str) -> Result<(Vec<String>, String), ProfileError> {
     let mut bases = Vec::new();
     let mut rest = String::new();
@@ -1627,6 +2086,7 @@ mod tests {
     fn utf16le_res_files_round_trip_instead_of_being_wiped() {
         let schema = schema_fixture();
         let mut tree = HudTree::default();
+        tree.insert("#customization/minmode.res", b"off\n".to_vec());
         let text = "\"Scheme\"\n{\n\t\"Colors\"\n\t{\n\t\t\"bh_Health_Buff\"\t\t\"255 0 0 255\"\n\t\t\"Keep\"\t\t\"1 1 1 1\"\n\t}\n}\n";
         tree.insert(
             "resource/clientscheme_colors.res",

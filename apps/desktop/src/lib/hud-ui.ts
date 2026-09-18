@@ -329,7 +329,11 @@ export function seedHudOptions(
   }
   for (const section of schema.sections) {
     for (const control of section.controls) {
-      next[control.name] = optionValue(record, control.name, control.value);
+      const legacyValue =
+        record?.id.toLowerCase() === "kbnhud" && control.name === "kbn_low_ammo_blink_2"
+          ? (record.options.kbn_low_ammo_blink_1 ?? control.value)
+          : control.value;
+      next[control.name] = optionValue(record, control.name, legacyValue);
     }
   }
   return next;

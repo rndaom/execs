@@ -27,6 +27,41 @@ import {
 } from "./hud-ui";
 
 describe("hud catalog helpers", () => {
+  it("seeds the repaired KBN blink color from a legacy shared key only until explicitly saved", () => {
+    const schema = {
+      author: "fixture",
+      sections: [
+        {
+          name: "Colors",
+          controls: [
+            {
+              name: "kbn_low_ammo_blink_2",
+              label: "Blink 2",
+              controlType: "color",
+              choices: [],
+              value: "255 100 100 255",
+            },
+          ],
+        },
+      ],
+    };
+    const record = {
+      id: "kbnhud",
+      hash: null,
+      source: "hudDb" as const,
+      options: { kbn_low_ammo_blink_1: "1 2 3 255" },
+    };
+    expect(seedHudOptions(schema, record).kbn_low_ammo_blink_2).toBe("1 2 3 255");
+    expect(
+      seedHudOptions(schema, {
+        ...record,
+        options: { ...record.options, kbn_low_ammo_blink_2: "4 5 6 255" },
+      }).kbn_low_ammo_blink_2,
+    ).toBe("4 5 6 255");
+    expect(seedHudOptions(schema, { ...record, options: {} }).kbn_low_ammo_blink_2).toBe(
+      "255 100 100 255",
+    );
+  });
   it("filters by name and author", () => {
     expect(filterHudCatalog(PREVIEW_HUD_CATALOG, "toon")).toEqual([PREVIEW_HUD_CATALOG[1]]);
     expect(filterHudCatalog(PREVIEW_HUD_CATALOG, "Toon HUD")).toEqual([PREVIEW_HUD_CATALOG[1]]);

@@ -273,7 +273,7 @@ describe("retained settings feedback", () => {
     await advance(700);
     expect(toast()).toContain("original HUD failed");
     const originalSource = element("toast").dataset.source;
-    const target = (await api.importProfile()).profiles.find(
+    const target = (await api.saveCurrentAs("Second profile")).profiles.find(
       (profile) => profile.id !== profiles.library?.activeProfileId,
     );
     if (!target) throw new Error("Fixture needs a second profile");

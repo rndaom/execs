@@ -4,7 +4,9 @@ import type {
   AbsorbDelta,
   CustomFolderRepair,
   PackChoice,
+  ProfileImportReview,
   ProfileLibrary,
+  ProfileSummary,
   Tf2Install,
 } from "../lib/bridge";
 import {
@@ -12,6 +14,7 @@ import {
   canImportProfile,
   canSaveCurrent,
   hasPackChanges,
+  newlyImportedProfile,
 } from "../lib/library-ui";
 import type { SetOperationError } from "./useOperationErrors";
 import type { SwitchProgressController } from "./useSwitchProgress";
@@ -30,6 +33,14 @@ export type ProfileLibraryState = {
   onBindSyncHandled: (request: number) => void;
   saveCurrent: (name: string) => Promise<boolean>;
   importProfile: () => Promise<void>;
+  importing: boolean;
+  importStage: "selecting" | "reading" | "review" | "saving" | "done" | null;
+  importReview: ProfileImportReview | null;
+  confirmImport: () => Promise<void>;
+  cancelImport: () => Promise<void>;
+  importError: string | null;
+  importedProfile: ProfileSummary | null;
+  dismissImport: () => void;
   exportProfile: (id: string) => Promise<void>;
   switchProfile: (id: string) => Promise<void>;
   folderRepair: { id: string; name: string; plan: CustomFolderRepair[]; error?: string } | null;
@@ -68,6 +79,12 @@ export function useProfileLibrary(
   const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
   const [packPromptDeferred, setPackPromptDeferred] = useState(false);
   const [absorbNonce, setAbsorbNonce] = useState(0);
+  const [importStage, setImportStage] = useState<ProfileLibraryState["importStage"]>(null);
+  const [importReview, setImportReview] = useState<ProfileImportReview | null>(null);
+  const importInFlight = useRef(false);
+  const importing = importStage !== null && importStage !== "done";
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importedProfile, setImportedProfile] = useState<ProfileSummary | null>(null);
   const [absorbRetry, setAbsorbRetry] = useState(0);
   const absorb = useRef({
     generation: 0,
@@ -244,22 +261,65 @@ export function useProfileLibrary(
   );
 
   const importProfile = useCallback(async () => {
-    if (!library || !canImportProfile(library, running)) {
-      return;
-    }
+    if (!library || busy || importInFlight.current || !canImportProfile(library, running)) return;
+    importInFlight.current = true;
+    setImportedProfile(null);
+    setImportReview(null);
+    setImportError(null);
+    setImportStage("selecting");
     setBusy(true);
+    let unlisten: (() => void) | undefined;
     try {
-      setLibrary(await api.importProfile());
-      setError(null, "profiles:import");
+      unlisten = await api.onProfileImportReading(() => setImportStage("reading"));
+      const review = await api.importProfile();
+      setImportReview(review);
+      setImportStage(review ? "review" : null);
+      if (!review) setBusy(false);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not import that profile.",
-        "profiles:import",
-      );
+      setImportError(err instanceof Error ? err.message : "Could not read that ZIP.");
+      setImportStage(null);
+      setBusy(false);
     } finally {
+      unlisten?.();
+      importInFlight.current = false;
+    }
+  }, [api, library, running, busy, setBusy]);
+
+  const confirmImport = useCallback(async () => {
+    if (!importReview || !library || running || importInFlight.current) return;
+    importInFlight.current = true;
+    setImportStage("saving");
+    try {
+      const next = await api.confirmProfileImport(importReview.token);
+      setLibrary(next);
+      setImportedProfile(newlyImportedProfile(library, next));
+      setImportStage("done");
+    } catch (err) {
+      // Kept separately from settings errors so refresh cannot erase it.
+      setImportError(err instanceof Error ? err.message : "Could not import that profile.");
+      setImportStage(null);
+      setImportReview(null);
+    } finally {
+      importInFlight.current = false;
       setBusy(false);
     }
-  }, [api, library, running, setError, setBusy]);
+  }, [api, importReview, library, running, setBusy]);
+
+  const cancelImport = useCallback(async () => {
+    if (importInFlight.current) return;
+    importInFlight.current = true;
+    if (importReview) {
+      try {
+        await api.cancelProfileImport(importReview.token);
+      } catch (err) {
+        setImportError(err instanceof Error ? err.message : "Could not cancel the import.");
+      }
+    }
+    setImportReview(null);
+    setImportStage(null);
+    setBusy(false);
+    importInFlight.current = false;
+  }, [api, importReview, setBusy]);
 
   const exportProfile = useCallback(
     async (id: string) => {
@@ -293,6 +353,9 @@ export function useProfileLibrary(
       setBusy(true);
       try {
         setLibrary(await api.switchProfile(id));
+        setImportedProfile(null);
+        setImportStage(null);
+        setImportReview(null);
         setError(null, "profiles:switch");
         progress.complete();
         setPackPrompt(null);
@@ -386,6 +449,8 @@ export function useProfileLibrary(
     setPackPromptDeferred(false);
     setBindSyncRequest(null);
     setAbsorbNonce(0);
+    setImportedProfile(null);
+    setImportError(null);
     absorb.current.generation += 1;
     absorb.current.completed = null;
     absorb.current.configDrift = false;
@@ -405,6 +470,19 @@ export function useProfileLibrary(
     onBindSyncHandled,
     saveCurrent,
     importProfile,
+    importing,
+    importStage,
+    importReview,
+    confirmImport,
+    cancelImport,
+    importError,
+    importedProfile,
+    dismissImport: () => {
+      setImportedProfile(null);
+      setImportReview(null);
+      setImportStage(null);
+      setImportError(null);
+    },
     exportProfile,
     switchProfile,
     folderRepair,

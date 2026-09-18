@@ -1,25 +1,13 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Api } from "../lib/api";
 import type { HitsoundPick } from "../lib/bridge";
 import { AutosaveActivity } from "./useAutosave";
 
-/** Object URLs for auditioned sounds, keyed by pick. Session-long. */
+/** Immutable source auditions only. Installed slots are read afresh each time. */
 const urls = new Map<string, string>();
 
 function keyOf(pick: HitsoundPick): string {
   return JSON.stringify(pick);
-}
-
-async function urlFor(api: Api, pick: HitsoundPick): Promise<string> {
-  const key = keyOf(pick);
-  const cached = urls.get(key);
-  if (cached) {
-    return cached;
-  }
-  const bytes = await api.hitsoundBytes(pick);
-  const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
-  urls.set(key, url);
-  return url;
 }
 
 /** A picked file is stashed per token; drop its URL when it is replaced. */
@@ -56,10 +44,11 @@ export type SoundPlayer = {
 };
 
 /** One audio element for the whole pane, so sounds never overlap. */
-export function useSoundPlayer(api: Api): SoundPlayer {
+export function useSoundPlayer(api: Api, installedIdentity: string): SoundPlayer {
   const active = useContext(AutosaveActivity);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const requestRef = useRef(0);
+  const installedUrl = useRef<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +64,10 @@ export function useSoundPlayer(api: Api): SoundPlayer {
     return () => {
       requestRef.current += 1;
       audio.pause();
+      if (installedUrl.current) {
+        URL.revokeObjectURL(installedUrl.current);
+        installedUrl.current = null;
+      }
       audio.removeEventListener("ended", onEnd);
       audioRef.current = null;
     };
@@ -83,8 +76,20 @@ export function useSoundPlayer(api: Api): SoundPlayer {
   const stop = useCallback(() => {
     requestRef.current += 1;
     audioRef.current?.pause();
+    if (installedUrl.current) {
+      URL.revokeObjectURL(installedUrl.current);
+      installedUrl.current = null;
+    }
     setPlaying(null);
   }, []);
+
+  // A committed profile/content change invalidates playback before another
+  // interaction. The request generation also rejects reads still in flight.
+  useLayoutEffect(() => {
+    void installedIdentity;
+    stop();
+    setError(null);
+  }, [installedIdentity, stop]);
 
   useEffect(() => {
     if (!active) {
@@ -98,13 +103,27 @@ export function useSoundPlayer(api: Api): SoundPlayer {
       if (!audio) {
         return;
       }
+      stop();
       const request = ++requestRef.current;
       const key = keyOf(pick);
       setError(null);
       setPlaying(key);
-      void urlFor(api, pick)
+      const readUrl = async () => {
+        const cached = pick.kind === "installed" ? undefined : urls.get(key);
+        if (cached) return cached;
+        const bytes = await api.hitsoundBytes(pick);
+        if (request !== requestRef.current) return null;
+        const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+        if (pick.kind === "installed") {
+          installedUrl.current = url;
+        } else {
+          urls.set(key, url);
+        }
+        return url;
+      };
+      void readUrl()
         .then((url) => {
-          if (request !== requestRef.current) {
+          if (!url || request !== requestRef.current) {
             return;
           }
           audio.pause();
@@ -128,7 +147,7 @@ export function useSoundPlayer(api: Api): SoundPlayer {
           setError(err instanceof Error ? err.message : "Could not play that sound.");
         });
     },
-    [api],
+    [api, stop],
   );
 
   return { play, stop, playing, error };
