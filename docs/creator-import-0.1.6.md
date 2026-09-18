@@ -17,7 +17,7 @@ The reported source ZIP was not supplied for this investigation.
 
 ## Maintenance adaptation
 
-Branch `codex/0.1.6-creator-import` starts at public `v0.1.5`. The owner assigns
+Branch `rndaom/0.1.6-creator-import` starts at public `v0.1.5`. The owner assigns
 the bounded creator import feature (RND-201) to 0.1.6. It reuses main's import
 reader, themed review, backend-owned single-use token and confirmation flow.
 It excludes profile-owned preloader metadata and switch changes. The native

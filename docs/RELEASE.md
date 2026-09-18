@@ -22,8 +22,8 @@ creator trust review and profile-owned preloaders. Main's changelog records
 fix. Its publication and compatibility evidence remains in
 `docs/release-0.1.4.md`.
 
-0.1.6 is being prepared in PR #50, with the separate main forward-port in
-PR #51. The owner assigned all 14 milestone issues: sound identity/audition,
+0.1.6 is being prepared in PR #52, with the separate main forward-port in
+PR #53. The owner assigned all 14 milestone issues: sound identity/audition,
 creator ZIP import, Windows HUD paths, and HUD import/customization fixes.
 The existing creator-import PR #49 is incorporated into the combined candidate.
 See `docs/release-0.1.6.md` for the verification record and remaining gates.
@@ -38,6 +38,28 @@ import again. Creator-profile ZIP imports and profile-scoped preloader metadata
 remain on 0.2.0. See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and
 implementation evidence.
 Next minor: **0.2.0**, first Thursday of the month, skipped if the budget is empty.
+
+## Branch names and release history
+
+`main` remains the default development branch. All other branches use the
+owner's `rndaom/` prefix:
+
+| Branch | Purpose |
+| --- | --- |
+| `rndaom/release-0.1` | Shared maintenance line for published 0.1.x releases. |
+| `rndaom/release-X.Y.Z` | Temporary candidate for one named release. |
+| `rndaom/forwardport-X.Y.Z` | Temporary PR carrying that release's fixes into main. |
+| `rndaom/<topic>` | Temporary implementation work; delete remotely after integration. |
+
+The older `release-0.1.3` name was reused for 0.1.4 and 0.1.5. It has now been
+consolidated into `rndaom/release-0.1` without losing commits. Completed version
+branches are not an archive: immutable `v0.1.0` through `v0.1.5` tags, including
+`v0.1.3+1`, retain the published versions. Missing version branches therefore do
+not mean missing releases. Do not recreate old branches merely to fill gaps.
+
+The owner-requested 0.1.6 branch rename replaced draft PRs #50/#51 with #52/#53;
+the earlier reviews and successful CI remain available on the closed PRs.
+Branch organization does not authorize merging or publishing the candidate.
 
 ## Who sees what
 

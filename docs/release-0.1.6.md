@@ -9,7 +9,7 @@ authorized. Public latest remains 0.1.5.
 
 The September 18 owner request covers all 14 issues in Linear's 0.1.6 milestone.
 The candidate starts at public `v0.1.5` (`9976464`) on
-`codex/release-0.1.6`, targeting maintenance `rndaom/release-0.1.3`.
+`rndaom/release-0.1.6`, targeting maintenance `rndaom/release-0.1`.
 The existing creator-import PR #49 and Windows long-path branch are retained
 and integrated. Unrelated 0.2.0 work stays on main. The milestone explicitly
 assigns creator cfg/custom ZIP import as a bounded, compatible patch addition.
@@ -83,8 +83,8 @@ The actual public 0.1.5 exporter generated the compatibility ZIP; candidate
 import/export/import preserved bytes, hashes, metadata and active-profile state.
 See [machine-readable evidence](audits/2026-09-18-0.1.6/public-profile-compatibility.json).
 
-Maintenance [PR #50](https://github.com/rndaom/execs/pull/50) incorporates PR #49.
-Forward-port [PR #51](https://github.com/rndaom/execs/pull/51) preserves main's
+Maintenance [PR #52](https://github.com/rndaom/execs/pull/52) incorporates PR #49.
+Forward-port [PR #53](https://github.com/rndaom/execs/pull/53) preserves main's
 0.2.0 feature work and passes 774 local Windows native tests plus Clippy.
 Private candidate [run 35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
 builds product commit `c001e96`; later preparation commits change documentation
@@ -94,7 +94,7 @@ smokes and release verification. Publication was **skipped**. The separate
 [maintenance product CI](https://github.com/rndaom/execs/actions/runs/35353755294)
 and [forward-port CI](https://github.com/rndaom/execs/actions/runs/35355011186)
 also pass. Both PRs are mergeable and remain drafts for the open acceptance
-gates. PR #49 is closed as superseded by #50.
+gates. PR #49 is closed as superseded by #52.
 
 Independent downloads verify Minisign signatures for the Windows NSIS,
 Linux AppImage and Debian artifacts, and bind the updater feed to the exact
