@@ -15,12 +15,18 @@ The owner confirmed Linux is good and authorized release. See
 PR #47 is merged into maintenance; immutable tag `v0.1.5` points to its merge
 commit. PR #48 is merged into main, retaining the unreleased 0.2.0 versions,
 creator trust review and profile-owned preloaders. Main's changelog records
-0.1.5 as the next release's previous-public upgrade baseline. The existing
-0.1.6 sound-fix milestone and three-feature 0.2.0 plan retain their scope.
+0.1.5 as the next release's previous-public upgrade baseline. The unreleased 0.2.0 profile-owned preloader behavior remains on main.
 
 0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
 fix. Its publication and compatibility evidence remains in
 `docs/release-0.1.4.md`.
+
+0.1.6 is being prepared in PR #50, with the separate main forward-port in
+PR #51. The owner assigned all 14 milestone issues: sound identity/audition,
+creator ZIP import, Windows HUD paths, and HUD import/customization fixes.
+The existing creator-import PR #49 is incorporated into the combined candidate.
+See `docs/release-0.1.6.md` for the verification record and remaining gates.
+Preparation does not authorize a tag or publication; public latest stays 0.1.5.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
