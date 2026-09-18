@@ -580,6 +580,7 @@ fn apply_control(
                     swap_custom_file(tree, custom, enabled, &file, false)?;
                 }
             }
+            switch_combo_base_aliases(tree, control, choice)?;
             apply_control(
                 tree, choice, options, custom, enabled, hud_id, layer, cfg_writes,
             )?;
@@ -630,6 +631,86 @@ fn apply_value_files(
             hud_cfg_path(layer, &hud_cfg_stem(&write.file_name)),
             write.true_text.as_bytes().to_vec(),
         ));
+    }
+    Ok(())
+}
+
+/// Static combo includes own the other choices' targets. Appending instead
+/// leaves Source's first-base merge loading the old choice.
+fn switch_combo_base_aliases(
+    tree: &mut HudTree,
+    control: &HudControl,
+    selected: &HudControl,
+) -> Result<(), ProfileError> {
+    let Some(files) = selected
+        .files
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Ok(());
+    };
+    for (path, patch) in files {
+        let Some(template) = patch.get("#base").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let target = substitute(template, &selected.value);
+        let rel = validate_hud_move_path(path)?;
+        validate_base_path(&rel, &target)?;
+        let aliases: Vec<String> = control
+            .options
+            .iter()
+            .flatten()
+            .filter_map(|choice| {
+                choice
+                    .files
+                    .as_ref()?
+                    .as_object()?
+                    .iter()
+                    .find(|(other, _)| normalize_folder(other).eq_ignore_ascii_case(&rel))?
+                    .1
+                    .get("#base")?
+                    .as_str()
+                    .map(|template| substitute(template, &choice.value))
+            })
+            .collect();
+        let keys: Vec<String> = tree
+            .files
+            .keys()
+            .filter(|key| key.eq_ignore_ascii_case(&rel))
+            .cloned()
+            .collect();
+        let key = match keys.as_slice() {
+            [] => continue,
+            [key] => key,
+            _ => {
+                return Err(ProfileError::Io(
+                    "HUD include file has conflicting case spellings".into(),
+                ))
+            }
+        };
+        let (existing, encoding) = decode_hud_text(key, tree.get(key).expect("existing key"))?;
+        parse_hud_vdf(&existing).map_err(ProfileError::Io)?;
+        let mut lines: Vec<String> = existing.split_inclusive('\n').map(str::to_string).collect();
+        let eligible = top_level_base_lines(&lines);
+        let matches: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(index, line)| {
+                eligible[*index] && aliases.iter().any(|alias| base_line_matches(line, alias))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        match matches.as_slice() {
+            [] => {},
+            [index] => {
+                let line = &mut lines[*index];
+                let range = base_target_range(line).expect("matched include");
+                let quoted = range.start > 0 && line.as_bytes()[range.start-1] == b'"';
+                line.replace_range(range, &if quoted { target } else { format!("\"{target}\"") });
+                tree.insert(key.clone(), encode_hud_text_checked(&lines.concat(),encoding)?);
+            },
+            _ => return Err(ProfileError::Io("Multiple HUD combo includes are active; restore the author's resource before retrying".into()))
+        }
     }
     Ok(())
 }
@@ -1199,6 +1280,27 @@ fn validate_base_path(file: &str, target: &str) -> Result<(), ProfileError> {
 #[cfg(test)]
 mod maintenance_regressions {
     use super::*;
+
+    #[test]
+    fn static_combo_base_choices_replace_the_previous_choice_only() {
+        let schema = parse_hud_schema(r##"{"Controls":{"Layout":[{"Name":"style","Type":"ComboBox","Value":"a","Options":[{"Value":"a","Files":{"customizations/style.res":{"#base":"../resource/a.res"}}},{"Value":"b","Files":{"customizations/style.res":{"#base":"../resource/b.res"}}}]}]}}"##).unwrap();
+        let original = "// note\n#base \"../resource/a.res\" // owned\n#base \"keep.res\"\n";
+        let mut tree = HudTree::default();
+        tree.insert("customizations/style.res", original.as_bytes().to_vec());
+        for choice in ["b", "b", "a"] {
+            apply_hud_options(
+                &mut tree,
+                &schema,
+                "fixture",
+                &BTreeMap::from([("style".into(), choice.into())]),
+            )
+            .unwrap();
+            assert_eq!(
+                std::str::from_utf8(tree.get("customizations/style.res").unwrap()).unwrap(),
+                original.replace("resource/a.res", &format!("resource/{choice}.res"))
+            );
+        }
+    }
 
     #[test]
     fn legacy_resource_preserves_every_byte_outside_the_edited_value() {
