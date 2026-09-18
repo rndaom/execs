@@ -985,7 +985,7 @@ fn resolve_relative(src: &str, base: &str) -> String {
 }
 
 pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
-    execs_core::hud_schema_compat::check_catalog_schema(id).map_err(|e| e.to_string())?;
+    execs_core::hud_schema_compat::check_catalog_schema(id).map_err(|e| e.message().to_string())?;
     let file = schema_file_name(id).ok_or_else(|| {
         "This HUD has no in-app options. Use the author’s page for extras.".to_string()
     })?;
@@ -1021,9 +1021,9 @@ pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
 }
 
 fn adapted_schema(id: &str, raw: &str) -> Result<String, String> {
-    let mut schema = execs_core::parse_hud_schema(raw).map_err(|e| e.to_string())?;
+    let mut schema = execs_core::parse_hud_schema(raw).map_err(|e| e.message().to_string())?;
     execs_core::hud_schema_compat::adapt_pinned_schema(id, &mut schema)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.message().to_string())?;
     serde_json::to_string(&schema).map_err(|e| e.to_string())
 }
 

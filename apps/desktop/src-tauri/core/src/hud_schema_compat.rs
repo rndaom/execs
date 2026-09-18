@@ -128,14 +128,14 @@ mod tests {
         let error =
             parse_hud_schema(r#"{"Controls":{"A":[{"Name":"same"}],"B":[{"Name":"same"}]}}"#)
                 .unwrap_err();
-        assert!(error.to_string().contains("duplicate control name: same"));
+        assert!(error.message().contains("duplicate control name: same"));
         assert!(parse_hud_schema(
             r#"{"Controls":{"A":[{"Name":"unique","Options":[{"Value":"0"},{"Value":"1"}]}]}}"#
         )
         .is_ok());
         assert!(check_catalog_schema("m0rehud")
             .unwrap_err()
-            .to_string()
+            .message()
             .contains("do not match"));
     }
 
