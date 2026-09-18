@@ -50,6 +50,22 @@ pub struct HudTree {
     pub files: BTreeMap<String, Vec<u8>>,
 }
 
+pub(crate) fn validate_hud_move_path(path: &str) -> Result<String, ProfileError> {
+    let normalized = path.replace('\\', "/");
+    if normalized.starts_with('/') {
+        return Err(ProfileError::Io(format!(
+            "HUD move requires a relative path: {path}"
+        )));
+    }
+    let normalized = normalized
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("/");
+    normalize_rel_path(&normalized)
+        .map_err(|_| ProfileError::Io(format!("Invalid relative HUD move path: {path}")))
+}
+
 impl HudTree {
     pub fn get(&self, path: &str) -> Option<&[u8]> {
         self.files.get(&normalize_hud_rel(path)).map(Vec::as_slice)
@@ -63,13 +79,77 @@ impl HudTree {
         self.files.remove(&normalize_hud_rel(path))
     }
 
-    pub fn rename(&mut self, from: &str, to: &str) -> bool {
-        if let Some(bytes) = self.remove(from) {
-            self.insert(to, bytes);
-            true
-        } else {
-            false
+    /// Move one file or a complete directory without overwriting any payload.
+    /// Identity is portable (ASCII case insensitive), even on Linux.
+    pub fn rename(&mut self, from: &str, to: &str) -> Result<(), ProfileError> {
+        let from = validate_hud_move_path(from)?;
+        let to = validate_hud_move_path(to)?;
+        let source = from.to_ascii_lowercase();
+        let target = to.to_ascii_lowercase();
+        let contains =
+            |root: &str, path: &str| path == root || path.starts_with(&format!("{root}/"));
+        if source != target && (contains(&source, &target) || contains(&target, &source)) {
+            return Err(ProfileError::Io(format!(
+                "HUD move overlaps its source: {from} → {to}"
+            )));
         }
+        let moving: Vec<_> = self
+            .files
+            .keys()
+            .filter(|path| contains(&source, &path.to_ascii_lowercase()))
+            .cloned()
+            .collect();
+        if moving.is_empty() {
+            if self
+                .files
+                .keys()
+                .any(|path| contains(&target, &path.to_ascii_lowercase()))
+            {
+                // Already in position, but still reject ambiguous portable identity.
+                return self.rename(&to, &to);
+            }
+            return Err(ProfileError::Io(format!("HUD move source is missing: {from} (destination {to}). Reinstall a compatible HUD before retrying.")));
+        }
+        let mut identities = std::collections::BTreeSet::new();
+        let mut destinations = Vec::new();
+        if source != target
+            && self.files.keys().any(|key| {
+                let key = key.to_ascii_lowercase();
+                !contains(&source, &key) && (contains(&target, &key) || contains(&key, &target))
+            })
+        {
+            return Err(ProfileError::Io(format!(
+                "HUD move destination already exists: {to}"
+            )));
+        }
+        for path in &moving {
+            let destination = format!("{to}{}", &path[from.len()..]);
+            normalize_rel_path(&destination)?;
+            let identity = destination.to_ascii_lowercase();
+            if !identities.insert(identity) {
+                return Err(ProfileError::Io(format!(
+                    "HUD move would overwrite existing content: {destination}"
+                )));
+            }
+            destinations.push(destination);
+        }
+        for identity in &identities {
+            let mut parent = identity.as_str();
+            while let Some((prefix, _)) = parent.rsplit_once('/') {
+                if identities.contains(prefix) {
+                    return Err(ProfileError::Io(format!(
+                        "HUD move source has a file/directory collision: {from}"
+                    )));
+                }
+                parent = prefix;
+            }
+        }
+        for (path, destination) in moving.into_iter().zip(destinations) {
+            if let Some(bytes) = self.files.remove(&path) {
+                self.files.insert(destination, bytes);
+            }
+        }
+        Ok(())
     }
 
     /// `get` without caring about ASCII case. HUD authors spell `Info.vdf`

@@ -168,6 +168,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 - Gameplay preserves `viewmodel_fov` throughout Source's 0.1–179.9 range without rounding incoming decimals. World FOV retains its separate 54–90 control.
 ## 0.1.5 pack and cfg integrity
 
+- HUD option apply stages the whole tree before publishing. Resource edits preserve untouched text spans and BOM/legacy bytes; logical `Resource/*.res` and `Scripts/*.res` include headers must be unambiguous. Folder choices use portable validated moves, and schema expressions resolve from one complete option/default snapshot without executing code.
+
 - A leading dash is part of a custom pack's literal identity. Absorb, Keep, removal and switch cleanup never substitute a dashed/undashed peer. Legacy HUD backup recovery requires a recorded inactive undashed HUD, no live undashed peer and no manifest ownership of the dashed path; coexisting or unknown dashed HUDs keep their normal identities.
 - Cfg-layer detection reads the mounted startup autoexec and core cfg through one bounded content check. The supported mastercomfig loader executes `comfig/comfig.cfg` followed by `overrides/autoexec.cfg`; addon names and leftover overrides are not loader evidence. Inventory preserves safe nested user cfgs and overrides in both layers. Managed binds/gameplay writes refuse a live/library loader mismatch until the external change is resolved.
 - Cfg inventory handles `user`, `app`, and `overrides` specially only when they are immediate `tf/cfg` children. The same names deeper in a user cfg tree remain literal profile content.

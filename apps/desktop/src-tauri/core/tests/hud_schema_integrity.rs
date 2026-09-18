@@ -132,7 +132,7 @@ fn hud_options_publish_identical_library_live_bytes_and_reapply_idempotently() {
     let resource =
         fs::read_to_string(fixture.root.join("tf/custom/fixture-hud").join(RESOURCE)).unwrap();
     assert!(resource.contains("\"r100\""));
-    assert!(resource.contains("\"labelText\"\t\t\"\\\""));
+    assert!(resource.contains("\"labelText\" \"\\\""));
 }
 
 #[test]

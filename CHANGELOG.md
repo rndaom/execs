@@ -33,6 +33,11 @@ User-facing changes only. The release workflow publishes the matching
 - Sounds: match assigned comfig sounds by source hash, so different sounds with
   the same name remain selectable.
 - Sounds: identify clips, sources and hit/kill slots in accessible control names.
+- HUD: preserve legacy resource bytes, comments and formatting when saving
+  options, and edit included resources inside their logical panel header.
+- HUD: apply and reverse folder-based choices, evaluate cross-control font
+  expressions, and switch HypnotizeHUD checkbox includes without losing other
+  resources. Invalid or incompatible instructions leave all options unchanged.
 
 ## [0.1.5] - 2026-09-14
 
