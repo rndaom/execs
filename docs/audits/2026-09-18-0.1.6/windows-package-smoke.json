@@ -1,0 +1,12 @@
+{
+  "version": "0.1.6",
+  "platform": "win32",
+  "oldVersion": "0.1.5",
+  "artifact": "execs_0.1.6_x64-setup.exe",
+  "signatureVerified": true,
+  "updateInstalled": true,
+  "noRepeatOffer": true,
+  "userDataPreserved": true,
+  "packagedNotices": true,
+  "packagedStartup": true
+}

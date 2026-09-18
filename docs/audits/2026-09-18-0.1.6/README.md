@@ -46,8 +46,10 @@ gates are maintained in [the release record](../../release-0.1.6.md).
 
 Automated filesystem probes use disposable fixtures. A separate attempted
 [retail smoke failed Cloud isolation and required verified recovery](retail-hud-smoke.md);
-it is not a passing gameplay gate. The exact candidate CI run and
-final results are recorded in the release record after verification completes.
+it is not a passing gameplay gate. The exact successful candidate CI run,
+signed package results and remaining acceptance gates are recorded in the
+release record. [HUD browser checks](hud-ui.md) add keyboard and unavailable
+control guidance evidence without claiming native speech or screenshots.
 Passing core checks do not establish every HUD's in-game appearance or actual
 screen-reader speech.
 

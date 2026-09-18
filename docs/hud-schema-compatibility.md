@@ -69,6 +69,6 @@ and all profile payload bytes through import, re-export and re-import.
 
 The signed candidate workflow
 [35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
-is ongoing at this documentation update. The planned TF2 check and final
-candidate CI/installer outcomes remain separate release gates. See the
+passed Windows/Linux validation, package builds and installer/updater checks;
+publication was skipped. Full TF2 visual acceptance remains open. See the
 [0.1.6 release record](release-0.1.6.md) for final integration provenance.
