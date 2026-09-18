@@ -1,0 +1,341 @@
+{
+  "Name": "rh_toggle_streamer_mode",
+  "Label": "Streamer Mode",
+  "Type": "Checkbox",
+  "ToolTip": "Removes player and game details, useful when streaming.",
+  "Value": "false",
+  "Files": {
+    "resource/ui/basechat.res": {
+      "HudChat": {
+        "wide": {
+          "true": "0",
+          "false": "250"
+        }
+      }
+    },
+    "resource/ui/dashboardpartymember.res": {
+      "avatar": {
+        "ypos": {
+          "true": "9999",
+          "false": "1"
+        }
+      }
+    },
+    "resource/ui/disguisestatuspanel.res": {
+      "DisguiseNameLabel": {
+        "ypos": {
+          "true": "9999",
+          "false": "0"
+        }
+      }
+    },
+    "resource/ui/freezepanel_basic.res": {
+      "FreezePanelBase": {
+        "FreezeLabel": {
+          "ypos": {
+            "true": "9999",
+            "false": "0"
+          }
+        },
+        "FreezeLabelKiller": {
+          "ypos": {
+            "true": "9999",
+            "false": "15"
+          }
+        }
+      }
+    },
+    "resource/ui/hudarenawinpanel.res": {
+      "ArenaWinPanelWinnersPanel": {
+        "Player1Avatar": {
+          "ypos": {
+            "true": "9999",
+            "false": "4"
+          }
+        },
+        "Player1Name": {
+          "ypos": {
+            "true": "9999",
+            "false": "4"
+          }
+        },
+        "Player2Avatar": {
+          "ypos": {
+            "true": "9999",
+            "false": "19"
+          }
+        },
+        "Player2Name": {
+          "ypos": {
+            "true": "9999",
+            "false": "19"
+          }
+        },
+        "Player3Avatar": {
+          "ypos": {
+            "true": "9999",
+            "false": "34"
+          }
+        },
+        "Player3Name": {
+          "ypos": {
+            "true": "9999",
+            "false": "34"
+          }
+        }
+      },
+      "ArenaWinPanelLosersPanel": {
+        "Player1Avatar": {
+          "ypos": {
+            "true": "9999",
+            "false": "4"
+          }
+        },
+        "Player1Name": {
+          "ypos": {
+            "true": "9999",
+            "false": "4"
+          }
+        },
+        "Player2Avatar": {
+          "ypos": {
+            "true": "9999",
+            "false": "19"
+          }
+        },
+        "Player2Name": {
+          "ypos": {
+            "true": "9999",
+            "false": "19"
+          }
+        },
+        "Player3Avatar": {
+          "ypos": {
+            "true": "9999",
+            "false": "34"
+          }
+        },
+        "Player3Name": {
+          "ypos": {
+            "true": "9999",
+            "false": "34"
+          }
+        }
+      }
+    },
+    "resource/ui/hudinspectpanel.res": {
+      "itempanel": {
+        "ItemLabel": {
+          "ypos": {
+            "true": "9999",
+            "false": "3"
+          }
+        }
+      }
+    },
+    "resource/ui/hudkillstreaknotice.res": {
+      "SplashLabel": {
+        "ypos": {
+          "true": "9999",
+          "false": "70"
+        }
+      }
+    },
+    "resource/ui/matchmakingtooltip.res": {
+      "TooltipPanel": {
+        "TipLabel": {
+          "ypos": {
+            "true": "9999",
+            "false": "10"
+          }
+        }
+      }
+    },
+    "resource/ui/mvmscoreboard.res": {
+      "MvMPlayerList": {
+        "ypos": {
+          "true": "9999",
+          "false": "248"
+        }
+      }
+    },
+    "resource/ui/pvprankpanel.res": {
+      "BGPanel": {
+        "NameLabel": {
+          "labelText": {
+            "true": "STREAMER MODE",
+            "false": "%name%"
+          }
+        }
+      }
+    },
+    "resource/ui/hudmatchstatus.res": {
+      "TeamStatus": {
+        "playerpanels_kv": {
+          "wide": {
+            "true": "0",
+            "false": "25"
+          }
+        }
+      },
+      "BlueTeamPanel": {
+        "wide": {
+          "true": "0",
+          "false": "150"
+        }
+      },
+      "RedTeamPanel": {
+        "wide": {
+          "true": "0",
+          "false": "150"
+        }
+      }
+    },
+    "resource/ui/scoreboard.res": {
+      "BluePlayerList": {
+        "wide": {
+          "true": "0",
+          "false": "270"
+        }
+      },
+      "RedPlayerList": {
+        "labelText": {
+          "wide": "0",
+          "false": "270"
+        }
+      },
+      "ServerLabel": {
+        "ypos": {
+          "true": "9999",
+          "false": "0"
+        }
+      }
+    },
+    "resource/ui/hudplayerclass.res": {
+      "CarryingWeapon": {
+        "OwnerLabel": {
+          "ypos": {
+            "true": "9999",
+            "false": "14"
+          }
+        }
+      }
+    },
+    "resource/ui/targetid.res": {
+      "TargetNameLabel": {
+        "labeltext": {
+          "true": "",
+          "false": "%targetname%"
+        }
+      }
+    },
+    "resource/ui/votehud.res": {
+      "VoteActive": {
+        "Header": {
+          "ypos": {
+            "true": "9999",
+            "false": "5"
+          }
+        }
+      }
+    },
+    "resource/ui/winpanel.res": {
+      "Player1Avatar": {
+        "ypos": {
+          "true": "9999",
+          "false": "120"
+        }
+      },
+      "Player1Name": {
+        "ypos": {
+          "true": "9999",
+          "false": "117"
+        }
+      },
+      "Player2Avatar": {
+        "ypos": {
+          "true": "9999",
+          "false": "136"
+        }
+      },
+      "Player2Name": {
+        "ypos": {
+          "true": "9999",
+          "false": "133"
+        }
+      },
+      "Player3Avatar": {
+        "ypos": {
+          "true": "9999",
+          "false": "152"
+        }
+      },
+      "Player3Name": {
+        "ypos": {
+          "true": "9999",
+          "false": "149"
+        }
+      }
+    },
+    "resource/ui/hudmatchsummary.res": {
+      "MainStatsContainer": {
+        "TeamScoresPanel": {
+          "BlueTeamPanel": {
+            "wide": {
+              "true": "0",
+              "false": "f0"
+            },
+            "BluePlayerListParent": {
+              "BluePlayerList": {
+                "wide": {
+                  "true": "0",
+                  "false": "p.465"
+                }
+              }
+            }
+          },
+          "RedTeamPanel": {
+            "wide": {
+              "true": "0",
+              "false": "f0"
+            },
+            "RedPlayerListParent": {
+              "RedPlayerList": {
+                "wide": {
+                  "true": "0",
+                  "false": "p.465"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resource/ui/hudtournament.res": {
+      "HudTournament": {
+        "playerpanels_kv": {
+          "playername": {
+            "wide": {
+              "true": "9999",
+              "false": "48"
+            }
+          }
+        }
+      }
+    },
+    "scripts/hudlayout.res": {
+      "HudDeathNotice": {
+        "TextFont": {
+          "true": "",
+          "false": "HudFontSmallest"
+        }
+      },
+      "HudVoiceStatus": {
+        "text_xpos": {
+          "true": "9999",
+          "false": "25"
+        }
+      }
+    }
+  }
+}

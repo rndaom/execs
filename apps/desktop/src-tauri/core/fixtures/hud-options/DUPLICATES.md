@@ -11,6 +11,11 @@ from the pinned upstream. Upstream project and license attribution are recorded
 in the repository's THIRD_PARTY.md.
 # Stale alternate-model filename
 
+`rayshud-streamer-mode.json` preserves the pinned Streamer Mode control. Its
+red scoreboard list incorrectly nests `wide`/`false` below `labelText`; exact
+fingerprint normalization restores the same `wide` true/false instruction as
+the blue list. Both installed SectionedListPanels declare width 270.
+
 `rayshud-alternate-player-model.json` is the exact Alternate Player Model control
 from the same pinned MIT schema. Its nonexistent `hudplayerclass_left.res`
 FileName is redundant with its complete direct `Files` instructions. The

@@ -6,6 +6,8 @@ User-facing changes only. The release workflow publishes the matching
 ## [Unreleased]
 
 ### Fixed
+- HUD: correct the pinned rayshud Streamer Mode instruction so both scoreboard
+  player lists hide and restore together.
 
 - HUD: allow rayshud's Alternate Player Model option to use its direct resource
   edits without requiring a nonexistent legacy customization file.
