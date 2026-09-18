@@ -32,7 +32,7 @@ strict validation, including when a manifest is malformed. ZIP hash, root,
 write lock, traversal, collisions, parser and archive limits remain checked.
 Import creates a new library profile without changing the active setup.
 
-## Validation
+## Initial backport validation
 
 - The exact first-entry `cfg/user.scr` fixture passes review, import and explicit
   switch for root, `tf/`, wrapper and wrapper-plus-`tf/` layouts. It verifies
@@ -53,8 +53,8 @@ Import creates a new library profile without changing the active setup.
   `phf_macros` dependency; the explicit target separates host procedural macros
   from the target's static-CRT build.
 
-Linux CI, packaged installer/updater verification and the reporter's exact ZIP
-remain release/integration checks; this record does not claim they were run.
+These counts record the initial backport, before the complete 0.1.6 integration.
+The reporter's exact ZIP was not supplied. Final integration evidence follows.
 
 The owner clarified that user.scr must be supported. The added lifecycle regression
 checks capture, edited bytes (including CRLF), absorb, export/re-import and switching
@@ -85,7 +85,26 @@ so this inspection does not claim an in-game custom-options smoke test.
 The import dialog, profile-library hook and library helper suites passed all
 30 tests independently. A new native regression checks that a successful review
 cannot bypass a later game lock or library-root mismatch, with byte snapshots
-confirming neither install nor the library changes. Running that regression and
-the existing ZIP/lifecycle suite locally is blocked by Windows Application
-Control (`os error 4551`); Windows and Linux CI must validate the native tests
-before release readiness is claimed.
+confirming neither install nor the library changes.
+
+## Integrated Windows verification
+
+Windows Application Control initially refused the installed Rust compiler with
+`os error 4551`. An official Rust 1.96.0 toolchain installed alongside it runs
+successfully without changing security policy. The integrated Windows workspace
+suite passes 769 tests, with 16 opt-in tests explicitly ignored by the normal
+run; workspace Clippy also passes with warnings denied. This includes the
+creator ZIP, user.scr lifecycle and confirmation-boundary regressions.
+
+The actual public v0.1.5 core exports a synthetic profile that 0.1.6 imports into
+both empty and active libraries, re-exports byte-for-byte unchanged, and imports
+again. All 11 payloads, four mod records, HUD metadata, shared storage and ignored
+packs survive; the active profile, source library and synthetic install trees
+remain unchanged. This checks public-export compatibility without using the
+installed profile library or launching TF2.
+
+The signed candidate workflow
+[35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
+is ongoing at this documentation update. These local results do not claim that
+candidate CI or packaged installer/updater verification has finished. See the
+[0.1.6 release record](release-0.1.6.md) for final integration provenance and gates.
