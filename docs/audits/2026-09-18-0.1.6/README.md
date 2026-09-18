@@ -42,7 +42,9 @@ gates are maintained in [the release record](../../release-0.1.6.md).
   ZIP/7z/folder parity. [Schema compatibility](../../hud-schema-compatibility.md)
   explains unsupported controls and retained saved values.
 
-All filesystem probes use disposable fixtures. The exact candidate CI run and
+Automated filesystem probes use disposable fixtures. A separate attempted
+[retail smoke failed Cloud isolation and required verified recovery](retail-hud-smoke.md);
+it is not a passing gameplay gate. The exact candidate CI run and
 final results are recorded in the release record after verification completes.
 Passing core checks do not establish every HUD's in-game appearance or actual
 screen-reader speech.
@@ -52,6 +54,7 @@ screen-reader speech.
 The installed stable Rust executable was blocked by Smart App Control. Official
 Rust 1.96.0 was installed alongside it through rustup, without changing security
 settings or the default toolchain. This supports the project's Rust 1.93 minimum.
-Some independently generated build helpers were also blocked; results distinguish
-successful local tests from Windows and Linux GitHub runs. GitHub uses current
+Some earlier independently generated build helpers were also blocked. The final
+full local Windows suite and workspace Clippy pass using the side-by-side
+toolchain; Windows and Linux GitHub runs are recorded separately. GitHub uses current
 stable Rust. No Windows security policy was disabled or bypassed.
