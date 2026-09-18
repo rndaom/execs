@@ -1,0 +1,76 @@
+{
+  "Name": "rh_toggle_alt_player_model",
+  "Label": "Alternate Player Model",
+  "Type": "Checkbox",
+  "ToolTip": "Toggle the position of the player's mini 3D model to be on the left.",
+  "Value": "false",
+  "FileName": "hudplayerclass_left.res",
+  "Files": {
+    "scripts/hudlayout.res": {
+      "DisguiseStatus": {
+        "xpos": {
+          "true": "25",
+          "false": "r150"
+        }
+      }
+    },
+    "resource/ui/hudplayerclass.res": {
+      "classmodelpanel": {
+        "xpos": {
+          "true": "0",
+          "false": "r210"
+        },
+        "ypos": {
+          "true": "r200",
+          "false": "r148"
+        },
+        "wide": {
+          "true": "150",
+          "false": "75"
+        },
+        "tall": {
+          "true": "200",
+          "false": "150"
+        },
+        "fov": {
+          "true": "23",
+          "false": "25"
+        },
+        "model": {
+          "angles_x": {
+            "true": "0",
+            "false": "-13"
+          },
+          "angles_y": {
+            "true": "165",
+            "false": "150"
+          },
+          "origin_x": {
+            "true": "200",
+            "false": "138"
+          },
+          "origin_y": {
+            "true": "0",
+            "false": "-4"
+          },
+          "origin_z": {
+            "true": "-80",
+            "false": "-93"
+          }
+        }
+      },
+      "CarryingWeapon": {
+        "xpos": {
+          "true": "100",
+          "false": "r250"
+        }
+      },
+      "PlayerStatusSpyOutlineImage": {
+        "image": {
+          "true": "../vgui/replay/thumbnails/transparent",
+          "false": "../hud/class_spy_outline"
+        }
+      }
+    }
+  }
+}

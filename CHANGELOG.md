@@ -12,6 +12,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- HUD: allow rayshud's Alternate Player Model option to use its direct resource
+  edits without requiring a nonexistent legacy customization file.
+
 - Profiles: retain saved particle selections when repairing custom folder names,
   including profiles that are not active.
 - Profiles: offer folder repair before switching to an imported setup with

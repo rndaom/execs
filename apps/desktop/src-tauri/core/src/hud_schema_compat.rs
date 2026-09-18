@@ -14,6 +14,21 @@ pub fn normalize_pinned_duplicates(raw: &mut serde_json::Value) {
     else {
         return;
     };
+    for control in sections
+        .values_mut()
+        .filter_map(serde_json::Value::as_array_mut)
+        .flatten()
+    {
+        if control["Name"] == "rh_toggle_alt_player_model"
+            && crate::hash::sha256_hex(control.to_string().as_bytes())
+                == "f39fe1988e1787065510f7eb2af4e353fe6f8848ce45c0252f070695f5afe155"
+        {
+            // This exact pinned record already edits every loaded model/disguise
+            // property directly. Its legacy file does not exist in the HUD and
+            // the schema declares no customization/enable folders for a move.
+            control.as_object_mut().unwrap().remove("FileName");
+        }
+    }
     for (name, first_hash, second_hash, action) in [
         (
             "rh_toggle_center_class",
@@ -210,6 +225,59 @@ mod tests {
         HudTree,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn rayshud_alternate_model_uses_its_direct_resource_instructions() {
+        let control: serde_json::Value = serde_json::from_str(include_str!(
+            "../fixtures/hud-options/rayshud-alternate-player-model.json"
+        ))
+        .unwrap();
+        let mut raw = serde_json::json!({"Controls":{"General":[control.clone()]}});
+        normalize_pinned_duplicates(&mut raw);
+        assert!(raw["Controls"]["General"][0].get("FileName").is_none());
+        assert_eq!(raw["Controls"]["General"][0]["Files"], control["Files"]);
+        let schema = parse_hud_schema(&raw.to_string()).unwrap();
+        let mut tree = HudTree::default();
+        tree.insert(
+            "scripts/hudlayout.res",
+            b"\"Resource/HudLayout.res\" {}".to_vec(),
+        );
+        tree.insert(
+            "resource/ui/hudplayerclass.res",
+            b"\"Resource/UI/HudPlayerClass.res\" {}".to_vec(),
+        );
+        for enabled in [true, false] {
+            apply_hud_options(
+                &mut tree,
+                &schema,
+                "rayshud",
+                &BTreeMap::from([("rh_toggle_alt_player_model".into(), enabled.to_string())]),
+            )
+            .unwrap();
+            let parsed = crate::vdf::parse_hud_vdf(
+                std::str::from_utf8(tree.get("resource/ui/hudplayerclass.res").unwrap()).unwrap(),
+            )
+            .unwrap();
+            let root = parsed.entries[0].1.as_obj().unwrap();
+            assert_eq!(
+                root.get("classmodelpanel")
+                    .unwrap()
+                    .as_obj()
+                    .unwrap()
+                    .get("xpos")
+                    .unwrap()
+                    .as_str(),
+                Some(if enabled { "0" } else { "r210" })
+            );
+        }
+        let mut changed = serde_json::json!({"Controls":{"General":[control]}});
+        changed["Controls"]["General"][0]["FileName"] = "different.res".into();
+        normalize_pinned_duplicates(&mut changed);
+        assert_eq!(
+            changed["Controls"]["General"][0]["FileName"],
+            "different.res"
+        );
+    }
 
     #[test]
     #[ignore = "requires the pinned downloaded schema corpus, EXECS_HUD_SCHEMA_CORPUS"]
