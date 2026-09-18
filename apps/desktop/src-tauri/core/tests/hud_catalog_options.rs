@@ -86,19 +86,18 @@ fn hypnotize_checkbox_bases_apply_both_states_in_full_schema() {
                 let options = BTreeMap::from([(control.name.clone(), on.to_string())]);
                 apply_hud_options(&mut tree, &schema, "hypnotizehud", &options).unwrap();
                 let text = std::str::from_utf8(tree.get(path).unwrap()).unwrap();
+                let parsed = execs_core::vdf::parse_hud_vdf(text).unwrap();
+                let active_bases: Vec<&str> = parsed
+                    .entries
+                    .iter()
+                    .filter(|(key, _)| key.eq_ignore_ascii_case("#base"))
+                    .filter_map(|(_, value)| value.as_str())
+                    .collect();
                 for item in items {
                     let selected = item[if on { "true" } else { "false" }].as_str().unwrap();
                     let other = item[if on { "false" } else { "true" }].as_str().unwrap();
-                    assert!(
-                        text.contains(&format!("#base \"{selected}\"")),
-                        "{}: {text}",
-                        control.name
-                    );
-                    assert!(
-                        !text.contains(&format!("#base \"{other}\"")),
-                        "{}: {text}",
-                        control.name
-                    );
+                    assert!(active_bases.contains(&selected), "{}: {text}", control.name);
+                    assert!(!active_bases.contains(&other), "{}: {text}", control.name);
                 }
                 let once = tree.clone();
                 apply_hud_options(&mut tree, &schema, "hypnotizehud", &options).unwrap();
