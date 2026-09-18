@@ -50,8 +50,10 @@ it is not a passing gameplay gate. The exact successful candidate CI run,
 signed package results and remaining acceptance gates are recorded in the
 release record. [HUD browser checks](hud-ui.md) add keyboard and unavailable
 control guidance evidence without claiming native speech or screenshots.
-Passing core checks do not establish every HUD's in-game appearance or actual
-screen-reader speech.
+Final [native HUD acceptance](native-hud.md) records the successful isolated
+retail comparison and verified restoration. [Windows NVDA](native-a11y/windows.md)
+and [Linux Orca](native-a11y/linux.md) record actual speech from native WebView
+engines. These scoped checks do not establish every HUD's in-game appearance.
 
 ## Windows build environment
 

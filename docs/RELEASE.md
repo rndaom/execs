@@ -22,21 +22,24 @@ creator trust review and profile-owned preloaders. Main's changelog records
 fix. Its publication and compatibility evidence remains in
 `docs/release-0.1.4.md`.
 
-0.1.6 is being prepared in PR #52, with the separate main forward-port in
+0.1.6 is ready for final integration and tagging in PR #52, with the main forward-port in
 PR #53. The owner assigned all 14 milestone issues: sound identity/audition,
 creator ZIP import, Windows HUD paths, and HUD import/customization fixes.
 The existing creator-import PR #49 is incorporated into the combined candidate.
-See `docs/release-0.1.6.md` for the verification record and remaining gates.
-Preparation does not authorize a tag or publication; public latest stays 0.1.5.
+Automated signed-candidate checks, live HUD rendering and native screen-reader
+speech acceptance pass. See `docs/release-0.1.6.md` for the verification record.
+The owner has authorized publication; public latest stays 0.1.5 until the tagged
+workflow succeeds and its public downloads and updater feed are verified.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
 also found three patch-class regressions in public 0.1.2: absorb must stop if
 TF2 starts mid-operation, a catalog-matched imported HUD must keep its editable
 local tree, and an exported profile with a small highly compressible asset must
-import again. Creator-profile ZIP imports and profile-scoped preloader metadata
-remain on 0.2.0. See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and
-implementation evidence.
+import again. At the 0.1.3 release, creator-profile ZIP imports and profile-scoped
+preloader metadata remained on the minor track. Creator ZIP import is included
+in the owner-assigned 0.1.6 scope; profile-scoped preloaders remain on 0.2.0.
+See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and implementation evidence.
 Next minor: **0.2.0**, first Thursday of the month, skipped if the budget is empty.
 
 ## Branch names and release history
