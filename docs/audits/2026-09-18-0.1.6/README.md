@@ -28,10 +28,12 @@ gates are maintained in [the release record](../../release-0.1.6.md).
 
 ## Reproducible gates
 
-- `node scripts/verify-public-profile.mjs` compiles actual public 0.1.5 and
+- On the 0.1.6 maintenance branch, `node scripts/verify-public-profile.mjs`
+  ([source](https://github.com/rndaom/execs/blob/codex/release-0.1.6/scripts/verify-public-profile.mjs)) compiles actual public 0.1.5 and
   candidate cores. The public exporter creates the ZIP, and candidate imports,
   re-exports and re-imports compare bytes, hashes, metadata and active-profile
-  preservation. Both GitHub platform jobs run it.
+  preservation. Both maintenance GitHub platform jobs run it. This comparison
+  is specific to the maintenance schema and is not installed as a main gate.
 - `node scripts/verify-pinned-huds.mjs` downloads exact upstream revisions and
   verifies SHA-256 before tests. It exercises actual rayshud options,
   HypnotizeHUD includes, budhud directories, kbnhud/HypnotizeHUD declared fonts,

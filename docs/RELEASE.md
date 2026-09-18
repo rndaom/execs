@@ -15,7 +15,8 @@ The owner confirmed Linux is good and authorized release. See
 PR #47 is merged into maintenance; immutable tag `v0.1.5` points to its merge
 commit. PR #48 is merged into main, retaining the unreleased 0.2.0 versions,
 creator trust review and profile-owned preloaders. Main's changelog records
-0.1.5 as the next release's previous-public upgrade baseline. The unreleased 0.2.0 profile-owned preloader behavior remains on main.
+0.1.5 as the next release's previous-public upgrade baseline. The unreleased
+0.2.0 profile-owned preloader behavior remains on main.
 
 0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
 fix. Its publication and compatibility evidence remains in

@@ -1,5 +1,9 @@
 # 0.1.6 release preparation
 
+This record describes the maintenance candidate. The main forward-port retains
+version 0.2.0 and its profile-owned preloader schema; it does not adopt the
+maintenance release's version files or its schema-specific compatibility gate.
+
 Status: all 14 issues implemented; automated candidate verification is running.
 Gameplay rendering and native screen-reader acceptance remain open, so this is
 not yet unconditional release approval. Publication and a release tag are not
