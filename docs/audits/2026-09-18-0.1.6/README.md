@@ -1,6 +1,6 @@
 # 0.1.6 verification
 
-This directory records preparation, not publication. The issue scope and release
+This directory records preparation, acceptance and verified publication. The issue scope and release
 gates are maintained in [the release record](../../release-0.1.6.md).
 
 ## Research and implementation decisions
@@ -45,7 +45,7 @@ gates are maintained in [the release record](../../release-0.1.6.md).
 Automated filesystem probes use disposable fixtures. A separate attempted
 [retail smoke failed Cloud isolation and required verified recovery](retail-hud-smoke.md);
 it is not a passing gameplay gate. The exact successful candidate CI run,
-signed package results and remaining acceptance gates are recorded in the
+signed package results and completed acceptance gates are recorded in the
 release record. [HUD browser checks](hud-ui.md) add keyboard and unavailable
 control guidance evidence without claiming native speech or screenshots.
 Final [native HUD acceptance](native-hud.md) records the successful isolated
@@ -62,3 +62,13 @@ Some earlier independently generated build helpers were also blocked. The final
 full local Windows suite and workspace Clippy pass using the side-by-side
 toolchain; Windows and Linux GitHub runs are recorded separately. GitHub uses current
 stable Rust. No Windows security policy was disabled or bypassed.
+
+## Published artifacts
+
+The immutable `v0.1.6` tag was built and published by
+[run 35403021728](https://github.com/rndaom/execs/actions/runs/35403021728).
+[Anonymous public verification](public-verification.json) checks public delivery,
+all three signatures and hashes, updater URLs, release notes and exact provenance.
+Tagged installer/updater smoke reports remain separate from candidate evidence:
+[Windows](tagged-windows-package-smoke.json) and
+[Linux](tagged-linux-package-smoke.json).

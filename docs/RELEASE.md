@@ -3,33 +3,30 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.5** (`v0.1.5`, published 2026-09-15 at
-01:26 UTC; September 14 in America/New_York). All 23 repair records are Done.
-Frontend and Windows/Linux validation, signed packages, upgrades from public
-0.1.4, startup/notices, app-data preservation and no-repeat-offer checks pass.
-Anonymous public downloads, all three installer signatures and hashes, the
-actual updater URLs and exact release provenance are independently verified.
-The owner confirmed Linux is good and authorized release. See
-`docs/release-0.1.5.md` for final publication evidence and the X announcement.
+Current public version: **0.1.6** (`v0.1.6`, published 2026-09-18 23:20:05 UTC;
+September 18, 2026 at 7:20 PM in America/New_York). The owner assigned all 14
+milestone issues: sound identity/audition, creator ZIP import, Windows HUD paths,
+and HUD import/customization fixes. All 14 Linear milestone issues are Done.
 
-PR #47 is merged into maintenance; immutable tag `v0.1.5` points to its merge
-commit. PR #48 is merged into main, retaining the unreleased 0.2.0 versions,
-creator trust review and profile-owned preloaders. Main's changelog records
-0.1.5 as the next release's previous-public upgrade baseline. The unreleased
-0.2.0 profile-owned preloader behavior remains on main.
+Frontend and Windows/Linux validation, signed packages, upgrades from public
+0.1.5, startup/notices, app-data preservation and no-repeat-offer checks pass.
+Anonymous downloads independently verify all three installer signatures and
+hashes, the public updater URLs and exact release provenance. Native NVDA/Orca
+announced-name checks and Windows retail HUD rendering pass within their
+recorded scopes. See `docs/release-0.1.6.md` for publication and acceptance evidence.
+
+PR #52 is merged into `rndaom/release-0.1`; immutable tag `v0.1.6` points to
+merge commit `871abd751d278ca5105b64e9cfe3ee9e7f3067bb`. PR #53 is merged into
+main, retaining unreleased 0.2.0 versions and profile-scoped preloader work.
+Creator-import PR #49 is incorporated into #52 and closed as superseded.
+
+0.1.5 shipped the cfg/profile integrity and mutation-outcome fixes. PR #47
+merged into maintenance and PR #48 carried those fixes into main. Its immutable
+tag, publication evidence and announcement remain in `docs/release-0.1.5.md`.
 
 0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
 fix. Its publication and compatibility evidence remains in
 `docs/release-0.1.4.md`.
-
-0.1.6 is ready for final integration and tagging in PR #52, with the main forward-port in
-PR #53. The owner assigned all 14 milestone issues: sound identity/audition,
-creator ZIP import, Windows HUD paths, and HUD import/customization fixes.
-The existing creator-import PR #49 is incorporated into the combined candidate.
-Automated signed-candidate checks, live HUD rendering and native screen-reader
-speech acceptance pass. See `docs/release-0.1.6.md` for the verification record.
-The owner has authorized publication; public latest stays 0.1.5 until the tagged
-workflow succeeds and its public downloads and updater feed are verified.
 
 0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
 Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
@@ -56,13 +53,14 @@ owner's `rndaom/` prefix:
 
 The older `release-0.1.3` name was reused for 0.1.4 and 0.1.5. It has now been
 consolidated into `rndaom/release-0.1` without losing commits. Completed version
-branches are not an archive: immutable `v0.1.0` through `v0.1.5` tags, including
+branches are not an archive: immutable `v0.1.0` through `v0.1.6` tags, including
 `v0.1.3+1`, retain the published versions. Missing version branches therefore do
 not mean missing releases. Do not recreate old branches merely to fill gaps.
 
 The owner-requested 0.1.6 branch rename replaced draft PRs #50/#51 with #52/#53;
 the earlier reviews and successful CI remain available on the closed PRs.
-Branch organization does not authorize merging or publishing the candidate.
+Release publication requires the owner's separate authorization; a branch
+rename does not grant it.
 
 ## Who sees what
 

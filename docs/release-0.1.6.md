@@ -1,16 +1,16 @@
-# 0.1.6 release preparation
+# 0.1.6 release
 
-Status: all 14 issues implemented and all required candidate acceptance gates
-passed, including live HUD rendering and native screen-reader speech. The owner
-has authorized release, and the candidate is ready for final integration and
-tagging. Publication and its public-download verification are still pending.
-Public latest remains 0.1.5 until the tagged workflow publishes successfully.
+Status: published as the latest stable release at 2026-09-18 23:20:05 UTC
+(September 18, 2026 at 7:20 PM in America/New_York). All 14 issues are implemented;
+tagged release jobs and independent anonymous public-download checks pass.
+The owner authorized publication after live HUD rendering and native
+screen-reader acceptance passed. All 14 Linear milestone issues are Done.
 
 ## Scope and baseline
 
 The September 18 owner request covers all 14 issues in Linear's 0.1.6 milestone.
-The candidate starts at public `v0.1.5` (`9976464`) on
-`rndaom/release-0.1.6`, targeting maintenance `rndaom/release-0.1`.
+The release starts at public `v0.1.5` (`9976464`) and is integrated into
+maintenance `rndaom/release-0.1` through PR #52.
 The creator-import work from PR #49 and the Windows long-path fix are integrated
 into this candidate. Unrelated 0.2.0 work stays on main. The milestone explicitly
 assigns creator cfg/custom ZIP import as a bounded, compatible patch addition.
@@ -25,9 +25,9 @@ assigns creator cfg/custom ZIP import as a bounded, compatible patch addition.
 | HUD resource editing | RND-305, RND-306, RND-307, RND-310, RND-311 | Preserve legacy encoding; make folder variants reversible; handle conditional base includes, bounded expressions and included resource headers. Verify resource bytes against real pinned HUDs and official Source/editor semantics. |
 | HUD schema compatibility | RND-308, RND-309, RND-312 | Match supported schema revisions, reject duplicate identities, correct effective FlawHUD toggles and independent kbnhud size targets. Verify changed resources, not merely successful return values. |
 
-Implementation branches carry focused regressions and user-facing Unreleased
-notes. The integrated candidate receives a second review, Windows tests and
-GitHub Linux CI. Changes are forward-ported to the unreleased minor track.
+Implementation commits carry focused regressions and user-facing changelog
+notes. The integrated candidate passed independent review, Windows checks and
+GitHub Linux CI. PR #53 carries the fixes into the unreleased minor track.
 
 ## Verified implementation
 
@@ -67,6 +67,9 @@ are an explicit supported outcome of RND-308/309, not silently successful saves.
 - [x] Matching four version files, Cargo lockfile and 0.1.6 changelog section
 - [x] TF2 gameplay rendering for changed HUD includes and independent crosshairs
 - [x] Windows WebView2/NVDA and Linux WebKit/Orca announced names
+- [x] Maintenance and main PRs merged; immutable `v0.1.6` tag pushed
+- [x] Tagged workflow published as the latest stable release
+- [x] Anonymous public installers, signatures, updater links and provenance verified
 
 [Windows NVDA](audits/2026-09-18-0.1.6/native-a11y/windows.md) and
 [Linux Orca](audits/2026-09-18-0.1.6/native-a11y/linux.md) verify actual generated
@@ -76,6 +79,8 @@ audition. The [live HUD qualification](audits/2026-09-18-0.1.6/native-hud.md)
 records the six HypnotizeHUD controls and kbnhud crosshair/hitmarker A/B checks.
 Transparent viewmodels were observed after applying the HUD author's cvars and
 reloading the map; this does not establish a universal cause or prerequisite.
+The retail observations cover Windows TF2 and these pinned HUDs; they do not
+claim Linux gameplay validation or universal compatibility with other HUDs.
 
 Local final Windows results: 769 native tests passed; 16 opt-in fixture/network
 tests are excluded from the ordinary suite. The separate pinned-HUD gate passes
@@ -93,9 +98,12 @@ The actual public 0.1.5 exporter generated the compatibility ZIP; candidate
 import/export/import preserved bytes, hashes, metadata and active-profile state.
 See [machine-readable evidence](audits/2026-09-18-0.1.6/public-profile-compatibility.json).
 
-Maintenance [PR #52](https://github.com/rndaom/execs/pull/52) incorporates PR #49.
-Forward-port [PR #53](https://github.com/rndaom/execs/pull/53) preserves main's
-0.2.0 feature work and passes 774 local Windows native tests plus Clippy.
+Maintenance [PR #52](https://github.com/rndaom/execs/pull/52) merged as
+`871abd751d278ca5105b64e9cfe3ee9e7f3067bb` and incorporates PR #49.
+Forward-port [PR #53](https://github.com/rndaom/execs/pull/53) merged into main as
+`88eee3d2c817d23bc5ad491fc2b2c4fa2e73a2f9`. It preserves main's 0.2.0 versions
+and profile-scoped preloader work and passes 774 local Windows native tests
+plus Clippy.
 Private candidate [run 35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
 builds product commit `c001e96`; later preparation commits change documentation
 only, including the merge of maintenance's post-publication 0.1.5 evidence.
@@ -103,17 +111,37 @@ The run passed all validation, both package builds, both updater/installer
 smokes and release verification. Publication was **skipped**. The separate
 [maintenance product CI](https://github.com/rndaom/execs/actions/runs/35353755294)
 and [forward-port CI](https://github.com/rndaom/execs/actions/runs/35355011186)
-also pass. Both PRs are mergeable and remain drafts pending final integration
-and tagging. PR #49 is closed as superseded by #52.
+also pass. PR #49 is closed as superseded by #52.
 
-Independent downloads verify Minisign signatures for the Windows NSIS,
+Independent candidate downloads verify Minisign signatures for the Windows NSIS,
 Linux AppImage and Debian artifacts, and bind the updater feed to the exact
 draft assets. `release-commit.json` names the exact candidate commit and run.
 See [candidate-verification.json](audits/2026-09-18-0.1.6/candidate-verification.json),
 [Windows package smoke](audits/2026-09-18-0.1.6/windows-package-smoke.json) and
 [Linux package smoke](audits/2026-09-18-0.1.6/linux-package-smoke.json).
-The draft is not a public prerelease. No `v0.1.6` Git tag exists, and the
-public latest release and downloaded public updater feed still name 0.1.5.
+
+## Publication verification
+
+Immutable tag `v0.1.6` points to maintenance merge commit
+`871abd751d278ca5105b64e9cfe3ee9e7f3067bb`.
+[Tagged release run 35403021728](https://github.com/rndaom/execs/actions/runs/35403021728)
+passed validation, both package builds, both installer/updater smoke jobs and
+release verification, then published
+[0.1.6 as the latest stable release](https://github.com/rndaom/execs/releases/tag/v0.1.6).
+
+Anonymous downloads independently verify all three installer signatures and
+SHA-256 hashes, the exact tag/source/run provenance, and the published updater
+URLs and signature sidecars. The public `/releases/latest` feed names 0.1.6,
+contains Windows NSIS and Linux AppImage targets, and has no Debian updater
+entry or temporary draft URL. The Debian package remains available for first
+installation. See [public verification](audits/2026-09-18-0.1.6/public-verification.json).
+
+The tagged installers pass signed upgrades from the actual public 0.1.5
+installers, startup, packaged notices, app-data preservation and no-repeat-offer
+checks. Linux also installs and starts the Debian package. Tagged-run results
+are retained separately from the earlier private-candidate evidence:
+[Windows](audits/2026-09-18-0.1.6/tagged-windows-package-smoke.json) and
+[Linux](audits/2026-09-18-0.1.6/tagged-linux-package-smoke.json).
 
 ## Retail verification and restoration
 
@@ -134,6 +162,6 @@ runtime despite receiving no video flags; both were restored exactly. The
 original enabled Steam Cloud setting was restored. Live rendering evidence,
 rather than bootstrap or font loading alone, closes the gameplay gate.
 
-The owner's readiness condition is satisfied. Release integration, tag and
-publication remain pending; public issue closure and milestone completion follow
-successful publication and independent public-download/updater verification.
+The owner's readiness condition and publication request are complete. The
+evidence above distinguishes automated package verification, native spoken-name
+qualification and Windows retail rendering; none substitutes for the others.

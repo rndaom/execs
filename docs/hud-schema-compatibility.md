@@ -70,5 +70,8 @@ and all profile payload bytes through import, re-export and re-import.
 The signed candidate workflow
 [35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
 passed Windows/Linux validation, package builds and installer/updater checks;
-publication was skipped. Full TF2 visual acceptance remains open. See the
-[0.1.6 release record](release-0.1.6.md) for final integration provenance.
+publication was skipped. Subsequent [Windows TF2 visual acceptance](audits/2026-09-18-0.1.6/native-hud.md)
+passes all six HypnotizeHUD comparisons and independent kbnhud sizes/outlines,
+including a hitmarker triggered by actual damage. Those scoped retail checks do
+not claim Linux gameplay or universal HUD compatibility. See the
+[0.1.6 release record](release-0.1.6.md) for final publication provenance.
