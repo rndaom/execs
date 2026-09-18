@@ -312,6 +312,18 @@ export function HudPane({
                     <fieldset key={section.name} className="flex min-w-0 flex-col gap-2 py-3">
                       <legend className="eyebrow py-1">{section.name}</legend>
                       {section.controls.map((control) => {
+                        if (control.unavailableReason) {
+                          return (
+                            <div
+                              key={control.name}
+                              className="py-2"
+                              data-testid="hud-option-unavailable"
+                            >
+                              <p className="t-row">{control.label} - Unavailable</p>
+                              <p className="t-meta mt-1">{control.unavailableReason}</p>
+                            </div>
+                          );
+                        }
                         const value = draft[control.name] ?? control.value;
                         if (control.controlType === "checkbox") {
                           const enabled = isHudCheckboxOn(value);

@@ -39,6 +39,7 @@ pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
     "m0rehud",
     "kbnhud",
     "hypnotize-hud",
+    "hypnotizehud",
 ];
 
 const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db/main";
@@ -417,6 +418,14 @@ pub fn live_hud_keys(tf2_root: &Path) -> Vec<String> {
     keys
 }
 
+pub fn catalog_hud_id(id: &str) -> &str {
+    if id.eq_ignore_ascii_case("hypnotize-hud") {
+        "hypnotizehud"
+    } else {
+        id
+    }
+}
+
 pub fn schema_supported(id: &str) -> bool {
     SUPPORTED_SCHEMA_HUDS
         .iter()
@@ -430,7 +439,7 @@ pub fn schema_file_name(id: &str) -> Option<&'static str> {
         "flawhud" => Some("flawhud.json"),
         "m0rehud" => Some("m0rehud-classic.json"),
         "kbnhud" => Some("kbnhud.json"),
-        "hypnotize-hud" => Some("hypnotize-hud.json"),
+        "hypnotize-hud" | "hypnotizehud" => Some("hypnotize-hud.json"),
         _ => None,
     }
 }
@@ -688,7 +697,7 @@ pub fn hud_ui_state(manifest: &ProfileManifest, catalog: &[HudCatalogEntry]) -> 
     let catalog_hash = id.and_then(|id| {
         catalog
             .iter()
-            .find(|entry| entry.id.eq_ignore_ascii_case(id))
+            .find(|entry| catalog_hud_id(&entry.id).eq_ignore_ascii_case(catalog_hud_id(id)))
             .map(|entry| entry.hash.clone())
     });
     let update_available = match (&installed, &catalog_hash) {
@@ -1210,7 +1219,7 @@ pub fn apply_schema_options_to<I, S>(
     tf2_root: &Path,
     profile_id: &str,
     schema: &crate::hud_apply::HudSchema,
-    options: BTreeMap<String, String>,
+    mut options: BTreeMap<String, String>,
     running_names: I,
 ) -> Result<ProfileDetail, ProfileError>
 where
@@ -1230,6 +1239,11 @@ where
             "Install a HUD before saving options.".into(),
         ));
     }
+    crate::hud_schema_compat::preserve_unavailable_options(
+        schema,
+        &status.record.options,
+        &mut options,
+    )?;
     let folder = manifest_hud_folder_resolved(&manifest.files, &status.record.id)
         .unwrap_or_else(|| status.record.id.clone());
     let mut tree = load_hud_tree_from_manifest(profiles_dir, profile_id, &manifest, &folder)?;

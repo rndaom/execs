@@ -103,6 +103,8 @@ pub struct HudSchemaControl {
     pub value: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<HudSchemaChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -254,7 +256,10 @@ pub fn hud_cfg_stem(file_name: &str) -> String {
 }
 
 pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
-    serde_json::from_str(&strip_json_comments(raw)).map_err(|err| ProfileError::Io(err.to_string()))
+    let schema: HudSchema = serde_json::from_str(&strip_json_comments(raw))
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    crate::hud_schema_compat::validate_identities(&schema)?;
+    Ok(schema)
 }
 
 /// Some TF2HUD.Editor schemas carry `//` and `/* */` comments, which strict
@@ -358,6 +363,7 @@ fn apply_resolved_hud_options(
     options: &BTreeMap<String, String>,
     layer: CfgLayer,
 ) -> Result<HudApplyResult, ProfileError> {
+    crate::hud_schema_compat::validate_identities(schema)?;
     let custom = schema
         .customizations_folder
         .as_deref()
@@ -371,6 +377,10 @@ fn apply_resolved_hud_options(
     let mut cfg_writes = Vec::new();
     for controls in schema.controls.values() {
         for control in controls {
+            // Keep legacy saved values, but never write unconsumed log snippets.
+            if crate::hud_schema_compat::unavailable_reason(control).is_some() {
+                continue;
+            }
             apply_control(
                 tree,
                 control,
@@ -442,6 +452,8 @@ fn view_control(control: &HudControl) -> Option<HudSchemaControl> {
         control_type: kind.to_string(),
         value: control.value.clone(),
         choices,
+        unavailable_reason: crate::hud_schema_compat::unavailable_reason(control)
+            .map(str::to_owned),
         minimum: control.minimum.as_ref().map(json_to_string),
         maximum: control.maximum.as_ref().map(json_to_string),
     })

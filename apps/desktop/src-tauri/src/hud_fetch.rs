@@ -413,7 +413,17 @@ pub fn catalog_entry(id: &str) -> Result<HudCatalogEntry, String> {
     let entries = load_or_fetch_catalog(false)?;
     entries
         .into_iter()
-        .find(|entry| entry.id.eq_ignore_ascii_case(id))
+        .find(|entry| {
+            execs_core::hud::catalog_hud_id(&entry.id)
+                .eq_ignore_ascii_case(execs_core::hud::catalog_hud_id(id))
+        })
+        .map(|mut entry| {
+            // Updates retain the stored folder identity, including the legacy alias.
+            if id.eq_ignore_ascii_case("hypnotize-hud") {
+                entry.id = id.to_string();
+            }
+            entry
+        })
         .ok_or_else(|| format!("hud-db has no HUD named {id}."))
 }
 
@@ -975,6 +985,7 @@ fn resolve_relative(src: &str, base: &str) -> String {
 }
 
 pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
+    execs_core::hud_schema_compat::check_catalog_schema(id).map_err(|e| e.to_string())?;
     let file = schema_file_name(id).ok_or_else(|| {
         "This HUD has no in-app options. Use the author’s page for extras.".to_string()
     })?;
@@ -988,7 +999,7 @@ pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
     if let Ok(bytes) = net::read_cache_file_capped(&root, &cache, SCHEMA_CACHE_MAX_BYTES) {
         if let Ok(text) = String::from_utf8(bytes) {
             if execs_core::parse_hud_schema(&text).is_ok() {
-                return Ok(text);
+                return adapted_schema(id, &text);
             }
         }
     }
@@ -1006,7 +1017,14 @@ pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
     // otherwise fail on every start.
     net::write_cache_file_within(&root, &cache, text.as_bytes())
         .map_err(|err| format!("Could not save the HUD options schema ({err})."))?;
-    Ok(text)
+    adapted_schema(id, &text)
+}
+
+fn adapted_schema(id: &str, raw: &str) -> Result<String, String> {
+    let mut schema = execs_core::parse_hud_schema(raw).map_err(|e| e.to_string())?;
+    execs_core::hud_schema_compat::adapt_pinned_schema(id, &mut schema)
+        .map_err(|e| e.to_string())?;
+    serde_json::to_string(&schema).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
