@@ -5,10 +5,13 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- Profiles: import creator cfg/custom ZIPs with an app-themed review, real
-  progress, and a direct switch action after import.
+- Profiles: retain saved particle selections when repairing custom folder names,
+  including profiles that are not active.
+- Profiles: switch shared preloader selections with the target profile.
+
+## [0.1.6] - 2026-09-18
 
 ### Fixed
 
@@ -16,14 +19,6 @@ User-facing changes only. The release workflow publishes the matching
   player lists hide and restore together.
 - HUD: allow rayshud's Alternate Player Model option to use its direct resource
   edits without requiring a nonexistent legacy customization file.
-
-- Profiles: retain saved particle selections when repairing custom folder names,
-  including profiles that are not active.
-- Profiles: offer folder repair before switching to an imported setup with
-  unsupported custom folder names.
-- Profiles: switch shared preloader selections with the target profile.
-- Profiles: import split creator folders together, seed missing config.cfg
-  from TF2 defaults, and place legacy hitsounds under sound/ui.
 - HUDs: skip backup files and regenerable caches consistently when importing
   ZIPs, 7z archives or folders, fixing kinhud and m0re Rockz installs.
 - HUDs: install packs with deeply nested filenames on Windows without requiring
@@ -43,9 +38,11 @@ User-facing changes only. The release workflow publishes the matching
 - HUD: apply and reverse folder-based choices, evaluate cross-control font
   expressions, and switch HypnotizeHUD checkbox includes without losing other
   resources. Invalid or incompatible instructions leave all options unchanged.
-- Preserve rayshud options despite duplicate upstream control names, and separate kbnhud's two low-ammo blink colors while retaining older saved values.
-
-- Restore HypnotizeHUD option matching, keep kbnhud crosshair and hitmarker sizes independent, and identify unavailable m0rehud Classic and log-based HUD controls instead of reporting ineffective saves.
+- HUD: preserve rayshud options despite duplicate upstream control names, and
+  separate kbnhud's two low-ammo blink colors while retaining older saved values.
+- HUD: restore HypnotizeHUD options and keep kbnhud crosshair and hitmarker sizes
+  independent. Identify unavailable m0rehud Classic and log-based controls
+  instead of reporting ineffective saves.
 
 ## [0.1.5] - 2026-09-14
 
