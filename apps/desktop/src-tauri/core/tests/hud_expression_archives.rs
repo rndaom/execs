@@ -93,7 +93,7 @@ fn real_font_templates_reapply_and_resolve_to_declared_fonts() {
             .tree;
         let mut schema =
             parse_hud_schema(&fs::read_to_string(dir.join("schema.json")).unwrap()).unwrap();
-        execs_core::hud_schema_compat::adapt_pinned_schema(hud, &mut schema);
+        execs_core::hud_schema_compat::adapt_pinned_schema(hud, &mut schema).unwrap();
         let mut tree = original.clone();
         let mut options = BTreeMap::new();
         apply_hud_options(&mut tree, &schema, hud, &options).unwrap();
