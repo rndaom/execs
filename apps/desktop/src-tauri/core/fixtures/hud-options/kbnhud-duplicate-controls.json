@@ -1,0 +1,38 @@
+{
+  "Controls": {
+    "kbn_low_ammo_blink_1": [
+      {
+        "Name": "kbn_low_ammo_blink_1",
+        "Label": "Low Ammo Blink 1",
+        "Type": "ColorPicker",
+        "Value": "255 0 0 255",
+        "Restart": true,
+        "Files": {
+          "^customizations/#colors/ccolors_clientscheme.res": {
+            "Scheme": {
+              "Colors": {
+                "Low Ammo flash 1": "$value"
+              }
+            }
+          }
+        }
+      },
+      {
+        "Name": "kbn_low_ammo_blink_1",
+        "Label": "Low Ammo Blink 2",
+        "Type": "ColorPicker",
+        "Value": "255 100 100 255",
+        "Restart": true,
+        "Files": {
+          "^customizations/#colors/ccolors_clientscheme.res": {
+            "Scheme": {
+              "Colors": {
+                "Low Ammo flash 2": "$value"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

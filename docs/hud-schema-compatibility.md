@@ -4,6 +4,20 @@ The option schema remains pinned to TF2HUD.Editor commit
 `17bccd15d818d12707ce89574318acbc23c85a9f`. Cached and newly downloaded
 schemas pass the same validation and adapter before use.
 
+Exact duplicate records are normalized before typed parsing and unique-ID
+validation. SHA-256 fingerprints bind each correction to the complete pinned
+control data. Unknown or changed duplicates still refuse options.
+
+- rayshud's shared centered class/team key becomes one clearly named control
+  editing both resources. Its duplicate health-style control using absent
+  FileName variants is removed; the later control editing the loaded
+  `resource/ui/hudplayerhealth.res` remains under the original saved key.
+- kbnhud's second low-ammo blink color becomes `kbn_low_ammo_blink_2`. Older
+  stored values under the shared `_1` key seed both colors until `_2` is saved
+  explicitly. Fresh profiles retain the two distinct upstream defaults.
+- An audit of all six pinned schemas found no other duplicates in budhud,
+  FlawHUD or HypnotizeHUD; m0rehud remains explicitly unavailable as below.
+
 - **HypnotizeHUD (RND-307):** hud-db uses `hypnotizehud`; older records may use
   `hypnotize-hud`. Both resolve the same schema and catalog update. An update
   retains the stored alias so it does not implicitly rename the installed tree.

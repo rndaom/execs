@@ -256,8 +256,11 @@ pub fn hud_cfg_stem(file_name: &str) -> String {
 }
 
 pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
-    let schema: HudSchema = serde_json::from_str(&strip_json_comments(raw))
+    let mut raw: serde_json::Value = serde_json::from_str(&strip_json_comments(raw))
         .map_err(|err| ProfileError::Io(err.to_string()))?;
+    crate::hud_schema_compat::normalize_pinned_duplicates(&mut raw);
+    let schema: HudSchema =
+        serde_json::from_value(raw).map_err(|err| ProfileError::Io(err.to_string()))?;
     crate::hud_schema_compat::validate_identities(&schema)?;
     Ok(schema)
 }
@@ -349,6 +352,8 @@ pub fn apply_hud_options_for_layer(
 ) -> Result<HudApplyResult, ProfileError> {
     // Validate and resolve the complete schema before changing even the staged
     // tree. A later control failure must not leave earlier edits in the caller.
+    let migrated_options = crate::hud_schema_compat::migrate_saved_options(hud_id, options);
+    let options = &migrated_options;
     let schema = expressions::resolve_schema(schema, options)?;
     let mut staged = tree.clone();
     let result = apply_resolved_hud_options(&mut staged, &schema, hud_id, options, layer)?;
