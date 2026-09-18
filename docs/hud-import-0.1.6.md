@@ -51,8 +51,19 @@ fix uses canonicalized, extended Windows parent paths at both direct move
 endpoints and retains the leaf, supporting absent destinations and existing
 containment checks. Reviewed without finding a new defect.
 
-September 18 preparation: all three pinned downloads match the hashes above;
-Rust formatting and diff whitespace checks pass. Windows `LongPathsEnabled=0`.
-Local Cargo execution is blocked before tests by Application Control error
-4551 on `rustc.exe`; native test execution is still required in CI or on a
-permitted local toolchain. No policy bypass is used.
+September 18 Windows verification: all three pinned downloads match the hashes
+above. The opt-in install/update probe passes for HypnotizeHUD, kinhud and
+m0re-rockz in disposable roots, checking all retained live/library bytes and
+long staging paths with Windows `LongPathsEnabled=0`.
+
+Application Control initially refused the installed compiler with error 4551.
+An official Rust 1.96.0 toolchain installed alongside it runs these checks
+without changing security policy. The integrated workspace suite passes 769
+tests, with 16 opt-in tests explicitly ignored by the normal run; workspace
+Clippy passes with warnings denied. Rust formatting and whitespace checks pass.
+
+The signed candidate workflow
+[35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
+is ongoing at this documentation update. The local probe does not establish
+in-game rendering or completion of candidate CI and packaged installer checks.
+See the [0.1.6 release record](release-0.1.6.md) for final provenance and gates.

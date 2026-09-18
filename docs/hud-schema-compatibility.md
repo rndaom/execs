@@ -50,7 +50,25 @@ Primary evidence:
 
 The unit regressions check identity rejection, alias resolution, exact corrected
 targets, repeat adaptation, unavailable presentation metadata, unchanged resource
-bytes, preserved saved values and rejected unsupported edits. These assertions
-do not constitute an in-game rendering check. The release candidate must also
-exercise the engine's full-apply tests with three distinct sizes and perform the
-planned TF2 check before release.
+bytes, preserved saved values and rejected unsupported edits.
+
+## Integrated Windows verification
+
+The official Rust 1.96.0 toolchain, installed alongside the compiler initially
+refused by Windows Application Control, runs without changing security policy.
+The full workspace suite passes 769 tests, with 16 opt-in tests explicitly
+ignored by the normal run; workspace Clippy passes with warnings denied.
+
+Separate opt-in checks against actual pinned HUD fixtures pass all four option
+tests and the font test, including full application of distinct sizes. The
+three-package archive install/update probe also passes. These checks supplement
+the synthetic regressions; they do not make m0rehud Classic or log-based
+`WriteFile` controls supported, and they do not constitute an in-game rendering
+check. Public v0.1.5 exporter compatibility also passes, preserving HUD metadata
+and all profile payload bytes through import, re-export and re-import.
+
+The signed candidate workflow
+[35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
+is ongoing at this documentation update. The planned TF2 check and final
+candidate CI/installer outcomes remain separate release gates. See the
+[0.1.6 release record](release-0.1.6.md) for final integration provenance.
