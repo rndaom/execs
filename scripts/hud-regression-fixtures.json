@@ -1,0 +1,37 @@
+[
+  {
+    "id": "kbnhud",
+    "archiveUrl": "https://codeload.github.com/Jotunn/kbnHud/legacy.zip/daeda0c20310a54646253f7dfdc9536ae7acdfb6",
+    "archiveSha256": "829e58d87556555a1ad7b6da088f5c76252955fc64e75b0fc754d34c84c6e15f",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/kbnhud.json",
+    "schemaSha256": "e41144032f6bc198b0c6de31b667fb10592a5be34fcabd9c8dfabf5f1c8adf40"
+  },
+  {
+    "id": "hypnotizehud",
+    "archiveUrl": "https://codeload.github.com/Hypnootize/hypnotizehud/legacy.zip/82d332540a82ab085ff1a14b9aef774982ac5b9e",
+    "archiveSha256": "07d4385993349514150e4fc94a3068207d90e9d589225a68d1e90aef985ac246",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/hypnotize-hud.json",
+    "schemaSha256": "44eafa23a59a71dd577bb69db04a1f143d92f464c24333a07d7a371f20851abb"
+  },
+  {
+    "id": "rayshud",
+    "archiveUrl": "https://codeload.github.com/raysfire/rayshud/legacy.zip/a22ede014e4f3b1260aa8fd657ff0757d9d006b8",
+    "archiveSha256": "63190652527b2bd16249c576c016ca14599e4ca746aed1a0c43d92b1c9513df9",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/rayshud.json",
+    "schemaSha256": "db790856cba47d1eed4eb0dd580b73816ecc79d5ac40590c60f8706f681dcc44"
+  },
+  {
+    "id": "budhud",
+    "archiveUrl": "https://codeload.github.com/rbjaxter/budhud/legacy.zip/16f7be2bb4f0dcbe46ec5f444486ab6a6ea4c7e6",
+    "archiveSha256": "e1ec9d49c1a564007e5e85ccc4fa32a024ebdd258e2480139bbe005d3fbee353",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/budhud.json",
+    "schemaSha256": "6d21e251d434a1c0fe02eabff545405823f1bef361c43b13e4049c7bb0a9ee1a"
+  },
+  {
+    "id": "flawhud",
+    "archiveUrl": "https://codeload.github.com/CriticalFlaw/flawhud/legacy.zip/6282582e531ec1ca20b0ab85f9f1511be2f346df",
+    "archiveSha256": "274a3724686145036505eba329a45fc02ef91558335487be08f881f34a3123cb",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/flawhud.json",
+    "schemaSha256": "18bbc2d67b9a80ea626f53ae3875aebc83748be682b654bb2f4843d2a2d33d1e"
+  }
+]
