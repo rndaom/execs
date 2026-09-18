@@ -4,6 +4,102 @@ use std::collections::BTreeSet;
 use crate::hud_apply::{HudControl, HudSchema};
 use crate::profile::ProfileError;
 
+/// Exact duplicate records from the pinned upstream JSON. Normalize before
+/// deserializing (which drops fields used to establish exact provenance), then
+/// enforce unique identities normally. Unknown duplicates still fail closed.
+pub fn normalize_pinned_duplicates(raw: &mut serde_json::Value) {
+    let Some(sections) = raw
+        .get_mut("Controls")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    for (name, first_hash, second_hash, action) in [
+        (
+            "rh_toggle_center_class",
+            "68e9e9e6637f54784dc270a5024989fd65b4407f1577c005cf3be9958e6b3af3",
+            "0875daa4222dfddd2249d342881e421a12bacb1f825cc34de27733edc7220636",
+            0,
+        ),
+        (
+            "rh_val_health_style",
+            "4ee3ec835169e2dcf8fc45ca416b617f18011749ed380d1d90a158b21ca3f846",
+            "1983bcc6774607930eb5ee66628681ab75e823520507aa810a29933ac7e0e0c7",
+            1,
+        ),
+        (
+            "kbn_low_ammo_blink_1",
+            "21a703ef13066a90c7f3bfcb2c8c7d14ecb3835659eb114a168cd61e6d907f22",
+            "4d720a31213fe6a5cfeb35f10a40af91df0bd41a6eec97a8ae0500241f94e203",
+            2,
+        ),
+    ] {
+        let records: Vec<_> = sections
+            .values()
+            .filter_map(serde_json::Value::as_array)
+            .flatten()
+            .filter(|control| control["Name"] == name)
+            .cloned()
+            .collect();
+        if records.len() != 2 {
+            continue;
+        }
+        let fingerprint =
+            |value: &serde_json::Value| crate::hash::sha256_hex(value.to_string().as_bytes());
+        let Some(first) = records
+            .iter()
+            .find(|record| fingerprint(record) == first_hash)
+        else {
+            continue;
+        };
+        let Some(second) = records
+            .iter()
+            .find(|record| fingerprint(record) == second_hash)
+        else {
+            continue;
+        };
+        for controls in sections
+            .values_mut()
+            .filter_map(serde_json::Value::as_array_mut)
+        {
+            controls.retain_mut(|control| {
+                if action == 0 {
+                    if control == second {
+                        return false;
+                    }
+                    if control == first {
+                        control["Label"] = "Centered class and team select".into();
+                        control["Files"]
+                            .as_object_mut()
+                            .unwrap()
+                            .extend(second["Files"].as_object().unwrap().clone());
+                    }
+                } else if action == 1 && control == first {
+                    // The old FileName variants are absent from the current HUD.
+                    // Keep the later control that edits the loaded health resource.
+                    return false;
+                } else if action == 2 && control == second {
+                    control["Name"] = "kbn_low_ammo_blink_2".into();
+                }
+                true
+            });
+        }
+    }
+}
+
+pub fn migrate_saved_options(
+    hud_id: &str,
+    options: &std::collections::BTreeMap<String, String>,
+) -> std::collections::BTreeMap<String, String> {
+    let mut migrated = options.clone();
+    if hud_id.eq_ignore_ascii_case("kbnhud") && !migrated.contains_key("kbn_low_ammo_blink_2") {
+        if let Some(value) = options.get("kbn_low_ammo_blink_1") {
+            migrated.insert("kbn_low_ammo_blink_2".into(), value.clone());
+        }
+    }
+    migrated
+}
+
 pub fn check_catalog_schema(id: &str) -> Result<(), ProfileError> {
     if id.eq_ignore_ascii_case("m0rehud") {
         return Err(ProfileError::Io("The available m0rehud Classic options do not match the catalog's m0rehud files and contain duplicate control names. Use the HUD author's customization instructions. Your saved options are retained; they have not been reapplied.".into()));
@@ -114,6 +210,70 @@ mod tests {
         HudTree,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    #[ignore = "requires the pinned downloaded schema corpus, EXECS_HUD_SCHEMA_CORPUS"]
+    fn all_supported_pinned_schemas_have_valid_normalized_identities() {
+        let corpus = std::path::PathBuf::from(
+            std::env::var_os("EXECS_HUD_SCHEMA_CORPUS").expect("schema corpus directory"),
+        );
+        for id in ["rayshud", "kbnhud", "budhud", "flawhud", "hypnotizehud"] {
+            let raw = std::fs::read_to_string(corpus.join(id).join("schema.json")).unwrap();
+            let mut schema =
+                parse_hud_schema(&raw).unwrap_or_else(|error| panic!("{id}: {}", error.message()));
+            adapt_pinned_schema(id, &mut schema).unwrap();
+            validate_identities(&schema).unwrap();
+        }
+        assert!(check_catalog_schema("m0rehud").is_err());
+    }
+
+    #[test]
+    fn exact_pinned_duplicate_fragments_normalize_before_identity_validation() {
+        let raw = include_str!("../fixtures/hud-options/rayshud-duplicate-controls.json");
+        let schema = parse_hud_schema(raw).unwrap();
+        let controls: Vec<_> = schema.controls.values().flatten().collect();
+        assert_eq!(controls.len(), 2);
+        let centered = controls
+            .iter()
+            .find(|c| c.name == "rh_toggle_center_class")
+            .unwrap();
+        assert_eq!(centered.label, "Centered class and team select");
+        assert_eq!(
+            centered.files.as_ref().unwrap().as_object().unwrap().len(),
+            2
+        );
+        let health = controls
+            .iter()
+            .find(|c| c.name == "rh_val_health_style")
+            .unwrap();
+        for choice in health.options.as_ref().unwrap() {
+            assert!(choice.file_name.is_none());
+            assert!(choice
+                .files
+                .as_ref()
+                .unwrap()
+                .get("resource/ui/hudplayerhealth.res")
+                .is_some());
+        }
+        // Hash matching must reject a changed upstream record, not bless a name.
+        assert!(parse_hud_schema(&raw.replace("Centered Team Select", "Changed")).is_err());
+
+        let kbn = parse_hud_schema(include_str!(
+            "../fixtures/hud-options/kbnhud-duplicate-controls.json"
+        ))
+        .unwrap();
+        let controls = &kbn.controls["kbn_low_ammo_blink_1"];
+        assert_eq!(controls[0].name, "kbn_low_ammo_blink_1");
+        assert_eq!(controls[1].name, "kbn_low_ammo_blink_2");
+        assert_eq!(controls[0].value, "255 0 0 255");
+        assert_eq!(controls[1].value, "255 100 100 255");
+        let old = BTreeMap::from([("kbn_low_ammo_blink_1".into(), "1 2 3 255".into())]);
+        let mut migrated = migrate_saved_options("kbnhud", &old);
+        assert_eq!(migrated["kbn_low_ammo_blink_2"], "1 2 3 255");
+        migrated.insert("kbn_low_ammo_blink_2".into(), "4 5 6 255".into());
+        assert_eq!(migrate_saved_options("kbnhud", &migrated), migrated);
+        assert!(migrate_saved_options("kbnhud", &BTreeMap::new()).is_empty());
+    }
 
     #[test]
     fn catalog_and_stored_hypnotize_ids_share_the_schema() {
