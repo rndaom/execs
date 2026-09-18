@@ -42,10 +42,13 @@ checks for both library/live content and preservation of the previous HUD.
 - Native Win32 reproduction: passed (ordinary paths fail with error 3;
   extended paths succeed).
 - Rust formatting and diff whitespace checks: passed.
-- Local Cargo tests: blocked before execution by Windows Application Control,
-  error 4551 on dependency build scripts. This is not a test pass.
-- Before integration/release: run Windows/Linux CI, Windows regression with
-  long paths disabled, actual pinned HypnotizeHUD install/update in a disposable
-  fixture, and the normal previous-public profile/updater compatibility gates.
+- Initial local Cargo attempts were blocked by Windows Application Control
+  error 4551. An official side-by-side Rust 1.96.0 toolchain subsequently ran
+  the full Windows workspace suite successfully without a security-policy change.
+- Windows long-path regressions and actual pinned HypnotizeHUD install/update
+  pass in disposable fixtures with `LongPathsEnabled=0`. The full candidate
+  suite passes 769 native tests; workspace Clippy and formatting also pass.
+- Previous-public profile compatibility passes. Final Linux CI and signed
+  installer/updater results are tracked in [the release record](release-0.1.6.md).
 
 Tracked in [RND-303](https://linear.app/rndaom/issue/RND-303/fix-windows-long-path-hud-installs-failing-with-profile-library-os).
