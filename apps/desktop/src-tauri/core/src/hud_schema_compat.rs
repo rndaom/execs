@@ -19,6 +19,16 @@ pub fn normalize_pinned_duplicates(raw: &mut serde_json::Value) {
         .filter_map(serde_json::Value::as_array_mut)
         .flatten()
     {
+        if control["Name"] == "rh_toggle_streamer_mode"
+            && crate::hash::sha256_hex(control.to_string().as_bytes())
+                == "c3e750957f004bf81f9efee85b4b909e49991b817e913ec40c7db8b55d9972e5"
+        {
+            // The pinned red-list instruction accidentally puts `wide` where
+            // `true` belongs and wraps it in labelText. Both installed team
+            // lists are SectionedListPanels with width 270.
+            control["Files"]["resource/ui/scoreboard.res"]["RedPlayerList"] =
+                serde_json::json!({"wide":{"true":"0","false":"270"}});
+        }
         if control["Name"] == "rh_toggle_alt_player_model"
             && crate::hash::sha256_hex(control.to_string().as_bytes())
                 == "f39fe1988e1787065510f7eb2af4e353fe6f8848ce45c0252f070695f5afe155"
@@ -225,6 +235,55 @@ mod tests {
         HudTree,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn rayshud_streamer_mode_hides_both_team_lists() {
+        let control: serde_json::Value = serde_json::from_str(include_str!(
+            "../fixtures/hud-options/rayshud-streamer-mode.json"
+        ))
+        .unwrap();
+        let mut raw = serde_json::json!({"Controls":{"General":[control.clone()]}});
+        normalize_pinned_duplicates(&mut raw);
+        let files = &raw["Controls"]["General"][0]["Files"];
+        assert_eq!(
+            files["resource/ui/scoreboard.res"]["RedPlayerList"],
+            serde_json::json!({"wide":{"true":"0","false":"270"}})
+        );
+        let schema = parse_hud_schema(&raw.to_string()).unwrap();
+        let mut tree = HudTree::default();
+        tree.insert("resource/ui/scoreboard.res",b"\"Resource/UI/Scoreboard.res\" { \"RedPlayerList\" { \"wide\" \"270\" } \"BluePlayerList\" { \"wide\" \"270\" } }".to_vec());
+        for enabled in [true, false] {
+            apply_hud_options(
+                &mut tree,
+                &schema,
+                "rayshud",
+                &BTreeMap::from([("rh_toggle_streamer_mode".into(), enabled.to_string())]),
+            )
+            .unwrap();
+            let map = crate::vdf::parse_hud_vdf(
+                std::str::from_utf8(tree.get("resource/ui/scoreboard.res").unwrap()).unwrap(),
+            )
+            .unwrap();
+            let root = map.entries[0].1.as_obj().unwrap();
+            for team in ["RedPlayerList", "BluePlayerList"] {
+                let panel = root.get(team).unwrap().as_obj().unwrap();
+                assert_eq!(
+                    panel.get("wide").unwrap().as_str(),
+                    Some(if enabled { "0" } else { "270" })
+                );
+                assert!(panel.get("labelText").is_none());
+            }
+        }
+        let mut changed = serde_json::json!({"Controls":{"General":[control]}});
+        changed["Controls"]["General"][0]["Value"] = "true".into();
+        normalize_pinned_duplicates(&mut changed);
+        assert!(
+            changed["Controls"]["General"][0]["Files"]["resource/ui/scoreboard.res"]
+                ["RedPlayerList"]
+                .get("labelText")
+                .is_some()
+        );
+    }
 
     #[test]
     fn rayshud_alternate_model_uses_its_direct_resource_instructions() {

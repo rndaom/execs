@@ -19,6 +19,63 @@ fn fixture(hud: &str) -> (HudTree, HudSchema) {
 
 #[test]
 #[ignore = "requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES"]
+fn flawhud_full_schema_applies_supported_choices_without_log_files() {
+    let (original, schema) = fixture("flawhud");
+    let mut cases = vec![BTreeMap::new()];
+    let mut log_files = Vec::new();
+    for control in schema.controls.values().flatten() {
+        if let Some(write) = &control.write_file {
+            log_files.push(write.file_name.clone());
+        }
+        if execs_core::hud_schema_compat::unavailable_reason(control).is_some() {
+            continue;
+        }
+        let mut values = vec![control.value.clone()];
+        match control.control_type.to_ascii_lowercase().as_str() {
+            "checkbox" => values.extend(["true".into(), "false".into()]),
+            "combobox" => values.extend(
+                control
+                    .options
+                    .iter()
+                    .flatten()
+                    .map(|option| option.value.clone()),
+            ),
+            "colorpicker" => values.push("17 91 203 127".into()),
+            _ => {}
+        }
+        values.sort();
+        values.dedup();
+        cases.extend(
+            values
+                .into_iter()
+                .map(|value| BTreeMap::from([(control.name.clone(), value)])),
+        );
+    }
+    assert!(!log_files.is_empty());
+    assert!(cases.len() > 20);
+    eprintln!(
+        "FlawHUD: {} full-schema default/alternate cases",
+        cases.len()
+    );
+    for options in cases {
+        let mut tree = original.clone();
+        apply_hud_options(&mut tree, &schema, "flawhud", &options)
+            .unwrap_or_else(|error| panic!("{options:?}: {error:?}"));
+        for file in &log_files {
+            assert_eq!(
+                tree.get(file),
+                original.get(file),
+                "unexpected log file {file}"
+            );
+        }
+        let once = tree.clone();
+        apply_hud_options(&mut tree, &schema, "flawhud", &options).unwrap();
+        assert_eq!(tree, once, "{options:?}");
+    }
+}
+
+#[test]
+#[ignore = "requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES"]
 fn rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment() {
     let (original, schema) = fixture("rayshud");
     let path = "resource/scheme/clientscheme_colors.res";
@@ -53,6 +110,10 @@ fn rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment() 
         );
     }
     assert!(cases.len() >= 79);
+    eprintln!(
+        "rayshud: {} full-schema default/alternate cases",
+        cases.len()
+    );
     for options in cases {
         let mut tree = original.clone();
         apply_hud_options(&mut tree, &schema, "rayshud", &options)
