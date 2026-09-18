@@ -91,7 +91,7 @@ fn resolve_control(
             for (path, patch) in files {
                 resolve_json(patch, &current, values, budget, depth + 1).map_err(|err| {
                     error(format!(
-                        "HUD option \"{}\" ({}), {path}: {err}",
+                        "HUD option \"{}\" ({}), {path}: {err:?}",
                         control.label, control.name
                     ))
                 })?;
@@ -398,7 +398,7 @@ mod tests {
         let before = tree.clone();
         let err = apply_hud_options(&mut tree, &schema, "fixture", &BTreeMap::new())
             .unwrap_err()
-            .to_string();
+            .message();
         assert!(
             err.contains("size")
                 && err.contains("resource/crosshair.res")
