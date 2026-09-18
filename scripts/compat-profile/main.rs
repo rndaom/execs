@@ -12,7 +12,6 @@ use serde_json::{json, Value};
 const OLD_COMMIT: &str = "9976464bd7a4a79faf53b6e6ca3dab2219633bdd";
 const OLD_CORE_TREE: &str = "f2d03158fd4435d931db1f55fc50da1b2ef67478";
 
-
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
         .arg("-C")
