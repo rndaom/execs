@@ -1710,25 +1710,15 @@ mod tests {
         let before_live = snapshot_tree(&root);
         let before_other = snapshot_tree(&other_root);
 
-        let locked = import_profile_with_review(
-            &profiles,
-            &root,
-            &path,
-            [tf2_name()],
-            Some(&review),
-        )
-        .unwrap_err();
+        let locked =
+            import_profile_with_review(&profiles, &root, &path, [tf2_name()], Some(&review))
+                .unwrap_err();
         assert_eq!(locked, ProfileError::GameRunning);
         assert_eq!(snapshot_tree(&profiles), before_library);
 
-        let moved = import_profile_with_review(
-            &profiles,
-            &other_root,
-            &path,
-            unlocked(),
-            Some(&review),
-        )
-        .unwrap_err();
+        let moved =
+            import_profile_with_review(&profiles, &other_root, &path, unlocked(), Some(&review))
+                .unwrap_err();
         assert!(matches!(moved, ProfileError::RootMismatch { .. }));
         assert_eq!(snapshot_tree(&profiles), before_library);
         assert_eq!(snapshot_tree(&root), before_live);
