@@ -1,0 +1,59 @@
+{
+  "candidateRun": 35353749221,
+  "candidateCommit": "c001e96e2725820b593bfe04483d2b94b81a89cb",
+  "windowsTests": 769,
+  "linuxTests": 778,
+  "desktopTests": 542,
+  "cfglintTests": 140,
+  "releaseScriptTests": 21,
+  "mainTests": 774,
+  "mainCodeCi": 35353753601,
+  "maintenanceCodeCi": 35353755294,
+  "mainFinalCi": 35355011186,
+  "draftReleaseId": 391537399,
+  "linuxPackages": [
+    {
+      "name": "execs_0.1.6_amd64.AppImage",
+      "bytes": 99670520,
+      "sha256": "73bc47a589abc37ea471d3d0ca699cd2c5eb6232e68c3cec24d095328c45b960"
+    },
+    {
+      "name": "execs_0.1.6_amd64.deb",
+      "bytes": 12906078,
+      "sha256": "890dbeffbaea532b4c8b900260773da1b6d28cfea9d161b1664c925d29bf7de9"
+    }
+  ],
+  "windowsPackage": {
+    "name": "execs_0.1.6_x64-setup.exe",
+    "bytes": 6193126,
+    "sha256": "573c153e71ae8223f35b45987fdef5e2c3ccd8d848b356bfac04cb3502f4808e"
+  },
+  "candidateStatus": "success",
+  "independentAllThreePackageSignatures": true,
+  "independentUpdaterAssetBinding": true,
+  "releaseCommitProvenanceMatches": true,
+  "draftRelease": true,
+  "publishStatus": "skipped",
+  "publicVersion": "0.1.5",
+  "tagCreated": false,
+  "manualGates": [
+    "TF2 gameplay rendering for changed HUD includes and independent crosshairs",
+    "Windows WebView2/NVDA and Linux WebKit/Orca spoken output"
+  ],
+  "scope": [
+    "RND-312",
+    "RND-311",
+    "RND-310",
+    "RND-303",
+    "RND-309",
+    "RND-308",
+    "RND-307",
+    "RND-306",
+    "RND-305",
+    "RND-304",
+    "RND-201",
+    "RND-287",
+    "RND-293",
+    "RND-245"
+  ]
+}

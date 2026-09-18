@@ -1,6 +1,6 @@
 # 0.1.6 release preparation
 
-Status: all 14 issues implemented; automated candidate verification is running.
+Status: all 14 issues implemented; automated signed-candidate verification passed.
 Gameplay rendering and native screen-reader acceptance remain open, so this is
 not yet unconditional release approval. Publication and a release tag are not
 authorized. Public latest remains 0.1.5.
@@ -56,13 +56,13 @@ are an explicit supported outcome of RND-308/309, not silently successful saves.
 - [x] All 14 acceptance criteria mapped to implementation and checks/limitations
 - [x] Frontend tests, Biome and production build
 - [x] Windows Rust formatting, clippy and workspace tests
-- [ ] GitHub Linux CI and package smoke
+- [x] GitHub Linux CI and package smoke
 - [x] Previous-public profile import/export compatibility
 - [x] Changed UI interaction, layout and accessible-name checks
 - [x] Real pinned HUD resource semantics and manifest/live-byte integrity
-- [ ] Signed private candidate and updater upgrade from public 0.1.5
-- [ ] Startup, app-data preservation and no-repeat-update checks
-- [ ] Maintenance and forward-port PRs with passing checks
+- [x] Signed private candidate and updater upgrade from public 0.1.5
+- [x] Startup, app-data preservation and no-repeat-update checks
+- [x] Maintenance and forward-port product changes pass CI
 - [x] Matching four version files, Cargo lockfile and 0.1.6 changelog section
 - [ ] TF2 gameplay rendering for changed HUD includes and independent crosshairs
 - [ ] Windows WebView2/NVDA and Linux WebKit/Orca announced names
@@ -74,6 +74,10 @@ installation/update probe. Workspace Clippy denies warnings and formatting
 passes. Frontend: 542 desktop tests, 140 cfglint tests and 21 release-script
 tests pass (three Linux-only script checks skip locally); Biome, TypeScript and
 production build pass. The normal Vite large-chunk advisory remains.
+GitHub Linux passes 778 native tests plus the separately invoked pinned-HUD
+gate; GitHub Windows matches the 769-test local suite and passes that gate.
+The [HUD browser interaction check](audits/2026-09-18-0.1.6/hud-ui.md)
+also verifies keyboard behavior and explicit unavailable-control guidance.
 
 The actual public 0.1.5 exporter generated the compatibility ZIP; candidate
 import/export/import preserved bytes, hashes, metadata and active-profile state.
@@ -84,7 +88,22 @@ Forward-port [PR #51](https://github.com/rndaom/execs/pull/51) preserves main's
 0.2.0 feature work and passes 774 local Windows native tests plus Clippy.
 Private candidate [run 35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
 builds product commit `c001e96`; later preparation commits change documentation
-only. Its release workflow must leave publication skipped.
+only, including the merge of maintenance's post-publication 0.1.5 evidence.
+The run passed all validation, both package builds, both updater/installer
+smokes and release verification. Publication was **skipped**. The separate
+[maintenance product CI](https://github.com/rndaom/execs/actions/runs/35353755294)
+and [forward-port CI](https://github.com/rndaom/execs/actions/runs/35355011186)
+also pass. Both PRs are mergeable and remain drafts for the open acceptance
+gates. PR #49 is closed as superseded by #50.
+
+Independent downloads verify Minisign signatures for the Windows NSIS,
+Linux AppImage and Debian artifacts, and bind the updater feed to the exact
+draft assets. `release-commit.json` names the exact candidate commit and run.
+See [candidate-verification.json](audits/2026-09-18-0.1.6/candidate-verification.json),
+[Windows package smoke](audits/2026-09-18-0.1.6/windows-package-smoke.json) and
+[Linux package smoke](audits/2026-09-18-0.1.6/linux-package-smoke.json).
+The draft is not a public prerelease. No `v0.1.6` Git tag exists, and the
+public latest release and downloaded public updater feed still name 0.1.5.
 
 ## Retail verification limitation
 

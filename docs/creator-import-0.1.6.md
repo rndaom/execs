@@ -105,6 +105,6 @@ installed profile library or launching TF2.
 
 The signed candidate workflow
 [35353749221](https://github.com/rndaom/execs/actions/runs/35353749221)
-is ongoing at this documentation update. These local results do not claim that
-candidate CI or packaged installer/updater verification has finished. See the
+passed Windows/Linux validation, package builds and installer/updater checks;
+publication was skipped. See the
 [0.1.6 release record](release-0.1.6.md) for final integration provenance and gates.
