@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- HUDs: skip backup files and regenerable caches consistently when importing
+  ZIPs, 7z archives or folders, fixing kinhud and m0re Rockz installs.
 - HUDs: install packs with deeply nested filenames on Windows without requiring
   the system's long-path setting, including HypnotizeHUD.
 - Profiles: import creator cfg/custom ZIPs instead of rejecting entries such as
