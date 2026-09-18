@@ -232,7 +232,8 @@ export function sameChoice(a: SoundChoice, b: SoundChoice): boolean {
     const entry = b.entry;
     return (
       (a.kind === "community" && entry.source === "community" && a.id === entry.name) ||
-      (a.kind === "comfig" && entry.source === "comfig" && a.name === entry.name)
+      (a.kind === "comfig" && entry.source === "comfig" && a.hash === entry.hash) ||
+      (a.kind === "file" && entry.source === "file" && a.picked.token === entry.token)
     );
   }
   if (a.kind !== b.kind) {
@@ -250,7 +251,9 @@ export function sameChoice(a: SoundChoice, b: SoundChoice): boolean {
     default:
       return (
         a.entry.name === (b as typeof a).entry.name &&
-        a.entry.source === (b as typeof a).entry.source
+        a.entry.source === (b as typeof a).entry.source &&
+        a.entry.hash === (b as typeof a).entry.hash &&
+        a.entry.token === (b as typeof a).entry.token
       );
   }
 }
@@ -269,7 +272,12 @@ export function serializeSoundsDraft(draft: SoundsDraft): string {
             ? value.choice.picked.token
             : value.choice.kind === "comfig"
               ? value.choice.hash
-              : `${value.choice.entry.source}:${value.choice.entry.name}`,
+              : [
+                  value.choice.entry.source,
+                  value.choice.entry.name,
+                  value.choice.entry.hash,
+                  value.choice.entry.token,
+                ],
       value.volume,
       value.pitchMin,
       value.pitchMax,

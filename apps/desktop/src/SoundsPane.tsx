@@ -54,6 +54,7 @@ import {
   type SoundLibraryEntry,
   type SoundSort,
   type SoundSourceId,
+  soundAccessibleNames,
   stockEntries,
 } from "./lib/sound-library";
 
@@ -119,7 +120,7 @@ export function SoundsPane({
     serializeSoundsDraft,
     draftRecordKey(profileId, "sounds"),
   );
-  const player = useSoundPlayer(api);
+  const player = useSoundPlayer(api, JSON.stringify([profileId, record]));
   const canAudition = isTauri();
 
   // Library state.
@@ -181,6 +182,7 @@ export function SoundsPane({
     () => filterSoundLibrary(library, query, sort, source === "all" ? null : new Set([source])),
     [library, query, sort, source],
   );
+  const accessibleNames = useMemo(() => soundAccessibleNames(library), [library]);
 
   const dirty = serializeSoundsDraft(draft) !== serializeSoundsDraft(seeded);
   const needsPack = packChangeNeeded(draft, record);
@@ -344,6 +346,7 @@ export function SoundsPane({
             const playable = canAudition && stockAvailable(entry, "hit");
             const isHit = sameChoice(draft.hit.choice, hitChoice);
             const isKill = sameChoice(draft.kill.choice, killChoice);
+            const clipName = accessibleNames.get(entry.id) ?? entry.label;
             return (
               <li
                 key={entry.id}
@@ -351,6 +354,7 @@ export function SoundsPane({
                 className="row min-h-12 gap-3 border-b border-edge last:border-b-0"
               >
                 <PlayButton
+                  clipName={clipName}
                   playing={player.playing === soundKey(hitPick)}
                   disabled={!playable}
                   onClick={() => toggle("hit", hitChoice)}
@@ -368,6 +372,7 @@ export function SoundsPane({
                 <span className="flex shrink-0 items-center gap-1">
                   <AssignButton
                     label="Hit"
+                    accessibleLabel={`Assign ${clipName} as hit sound`}
                     active={isHit}
                     disabled={locked}
                     testId={`sounds-assign-hit-${entry.id}`}
@@ -375,6 +380,7 @@ export function SoundsPane({
                   />
                   <AssignButton
                     label="Kill"
+                    accessibleLabel={`Assign ${clipName} as kill sound`}
                     active={isKill}
                     disabled={locked}
                     testId={`sounds-assign-kill-${entry.id}`}
@@ -527,6 +533,7 @@ function SoundSlot({
         }`}
       >
         <PlayButton
+          clipName={`${choiceLabel(slot.choice)} (${title.toLowerCase()}, ${choiceSourceLabel(slot.choice)})`}
           playing={isPlaying}
           disabled={!canAudition}
           testId={`sounds-${kind}-play`}
@@ -547,6 +554,7 @@ function SoundSlot({
         <Slider
           id={`sounds-${kind}-volume`}
           label="Volume"
+          accessibleLabel={`${title} volume`}
           value={slot.volume}
           min={0}
           max={100}
@@ -562,7 +570,7 @@ function SoundSlot({
             <p className="t-meta">Makes the file itself louder.</p>
           </div>
           <Segmented
-            label="Boost"
+            label={`${title} boost`}
             size="sm"
             disabled={locked}
             testIdPrefix={`sounds-${kind}-boost`}
@@ -580,11 +588,13 @@ function SoundSlot({
 }
 
 function PlayButton({
+  clipName,
   playing,
   disabled = false,
   testId,
   onClick,
 }: {
+  clipName: string;
   playing: boolean;
   disabled?: boolean;
   testId?: string;
@@ -594,7 +604,7 @@ function PlayButton({
     <button
       type="button"
       data-testid={testId}
-      aria-label={playing ? "Stop" : "Play"}
+      aria-label={`${playing ? "Stop" : "Play"} ${clipName}`}
       aria-pressed={playing}
       disabled={disabled}
       title={disabled ? "Needs the desktop app." : undefined}
@@ -608,12 +618,14 @@ function PlayButton({
 
 function AssignButton({
   label,
+  accessibleLabel,
   active,
   disabled,
   testId,
   onClick,
 }: {
   label: string;
+  accessibleLabel: string;
   active: boolean;
   disabled: boolean;
   testId: string;
@@ -624,6 +636,7 @@ function AssignButton({
       type="button"
       data-testid={testId}
       data-active={active ? "true" : "false"}
+      aria-label={accessibleLabel}
       aria-pressed={active}
       disabled={disabled || active}
       onClick={onClick}
@@ -641,6 +654,7 @@ function AssignButton({
 function Slider({
   id,
   label,
+  accessibleLabel,
   hint,
   value,
   min,
@@ -651,6 +665,7 @@ function Slider({
 }: {
   id: string;
   label: string;
+  accessibleLabel?: string;
   hint?: string;
   value: number;
   min: number;
@@ -674,6 +689,7 @@ function Slider({
         id={id}
         data-testid={id}
         type="range"
+        aria-label={accessibleLabel}
         min={min}
         max={max}
         step={1}

@@ -153,6 +153,8 @@ Tokens only in `apps/desktop/src/index.css` `@theme`: bg `#121212` → panel `#1
 
 ## 0.1.5 mutation outcomes
 
+- Installed sound auditions read current bytes on each play, invalidate on profile or installed-record changes, and revoke their transient URLs. Draft ownership remains the stable profile/slot identity. Catalog assignment matches source hashes/tokens; legacy unknown identities do not match by display name.
+
 - Crosshair builds release draft asset bytes only after a confirmed successful host result. Sounds drafts belong to the profile and sound slots; a changed installed record acknowledges content without resetting newer edits.
 - Comfig controls and previews show the complete persisted snapshot. Failed preset, module and addon selections stay available to retry and never enter later write payloads as if saved.
 - Import picker cancellation remains `null` through the bridge and write runner. Cancelled imports skip reload and completion feedback; picker commands reserve no Saving indicator while the user is choosing.

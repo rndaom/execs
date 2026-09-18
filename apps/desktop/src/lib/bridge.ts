@@ -740,6 +740,9 @@ export type HitsoundSource = "community" | "file" | "comfig";
 export type HitsoundEntry = {
   name: string;
   source: HitsoundSource;
+  /** Stable original source identity; older profiles may omit it. */
+  token?: string | null;
+  hash?: string | null;
   /** Gain baked into the file: 0, 6 or 12 dB. */
   boost?: number;
 };
