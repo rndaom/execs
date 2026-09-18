@@ -54,6 +54,8 @@ jobs:
         run: git fetch origin tag v0.1.5 --no-tags
       - name: Previous-public profile compatibility
         run: node scripts/verify-public-profile.mjs
+      - name: Pinned HUD installation and option semantics
+        run: node scripts/verify-pinned-huds.mjs
 
   rust-windows:
     runs-on: windows-latest
@@ -76,3 +78,5 @@ jobs:
         run: git fetch origin tag v0.1.5 --no-tags
       - name: Previous-public profile compatibility
         run: node scripts/verify-public-profile.mjs
+      - name: Pinned HUD installation and option semantics
+        run: node scripts/verify-pinned-huds.mjs
