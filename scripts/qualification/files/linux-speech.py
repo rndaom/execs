@@ -21,9 +21,11 @@ for attempt in range(120):
     if runtime.get("speechPhase") == "problem-row" and not (evidence / "speech-reviewed").exists():
         # GNOME Orca desktop flat review, verified against ORCA_42_0 keymap.
         # https://help.gnome.org/orca/commands_flat_review.html
-        for command in ["KP_Up", "KP_Page_Up", "KP_Page_Up", "KP_Page_Up", "KP_Page_Up"]:
+        # Document Say All from the focused problem link (GNOME reading commands).
+        for command in ["KP_Add"]:
             subprocess.run(["xdotool", "key", "--clearmodifiers", command], check=True)
-            time.sleep(1.4)
+            time.sleep(8)
+        subprocess.run(["xdotool", "key", "--clearmodifiers", "Control_L"], check=True)
         (evidence / "speech-reviewed").touch()
     result_path = evidence / "1200x800" / "workflows.json"
     if result_path.exists():
