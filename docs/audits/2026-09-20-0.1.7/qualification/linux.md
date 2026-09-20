@@ -36,13 +36,39 @@ document script; the initial generic GTK script is not an explanation for this
 gap. Windows NVDA separately spoke both full warning and save result. The green
 Linux job requires editor speech, not every acceptance announcement.
 
-These are protocol limitations rather than established product defects. The
-finding's focusable button contains the location; warning prose is adjacent
-paragraph content. This harness focuses the button and selects the argument,
-without asking Orca to read the full row. After Save it waits for the Unsaved
-marker to disappear and immediately focuses Open file, which may interrupt a
-polite status announcement. A deliberate read-row and settled-save speech check
-is needed to close these observations; this run cannot certify or disprove them.
+Two bounded follow-ups investigated these observations without modifying product
+code. [Run 35491252328](https://github.com/rndaom/execs/actions/runs/35491252328)
+at `9108321` used documented desktop flat review (KP8 then four KP9 commands)
+from the scrolled, focused problem location. Only the frame title was spoken.
+[Run 35491407031](https://github.com/rndaom/execs/actions/runs/35491407031)
+at `62a0797` used documented document Say All (KP Plus) from the same location.
+The log confirms `Handler is Speak entire document`, but no warning prose was
+generated. The adjacent paragraph text and precise argument navigation pass
+separately; full warning speech remains unverified on this reader/host.
+
+Both follow-ups held focus stationary for five seconds after each acknowledged
+save. Explicit Saved speech remained absent, so immediate focus movement is not
+a sufficient explanation. The [captured AT-SPI event](linux/polite-status-event.txt)
+exposes a status-bar child addition with `live:polite`, `atomic:true`, and
+`container-live:polite`. Product Toast already uses an always-mounted polite
+status region. Orca 42's [WebKitGtk script](https://github.com/GNOME/orca/blob/ORCA_42_0/src/orca/scripts/toolkits/WebKitGtk/script.py#L55)
+inherits the default script and does not override child-add handling; the
+[default handler is empty](https://github.com/GNOME/orca/blob/ORCA_42_0/src/orca/scripts/default.py#L2128).
+This source behavior and the observed event explain the absent automatic
+announcement on this stack; they do not establish a malformed product status
+region or justify claiming the required spoken result passed.
+
+[Settled-save speech](linux/settled-save-speech.txt),
+[Say All speech and handler](linux/say-all-speech.txt), and
+[follow-up workflow assertions](linux/speech-followup-workflows.json) preserve
+the observations. Commands were checked against the [GNOME flat-review guide](https://help.gnome.org/orca/commands_flat_review.html),
+[reading guide](https://help.gnome.org/orca/commands_reading.html), and exact
+[Orca 42 keymap](https://github.com/GNOME/orca/blob/ORCA_42_0/src/orca/desktop_keyboardmap.py#L53).
+These targeted runs explicitly omit keyboard, IME and performance qualification;
+the earlier passing measurements remain unchanged. The preceding full rerun
+35491095523 failed before speech review because physical completion intermittently
+retained only the first prefix character under Orca. That failure is not erased
+by the targeted runs or represented as a new passing keyboard observation.
 
 See [speech excerpts](linux/speech-excerpts.txt) and
 [workflow assertions](linux/workflows.json). Vanilla autoexec creation, native

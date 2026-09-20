@@ -3,7 +3,9 @@
 Status: both native jobs passed in run 35490611803 at 0ff59b4. Keyboard,
 authoring workflows, Linux real IME and performance evidence are recorded below.
 This is scoped fixture qualification, not blanket release acceptance: Linux
-explicit save-result speech and full warning narration were not observed.
+explicit save-result speech and full warning narration were not observed, even
+in bounded settled-save and documented read-command follow-ups. The Linux record
+links the source-backed Orca 42 child-add announcement limitation and raw logs.
 
 Completed platform evidence: [Windows native results and captures](windows.md)
 and [Linux native results and capture](linux.md).

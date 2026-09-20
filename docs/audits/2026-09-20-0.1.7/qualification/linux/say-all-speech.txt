@@ -1,0 +1,61 @@
+05:21:12.307482 - SPEECH OUTPUT: 'Screen reader on.'{'established': False}
+05:21:12.926509 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}
+05:21:16.115711 - SPEECH OUTPUT: 'New cfg collapsed push button.'{'established': False}
+05:21:16.519653 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:21:16.553000 - SPEECH OUTPUT: 'New cfg article'{'established': False}
+05:21:16.554071 - SPEECH OUTPUT: 'Name or relative helper path embedded.'{'established': False}
+05:21:16.736671 - SPEECH OUTPUT: 'Open unsaved draft push button.'{'established': False}
+05:21:17.280813 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/qualification/native_a.cfg embedded.'{'established': False}
+05:21:17.282102 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:21:17.746570 - SPEECH OUTPUT: 'Problems (3) collapsed push button.'{'established': False}
+05:21:18.272268 - SPEECH OUTPUT: 'Problems article'{'established': False}
+05:21:18.273410 - SPEECH OUTPUT: 'tf/cfg/overrides/qualification/native_a.cfg:1:13 push button.'{'established': False}
+05:21:20.605368 - SPEECH OUTPUT: 'plus ' {'established': False}
+05:21:20.608487 - INFO: Handler is Speak entire document
+05:21:28.620521 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:21:28.676024 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:21:30.526611 - SPEECH OUTPUT: 'banana'[{'established': False}]
+05:21:30.529098 - SPEECH OUTPUT: 'selected'{'established': False}
+05:21:31.121990 - SPEECH OUTPUT: 'Reference collapsed push button.'{'established': False}
+05:21:31.620505 - SPEECH OUTPUT: 'Text unselected.'{'established': False}
+05:21:32.171385 - SPEECH OUTPUT: 'Focus editor push button.'{'established': False}
+05:21:32.988639 - SPEECH OUTPUT: 'New cfg collapsed push button.'{'established': False}
+05:21:33.223781 - SPEECH OUTPUT: 'New cfg article'{'established': False}
+05:21:33.224780 - SPEECH OUTPUT: 'Name or relative helper path embedded.'{'established': False}
+05:21:33.263547 - SPEECH OUTPUT: 'Open unsaved draft push button.'{'established': False}
+05:21:33.858969 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:21:34.277394 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:21:34.314042 - SPEECH OUTPUT: 'native_a.cfg tf/cfg/overrides/qualification/native_a.cfg Unsaved · push button.'{'established': False}
+05:21:34.843420 - SPEECH OUTPUT: 'collapsed'{'established': False}
+05:21:34.863083 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:21:35.275852 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:21:35.308537 - SPEECH OUTPUT: 'native_b.cfg tf/cfg/overrides/qualification/native_b.cfg Unsaved · push button.'{'established': False}
+05:21:36.275029 - SPEECH OUTPUT: 'Exec target: tf/cfg/overrides/qualification/native_a.cfg:1 · from line 2 push button.'{'established': False}
+05:21:36.709741 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/qualification/native_a.cfg embedded.'{'established': False}
+05:21:36.710936 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:21:37.267683 - SPEECH OUTPUT: 'Save file push button.'{'established': False}
+05:21:42.766841 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:21:43.330863 - SPEECH OUTPUT: 'native_b.cfg tf/cfg/overrides/qualification/native_b.cfg Unsaved · push button.'{'established': False}
+05:21:43.947693 - SPEECH OUTPUT: 'Save file push button.'{'established': False}
+05:21:49.279686 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:21:49.844653 - SPEECH OUTPUT: 'native_a.cfg tf/cfg/overrides/qualification/native_a.cfg push button.'{'established': False}
+05:21:50.436637 - SPEECH OUTPUT: 'collapsed'{'established': False}
+05:21:50.457876 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:21:50.819485 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:21:50.852744 - SPEECH OUTPUT: 'native_b.cfg tf/cfg/overrides/qualification/native_b.cfg push button.'{'established': False}
+05:21:51.364551 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/qualification/native_b.cfg embedded.'{'established': False}
+05:21:51.365779 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:21:51.797436 - SPEECH OUTPUT: 'Find / replace push button.'{'established': False}
+05:21:52.208862 - SPEECH OUTPUT: 'Find embedded.'{'established': False}
+05:21:52.806059 - SPEECH OUTPUT: 'Go to line push button.'{'established': False}
+05:21:53.209226 - SPEECH OUTPUT: '2'[{'established': False}]
+05:21:53.210480 - SPEECH OUTPUT: 'selected'{'established': False}
+05:21:53.238119 - SPEECH OUTPUT: 'Go to line: 2 embedded.'{'established': False}
+05:21:53.819629 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:21:54.354217 - SPEECH OUTPUT: 'Text unselected.'{'established': False}
+05:21:54.379683 - SPEECH OUTPUT: 'provided.cfg tf/custom/qualification/cfg/provided.cfg pack push button.'{'established': False}
+05:21:55.004781 - SPEECH OUTPUT: 'Contents of tf/custom/qualification/cfg/provided.cfg embedded.'{'established': False}
+05:21:55.006045 - SPEECH OUTPUT: 'Read-only source · Ctrl+F searches · Ctrl+Alt+G goes to line · Tab moves focus.'{'established': False}
+05:21:57.424481 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}
+05:22:09.851156 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}
+05:22:21.849812 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}
