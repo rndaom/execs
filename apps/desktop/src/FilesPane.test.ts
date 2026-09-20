@@ -118,6 +118,25 @@ afterEach(async () => {
 });
 
 describe("Files draft navigation", () => {
+  it("Focus returns to the editor without changing selection, scroll or draft", async () => {
+    await render();
+    await edit(Array.from({ length: 80 }, (_, i) => `echo line${i}`).join("\n"));
+    const view = editor();
+    await act(async () => view.dispatch({ selection: { anchor: 20, head: 26 } }));
+    await button("Open file");
+    view.scrollDOM.scrollTop = 120;
+    view.scrollDOM.scrollLeft = 30;
+    const before = view.state.doc.toString();
+    await click('[aria-label="Focus editor"]');
+    expect(document.activeElement).toBe(view.contentDOM);
+    expect(view.state.selection.main.anchor).toBe(20);
+    expect(view.state.selection.main.head).toBe(26);
+    expect(view.scrollDOM.scrollTop).toBe(120);
+    expect(view.scrollDOM.scrollLeft).toBe(30);
+    expect(view.state.doc.toString()).toBe(before);
+    expect(container.querySelector('[aria-label="Profile files"]')).toBeNull();
+    expect(onSave).not.toHaveBeenCalled();
+  });
   it("retains drafts and selected file across pane exit, file navigation and profile switches without saving", async () => {
     await render();
     await pick(second);

@@ -9,6 +9,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Files: Focus returns to the current editor selection, and completion keeps spoken
+  source details concise while preserving full provenance in Reference.
 - Files: create unsaved user cfgs in the verified profile layer, retain multiple
   drafts while navigating or playing, and review changed sources before an explicit
   save. Problems navigate to exact source locations and analysis runs in a bounded worker.

@@ -52,10 +52,10 @@ export function filesCompletionCatalog(): CompletionCatalog {
   const positionalArguments: Record<string, CompletionEntry[][]> = {};
   const args: Record<string, CompletionEntry[]> = {};
   const commands = entries.map((entry): CompletionEntry => {
-    const provenance = entry.sources
-      .map((source) => `${source.description}: ${source.url} (${source.revision}, ${source.date})`)
-      .join("\n");
-    const info = `${entry.help ?? "No description in the bundled source."}\n${entry.applicability}\n${provenance}`;
+    // Completion is announced on each keyboard move. Keep its source readable;
+    // complete URLs, revisions and dates remain in the offline Reference panel.
+    const provenance = [...new Set(entry.sources.map((source) => source.description))].join("; ");
+    const info = `${entry.help ?? "No description in the bundled source."}\n${entry.applicability}\nSource: ${provenance}. Full provenance is available in Reference.`;
     const values = (items: readonly string[] | undefined): CompletionEntry[] =>
       (items ?? []).map((label) => ({
         label,
@@ -70,7 +70,7 @@ export function filesCompletionCatalog(): CompletionCatalog {
     return {
       label: entry.name,
       type: entry.kind === "cvar" ? "variable" : "function",
-      detail: entry.kind,
+      detail: ` · ${entry.kind}`,
       info,
     };
   });
