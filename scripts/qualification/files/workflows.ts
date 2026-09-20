@@ -3,7 +3,7 @@
  * No component, editor-model, draft-store or IPC access. Programmatic DOM clicks
  * and execCommand editing are NOT evidence of physical keyboard or IME behavior.
  */
-export async function runFilesWorkflows() {
+export async function runFilesWorkflows(speechReview = false) {
   const started = performance.now();
   const steps: { name: string; elapsedMs: number; detail?: unknown }[] = [];
   const wait = async (predicate: () => boolean, description: string) => {
@@ -109,6 +109,8 @@ export async function runFilesWorkflows() {
       () => !pane().querySelector("h3")?.textContent?.includes("Unsaved"),
       "acknowledged fixture save",
     );
+    // Keep focus still while the native reader consumes the polite status.
+    if (speechReview) await new Promise((resolve) => setTimeout(resolve, 5000));
   };
 
   try {
@@ -129,6 +131,15 @@ export async function runFilesWorkflows() {
     const jump = row?.querySelector<HTMLButtonElement>("button");
     if (!jump || !row?.textContent?.includes("warn"))
       throw Error("Numeric finding lacks non-color severity/location");
+    if (speechReview) {
+      jump.scrollIntoView({ block: "center" });
+      jump.focus();
+      document.body.dataset.qualificationSpeech = "problem-row";
+      await wait(
+        () => document.body.dataset.qualificationSpeech === "reviewed",
+        "physical Orca problem-row review",
+      );
+    }
     await focusThenClick(jump);
     await wait(
       () => window.getSelection()?.toString() === "banana",

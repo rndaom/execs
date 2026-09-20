@@ -82,7 +82,7 @@ def capture():
       }
       const values=[...window.__qualificationPaint].sort((a,b)=>a-b);
       return {viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
-        timing:window.__qualificationTiming,
+        timing:window.__qualificationTiming,speechPhase:document.body.dataset.qualificationSpeech,
         reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,
         buttonTransitions:[...document.querySelectorAll('button')].map(button=>({name:button.textContent,transitionDuration:getComputedStyle(button).transitionDuration})),
         measurement:'physical printable editor keydown to second requestAnimationFrame; excludes navigation and shortcuts',samples:values.length,
@@ -97,8 +97,10 @@ def capture():
         web.run_javascript("window.__qualificationBenchmark ?? null", None, captured_benchmark, None)
     if (args.evidence.parent / "workflows-request").exists() and not workflows_started:
         workflows_started = True
-        web.run_javascript("window.__runQualificationWorkflows().then(value=>window.__qualificationWorkflows=value).catch(error=>window.__qualificationWorkflows={passed:false,error:String(error)})", None, None, None)
+        web.run_javascript("window.__runQualificationWorkflows(true).then(value=>window.__qualificationWorkflows=value).catch(error=>window.__qualificationWorkflows={passed:false,error:String(error)})", None, None, None)
     if workflows_started:
+        if (args.evidence.parent / "speech-reviewed").exists():
+            web.run_javascript("document.body.dataset.qualificationSpeech='reviewed'", None, None, None)
         web.run_javascript("window.__qualificationWorkflows ?? null", None, captured_workflows, None)
     return True
 

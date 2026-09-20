@@ -159,6 +159,19 @@ timing = json.loads((evidence / "1200x800" / "runtime.json").read_text()).get("t
 (evidence / "completion-timing-observations.json").write_text(json.dumps({"physicalTrials": 20, "distinctObservations": len(timing.get("completionMs", [])), "timing": timing}, indent=2))
 (evidence / "workflows-request").touch()
 for attempt in range(120):
+    runtime = json.loads((evidence / "1200x800" / "runtime.json").read_text())
+    if runtime.get("speechPhase") == "problem-row" and not (evidence / "speech-reviewed").exists():
+        # Orca desktop flat review: current line KP8, next line KP9.
+        # https://help.gnome.org/orca/commands_flat_review.html
+        key("KP_Up")
+        time.sleep(1)
+        for line in range(4):
+            key("KP_Page_Up")
+            time.sleep(1)
+        (evidence / "speech-problem-review.json").write_text(json.dumps({
+            "method": "Physical Orca desktop flat review KP8 then four KP9 next-line commands",
+            "accessibility": snapshot()}))
+        (evidence / "speech-reviewed").touch()
     result_path = evidence / "1200x800" / "workflows.json"
     if result_path.exists():
         result = json.loads(result_path.read_text())
