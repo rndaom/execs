@@ -118,6 +118,40 @@ afterEach(async () => {
 });
 
 describe("Files draft navigation", () => {
+  it("opens incoming callers at their source line and identifies deferred payloads without losing drafts", async () => {
+    files = [
+      { path: first, text: 'echo start\nexec b\nbind f "helper_alias"\n' },
+      { path: second, text: 'alias helper_alias "echo helper"\n' },
+    ];
+    await render();
+    const retained = `${files[0].text}echo unsaved\n`;
+    await edit(retained);
+    await checked();
+    await act(async () => container.querySelector<HTMLElement>("summary")?.click());
+    const outgoing =
+      '[data-testid="files-source-link"][data-direction="outgoing"][data-deferred="false"]';
+    expect(container.querySelector(outgoing)?.textContent).toContain(`${second}:1`);
+    await click(outgoing);
+    expect(editor().contentDOM.getAttribute("aria-label")).toBe(`Contents of ${second}`);
+    const incoming =
+      '[data-testid="files-source-link"][data-direction="incoming"][data-deferred="false"]';
+    expect(container.querySelector(incoming)?.textContent).toContain(`Referenced by: ${first}:2`);
+    await click(incoming);
+    expect(editor().contentDOM.getAttribute("aria-label")).toBe(`Contents of ${first}`);
+    expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(2);
+    expect(editor().state.doc.toString()).toBe(retained);
+    await pick(second);
+    const deferredCaller =
+      '[data-testid="files-source-link"][data-direction="incoming"][data-deferred="true"]';
+    expect(container.querySelector(deferredCaller)?.textContent).toContain(`${first}:3`);
+    expect(container.querySelector(deferredCaller)?.textContent).toContain(
+      "Deferred bind/alias payload",
+    );
+    await click(deferredCaller);
+    expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(3);
+    expect(editor().state.doc.toString()).toBe(retained);
+    expect(onSave).not.toHaveBeenCalled();
+  });
   it("Focus returns to the editor without changing selection, scroll or draft", async () => {
     await render();
     await edit(Array.from({ length: 80 }, (_, i) => `echo line${i}`).join("\n"));
