@@ -21,6 +21,8 @@ Commands: `pnpm install`, `pnpm desktop:dev` (Tauri), `pnpm dev` (browser only, 
 
 ## Architecture
 
+- Inventory development stays in `tools/inventory-probe/` until Steam session access and synchronization are verified. Inventory and layout drafts belong to the Steam account, never a customization profile; switching profiles must not rearrange items. Prefer the existing signed-in Steam session, with no separate credentials in execs. Jengerer's Item Manager inspires the interactions and is credited; its unlicensed code/assets are not reused. This is future minor-release work, not assigned to 0.2.0 yet.
+
 - **Core owns disk, the crate owns network, the UI owns drafts.** `execs-core` has no networking; `*_fetch.rs` / `gamebanana.rs` download through `net.rs` (one client, `execs/<version> (+https://github.com/rndaom/execs)` user agent, size caps, pinned URLs, sha256 where the source publishes one). Commands in `src-tauri/src/commands/*` are thin: `blocking` / `with_root` / `with_profile` run work off the main thread; writes take the `WriteGate` mutex.
 - **Errors** are `{ code, message }` (`error.rs`); the frontend's single `call<T>()` in `lib/bridge.ts` turns them into `BridgeError`. Every command has a preview twin in `lib/preview-bridge.ts` (the `Api` type is derived from `bridge.ts`, so a new command cannot be forgotten there).
 - **Pane logic lives in `lib/*-ui.ts` with unit tests**; components stay thin. Drafts use `useSeededDraft` keyed by profile id so a switch never leaks a draft into another profile.

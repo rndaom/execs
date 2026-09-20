@@ -8,6 +8,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  inventory-probe:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/inventory-probe
+      - run: cargo fmt --manifest-path tools/inventory-probe/Cargo.toml --check
+      - run: cargo clippy --manifest-path tools/inventory-probe/Cargo.toml --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path tools/inventory-probe/Cargo.toml --locked
+
   frontend:
     runs-on: ubuntu-latest
     steps:

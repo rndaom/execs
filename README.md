@@ -96,6 +96,10 @@ execs installs work by the TF2 community:
 
 Licenses and how each one is used: [THIRD_PARTY.md](THIRD_PARTY.md).
 
+The inventory organizer under development is inspired by
+[Jengerer's Item Manager](https://www.jengerer.com/item_manager/), by Jengerer
+and its contributors. It is not available in a public release yet.
+
 Fan project, not affiliated with Valve Corporation. Team Fortress and Steam are trademarks of Valve Corporation.
 
 [Contributing](CONTRIBUTING.md) · [Releases](docs/RELEASE.md) · [Security](SECURITY.md) · [MIT license](LICENSE)
