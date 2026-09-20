@@ -28,6 +28,7 @@ args.evidence.mkdir(parents=True, exist_ok=False)
 started = time.monotonic()
 benchmark_started = False
 workflows_started = False
+ordinary_started = False
 maximum_rss = 0
 window = Gtk.Window(title="execs 0.1.7 isolated Files qualification")
 window.set_default_size(args.width, args.height)
@@ -65,7 +66,10 @@ window.show_all()
 
 
 def capture():
-    global benchmark_started, workflows_started
+    global benchmark_started, workflows_started, ordinary_started
+    if (args.evidence.parent / "ordinary-paint-start").exists() and not ordinary_started:
+        ordinary_started = True
+        web.run_javascript("window.__qualificationPaint=[]", None, reset_ordinary, None)
     native = window.get_window()
     if native:
         picture = Gdk.pixbuf_get_from_window(native, 0, 0, window.get_allocated_width(), window.get_allocated_height())
@@ -103,8 +107,16 @@ def captured_runtime(view, result, unused):
     try:
         value = view.run_javascript_finish(result).get_js_value()
         (args.evidence / "runtime.json").write_text(value.to_json(0))
+        if (args.evidence.parent / "ordinary-paint-stop").exists() and not (args.evidence / "ordinary-paint.json").exists():
+            record = json.loads(value.to_json(0))
+            (args.evidence / "ordinary-paint.json").write_text(json.dumps({key: record.get(key) for key in ["measurement", "samples", "p95ms", "values"]}))
     except GLib.Error as error:
         (args.evidence / "runtime-error.txt").write_text(str(error))
+
+
+def reset_ordinary(view, result, unused):
+    view.run_javascript_finish(result)
+    (args.evidence.parent / "ordinary-paint-started").touch()
 
 
 def captured_benchmark(view, result, unused):

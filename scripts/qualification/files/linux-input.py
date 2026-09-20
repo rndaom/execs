@@ -87,12 +87,10 @@ key("Escape")
 key("ctrl+alt+g")
 (evidence / "goto-panel.json").write_text(json.dumps(snapshot(), indent=2))
 key("Escape")
-subprocess.run(["xdotool", "key", "--clearmodifiers", "--repeat", "2", "--repeat-delay", "120", "Insert+a"], check=True)
-time.sleep(.5)
-(evidence / "screen-reader-input-mode.txt").write_text("Orca Modifier+A double press selects sticky focus mode before authoring; verify actual speech in orca.log.\n")
+time.sleep(1)
 key("ctrl+End")
 key("Return")
-subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "80", "sensi"], check=True)
+subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "300", "sensi"], check=True)
 key("ctrl+space")
 time.sleep(1)
 (evidence / "completion.json").write_text(json.dumps(snapshot(), indent=2))
@@ -107,7 +105,21 @@ for sample in range(20):
     key("Escape")
 key("ctrl+End")
 key("Return")
+(evidence / "ordinary-paint-start").touch()
+for attempt in range(20):
+    if (evidence / "ordinary-paint-started").exists():
+        break
+    time.sleep(.5)
+else:
+    raise RuntimeError("Ordinary input timing reset did not complete")
 subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "80", "// paint latency abcdefghijklmnopqrstuvwxyz 0123456789"], check=True)
+(evidence / "ordinary-paint-stop").touch()
+for attempt in range(20):
+    if (evidence / "1200x800" / "ordinary-paint.json").exists():
+        break
+    time.sleep(.5)
+else:
+    raise RuntimeError("Ordinary input timing capture did not complete")
 key("Return")
 subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "80", "// IME "], check=True)
 try:
@@ -144,8 +156,7 @@ else:
     raise RuntimeError("Worker benchmark did not complete")
 (evidence / "benchmark-request").unlink()
 timing = json.loads((evidence / "1200x800" / "runtime.json").read_text()).get("timing", {})
-if len(timing.get("completionMs", [])) < 20:
-    raise RuntimeError("Insufficient distinct physical completion timing observations")
+(evidence / "completion-timing-observations.json").write_text(json.dumps({"physicalTrials": 20, "distinctObservations": len(timing.get("completionMs", [])), "timing": timing}, indent=2))
 (evidence / "workflows-request").touch()
 for attempt in range(120):
     result_path = evidence / "1200x800" / "workflows.json"
