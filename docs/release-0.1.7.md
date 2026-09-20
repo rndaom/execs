@@ -1,6 +1,7 @@
 # 0.1.7 release candidate
 
-Implementation and native qualification are complete within the recorded limits.
+Implementation, native and signed package qualification are complete within the
+recorded limits. Final PR-head CI is required before marking the PRs ready.
 The private installers come from [candidate run 35491010492](https://github.com/rndaom/execs/actions/runs/35491010492)
 at `6ecbcc0`. Linux package checks passed; Windows installation/updating passed
 before its worker probe failed to attach. WebView2 150+ ignores environment
@@ -8,7 +9,9 @@ debugging overrides for elevated hosts. The [private Windows recovery workflow](
 must pass the same signed installer with an app-specific disposable-CI policy,
 then verify both signed assets/feed and record the original build plus recovery
 run in the draft's `release-commit.json`. A failed original run is not described
-as successful; readiness requires this explicit recovery gate.
+as successful. The complete recovery [run 35493043167](https://github.com/rndaom/execs/actions/runs/35493043167)
+passed both jobs. [Package evidence](audits/2026-09-20-0.1.7/packages/README.md)
+records exact hashes and separates the original build from its recovery.
 Later commits contain qualification harnesses and evidence only. Publication is
 not authorized. No release tag is created by this preparation.
 

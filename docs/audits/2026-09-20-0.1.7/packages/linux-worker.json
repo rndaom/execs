@@ -1,0 +1,35 @@
+{
+  "application": "/home/runner/work/_temp/execs-package-smoke/squashfs-root/AppRun",
+  "workerAsset": "files-analysis.worker-DYiVjpKz.js",
+  "workerSha256": "a203d74621f42bc1ca2ae41ffe55430d365e4d24893e2fed8ff1107f886a1637",
+  "page": "tauri://localhost",
+  "csp": [],
+  "origin": "tauri://localhost",
+  "url": "tauri://localhost/assets/files-analysis.worker-DYiVjpKz.js",
+  "durationMs": 95,
+  "outcome": {
+    "links": [],
+    "result": {
+      "safetyComplete": true,
+      "findings": [
+        {
+          "message": "fov_desired: value expects a number; Source may coerce this text instead of rejecting it",
+          "advisory": false,
+          "ruleId": "argument-number",
+          "via": null,
+          "category": "argument",
+          "tier": "warn",
+          "col": 13,
+          "file": "tf/cfg/autoexec.cfg",
+          "from": 40,
+          "to": 46,
+          "line": 3
+        }
+      ],
+      "ok": true,
+      "executionComplete": true
+    },
+    "identity": "packaged-origin-worker"
+  },
+  "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15"
+}
