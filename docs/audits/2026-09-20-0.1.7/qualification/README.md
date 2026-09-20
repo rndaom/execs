@@ -34,12 +34,15 @@ The dedicated `qualify-files.yml` workflow has read-only repository permissions,
 does not build a product release, does not publish or tag, and retains native
 test artifacts. Its Windows job currently validates the host build only; its
 Linux job attempts real WebKitGTK keyboard, Orca logging and Japanese IME.
+The Windows CI job now attempts actual physical keyboard events, completion,
+Tab exit, WebView2 screenshots and NVDA generated speech in the disposable runner.
+It fails if editor-name speech is absent. No successful run is claimed yet.
 Workflow configuration is preparation, not evidence of a passing run.
 
 ## Evidence boundaries
 
 `scripts/qualification/files/windows` and `scripts/qualification/files/webkit.py`
-host the real React frontend through its development preview adapter. They expose
+host the real React frontend through its isolated preview adapter. They expose
 no Tauri IPC and use fresh/ephemeral WebView data. Preview operations remain
 in memory. Native engine, keyboard and actual generated screen-reader speech can
 be measured here. Native save/close/Cloud guarantees require the core/IPC
@@ -66,6 +69,14 @@ Synthetic composition events can test handler behavior but cannot establish
 operating-system IME acceptance. DOM accessible names and screenshots cannot
 establish screen-reader speech. Fixture save success cannot establish disk or
 Cloud persistence. A preview worker cannot establish packaged CSP acceptance.
+
+The dedicated Vite qualification configuration builds with production transforms
+and the ordinary application modules, replacing only the entry adapter with the
+in-memory fixture. A loopback static server sends the exact product CSP from
+`tauri.conf.json` as a response header. This checks the bundled worker and editor
+in each native engine under that policy, without weakening the policy or shipping
+preview code in the product. It remains a fixture with equivalent CSP, not an
+actual packaged Tauri origin/IPC test. Product package smoke remains separate.
 
 ## Source references
 
