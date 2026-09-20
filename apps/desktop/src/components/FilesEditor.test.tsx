@@ -2,6 +2,7 @@
 
 import { acceptCompletion, completionStatus, startCompletion } from "@codemirror/autocomplete";
 import { undo } from "@codemirror/commands";
+import { searchPanelOpen } from "@codemirror/search";
 import { EditorView } from "@codemirror/view";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -55,6 +56,45 @@ describe("Files editor model isolation", () => {
       new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }),
     );
     expect(props.onSave).toHaveBeenCalledOnce();
+  });
+  it("honors disabled Save and toggles line wrapping from the keyboard", () => {
+    props = { ...props, canSave: false };
+    render();
+    const view = editor();
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(props.onSave).not.toHaveBeenCalled();
+
+    const wrap = box.querySelector('[aria-label="Wrap lines"]');
+    expect(wrap?.getAttribute("aria-pressed")).toBe("false");
+    act(() => {
+      view.contentDOM.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "z", altKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    expect(wrap?.getAttribute("aria-pressed")).toBe("true");
+  });
+  it("opens Save as and New cfg from editor shortcuts", () => {
+    const onSaveAs = vi.fn();
+    const onNewCfg = vi.fn();
+    props = { ...props, onSaveAs, onNewCfg };
+    render();
+    const view = editor();
+    const saveAsEvent = new KeyboardEvent("keydown", {
+      key: "S",
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.contentDOM.dispatchEvent(saveAsEvent);
+    expect(saveAsEvent.defaultPrevented).toBe(true);
+    expect(onSaveAs).toHaveBeenCalledOnce();
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "n", ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(onNewCfg).toHaveBeenCalledOnce();
   });
   it("replaces only the command token as a single undoable completion", async () => {
     props = {
@@ -117,7 +157,7 @@ describe("Files editor model isolation", () => {
     const view = editor();
     expect(document.activeElement).toBe(view.contentDOM);
     expect(view.contentDOM.getAttribute("tabindex")).toBe("0");
-    expect(box.textContent).toContain("Read-only source · Ctrl+F searches");
+    expect(box.textContent).toContain("Read-only · Ctrl+Shift+S Save as · Ctrl+F Find");
     expect(box.textContent).not.toContain("Ctrl+S saves");
     act(() => view.dispatch({ changes: { from: 0, insert: "bad" } }));
     view.contentDOM.dispatchEvent(
@@ -139,5 +179,65 @@ describe("Files editor model isolation", () => {
     render();
     expect(editor().state.doc.toString()).toBe("discarded");
     expect(undo(editor())).toBe(false);
+  });
+  it("toggles Find from the same button and exposes editor actions on right-click", () => {
+    render();
+    const find = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "Find",
+    );
+    expect(find).toBeDefined();
+    act(() => find?.click());
+    expect(searchPanelOpen(editor().state)).toBe(true);
+    expect(find?.getAttribute("aria-pressed")).toBe("true");
+    expect(box.querySelector(".cm-panel.cm-search")).not.toBeNull();
+    const search = box.querySelector<HTMLInputElement>('.cm-panel.cm-search [name="search"]');
+    if (!search) throw new Error("Missing search input");
+    act(() => {
+      search.value = "echo";
+      search.dispatchEvent(new KeyboardEvent("keyup", { key: "o", bubbles: true }));
+      box.querySelector<HTMLButtonElement>('.cm-panel.cm-search [name="next"]')?.click();
+    });
+    const match = box.querySelector<HTMLElement>(".cm-searchMatch");
+    const currentMatch = box.querySelector<HTMLElement>(".cm-searchMatch-selected");
+    expect(match).not.toBeNull();
+    expect(currentMatch).not.toBeNull();
+    expect(getComputedStyle(match as HTMLElement).borderRadius).toBe("4px");
+    expect(getComputedStyle(currentMatch as HTMLElement).boxShadow).toContain("inset");
+    act(() => find?.click());
+    expect(searchPanelOpen(editor().state)).toBe(false);
+    expect(find?.getAttribute("aria-pressed")).toBe("false");
+
+    act(() => {
+      editor().contentDOM.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 24,
+          clientY: 24,
+        }),
+      );
+    });
+    const menu = document.querySelector('[role="menu"][aria-label="Editor actions"]');
+    expect(menu?.textContent).toContain("Find and replace");
+    expect(menu?.textContent).toContain("Wrap lines");
+    expect(menu?.textContent).toContain("Save");
+    const wrap = menu?.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]');
+    act(() => wrap?.click());
+    expect(box.querySelector('[aria-label="Wrap lines"]')?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(document.querySelector('[role="menu"][aria-label="Editor actions"]')).toBeNull();
+
+    act(() => {
+      editor().contentDOM.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "F10",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(document.querySelector('[role="menu"][aria-label="Editor actions"]')).not.toBeNull();
   });
 });

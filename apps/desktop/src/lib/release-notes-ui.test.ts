@@ -55,6 +55,16 @@ describe("installed release notes", () => {
     expect(installedReleaseForLaunch(state, "0.1.3+1", true)).toBeNull();
   });
 
+  it("shows bundled Files hotfix notes after a manual 0.1.7 update", () => {
+    const state = storage();
+    installedReleaseForLaunch(state, "0.1.7", false);
+    const release = installedReleaseForLaunch(state, "0.1.7+2", true);
+    expect(release?.version).toBe("0.1.7+2");
+    expect(release?.notes).toContain("compact editor workspace");
+    expect(release?.notes).toContain("Save as new cfg");
+    expect(release?.notes).toContain("keyboard file navigation");
+  });
+
   it("matches and dismisses pending notes by exact revision, including consecutive hotfixes", () => {
     const state = storage();
     installedReleaseForLaunch(state, "0.1.3", false);
