@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createFilesDraftStore } from "./files-drafts";
+import { createFilesDraftStore, type DirtyFileDraft } from "./files-drafts";
 import { saveFileDrafts } from "./files-exit";
 
 function dirty() {
@@ -45,6 +45,28 @@ describe("Files exit save transaction", () => {
         return true;
       }),
     ).toBe(false);
-    expect(store.dirty()).toEqual([{ profile: "a", path: "one", text: "newer" }]);
+    expect(store.dirty()).toEqual([
+      expect.objectContaining({ profile: "a", path: "one", text: "newer" }),
+    ]);
+  });
+  it("keeps one immutable click-time document set across a partial save-all", async () => {
+    const store = dirty();
+    const save = vi.fn(async (draft: DirtyFileDraft) => {
+      expect(draft.documents).toEqual([
+        { path: "one", text: "new", revision: 1 },
+        { path: "two", text: "new", revision: 1 },
+      ]);
+      if (draft.path === "one") {
+        store.edit("a", "two", "changed during first write");
+        return true;
+      }
+      return false;
+    });
+    expect(await saveFileDrafts(store, save)).toBe(false);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(store.dirty()).toEqual([
+      expect.objectContaining({ profile: "a", path: "two", text: "changed during first write" }),
+      expect.objectContaining({ profile: "b", path: "one", text: "new" }),
+    ]);
   });
 });
