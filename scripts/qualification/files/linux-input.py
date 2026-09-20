@@ -90,3 +90,15 @@ if not any("日本語" in row.get("text", "") for row in ime_rows):
     raise RuntimeError("Real ibus-anthy Japanese composition did not commit the expected text")
 subprocess.run(["ibus", "engine", "xkb:us::eng"], check=True)
 time.sleep(2)
+(evidence / "benchmark-request").touch()
+for attempt in range(80):
+    result_path = evidence / "1200x800" / "worker-benchmark.json"
+    if result_path.exists():
+        result = json.loads(result_path.read_text())
+        if not result.get("results") or not all(row["expectationMet"] for row in result["results"]):
+            raise RuntimeError("Worker boundary benchmark failed")
+        break
+    time.sleep(1)
+else:
+    raise RuntimeError("Worker benchmark did not complete")
+(evidence / "benchmark-request").unlink()

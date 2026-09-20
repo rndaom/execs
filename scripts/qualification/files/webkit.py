@@ -1,6 +1,7 @@
 """Native WebKitGTK fixture host; does not expose IPC or touch player state."""
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -24,6 +25,8 @@ if target.scheme != "http" or target.hostname != "127.0.0.1" or "preview=setting
     parser.error("Only loopback Files preview fixtures are accepted")
 args.evidence.mkdir(parents=True, exist_ok=False)
 started = time.monotonic()
+benchmark_started = False
+maximum_rss = 0
 window = Gtk.Window(title="execs 0.1.7 isolated Files qualification")
 window.set_default_size(args.width, args.height)
 context = WebKit2.WebContext.new_ephemeral()
@@ -58,6 +61,7 @@ window.show_all()
 
 
 def capture():
+    global benchmark_started
     native = window.get_window()
     if native:
         picture = Gdk.pixbuf_get_from_window(native, 0, 0, window.get_allocated_width(), window.get_allocated_height())
@@ -75,6 +79,11 @@ def capture():
         workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),
         editor:document.querySelector('.cm-content')?.getAttribute('aria-label'),body:document.body.innerText};
     })()""", None, captured_runtime, None)
+    if (args.evidence.parent / "benchmark-request").exists() and not benchmark_started:
+        benchmark_started = True
+        web.run_javascript("window.__runQualificationBenchmark().then(value=>window.__qualificationBenchmark=value).catch(error=>window.__qualificationBenchmark={error:String(error)})", None, None, None)
+    if benchmark_started:
+        web.run_javascript("window.__qualificationBenchmark ?? null", None, captured_benchmark, None)
     return True
 
 
@@ -86,7 +95,32 @@ def captured_runtime(view, result, unused):
         (args.evidence / "runtime-error.txt").write_text(str(error))
 
 
+def captured_benchmark(view, result, unused):
+    value = view.run_javascript_finish(result).get_js_value()
+    serialized = value.to_json(0)
+    if serialized != "null":
+        (args.evidence / "worker-benchmark.json").write_text(serialized)
+        (args.evidence / "memory.json").write_text(json.dumps({"maximumRssBytes": maximum_rss,
+            "measurement": "100ms sampled host process-tree RSS during session; not absolute lifetime peak"}))
+
+
+def memory_sample():
+    global maximum_rss
+    pending = [os.getpid()]
+    rss = 0
+    while pending:
+        pid = pending.pop()
+        try:
+            rss += int(Path(f"/proc/{pid}/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+            pending.extend(int(child) for child in Path(f"/proc/{pid}/task/{pid}/children").read_text().split())
+        except (OSError, IndexError, ValueError):
+            pass
+    maximum_rss = max(maximum_rss, rss)
+    return True
+
+
 GLib.timeout_add_seconds(2, capture)
+GLib.timeout_add(100, memory_sample)
 if args.capture_seconds:
     GLib.timeout_add_seconds(args.capture_seconds, Gtk.main_quit)
 web.load_uri(args.url)

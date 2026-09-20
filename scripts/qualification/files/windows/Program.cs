@@ -145,6 +145,25 @@ internal static class Program
             await Key(handle, (byte)(mapped & 0xff), (mapped & 0x100) != 0 ? (byte)0x10 : (byte)0);
         }
         File.WriteAllText(Path.Combine(evidence, "paint-latency.json"), await web.ExecuteScriptAsync("(()=>{const values=window.__qualificationPaint.toSorted((a,b)=>a-b);return {measurement:'physical keydown to second requestAnimationFrame; includes monitor frame interval',samples:values.length,p95ms:values[Math.max(0,Math.ceil(values.length*.95)-1)],values}})()"));
+        await web.ExecuteScriptAsync("window.__runQualificationBenchmark().then(value=>window.__qualificationBenchmark=value).catch(error=>window.__qualificationBenchmark={error:String(error)})");
+        long maximumWorkingSet = 0;
+        for (var attempt = 0; attempt < 700; attempt++)
+        {
+            long workingSet = Process.GetCurrentProcess().WorkingSet64;
+            foreach (var child in web.CoreWebView2.Environment.GetProcessInfos())
+            {
+                try { using var process = Process.GetProcessById(child.ProcessId); workingSet += process.WorkingSet64; }
+                catch (ArgumentException) { }
+            }
+            maximumWorkingSet = Math.Max(maximumWorkingSet, workingSet);
+            if (await web.ExecuteScriptAsync("!!window.__qualificationBenchmark") == "true") break;
+            await Task.Delay(100);
+        }
+        var benchmark = await web.ExecuteScriptAsync("window.__qualificationBenchmark ?? null");
+        File.WriteAllText(Path.Combine(evidence, "worker-benchmark.json"), benchmark);
+        File.WriteAllText(Path.Combine(evidence, "memory.json"), JsonSerializer.Serialize(new { maximumWorkingSet, measurement = "100ms sampled process-tree working set during worker benchmark; not absolute lifetime peak" }));
+        if (await web.ExecuteScriptAsync("window.__qualificationBenchmark?.results?.every(row=>row.expectationMet) ?? false") != "true")
+            throw new InvalidOperationException("Worker boundary benchmark failed; inspect worker-benchmark.json");
         using (var picture = File.Create(Path.Combine(evidence, "native-editor.png")))
             await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, picture);
         File.WriteAllText(Path.Combine(evidence, "runtime.json"), await web.ExecuteScriptAsync("({viewport:{width:innerWidth,height:innerHeight},workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),body:document.body.innerText})"));

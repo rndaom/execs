@@ -21,7 +21,9 @@ export default mergeConfig(
           return `import {createRoot} from 'react-dom/client';
 import {App} from './App';
 import {createPreviewApi} from './lib/preview-bridge';
+import {runWorkerBenchmark} from '../../../scripts/qualification/files/worker-benchmark';
 import './index.css';
+window.__runQualificationBenchmark=runWorkerBenchmark;
 const preview = 'settings-files';
 createRoot(document.getElementById('root')).render(<App api={createPreviewApi(preview)} preview={preview} />);`;
         },
