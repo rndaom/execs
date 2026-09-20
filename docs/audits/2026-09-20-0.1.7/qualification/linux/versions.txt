@@ -1,0 +1,4 @@
+gir1.2-webkit2-4.1:amd64	2.50.4-0ubuntu0.22.04.1
+ibus	1.5.26-4
+ibus-anthy	1.5.14-1
+orca	42.0-1ubuntu2

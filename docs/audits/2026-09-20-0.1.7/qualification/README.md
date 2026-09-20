@@ -1,11 +1,12 @@
 # Files native qualification — RND-323
 
-Status: native qualification in progress; final integrated run pending. Initial
-Windows keyboard/completion/NVDA runs passed, and Linux authoring workflows,
-Orca observations and analysis benchmarks ran successfully. IME and expanded
-keyboard harness corrections require the final rerun before acceptance.
+Status: both native jobs passed in run 35490611803 at 0ff59b4. Keyboard,
+authoring workflows, Linux real IME and performance evidence are recorded below.
+This is scoped fixture qualification, not blanket release acceptance: Linux
+explicit save-result speech and full warning narration were not observed.
 
-Completed platform evidence: [Windows native results and captures](windows.md).
+Completed platform evidence: [Windows native results and captures](windows.md)
+and [Linux native results and capture](linux.md).
 
 The owner authorized implementation and private release readiness on September
 19, 2026. Publication, tagging, real-game launches and real-profile writes are
@@ -14,13 +15,11 @@ issue describes its creation date, not this later authorization.
 
 ## Environment and reusable evidence
 
-- Windows host: AMD Ryzen 7 9800X3D. Exact OS, WebView2, NVDA and candidate source
-  versions will be captured with the run, rather than copied from 0.1.6.
-- Existing portable NVDA and .NET 10/WebView2 harness from 0.1.6 are available
-  locally. Use a new NVDA configuration and WebView2 user-data directory.
-- WSL is not installed; no SSH host aliases were found. Native Linux needs the
-  private GitHub Actions runner used for 0.1.6 (Ubuntu 22.04, WebKitGTK 4.1,
-  Xvfb, AT-SPI, Orca, Speech Dispatcher). Do not install WSL as a workaround.
+- Windows evidence uses a disposable Windows Server 2025 GitHub runner, AMD
+  EPYC 9V74, four logical CPUs, WebView2 152.0.4191.66 and NVDA 2026.2.
+- Linux evidence uses a disposable Ubuntu 22.04 GitHub runner, AMD EPYC 9V74,
+  four logical CPUs, WebKitGTK 2.50.4, Orca 42.0, IBus 1.5.26 and Anthy 1.5.14.
+  Xvfb, AT-SPI and Speech Dispatcher provide the native desktop and speech log.
 - Windows currently has only `en-US` / `0409:00000409` installed. No real
   Windows IME claim is possible from that keyboard; synthetic composition
   coverage remains distinct. Linux CI provisions ibus-anthy in its disposable
@@ -101,9 +100,10 @@ actual packaged Tauri origin/IPC test. Product package smoke remains separate.
   1 MiB and 8 MiB cases must return an explicit incomplete analysis-budget finding;
   comment-heavy byte-boundary cases remain separate. Memory is a 100 ms sampled
   process-tree working set/RSS, not an absolute or unique physical-memory peak.
-- The generic GTK host's Orca script has spoken editor names, completion choices
-  and selected diagnostic text. DOM contracts and generated speech are reported
-  separately; an unobserved status or read-only announcement is not a speech pass.
+- Orca switches from the initial GTK script to its WebKitGtk document script.
+  Final speech includes editor names, completion choices, problem location and
+  selected diagnostic text, and explicit read-only instructions. Full warning
+  prose and the explicit Saved status remain unobserved in Linux speech.
 - The 200% capture also records reduced-motion media matching and computed button
   transition durations: WebView2 uses a developer media override, WebKitGTK uses
   the disposable GTK desktop animation preference. These mechanisms are recorded
