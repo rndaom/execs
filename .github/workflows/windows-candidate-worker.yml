@@ -96,10 +96,7 @@ jobs:
           node scripts/verify-release.mjs "$RUNNER_TEMP/candidate" 0.1.7
           gh release upload v0.1.7 "$RUNNER_TEMP/candidate/latest.json" --clobber
           node scripts/release-notes.mjs 0.1.7 > "$RUNNER_TEMP/notes.md"
-          name=$(node scripts/release-version.mjs v0.1.7 --name)
-          gh release edit v0.1.7 --target "$CANDIDATE_SHA" --title "$name" --notes-file "$RUNNER_TEMP/notes.md"
           node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP+"/release-commit.json",JSON.stringify({commit:process.env.CANDIDATE_SHA,run:"35491010492",qualificationRun:process.env.GITHUB_RUN_ID,qualificationCommit:process.env.GITHUB_SHA},null,2)+"\n")'
-          gh release upload v0.1.7 "$RUNNER_TEMP/release-commit.json" --clobber
           test "$(gh release view v0.1.7 --json isDraft --jq .isDraft)" = true
       - uses: actions/upload-artifact@v4
         with:
@@ -110,3 +107,4 @@ jobs:
             ${{ runner.temp }}/release-commit.json
             ${{ runner.temp }}/build-run.json
             ${{ runner.temp }}/build-jobs.json
+            ${{ runner.temp }}/notes.md
