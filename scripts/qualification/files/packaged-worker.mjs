@@ -159,6 +159,7 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
   mkdirSync(evidence, { recursive: true });
   const environment = {
     ...parentEnvironment,
+    TAURI_WEBVIEW_AUTOMATION: "true",
     APPDATA: join(evidence, "roaming"),
     LOCALAPPDATA: join(evidence, "local"),
     XDG_DATA_HOME: join(evidence, "data"),

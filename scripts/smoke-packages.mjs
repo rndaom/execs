@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { basename, join, resolve } from "node:path";
+import { qualifyPackagedWorker } from "./qualification/files/packaged-worker.mjs";
 import {
   previousReleaseVersion,
   releaseInstallerName,
@@ -247,6 +248,7 @@ try {
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
     }
   }
+  await qualifyPackagedWorker(executable, childEnv, join(scratch, "files-worker"));
   writeFileSync(
     join(scratch, "result.json"),
     `${JSON.stringify({ version, platform: process.platform, oldVersion, artifact: basename(asset), signatureVerified: true, updateInstalled: true, noRepeatOffer: true, userDataPreserved: true, packagedNotices: true, packagedStartup: true }, null, 2)}\n`,

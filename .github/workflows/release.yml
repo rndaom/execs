@@ -54,13 +54,16 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb xdotool
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb xdotool webkit2gtk-driver
       - uses: pnpm/action-setup@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
       - run: pnpm install --frozen-lockfile
+      - name: Install packaged Linux worker qualification driver
+        if: runner.os == 'Linux'
+        run: cargo install tauri-driver --version 2.0.6 --locked
       - name: Verify packaged third-party notices
         run: node scripts/third-party-notices.mjs --check
       - name: Include Linux system-library notices
@@ -106,7 +109,11 @@ jobs:
         if: always()
         with:
           name: release-smoke-${{ runner.os }}
-          path: ${{ runner.temp }}/execs-package-smoke/*.json
+          path: |
+            ${{ runner.temp }}/execs-package-smoke/*.json
+            ${{ runner.temp }}/execs-package-smoke/files-worker/*.json
+            ${{ runner.temp }}/execs-package-smoke/files-worker/*.png
+            ${{ runner.temp }}/execs-package-smoke/files-worker/*.log
 
   verify:
     needs: [build]
