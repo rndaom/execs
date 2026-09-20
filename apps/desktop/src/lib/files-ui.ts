@@ -34,6 +34,13 @@ export type LintBundleResult = {
   findings: CfgFinding[];
 };
 
+/** Unresolved runtime sources are warnings; exhausted computational budgets are not a checked save. */
+export function hitAnalysisLimit(result: LintBundleResult): boolean {
+  return result.findings.some(
+    (finding) => finding.ruleId === "analysis-budget" || finding.ruleId === "alias-budget",
+  );
+}
+
 export type CfgFileMeta = {
   path: string;
   origin: CfgOrigin;

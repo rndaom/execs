@@ -35,6 +35,10 @@ redistributed.
 
 ## Libraries
 
+- [CodeMirror 6](https://codemirror.net/) and [Lezer](https://lezer.codemirror.net/)
+  power the local Files editor, search, history and completion. MIT licenses;
+  package versions and full notices are included in the dependency inventory.
+
 Runtime dependencies are listed in `apps/desktop/package.json` and
 `apps/desktop/src-tauri/Cargo.toml`. The Rust and JavaScript dependency inventory records permissive licenses
 (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode, MPL-2.0 for a few unmodified

@@ -63,6 +63,7 @@ let running: boolean;
 let onPendingChange: ReturnType<typeof vi.fn>;
 function makeApi() {
   return {
+    getFilesContext: vi.fn(async () => ({ profileId, root: "fixture", layer: "vanilla" })),
     getActiveProfileDetail: vi.fn(async () => ({
       id: profileId,
       layer: "vanilla",

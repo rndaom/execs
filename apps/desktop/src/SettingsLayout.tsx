@@ -95,7 +95,7 @@ export function SettingsLayout({
       </aside>
 
       <section className="min-w-0 flex-1 overflow-y-auto">
-        <div className="content-col py-10">
+        <div className={tab === "files" ? "mx-auto w-full px-4 py-3" : "content-col py-10"}>
           <div data-testid={`settings-pane-${tab}`} className="min-w-0 pb-8">
             {children ?? <p className="t-meta">{SETTINGS_TAB_LABELS[tab]} settings</p>}
           </div>
