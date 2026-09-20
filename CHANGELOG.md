@@ -10,6 +10,10 @@ User-facing changes only. The release workflow publishes the matching
 - Profiles: retain saved particle selections when repairing custom folder names,
   including profiles that are not active.
 - Profiles: switch shared preloader selections with the target profile.
+- Profiles: accepting external mod removal clears its installed record so exports
+  import successfully again; partial pack changes refresh file and byte counts.
+  Accepted HUD removal also clears its installed record. Keep and Restore preserve
+  the saved customization.
 
 ## [0.1.6] - 2026-09-18
 
