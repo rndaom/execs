@@ -1,0 +1,51 @@
+{
+  "durationMs": 24196.20000000001,
+  "passed": true,
+  "remaining": [
+    "vanilla versus comfig autoexec creation needs separate fresh fixture",
+    "external source conflict and native transition proof require integration/native tests",
+    "screen-reader speech must be checked independently"
+  ],
+  "scope": "Public DOM interactions in a disposable native-engine fixture; not physical keyboard, real filesystem, Cloud or source-conflict proof",
+  "steps": [
+    {
+      "detail": { "path": "tf/cfg/overrides/qualification/native_a.cfg" },
+      "elapsedMs": 1124.0999999999767,
+      "name": "Created unsaved helper in disclosed cfg layer"
+    },
+    { "elapsedMs": 2639.5, "name": "Numeric warning has text severity and selects exact argument" },
+    {
+      "elapsedMs": 4076.7000000000116,
+      "name": "Bundled reference displays command, provenance and sourced bounds"
+    },
+    {
+      "detail": {
+        "pathA": "tf/cfg/overrides/qualification/native_a.cfg",
+        "pathB": "tf/cfg/overrides/qualification/native_b.cfg"
+      },
+      "elapsedMs": 14515.299999999988,
+      "name": "Two unsaved documents preserve Unicode, literal backslashes and quoted separators"
+    },
+    {
+      "elapsedMs": 15528.599999999977,
+      "name": "Resolved exec link navigates to retained helper draft"
+    },
+    {
+      "elapsedMs": 20111.599999999977,
+      "name": "Both fixture saves acknowledged and reopen exact submitted source"
+    },
+    { "elapsedMs": 21131.5, "name": "Find/replace opens through accessible button" },
+    { "elapsedMs": 22162.29999999999, "name": "Go-to-line opens through accessible button" },
+    {
+      "detail": {
+        "accessibleName": "Contents of tf/custom/qualification/cfg/provided.cfg",
+        "ariaReadonly": "true",
+        "contentEditable": "false",
+        "focusReachedContent": true,
+        "path": "tf/custom/qualification/cfg/provided.cfg"
+      },
+      "elapsedMs": 23687,
+      "name": "Provided source is read-only with no Save action"
+    }
+  ]
+}

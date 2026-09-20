@@ -1,0 +1,291 @@
+05:02:42.943452 - SPEECH OUTPUT: 'Screen reader on.'{'established': False}
+05:02:44.541406 - SPEECH OUTPUT: 'Profile Profiles.'{'established': False}
+05:02:44.973233 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:44.995445 - SPEECH OUTPUT: 'Copy install path push button.'{'established': False}
+05:02:44.996711 - SPEECH OUTPUT: 'Copy install path — /home/user/.local/share/Steam/steamapps/common/Team Fortress 2.'{'established': False}
+05:02:45.453229 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:45.471367 - SPEECH OUTPUT: 'Launch TF2 push button.'{'established': False}
+05:02:45.921411 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:45.955111 - SPEECH OUTPUT: 'Settings article'{'established': False}
+05:02:45.956196 - SPEECH OUTPUT: 'Comfig push button.'{'established': False}
+05:02:46.394767 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:46.420300 - SPEECH OUTPUT: 'Binds push button.'{'established': False}
+05:02:46.870368 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:46.893257 - SPEECH OUTPUT: 'Gameplay push button.'{'established': False}
+05:02:47.347886 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:47.371894 - SPEECH OUTPUT: 'HUD push button.'{'established': False}
+05:02:47.821985 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:47.844760 - SPEECH OUTPUT: 'Crosshair push button.'{'established': False}
+05:02:48.292377 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:48.315610 - SPEECH OUTPUT: 'Viewmodels push button.'{'established': False}
+05:02:48.764862 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:48.788511 - SPEECH OUTPUT: 'Sounds push button.'{'established': False}
+05:02:49.236560 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:49.255973 - SPEECH OUTPUT: 'Mods push button.'{'established': False}
+05:02:49.705917 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:49.724140 - SPEECH OUTPUT: 'Files push button.'{'established': False}
+05:02:50.181289 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:50.199985 - SPEECH OUTPUT: 'Launch push button.'{'established': False}
+05:02:50.650787 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:50.674802 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:02:51.120266 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:51.138128 - SPEECH OUTPUT: 'Problems (0) collapsed push button.'{'established': False}
+05:02:51.589638 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:51.607977 - SPEECH OUTPUT: 'Reference collapsed push button.'{'established': False}
+05:02:52.063250 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:52.081385 - SPEECH OUTPUT: 'New cfg collapsed push button.'{'established': False}
+05:02:52.531218 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:52.549862 - SPEECH OUTPUT: 'Focus editor push button.'{'established': False}
+05:02:52.999884 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:53.022420 - SPEECH OUTPUT: 'Find / replace push button.'{'established': False}
+05:02:53.493419 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:53.510806 - SPEECH OUTPUT: 'Go to line push button.'{'established': False}
+05:02:53.964154 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:53.981591 - SPEECH OUTPUT: 'Wrap lines toggle button not pressed.'{'established': False}
+05:02:54.435393 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:54.486887 - SPEECH OUTPUT: '4
+05:02:54.488363 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/autoexec.cfg embedded.'{'established': False}
+05:02:54.489238 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:02:54.910553 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:02:54.949919 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:02:55.326791 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:02:55.359700 - SPEECH OUTPUT: 'File ownership and execution.'{'established': False}
+05:02:55.802259 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:02:55.852423 - SPEECH OUTPUT: '4
+05:02:55.853798 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/autoexec.cfg embedded.'{'established': False}
+05:02:55.854958 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:02:56.231103 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:02:56.269247 - SPEECH OUTPUT: 'f ' {'established': False}
+05:02:56.308672 - SPEECH OUTPUT: 'Find embedded.'{'established': False}
+05:02:56.735755 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:02:56.780804 - SPEECH OUTPUT: '4
+05:02:56.782199 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/autoexec.cfg embedded.'{'established': False}
+05:02:56.782963 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:02:57.152041 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:02:57.158544 - SPEECH OUTPUT: 'left alt ' {'established': False}
+05:02:57.169365 - SPEECH OUTPUT: 'g ' {'established': False}
+05:02:57.206017 - SPEECH OUTPUT: 'Go to line: 1 embedded.'{'established': False}
+05:02:57.658346 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:02:57.703914 - SPEECH OUTPUT: '4
+05:02:57.705301 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/autoexec.cfg embedded.'{'established': False}
+05:02:57.706104 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:02:59.075036 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:02:59.150104 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/autoexec.cfg embedded.'{'established': False}
+05:02:59.151343 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:02:59.503901 - SPEECH OUTPUT: 'return ' {'established': False}
+05:02:59.921210 - SPEECH OUTPUT: 's ' {'established': False}
+05:03:00.090142 - SPEECH OUTPUT: 'e ' {'established': False}
+05:03:00.130932 - SPEECH OUTPUT: 'Completions comment'{'established': False}
+05:03:00.132071 - SPEECH OUTPUT: 'save · command.'{'established': False}
+05:03:00.133875 - SPEECH OUTPUT: 'Saves current game. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:01.717622 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:03.079512 - SPEECH OUTPUT: 'tab ' {'established': False}
+05:03:03.626745 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:04.042872 - SPEECH OUTPUT: 'backspace ' {'established': False}
+05:03:04.459587 - SPEECH OUTPUT: 'backspace ' {'established': False}
+05:03:04.876933 - SPEECH OUTPUT: 'backspace ' {'established': False}
+05:03:05.292839 - SPEECH OUTPUT: 'backspace ' {'established': False}
+05:03:05.710208 - SPEECH OUTPUT: 'backspace ' {'established': False}
+05:03:06.130079 - SPEECH OUTPUT: 'backspace ' {'established': False}
+05:03:06.547017 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:06.553513 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:07.250302 - SPEECH OUTPUT: 'Completions comment'{'established': False}
+05:03:07.251373 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:07.252261 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:07.311826 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:07.315730 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:08.890668 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:08.891764 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:08.948994 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:08.952795 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:10.022747 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:10.023892 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:10.078442 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:10.081774 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:10.084679 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:11.443676 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:11.444829 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:11.482217 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:11.502345 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:12.565590 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:12.566692 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:12.609256 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:12.663346 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:12.665712 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:13.436236 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:13.437363 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:14.015659 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:14.051320 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:15.154840 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:15.155956 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:15.182442 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:15.213590 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:16.517951 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:16.519071 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:16.573807 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:16.611315 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:17.670599 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:17.671705 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:17.728782 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:17.731393 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:18.513855 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:18.514929 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:19.076196 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:19.111556 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:20.152385 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:20.153502 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:20.186570 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:20.209332 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:20.211619 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:21.579025 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:21.580225 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:21.615573 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:21.636041 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:22.719592 - SPEECH OUTPUT: 'sensitivity · cvar.'{'established': False}
+05:03:22.720680 - SPEECH OUTPUT: 'Mouse sensitivity. Pinned Windows TF2 dump; Linux and current retail availability unverified Source: Windows TF2 cvarlist dump; MIT mastercomfig contributors. Full provenance is available in Reference.'{'established': False}
+05:03:22.775817 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:22.816074 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:22.818565 - SPEECH OUTPUT: 'escape ' {'established': False}
+05:03:22.821411 - SPEECH OUTPUT: 'left control ' {'established': False}
+05:03:25.809435 - SPEECH OUTPUT: 'slash ' {'established': False}
+05:03:25.857786 - SPEECH OUTPUT: 'slash ' {'established': False}
+05:03:25.862814 - SPEECH OUTPUT: 'slash ' {'established': False}
+05:03:25.896121 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:25.934298 - SPEECH OUTPUT: 'p ' {'established': False}
+05:03:25.971912 - SPEECH OUTPUT: 'a ' {'established': False}
+05:03:26.012424 - SPEECH OUTPUT: 'i ' {'established': False}
+05:03:26.052627 - SPEECH OUTPUT: 'n ' {'established': False}
+05:03:26.093698 - SPEECH OUTPUT: 't ' {'established': False}
+05:03:26.133807 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:26.175008 - SPEECH OUTPUT: 'l ' {'established': False}
+05:03:26.215521 - SPEECH OUTPUT: 'a ' {'established': False}
+05:03:26.256012 - SPEECH OUTPUT: 't ' {'established': False}
+05:03:26.296604 - SPEECH OUTPUT: 'e ' {'established': False}
+05:03:26.336893 - SPEECH OUTPUT: 'n ' {'established': False}
+05:03:26.377995 - SPEECH OUTPUT: 'c ' {'established': False}
+05:03:26.418452 - SPEECH OUTPUT: 'y ' {'established': False}
+05:03:26.459021 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:26.499676 - SPEECH OUTPUT: 'a ' {'established': False}
+05:03:26.540561 - SPEECH OUTPUT: 'b ' {'established': False}
+05:03:26.580889 - SPEECH OUTPUT: 'c ' {'established': False}
+05:03:26.621410 - SPEECH OUTPUT: 'd ' {'established': False}
+05:03:26.662074 - SPEECH OUTPUT: 'e ' {'established': False}
+05:03:26.702361 - SPEECH OUTPUT: 'f ' {'established': False}
+05:03:26.743334 - SPEECH OUTPUT: 'g ' {'established': False}
+05:03:26.783863 - SPEECH OUTPUT: 'h ' {'established': False}
+05:03:26.824383 - SPEECH OUTPUT: 'i ' {'established': False}
+05:03:26.864556 - SPEECH OUTPUT: 'j ' {'established': False}
+05:03:26.905535 - SPEECH OUTPUT: 'k ' {'established': False}
+05:03:26.946108 - SPEECH OUTPUT: 'l ' {'established': False}
+05:03:26.986509 - SPEECH OUTPUT: 'm ' {'established': False}
+05:03:27.026671 - SPEECH OUTPUT: 'n ' {'established': False}
+05:03:27.067585 - SPEECH OUTPUT: 'o ' {'established': False}
+05:03:27.108159 - SPEECH OUTPUT: 'p ' {'established': False}
+05:03:27.149093 - SPEECH OUTPUT: 'q ' {'established': False}
+05:03:27.189682 - SPEECH OUTPUT: 'r ' {'established': False}
+05:03:27.230425 - SPEECH OUTPUT: 's ' {'established': False}
+05:03:27.271062 - SPEECH OUTPUT: 't ' {'established': False}
+05:03:27.311866 - SPEECH OUTPUT: 'u ' {'established': False}
+05:03:27.352730 - SPEECH OUTPUT: 'v ' {'established': False}
+05:03:27.392898 - SPEECH OUTPUT: 'w ' {'established': False}
+05:03:27.443296 - SPEECH OUTPUT: 'x ' {'established': False}
+05:03:27.446544 - SPEECH OUTPUT: 'x ' {'established': False}
+05:03:27.477698 - SPEECH OUTPUT: 'y ' {'established': False}
+05:03:27.515141 - SPEECH OUTPUT: 'z ' {'established': False}
+05:03:27.555816 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:27.596519 - SPEECH OUTPUT: '0 ' {'established': False}
+05:03:27.637422 - SPEECH OUTPUT: '1 ' {'established': False}
+05:03:27.677820 - SPEECH OUTPUT: '2 ' {'established': False}
+05:03:27.718553 - SPEECH OUTPUT: '3 ' {'established': False}
+05:03:27.759605 - SPEECH OUTPUT: '4 ' {'established': False}
+05:03:27.800033 - SPEECH OUTPUT: '5 ' {'established': False}
+05:03:27.840727 - SPEECH OUTPUT: '6 ' {'established': False}
+05:03:27.880968 - SPEECH OUTPUT: '7 ' {'established': False}
+05:03:27.921399 - SPEECH OUTPUT: '8 ' {'established': False}
+05:03:27.961907 - SPEECH OUTPUT: '9 ' {'established': False}
+05:03:29.507342 - SPEECH OUTPUT: 'return ' {'established': False}
+05:03:29.923822 - SPEECH OUTPUT: 'slash ' {'established': False}
+05:03:29.970868 - SPEECH OUTPUT: 'slash ' {'established': False}
+05:03:29.975612 - SPEECH OUTPUT: 'slash ' {'established': False}
+05:03:30.009113 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:30.046213 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.048603 - SPEECH OUTPUT: 'I ' {'established': False, 'average-pitch': 7.0}
+05:03:30.050547 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.091752 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.136029 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.139550 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.142026 - SPEECH OUTPUT: 'M ' {'established': False, 'average-pitch': 7.0}
+05:03:30.168735 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.171457 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.173515 - SPEECH OUTPUT: 'E ' {'established': False, 'average-pitch': 7.0}
+05:03:30.195584 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:30.199915 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:30.232730 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:30.244685 - SPEECH OUTPUT: 'left shift ' {'established': False}
+05:03:31.247510 - SPEECH OUTPUT: 'n ' {'established': False}
+05:03:31.338424 - SPEECH OUTPUT: 'i ' {'established': False}
+05:03:31.440013 - SPEECH OUTPUT: 'h ' {'established': False}
+05:03:31.519553 - SPEECH OUTPUT: 'o ' {'established': False}
+05:03:31.609551 - SPEECH OUTPUT: 'n ' {'established': False}
+05:03:31.700637 - SPEECH OUTPUT: 'g ' {'established': False}
+05:03:31.791150 - SPEECH OUTPUT: 'o ' {'established': False}
+05:03:31.884360 - SPEECH OUTPUT: 'space ' {'established': False}
+05:03:32.301142 - SPEECH OUTPUT: 'return ' {'established': False}
+05:03:32.340567 - SPEECH OUTPUT: '日本語'[{'established': False}]
+05:03:45.467652 - SPEECH OUTPUT: 'New cfg collapsed push button.'{'established': False}
+05:03:45.864356 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:03:45.988906 - SPEECH OUTPUT: 'qualification/native_a'[{'established': False}]
+05:03:46.092521 - SPEECH OUTPUT: 'Open unsaved draft push button.'{'established': False}
+05:03:46.590435 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/qualification/native_a.cfg embedded.'{'established': False}
+05:03:46.591427 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:03:47.089982 - SPEECH OUTPUT: 'Problems (0) collapsed push button.'{'established': False}
+05:03:47.538019 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:03:47.586671 - SPEECH OUTPUT: 'Problems article'{'established': False}
+05:03:47.587516 - SPEECH OUTPUT: 'tf/cfg/overrides/qualification/native_a.cfg:1:13 push button.'{'established': False}
+05:03:47.990105 - SPEECH OUTPUT: 'banana'[{'established': False}]
+05:03:47.991106 - SPEECH OUTPUT: 'selected'{'established': False}
+05:03:48.590583 - SPEECH OUTPUT: 'Reference collapsed push button.'{'established': False}
+05:03:49.059569 - SPEECH OUTPUT: 'Text unselected.'{'established': False}
+05:03:49.594759 - SPEECH OUTPUT: 'Focus editor push button.'{'established': False}
+05:03:50.321865 - SPEECH OUTPUT: 'New cfg collapsed push button.'{'established': False}
+05:03:50.612432 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:03:50.637424 - SPEECH OUTPUT: 'New cfg article'{'established': False}
+05:03:50.638448 - SPEECH OUTPUT: 'Name or relative helper path embedded.'{'established': False}
+05:03:50.707479 - SPEECH OUTPUT: 'Open unsaved draft push button.'{'established': False}
+05:03:51.261262 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:03:51.705932 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:03:51.732629 - SPEECH OUTPUT: 'native_a.cfg tf/cfg/overrides/qualification/native_a.cfg Unsaved · push button.'{'established': False}
+05:03:52.235125 - SPEECH OUTPUT: 'collapsed'{'established': False}
+05:03:52.251584 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:03:52.720429 - SPEECH OUTPUT: 'native_b.cfg tf/cfg/overrides/qualification/native_b.cfg Unsaved · push button.'{'established': False}
+05:03:53.738912 - SPEECH OUTPUT: 'Exec target: tf/cfg/overrides/qualification/native_a.cfg push button.'{'established': False}
+05:03:54.173314 - SPEECH OUTPUT: '0
+05:03:54.174337 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/qualification/native_a.cfg embedded.'{'established': False}
+05:03:54.175122 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:03:54.733195 - SPEECH OUTPUT: 'Save file push button.'{'established': False}
+05:03:55.258658 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:03:55.724892 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:03:55.749127 - SPEECH OUTPUT: 'native_b.cfg tf/cfg/overrides/qualification/native_b.cfg Unsaved · push button.'{'established': False}
+05:03:56.266147 - SPEECH OUTPUT: 'Save file push button.'{'established': False}
+05:03:56.763963 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:03:57.260204 - SPEECH OUTPUT: 'native_a.cfg tf/cfg/overrides/qualification/native_a.cfg push button.'{'established': False}
+05:03:57.754820 - SPEECH OUTPUT: 'collapsed'{'established': False}
+05:03:57.769632 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:03:58.235593 - SPEECH OUTPUT: 'expanded'{'established': False}
+05:03:58.262072 - SPEECH OUTPUT: 'native_b.cfg tf/cfg/overrides/qualification/native_b.cfg push button.'{'established': False}
+05:03:58.735720 - SPEECH OUTPUT: 'Contents of tf/cfg/overrides/qualification/native_b.cfg embedded.'{'established': False}
+05:03:58.736706 - SPEECH OUTPUT: 'Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves.'{'established': False}
+05:03:59.248139 - SPEECH OUTPUT: 'Find / replace push button.'{'established': False}
+05:03:59.655638 - SPEECH OUTPUT: 'Find embedded.'{'established': False}
+05:04:00.251026 - SPEECH OUTPUT: 'Go to line push button.'{'established': False}
+05:04:00.653415 - SPEECH OUTPUT: '2'[{'established': False}]
+05:04:00.654421 - SPEECH OUTPUT: 'selected'{'established': False}
+05:04:00.673657 - SPEECH OUTPUT: 'Go to line: 2 embedded.'{'established': False}
+05:04:01.261827 - SPEECH OUTPUT: 'Open file collapsed push button.'{'established': False}
+05:04:01.763550 - SPEECH OUTPUT: 'Text unselected.'{'established': False}
+05:04:01.787532 - SPEECH OUTPUT: 'provided.cfg tf/custom/qualification/cfg/provided.cfg pack push button.'{'established': False}
+05:04:02.391919 - SPEECH OUTPUT: 'Contents of tf/custom/qualification/cfg/provided.cfg embedded.'{'established': False}
+05:04:02.392872 - SPEECH OUTPUT: 'Read-only source · Ctrl+F searches · Ctrl+Alt+G goes to line · Tab moves focus.'{'established': False}
+05:04:04.615992 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}
+05:04:17.149074 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}
+05:04:29.151259 - SPEECH OUTPUT: 'execs 0.1.7 isolated Files qualification frame.'{'established': False}

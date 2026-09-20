@@ -1,0 +1,323 @@
+{
+  "status": "passed",
+  "version": "0.1.7",
+  "tag": "v0.1.7",
+  "githubRepository": "rndaom/execs",
+  "expectedCommit": "1a81bcfbb8ea2dee2fbddf2a409180296adac4c0",
+  "expectedRun": "35493975892",
+  "startedAt": "2026-09-20T06:57:10.301Z",
+  "anonymous": true,
+  "requests": [
+    {
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/releases/latest",
+      "finalUrl": "https://api.github.com/repos/rndaom/execs/releases/latest",
+      "redirects": [],
+      "file": "release.json",
+      "bytes": 17028,
+      "sha256": "7d7c694d21a7808f21269f9b72ada19e3b0a956a2339d2f1778e7d3003412b2d",
+      "contentType": "application/json; charset=utf-8",
+      "githubRequestId": "CE59:295384:1CB6E94:5FF1CFB:6AAF83C6"
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/latest/download/latest.json",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/360e116e-ce53-49a2-9e34-5dd466409dfd",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/latest/download/latest.json",
+          "to": "https://github.com/rndaom/execs/releases/download/v0.1.7/latest.json"
+        },
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/latest.json",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/360e116e-ce53-49a2-9e34-5dd466409dfd"
+        }
+      ],
+      "file": "latest.json",
+      "bytes": 4260,
+      "sha256": "5413095b2066a328215a3908fb683559b895c98c72e44bf8382739c7a9741fd9",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/release-commit.json",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/1d338c0e-6fcd-4a27-a0c3-da6005e030f0",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/release-commit.json",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/1d338c0e-6fcd-4a27-a0c3-da6005e030f0"
+        }
+      ],
+      "file": "release-commit.json",
+      "bytes": 83,
+      "sha256": "851b1a9ee762a7a9bb19d9fb000872682cb92e10d0ec7f999cbcf3c6688f427c",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/actions/runs/35493975892",
+      "finalUrl": "https://api.github.com/repos/rndaom/execs/actions/runs/35493975892",
+      "redirects": [],
+      "file": "release-run.json",
+      "bytes": 11731,
+      "sha256": "3af7409e0a7edafef2af8052053ad793f597f35414cdd1058bf9f64967d5ee3c",
+      "contentType": "application/json; charset=utf-8",
+      "githubRequestId": "CE59:295384:1CB71E3:5FF27FD:6AAF83C6"
+    },
+    {
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/git/ref/tags/v0.1.7",
+      "finalUrl": "https://api.github.com/repos/rndaom/execs/git/ref/tags/v0.1.7",
+      "redirects": [],
+      "file": "tag-ref.json",
+      "bytes": 319,
+      "sha256": "3915fbd190d24fbe0e2d38efea9e714775b142f5c1a2e663a6bb8648d6e45051",
+      "contentType": "application/json; charset=utf-8",
+      "githubRequestId": "CE59:295384:1CB72A2:5FF2A82:6AAF83C7"
+    },
+    {
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/git/tags/37f2f6fe5b572076c030144f6f6248432e5d5813",
+      "finalUrl": "https://api.github.com/repos/rndaom/execs/git/tags/37f2f6fe5b572076c030144f6f6248432e5d5813",
+      "redirects": [],
+      "file": "annotated-tag-0.json",
+      "bytes": 666,
+      "sha256": "b635b0022f02014a5d4d5a296bddaa6668808d4964fa91b5200773ec8caa7e6a",
+      "contentType": "application/json; charset=utf-8",
+      "githubRequestId": "CE59:295384:1CB733A:5FF2C63:6AAF83C7"
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_x64-setup.exe.sig",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/a03c923d-be66-4f2a-9330-0161280f809b",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_x64-setup.exe.sig",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/a03c923d-be66-4f2a-9330-0161280f809b"
+        }
+      ],
+      "file": "execs_0.1.7_x64-setup.exe.sig",
+      "bytes": 416,
+      "sha256": "f704b7fff66e529900dc0012f6bdf572c1bd5981b9ffbafe88c9e3d6ed8b4658",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_x64-setup.exe",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/862340b8-7797-4249-bd53-29292942a083",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_x64-setup.exe",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/862340b8-7797-4249-bd53-29292942a083"
+        }
+      ],
+      "file": "execs_0.1.7_x64-setup.exe",
+      "bytes": 6450549,
+      "sha256": "7b159774499da2592233e5f6ff4d6fb57a96e00c20cbd091ec4fac15173a1fbb",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.AppImage.sig",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/d2630ca2-508b-47c0-ac0a-1eae63bce0d3",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.AppImage.sig",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/d2630ca2-508b-47c0-ac0a-1eae63bce0d3"
+        }
+      ],
+      "file": "execs_0.1.7_amd64.AppImage.sig",
+      "bytes": 416,
+      "sha256": "9cc6f4bf0987c713eb9bc66f9ed148c61e633d4ded99fe57d9b4bbef48eaaf39",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.AppImage",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/623a6c03-c4f5-46c0-acdd-07f12916a70f",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.AppImage",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/623a6c03-c4f5-46c0-acdd-07f12916a70f"
+        }
+      ],
+      "file": "execs_0.1.7_amd64.AppImage",
+      "bytes": 99985912,
+      "sha256": "37419cd48f61b9efcfabde7b29f9d2280a4b8df300969afe2d81a85c711977e7",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.deb.sig",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/633d6471-4623-4606-8a4d-551f2b0410fb",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.deb.sig",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/633d6471-4623-4606-8a4d-551f2b0410fb"
+        }
+      ],
+      "file": "execs_0.1.7_amd64.deb.sig",
+      "bytes": 408,
+      "sha256": "04bc4addbf041c85559e3c8e8d64fb185c7eabc5afbf5c2645c301bcfc2d0d12",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.deb",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/24bacc37-5abd-4895-a6ac-ca78026fab14",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.deb",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/24bacc37-5abd-4895-a6ac-ca78026fab14"
+        }
+      ],
+      "file": "execs_0.1.7_amd64.deb",
+      "bytes": 13220990,
+      "sha256": "f865233fe7ddbe417b81e69ea170afb17ea0ce47289b6cc610dd224bc5346155",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/576301602",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/862340b8-7797-4249-bd53-29292942a083",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://api.github.com/repos/rndaom/execs/releases/assets/576301602",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/862340b8-7797-4249-bd53-29292942a083"
+        }
+      ],
+      "file": "updater-windows-x86_64-execs_0.1.7_x64-setup.exe",
+      "bytes": 6450549,
+      "sha256": "7b159774499da2592233e5f6ff4d6fb57a96e00c20cbd091ec4fac15173a1fbb",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    },
+    {
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/576299618",
+      "finalUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/623a6c03-c4f5-46c0-acdd-07f12916a70f",
+      "redirects": [
+        {
+          "status": 302,
+          "from": "https://api.github.com/repos/rndaom/execs/releases/assets/576299618",
+          "to": "https://release-assets.githubusercontent.com/github-production-release-asset/1335405425/623a6c03-c4f5-46c0-acdd-07f12916a70f"
+        }
+      ],
+      "file": "updater-linux-x86_64-execs_0.1.7_amd64.AppImage",
+      "bytes": 99985912,
+      "sha256": "37419cd48f61b9efcfabde7b29f9d2280a4b8df300969afe2d81a85c711977e7",
+      "contentType": "application/octet-stream",
+      "githubRequestId": null
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "execs_0.1.7_x64-setup.exe",
+      "assetId": 576301602,
+      "publicUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_x64-setup.exe",
+      "bytes": 6450549,
+      "sha256": "7b159774499da2592233e5f6ff4d6fb57a96e00c20cbd091ec4fac15173a1fbb",
+      "githubDigestVerified": true,
+      "productionSignatureVerified": true,
+      "sidecar": "execs_0.1.7_x64-setup.exe.sig"
+    },
+    {
+      "name": "execs_0.1.7_amd64.AppImage",
+      "assetId": 576299618,
+      "publicUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.AppImage",
+      "bytes": 99985912,
+      "sha256": "37419cd48f61b9efcfabde7b29f9d2280a4b8df300969afe2d81a85c711977e7",
+      "githubDigestVerified": true,
+      "productionSignatureVerified": true,
+      "sidecar": "execs_0.1.7_amd64.AppImage.sig"
+    },
+    {
+      "name": "execs_0.1.7_amd64.deb",
+      "assetId": 576299581,
+      "publicUrl": "https://github.com/rndaom/execs/releases/download/v0.1.7/execs_0.1.7_amd64.deb",
+      "bytes": 13220990,
+      "sha256": "f865233fe7ddbe417b81e69ea170afb17ea0ce47289b6cc610dd224bc5346155",
+      "githubDigestVerified": true,
+      "productionSignatureVerified": true,
+      "sidecar": "execs_0.1.7_amd64.deb.sig"
+    }
+  ],
+  "updaterDownloads": [
+    {
+      "platform": "windows-x86_64",
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/576301602",
+      "file": "updater-windows-x86_64-execs_0.1.7_x64-setup.exe",
+      "bytes": 6450549,
+      "sha256": "7b159774499da2592233e5f6ff4d6fb57a96e00c20cbd091ec4fac15173a1fbb",
+      "sameAsPublicAsset": true,
+      "productionSignatureVerified": true,
+      "feedSignatureMatchesSidecar": true
+    },
+    {
+      "platform": "linux-x86_64",
+      "requestedUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/576299618",
+      "file": "updater-linux-x86_64-execs_0.1.7_amd64.AppImage",
+      "bytes": 99985912,
+      "sha256": "37419cd48f61b9efcfabde7b29f9d2280a4b8df300969afe2d81a85c711977e7",
+      "sameAsPublicAsset": true,
+      "productionSignatureVerified": true,
+      "feedSignatureMatchesSidecar": true
+    }
+  ],
+  "limits": [
+    "Checks anonymous public delivery and cryptographic identity; does not install or execute packages.",
+    "Does not repeat platform startup, updater installation, Steam Cloud, or in-game testing.",
+    "Network errors, API rate limits, or stale CDN publication state fail this run; retry in a new evidence directory.",
+    "Only this release, commit, and workflow run are accepted."
+  ],
+  "outputDirectory": "G:\\Projects\\execs-017-evidence\\public-017-final",
+  "localRepository": "G:\\Projects\\execs-017-release",
+  "productionPublicKeySha256": "d39451129f60277a734aba43fe7aef268a2efbd97fd463ca292f2b2485ec06c7",
+  "release": {
+    "id": 392314877,
+    "url": "https://github.com/rndaom/execs/releases/tag/v0.1.7",
+    "tag": "v0.1.7",
+    "publishedAt": "2026-09-20T06:55:58Z",
+    "targetCommitish": "1a81bcfbb8ea2dee2fbddf2a409180296adac4c0"
+  },
+  "updaterFeed": {
+    "requestedUrl": "https://github.com/rndaom/execs/releases/latest/download/latest.json",
+    "version": "0.1.7",
+    "platforms": [
+      "linux-x86_64",
+      "linux-x86_64-appimage",
+      "windows-x86_64",
+      "windows-x86_64-nsis"
+    ],
+    "notesMatchChangelog": true,
+    "debEntryAbsent": true,
+    "untaggedUrlAbsent": true
+  },
+  "provenance": {
+    "commit": "1a81bcfbb8ea2dee2fbddf2a409180296adac4c0",
+    "run": "35493975892"
+  },
+  "releaseRun": {
+    "id": 35493975892,
+    "url": "https://github.com/rndaom/execs/actions/runs/35493975892",
+    "event": "push",
+    "headSha": "1a81bcfbb8ea2dee2fbddf2a409180296adac4c0",
+    "status": "completed",
+    "conclusion": "success",
+    "workflow": ".github/workflows/release.yml"
+  },
+  "tagDereferences": [
+    {
+      "sha": "37f2f6fe5b572076c030144f6f6248432e5d5813",
+      "tag": "v0.1.7",
+      "targetType": "commit",
+      "targetSha": "1a81bcfbb8ea2dee2fbddf2a409180296adac4c0"
+    }
+  ],
+  "tagCommit": "1a81bcfbb8ea2dee2fbddf2a409180296adac4c0",
+  "completedAt": "2026-09-20T06:57:16.338Z"
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "execs_0.1.7_amd64.AppImage",
+    "bytes": 99985912,
+    "sha256": "62ea8709555651468068856fe2c9a670ed6d45c453263a0a3a71376f1fe33c55"
+  },
+  {
+    "name": "execs_0.1.7_x64-setup.exe",
+    "bytes": 6452955,
+    "sha256": "1b4fdaec473a5b4a7e10387797aeb224069aa8134fea124a7755f0622f1960ff"
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "source_commit": "4e5fb394c790197bc184dc9a82301561b3bd35ca",
+  "description": "Final production build including incoming-reference navigation. Raw asset bytes; no startup or memory inference.",
+  "assets": [
+    {
+      "file": "app-BShhQmBr.js",
+      "bytes": 247,
+      "sha256": "e62e80fa395b34706628902841b7a2f36ab280ed5fc2aa4c1517e707e2bc9eb1"
+    },
+    {
+      "file": "files-analysis.worker-DYiVjpKz.js",
+      "bytes": 760604,
+      "sha256": "a203d74621f42bc1ca2ae41ffe55430d365e4d24893e2fed8ff1107f886a1637"
+    },
+    {
+      "file": "FilesPane-CQ6I-gE3.js",
+      "bytes": 383880,
+      "sha256": "8349539d8030d5e36eaa09955794639be8cdccba099f893aab103da6c241714e"
+    },
+    {
+      "file": "index-_FrACPB3.js",
+      "bytes": 334,
+      "sha256": "30960d4574f342abf639a9cd97352625c51363db1e94d704d939947f98b4f967"
+    },
+    {
+      "file": "index-CzHiXLlx.css",
+      "bytes": 51256,
+      "sha256": "0e5c6e73ba0be971913a310673d47446149a50e07a4dfe2dd8b726fb720ad7a7"
+    },
+    {
+      "file": "index-D2jsPY3V.js",
+      "bytes": 1353152,
+      "sha256": "58a7093f04aa1102574ed839d8a292f5ac9faf71a959e40edc9732be6fc2e225"
+    },
+    {
+      "file": "index-Dl5CCK7N.js",
+      "bytes": 1077,
+      "sha256": "9439d0532df480d18b73720cd7324a09b2b06737e3febf6151afefd06708ccdd"
+    },
+    {
+      "file": "window-UvYh90p2.js",
+      "bytes": 13979,
+      "sha256": "f3f22a7e3daa511f61b9138c4544bce5a89aa4fbba2b515795da1c1914301583"
+    }
+  ]
+}

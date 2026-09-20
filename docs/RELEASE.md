@@ -3,7 +3,17 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.6** (`v0.1.6`, published 2026-09-18 23:20:05 UTC;
+Current public version: **0.1.7**, published September 20, 2026 at 06:55:58 UTC
+(2:55 AM America/New_York), after the owner's explicit release authorization.
+PR #54 merged into maintenance and PR #55 carried the fixes into main, which
+retains 0.2.0. Immutable `v0.1.7` points to
+`1a81bcfbb8ea2dee2fbddf2a409180296adac4c0`. All 13 milestone issues are Done.
+Tagged workflow `35493975892` passed every gate, including both platforms'
+upgrades from 0.1.6 and packaged Files workers. Anonymous public downloads
+independently passed signature, hash, updater and provenance checks.
+See `docs/release-0.1.7.md` for evidence and qualification limits.
+
+Previous public version: **0.1.6** (`v0.1.6`, published 2026-09-18 23:20:05 UTC;
 September 18, 2026 at 7:20 PM in America/New_York). The owner assigned all 14
 milestone issues: sound identity/audition, creator ZIP import, Windows HUD paths,
 and HUD import/customization fixes. All 14 Linear milestone issues are Done.
@@ -53,7 +63,7 @@ owner's `rndaom/` prefix:
 
 The older `release-0.1.3` name was reused for 0.1.4 and 0.1.5. It has now been
 consolidated into `rndaom/release-0.1` without losing commits. Completed version
-branches are not an archive: immutable `v0.1.0` through `v0.1.6` tags, including
+branches are not an archive: immutable `v0.1.0` through `v0.1.7` tags, including
 `v0.1.3+1`, retain the published versions. Missing version branches therefore do
 not mean missing releases. Do not recreate old branches merely to fill gaps.
 

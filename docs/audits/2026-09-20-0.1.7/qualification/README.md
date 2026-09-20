@@ -1,0 +1,128 @@
+# Files native qualification — RND-323
+
+Status: both native jobs passed in run 35490611803 at 0ff59b4. Keyboard,
+authoring workflows, Linux real IME and performance evidence are recorded below.
+This is scoped fixture qualification, not blanket release acceptance: Linux
+explicit save-result speech and full warning narration were not observed, even
+in bounded settled-save and documented read-command follow-ups. The Linux record
+links the source-backed Orca 42 child-add announcement limitation and raw logs.
+
+Completed platform evidence: [Windows native results and captures](windows.md)
+and [Linux native results and capture](linux.md).
+
+The owner authorized implementation and private release readiness on September
+19, 2026. Publication, tagging, real-game launches and real-profile writes are
+outside this qualification. The original planning-only language in the Linear
+issue describes its creation date, not this later authorization.
+
+## Environment and reusable evidence
+
+- Windows evidence uses a disposable Windows Server 2025 GitHub runner, AMD
+  EPYC 9V74, four logical CPUs, WebView2 152.0.4191.66 and NVDA 2026.2.
+- Linux evidence uses a disposable Ubuntu 22.04 GitHub runner, AMD EPYC 9V74,
+  four logical CPUs, WebKitGTK 2.50.4, Orca 42.0, IBus 1.5.26 and Anthy 1.5.14.
+  Xvfb, AT-SPI and Speech Dispatcher provide the native desktop and speech log.
+- Windows currently has only `en-US` / `0409:00000409` installed. No real
+  Windows IME claim is possible from that keyboard; synthetic composition
+  coverage remains distinct. Linux CI provisions ibus-anthy in its disposable
+  desktop and checks physical roman-key input commits `日本語` through the IME.
+- Prior passing harness source: commit
+  `e2e9ef07727ec19aede558707c928c5faef827da`. Prior sound-label acceptance is not
+  evidence that Files editor interaction works.
+
+The .NET 10 Windows harness builds with zero errors and warnings. Its initial
+local `Start-Process` launch was rejected by automatic policy review with only
+`blocked by policy` as the reason. No launch retry or alternate local automation
+was attempted. Subsequent native runs use disposable GitHub Actions desktops.
+
+The dedicated `qualify-files.yml` workflow has read-only repository permissions,
+does not build a product release, does not publish or tag, and retains native
+test artifacts. Its Linux job attempts real WebKitGTK keyboard, Orca logging and
+Japanese IME.
+The Windows CI job now attempts actual physical keyboard events, completion,
+Tab exit, WebView2 screenshots and NVDA generated speech in the disposable runner.
+It fails if editor-name speech is absent. The final results record must name the
+actual run and source revision; workflow configuration alone is not evidence.
+
+## Evidence boundaries
+
+`scripts/qualification/files/windows` and `scripts/qualification/files/webkit.py`
+host the real React frontend through its isolated preview adapter. They expose
+no Tauri IPC and use fresh/ephemeral WebView data. Preview operations remain
+in memory. Native engine, keyboard and actual generated screen-reader speech can
+be measured here. Native save/close/Cloud guarantees require the core/IPC
+regressions and isolated packaged application checks separately.
+
+The hosts take explicit viewport dimensions and zoom. Record the measured CSS
+viewport; host-window borders and OS display scaling must not be counted as
+editor area. Navigation duration is host navigation only, not application-ready
+startup or key-to-paint latency. Do not report it as such.
+
+## Required run matrix
+
+| Area | Required evidence |
+| --- | --- |
+| Native layout | Windows/WebView2 and Linux/WebKitGTK at 960×640, 1200×800, 1280×800 and 200% zoom; Save visible, usable line count, filename distinction, editor focus mode |
+| Native keyboard | Novice create → reference → completion → diagnostic → save; experienced cross-file/alias/exec navigation and retained drafts; Tab exits without a completion, Escape dismisses completion, Ctrl+Space completion, Ctrl+S save, Ctrl+F find/replace, Ctrl+G next match, Ctrl+Shift+G previous match, Ctrl+Alt+G go to line |
+| Screen readers | Actual NVDA and Orca speech for editor name, line/document context, completion options, problem navigation, read-only state and save result; retain scoped speech excerpts |
+| IME and display | Real composition without premature completion/save; non-ASCII round trip; reduced motion; contrast ratios and non-color problem cues |
+| Performance | Named CPU/OS/engine; bundle bytes, ready-startup, peak process-tree memory, p95 input-to-next-paint, completion and analysis duration; 10k-line, 1MiB, 8MiB and 256-file cases |
+| Package | Production worker and local reference under actual Tauri CSP; offline operation; no remote executable code or weakened CSP; separate Windows/Linux installers and updater smoke |
+| Integrity | Focused native tests for profile/root/source mismatch, save edits, managed/absorb changes, game lock, creation collisions, interrupted transaction and Cloud failure; prior-public export/import hashes |
+
+Synthetic composition events can test handler behavior but cannot establish
+operating-system IME acceptance. DOM accessible names and screenshots cannot
+establish screen-reader speech. Fixture save success cannot establish disk or
+Cloud persistence. A preview worker cannot establish packaged CSP acceptance.
+
+The dedicated Vite qualification configuration builds with production transforms
+and the ordinary application modules, replacing only the entry adapter with the
+in-memory fixture. A loopback static server sends the exact product CSP from
+`tauri.conf.json` as a response header. This checks the bundled worker and editor
+in each native engine under that policy, without weakening the policy or shipping
+preview code in the product. It remains a fixture with equivalent CSP, not an
+actual packaged Tauri origin/IPC test. Product package smoke remains separate.
+
+## Harness corrections and interpretation
+
+- IBus daemon startup is asynchronous. The runner waits for its engine inventory
+  before starting the host. Anthy's default input mode is Latin (`3`); this test
+  explicitly selects Hiragana (`0`) and Roman-key typing (`0`) in the disposable
+  desktop. It records both installed settings and the selected engine. The IBus
+  CLI can fail its keyboard-layout subprocess after selecting an engine, so the
+  test verifies the selected engine rather than inferring it from that exit code.
+- NVDA may consume Escape to change its own focus mode. The Windows harness uses
+  its documented Insert+F2 pass-next-key gesture before closing the search and
+  go-to-line dialogs, then verifies the resulting editor focus.
+- Readiness measures navigation start to editor plus settled analysis, not the
+  operating-system process-launch interval. Completion measures physical
+  Ctrl+Space to completion DOM appearance, not compositor presentation. Printable
+  input latency measures the second animation frame after the native key event.
+- Twenty representative 10k-line samples use a fresh worker each time. Dense
+  1 MiB and 8 MiB cases must return an explicit incomplete analysis-budget finding;
+  comment-heavy byte-boundary cases remain separate. Memory is a 100 ms sampled
+  process-tree working set/RSS, not an absolute or unique physical-memory peak.
+- Orca switches from the initial GTK script to its WebKitGtk document script.
+  Final speech includes editor names, completion choices, problem location and
+  selected diagnostic text, and explicit read-only instructions. Full warning
+  prose and the explicit Saved status remain unobserved in Linux speech.
+- The 200% capture also records reduced-motion media matching and computed button
+  transition durations: WebView2 uses a developer media override, WebKitGTK uses
+  the disposable GTK desktop animation preference. These mechanisms are recorded
+  explicitly rather than presented as a user's actual desktop preference.
+
+## Source references
+
+- [RND-323 acceptance](https://linear.app/rndaom/issue/RND-323/qualify-the-rebuilt-files-workflow-on-windows-and-linux-before-017)
+- [Files audit and plan](https://linear.app/rndaom/document/files-workspace-deep-audit-research-and-017-rework-plan-73e3e612b655)
+- [Prior Windows speech qualification](../../2026-09-18-0.1.6/native-a11y/windows.md)
+- [Prior Linux speech qualification](../../2026-09-18-0.1.6/native-a11y/linux.md)
+- [Orca debugging](https://orca.gnome.org/debugging): logs include generated speech and accessibility events.
+- [NVDA User Guide](https://download.nvaccess.org/documentation/en/userGuide.html): speech viewer and application keyboard interaction.
+- [Tauri CSP](https://v2.tauri.app/security/csp/): packaged resource restrictions require direct verification.
+- [IBus CLI source](https://github.com/ibus/ibus/blob/1.5.26/tools/main.vala): engine selection and optional system keyboard-layout handling.
+- [Anthy settings schema](https://github.com/ibus/ibus-anthy/blob/main/data/org.freedesktop.ibus.engine.anthy.gschema.xml.in) and [input-mode definitions](https://github.com/ibus/ibus-anthy/blob/main/engine/python3/engine.py): Latin default and Hiragana/Roman-key configuration.
+
+These documentation pages were read on September 20, 2026 UTC. The CodeMirror
+Tab documentation fetch timed out; no fetched content from that attempt is
+claimed as evidence.

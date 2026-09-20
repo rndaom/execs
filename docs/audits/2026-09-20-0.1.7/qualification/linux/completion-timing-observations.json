@@ -1,0 +1,13 @@
+{
+  "physicalTrials": 20,
+  "distinctObservations": 15,
+  "timing": {
+    "readyMs": 546,
+    "completionP95Ms": 81,
+    "scope": "Navigation start to editor plus settled analysis; physical Ctrl+Space keydown to visible completion DOM, not compositor presentation",
+    "completionMs": [
+      81, 73, 68, 70, 69, 69.00000000000364, 68.99999999999636, 68, 68.00000000000364,
+      68.99999999999636, 68, 67, 69, 68.00000000000728, 73
+    ]
+  }
+}
