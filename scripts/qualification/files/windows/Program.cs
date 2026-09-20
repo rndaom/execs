@@ -147,6 +147,15 @@ internal static class Program
         if (!(await web.ExecuteScriptAsync("document.querySelector('.cm-content')?.textContent")).Contains("sensitivity"))
             throw new InvalidOperationException("Tab did not accept command completion");
         await Key(handle, 0x1B);
+        for (var sample = 0; sample < 20; sample++)
+        {
+            await Key(handle, 0x20, 0x11);
+            await Task.Delay(200);
+            await Key(handle, 0x1B);
+        }
+        File.WriteAllText(Path.Combine(evidence, "timing.json"), await web.ExecuteScriptAsync("window.__qualificationTiming"));
+        if (await web.ExecuteScriptAsync("window.__qualificationTiming.completionMs.length >= 20") != "true")
+            throw new InvalidOperationException("Insufficient distinct physical completion timing observations");
         await web.ExecuteScriptAsync("window.__qualificationPaint=[]");
         await Key(handle, 0x23, 0x11);
         await Key(handle, 0x0D);

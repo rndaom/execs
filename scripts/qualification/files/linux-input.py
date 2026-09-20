@@ -92,6 +92,9 @@ key("Tab")
 if not any("sensitivity" in row.get("text", "") for row in snapshot() if row["focused"]):
     raise RuntimeError("Physical completion did not accept sensitivity")
 key("Escape")
+for sample in range(20):
+    key("ctrl+space")
+    key("Escape")
 key("ctrl+End")
 key("Return")
 subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "50", "// IME "], check=True)
@@ -125,6 +128,9 @@ for attempt in range(80):
 else:
     raise RuntimeError("Worker benchmark did not complete")
 (evidence / "benchmark-request").unlink()
+timing = json.loads((evidence / "1200x800" / "runtime.json").read_text()).get("timing", {})
+if len(timing.get("completionMs", [])) < 20:
+    raise RuntimeError("Insufficient distinct physical completion timing observations")
 (evidence / "workflows-request").touch()
 for attempt in range(120):
     result_path = evidence / "1200x800" / "workflows.json"

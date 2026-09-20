@@ -76,6 +76,7 @@ def capture():
       }
       const values=[...window.__qualificationPaint].sort((a,b)=>a-b);
       return {viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
+        timing:window.__qualificationTiming,
         measurement:'physical keydown to second requestAnimationFrame',samples:values.length,
         p95ms:values[Math.max(0,Math.ceil(values.length*.95)-1)],values,
         workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),
