@@ -60,6 +60,20 @@ source area usable. This pass found and corrected the Focus button retaining
 button focus; its regression also protects selection and scroll. It does not
 claim native filesystem persistence or screen-reader acceptance.
 
+The final incoming-reference review found and corrected links that reopened the
+selected target instead of its caller. At product commit `4e5fb39`, a browser
+pass followed autoexec's outgoing link into the managed binds file, then used
+`Referenced by` to return to autoexec line 1. The ownership disclosure displays
+caller locations and explicitly labels deferred bind/alias candidates. Its
+regression retains an unsaved draft and verifies that navigation performs no
+save. Biome, TypeScript and the production build pass after this correction.
+The native timing runs retain their earlier exact source identities; this
+follow-up changes graph labels/navigation, not the editor or worker engine.
+
+The catalog's verified argument diagnostics cover sourced constraints and
+runtime flags. It does not claim exhaustive engine key/arity validation where
+no verified source exists; the language contract records that boundary.
+
 ## Acceptance evidence map
 
 | Scope | Implementation and regression evidence |
@@ -72,7 +86,8 @@ claim native filesystem persistence or screen-reader acceptance.
 | RND-319 | `files-completion.test.ts`, `files-completion-catalog.test.ts`, native completion input/speech |
 | RND-320, RND-322 | `files-reference.test.ts`, `files-ui.test.ts`, shared `lint-options.test.ts`; `files-reference-sources.md` |
 | RND-321 | `files-create.test.ts`, source-bound host tests and native vanilla/comfig creation tests |
-| RND-323 | Qualification record and signed private candidate gates; remain pending until actual runs pass |
+| RND-323 | Native qualification record, bounded speech limitations, and final signed private candidate run 35491010492 |
 
-This mapping identifies inspectable evidence, not a blanket completion claim for
-native acceptance criteria still marked pending.
+This mapping identifies inspectable evidence, not blanket accessibility
+certification. The release record links the authoritative package/CI results;
+readiness requires those gates to pass and retains the documented speech limits.

@@ -1,7 +1,10 @@
 # 0.1.7 release candidate
 
-Status: implementation complete; native and package qualification in progress. Publication is not
-authorized. No release tag is created by this preparation.
+Implementation and native qualification are complete within the recorded limits.
+The final private package gate is [candidate run 35491010492](https://github.com/rndaom/execs/actions/runs/35491010492),
+at `6ecbcc0`; its successful build and verify jobs are required for readiness.
+Later commits contain qualification harnesses and evidence only. Publication is
+not authorized. No release tag is created by this preparation.
 
 ## Scope and baseline
 
@@ -23,20 +26,42 @@ evidence. Unreleased Inventory and profile-owned preloader work are excluded.
 
 ## Release gates
 
-- [ ] All issue acceptance criteria mapped to implementation and evidence
+- [x] All issue acceptance criteria mapped to implementation and evidence
 - [x] Frontend tests, Biome and production build
 - [x] Windows/Linux Rust format, Clippy and workspace tests
 - [x] Actual public 0.1.6 export/import and exact-byte round trip
-- [ ] Supported window sizes, zoom, keyboard, screen readers and IME
-- [ ] Novice and experienced Files workflows
+- [x] Supported window sizes, zoom, keyboard, screen-reader observations and Linux IME; limits below
+- [x] Novice and experienced Files workflows, separated from native persistence tests
 - [x] Lock, external conflict, failed write and transition regressions
-- [ ] Offline help, packaged worker/CSP and measured responsiveness
-- [ ] Signed private installer/updater candidate from public 0.1.6
-- [ ] Maintenance and forward-port PRs pass CI
+- [x] Offline help and measured native responsiveness
 - [x] Four version files, Cargo lockfile and 0.1.7 changelog agree
 
 Tagging, merging release PRs and publishing remain separate owner actions.
 Passing fixture checks does not imply unperformed native or retail-game checks.
+
+The remaining machine-verifiable gates are the private candidate's Windows/Linux
+installer and updater smoke, actual packaged worker/CSP, signature/feed verify
+job, and green CI on both PRs. Their linked GitHub runs are the authoritative
+results; a queued, failed or cancelled run does not satisfy a gate. The publish
+job must stay skipped. Product code is unchanged after `4e5fb39` on maintenance
+and `9dcb51b` on the forward-port.
+
+## Qualification limits
+
+Both native engine jobs passed [run 35490611803](https://github.com/rndaom/execs/actions/runs/35490611803).
+Windows NVDA spoke editor, completion, full numeric warning, selection, save and
+read-only state. Linux Orca spoke editor, completion, problem location/selection,
+Japanese IME text and read-only instructions. Orca 42 did not speak the full
+warning or save status in the bounded follow-ups; its WebKitGTK script lacks
+the relevant live-region child-add handler. These observations are explicitly
+retained in [the native evidence](audits/2026-09-20-0.1.7/qualification/README.md),
+not represented as complete screen-reader certification. Windows Japanese IME
+was not exercised. Normal editing and representative analysis meet the proposed
+performance targets on both named runners.
+
+The final graph-link correction has focused tests and an independent browser
+visual/navigation pass after the native measurements. Generic engine argument
+arity/key validation is not claimed beyond the sourced catalog constraints.
 
 ## Research
 
@@ -52,9 +77,7 @@ remote executable code or disabling production CSP.
 [Maintenance PR #54](https://github.com/rndaom/execs/pull/54) targets the 0.1
 maintenance line. [Forward-port PR #55](https://github.com/rndaom/execs/pull/55)
 targets main and keeps its 0.2.0 version and profile-owned preloader architecture.
-Both remain drafts until the runtime gates finish. Implemented child issues are
-In Review; RND-323 and its parent remain in progress while qualification runs.
-
-Integrated CI passed on both [maintenance](https://github.com/rndaom/execs/actions/runs/35488964906)
-and [main forward-port](https://github.com/rndaom/execs/actions/runs/35488869606).
-Final accessibility follow-ups rerun affected checks before readiness is declared.
+PR readiness and Linear review state are updated only after the runtime gates
+finish. Final product CI is recorded in the candidate's validation jobs and the
+[main forward-port run](https://github.com/rndaom/execs/actions/runs/35490926728).
+The PR checks additionally validate the final documentation/harness head.
