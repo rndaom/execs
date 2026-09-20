@@ -1,7 +1,10 @@
 # 0.1.7 verification
 
-This record covers a private candidate, not a published release. The complete
-scope and remaining gates are in [the release record](../../release-0.1.7.md).
+This record covers preparation and the published 0.1.7 release. The complete
+scope and qualification limits are in [the release record](../../release-0.1.7.md).
+[Public verification](public-verification.json) independently checks anonymous
+delivery, signatures and provenance. [Tagged package evidence](tagged/README.md)
+records the final release run separately from private candidate qualification.
 
 ## Implementation and independent review
 

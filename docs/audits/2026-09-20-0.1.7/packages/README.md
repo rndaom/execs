@@ -42,7 +42,9 @@ the old draft target observed before its metadata was corrected; its pinned
 source, signature and asset hash are the identity checks.
 
 All application launches and test registry changes occurred in disposable CI.
-No player data, Steam Cloud or real game launch was used. The release remains a
-draft, the public latest version stays 0.1.6, and no `v0.1.7` Git tag is created.
+No player data, Steam Cloud or real game launch was used. At this private
+qualification stage the release remained a draft, public latest stayed 0.1.6,
+and no `v0.1.7` tag had been created. Subsequent authorized publication is
+recorded in [the tagged evidence](../tagged/README.md).
 
 Primary runtime explanation: [Microsoft WebView2 elevated-host policy](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645#issuecomment-4934355430).

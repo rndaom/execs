@@ -1,11 +1,32 @@
 # 0.1.7 release
 
-The owner authorized release on September 20, 2026. Both prepared PRs passed
-their final CI. Merge, immutable tag creation and tagged-workflow publication
-are now authorized; their outcomes are recorded after verification.
+Published [0.1.7](https://github.com/rndaom/execs/releases/tag/v0.1.7) on
+September 20, 2026 at 06:55:58 UTC after the owner's explicit authorization.
+Both PRs are merged and all 13 Linear milestone issues are Done.
+
+## Publication verification
+
+- PR #54 merged into maintenance at `1a81bcfbb8ea2dee2fbddf2a409180296adac4c0`;
+  immutable `v0.1.7` points to that commit. PR #55 merged into main at
+  `dd220026356f687b3748c6b433060507c6a612c6`, retaining main's 0.2.0 versions.
+- [Tagged workflow 35493975892](https://github.com/rndaom/execs/actions/runs/35493975892)
+  passed frontend and both Rust platforms, both package jobs, verification and
+  publication. Both installers upgraded public 0.1.6 with data preserved,
+  startup/notices present and no repeat update offer. Both packaged Files
+  workers executed successfully with the expected asset hashes.
+- [Anonymous public verification](audits/2026-09-20-0.1.7/public-verification.json)
+  passed all three installer signatures and hashes, both updater downloads,
+  release notes, exact tag and commit/run provenance. The feed has no Debian
+  updater target or temporary draft URLs.
+- [Tagged package evidence](audits/2026-09-20-0.1.7/tagged/README.md) is separate
+  from the earlier private candidate and its recovery records below.
+- No GitHub Issues or Discussions needed closing. Milestone 0.1.8 already
+  exists. Recorded native accessibility and IME limitations remain unchanged.
+
+## Preparation history
 
 Implementation, native and signed package qualification are complete within the
-recorded limits. Final PR-head CI is required before marking the PRs ready.
+recorded limits. Final PR-head CI passed before the PRs were merged.
 The private installers come from [candidate run 35491010492](https://github.com/rndaom/execs/actions/runs/35491010492)
 at `6ecbcc0`. Linux package checks passed; Windows installation/updating passed
 before its worker probe failed to attach. WebView2 150+ ignores environment

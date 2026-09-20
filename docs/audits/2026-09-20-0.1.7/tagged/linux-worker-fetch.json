@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "page": "tauri://localhost",
+  "url": "tauri://localhost/assets/files-analysis.worker-DYiVjpKz.js",
+  "mime": "text/javascript",
+  "headers": [
+    [
+      "access-control-allow-origin",
+      "tauri://localhost"
+    ],
+    [
+      "content-type",
+      "text/javascript"
+    ]
+  ],
+  "ok": true,
+  "prefix": "(function(){\"use strict\";function qi(e,t){var l;let n=0;for(const m of e){const r=(l=m.codePointAt(0))!=null?l:0;if(n+=r<=127?1:r<=2047?2:r<=65535?3:4,n>t)retur",
+  "packagedWorkerSha256": "a203d74621f42bc1ca2ae41ffe55430d365e4d24893e2fed8ff1107f886a1637",
+  "expectedWorkerSha256": "a203d74621f42bc1ca2ae41ffe55430d365e4d24893e2fed8ff1107f886a1637"
+}
