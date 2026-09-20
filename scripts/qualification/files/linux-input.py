@@ -145,3 +145,4 @@ for attempt in range(120):
     time.sleep(1)
 else:
     raise RuntimeError("Native fixture workflows did not complete")
+(evidence / "workflows-request").unlink()
