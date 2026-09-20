@@ -4,13 +4,20 @@ set -euo pipefail
 test "${CI:-}" = true || { echo 'Requires disposable CI environment'; exit 2; }
 export FILES_EVIDENCE=/tmp/files-qualification
 mkdir -p "$FILES_EVIDENCE"
+dpkg-query -W orca gir1.2-webkit2-4.1 ibus ibus-anthy >"$FILES_EVIDENCE/versions.txt"
+lscpu >"$FILES_EVIDENCE/cpu.txt"
+git rev-parse HEAD >"$FILES_EVIDENCE/commit.txt"
 export NO_AT_BRIDGE=0 GTK_MODULES=gail:atk-bridge GTK_IM_MODULE=ibus
 export XMODIFIERS=@im=ibus WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
 gsettings set org.gnome.desktop.interface toolkit-accessibility true
 pulseaudio --start
 speech-dispatcher --spawn
 openbox >"$FILES_EVIDENCE/openbox.log" 2>&1 &
-ibus-daemon --daemonize --xim --replace
+gsettings set org.freedesktop.ibus.general preload-engines "['xkb:us::eng', 'anthy']"
+gsettings set org.freedesktop.ibus.general engines-order "['xkb:us::eng', 'anthy']"
+gsettings set org.freedesktop.ibus.general use-global-engine true
+ibus-daemon --daemonize --xim --replace --cache=refresh >"$FILES_EVIDENCE/ibus.log" 2>&1
+ibus list-engine >"$FILES_EVIDENCE/ibus-engines.txt"
 pnpm --filter @execs/desktop exec vite build --config ../../scripts/qualification/files/vite.config.mts --outDir "$FILES_EVIDENCE/bundle" >"$FILES_EVIDENCE/build.log" 2>&1
 node scripts/qualification/files/serve.mjs "$FILES_EVIDENCE/bundle" >"$FILES_EVIDENCE/server.log" 2>&1 &
 orca --replace --enable=speech --disable=braille --debug --debug-file="$FILES_EVIDENCE/orca.log" >"$FILES_EVIDENCE/orca-console.log" 2>&1 &
@@ -30,6 +37,4 @@ python3 scripts/qualification/files/webkit.py --width 1280 --height 800 --captur
 python3 scripts/qualification/files/webkit.py --zoom 2 --capture-seconds 12 --evidence "$FILES_EVIDENCE/1200x800-200pct"
 grep -E 'SPEECH OUTPUT|SPEECH GENERATOR|Traceback|ERROR' "$FILES_EVIDENCE/orca.log" >"$FILES_EVIDENCE/speech-summary.txt" || true
 grep -q 'SPEECH OUTPUT:.*Contents of' "$FILES_EVIDENCE/speech-summary.txt"
-dpkg-query -W orca gir1.2-webkit2-4.1 ibus ibus-anthy >"$FILES_EVIDENCE/versions.txt"
-lscpu >"$FILES_EVIDENCE/cpu.txt"
-git rev-parse HEAD >"$FILES_EVIDENCE/commit.txt"
+python3 -c 'import json,os; from pathlib import Path; result=json.loads((Path(os.environ["FILES_EVIDENCE"])/"ime-result.json").read_text()); assert result["passed"], result'

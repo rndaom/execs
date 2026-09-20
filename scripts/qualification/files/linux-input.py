@@ -79,16 +79,23 @@ key("shift+Tab")
 key("ctrl+End")
 key("Return")
 subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "50", "// IME "], check=True)
-subprocess.run(["ibus", "engine", "anthy"], check=True)
-time.sleep(1)
-subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "180", "nihongo"], check=True)
-key("space")
-key("Return")
-ime_rows = snapshot()
-(evidence / "ime.json").write_text(json.dumps(ime_rows, indent=2, ensure_ascii=False))
-if not any("日本語" in row.get("text", "") for row in ime_rows):
-    raise RuntimeError("Real ibus-anthy Japanese composition did not commit the expected text")
-subprocess.run(["ibus", "engine", "xkb:us::eng"], check=True)
+try:
+    engine = subprocess.run(["ibus", "engine", "anthy"], capture_output=True, text=True)
+    (evidence / "ibus-activation.json").write_text(json.dumps({"code": engine.returncode, "stdout": engine.stdout, "stderr": engine.stderr}))
+    engine.check_returncode()
+    time.sleep(1)
+    subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "180", "nihongo"], check=True)
+    key("space")
+    key("Return")
+    ime_rows = snapshot()
+    (evidence / "ime.json").write_text(json.dumps(ime_rows, indent=2, ensure_ascii=False))
+    if not any("日本語" in row.get("text", "") for row in ime_rows):
+        raise RuntimeError("Real ibus-anthy Japanese composition did not commit the expected text")
+    ime_result = {"passed": True, "method": "Physical X11 roman-key input through ibus-anthy"}
+except (subprocess.CalledProcessError, RuntimeError) as error:
+    ime_result = {"passed": False, "error": str(error)}
+(evidence / "ime-result.json").write_text(json.dumps(ime_result, indent=2))
+subprocess.run(["ibus", "engine", "xkb:us::eng"], check=False)
 time.sleep(2)
 (evidence / "benchmark-request").touch()
 for attempt in range(80):
