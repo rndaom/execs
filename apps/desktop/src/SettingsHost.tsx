@@ -524,11 +524,21 @@ export function SettingsHost({
     }
     const saved = await runWrite(
       async () => {
-        const committed = await api.writeOwnedFile(
-          draft.path,
-          draft.text,
-          draft.expected as FilesSource,
-        );
+        const committed = await api
+          .writeOwnedFile(draft.path, draft.text, draft.expected as FilesSource)
+          .catch(async (error: unknown) => {
+            if (
+              error &&
+              typeof error === "object" &&
+              "code" in error &&
+              error.code === "FileConflict"
+            ) {
+              // Refresh the comparison source, keeping the original draft/token.
+              // No retry or write is performed until the player reviews it.
+              await reload().catch(() => {});
+            }
+            throw error;
+          });
         const hash = committed.files.find((file) => file.path === draft.path)?.sha256;
         if (!hash)
           throw new Error(
