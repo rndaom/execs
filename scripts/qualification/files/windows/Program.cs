@@ -62,6 +62,9 @@ internal static class Program
                     catch (Exception error)
                     {
                         File.WriteAllText(Path.Combine(evidence, "failure.txt"), error.ToString());
+                        File.WriteAllText(Path.Combine(evidence, "failure-dom.json"), await web.ExecuteScriptAsync("({active:document.activeElement?.outerHTML,body:document.body.innerText})"));
+                        using (var picture = File.Create(Path.Combine(evidence, "failure.png")))
+                            await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, picture);
                         Environment.ExitCode = 1;
                     }
                     finally { window.Close(); }
@@ -77,12 +80,14 @@ internal static class Program
     [DllImport("user32.dll")] private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern short VkKeyScan(char value);
 
-    private static async Task Key(IntPtr window, byte key, byte modifier = 0)
+    private static async Task Key(IntPtr window, byte key, byte modifier = 0, byte secondModifier = 0)
     {
         if (GetForegroundWindow() != window) throw new InvalidOperationException("Qualification window lost foreground; no input sent");
         if (modifier != 0) keybd_event(modifier, 0, 0, UIntPtr.Zero);
+        if (secondModifier != 0) keybd_event(secondModifier, 0, 0, UIntPtr.Zero);
         keybd_event(key, 0, 0, UIntPtr.Zero);
         keybd_event(key, 0, 2, UIntPtr.Zero);
+        if (secondModifier != 0) keybd_event(secondModifier, 0, 2, UIntPtr.Zero);
         if (modifier != 0) keybd_event(modifier, 0, 2, UIntPtr.Zero);
         await Task.Delay(150);
     }
@@ -119,9 +124,7 @@ internal static class Program
         if (await web.ExecuteScriptAsync("!!document.querySelector('.cm-search input[name=search]')") != "true")
             throw new InvalidOperationException("Physical Ctrl+F did not open search");
         await Key(handle, 0x1B);
-        keybd_event(0x12, 0, 0, UIntPtr.Zero);
-        await Key(handle, 0x47, 0x11);
-        keybd_event(0x12, 0, 2, UIntPtr.Zero);
+        await Key(handle, 0x47, 0x11, 0x12);
         if (await web.ExecuteScriptAsync("!!document.querySelector('input[name=line]')") != "true")
             throw new InvalidOperationException("Physical Ctrl+Alt+G did not open go-to-line");
         await Key(handle, 0x1B);

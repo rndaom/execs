@@ -100,8 +100,11 @@ key("Return")
 subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "50", "// IME "], check=True)
 try:
     engine = subprocess.run(["ibus", "engine", "anthy"], capture_output=True, text=True)
-    (evidence / "ibus-activation.json").write_text(json.dumps({"code": engine.returncode, "stdout": engine.stdout, "stderr": engine.stderr}))
-    engine.check_returncode()
+    selected = subprocess.run(["ibus", "engine"], capture_output=True, text=True)
+    (evidence / "ibus-activation.json").write_text(json.dumps({"code": engine.returncode, "stdout": engine.stdout, "stderr": engine.stderr,
+        "selectedCode": selected.returncode, "selected": selected.stdout, "selectedStderr": selected.stderr}))
+    if selected.returncode != 0 or selected.stdout.strip() != "anthy":
+        raise RuntimeError("IBus did not select the Anthy engine; inspect activation evidence")
     time.sleep(1)
     subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "180", "nihongo"], check=True)
     key("space")

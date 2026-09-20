@@ -16,6 +16,7 @@ openbox >"$FILES_EVIDENCE/openbox.log" 2>&1 &
 gsettings set org.freedesktop.ibus.general preload-engines "['xkb:us::eng', 'anthy']"
 gsettings set org.freedesktop.ibus.general engines-order "['xkb:us::eng', 'anthy']"
 gsettings set org.freedesktop.ibus.general use-global-engine true
+gsettings set org.freedesktop.ibus.general use-system-keyboard-layout true
 gsettings set org.freedesktop.ibus.general.hotkey triggers "[]"
 ibus-daemon --daemonize --xim --replace --cache=refresh >"$FILES_EVIDENCE/ibus.log" 2>&1
 for attempt in $(seq 1 30); do
