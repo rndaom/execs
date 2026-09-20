@@ -25,7 +25,7 @@ evidence. Unreleased Inventory and profile-owned preloader work are excluded.
 
 - [ ] All issue acceptance criteria mapped to implementation and evidence
 - [x] Frontend tests, Biome and production build
-- [ ] Windows/Linux Rust format, Clippy and workspace tests
+- [x] Windows/Linux Rust format, Clippy and workspace tests
 - [x] Actual public 0.1.6 export/import and exact-byte round trip
 - [ ] Supported window sizes, zoom, keyboard, screen readers and IME
 - [ ] Novice and experienced Files workflows
@@ -54,3 +54,7 @@ maintenance line. [Forward-port PR #55](https://github.com/rndaom/execs/pull/55)
 targets main and keeps its 0.2.0 version and profile-owned preloader architecture.
 Both remain drafts until the runtime gates finish. Implemented child issues are
 In Review; RND-323 and its parent remain in progress while qualification runs.
+
+Integrated CI passed on both [maintenance](https://github.com/rndaom/execs/actions/runs/35488964906)
+and [main forward-port](https://github.com/rndaom/execs/actions/runs/35488869606).
+Final accessibility follow-ups rerun affected checks before readiness is declared.
