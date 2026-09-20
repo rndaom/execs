@@ -162,6 +162,7 @@ export function FilesEditor(props: FilesEditorProps) {
         EditorView.editable.of(!latest.current.readOnly),
       ]),
       EditorView.contentAttributes.of({
+        tabindex: "0",
         "aria-label": `Contents of ${latest.current.path}`,
         "aria-describedby": "files-editor-keyboard-help",
         spellcheck: "false",
@@ -370,8 +371,9 @@ export function FilesEditor(props: FilesEditorProps) {
         id="files-editor-keyboard-help"
         className="border-t border-edge px-3 py-1 text-xs text-ink-muted"
       >
-        Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S
-        saves
+        {props.readOnly
+          ? "Read-only source · Ctrl+F searches · Ctrl+Alt+G goes to line · Tab moves focus"
+          : "Ctrl+Space suggests · Tab accepts a suggestion or moves focus · Esc then Tab exits · Ctrl+S saves"}
       </p>
     </div>
   );
