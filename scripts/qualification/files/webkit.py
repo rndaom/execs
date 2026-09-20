@@ -17,6 +17,7 @@ parser.add_argument("--evidence", type=Path, required=True)
 parser.add_argument("--width", type=int, default=1200)
 parser.add_argument("--height", type=int, default=800)
 parser.add_argument("--zoom", type=float, default=1)
+parser.add_argument("--capture-seconds", type=int, default=0)
 args = parser.parse_args()
 target = urlparse(args.url)
 if target.scheme != "http" or target.hostname != "127.0.0.1" or "preview=settings-files" not in target.query:
@@ -62,9 +63,31 @@ def capture():
         picture = Gdk.pixbuf_get_from_window(native, 0, 0, window.get_allocated_width(), window.get_allocated_height())
         if picture:
             picture.savev(str(args.evidence / "native-window.png"), "png", [], [])
+    web.run_javascript("""(()=>{
+      if (!window.__qualificationPaint) {
+        window.__qualificationPaint=[];
+        document.addEventListener('keydown',()=>{const start=performance.now();requestAnimationFrame(()=>requestAnimationFrame(()=>window.__qualificationPaint.push(performance.now()-start)));},true);
+      }
+      const values=[...window.__qualificationPaint].sort((a,b)=>a-b);
+      return {viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
+        measurement:'physical keydown to second requestAnimationFrame',samples:values.length,
+        p95ms:values[Math.max(0,Math.ceil(values.length*.95)-1)],values,
+        workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),
+        editor:document.querySelector('.cm-content')?.getAttribute('aria-label'),body:document.body.innerText};
+    })()""", None, captured_runtime, None)
     return True
 
 
+def captured_runtime(view, result, unused):
+    try:
+        value = view.run_javascript_finish(result).get_js_value()
+        (args.evidence / "runtime.json").write_text(value.to_json(0))
+    except GLib.Error as error:
+        (args.evidence / "runtime-error.txt").write_text(str(error))
+
+
 GLib.timeout_add_seconds(2, capture)
+if args.capture_seconds:
+    GLib.timeout_add_seconds(args.capture_seconds, Gtk.main_quit)
 web.load_uri(args.url)
 Gtk.main()

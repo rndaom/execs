@@ -29,8 +29,9 @@ jobs:
             /tmp/files-qualification/*.json
             /tmp/files-qualification/*.txt
             /tmp/files-qualification/*.log
-            /tmp/files-qualification/1200x800/*.json
-            /tmp/files-qualification/1200x800/*.png
+            /tmp/files-qualification/*/*.json
+            /tmp/files-qualification/*/*.png
+            /tmp/files-qualification/*/runtime-error.txt
   windows-host:
     runs-on: windows-latest
     timeout-minutes: 15

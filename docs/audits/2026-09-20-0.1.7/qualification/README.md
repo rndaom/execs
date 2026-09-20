@@ -32,8 +32,8 @@ was attempted. Windows native acceptance is consequently still pending.
 
 The dedicated `qualify-files.yml` workflow has read-only repository permissions,
 does not build a product release, does not publish or tag, and retains native
-test artifacts. Its Windows job currently validates the host build only; its
-Linux job attempts real WebKitGTK keyboard, Orca logging and Japanese IME.
+test artifacts. Its Linux job attempts real WebKitGTK keyboard, Orca logging and
+Japanese IME.
 The Windows CI job now attempts actual physical keyboard events, completion,
 Tab exit, WebView2 screenshots and NVDA generated speech in the disposable runner.
 It fails if editor-name speech is absent. No successful run is claimed yet.

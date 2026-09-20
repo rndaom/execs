@@ -22,6 +22,12 @@ python3 scripts/qualification/files/webkit.py --evidence "$FILES_EVIDENCE/1200x8
 host_pid=$!
 trap 'kill "$host_pid" 2>/dev/null || true' EXIT
 python3 scripts/qualification/files/linux-input.py
+kill "$host_pid"
+wait "$host_pid" || true
+trap - EXIT
+python3 scripts/qualification/files/webkit.py --width 960 --height 640 --capture-seconds 12 --evidence "$FILES_EVIDENCE/960x640"
+python3 scripts/qualification/files/webkit.py --width 1280 --height 800 --capture-seconds 12 --evidence "$FILES_EVIDENCE/1280x800"
+python3 scripts/qualification/files/webkit.py --zoom 2 --capture-seconds 12 --evidence "$FILES_EVIDENCE/1200x800-200pct"
 grep -E 'SPEECH OUTPUT|SPEECH GENERATOR|Traceback|ERROR' "$FILES_EVIDENCE/orca.log" >"$FILES_EVIDENCE/speech-summary.txt" || true
 grep -q 'SPEECH OUTPUT:.*Contents of' "$FILES_EVIDENCE/speech-summary.txt"
 dpkg-query -W orca gir1.2-webkit2-4.1 ibus ibus-anthy >"$FILES_EVIDENCE/versions.txt"
