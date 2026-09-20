@@ -5,6 +5,8 @@ Windows keyboard/completion/NVDA runs passed, and Linux authoring workflows,
 Orca observations and analysis benchmarks ran successfully. IME and expanded
 keyboard harness corrections require the final rerun before acceptance.
 
+Completed platform evidence: [Windows native results and captures](windows.md).
+
 The owner authorized implementation and private release readiness on September
 19, 2026. Publication, tagging, real-game launches and real-profile writes are
 outside this qualification. The original planning-only language in the Linear
