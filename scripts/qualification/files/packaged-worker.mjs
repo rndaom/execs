@@ -152,8 +152,21 @@ async function cdpSession(application, environment, evidence) {
     });
     let counter = 0;
     const pending = new Map();
+    const diagnostics = [];
     socket.addEventListener("message", (event) => {
       const response = JSON.parse(event.data);
+      if (
+        response.method &&
+        /^(Log\.|Runtime\.(exceptionThrown|consoleAPICalled)|Network\.(responseReceived|loadingFailed)|Security\.)/.test(
+          response.method,
+        ) &&
+        diagnostics.length < 200
+      ) {
+        diagnostics.push({
+          method: response.method,
+          params: JSON.stringify(response.params).slice(0, 4000),
+        });
+      }
       const request = pending.get(response.id);
       if (!request) return;
       pending.delete(response.id);
@@ -171,6 +184,12 @@ async function cdpSession(application, environment, evidence) {
         pending.set(id, { done, reject, timeout });
         socket.send(JSON.stringify({ id, method, params }));
       });
+    await command("Runtime.enable");
+    await command("Log.enable");
+    await command("Network.enable", {
+      maxTotalBufferSize: 1024 * 1024,
+      maxResourceBufferSize: 256 * 1024,
+    });
     return {
       async evaluate(expression) {
         const result = await command("Runtime.evaluate", {
@@ -185,6 +204,10 @@ async function cdpSession(application, environment, evidence) {
         return (await command("Page.captureScreenshot", { format: "png" })).data;
       },
       async close() {
+        writeFileSync(
+          join(evidence, "webview2-diagnostics.json"),
+          `${JSON.stringify(diagnostics, null, 2)}\n`,
+        );
         socket.close();
         await stop();
       },
@@ -319,28 +342,52 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
     evidence,
   );
   try {
+    const assetResponse = await session.evaluate(`(async()=>{
+      const url=new URL(${JSON.stringify(`assets/${worker}`)},location.href).href;
+      const response=await fetch(url);
+      return {url:response.url,status:response.status,ok:response.ok,mime:response.headers.get('content-type'),headers:[...response.headers],source:await response.text(),page:location.href};
+    })()`);
+    const packagedWorkerSha256 = createHash("sha256").update(assetResponse.source).digest("hex");
+    const prefix = assetResponse.source.slice(0, 160);
+    delete assetResponse.source;
+    writeFileSync(
+      join(evidence, "worker-fetch.json"),
+      `${JSON.stringify({ ...assetResponse, prefix, packagedWorkerSha256, expectedWorkerSha256: sourceHash }, null, 2)}\n`,
+    );
+    assert.ok(assetResponse.ok, "Packaged worker fetch failed");
+    assert.equal(
+      packagedWorkerSha256,
+      sourceHash,
+      "Packaged worker must match the platform-specific candidate source build before execution",
+    );
+    assert.match(
+      assetResponse.mime ?? "",
+      /(?:javascript|ecmascript)/i,
+      "Packaged worker must have a JavaScript MIME type",
+    );
     const result = await session.evaluate(`(async()=>{
       const url=new URL(${JSON.stringify(`assets/${worker}`)},location.href).href;
-      const packagedWorkerSource=await (await fetch(url)).text();
+      const violations=[];
+      const violation=event=>{if(violations.length<20)violations.push({blockedURI:event.blockedURI,violatedDirective:event.violatedDirective,effectiveDirective:event.effectiveDirective,originalPolicy:event.originalPolicy,sourceFile:event.sourceFile,lineNumber:event.lineNumber});};
+      document.addEventListener('securitypolicyviolation',violation);
       const identity='packaged-origin-worker';
       const started=performance.now();
       const outcome=await new Promise((resolve,reject)=>{
         const worker=new Worker(url,{type:'module'});
         const timer=setTimeout(()=>{worker.terminate();reject(Error('Packaged analysis worker timed out'));},15000);
-        worker.onerror=event=>{clearTimeout(timer);worker.terminate();reject(Error(event.message||'Packaged worker error'));};
+        worker.onerror=event=>{clearTimeout(timer);worker.terminate();resolve({probeError:{message:event.message||'Packaged worker error',filename:event.filename,line:event.lineno,column:event.colno,type:event.type}});};
         worker.onmessage=event=>{clearTimeout(timer);worker.terminate();resolve(event.data);};
         worker.postMessage({profile:'disposable-qualification',identity,files:[{path:'tf/cfg/autoexec.cfg',text:'sensitivity 2\\nvoicemenu 0 0\\nfov_desired banana\\n'}]});
-      });
-      return {url,packagedWorkerSource,origin:location.origin,page:location.href,userAgent:navigator.userAgent,csp:[...document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]')].map(node=>node.content),durationMs:performance.now()-started,outcome};
+      }).catch(error=>({probeError:{message:String(error)}}));
+      document.removeEventListener('securitypolicyviolation',violation);
+      return {url,violations,origin:location.origin,page:location.href,userAgent:navigator.userAgent,csp:[...document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]')].map(node=>node.content),durationMs:performance.now()-started,outcome};
     })()`);
-    result.packagedWorkerSha256 = createHash("sha256")
-      .update(result.packagedWorkerSource)
-      .digest("hex");
-    delete result.packagedWorkerSource;
+    result.packagedWorkerSha256 = packagedWorkerSha256;
     writeFileSync(
       join(evidence, "worker-result.json"),
       `${JSON.stringify({ application, workerAsset: worker, workerSha256: sourceHash, ...result }, null, 2)}\n`,
     );
+    assert.equal(result.outcome.probeError, undefined, JSON.stringify(result.outcome.probeError));
     assert.equal(result.outcome.identity, "packaged-origin-worker");
     assert.equal(
       result.packagedWorkerSha256,

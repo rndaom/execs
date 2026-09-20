@@ -47,6 +47,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - name: Build only the exact candidate frontend for worker identity
         working-directory: candidate
+        env:
+          TAURI_ENV_PLATFORM: windows
         run: |
           pnpm install --frozen-lockfile
           pnpm build
