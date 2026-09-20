@@ -5,6 +5,13 @@ export interface CfgFile {
 }
 
 export interface Token {
+  /** UTF-16 offsets into unchanged source; end exclusive. */
+  from: number;
+  to: number;
+  /** Offsets excluding quotes, for mapping literal payloads. */
+  contentFrom: number;
+  contentTo: number;
+  closed: boolean;
   value: string;
   line: number;
   col: number;
@@ -12,6 +19,8 @@ export interface Token {
 }
 
 export interface Command {
+  from: number;
+  to: number;
   /** Lowercased first token. */
   name: string;
   args: string[];
@@ -22,8 +31,19 @@ export interface Command {
 }
 
 export type FindingTier = "block" | "warn" | "info";
+export type FindingCategory =
+  | "restriction"
+  | "syntax"
+  | "argument"
+  | "availability"
+  | "coverage"
+  | "advice";
 
 export interface Finding {
+  /** Optional for legacy consumers; cfglint always supplies editor offsets. */
+  from?: number;
+  to?: number;
+  category?: FindingCategory;
   ruleId: string;
   tier: FindingTier;
   message: string;
@@ -125,6 +145,8 @@ export interface LintOptions {
 }
 
 export interface LintResult {
+  /** All supplied sources and deferred payloads were inspected within the safety budget. */
+  safetyComplete: boolean;
   findings: Finding[];
   /** Known startup cvars, in execution order; empty when execution is incomplete. */
   effective: Map<string, CvarValue>;

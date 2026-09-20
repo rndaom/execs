@@ -1,6 +1,7 @@
 //! Regressions for incomplete inventories and case-only renames. These tests
 //! isolate both profiles and the live surface and never discover real Steam.
-use execs_core::absorb::{absorb_owned_to, AbsorbOptions};
+use execs_core::absorb::{absorb_owned_to, absorb_packs_to, AbsorbOptions, PackChoice};
+use execs_core::mods::{install_mod_to, ModContent, ModSource};
 use execs_core::profile::{
     create_profile_record_to, exclusive_file_path, load_manifest, save_current_as_to,
     SaveCurrentOptions,
@@ -73,6 +74,287 @@ impl Fixture {
     fn absorb(&self) {
         absorb_owned_to(&self.profiles, &self.root, unlocked(), absorb_options()).unwrap();
     }
+
+    fn install_mod(&self, id: &str, vpk: bool) -> String {
+        let content = if vpk {
+            ModContent::Vpk(execs_core::vpk::write_vpk_v2(
+                &[("materials/test.vmt".into(), b"material".to_vec())]
+                    .into_iter()
+                    .collect(),
+            ))
+        } else {
+            ModContent::Tree(vec![
+                ("materials/test.vmt".into(), b"material".to_vec()),
+                ("materials/other.vmt".into(), b"other".to_vec()),
+            ])
+        };
+        install_mod_to(
+            &self.profiles,
+            &self.root,
+            id,
+            "audit-pack",
+            content,
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap();
+        load_manifest(&self.profiles, id).unwrap().mods[0]
+            .pack
+            .clone()
+    }
+
+    fn choose(&self, choice: PackChoice) {
+        absorb_packs_to(
+            &self.profiles,
+            &self.root,
+            choice,
+            unlocked(),
+            absorb_options(),
+        )
+        .unwrap();
+    }
+
+    fn save_metadata(&self, manifest: &execs_core::profile::ProfileManifest) {
+        execs_core::profile::mutate_profile_files_to(
+            &self.profiles,
+            &self.root,
+            &manifest.id,
+            &[],
+            &[],
+            execs_core::profile::ProfileLiveProjection::LibraryOnly,
+            unlocked(),
+            |next| {
+                next.hud = manifest.hud.clone();
+                next.hitsound = manifest.hitsound.clone();
+                next.viewmodel = manifest.viewmodel.clone();
+                Ok(())
+            },
+        )
+        .unwrap();
+    }
+
+    fn round_trip(&self, id: &str) -> String {
+        let zip = self.base.join("profile.zip");
+        execs_core::zip::export_profile_to(&self.profiles, &self.root, id, &zip).unwrap();
+        let old = execs_core::profile::load_library_from(&self.profiles, Some(&self.root)).unwrap();
+        let library =
+            execs_core::zip::import_profile_from(&self.profiles, &self.root, &zip, unlocked())
+                .unwrap();
+        library
+            .profiles
+            .iter()
+            .find(|p| !old.profiles.iter().any(|old| old.id == p.id))
+            .unwrap()
+            .id
+            .clone()
+    }
+}
+
+#[test]
+fn accepted_mod_removal_exports_imports_and_switches_without_stale_records() {
+    for vpk in [false, true] {
+        let f = Fixture::new();
+        let id = f.save();
+        let pack = f.install_mod(&id, vpk);
+        let live = f.root.join("tf/custom").join(&pack);
+        if vpk {
+            fs::remove_file(&live).unwrap();
+        } else {
+            fs::remove_dir_all(&live).unwrap();
+        }
+        f.absorb();
+        assert_eq!(load_manifest(&f.profiles, &id).unwrap().mods.len(), 1);
+        f.choose(PackChoice::Update);
+        assert!(load_manifest(&f.profiles, &id).unwrap().mods.is_empty());
+        let imported = f.round_trip(&id);
+        f.switch(&imported);
+        f.switch(&id);
+        assert!(!live.exists());
+        assert!(load_manifest(&f.profiles, &imported)
+            .unwrap()
+            .mods
+            .is_empty());
+    }
+}
+
+#[test]
+fn accepted_hud_removal_clears_its_record_but_keep_and_restore_preserve_it() {
+    use execs_core::profile::{HudRecord, HudSource};
+    for choice in [PackChoice::Update, PackChoice::Keep, PackChoice::Restore] {
+        let f = Fixture::new();
+        fs::write(f.root.join("tf/custom/mypack/info.vdf"), b"hud").unwrap();
+        let id = f.save();
+        let mut manifest = load_manifest(&f.profiles, &id).unwrap();
+        manifest.hud = Some(HudRecord {
+            id: "mypack".into(),
+            hash: None,
+            source: HudSource::Local,
+            options: Default::default(),
+        });
+        f.save_metadata(&manifest);
+        fs::remove_dir_all(f.root.join("tf/custom/mypack")).unwrap();
+        f.choose(choice);
+        assert_eq!(
+            load_manifest(&f.profiles, &id).unwrap().hud.is_none(),
+            choice == PackChoice::Update
+        );
+        f.round_trip(&id);
+    }
+}
+
+#[test]
+fn managed_sound_and_viewmodel_deletions_self_heal_and_keep_records() {
+    use execs_core::hitsound::{HitsoundEntry, HitsoundRecord, HitsoundSource, HITSOUND_REL};
+    use execs_core::profile::{ViewmodelRecord, ViewmodelSource};
+    use execs_core::viewmodel::EXECS_VIEWMODELS_VPK;
+    let f = Fixture::new();
+    fs::create_dir_all(f.root.join("tf/custom/execs-hitsounds/sound/ui")).unwrap();
+    fs::write(f.root.join(HITSOUND_REL), b"original sound bytes").unwrap();
+    fs::write(
+        f.root.join(EXECS_VIEWMODELS_VPK),
+        b"original viewmodel bytes",
+    )
+    .unwrap();
+    let id = f.save();
+    let mut before = load_manifest(&f.profiles, &id).unwrap();
+    before.hitsound = Some(HitsoundRecord {
+        hit: Some(HitsoundEntry::new("sound".into(), HitsoundSource::File)),
+        kill: None,
+    });
+    before.viewmodel = Some(ViewmodelRecord {
+        id: "execs-viewmodels".into(),
+        source: ViewmodelSource::Imported,
+        preload: false,
+        options: Default::default(),
+    });
+    f.save_metadata(&before);
+    fs::remove_file(f.root.join(HITSOUND_REL)).unwrap();
+    fs::remove_file(f.root.join(EXECS_VIEWMODELS_VPK)).unwrap();
+    f.choose(PackChoice::Update);
+    let after = load_manifest(&f.profiles, &id).unwrap();
+    assert_eq!(after.hitsound, before.hitsound);
+    assert_eq!(after.viewmodel, before.viewmodel);
+    assert_eq!(
+        fs::read(f.root.join(HITSOUND_REL)).unwrap(),
+        b"original sound bytes"
+    );
+    assert_eq!(
+        fs::read(f.root.join(EXECS_VIEWMODELS_VPK)).unwrap(),
+        b"original viewmodel bytes"
+    );
+}
+
+#[test]
+fn partial_mod_changes_recompute_counts_and_bytes_and_round_trip() {
+    let f = Fixture::new();
+    let id = f.save();
+    let pack = f.install_mod(&id, false);
+    let live = f.root.join("tf/custom").join(&pack);
+    fs::remove_file(live.join("materials/other.vmt")).unwrap();
+    fs::write(live.join("materials/test.vmt"), b"edited material").unwrap();
+    f.absorb();
+    let record = load_manifest(&f.profiles, &id).unwrap().mods.remove(0);
+    assert_eq!((record.files, record.bytes), (1, 15));
+    fs::write(live.join("materials/new.vmt"), b"new").unwrap();
+    f.absorb();
+    let manifest = load_manifest(&f.profiles, &id).unwrap();
+    assert_eq!((manifest.mods[0].files, manifest.mods[0].bytes), (2, 18));
+    let imported = f.round_trip(&id);
+    assert_eq!(
+        load_manifest(&f.profiles, &imported).unwrap().mods,
+        manifest.mods
+    );
+    f.switch(&imported);
+    assert_eq!(
+        fs::read(live.join("materials/test.vmt")).unwrap(),
+        b"edited material"
+    );
+    assert!(!live.join("materials/other.vmt").exists());
+}
+
+#[test]
+fn keep_and_restore_preserve_missing_mod_records_and_payload() {
+    for choice in [PackChoice::Keep, PackChoice::Restore] {
+        let f = Fixture::new();
+        let id = f.save();
+        let pack = f.install_mod(&id, false);
+        let before = load_manifest(&f.profiles, &id).unwrap();
+        fs::remove_dir_all(f.root.join("tf/custom").join(&pack)).unwrap();
+        f.choose(choice);
+        let after = load_manifest(&f.profiles, &id).unwrap();
+        assert_eq!(after.mods, before.mods);
+        assert_eq!(after.files, before.files);
+        f.round_trip(&id);
+        let empty = f.empty_profile(&id);
+        f.switch(&empty);
+        f.switch(&id);
+        assert_eq!(
+            fs::read(
+                f.root
+                    .join("tf/custom")
+                    .join(pack)
+                    .join("materials/test.vmt")
+            )
+            .unwrap(),
+            b"material"
+        );
+    }
+}
+
+#[test]
+fn rename_to_dashed_peer_drops_only_old_record_and_preserves_new_bytes() {
+    let f = Fixture::new();
+    let id = f.save();
+    let pack = f.install_mod(&id, false);
+    let renamed = f.root.join("tf/custom").join(format!("-{pack}"));
+    fs::rename(f.root.join("tf/custom").join(&pack), &renamed).unwrap();
+    f.choose(PackChoice::Update);
+    assert!(load_manifest(&f.profiles, &id).unwrap().mods.is_empty());
+    let imported = f.round_trip(&id);
+    f.switch(&imported);
+    assert_eq!(
+        fs::read(renamed.join("materials/test.vmt")).unwrap(),
+        b"material"
+    );
+}
+
+#[test]
+#[cfg(windows)]
+fn unreadable_mod_inventory_and_write_lock_do_not_remove_records() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let f = Fixture::new();
+    let id = f.save();
+    let pack = f.install_mod(&id, false);
+    let before = load_manifest(&f.profiles, &id).unwrap();
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(
+            f.root
+                .join("tf/custom")
+                .join(pack)
+                .join("materials/test.vmt"),
+        )
+        .unwrap();
+    assert!(absorb_packs_to(
+        &f.profiles,
+        &f.root,
+        PackChoice::Update,
+        unlocked(),
+        absorb_options()
+    )
+    .is_err());
+    assert_eq!(load_manifest(&f.profiles, &id).unwrap(), before);
+    drop(lock);
+    assert!(absorb_packs_to(
+        &f.profiles,
+        &f.root,
+        PackChoice::Update,
+        ["tf_win64.exe"],
+        absorb_options()
+    )
+    .is_err());
+    assert_eq!(load_manifest(&f.profiles, &id).unwrap(), before);
 }
 
 impl Drop for Fixture {

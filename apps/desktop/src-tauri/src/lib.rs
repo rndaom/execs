@@ -677,6 +677,7 @@ pub fn run() {
             commands::first_run::apply_unused_wizard,
             commands::first_run::create_fresh_profile,
             commands::files::get_active_profile_detail,
+            commands::files::get_files_context,
             commands::files::read_profile_file,
             commands::files::write_owned_file,
             commands::files::write_managed_cfg,

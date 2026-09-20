@@ -419,12 +419,20 @@ export type ProfileDetail = {
   mods?: ModRecord[];
 };
 
+export type FilesContext = { profileId: string; root: string; layer: CfgLayer };
+export type FilesSource = FilesContext & { sha256: string | null; librarySha256: string | null };
+
 export type ProfileFileContent = {
   path: string;
   text: string | null;
   sha256: string;
   binary: boolean;
+  source: FilesSource;
 };
+
+export async function getFilesContext(): Promise<FilesContext> {
+  return call<FilesContext>("get_files_context");
+}
 
 export async function getActiveProfileDetail(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("get_active_profile_detail");
@@ -440,7 +448,7 @@ export async function readProfileFile(path: string, id?: string): Promise<Profil
 export async function writeOwnedFile(
   path: string,
   text: string,
-  id?: string,
+  expected: FilesSource,
 ): Promise<ProfileDetail> {
   if (!editorPathFits(path)) {
     throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
@@ -451,7 +459,7 @@ export async function writeOwnedFile(
       "FileTooLarge",
     );
   }
-  return call<ProfileDetail>("write_owned_file", { path, text, id: id ?? null });
+  return call<ProfileDetail>("write_owned_file", { path, text, expected });
 }
 
 export async function writeManagedCfg(

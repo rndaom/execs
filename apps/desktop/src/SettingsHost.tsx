@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
-import { FilesPane } from "./FilesPane";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
@@ -20,6 +19,8 @@ import {
   syncTrackedBindsFromConfig,
 } from "./lib/binds-ui";
 import {
+  type FilesContext,
+  type FilesSource,
   isTauri,
   type ModsCatalog,
   type PreloaderReport,
@@ -35,13 +36,15 @@ import {
   hasBaseVpk,
   toggleComfigAddon,
 } from "./lib/comfig-ui";
+import { analyzeFilesSnapshot } from "./lib/files-analysis";
 import {
   createFilesDraftStore,
   type DirtyFileDraft,
   type FilesDraftStore,
 } from "./lib/files-drafts";
 import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
-import { blockingFindingsForFile, cfgFileMeta, lintBundle } from "./lib/files-ui";
+import { cfgHudFolder } from "./lib/files-reference";
+import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
@@ -52,14 +55,10 @@ import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
-type CfgText = { path: string; text: string };
-
-function upsertFile(files: CfgText[], path: string, text: string): CfgText[] {
-  if (files.some((file) => file.path === path)) {
-    return files.map((file) => (file.path === path ? { path, text } : file));
-  }
-  return [...files, { path, text }];
-}
+type CfgText = { path: string; text: string; source?: FilesSource };
+const FilesPane = lazy(() =>
+  import("./FilesPane").then((module) => ({ default: module.FilesPane })),
+);
 
 export function SettingsHost({
   api,
@@ -78,6 +77,7 @@ export function SettingsHost({
   onPendingChange,
   onRecoveryChange,
   onError,
+  onNavigate,
 }: {
   api: Api;
   filesDraftStore?: FilesDraftStore;
@@ -95,12 +95,19 @@ export function SettingsHost({
   onPendingChange?: (pending: boolean) => void;
   onRecoveryChange?: (recovery: boolean) => void;
   onError: SetOperationError;
+  onNavigate?: (tab: SettingsTab) => void;
 }) {
   const { error, dismissError } = useAppStatus();
   const toast = useToast();
   const [queueBusy, setQueueBusy] = useState(false);
   const [detail, setDetail] = useState<ProfileDetail | null>(null);
   const [files, setFiles] = useState<CfgText[]>([]);
+  const [filesContext, setFilesContext] = useState<FilesContext | null>(null);
+  const [filesInspection, setFilesInspection] = useState<{
+    files: CfgText[];
+    detail: ProfileDetail;
+    context: FilesContext;
+  } | null>(null);
   const [filesLimited, setFilesLimited] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -207,6 +214,10 @@ export function SettingsHost({
       if (stale()) {
         return;
       }
+      const context = next ? await api.getFilesContext() : null;
+      if (stale()) return;
+      if (context && context.profileId !== next?.id)
+        throw new Error("The profile changed while loading Files.");
       const candidates = editorCfgCandidates(next?.files ?? []);
       const loaded: CfgText[] = [];
       let totalBytes = 0;
@@ -216,7 +227,18 @@ export function SettingsHost({
         try {
           const content = await api.readProfileFile(file.path);
           if (stale()) return;
+          if (
+            content.source &&
+            context &&
+            (content.source.profileId !== context.profileId ||
+              content.source.root !== context.root ||
+              content.source.layer !== context.layer)
+          )
+            throw new Error("The Files source identity changed during loading.");
           if (content.text === null) {
+            if (content.source?.sha256 === null && content.source.librarySha256 !== null) {
+              loaded.push({ path: content.path, text: "", source: content.source });
+            }
             missing.push(file.path);
             continue;
           }
@@ -226,7 +248,7 @@ export function SettingsHost({
             break;
           }
           totalBytes = nextTotal;
-          loaded.push({ path: content.path, text: content.text });
+          loaded.push({ path: content.path, text: content.text, source: content.source });
         } catch {
           if (stale()) return;
           missing.push(file.path);
@@ -234,6 +256,8 @@ export function SettingsHost({
       }
       if (wasLimited || missing.length > 0) {
         setFilesLimited(true);
+        // Keep the bounded Files inventory inspectable while settings writes remain blocked.
+        if (next && context) setFilesInspection({ files: loaded, detail: next, context });
         throw new Error(
           missing.length > 0
             ? `Could not read settings: ${missing.join(", ")}. Retry before saving.`
@@ -255,9 +279,18 @@ export function SettingsHost({
         const managed = nextFiles.find((file) => file.path === bindsPath)?.text ?? "";
         const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
         if (synced !== managed) {
-          await api.writeOwnedFile(bindsPath, synced);
+          const expected = nextFiles.find((file) => file.path === bindsPath)?.source;
+          if (!expected)
+            throw new Error("The Binds source identity is unavailable. Retry loading settings.");
+          await api.writeOwnedFile(bindsPath, synced, expected);
           if (stale()) return;
-          nextFiles = upsertFile(nextFiles, bindsPath, synced);
+          const refreshed = await api.readProfileFile(bindsPath);
+          if (stale()) return;
+          nextFiles = nextFiles.map((file) =>
+            file.path === bindsPath
+              ? { path: bindsPath, text: refreshed.text ?? synced, source: refreshed.source }
+              : file,
+          );
         }
       }
       // Publish every seed in the same React batch, only after the complete read.
@@ -274,6 +307,11 @@ export function SettingsHost({
       detailRef.current = next;
       setDetail(next);
       setFiles(nextFiles);
+      setFilesInspection(null);
+      setFilesContext(context);
+      for (const file of nextFiles)
+        filesDraftStore.read(next?.id ?? null, file.path, file.text, file.source);
+      filesDraftStore.markMissing(next?.id ?? null, new Set(nextFiles.map((file) => file.path)));
       setFilesLimited(false);
       setComfig(
         state
@@ -403,17 +441,17 @@ export function SettingsHost({
     // biome-ignore lint/suspicious/noConfusingVoidType: Ordinary write callbacks return void; null explicitly means a cancelled picker.
     work: () => Promise<void | null>,
     copy?: { success?: string; failure?: string; source?: string },
-    options?: { picker?: boolean },
+    options?: { picker?: boolean; filesRecovery?: string },
   ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
     // because one is in flight silently dropped clicks the panes had already
     // applied optimistically. Only an *external* operation still blocks, and
     // it says so instead of no-oping.
-    if (externalBusy || loadBlocked.current) {
+    if (externalBusy || (loadBlocked.current && !options?.filesRecovery)) {
       toast.failSave("another change is still saving", copy?.failure, copy?.source, false);
       return false;
     }
-    const expectedProfileId = profileId;
+    const expectedProfileId = options?.filesRecovery ?? profileId;
     // Picker commands include the native dialog. They must not say Saving
     // while the player is still choosing, or complete when no file was chosen.
     let started = !options?.picker;
@@ -421,8 +459,8 @@ export function SettingsHost({
     try {
       const applied = await settingsBusyQueue.run(async () => {
         if (
-          loadBlocked.current ||
-          detailRef.current?.id !== expectedProfileId ||
+          (loadBlocked.current && !options?.filesRecovery) ||
+          (!options?.filesRecovery && detailRef.current?.id !== expectedProfileId) ||
           (await api.getActiveProfileDetail())?.id !== expectedProfileId
         ) {
           throw new Error("The active profile changed. Your draft has not been saved.");
@@ -450,14 +488,41 @@ export function SettingsHost({
   }
 
   async function saveFileDraft(draft: DirtyFileDraft): Promise<boolean> {
-    if (running || draft.profile !== profileId || !files.some((file) => file.path === draft.path))
-      return false;
-    if (!cfgFileMeta(draft.path, detail?.hud?.id).editable) return false;
-    const bundle = files.map((file) =>
-      file.path === draft.path ? { path: file.path, text: draft.text } : file,
-    );
+    const restoreMissing =
+      filesDraftStore.state(draft.profile, draft.path)?.missingReviewed === true &&
+      draft.expected?.sha256 === null &&
+      draft.expected.librarySha256 !== null;
+    const fileProfileId = filesInspection?.detail.id ?? profileId;
+    if (running || draft.profile !== fileProfileId || !draft.expected) return false;
+    const hudFolder = cfgHudFolder(detail?.files ?? [], detail?.hud);
     if (
-      blockingFindingsForFile(lintBundle(bundle, detail?.hud?.id).findings, draft.path).length > 0
+      !cfgFileMeta(draft.path, hudFolder).editable ||
+      filesDraftStore.state(draft.profile, draft.path)?.conflict
+    )
+      return false;
+    const submittedDocuments = draft.documents ?? filesDraftStore.documents(draft.profile);
+    const bundle = submittedDocuments.map((file) => ({
+      path: file.path,
+      text: file.path === draft.path ? draft.text : file.text,
+    }));
+    let checked: Awaited<ReturnType<typeof analyzeFilesSnapshot>>;
+    try {
+      checked = await analyzeFilesSnapshot({
+        profile: draft.profile,
+        files: bundle,
+        hudId: hudFolder,
+        identity: `${draft.profile}:${draft.path}:${draft.revision ?? 0}`,
+      });
+    } catch (error) {
+      onError(
+        error instanceof Error ? error.message : "Files analysis failed. Retry before saving.",
+        `files:validation:${draft.profile}:${draft.path}`,
+      );
+      return false;
+    }
+    if (
+      hitAnalysisLimit(checked.result) ||
+      blockingFindingsForFile(checked.result.findings, draft.path).length > 0
     ) {
       onError(
         "Resolve blocking findings in Files before saving.",
@@ -467,12 +532,37 @@ export function SettingsHost({
     }
     const saved = await runWrite(
       async () => {
-        await api.writeOwnedFile(draft.path, draft.text);
+        const committed = await api
+          .writeOwnedFile(draft.path, draft.text, draft.expected as FilesSource)
+          .catch(async (error: unknown) => {
+            if (
+              error &&
+              typeof error === "object" &&
+              "code" in error &&
+              error.code === "FileConflict"
+            ) {
+              // Refresh the comparison source, keeping the original draft/token.
+              // No retry or write is performed until the player reviews it.
+              await reload().catch(() => {});
+            }
+            throw error;
+          });
+        const hash = committed.files.find((file) => file.path === draft.path)?.sha256;
+        if (!hash)
+          throw new Error(
+            "The saved cfg identity is unavailable. Reload Files before another save.",
+          );
+        filesDraftStore.acknowledge(draft.profile, draft.path, draft.text, {
+          ...(draft.expected as FilesSource),
+          sha256: hash,
+          librarySha256: hash,
+        });
       },
       {
         source: `${draft.profile}:files:${draft.path}`,
         failure: `Could not save Files (${draft.path})`,
       },
+      restoreMissing && draft.profile ? { filesRecovery: draft.profile } : undefined,
     );
     if (saved) onError(null, `files:validation:${draft.profile}:${draft.path}`);
     return saved;
@@ -1060,17 +1150,26 @@ export function SettingsHost({
 
     if (tab === "files") {
       return (
-        <FilesPane
-          profileId={profileId}
-          files={files}
-          draftStore={filesDraftStore}
-          closeReady={filesCloseReady}
-          limited={filesLimited}
-          hudId={detail?.hud?.id ?? null}
-          onSave={(path, text) => {
-            return saveFileDraft({ profile: profileId, path, text });
-          }}
-        />
+        <Suspense fallback={<p className="t-meta">Loading cfg workspace…</p>}>
+          <FilesPane
+            profileId={filesInspection?.detail.id ?? profileId}
+            files={filesInspection?.files ?? files}
+            context={filesInspection?.context ?? filesContext}
+            gameRunning={running}
+            recoveryAvailable={!externalBusy && !queueBusy && !loading && !!filesInspection}
+            onNavigate={onNavigate}
+            draftStore={filesDraftStore}
+            closeReady={filesCloseReady}
+            limited={filesLimited}
+            hudId={cfgHudFolder(
+              filesInspection?.detail.files ?? detail?.files ?? [],
+              filesInspection?.detail.hud ?? detail?.hud,
+            )}
+            onSave={(path, text, submission) => {
+              return saveFileDraft(submission ?? { profile: profileId, path, text });
+            }}
+          />
+        </Suspense>
       );
     }
 
@@ -1108,6 +1207,7 @@ export function SettingsHost({
     visited.current = { profile: profileId, tabs: new Set() };
   }
   if (profileId) visited.current.tabs.add(tab);
+  if (tab === "files" && filesInspection) visited.current.tabs.add("files");
 
   return (
     <AppStatusProvider
@@ -1145,7 +1245,11 @@ export function SettingsHost({
           profile={profileId}
           tab={paneTab}
           active={tab === paneTab}
-          blocked={inputsBlocked || (!maps.complete && usesCfgState(paneTab))}
+          blocked={
+            paneTab === "files"
+              ? !filesCloseReady || externalBusy
+              : inputsBlocked || (!maps.complete && usesCfgState(paneTab))
+          }
           onDiscard={
             paneTab === "launch"
               ? () => {

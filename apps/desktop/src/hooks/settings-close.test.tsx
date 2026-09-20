@@ -187,11 +187,13 @@ it("preserves Files' explicit decision with mixed settings and file drafts", asy
   expect(save).not.toHaveBeenCalled();
   await click("Save and continue");
   expect(save).toHaveBeenCalledTimes(2);
-  expect(saveFile).toHaveBeenCalledWith({
-    profile: "a",
-    path: "tf/cfg/config.cfg",
-    text: "new bytes",
-  });
+  expect(saveFile).toHaveBeenCalledWith(
+    expect.objectContaining({
+      profile: "a",
+      path: "tf/cfg/config.cfg",
+      text: "new bytes",
+    }),
+  );
   expect(files.dirty()).toEqual([]);
   expect(native.destroy).toHaveBeenCalledOnce();
 });

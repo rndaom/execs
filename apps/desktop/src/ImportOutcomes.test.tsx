@@ -55,6 +55,11 @@ beforeEach(() => {
   root = createRoot(box);
   capture.panes = {};
   api = {
+    getFilesContext: vi.fn(async () => ({
+      profileId: detail.id,
+      root: "fixture",
+      layer: detail.layer,
+    })),
     getActiveProfileDetail: vi.fn(async () => detail),
     getComfigState: vi.fn(async () => null),
     getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
