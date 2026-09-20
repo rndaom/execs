@@ -1,11 +1,11 @@
 {
-  "source_commit": "d7ded7359bf30f7d04e00ca599fde340e745a66e",
-  "description": "Production build after Files integration and Focus/completion follow-up. Raw asset bytes; no startup or memory inference.",
+  "source_commit": "4e5fb394c790197bc184dc9a82301561b3bd35ca",
+  "description": "Final production build including incoming-reference navigation. Raw asset bytes; no startup or memory inference.",
   "assets": [
     {
-      "file": "app-COFKWOAd.js",
+      "file": "app-BShhQmBr.js",
       "bytes": 247,
-      "sha256": "93ee7c8269708c0d1a66272ca8d0f914d411be118d875cd98c6d0618b5bfe3a6"
+      "sha256": "e62e80fa395b34706628902841b7a2f36ab280ed5fc2aa4c1517e707e2bc9eb1"
     },
     {
       "file": "files-analysis.worker-DYiVjpKz.js",
@@ -13,19 +13,14 @@
       "sha256": "a203d74621f42bc1ca2ae41ffe55430d365e4d24893e2fed8ff1107f886a1637"
     },
     {
-      "file": "FilesPane-DTqGgkS_.js",
-      "bytes": 383278,
-      "sha256": "1dd2a37290f291ac1590769d65d2df456b62891a228f52bb2598c4317a0907df"
+      "file": "FilesPane-CQ6I-gE3.js",
+      "bytes": 383880,
+      "sha256": "8349539d8030d5e36eaa09955794639be8cdccba099f893aab103da6c241714e"
     },
     {
-      "file": "index-BdNCzc1f.js",
+      "file": "index-_FrACPB3.js",
       "bytes": 334,
-      "sha256": "2511b7cd1a825313e9c761eda073e895e6651840dbc51a26a10b86e6e11dfc62"
-    },
-    {
-      "file": "index-CYDLIQzS.js",
-      "bytes": 1353152,
-      "sha256": "a98797b3b76e53327d4468d35cda7b4f880b7afe6d8adf93ff986100cc151158"
+      "sha256": "30960d4574f342abf639a9cd97352625c51363db1e94d704d939947f98b4f967"
     },
     {
       "file": "index-CzHiXLlx.css",
@@ -33,14 +28,19 @@
       "sha256": "0e5c6e73ba0be971913a310673d47446149a50e07a4dfe2dd8b726fb720ad7a7"
     },
     {
-      "file": "index-yAXEDFBW.js",
-      "bytes": 1077,
-      "sha256": "6a4a09b730832b2364ca6405cddcf4fc365f3b7ad15a49dac4983e464d89a1fd"
+      "file": "index-D2jsPY3V.js",
+      "bytes": 1353152,
+      "sha256": "58a7093f04aa1102574ed839d8a292f5ac9faf71a959e40edc9732be6fc2e225"
     },
     {
-      "file": "window-C6pl6yjE.js",
+      "file": "index-Dl5CCK7N.js",
+      "bytes": 1077,
+      "sha256": "9439d0532df480d18b73720cd7324a09b2b06737e3febf6151afefd06708ccdd"
+    },
+    {
+      "file": "window-UvYh90p2.js",
       "bytes": 13979,
-      "sha256": "9e9cebd6788787c3c9db0437cfb03910d708da89ab3b6a098ff08412239383e5"
+      "sha256": "f3f22a7e3daa511f61b9138c4544bce5a89aa4fbba2b515795da1c1914301583"
     }
   ]
 }
