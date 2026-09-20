@@ -27,7 +27,9 @@ The surrounding UI retains the existing typography and theme tokens.
   documented unconditional keyboard exit. Enter is not a completion shortcut.
   Composition events remain under the engine's handling. Ctrl+Space is optional;
   typed completion also works when an OS/input method reserves that shortcut.
-* There is no WebKitGTK-specific code or worker dependency. Browser testing does
+* The editor has no WebKitGTK-specific code or worker dependency. Files analysis
+  runs separately in a bundled module worker; worker startup, cancellation and
+  failures must therefore be tested in each packaged webview. Browser testing does
   not establish packaged WebKitGTK or NVDA/Orca compatibility: those release
   checks must be recorded separately, including IME and non-US keyboard use.
 * Search highlights current-file matches before replacement, supports ordinary
