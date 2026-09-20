@@ -87,6 +87,10 @@ pub(crate) fn with_profile_process_sampler<R>(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProfileError {
+    FileConflict,
+    FilesProfileChanged,
+    FilesRootChanged,
+    CfgLayerChanged,
     GameRunning,
     RootMismatch {
         library_root: String,
@@ -112,6 +116,10 @@ impl From<WriteLockError> for ProfileError {
 impl ProfileError {
     pub fn code(&self) -> &'static str {
         match self {
+            Self::FileConflict => "FileConflict",
+            Self::FilesProfileChanged => "ProfileChanged",
+            Self::FilesRootChanged => "RootChanged",
+            Self::CfgLayerChanged => "CfgLayerChanged",
             Self::GameRunning => "GameRunning",
             Self::RootMismatch { .. } => "RootMismatch",
             Self::NotInitialized => "NotInitialized",
@@ -128,6 +136,18 @@ impl ProfileError {
 
     pub fn message(&self) -> String {
         match self {
+            Self::FileConflict => {
+                "This cfg changed outside your draft. Review the current file before saving.".into()
+            }
+            Self::FilesProfileChanged => {
+                "The active profile changed before saving. Your draft was not written.".into()
+            }
+            Self::FilesRootChanged => {
+                "The confirmed TF2 folder changed before saving. Your draft was not written.".into()
+            }
+            Self::CfgLayerChanged => {
+                "TF2's cfg loader changed. Refresh the profile before saving.".into()
+            }
             Self::GameRunning => WriteLockError::GameRunning.message().into(),
             Self::RootMismatch {
                 library_root,
@@ -1353,6 +1373,7 @@ where
                 manifest.launch_sync_pending = false;
                 Ok(())
             },
+            None,
         )?;
         return load_library_from(profiles_dir, Some(tf2_root));
     }
@@ -1489,6 +1510,7 @@ where
         false,
         running_names,
         |_| Ok(()),
+        None,
     )?;
     Ok(result.hashes)
 }
@@ -1518,6 +1540,39 @@ where
     S: AsRef<str>,
     F: FnOnce(&mut ProfileManifest) -> Result<(), ProfileError>,
 {
+    mutate_profile_files_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        puts,
+        remove_paths,
+        projection,
+        running_names,
+        edit_manifest,
+        None,
+    )
+}
+
+/// A Files save checks original sources after rollback snapshots are prepared,
+/// immediately before journal publication. It also projects requested paths
+/// whose library bytes are unchanged (a deliberate resolution of live drift).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mutate_profile_files_checked_to<I, S, F>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    puts: &[(String, FileSource<'_>)],
+    remove_paths: &[String],
+    projection: ProfileLiveProjection,
+    running_names: I,
+    edit_manifest: F,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
+) -> Result<ProfileManifest, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    F: FnOnce(&mut ProfileManifest) -> Result<(), ProfileError>,
+{
     Ok(mutate_profile_files_impl(
         profiles_dir,
         tf2_root,
@@ -1529,6 +1584,7 @@ where
         false,
         running_names,
         edit_manifest,
+        precommit,
     )?
     .manifest)
 }
@@ -1564,6 +1620,7 @@ where
         false,
         running_names,
         edit_manifest,
+        None,
     )?
     .manifest)
 }
@@ -1585,6 +1642,7 @@ fn mutate_profile_files_impl<I, S, F>(
     activate_if_none: bool,
     running_names: I,
     edit_manifest: F,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
 ) -> Result<ProfileMutationResult, ProfileError>
 where
     I: IntoIterator<Item = S>,
@@ -1736,7 +1794,8 @@ where
         return Err(err);
     }
 
-    if manifest == old_manifest
+    if precommit.is_none()
+        && manifest == old_manifest
         && requested_live_renames.is_empty()
         && !(activate_if_none && old_index.active_profile_id.is_none())
     {
@@ -1764,9 +1823,11 @@ where
         .filter_map(|key| {
             let old = old_by_key.get(&key).copied();
             let new = new_by_key.get(&key).copied();
-            (old != new).then(|| ProfileFileChange {
-                old_path: old.map(|file| file.path.clone()),
-                new_path: new.map(|file| file.path.clone()),
+            (old != new || (precommit.is_some() && requested.contains(&key))).then(|| {
+                ProfileFileChange {
+                    old_path: old.map(|file| file.path.clone()),
+                    new_path: new.map(|file| file.path.clone()),
+                }
             })
         })
         .collect();
@@ -1853,6 +1914,12 @@ where
     if let Err(err) = refuse_writes(profile_live_process_names()) {
         let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
         return Err(err);
+    }
+    if let Some(precommit) = precommit {
+        if let Err(err) = precommit() {
+            let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
+            return Err(err);
+        }
     }
     if let Err(err) = write_json_within(
         profiles_dir,

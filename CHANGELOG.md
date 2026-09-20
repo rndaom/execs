@@ -14,6 +14,8 @@ User-facing changes only. The release workflow publishes the matching
 - Files: recognize TF2 voice commands, button actions and sourced comfig aliases offline;
   explain numeric mistakes, exact finding locations and incomplete analysis without
   treating routine personal mouse settings or menu-restoring binds as hostile configs.
+- Files: refuse stale saves after profile, install, loader or source changes, and
+  create new user cfg files through the existing recoverable profile transaction.
 
 ## [0.1.6] - 2026-09-18
 

@@ -1,6 +1,7 @@
 //! The Files pane: reading and writing the active profile's own cfg files.
 
-use execs_core::{ProfileDetail, ProfileFileContent};
+use execs_core::files_workspace::{FilesContent, FilesContext, FilesSource};
+use execs_core::ProfileDetail;
 
 use super::shared::{with_profile, with_root};
 use crate::error::CommandError;
@@ -38,10 +39,22 @@ pub async fn get_active_profile_detail() -> Result<Option<ProfileDetail>, Comman
 }
 
 #[tauri::command]
-pub async fn read_profile_file(path: String) -> Result<ProfileFileContent, CommandError> {
+pub async fn get_files_context() -> Result<FilesContext, CommandError> {
+    with_root(|root| {
+        Ok(execs_core::files_workspace::context_from(
+            &execs_core::profiles_dir(),
+            &root,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn read_profile_file(path: String) -> Result<FilesContent, CommandError> {
     validate_editor_path(&path)?;
-    with_profile(move |root, profile_id| {
-        let content = execs_core::read_profile_file(&root, &profile_id, &path)?;
+    with_profile(move |root, _profile_id| {
+        let content =
+            execs_core::files_workspace::read_from(&execs_core::profiles_dir(), &root, &path)?;
         if let Some(text) = &content.text {
             // Refuse before serde/IPC makes another copy in the renderer.
             validate_editor_text(text)?;
@@ -56,18 +69,22 @@ pub async fn write_owned_file(
     gate: tauri::State<'_, WriteGate>,
     path: String,
     text: String,
+    expected: FilesSource,
 ) -> Result<ProfileDetail, CommandError> {
     // Validate the already-decoded request before moving it into a blocking
     // closure or handing its buffer to core.
     validate_editor_path(&path)?;
     validate_editor_text(&text)?;
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| {
-        Ok(execs_core::write_owned_file(
+    with_profile(move |root, _profile_id| {
+        Ok(execs_core::files_workspace::save_to(
+            &execs_core::profiles_dir(),
             &root,
-            &profile_id,
             &path,
             text.as_bytes(),
+            &expected,
+            execs_core::process_lock::live_process_names(),
+            execs_core::apply::WriteOwnedOptions::default(),
         )?)
     })
     .await
