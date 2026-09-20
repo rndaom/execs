@@ -50,12 +50,23 @@ export function FilesReference({ command, selectedPath, editable, onInsert }: Fi
                   ? entry.arguments
                       .map(
                         (argument) =>
-                          `${argument.name}${argument.optional ? " (optional)" : ""}${argument.type ? `: ${argument.type}` : ""}${argument.values ? ` — ${argument.values.join(", ")}` : ""}`,
+                          `${argument.name}${argument.optional ? " (optional)" : ""}${argument.type ? `: ${argument.type}` : ""}${argument.values ? ` — ${argument.values.join(", ")}` : ""}${argument.min === undefined ? "" : `; minimum ${argument.min}`}${argument.max === undefined ? "" : `; maximum ${argument.max}`}`,
                       )
                       .join("; ")
                   : "No verified parameter details in this snapshot."}
               </dd>
             </div>
+            {entry.value && (
+              <div>
+                <dt className="t-meta">Verified value constraints</dt>
+                <dd>
+                  {entry.value.type ?? "Value"}
+                  {entry.value.min === undefined ? "" : `; minimum ${entry.value.min}`}
+                  {entry.value.max === undefined ? "" : `; maximum ${entry.value.max}`}
+                  {entry.value.values ? `; one of ${entry.value.values.join(", ")}` : ""}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="t-meta">Documented default</dt>
               <dd>
@@ -81,7 +92,7 @@ export function FilesReference({ command, selectedPath, editable, onInsert }: Fi
               <dd>
                 {entry.sources.map((source) => (
                   <p key={`${source.url}-${source.revision}`} className="break-words">
-                    {source.description} · {source.date} · {source.revision}
+                    {source.description} · reviewed {source.date} · revision {source.revision}
                   </p>
                 ))}
               </dd>
