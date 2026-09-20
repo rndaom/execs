@@ -1,7 +1,9 @@
 # Files native qualification — RND-323
 
-Status: preparation; no 0.1.7 native acceptance result yet. This record must not
-be used to mark RND-323 or its parent Done until the integrated product passes.
+Status: native qualification in progress; final integrated run pending. Initial
+Windows keyboard/completion/NVDA runs passed, and Linux authoring workflows,
+Orca observations and analysis benchmarks ran successfully. IME and expanded
+keyboard harness corrections require the final rerun before acceptance.
 
 The owner authorized implementation and private release readiness on September
 19, 2026. Publication, tagging, real-game launches and real-profile writes are
@@ -28,7 +30,7 @@ issue describes its creation date, not this later authorization.
 The .NET 10 Windows harness builds with zero errors and warnings. Its initial
 local `Start-Process` launch was rejected by automatic policy review with only
 `blocked by policy` as the reason. No launch retry or alternate local automation
-was attempted. Windows native acceptance is consequently still pending.
+was attempted. Subsequent native runs use disposable GitHub Actions desktops.
 
 The dedicated `qualify-files.yml` workflow has read-only repository permissions,
 does not build a product release, does not publish or tag, and retains native
@@ -36,8 +38,8 @@ test artifacts. Its Linux job attempts real WebKitGTK keyboard, Orca logging and
 Japanese IME.
 The Windows CI job now attempts actual physical keyboard events, completion,
 Tab exit, WebView2 screenshots and NVDA generated speech in the disposable runner.
-It fails if editor-name speech is absent. No successful run is claimed yet.
-Workflow configuration is preparation, not evidence of a passing run.
+It fails if editor-name speech is absent. The final results record must name the
+actual run and source revision; workflow configuration alone is not evidence.
 
 ## Evidence boundaries
 
@@ -78,6 +80,33 @@ in each native engine under that policy, without weakening the policy or shippin
 preview code in the product. It remains a fixture with equivalent CSP, not an
 actual packaged Tauri origin/IPC test. Product package smoke remains separate.
 
+## Harness corrections and interpretation
+
+- IBus daemon startup is asynchronous. The runner waits for its engine inventory
+  before starting the host. Anthy's default input mode is Latin (`3`); this test
+  explicitly selects Hiragana (`0`) and Roman-key typing (`0`) in the disposable
+  desktop. It records both installed settings and the selected engine. The IBus
+  CLI can fail its keyboard-layout subprocess after selecting an engine, so the
+  test verifies the selected engine rather than inferring it from that exit code.
+- NVDA may consume Escape to change its own focus mode. The Windows harness uses
+  its documented Insert+F2 pass-next-key gesture before closing the search and
+  go-to-line dialogs, then verifies the resulting editor focus.
+- Readiness measures navigation start to editor plus settled analysis, not the
+  operating-system process-launch interval. Completion measures physical
+  Ctrl+Space to completion DOM appearance, not compositor presentation. Printable
+  input latency measures the second animation frame after the native key event.
+- Twenty representative 10k-line samples use a fresh worker each time. Dense
+  1 MiB and 8 MiB cases must return an explicit incomplete analysis-budget finding;
+  comment-heavy byte-boundary cases remain separate. Memory is a 100 ms sampled
+  process-tree working set/RSS, not an absolute or unique physical-memory peak.
+- The generic GTK host's Orca script has spoken editor names, completion choices
+  and selected diagnostic text. DOM contracts and generated speech are reported
+  separately; an unobserved status or read-only announcement is not a speech pass.
+- The 200% capture also records reduced-motion media matching and computed button
+  transition durations: WebView2 uses a developer media override, WebKitGTK uses
+  the disposable GTK desktop animation preference. These mechanisms are recorded
+  explicitly rather than presented as a user's actual desktop preference.
+
 ## Source references
 
 - [RND-323 acceptance](https://linear.app/rndaom/issue/RND-323/qualify-the-rebuilt-files-workflow-on-windows-and-linux-before-017)
@@ -87,6 +116,8 @@ actual packaged Tauri origin/IPC test. Product package smoke remains separate.
 - [Orca debugging](https://orca.gnome.org/debugging): logs include generated speech and accessibility events.
 - [NVDA User Guide](https://download.nvaccess.org/documentation/en/userGuide.html): speech viewer and application keyboard interaction.
 - [Tauri CSP](https://v2.tauri.app/security/csp/): packaged resource restrictions require direct verification.
+- [IBus CLI source](https://github.com/ibus/ibus/blob/1.5.26/tools/main.vala): engine selection and optional system keyboard-layout handling.
+- [Anthy settings schema](https://github.com/ibus/ibus-anthy/blob/main/data/org.freedesktop.ibus.engine.anthy.gschema.xml.in) and [input-mode definitions](https://github.com/ibus/ibus-anthy/blob/main/engine/python3/engine.py): Latin default and Hiragana/Roman-key configuration.
 
 These documentation pages were read on September 20, 2026 UTC. The CodeMirror
 Tab documentation fetch timed out; no fetched content from that attempt is
