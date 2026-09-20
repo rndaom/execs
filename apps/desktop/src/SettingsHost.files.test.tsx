@@ -1,0 +1,202 @@
+// @vitest-environment jsdom
+import { EditorView } from "@codemirror/view";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ToastProvider } from "./components/ui/Toast";
+import { AppStatusProvider } from "./hooks/useAppStatus";
+import { analyzeFilesSnapshot } from "./lib/files-analysis";
+import { createFilesDraftStore, type DirtyFileDraft } from "./lib/files-drafts";
+import { saveFileDrafts } from "./lib/files-exit";
+import { createPreviewApi } from "./lib/preview-bridge";
+import { SettingsHost } from "./SettingsHost";
+
+vi.mock("./lib/files-analysis", async (load) => {
+  const actual = await load<typeof import("./lib/files-analysis")>();
+  return {
+    ...actual,
+    analyzeFilesSnapshot: vi.fn(async (snapshot, signal) => {
+      await Promise.resolve();
+      if (signal?.aborted) throw Error("Analysis cancelled.");
+      return actual.runFilesAnalysis(snapshot);
+    }),
+  };
+});
+
+let root: Root;
+let box: HTMLDivElement;
+let api: ReturnType<typeof createPreviewApi>;
+let store: ReturnType<typeof createFilesDraftStore>;
+let profile: string;
+const saver: { current: ((draft: DirtyFileDraft) => Promise<boolean>) | null } = { current: null };
+const noop = () => {};
+
+async function click(label: string) {
+  await act(async () => {
+    const button = [...box.querySelectorAll("button")].find(
+      (element) => element.textContent?.trim() === label,
+    );
+    if (!button) throw Error(`Missing button ${label}`);
+    button.click();
+  });
+}
+function editor() {
+  const element = box.querySelector<HTMLElement>(".cm-editor");
+  if (!element) throw Error("Missing editor");
+  return EditorView.findFromDOM(element) as EditorView;
+}
+async function edit(text: string) {
+  await act(async () =>
+    editor().dispatch({ changes: { from: 0, to: editor().state.doc.length, insert: text } }),
+  );
+}
+async function save(draft = store.dirty()[0]) {
+  let result = false;
+  await act(async () => {
+    result = (await saver.current?.(draft)) ?? false;
+  });
+  return result;
+}
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+  window.matchMedia = vi
+    .fn()
+    .mockReturnValue({ matches: false, addEventListener: noop, removeEventListener: noop });
+  box = document.createElement("div");
+  document.body.append(box);
+  root = createRoot(box);
+  api = createPreviewApi("settings-files");
+  store = createFilesDraftStore();
+  profile = (await api.getActiveProfileDetail())?.id ?? "";
+  await act(async () =>
+    root.render(
+      <ToastProvider>
+        <AppStatusProvider value={{ error: null, setError: noop, running: false, busy: false }}>
+          <SettingsHost
+            api={api}
+            filesDraftStore={store}
+            filesSaver={saver}
+            tab="files"
+            running={false}
+            externalBusy={false}
+            refreshKey={1}
+            bindSyncRequest={null}
+            onBindSyncHandled={noop}
+            onBusyChange={noop}
+            onError={noop}
+          />
+        </AppStatusProvider>
+      </ToastProvider>,
+    ),
+  );
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  box.remove();
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it("creates an empty cfg draft without writing and saves only with an absent-source token", async () => {
+  const write = vi.spyOn(api, "writeOwnedFile");
+  await click("New cfg");
+  await act(async () => {
+    const input = box.querySelector<HTMLInputElement>("#new-cfg-name");
+    if (!input) throw Error("Missing name input");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+      input,
+      "helpers/first",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click("Open unsaved draft");
+  const draft = store.dirty()[0];
+  expect(draft.path).toMatch(/\/helpers\/first\.cfg$/);
+  expect(draft.text).toBe("");
+  expect(write).not.toHaveBeenCalled();
+  expect(await save(draft)).toBe(true);
+  expect(write).toHaveBeenCalledWith(
+    draft.path,
+    "",
+    expect.objectContaining({ profileId: profile, sha256: null, librarySha256: null }),
+  );
+  expect((await api.readProfileFile(draft.path)).text).toBe("");
+  expect(store.dirty()).toEqual([]);
+});
+
+it("retains editor bytes and the original token after native FileConflict", async () => {
+  await edit("echo my retained draft\n");
+  const draft = store.dirty()[0];
+  if (!draft.expected) throw Error("Missing original source token");
+  await api.writeOwnedFile(draft.path, "echo external change\n", draft.expected);
+  expect(await save(draft)).toBe(false);
+  expect(editor().state.doc.toString()).toBe("echo my retained draft\n");
+  expect(store.state(profile, draft.path)).toMatchObject({
+    text: draft.text,
+    expected: draft.expected,
+    dirty: true,
+  });
+  expect((await api.readProfileFile(draft.path)).text).toBe("echo external change\n");
+});
+
+it("validates one captured all-draft snapshot while preserving later edits during save-all", async () => {
+  const candidates = store.documents(profile).filter((file) => file.path.startsWith("tf/cfg/"));
+  const [first, second] = candidates;
+  expect(second).toBeDefined();
+  store.edit(profile, first.path, "echo first submitted\n");
+  store.edit(profile, second.path, "echo second submitted\n");
+  const submissions = store.dirty();
+  const originalWrite = api.writeOwnedFile;
+  vi.spyOn(api, "writeOwnedFile").mockImplementation(async (...args) => {
+    if (args[0] === first.path) store.edit(profile, second.path, "echo newer second draft\n");
+    return originalWrite(...args);
+  });
+  let saved = true;
+  await act(async () => {
+    saved = await saveFileDrafts(
+      store,
+      (draft) => saver.current?.(draft) ?? Promise.resolve(false),
+    );
+  });
+  expect(saved).toBe(false);
+  expect(store.state(profile, second.path)?.text).toBe("echo newer second draft\n");
+  expect(store.state(profile, second.path)?.dirty).toBe(true);
+  for (const draft of submissions) {
+    const checked = vi
+      .mocked(analyzeFilesSnapshot)
+      .mock.calls.find(
+        ([snapshot]) =>
+          snapshot.identity === `${draft.profile}:${draft.path}:${draft.revision ?? 0}`,
+      );
+    expect(checked?.[0].files).toEqual(draft.documents?.map(({ path, text }) => ({ path, text })));
+  }
+});
+
+it("acknowledges the committed hash rather than a later reload's external hash", async () => {
+  await edit("echo submitted\n");
+  const draft = store.dirty()[0];
+  const originalWrite = api.writeOwnedFile;
+  let committedHash: string | undefined;
+  let externalHash: string | undefined;
+  vi.spyOn(api, "writeOwnedFile").mockImplementation(async (...args) => {
+    const committed = await originalWrite(...args);
+    const committedFile = await api.readProfileFile(args[0]);
+    committedHash = committedFile.sha256;
+    store.edit(profile, args[0], "echo edit while saving\n");
+    await originalWrite(args[0], "echo subsequent external change\n", committedFile.source);
+    externalHash = (await api.readProfileFile(args[0])).sha256;
+    return structuredClone(committed);
+  });
+  expect(await save(draft)).toBe(true);
+  expect(store.state(profile, draft.path)).toMatchObject({
+    text: "echo edit while saving\n",
+    expected: { sha256: committedHash },
+    currentExpected: { sha256: externalHash },
+    dirty: true,
+    conflict: true,
+  });
+  expect(committedHash).not.toBe(externalHash);
+});
