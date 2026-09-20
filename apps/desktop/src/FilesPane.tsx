@@ -651,19 +651,36 @@ function ProfileFilesPane({
           <p className="t-meta">
             {cfgExecutionRole(selected, snapshot.files, context?.layer === "comfig")}
           </p>
+          <p className="t-meta">
+            Links are static candidates. Scanned cfgs may be dormant; bind and alias payloads run
+            only when invoked.
+          </p>
           {links
-            .filter((link) => link.file === selected || link.target === selected)
-            .map((link) => (
+            .flatMap((link) => [
+              ...(link.file === selected
+                ? [{ link, incoming: false, path: link.target, line: link.targetLine ?? 1 }]
+                : []),
+              ...(link.target === selected
+                ? [{ link, incoming: true, path: link.file, line: link.line }]
+                : []),
+            ])
+            .map(({ link, incoming, path, line }) => (
               <button
-                key={`${link.file}:${link.line}:${link.kind}:${link.target}:${link.targetLine}:${link.deferred}`}
+                key={`${incoming}:${link.file}:${link.line}:${link.kind}:${link.target}:${link.targetLine}:${link.deferred}`}
                 type="button"
+                data-testid="files-source-link"
+                data-direction={incoming ? "incoming" : "outgoing"}
+                data-deferred={link.deferred}
                 className="btn btn-ghost"
-                disabled={!link.target}
+                disabled={!path}
                 onClick={() => {
-                  if (link.target) pick(link.target, link.targetLine);
+                  if (path) pick(path, line);
                 }}
               >
-                {link.label}: {link.target ?? "Unresolved in loaded cfgs"}
+                {incoming ? "Referenced by" : link.label}:{" "}
+                {path ? `${path}:${line}` : "Unresolved in loaded cfgs"}
+                {incoming ? ` · ${link.kind}` : ` · from line ${link.line}`}
+                {link.deferred ? " · Deferred bind/alias payload" : ""}
               </button>
             ))}
         </details>

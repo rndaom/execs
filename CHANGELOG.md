@@ -25,6 +25,8 @@ User-facing changes only. The release workflow publishes the matching
   import successfully again; partial pack changes refresh file and byte counts.
   Accepted HUD removal also clears its installed record. Keep and Restore preserve
   the saved customization.
+- Files: show incoming cfg references at their caller and identify deferred bind/alias
+  payloads; opening a reference keeps the current drafts intact.
 - Files: keep provided read-only sources reachable by keyboard for selection,
   search and reference without allowing edits or saves.
 - Files: recognize TF2 voice commands, button actions and sourced comfig aliases offline;
