@@ -86,8 +86,8 @@ pub use apply::{
     apply_preloader_selection, apply_preloader_selection_with_sampler, forget_preload_profile,
     preload_profiles, preloader_status, profile_particle_cleanup_selection, rebuild_keep_lists,
     record_preload_profile, recover_pending_preloader, recover_pending_preloader_with_sampler,
-    revert_preloader, revert_preloader_with_sampler, take_preload_profiles, PreloaderReport,
-    PreloaderSelection, PreloaderStatus, RevertReport,
+    revert_preloader, revert_preloader_with_sampler, selected_profile_particle_mod_ids,
+    take_preload_profiles, PreloaderReport, PreloaderSelection, PreloaderStatus, RevertReport,
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{

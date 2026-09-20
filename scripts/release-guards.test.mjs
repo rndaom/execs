@@ -405,6 +405,30 @@ test("package smoke derives and passes the immediately previous changelog releas
   assert.doesNotMatch(probe, /context\.package_info_mut\(\)\.version = "0\.1\.1"/);
 });
 
+test("profile compatibility uses the actual previous public hotfix consistently", () => {
+  const expectedTag = "v0.1.7+2";
+  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+  const fetchedTags = [...ci.matchAll(/git fetch origin tag (\S+) --no-tags/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(fetchedTags, [expectedTag, expectedTag]);
+
+  const launcher = readFileSync("scripts/verify-public-profile.mjs", "utf8");
+  assert.match(launcher, /const publicTag = "v0\.1\.7\+2"/);
+  assert.match(launcher, /EXECS_COMPAT_PUBLIC_REPO/);
+  assert.match(launcher, /EXECS_COMPAT_CANDIDATE_REPO/);
+  assert.match(launcher, /version = "0\.1\.7\+2\.compat"/);
+  assert.match(launcher, /path = \$\{tomlPath\(publicBuild\)\}/);
+  assert.doesNotMatch(launcher, /v0\.1\.6|EXECS_COMPAT_(?:OLD|NEW)_REPO/);
+
+  const probe = readFileSync("scripts/compat-profile/main.rs", "utf8");
+  assert.match(probe, /const PUBLIC_VERSION: &str = "0\.1\.7\+2"/);
+  assert.match(probe, /const PUBLIC_TAG: &str = "v0\.1\.7\+2"/);
+  assert.match(probe, /const PUBLIC_COMMIT: &str = "15086ea569178402d927bf4990828dc436c8ec40"/);
+  assert.match(probe, /const PUBLIC_CORE_TREE: &str = "0246e1fdc7dfd32c19306459df5de289a45c5fdd"/);
+  assert.doesNotMatch(probe, /v0\.1\.6|OLD_(?:COMMIT|CORE_TREE)/);
+});
+
 test("release workflow always waits for the reusable CI gate", () => {
   const yaml = readFileSync(".github/workflows/release.yml", "utf8");
   assert.match(yaml, /uses: \.\/\.github\/workflows\/ci.yml/);

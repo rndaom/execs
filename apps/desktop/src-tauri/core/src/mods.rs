@@ -789,6 +789,16 @@ where
         .cloned()
         .ok_or_else(|| ProfileError::Io("That mod is not installed on this profile.".into()))?;
 
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if library.active_profile_id.as_deref() == Some(profile_id) {
+        let data_dir = profiles_dir.parent().ok_or(ProfileError::InvalidPath)?;
+        let selected = crate::preloader::selected_profile_particle_mod_ids(data_dir)
+            .map_err(ProfileError::Io)?;
+        if selected.iter().any(|selected| selected == &record.id) {
+            return Err(ProfileError::ParticleSourceSelected(record.name));
+        }
+    }
+
     let paths: Vec<String> = pack_files(&manifest, &record.pack)
         .into_iter()
         .map(|file| file.path)
@@ -807,7 +817,6 @@ where
             Ok(())
         },
     )?;
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
     if library.active_profile_id.as_deref() == Some(profile_id) {
         for path in &paths {
             prune_empty_parents(&live_path(tf2_root, path), tf2_root);
@@ -1012,6 +1021,40 @@ mod tests {
             .clone();
         set_active_profile_to(&profiles, &tf2, &id, unlocked()).unwrap();
         (root, profiles, tf2, id)
+    }
+
+    fn save_selected_profile_mods(data_dir: &Path, ids: &[&str]) -> Vec<u8> {
+        let state = crate::preloader::PreloaderState {
+            profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+            ..crate::preloader::PreloaderState::default()
+        };
+        let bytes = serde_json::to_vec_pretty(&state).unwrap();
+        fs::create_dir_all(data_dir.join("preloader")).unwrap();
+        fs::write(data_dir.join("preloader/state.json"), &bytes).unwrap();
+        bytes
+    }
+
+    fn install_particle_mod(
+        profiles: &Path,
+        tf2: &Path,
+        profile_id: &str,
+        name: &str,
+        pcf: &str,
+    ) -> ModRecord {
+        install_mod_to(
+            profiles,
+            tf2,
+            profile_id,
+            name,
+            ModContent::Tree(vec![(format!("particles/{pcf}"), b"pcf".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap()
+        .mods
+        .into_iter()
+        .find(|record| record.name == name)
+        .unwrap()
     }
 
     fn cleanup(root: &Path) {
@@ -1386,6 +1429,105 @@ mod tests {
             .iter()
             .all(|file| !file.path.starts_with("tf/custom/cool-effects")));
         assert!(!tf2.join("tf/custom/cool-effects").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn selected_active_particle_source_is_not_removed_until_selection_changes() {
+        let (root, profiles, tf2, id) = setup();
+        let first = install_particle_mod(&profiles, &tf2, &id, "Particle source A", "a.pcf");
+        let second = install_particle_mod(&profiles, &tf2, &id, "Particle source B", "b.pcf");
+        let state = save_selected_profile_mods(&root, &[&first.id, &second.id]);
+        let snapshot = root.join("preloader/originals/sentinel");
+        fs::create_dir_all(snapshot.parent().unwrap()).unwrap();
+        fs::write(&snapshot, b"pristine snapshot").unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let first_live = tf2.join("tf/custom").join(&first.pack);
+        let second_live = tf2.join("tf/custom").join(&second.pack);
+
+        let err = remove_mod_to(&profiles, &tf2, &id, &first.id, unlocked()).unwrap_err();
+        assert!(matches!(
+            &err,
+            ProfileError::ParticleSourceSelected(name) if name == "Particle source A"
+        ));
+        assert_eq!(err.code(), "ParticleSourceSelected");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(fs::read(root.join("preloader/state.json")).unwrap(), state);
+        assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+        assert!(first_live.exists());
+        assert!(second_live.exists());
+
+        save_selected_profile_mods(&root, &[&second.id]);
+        let detail = remove_mod_to(&profiles, &tf2, &id, &first.id, unlocked()).unwrap();
+        assert_eq!(detail.mods.len(), 1);
+        assert_eq!(detail.mods[0].id, second.id);
+        assert!(!first_live.exists());
+        assert!(second_live.exists());
+        assert_eq!(
+            crate::preloader::selected_profile_particle_mod_ids(&root).unwrap(),
+            vec![second.id]
+        );
+        assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+        cleanup(&root);
+    }
+
+    #[test]
+    fn running_game_precedes_selected_particle_source_removal_guard() {
+        let (root, profiles, tf2, id) = setup();
+        let record =
+            install_particle_mod(&profiles, &tf2, &id, "Locked particle source", "lock.pcf");
+        let state = save_selected_profile_mods(&root, &[&record.id]);
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = remove_mod_to(&profiles, &tf2, &id, &record.id, ["tf_win64.exe"]).unwrap_err();
+        assert!(matches!(err, ProfileError::GameRunning));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(fs::read(root.join("preloader/state.json")).unwrap(), state);
+        assert!(tf2.join("tf/custom").join(record.pack).exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn selected_global_particle_source_id_does_not_block_removal_from_an_inactive_profile() {
+        let (root, profiles, tf2, active_id) = setup();
+        let inactive_id = create_profile_record_to(&profiles, &tf2, "Inactive", unlocked())
+            .unwrap()
+            .profiles
+            .into_iter()
+            .find(|profile| profile.id != active_id)
+            .unwrap()
+            .id;
+        let inactive = install_particle_mod(
+            &profiles,
+            &tf2,
+            &inactive_id,
+            "Shared particle source",
+            "inactive.pcf",
+        );
+        let active = install_particle_mod(
+            &profiles,
+            &tf2,
+            &active_id,
+            "Shared particle source",
+            "active.pcf",
+        );
+        assert_eq!(inactive.id, active.id);
+        let state = save_selected_profile_mods(&root, &[&active.id]);
+        let active_live = tf2.join("tf/custom").join(&active.pack);
+
+        let detail =
+            remove_mod_to(&profiles, &tf2, &inactive_id, &inactive.id, unlocked()).unwrap();
+        assert!(detail.mods.is_empty());
+        assert!(load_manifest(&profiles, &inactive_id)
+            .unwrap()
+            .mods
+            .is_empty());
+        assert_eq!(
+            load_manifest(&profiles, &active_id).unwrap().mods,
+            vec![active]
+        );
+        assert!(active_live.exists());
+        assert_eq!(fs::read(root.join("preloader/state.json")).unwrap(), state);
         cleanup(&root);
     }
 

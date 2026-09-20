@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GameBananaMod } from "./bridge";
 import {
   foldCategories,
   formatModBytes,
   gameBananaIdOf,
-  gameBananaMetaLine,
-  gameBananaPageKey,
-  gameBananaPager,
   isGameBananaInstalled,
   MATURE_STORAGE_KEY,
   MOD_CONFIRM_BYTES,
@@ -25,12 +21,10 @@ import {
   REPAIR_POLL_MS,
   REPAIR_SLOW_POLL_MS,
   readMaturePreference,
-  relativeDate,
   repairActionDisabled,
   repairPollDelay,
   repairStateAfterBackendRead,
   selectionDirty,
-  sortGameBananaMods,
   summarizeReport,
   toggleName,
   visibleModSelection,
@@ -266,86 +260,6 @@ describe("your mods", () => {
 });
 
 describe("gamebanana browser", () => {
-  const NOW = Date.UTC(2026, 8, 2);
-  const record = (over: Partial<GameBananaMod>): GameBananaMod => ({
-    id: 1,
-    name: "A",
-    author: "a",
-    category: "Skins",
-    categoryId: 1,
-    likes: 0,
-    views: 0,
-    downloads: 0,
-    updatedAt: 0,
-    addedAt: 0,
-    thumb: null,
-    url: "https://gamebanana.com/mods/1",
-    mature: false,
-    ...over,
-  });
-
-  it("sorts the loaded records by every pill", () => {
-    const ids = (sort: Parameters<typeof sortGameBananaMods>[1]) =>
-      sortGameBananaMods(PREVIEW_GAMEBANANA_RECORDS, sort).map((mod) => mod.id);
-    expect(ids("likes")[0]).toBe(577_301);
-    expect(ids("views")[0]).toBe(577_301);
-    expect(ids("downloads")[0]).toBe(577_301);
-    expect(ids("updated")[0]).toBe(602_110);
-    expect(ids("new")[0]).toBe(602_110);
-    // Sorting never drops or duplicates a record.
-    expect(ids("likes")).toHaveLength(PREVIEW_GAMEBANANA_RECORDS.length);
-  });
-
-  it("sinks a withheld download count instead of reading it as zero", () => {
-    const sorted = sortGameBananaMods(
-      [record({ id: 1, downloads: null }), record({ id: 2, downloads: 0 })],
-      "downloads",
-    );
-    expect(sorted.map((mod) => mod.id)).toEqual([2, 1]);
-  });
-
-  it("labels the pager from the count when there is one", () => {
-    const pager = gameBananaPager(3, 240, 20, false);
-    expect(pager.label).toBe("Page 3 of 12");
-    expect(pager.pageCount).toBe(12);
-    expect(pager.hasPrevious).toBe(true);
-    expect(pager.hasNext).toBe(true);
-    expect(gameBananaPager(1, 240, 20, false).hasPrevious).toBe(false);
-    expect(gameBananaPager(12, 240, 20, false).hasNext).toBe(false);
-  });
-
-  it("drops the total from the label when GameBanana withholds it", () => {
-    const pager = gameBananaPager(3, 0, 20, true);
-    expect(pager.label).toBe("Page 3");
-    expect(pager.pageCount).toBeNull();
-    // Nothing but the page itself can say the run has ended.
-    expect(pager.hasNext).toBe(false);
-    expect(gameBananaPager(3, 0, 20, false).hasNext).toBe(true);
-  });
-
-  it("stops at a page that says it is the last one", () => {
-    expect(gameBananaPager(2, 240, 20, true).hasNext).toBe(false);
-  });
-
-  it("keys a cached page by everything that changes it", () => {
-    expect(gameBananaPageKey(" Rocket ", "likes", 5225, 2, false)).toBe(
-      gameBananaPageKey("rocket", "likes", 5225, 2, false),
-    );
-    expect(gameBananaPageKey("rocket", "likes", null, 2, false)).not.toBe(
-      gameBananaPageKey("rocket", "likes", 5225, 2, false),
-    );
-    expect(gameBananaPageKey("rocket", "likes", null, 1, false)).not.toBe(
-      gameBananaPageKey("rocket", "likes", null, 2, false),
-    );
-    expect(gameBananaPageKey("rocket", "views", null, 1, false)).not.toBe(
-      gameBananaPageKey("rocket", "likes", null, 1, false),
-    );
-    // The mature flag changes what a page holds, so it changes the key.
-    expect(gameBananaPageKey("rocket", "likes", null, 1, true)).not.toBe(
-      gameBananaPageKey("rocket", "likes", null, 1, false),
-    );
-  });
-
   it("keeps mature content off until it is asked for", () => {
     // No storage at all (or a blocked one) must never open the filter.
     expect(readMaturePreference()).toBe(false);
@@ -373,29 +287,6 @@ describe("gamebanana browser", () => {
   it("flags exactly the fixtures that are meant to be flagged", () => {
     const flagged = PREVIEW_GAMEBANANA_RECORDS.filter((mod) => mod.mature).map((mod) => mod.name);
     expect(flagged).toEqual(["Flat Scattergun", "Vintage Sniper Rifle"]);
-  });
-
-  it("says how long ago in words", () => {
-    const days = (count: number) => NOW / 1000 - count * 86_400;
-    expect(relativeDate(days(0), NOW)).toBe("today");
-    expect(relativeDate(days(1), NOW)).toBe("yesterday");
-    expect(relativeDate(days(3), NOW)).toBe("3 days ago");
-    expect(relativeDate(days(8), NOW)).toBe("a week ago");
-    expect(relativeDate(days(21), NOW)).toBe("3 weeks ago");
-    expect(relativeDate(days(70), NOW)).toBe("2 months ago");
-    expect(relativeDate(days(400), NOW)).toBe("a year ago");
-    expect(relativeDate(days(1200), NOW)).toBe("3 years ago");
-    // A clock skewed into the future must not read as "-0 days ago".
-    expect(relativeDate(days(-2), NOW)).toBe("today");
-  });
-
-  it("writes the card meta line, downloads only when known", () => {
-    expect(gameBananaMetaLine(PREVIEW_GAMEBANANA_RECORDS[0], NOW)).toBe(
-      "▲ 1.3k · 41k downloads · Updated 5 days ago",
-    );
-    expect(gameBananaMetaLine(PREVIEW_GAMEBANANA_RECORDS[2], NOW)).toBe(
-      "▲ 402 · Updated a month ago",
-    );
   });
 
   it("folds a long category list behind More", () => {

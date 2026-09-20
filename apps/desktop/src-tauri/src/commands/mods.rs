@@ -174,9 +174,10 @@ pub async fn remove_mod(
 
 /// One page of TF2 mods from GameBanana.
 ///
-/// An empty `query` browses the index, which sorts server-side. A non-empty one
-/// searches, and GameBanana's search takes no sort parameter — the page is
-/// sorted here, so a search's ordering only holds within the page on screen.
+/// Browse and name search share the index endpoint, so GameBanana applies the
+/// selected sort and supported filters to the whole result set. `refresh`
+/// bypasses a still-fresh native cache entry without changing the canonical
+/// request URL.
 #[tauri::command]
 pub async fn search_gamebanana_mods(
     query: String,
@@ -184,8 +185,10 @@ pub async fn search_gamebanana_mods(
     category: Option<u64>,
     page: u32,
     include_mature: Option<bool>,
+    refresh: Option<bool>,
 ) -> Result<GameBananaPage, CommandError> {
     let include_mature = include_mature.unwrap_or(false);
+    let refresh = refresh.unwrap_or(false);
     blocking(move || {
         Ok(gamebanana::search_mods(
             &query,
@@ -193,14 +196,17 @@ pub async fn search_gamebanana_mods(
             category,
             page,
             include_mature,
+            refresh,
         )?)
     })
     .await
 }
 
 #[tauri::command]
-pub async fn gamebanana_mod_categories() -> Result<Vec<GameBananaCategory>, CommandError> {
-    blocking(|| Ok(gamebanana::categories()?)).await
+pub async fn gamebanana_mod_categories(
+    refresh: Option<bool>,
+) -> Result<Vec<GameBananaCategory>, CommandError> {
+    blocking(move || Ok(gamebanana::categories(refresh.unwrap_or(false))?)).await
 }
 
 /// Download a GameBanana mod and install it into the active profile.

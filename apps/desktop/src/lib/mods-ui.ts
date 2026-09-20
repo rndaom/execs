@@ -3,7 +3,6 @@ import type {
   CatalogParticleMod,
   GameBananaCategory,
   GameBananaMod,
-  GameBananaSort,
   ModRecord,
   ModSource,
   ModsCatalog,
@@ -11,7 +10,6 @@ import type {
   PreloaderReport,
   PreloaderStatusPayload,
 } from "./bridge";
-import { compactCount } from "./hud-ui";
 
 /** Credit shown on the pane; the mechanism and default library come from
  * cueki's casual-pre-loader, rebuilt natively for execs. */
@@ -271,92 +269,6 @@ export function isGameBananaInstalled(mods: ModRecord[], id: number): boolean {
 // GameBanana browser
 // ---------------------------------------------------------------------------
 
-export const GAMEBANANA_SORTS: { id: GameBananaSort; label: string }[] = [
-  { id: "downloads", label: "Downloads" },
-  { id: "likes", label: "Likes" },
-  { id: "views", label: "Views" },
-  { id: "updated", label: "Updated" },
-  { id: "new", label: "New" },
-];
-
-/** How long the search input waits before it asks GameBanana. */
-export const GAMEBANANA_SEARCH_DEBOUNCE_MS = 400;
-
-/**
- * Order what is loaded. A search cannot be ordered server-side (documented on
- * the Rust side), so the pill has to mean the same thing either way.
- */
-export function sortGameBananaMods(
-  records: GameBananaMod[],
-  sort: GameBananaSort,
-): GameBananaMod[] {
-  const byName = (a: GameBananaMod, b: GameBananaMod) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
-  const sorted = [...records];
-  switch (sort) {
-    case "downloads":
-      // Withheld counts sink rather than pretending to be zero.
-      sorted.sort((a, b) => (b.downloads ?? -1) - (a.downloads ?? -1) || byName(a, b));
-      break;
-    case "likes":
-      sorted.sort((a, b) => b.likes - a.likes || byName(a, b));
-      break;
-    case "views":
-      sorted.sort((a, b) => b.views - a.views || byName(a, b));
-      break;
-    case "updated":
-      sorted.sort((a, b) => b.updatedAt - a.updatedAt || byName(a, b));
-      break;
-    default:
-      sorted.sort((a, b) => b.addedAt - a.addedAt || byName(a, b));
-  }
-  return sorted;
-}
-
-export type GameBananaPager = {
-  label: string;
-  pageCount: number | null;
-  hasPrevious: boolean;
-  hasNext: boolean;
-};
-
-/**
- * One page at a time, with an honest label: GameBanana does not always say how
- * many there are, and "Page 3 of ?" is worse than "Page 3". Without a count the
- * only thing that ends the run is the page saying it is the last one.
- */
-export function gameBananaPager(
-  page: number,
-  total: number,
-  perPage: number,
-  complete: boolean,
-): GameBananaPager {
-  const pageCount = perPage > 0 && total > 0 ? Math.ceil(total / perPage) : null;
-  return {
-    label: pageCount === null ? `Page ${page}` : `Page ${page} of ${pageCount}`,
-    pageCount,
-    hasPrevious: page > 1,
-    hasNext: !complete && (pageCount === null || page < pageCount),
-  };
-}
-
-/** The cache key one loaded page belongs to. */
-export function gameBananaPageKey(
-  query: string,
-  sort: GameBananaSort,
-  category: number | null,
-  page: number,
-  includeMature: boolean,
-): string {
-  return [
-    query.trim().toLowerCase(),
-    sort,
-    category ?? "all",
-    page,
-    includeMature ? "mature" : "sfw",
-  ].join(" ");
-}
-
 /** Where the mature-content choice is remembered, like the disclosures. */
 export const MATURE_STORAGE_KEY = "execs.gamebanana.mature";
 
@@ -379,43 +291,6 @@ export function writeMaturePreference(include: boolean): void {
   } catch {
     // Remembering it is a convenience, not a requirement.
   }
-}
-
-const DAY_SECONDS = 86_400;
-
-/** "today", "3 days ago", "2 months ago" — terse, sentence case. */
-export function relativeDate(unixSeconds: number, now: number = Date.now()): string {
-  const elapsed = Math.floor(now / 1000) - Math.floor(unixSeconds);
-  if (elapsed < DAY_SECONDS) {
-    return "today";
-  }
-  const days = Math.floor(elapsed / DAY_SECONDS);
-  if (days === 1) {
-    return "yesterday";
-  }
-  if (days < 7) {
-    return `${days} days ago`;
-  }
-  if (days < 35) {
-    const weeks = Math.floor(days / 7);
-    return weeks === 1 ? "a week ago" : `${weeks} weeks ago`;
-  }
-  if (days < 365) {
-    const months = Math.floor(days / 30);
-    return months === 1 ? "a month ago" : `${months} months ago`;
-  }
-  const years = Math.floor(days / 365);
-  return years === 1 ? "a year ago" : `${years} years ago`;
-}
-
-/** "▲ 1.2k · 340 downloads · Updated 3 days ago". */
-export function gameBananaMetaLine(mod: GameBananaMod, now: number = Date.now()): string {
-  const parts = [`▲ ${compactCount(mod.likes)}`];
-  if (mod.downloads !== null) {
-    parts.push(`${compactCount(mod.downloads)} downloads`);
-  }
-  parts.push(`Updated ${relativeDate(mod.updatedAt, now)}`);
-  return parts.join(" · ");
 }
 
 /** Above this many categories the tail folds behind "More" — no dropdowns. */
@@ -460,9 +335,10 @@ export const PREVIEW_PROFILE_MODS: ModRecord[] = [
 ];
 
 export const PREVIEW_GAMEBANANA_CATEGORIES: GameBananaCategory[] = [
-  { id: 4737, name: "Skins" },
-  { id: 5225, name: "Effects" },
-  { id: 5064, name: "Sounds" },
+  { id: 7951, name: "Skins" },
+  { id: 1090, name: "Effects" },
+  { id: 2774, name: "Game files" },
+  { id: 587, name: "Textures" },
 ];
 
 /** A 1×1 neutral pixel — one card in the fixtures has a picture. */
@@ -477,12 +353,13 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Clean Rocket Trails",
     author: "sparkplug",
     category: "Effects",
-    categoryId: 5225,
+    categoryId: 1090,
     likes: 1_284,
     views: 92_400,
     downloads: 41_300,
     updatedAt: Math.floor(Date.UTC(2026, 7, 28) / 1000),
     addedAt: Math.floor(Date.UTC(2025, 2, 3) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 8, 2) / 1000),
     thumb: PREVIEW_THUMB,
     url: "https://gamebanana.com/mods/618734",
     mature: false,
@@ -492,12 +369,13 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Flat Scattergun",
     author: "beancan",
     category: "Skins",
-    categoryId: 4737,
+    categoryId: 7951,
     likes: 861,
     views: 60_120,
     downloads: 22_940,
     updatedAt: Math.floor(Date.UTC(2026, 8, 1) / 1000) - 6 * HOUR,
     addedAt: Math.floor(Date.UTC(2026, 5, 19) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 8, 1) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/602110",
     mature: true,
@@ -507,12 +385,13 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Muted Hit Markers",
     author: "quietkid",
     category: "Sounds",
-    categoryId: 5064,
+    categoryId: 2774,
     likes: 402,
     views: 18_770,
     downloads: null,
     updatedAt: Math.floor(Date.UTC(2026, 6, 12) / 1000),
     addedAt: Math.floor(Date.UTC(2024, 10, 2) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 8, 2) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/590884",
     mature: false,
@@ -522,12 +401,13 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "No Explosion Smoke",
     author: "sparkplug",
     category: "Effects",
-    categoryId: 5225,
+    categoryId: 1090,
     likes: 2_940,
     views: 210_500,
     downloads: 118_600,
     updatedAt: Math.floor(Date.UTC(2026, 3, 5) / 1000),
     addedAt: Math.floor(Date.UTC(2023, 1, 14) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 3, 5) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/577301",
     mature: false,
@@ -537,12 +417,13 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Vintage Sniper Rifle",
     author: "oldworks",
     category: "Skins",
-    categoryId: 4737,
+    categoryId: 7951,
     likes: 178,
     views: 9_310,
     downloads: 4_220,
     updatedAt: Math.floor(Date.UTC(2025, 11, 22) / 1000),
     addedAt: Math.floor(Date.UTC(2025, 9, 30) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 0, 3) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/561442",
     mature: true,
@@ -552,16 +433,43 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Softer Footsteps",
     author: "quietkid",
     category: "Sounds",
-    categoryId: 5064,
+    categoryId: 2774,
     likes: 96,
     views: 5_400,
     downloads: 1_870,
     updatedAt: Math.floor(Date.UTC(2024, 4, 9) / 1000),
     addedAt: Math.floor(Date.UTC(2024, 4, 9) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2024, 4, 10) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/540019",
     mature: false,
   },
+  ...Array.from({ length: 18 }, (_, index): GameBananaMod => {
+    const categories = [
+      { name: "Skins", id: 7951 },
+      { name: "Effects", id: 1090 },
+      { name: "Game files", id: 2774 },
+      { name: "Textures", id: 587 },
+    ];
+    const category = categories[index % categories.length];
+    const addedAt = Math.floor(Date.UTC(2026, 8, 19 - index) / 1000);
+    return {
+      id: 700_000 + index,
+      name: `Preview mod ${String(index + 1).padStart(2, "0")}`,
+      author: `creator${(index % 5) + 1}`,
+      category: category.name,
+      categoryId: category.id,
+      likes: index % 6 === 0 ? null : 240 - index * 7,
+      views: index % 5 === 0 ? null : 8_000 - index * 113,
+      downloads: index % 4 === 0 ? null : 4_000 - index * 97,
+      addedAt,
+      updatedAt: index % 3 === 0 ? null : addedAt + HOUR,
+      modifiedAt: index % 4 === 0 ? null : addedAt + 2 * HOUR,
+      thumb: null,
+      url: `https://gamebanana.com/mods/${700_000 + index}`,
+      mature: false,
+    };
+  }),
 ];
 
 export const PREVIEW_PARTICLE_SOURCES: ParticleSource[] = [
