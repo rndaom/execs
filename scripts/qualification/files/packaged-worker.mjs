@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createWriteStream, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  createWriteStream,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve, sep } from "node:path";
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -20,23 +27,91 @@ async function eventually(operation, description) {
 }
 
 async function cdpSession(application, environment, evidence) {
+  // Tauri resolves its default WebView2 profile through Windows known folders.
+  // APPDATA/LOCALAPPDATA overrides alone do not isolate that browser process
+  // from the preceding installer/startup probes. WebView2's SDK override does.
+  // https://github.com/microsoft/playwright/blob/main/docs/src/webview2.md
+  const userDataFolder = mkdtempSync(join(evidence, "webview2-"));
   const child = spawn(application, [], {
     env: {
       ...environment,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
         "--remote-debugging-port=9227 --remote-debugging-address=127.0.0.1",
+      WEBVIEW2_USER_DATA_FOLDER: userDataFolder,
     },
     windowsHide: true,
   });
   const log = createWriteStream(join(evidence, "application.log"));
   child.stdout.pipe(log);
   child.stderr.pipe(log);
+  let spawnError;
+  child.on("error", (error) => {
+    spawnError = error;
+  });
+  const closed = new Promise((done) => child.once("close", done));
+  let lastProbeError;
+  let targets = [];
+  const record = (status) =>
+    writeFileSync(
+      join(evidence, "webview2-session.json"),
+      `${JSON.stringify(
+        {
+          status,
+          application,
+          pid: child.pid,
+          userDataFolder,
+          port: 9227,
+          exitCode: child.exitCode,
+          signalCode: child.signalCode,
+          spawnError: spawnError?.message,
+          lastProbeError: lastProbeError?.message,
+          targets: targets.map(({ type, url }) => ({ type, url })),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  const stop = async () => {
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      try {
+        execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+          windowsHide: true,
+          stdio: "ignore",
+          timeout: 10000,
+        });
+      } catch {
+        child.kill();
+      }
+    }
+    await Promise.race([closed, pause(3000)]);
+    log.end();
+  };
   let socket;
   try {
-    const page = await eventually(async () => {
-      const pages = await (await fetch("http://127.0.0.1:9227/json/list")).json();
-      return pages.find((entry) => entry.type === "page" && entry.url.includes("tauri.localhost"));
-    }, "packaged WebView2 CDP target");
+    let page;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (spawnError) throw spawnError;
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error(
+          `Packaged app exited before CDP: code=${child.exitCode}, signal=${child.signalCode}`,
+        );
+      }
+      try {
+        targets = await (
+          await fetch("http://127.0.0.1:9227/json/list", { signal: AbortSignal.timeout(1000) })
+        ).json();
+        page = targets.find(
+          (entry) => entry.type === "page" && entry.url.includes("tauri.localhost"),
+        );
+        if (page) break;
+      } catch (error) {
+        lastProbeError = error;
+      }
+      await pause(500);
+    }
+    if (!page)
+      throw new Error("Timed out: packaged WebView2 CDP target", { cause: lastProbeError });
+    record("connected");
     socket = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((done, reject) => {
       socket.addEventListener("open", done, { once: true });
@@ -78,14 +153,13 @@ async function cdpSession(application, environment, evidence) {
       },
       async close() {
         socket.close();
-        child.kill();
-        log.end();
+        await stop();
       },
     };
   } catch (error) {
+    record("failed");
     socket?.close();
-    child.kill();
-    log.end();
+    await stop();
     throw error;
   }
 }
@@ -137,7 +211,28 @@ async function webkitSession(application, environment, evidence) {
         return result.value;
       },
       async screenshot() {
-        return request(`/session/${session}/screenshot`, undefined, "GET");
+        // WebKitGTK's WebDriver screenshot endpoint can stall after a successful
+        // worker response. Capture the actual disposable Xvfb desktop via GDK.
+        return execFileSync(
+          "/usr/bin/python3",
+          [
+            "-c",
+            [
+              "import base64, gi",
+              "gi.require_version('Gdk', '3.0')",
+              "from gi.repository import Gdk",
+              "Gdk.init([])",
+              "root = Gdk.get_default_root_window()",
+              "assert root is not None, 'No Xvfb root window'",
+              "picture = Gdk.pixbuf_get_from_window(root, 0, 0, root.get_width(), root.get_height())",
+              "assert picture is not None, 'Native desktop capture failed'",
+              "ok, data = picture.save_to_bufferv('png', [], [])",
+              "assert ok, 'PNG encoding failed'",
+              "print(base64.b64encode(data).decode('ascii'))",
+            ].join("\n"),
+          ],
+          { env: environment, encoding: "utf8", timeout: 15000, maxBuffer: 8 * 1024 * 1024 },
+        ).trim();
       },
       async close() {
         await request(`/session/${session}`, undefined, "DELETE").catch(() => {});
@@ -208,10 +303,6 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
       join(evidence, "worker-result.json"),
       `${JSON.stringify({ application, workerAsset: worker, workerSha256: sourceHash, ...result }, null, 2)}\n`,
     );
-    writeFileSync(
-      join(evidence, "packaged-origin.png"),
-      Buffer.from(await session.screenshot(), "base64"),
-    );
     assert.equal(result.outcome.identity, "packaged-origin-worker");
     assert.ok(result.outcome.result, "Worker returned no lint result");
     assert.equal(result.outcome.error, undefined);
@@ -222,6 +313,10 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
       "Worker did not produce the expected numeric finding",
     );
     assert.ok(result.origin.includes("tauri"), "Expected actual packaged Tauri origin");
+    writeFileSync(
+      join(evidence, "packaged-origin.png"),
+      Buffer.from(await session.screenshot(), "base64"),
+    );
     return result;
   } finally {
     await session.close();
