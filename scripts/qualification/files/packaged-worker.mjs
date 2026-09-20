@@ -119,7 +119,11 @@ async function webkitSession(application, environment, evidence) {
     session = (
       await request("/session", {
         capabilities: {
-          alwaysMatch: { "tauri:options": { application }, timeouts: { script: 30000 } },
+          alwaysMatch: {
+            browserName: "wry",
+            "tauri:options": { application },
+            timeouts: { script: 30000 },
+          },
         },
       })
     ).sessionId;

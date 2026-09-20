@@ -7,7 +7,26 @@ export async function runWorkerBenchmark() {
   const cases = [
     {
       name: "representative-10k-lines",
-      files: [{ path: "tf/cfg/autoexec.cfg", text: "sensitivity 2\n".repeat(10_000) }],
+      files: [
+        {
+          path: "tf/cfg/autoexec.cfg",
+          text: [
+            "// Representative authoring fixture",
+            "sensitivity 2",
+            "fov_desired 90",
+            'bind "w" "+forward"',
+            'bind "v" "voicemenu 0 0"',
+            'alias +qual_zoom "fov_desired 75"',
+            'alias -qual_zoom "fov_desired 90"',
+            'echo "quoted;semicolon"',
+            'echo "literal\\path"',
+            "cl_crosshair_scale 24",
+            "",
+          ]
+            .join("\n")
+            .repeat(1000),
+        },
+      ],
     },
     { name: "one-mib", files: [{ path: "tf/cfg/autoexec.cfg", text: commentFile(mib) }] },
     {
