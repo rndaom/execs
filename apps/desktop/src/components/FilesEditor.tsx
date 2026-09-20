@@ -36,7 +36,7 @@ export type FilesEditorProps = {
   onCommandChange?: (command: string | null) => void;
   files?: readonly { path: string; text: string }[];
   catalog?: CompletionCatalog;
-  target?: { id: number; from?: number; to?: number; line?: number };
+  target?: { id: number; from?: number; to?: number; line?: number; focusOnly?: boolean };
   insertion?: { id: number; text: string };
 };
 
@@ -293,6 +293,10 @@ export function FilesEditor(props: FilesEditorProps) {
     const editor = view.current;
     const target = props.target;
     if (!editor || !target) return;
+    if (target.focusOnly) {
+      editor.contentDOM.focus({ preventScroll: true });
+      return;
+    }
     const from = Math.max(
       0,
       Math.min(

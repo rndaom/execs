@@ -58,7 +58,13 @@ function ProfileFilesPane({
   const [query, setQuery] = useState("");
   const [newName, setNewName] = useState("autoexec");
   const [command, setCommand] = useState<string | null>(null);
-  const [target, setTarget] = useState<{ id: number; line?: number; from?: number; to?: number }>();
+  const [target, setTarget] = useState<{
+    id: number;
+    line?: number;
+    from?: number;
+    to?: number;
+    focusOnly?: boolean;
+  }>();
   const [insertion, setInsertion] = useState<{ id: number; text: string }>();
   const [snippet, setSnippet] = useState<string | null>(null);
   const [reviewConflict, setReviewConflict] = useState(false);
@@ -262,6 +268,7 @@ function ProfileFilesPane({
             onClick={() => {
               setPanel(null);
               setSnippet(null);
+              setTarget({ id: ++actionId.current, focusOnly: true });
             }}
             aria-label="Focus editor"
           >
