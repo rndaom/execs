@@ -16,7 +16,12 @@ openbox >"$FILES_EVIDENCE/openbox.log" 2>&1 &
 gsettings set org.freedesktop.ibus.general preload-engines "['xkb:us::eng', 'anthy']"
 gsettings set org.freedesktop.ibus.general engines-order "['xkb:us::eng', 'anthy']"
 gsettings set org.freedesktop.ibus.general use-global-engine true
+gsettings set org.freedesktop.ibus.general.hotkey triggers "[]"
 ibus-daemon --daemonize --xim --replace --cache=refresh >"$FILES_EVIDENCE/ibus.log" 2>&1
+for attempt in $(seq 1 30); do
+  ibus list-engine >"$FILES_EVIDENCE/ibus-engines.txt" 2>>"$FILES_EVIDENCE/ibus.log" && break
+  sleep 1
+done
 ibus list-engine >"$FILES_EVIDENCE/ibus-engines.txt"
 pnpm --filter @execs/desktop exec vite build --config ../../scripts/qualification/files/vite.config.mts --outDir "$FILES_EVIDENCE/bundle" >"$FILES_EVIDENCE/build.log" 2>&1
 node scripts/qualification/files/serve.mjs "$FILES_EVIDENCE/bundle" >"$FILES_EVIDENCE/server.log" 2>&1 &

@@ -115,6 +115,16 @@ internal static class Program
         File.WriteAllText(Path.Combine(evidence, "tab-navigation.json"), JsonSerializer.Serialize(observations));
         if (await web.ExecuteScriptAsync("document.activeElement?.classList.contains('cm-content')") != "true")
             throw new InvalidOperationException("Physical Tab never reached editor");
+        await Key(handle, 0x46, 0x11);
+        if (await web.ExecuteScriptAsync("!!document.querySelector('.cm-search input[name=search]')") != "true")
+            throw new InvalidOperationException("Physical Ctrl+F did not open search");
+        await Key(handle, 0x1B);
+        keybd_event(0x12, 0, 0, UIntPtr.Zero);
+        await Key(handle, 0x47, 0x11);
+        keybd_event(0x12, 0, 2, UIntPtr.Zero);
+        if (await web.ExecuteScriptAsync("!!document.querySelector('input[name=line]')") != "true")
+            throw new InvalidOperationException("Physical Ctrl+Alt+G did not open go-to-line");
+        await Key(handle, 0x1B);
         await Key(handle, 0x1B);
         await Key(handle, 0x09);
         if (await web.ExecuteScriptAsync("document.activeElement?.classList.contains('cm-content')") == "true")
@@ -137,6 +147,7 @@ internal static class Program
         if (!(await web.ExecuteScriptAsync("document.querySelector('.cm-content')?.textContent")).Contains("sensitivity"))
             throw new InvalidOperationException("Tab did not accept command completion");
         await Key(handle, 0x1B);
+        await web.ExecuteScriptAsync("window.__qualificationPaint=[]");
         await Key(handle, 0x23, 0x11);
         await Key(handle, 0x0D);
         foreach (var character in "// paint latency sample abcdefghijklmnopqrstuvwxyz 0123456789")
@@ -164,6 +175,15 @@ internal static class Program
         File.WriteAllText(Path.Combine(evidence, "memory.json"), JsonSerializer.Serialize(new { maximumWorkingSet, measurement = "100ms sampled process-tree working set during worker benchmark; not absolute lifetime peak" }));
         if (await web.ExecuteScriptAsync("window.__qualificationBenchmark?.results?.every(row=>row.expectationMet) ?? false") != "true")
             throw new InvalidOperationException("Worker boundary benchmark failed; inspect worker-benchmark.json");
+        await web.ExecuteScriptAsync("window.__runQualificationWorkflows().then(value=>window.__qualificationWorkflows=value).catch(error=>window.__qualificationWorkflows={passed:false,error:String(error)})");
+        for (var attempt = 0; attempt < 900; attempt++)
+        {
+            if (await web.ExecuteScriptAsync("!!window.__qualificationWorkflows") == "true") break;
+            await Task.Delay(100);
+        }
+        File.WriteAllText(Path.Combine(evidence, "workflows.json"), await web.ExecuteScriptAsync("window.__qualificationWorkflows ?? null"));
+        if (await web.ExecuteScriptAsync("window.__qualificationWorkflows?.passed ?? false") != "true")
+            throw new InvalidOperationException("Native fixture workflows failed; inspect workflows.json");
         using (var picture = File.Create(Path.Combine(evidence, "native-editor.png")))
             await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, picture);
         File.WriteAllText(Path.Combine(evidence, "runtime.json"), await web.ExecuteScriptAsync("({viewport:{width:innerWidth,height:innerHeight},workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),body:document.body.innerText})"));

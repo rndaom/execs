@@ -4,6 +4,11 @@ import { analyzeFilesSnapshot } from "../../../apps/desktop/src/lib/files-analys
 export async function runWorkerBenchmark() {
   const mib = 1024 * 1024;
   const commentFile = (bytes: number) => `//${"x".repeat(bytes - 3)}\n`;
+  const mixedFile = (bytes: number) => {
+    const line = 'sensitivity 2; fov_desired 90; bind "v" "voicemenu 0 0"\n';
+    const body = line.repeat(Math.floor((bytes - 3) / line.length));
+    return body + commentFile(bytes - body.length);
+  };
   const cases = [
     {
       name: "representative-10k-lines",
@@ -29,6 +34,14 @@ export async function runWorkerBenchmark() {
       ],
     },
     { name: "one-mib", files: [{ path: "tf/cfg/autoexec.cfg", text: commentFile(mib) }] },
+    { name: "one-mib-high-token", files: [{ path: "tf/cfg/autoexec.cfg", text: mixedFile(mib) }] },
+    {
+      name: "eight-mib-high-token",
+      files: Array.from({ length: 8 }, (_, n) => ({
+        path: `tf/cfg/dense${n}.cfg`,
+        text: mixedFile(mib),
+      })),
+    },
     {
       name: "eight-mib",
       files: Array.from({ length: 8 }, (_, n) => ({
@@ -69,7 +82,11 @@ export async function runWorkerBenchmark() {
     },
   ];
   const results = [];
-  for (const fixture of cases) {
+  const repeated = Array.from({ length: 20 }, (_, n) => ({
+    ...cases[0],
+    name: `representative-repeat-${n + 1}`,
+  }));
+  for (const fixture of [...cases, ...repeated]) {
     const encoded = new TextEncoder().encode(JSON.stringify(fixture.files));
     const hash = Array.from(
       new Uint8Array(await crypto.subtle.digest("SHA-256", encoded)),
@@ -115,6 +132,13 @@ export async function runWorkerBenchmark() {
     });
   }
   return {
+    repeatedLint: (() => {
+      const values = results
+        .filter((row) => row.name.startsWith("representative-repeat-"))
+        .map((row) => row.durationMs)
+        .sort((a, b) => a - b);
+      return { samples: values.length, p95ms: values[Math.ceil(values.length * 0.95) - 1], values };
+    })(),
     userAgent: navigator.userAgent,
     hardwareConcurrency: navigator.hardwareConcurrency,
     measurement:

@@ -76,6 +76,22 @@ after_tab = [row for row in snapshot() if row["focused"]]
 if any(row["editable"] and ("cfg" in row["name"].lower() or "editor" in row["name"].lower()) for row in after_tab):
     raise RuntimeError("Tab remained trapped in editor")
 key("shift+Tab")
+key("ctrl+f")
+(evidence / "find-panel.json").write_text(json.dumps(snapshot(), indent=2))
+key("Escape")
+key("ctrl+alt+g")
+(evidence / "goto-panel.json").write_text(json.dumps(snapshot(), indent=2))
+key("Escape")
+key("ctrl+End")
+key("Return")
+subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "80", "sensi"], check=True)
+key("ctrl+space")
+time.sleep(1)
+(evidence / "completion.json").write_text(json.dumps(snapshot(), indent=2))
+key("Tab")
+if not any("sensitivity" in row.get("text", "") for row in snapshot() if row["focused"]):
+    raise RuntimeError("Physical completion did not accept sensitivity")
+key("Escape")
 key("ctrl+End")
 key("Return")
 subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "50", "// IME "], check=True)
@@ -109,3 +125,14 @@ for attempt in range(80):
 else:
     raise RuntimeError("Worker benchmark did not complete")
 (evidence / "benchmark-request").unlink()
+(evidence / "workflows-request").touch()
+for attempt in range(120):
+    result_path = evidence / "1200x800" / "workflows.json"
+    if result_path.exists():
+        result = json.loads(result_path.read_text())
+        if not result.get("passed"):
+            raise RuntimeError("Native fixture workflows failed; inspect workflows.json")
+        break
+    time.sleep(1)
+else:
+    raise RuntimeError("Native fixture workflows did not complete")

@@ -58,7 +58,7 @@ startup or key-to-paint latency. Do not report it as such.
 | Area | Required evidence |
 | --- | --- |
 | Native layout | Windows/WebView2 and Linux/WebKitGTK at 960×640, 1200×800, 1280×800 and 200% zoom; Save visible, usable line count, filename distinction, editor focus mode |
-| Native keyboard | Novice create → reference → completion → diagnostic → save; experienced cross-file/alias/exec navigation and retained drafts; Tab exits without a completion, Escape dismisses completion, Ctrl+Space/Ctrl+S/Ctrl+F/Ctrl+H/Ctrl+G |
+| Native keyboard | Novice create → reference → completion → diagnostic → save; experienced cross-file/alias/exec navigation and retained drafts; Tab exits without a completion, Escape dismisses completion, Ctrl+Space completion, Ctrl+S save, Ctrl+F find/replace, Ctrl+G next match, Ctrl+Shift+G previous match, Ctrl+Alt+G go to line |
 | Screen readers | Actual NVDA and Orca speech for editor name, line/document context, completion options, problem navigation, read-only state and save result; retain scoped speech excerpts |
 | IME and display | Real composition without premature completion/save; non-ASCII round trip; reduced motion; contrast ratios and non-color problem cues |
 | Performance | Named CPU/OS/engine; bundle bytes, ready-startup, peak process-tree memory, p95 input-to-next-paint, completion and analysis duration; 10k-line, 1MiB, 8MiB and 256-file cases |

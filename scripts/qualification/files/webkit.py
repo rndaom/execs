@@ -27,6 +27,7 @@ if target.scheme != "http" or target.hostname != "127.0.0.1" or "preview=setting
 args.evidence.mkdir(parents=True, exist_ok=False)
 started = time.monotonic()
 benchmark_started = False
+workflows_started = False
 maximum_rss = 0
 window = Gtk.Window(title="execs 0.1.7 isolated Files qualification")
 window.set_default_size(args.width, args.height)
@@ -62,7 +63,7 @@ window.show_all()
 
 
 def capture():
-    global benchmark_started
+    global benchmark_started, workflows_started
     native = window.get_window()
     if native:
         picture = Gdk.pixbuf_get_from_window(native, 0, 0, window.get_allocated_width(), window.get_allocated_height())
@@ -85,6 +86,11 @@ def capture():
         web.run_javascript("window.__runQualificationBenchmark().then(value=>window.__qualificationBenchmark=value).catch(error=>window.__qualificationBenchmark={error:String(error)})", None, None, None)
     if benchmark_started:
         web.run_javascript("window.__qualificationBenchmark ?? null", None, captured_benchmark, None)
+    if (args.evidence.parent / "workflows-request").exists() and not workflows_started:
+        workflows_started = True
+        web.run_javascript("window.__runQualificationWorkflows().then(value=>window.__qualificationWorkflows=value).catch(error=>window.__qualificationWorkflows={passed:false,error:String(error)})", None, None, None)
+    if workflows_started:
+        web.run_javascript("window.__qualificationWorkflows ?? null", None, captured_workflows, None)
     return True
 
 
@@ -103,6 +109,12 @@ def captured_benchmark(view, result, unused):
         (args.evidence / "worker-benchmark.json").write_text(serialized)
         (args.evidence / "memory.json").write_text(json.dumps({"maximumRssBytes": maximum_rss,
             "measurement": "100ms sampled host process-tree RSS during session; not absolute lifetime peak"}))
+
+
+def captured_workflows(view, result, unused):
+    serialized = view.run_javascript_finish(result).get_js_value().to_json(0)
+    if serialized != "null":
+        (args.evidence / "workflows.json").write_text(serialized)
 
 
 def memory_sample():
