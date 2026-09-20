@@ -185,6 +185,34 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    write_owned_file_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        rel_path,
+        bytes,
+        running_names,
+        options,
+        None,
+    )
+}
+
+/// Files supplies its source precondition at the final pre-publication boundary.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_owned_file_checked_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    bytes: &[u8],
+    running_names: I,
+    options: WriteOwnedOptions<'_>,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
@@ -195,7 +223,7 @@ where
     let active = library.active_profile_id.as_deref() == Some(profile_id);
     let config_needs_cloud = active && path == CONFIG_CFG;
     let puts = [(path, FileSource::Bytes(bytes))];
-    let manifest = mutate_profile_files_to(
+    let manifest = crate::profile::mutate_profile_files_checked_to(
         profiles_dir,
         tf2_root,
         profile_id,
@@ -209,6 +237,7 @@ where
             }
             Ok(())
         },
+        precommit,
     )?;
 
     if config_needs_cloud {

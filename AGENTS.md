@@ -79,6 +79,8 @@ Find TF2 through Steam library folders (registry, `libraryfolders.vdf`, `~/.stea
 
 ## Saving
 
+- Files saves require the expected active profile, confirmed root, verified cfg layer and exact live/library source hashes under the write gate. Source checks repeat after transaction snapshots and before publication; reviewed saves project even unchanged library bytes to repair deliberately resolved live drift. New cfgs require absence in both live and library trees, portable collision checks and the existing detected user layer. Provided cfgs and non-UTF-8 files remain read-only; helpers receive no implicit startup exec line.
+
 - Files drafts belong to the application session, keyed by profile and path. Closing execs, profile/install changes, profile creation and update installation ask Save / Discard / Cancel; Save awaits every dirty file and refuses the transition on failure, a changed profile, newer edits or the write lock. Files editing waits for the native close listener; host unmount alone never deletes drafts.
 - Pending settings register their pane and awaited save with the session draft registry. Native close flushes unlocked autosaves; Files retain their explicit Save / Discard / Cancel decision. Failed, locked and unapplied drafts stay open with explicit discard/cancel and a route to their pane. Discard resets only affected panes from persisted props and suppresses their unmount flush; real writes must finish first. Settings editing waits for the native close listener.
 - Launch TF2 names pending or failed settings and offers Review changes. Writes, switch/preloader recovery, Steam verification and update work retain their own guards and reasons; dismissing feedback never releases them.
