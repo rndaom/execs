@@ -3,10 +3,11 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-0.1.7 is being prepared on `rndaom/release-0.1.7`, with fixes carried into
+0.1.7 is being released from `rndaom/release-0.1.7`, with fixes carried into
 `rndaom/forwardport-0.1.7`. The owner authorized the complete Files workspace
 milestone and profile inventory repair, verification and PRs, but explicitly
-withheld publication. See `docs/release-0.1.7.md` for scope and open gates.
+withheld publication during preparation. The owner authorized publication on
+September 20, 2026. See `docs/release-0.1.7.md` for scope and release gates.
 Private candidate builds do not change the public version below.
 
 Current public version: **0.1.6** (`v0.1.6`, published 2026-09-18 23:20:05 UTC;

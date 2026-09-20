@@ -1,4 +1,8 @@
-# 0.1.7 release candidate
+# 0.1.7 release
+
+The owner authorized release on September 20, 2026. Both prepared PRs passed
+their final CI. Merge, immutable tag creation and tagged-workflow publication
+are now authorized; their outcomes are recorded after verification.
 
 Implementation, native and signed package qualification are complete within the
 recorded limits. Final PR-head CI is required before marking the PRs ready.
@@ -12,8 +16,8 @@ run in the draft's `release-commit.json`. A failed original run is not described
 as successful. The complete recovery [run 35493043167](https://github.com/rndaom/execs/actions/runs/35493043167)
 passed both jobs. [Package evidence](audits/2026-09-20-0.1.7/packages/README.md)
 records exact hashes and separates the original build from its recovery.
-Later commits contain qualification harnesses and evidence only. Publication is
-not authorized. No release tag is created by this preparation.
+Later preparation commits contain qualification harnesses and evidence only.
+The original preparation created no release tag or public release.
 
 ## Scope and baseline
 
@@ -45,7 +49,7 @@ evidence. Unreleased Inventory and profile-owned preloader work are excluded.
 - [x] Offline help and measured native responsiveness
 - [x] Four version files, Cargo lockfile and 0.1.7 changelog agree
 
-Tagging, merging release PRs and publishing remain separate owner actions.
+Tagging, merging release PRs and publishing follow the owner's release request.
 Passing fixture checks does not imply unperformed native or retail-game checks.
 
 The machine-verifiable gates are the original candidate's Windows/Linux
