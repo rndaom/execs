@@ -42,3 +42,37 @@ See [the native qualification record](qualification/README.md). Results there
 must distinguish browser fixtures, production-transformed native fixtures,
 actual packaged-origin checks and real input/screen-reader observations.
 No real player profile or live-game mutation is part of these fixtures.
+
+## Integrated frontend evidence
+
+The combined maintenance tree passes Biome, TypeScript, production build and the
+full frontend suite (160 cfglint, 634 desktop and 21 release-script tests, with
+three Linux-only script cases skipped on Windows). Subsequent mixed-source,
+Focus and concise-completion regressions pass their focused suites. CI reruns the
+complete final tree on Linux. CodeMirror and the Files pane load on demand.
+
+The September 20 browser pass used only the in-memory preview at 1280×720 and
+960×640. It created `practice/session.cfg`, entered `fov_desired banana`, saved
+immediately with Ctrl+S, displayed the non-blocking numeric warning at line 1,
+column 13, and navigated back to that exact argument. Opening tools scrolls and
+focuses their contents. The minimum window keeps editor actions visible and the
+source area usable. This pass found and corrected the Focus button retaining
+button focus; its regression also protects selection and scroll. It does not
+claim native filesystem persistence or screen-reader acceptance.
+
+## Acceptance evidence map
+
+| Scope | Implementation and regression evidence |
+| --- | --- |
+| RND-247 | `absorb_integrity.rs`; `release-0.1.7-rnd-247.md` |
+| RND-313 | `FilesEditor.test.tsx`; `files-workspace-design.md`; native layout captures |
+| RND-314–316 | cfglint catalog, authoring, trust, execution and generator tests; `CATALOG.md` and `LANGUAGE.md` |
+| RND-317 | `files-drafts.test.ts`, `SettingsHost.files.test.tsx`, `files_workspace_tests.rs`; `files-native-0.1.7.md` |
+| RND-318 | `files-analysis.test.ts`; native worker benchmark and packaged-origin probe |
+| RND-319 | `files-completion.test.ts`, `files-completion-catalog.test.ts`, native completion input/speech |
+| RND-320, RND-322 | `files-reference.test.ts`, `files-ui.test.ts`, shared `lint-options.test.ts`; `files-reference-sources.md` |
+| RND-321 | `files-create.test.ts`, source-bound host tests and native vanilla/comfig creation tests |
+| RND-323 | Qualification record and signed private candidate gates; remain pending until actual runs pass |
+
+This mapping identifies inspectable evidence, not a blanket completion claim for
+native acceptance criteria still marked pending.
