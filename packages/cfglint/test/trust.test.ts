@@ -174,7 +174,7 @@ describe("engineManagedLintOptions", () => {
     ];
     const result = lint(bundle, engineManagedLintOptions(bundle));
     const tampers = result.findings.filter((f) => f.ruleId === "mouse-tamper");
-    expect(tampers.map((f) => f.file)).toEqual(["tf/cfg/overrides/autoexec.cfg"]);
+    expect(tampers).toEqual([]);
     // Exempting the warn must not drop the value from the derived state.
     expect(result.effective.get("sensitivity")?.value).toBe("3");
     expect(result.effective.get("m_yaw")?.value).toBe("0.022");

@@ -259,10 +259,10 @@ describe("immediate execution and misc", () => {
     expect(disruptive).toHaveLength(2);
   });
 
-  it("still collapses the identical command repeated in one payload", () => {
+  it("retains distinct source ranges for repeated commands in one payload", () => {
     expect(
       lint(one('bind mouse1 "kill; kill"')).findings.filter((f) => f.ruleId === "kill-bind"),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
   it("warns on kill bound to mwheeldown (a gameplay key)", () => {

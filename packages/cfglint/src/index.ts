@@ -1,3 +1,5 @@
+export type { CatalogArgument, CatalogEntry, CatalogSource } from "./catalog.ts";
+export { enumerateCatalog, lookupCommand } from "./catalog.ts";
 export { lookupCvar } from "./corpus.ts";
 export { lint } from "./engine.ts";
 export {
@@ -11,12 +13,13 @@ export {
 } from "./lint-options.ts";
 export { parseCommands } from "./parser.ts";
 export { createCfgResolver } from "./search-paths.ts";
-export { tokenizeCommands } from "./tokenizer.ts";
+export { sourceOffset, sourcePosition, tokenizeCommands } from "./tokenizer.ts";
 export type {
   CfgFile,
   Command,
   CvarValue,
   Finding,
+  FindingCategory,
   FindingTier,
   LintOptions,
   LintResult,

@@ -1,3 +1,5 @@
+import { argumentFindings } from "./arguments.ts";
+import { lookupCommand } from "./catalog.ts";
 import { lookupCvar } from "./corpus.ts";
 import { evaluateStartup } from "./execution.ts";
 import { parseCommands } from "./parser.ts";
@@ -15,7 +17,6 @@ import {
   MAX_EXEC_DEPTH,
   MAX_EXEC_VISITS,
   MOUSE_CVARS,
-  NET_CVAR_RANGES,
   NETWORK_HIJACK_COMMANDS,
   RCON_NAMES,
   SELF_HARM_COMMANDS,
@@ -63,6 +64,7 @@ function isModulesData(path: string): boolean {
 
 export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   const findings: Finding[] = [];
+  let safetyComplete = true;
   const seenFindings = new Set<string>();
   const moduleLevels: Record<string, string> = {};
   const aliases = new Map<string, AliasDef>();
@@ -98,6 +100,40 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     at: Command,
     via?: string,
   ) => {
+    if (
+      [
+        "analysis-budget",
+        "alias-budget",
+        "alias-depth",
+        "exec-cycle",
+        "exec-depth",
+        "exec-external",
+        "execution-search-path",
+      ].includes(ruleId)
+    )
+      safetyComplete = false;
+    const category: Finding["category"] = ruleId.startsWith("syntax-")
+      ? "syntax"
+      : ruleId.startsWith("argument-")
+        ? "argument"
+        : ruleId === "unknown-command" || ruleId === "runtime-restriction"
+          ? "availability"
+          : [
+                "analysis-budget",
+                "alias-budget",
+                "alias-depth",
+                "exec-cycle",
+                "exec-depth",
+                "exec-external",
+                "execution-search-path",
+                "execution-incomplete",
+                "execution-unsupported",
+              ].includes(ruleId)
+            ? "coverage"
+            : tier === "block"
+              ? "restriction"
+              : "advice";
+    const span = { from: at.from, to: at.to, category };
     // Every command inside one payload anchors at the payload's own line/col,
     // so the command name has to be part of the key — otherwise
     // `bind mouse1 "kill; explode"` collapses into a single finding.
@@ -107,6 +143,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     // Provided (non-user) content never blocks: demote to an advisory warn.
     if (tier === "block" && isAdvisorySource(at)) {
       findings.push({
+        ...span,
         ruleId,
         tier: "warn",
         message,
@@ -118,7 +155,16 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       });
       return;
     }
-    findings.push({ ruleId, tier, message, file: at.file, line: at.line, col: at.col, via });
+    findings.push({
+      ...span,
+      ruleId,
+      tier,
+      message,
+      file: at.file,
+      line: at.line,
+      col: at.col,
+      via,
+    });
   };
 
   // Count every command and file visit across both passes. Exec depth does not
@@ -145,6 +191,24 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   // A repeated alias/exec may visit the same large payload many times. Parse
   // each distinct payload once; the visit budget still counts every command.
   const payloadCache = new WeakMap<Command, Map<string, Command[]>>();
+  const sourceLines = new Map(
+    files.map((file) => {
+      const starts = [0];
+      for (let i = 0; i < file.text.length; i++) if (file.text[i] === "\n") starts.push(i + 1);
+      return [file.path, starts] as const;
+    }),
+  );
+  function position(file: string, offset: number) {
+    const starts = sourceLines.get(file) ?? [0];
+    let low = 0;
+    let high = starts.length;
+    while (low + 1 < high) {
+      const middle = (low + high) >>> 1;
+      if (starts[middle] <= offset) low = middle;
+      else high = middle;
+    }
+    return { line: low + 1, col: offset - starts[low] + 1 };
+  }
   function payloadCommands(payload: string, site: Command): Command[] {
     let siteCache = payloadCache.get(site);
     if (!siteCache) {
@@ -153,11 +217,37 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     }
     let commands = siteCache.get(payload);
     if (!commands) {
-      commands = parseCommands(payload, site.file).map((inner) => ({
-        ...inner,
-        line: site.line,
-        col: site.col,
-      }));
+      // join(" ") matches the engine-facing payload model. Map every UTF-16
+      // character back to its original token, including unquoted payloads.
+      const tokens = site.tokens.slice(2);
+      const offsets: number[] = [];
+      for (const [index, token] of tokens.entries()) {
+        if (index) offsets.push(tokens[index - 1].contentTo);
+        for (let i = 0; i < token.value.length; i++) offsets.push(token.contentFrom + i);
+      }
+      const end = tokens[tokens.length - 1]?.contentTo ?? site.to;
+      const map = (offset: number) => offsets[offset] ?? end;
+      commands = parseCommands(payload, site.file).map((inner) => {
+        const remap = (token: Command["tokens"][number]) => ({
+          ...token,
+          from: map(token.from),
+          to: token.to > token.from ? map(token.to - 1) + 1 : map(token.to),
+          contentFrom: map(token.contentFrom),
+          contentTo:
+            token.contentTo > token.contentFrom
+              ? map(token.contentTo - 1) + 1
+              : map(token.contentTo),
+          ...position(site.file, map(token.from)),
+        });
+        const mapped = inner.tokens.map(remap);
+        return {
+          ...inner,
+          from: mapped[0].from,
+          to: mapped[mapped.length - 1].to,
+          ...position(site.file, mapped[0].from),
+          tokens: mapped,
+        };
+      });
       siteCache.set(payload, commands);
     }
     return commands;
@@ -192,6 +282,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       file: search.problem.file,
       line: 1,
       col: 1,
+      from: 0,
+      to: 0,
     });
   }
 
@@ -217,12 +309,13 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 
   /** Reports an `exec` whose target is not part of the linted set. */
   const reportUnresolvedExec = (target: string, cmd: Command, via?: string): void => {
+    safetyComplete = false;
     const bare = target.toLowerCase().replace(/\.cfg$/, "");
     if (externalAllow.has(bare)) return; // well-known engine/user file
     report(
       selfTrusted,
       "exec-external",
-      `\`exec ${target}\` targets a cfg that is not in this profile`,
+      `\`exec ${target}\` is not in this profile's inspected cfg sources; it may exist elsewhere in the install`,
       cmd,
       via,
     );
@@ -235,11 +328,43 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     const isEngineManagedTopLevel =
       ctx.via === undefined && engineManagedConfigPaths.has(normalizePath(cmd.file));
 
+    for (const token of cmd.tokens) {
+      if (token.closed) continue;
+      safetyComplete = false;
+      report(
+        "warn",
+        "syntax-quote",
+        "Unclosed quote; analysis recovers at the next line, so check the intended payload",
+        { ...cmd, from: token.from, to: token.to, line: token.line, col: token.col },
+        ctx.via,
+      );
+    }
+    // Credentials never enter generic argument messages or reference values.
+    if (name !== "password" && !RCON_NAMES.has(name)) {
+      for (const finding of argumentFindings(cmd)) {
+        report(
+          finding.tier,
+          finding.ruleId,
+          finding.message,
+          {
+            ...cmd,
+            from: finding.from ?? cmd.from,
+            to: finding.to ?? cmd.to,
+            line: finding.line,
+            col: finding.col,
+          },
+          ctx.via,
+        );
+      }
+    }
+
     if (NETWORK_HIJACK_COMMANDS.has(name)) {
       report(
         selfTrusted,
         "connect-redirect",
-        `\`${name}\` routes the player to a server chosen by the config author`,
+        trust === "self" && !isAdvisorySource(cmd)
+          ? `\`${name}\` joins the specified server when this command runs`
+          : `\`${name}\` routes the player to a server chosen by the config author`,
         cmd,
         ctx.via,
       );
@@ -261,7 +386,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       report(
         "block",
         "rcon-password",
-        `\`${name}\` is never legitimate in a shared config`,
+        `execs does not save or export \`${name}\` commands here because they can contain credentials or remote-console access; remove this command explicitly to save`,
         cmd,
         ctx.via,
       );
@@ -319,7 +444,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       report(
         "warn",
         "host-writeconfig",
-        "`host_writeconfig` overwrites the player's saved settings",
+        `When run in TF2, host_writeconfig serializes current settings and binds to ${cmd.args[0] ? `${cmd.args[0].replace(/\.cfg$/i, "")}.cfg` : "config.cfg"}; it does not preserve this source's comments or alias definitions`,
         cmd,
         ctx.via,
       );
@@ -329,8 +454,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     if (name === "alias" && cmd.args.length >= 1) {
       const aliasName = cmd.args[0].toLowerCase();
       const bare = aliasName.replace(/^[+-]/, "");
-      const entry = lookupCvar(bare);
-      if (ALIAS_SHADOW_DENYLIST.has(bare) || (entry && entry.c === 1)) {
+      const entry = lookupCommand(aliasName) ?? lookupCommand(bare);
+      if (ALIAS_SHADOW_DENYLIST.has(bare) || entry?.kind === "command") {
         report(
           "block",
           "alias-shadow",
@@ -347,9 +472,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
 
     if (name === "bind" && cmd.args.length >= 1) {
       const key = cmd.args[0].toLowerCase();
-      if (key === "escape") {
+      if (key === "escape" && cmd.args.length > 1) {
         const payload = cmd.args.slice(1).join(" ").trim().toLowerCase();
-        const preservesMenu = isEngineManagedTopLevel && ENGINE_MENU_COMMANDS.has(payload);
+        const preservesMenu =
+          (isEngineManagedTopLevel || (trust === "self" && !isAdvisorySource(cmd))) &&
+          ENGINE_MENU_COMMANDS.has(payload);
         if (!preservesMenu) {
           report(
             "block",
@@ -417,6 +544,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       return;
     }
     if (CHAT_COMMANDS.has(name) && ctx.via) {
+      if (trust === "self" && !isAdvisorySource(cmd)) return;
       report("warn", "chat-bind", `chat command \`${name}\` inside ${ctx.via}`, cmd, ctx.via);
       return;
     }
@@ -435,7 +563,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     // carries them. Warning there would pin a notice to the player's own
     // settings snapshot that they could never clear. This branch falls through
     // either way; startup evaluation is independent of these safety findings.
-    if (MOUSE_CVARS.has(name) && !isEngineManagedTopLevel) {
+    if (
+      MOUSE_CVARS.has(name) &&
+      !isEngineManagedTopLevel &&
+      (trust === "provided" || isAdvisorySource(cmd))
+    ) {
       report(
         "warn",
         "mouse-tamper",
@@ -444,22 +576,9 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         ctx.via,
       );
     }
-    const range = NET_CVAR_RANGES[name];
-    if (range && value !== undefined) {
-      const num = Number.parseFloat(value);
-      if (Number.isFinite(num) && (num < range.min || num > range.max)) {
-        report(
-          "warn",
-          "net-extreme",
-          `\`${name} ${value}\` is outside the sane range ${range.min}–${range.max}`,
-          cmd,
-          ctx.via,
-        );
-      }
-    }
 
     const entry = lookupCvar(name);
-    if (entry) {
+    if (entry && lookupCommand(name)?.kind !== "alias") {
       return;
     }
 
@@ -496,17 +615,28 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       aliasExpansions++;
       payloadOriginStack.push(aliasDef.site.file);
       try {
-        scanPayload(aliasDef.payload, cmd, ctx, [...aliasStack, name]);
+        scanPayload(
+          aliasDef.payload,
+          aliasDef.site,
+          { ...ctx, via: ctx.via ? `${ctx.via} → alias ${name}` : `alias ${name}` },
+          [...aliasStack, name],
+        );
       } finally {
         payloadOriginStack.pop();
       }
       return;
     }
 
+    if (entry) return; // catalogued comfig alias; availability is conditional
+
     // Unknown token: +forward style actions and one-off community commands land here.
-    if (!name.startsWith("+") && !name.startsWith("-")) {
-      report("info", "unknown-command", `unrecognized command \`${name}\``, cmd, ctx.via);
-    }
+    report(
+      "info",
+      "unknown-command",
+      `\`${name}\` is not in this offline catalog; a plugin or external alias may define it`,
+      { ...cmd, to: cmd.tokens[0]?.to ?? cmd.to },
+      ctx.via,
+    );
   };
 
   function scanPayload(payload: string, site: Command, ctx: ScanContext, aliasStack: string[]) {
@@ -542,7 +672,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       for (const cmd of entry.commands) {
         if (workExhausted) break;
         if (cmd.name === "exec" && cmd.args[0]) {
-          if (!takeWork("command", cmd)) break;
+          checkCommand(cmd, {}, []);
+          if (workExhausted) break;
           const target = cmd.args[0];
           const resolved = resolveExec(target);
           if (!resolved) {
@@ -632,6 +763,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
   let summaryCache: SummarySection[] | undefined;
 
   return {
+    safetyComplete,
     findings,
     effective,
     binds,
