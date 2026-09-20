@@ -4,14 +4,8 @@
   "ok": true,
   "mime": "text/javascript",
   "headers": [
-    [
-      "access-control-allow-origin",
-      "http://tauri.localhost"
-    ],
-    [
-      "content-type",
-      "text/javascript"
-    ]
+    ["access-control-allow-origin", "http://tauri.localhost"],
+    ["content-type", "text/javascript"]
   ],
   "page": "http://tauri.localhost/",
   "prefix": "(function(){\"use strict\";function _i(e,t){let n=0;for(const s of e){const c=s.codePointAt(0)??0;if(n+=c<=127?1:c<=2047?2:c<=65535?3:4,n>t)return null}return n}f",
