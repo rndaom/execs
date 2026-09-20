@@ -12,6 +12,7 @@ import {
   type AbsorbDelta,
   BridgeError,
   type ComfigState,
+  type FilesSource,
   type HitsoundRecord,
   type HitsoundSlotChange,
   type HudUiState,
@@ -167,6 +168,16 @@ export function createPreviewApi(state: PreviewState): Api {
       throw notInPreview("This profile action");
     }
     return next;
+  }
+
+  function filesContext() {
+    const current = requireDetail();
+    return { profileId: current.id, root: previewConfirmed(state)?.path ?? BROWSED.path, layer: current.layer };
+  }
+
+  // Preview-only deterministic source identity. Native uses SHA-256 of bytes.
+  function sourceHash(text: string): string {
+    return `preview:${text}`;
   }
 
   function upsert(path: string, text: string) {
@@ -332,6 +343,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getActiveProfileDetail() {
       return detail();
     },
+    async getFilesContext() {
+      return filesContext();
+    },
     async readProfileFile(path: string) {
       if (!editorPathFits(path)) {
         throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
@@ -343,14 +357,30 @@ export function createPreviewApi(state: PreviewState): Api {
       if (editorTextBytes(found.text) === null) {
         throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
       }
-      return { path, text: found.text, sha256: "", binary: false };
+      const hash = sourceHash(found.text);
+      return { path, text: found.text, sha256: hash, binary: false,
+        source: { ...filesContext(), sha256: hash, librarySha256: hash } };
     },
-    async writeOwnedFile(path: string, text: string) {
+    async writeOwnedFile(path: string, text: string, expected: FilesSource) {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 before saving.", "GameRunning");
+      const context = filesContext();
+      if (context.profileId !== expected.profileId) throw new BridgeError("The active profile changed.", "ProfileChanged");
+      if (context.root !== expected.root) throw new BridgeError("The TF2 folder changed.", "RootChanged");
+      if (context.layer !== expected.layer) throw new BridgeError("The cfg loader changed.", "CfgLayerChanged");
       if (!editorPathFits(path)) {
         throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
       }
       if (editorTextBytes(text) === null) {
         throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+      }
+      const current = files.find((file) => file.path === path);
+      const hash = current ? sourceHash(current.text) : null;
+      if (hash !== expected.sha256 || hash !== expected.librarySha256 || files.some((file) => file.path.toLowerCase() === path.toLowerCase() && file.path !== path)) {
+        throw new BridgeError("This cfg changed outside your draft. Review the current file before saving.", "FileConflict");
+      }
+      const prefix = context.layer === "comfig" ? "tf/cfg/overrides/" : "tf/cfg/";
+      if (!path.startsWith("tf/cfg/") || !path.endsWith(".cfg") || path.split("/").some((part) => !part || part === "." || part === ".." || part.toLowerCase() === "user") || (!current && !path.startsWith(prefix))) {
+        throw new BridgeError("That cfg destination is not allowed.", "ForbiddenPath");
       }
       upsert(path, text);
       return requireDetail();
