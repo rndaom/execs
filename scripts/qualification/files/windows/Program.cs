@@ -126,10 +126,16 @@ internal static class Program
         await Key(handle, 0x46, 0x11);
         if (await web.ExecuteScriptAsync("!!document.querySelector('.cm-search input[name=search]')") != "true")
             throw new InvalidOperationException("Physical Ctrl+F did not open search");
+        // NVDA reserves Escape for leaving focus mode. Its documented pass-next-key
+        // gesture sends this Escape to CodeMirror instead of changing reader mode.
+        await Key(handle, 0x71, 0x2D);
         await Key(handle, 0x1B);
+        if (await web.ExecuteScriptAsync("document.activeElement?.classList.contains('cm-content')") != "true")
+            throw new InvalidOperationException("Search close did not return focus to editor");
         await Key(handle, 0x47, 0x11, 0x12);
         if (await web.ExecuteScriptAsync("!!document.querySelector('input[name=line]')") != "true")
             throw new InvalidOperationException("Physical Ctrl+Alt+G did not open go-to-line");
+        await Key(handle, 0x71, 0x2D);
         await Key(handle, 0x1B);
         await Key(handle, 0x1B);
         await Key(handle, 0x09);
