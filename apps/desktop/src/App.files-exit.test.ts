@@ -61,6 +61,8 @@ beforeEach(async () => {
   const absorb = api.absorbOwned;
   api.absorbOwned = async () => ({ ...(await absorb()), library: await api.getProfileLibrary() });
   await act(async () => root.render(createElement(App, { api, preview: "settings-files" })));
+  // Files is loaded on first use; settle its real lazy import before editing.
+  await act(async () => vi.dynamicImportSettled());
 });
 afterEach(async () => {
   await act(async () => root.unmount());
