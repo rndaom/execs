@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -7,8 +8,14 @@ const host = process.env.TAURI_DEV_HOST;
 // Keep this in sync with `build.devUrl` in src-tauri/tauri.conf.json: the Tauri
 // config is static JSON and cannot read the environment. See README.
 const devPort = Number(process.env.EXECS_DEV_PORT ?? 1420);
+const desktopPackage = JSON.parse(
+  readFileSync(path.resolve(__dirname, "package.json"), "utf8"),
+) as { version: string };
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(desktopPackage.version),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

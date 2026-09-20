@@ -5,6 +5,25 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.7+1] - 2026-09-20
+
+0.1.7 Hotfix 1. Installs through the normal updater and keeps the displayed
+product version at 0.1.7. Existing profiles and exports remain supported.
+
+### Fixed
+
+- Files: replace the stacked disclosure page with a quiet editor workspace: a persistent file list,
+  one stable editor, one Save action, and Problems, Help and file details available on demand. File
+  paths stay out of the way, and New cfg now asks only when the file should run before showing
+  class or helper choices. Problems use compact issue rows, while Help keeps one command summary
+  above a stable Details, Guides and Snippets switcher. Find now uses the app's visual language and
+  closes from the same button, editor focus no longer draws a stray divider, and secondary file and
+  editor actions live in right-click menus instead of a separate File info panel.
+- Files: add Save as new cfg for editable and provided read-only files, with Ctrl+Shift+S and safe
+  destinations inside the active TF2 cfg layer. New helper cfgs now separate file name from location,
+  show the resolved path, and identify existing files before opening them. File rows disambiguate
+  duplicate names, support arrow-key navigation, and Find uses rounded neutral match highlights.
+
 ## [0.1.7] - 2026-09-20
 
 ### Added
