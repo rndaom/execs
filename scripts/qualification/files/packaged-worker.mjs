@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 async function eventually(operation, description) {
@@ -29,18 +30,46 @@ async function eventually(operation, description) {
 async function cdpSession(application, environment, evidence) {
   // Tauri resolves its default WebView2 profile through Windows known folders.
   // APPDATA/LOCALAPPDATA overrides alone do not isolate that browser process
-  // from the preceding installer/startup probes. WebView2's SDK override does.
+  // from the preceding installer/startup probes. Use its explicit profile policy.
   // https://github.com/microsoft/playwright/blob/main/docs/src/webview2.md
   const userDataFolder = mkdtempSync(join(evidence, "webview2-"));
-  const child = spawn(application, [], {
-    env: {
-      ...environment,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
-        "--remote-debugging-port=9227 --remote-debugging-address=127.0.0.1",
-      WEBVIEW2_USER_DATA_FOLDER: userDataFolder,
-    },
-    windowsHide: true,
-  });
+  // WebView2 150+ ignores environment/HKCU overrides in elevated hosts (the
+  // hosted Windows runner). Use app-specific HKLM policy only in disposable CI.
+  // https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645#issuecomment-4934355430
+  const policy = (action) =>
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-File",
+        fileURLToPath(new URL("./webview2-ci-policy.ps1", import.meta.url)),
+        "-Action",
+        action,
+        "-Snapshot",
+        join(evidence, "webview2-policy-before.json"),
+        "-UserDataFolder",
+        userDataFolder,
+      ],
+      { env: environment, windowsHide: true, stdio: "pipe", timeout: 10000 },
+    );
+  policy("Apply");
+  const launchEnvironment = { ...environment };
+  // Avoid an inherited environment override taking precedence over our policy.
+  for (const key of Object.keys(launchEnvironment)) {
+    if (
+      ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "WEBVIEW2_USER_DATA_FOLDER"].includes(
+        key.toUpperCase(),
+      )
+    )
+      delete launchEnvironment[key];
+  }
+  let child;
+  try {
+    child = spawn(application, [], { env: launchEnvironment, windowsHide: true });
+  } catch (error) {
+    policy("Restore");
+    throw error;
+  }
   const log = createWriteStream(join(evidence, "application.log"));
   child.stdout.pipe(log);
   child.stderr.pipe(log);
@@ -72,19 +101,23 @@ async function cdpSession(application, environment, evidence) {
       )}\n`,
     );
   const stop = async () => {
-    if (child.pid && child.exitCode === null && child.signalCode === null) {
-      try {
-        execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
-          windowsHide: true,
-          stdio: "ignore",
-          timeout: 10000,
-        });
-      } catch {
-        child.kill();
+    try {
+      if (child.pid && child.exitCode === null && child.signalCode === null) {
+        try {
+          execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+            windowsHide: true,
+            stdio: "ignore",
+            timeout: 10000,
+          });
+        } catch {
+          child.kill();
+        }
       }
+      await Promise.race([closed, pause(3000)]);
+      log.end();
+    } finally {
+      policy("Restore");
     }
-    await Promise.race([closed, pause(3000)]);
-    log.end();
   };
   let socket;
   try {
@@ -288,6 +321,7 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
   try {
     const result = await session.evaluate(`(async()=>{
       const url=new URL(${JSON.stringify(`assets/${worker}`)},location.href).href;
+      const packagedWorkerSource=await (await fetch(url)).text();
       const identity='packaged-origin-worker';
       const started=performance.now();
       const outcome=await new Promise((resolve,reject)=>{
@@ -297,13 +331,22 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
         worker.onmessage=event=>{clearTimeout(timer);worker.terminate();resolve(event.data);};
         worker.postMessage({profile:'disposable-qualification',identity,files:[{path:'tf/cfg/autoexec.cfg',text:'sensitivity 2\\nvoicemenu 0 0\\nfov_desired banana\\n'}]});
       });
-      return {url,origin:location.origin,page:location.href,userAgent:navigator.userAgent,csp:[...document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]')].map(node=>node.content),durationMs:performance.now()-started,outcome};
+      return {url,packagedWorkerSource,origin:location.origin,page:location.href,userAgent:navigator.userAgent,csp:[...document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]')].map(node=>node.content),durationMs:performance.now()-started,outcome};
     })()`);
+    result.packagedWorkerSha256 = createHash("sha256")
+      .update(result.packagedWorkerSource)
+      .digest("hex");
+    delete result.packagedWorkerSource;
     writeFileSync(
       join(evidence, "worker-result.json"),
       `${JSON.stringify({ application, workerAsset: worker, workerSha256: sourceHash, ...result }, null, 2)}\n`,
     );
     assert.equal(result.outcome.identity, "packaged-origin-worker");
+    assert.equal(
+      result.packagedWorkerSha256,
+      sourceHash,
+      "Packaged worker must match the candidate source build",
+    );
     assert.ok(result.outcome.result, "Worker returned no lint result");
     assert.equal(result.outcome.error, undefined);
     assert.ok(

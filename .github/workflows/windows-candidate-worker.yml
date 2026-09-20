@@ -1,0 +1,106 @@
+name: Private Windows candidate worker
+
+on:
+  push:
+    branches: [rndaom/qualify-0.1.7-package]
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact source SHA that produced the existing private 0.1.7 assets
+        required: true
+        default: 6ecbcc007d748139149352c9db5e406272921cc6
+        type: string
+      installer_sha256:
+        description: Exact signed private installer SHA-256 (refuse a replaced draft asset)
+        required: true
+        default: 1b4fdaec473a5b4a7e10387797aeb224069aa8134fea124a7755f0622f1960ff
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ inputs.candidate_sha || '6ecbcc007d748139149352c9db5e406272921cc6' }}
+  INSTALLER_SHA256: ${{ inputs.installer_sha256 || '1b4fdaec473a5b4a7e10387797aeb224069aa8134fea124a7755f0622f1960ff' }}
+
+concurrency:
+  group: release-v0.1.7
+  cancel-in-progress: false
+
+jobs:
+  packaged-worker:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: candidate
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - name: Build only the exact candidate frontend for worker identity
+        working-directory: candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Verify signature, install and exercise the existing private binary
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node ../scripts/qualification/files/windows-candidate.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-candidate-worker
+          path: |
+            ${{ runner.temp }}/execs-windows-candidate/*.json
+            ${{ runner.temp }}/execs-windows-candidate/files-worker/*.json
+            ${{ runner.temp }}/execs-windows-candidate/files-worker/*.log
+            ${{ runner.temp }}/execs-windows-candidate/files-worker/*.png
+
+  verify-private-assets:
+    needs: [packaged-worker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify original build identity and both signed private assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/35491010492" > "$RUNNER_TEMP/build-run.json"
+          node -e 'const r=require(process.env.RUNNER_TEMP+"/build-run.json");require("assert/strict").equal(r.head_sha,process.env.CANDIDATE_SHA)'
+          gh api "repos/$GH_REPO/actions/runs/35491010492/jobs" > "$RUNNER_TEMP/build-jobs.json"
+          node -e 'const j=require(process.env.RUNNER_TEMP+"/build-jobs.json").jobs,a=require("assert/strict");a.equal(j.find(x=>x.name==="build (ubuntu-22.04)").conclusion,"success");for(const n of ["validate / frontend","validate / rust-linux","validate / rust-windows"])a.equal(j.find(x=>x.name===n).conclusion,"success")'
+          gh release download v0.1.7 --dir "$RUNNER_TEMP/candidate" --pattern '*.exe' --pattern '*.AppImage' --pattern '*.sig' --pattern latest.json
+          release_id=$(gh release view v0.1.7 --json databaseId --jq .databaseId)
+          gh api "repos/$GH_REPO/releases/$release_id" > "$RUNNER_TEMP/candidate/release.json"
+          node -e 'const f=require("fs"),c=require("crypto"),a=require("assert/strict");a.equal(c.createHash("sha256").update(f.readFileSync(process.env.RUNNER_TEMP+"/candidate/execs_0.1.7_x64-setup.exe")).digest("hex"),process.env.INSTALLER_SHA256)'
+          node scripts/verify-release.mjs "$RUNNER_TEMP/candidate" 0.1.7
+          gh release upload v0.1.7 "$RUNNER_TEMP/candidate/latest.json" --clobber
+          node scripts/release-notes.mjs 0.1.7 > "$RUNNER_TEMP/notes.md"
+          name=$(node scripts/release-version.mjs v0.1.7 --name)
+          gh release edit v0.1.7 --target "$CANDIDATE_SHA" --title "$name" --notes-file "$RUNNER_TEMP/notes.md"
+          node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP+"/release-commit.json",JSON.stringify({commit:process.env.CANDIDATE_SHA,run:"35491010492",qualificationRun:process.env.GITHUB_RUN_ID,qualificationCommit:process.env.GITHUB_SHA},null,2)+"\n")'
+          gh release upload v0.1.7 "$RUNNER_TEMP/release-commit.json" --clobber
+          test "$(gh release view v0.1.7 --json isDraft --jq .isDraft)" = true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: private-candidate-verification
+          path: |
+            ${{ runner.temp }}/candidate/latest.json
+            ${{ runner.temp }}/candidate/release.json
+            ${{ runner.temp }}/release-commit.json
+            ${{ runner.temp }}/build-run.json
+            ${{ runner.temp }}/build-jobs.json

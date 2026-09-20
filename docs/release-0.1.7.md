@@ -1,8 +1,14 @@
 # 0.1.7 release candidate
 
 Implementation and native qualification are complete within the recorded limits.
-The final private package gate is [candidate run 35491010492](https://github.com/rndaom/execs/actions/runs/35491010492),
-at `6ecbcc0`; its successful build and verify jobs are required for readiness.
+The private installers come from [candidate run 35491010492](https://github.com/rndaom/execs/actions/runs/35491010492)
+at `6ecbcc0`. Linux package checks passed; Windows installation/updating passed
+before its worker probe failed to attach. WebView2 150+ ignores environment
+debugging overrides for elevated hosts. The [private Windows recovery workflow](https://github.com/rndaom/execs/actions/workflows/windows-candidate-worker.yml)
+must pass the same signed installer with an app-specific disposable-CI policy,
+then verify both signed assets/feed and record the original build plus recovery
+run in the draft's `release-commit.json`. A failed original run is not described
+as successful; readiness requires this explicit recovery gate.
 Later commits contain qualification harnesses and evidence only. Publication is
 not authorized. No release tag is created by this preparation.
 
@@ -39,11 +45,12 @@ evidence. Unreleased Inventory and profile-owned preloader work are excluded.
 Tagging, merging release PRs and publishing remain separate owner actions.
 Passing fixture checks does not imply unperformed native or retail-game checks.
 
-The remaining machine-verifiable gates are the private candidate's Windows/Linux
-installer and updater smoke, actual packaged worker/CSP, signature/feed verify
-job, and green CI on both PRs. Their linked GitHub runs are the authoritative
+The machine-verifiable gates are the original candidate's Windows/Linux
+installer and updater checks, actual packaged worker/CSP including the Windows
+recovery, both-platform signature/feed verification, and green CI on both PRs.
+Their linked GitHub runs are the authoritative
 results; a queued, failed or cancelled run does not satisfy a gate. The publish
-job must stay skipped. Product code is unchanged after `4e5fb39` on maintenance
+job stays skipped; the recovery workflow has no publish job. Product code is unchanged after `4e5fb39` on maintenance
 and `9dcb51b` on the forward-port.
 
 ## Qualification limits
