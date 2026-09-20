@@ -287,12 +287,7 @@
   "updaterFeed": {
     "requestedUrl": "https://github.com/rndaom/execs/releases/latest/download/latest.json",
     "version": "0.1.7",
-    "platforms": [
-      "linux-x86_64",
-      "linux-x86_64-appimage",
-      "windows-x86_64",
-      "windows-x86_64-nsis"
-    ],
+    "platforms": ["linux-x86_64", "linux-x86_64-appimage", "windows-x86_64", "windows-x86_64-nsis"],
     "notesMatchChangelog": true,
     "debEntryAbsent": true,
     "untaggedUrlAbsent": true
