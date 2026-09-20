@@ -74,14 +74,14 @@ def capture():
     web.run_javascript("""(()=>{
       if (!window.__qualificationPaint) {
         window.__qualificationPaint=[];
-        document.addEventListener('keydown',()=>{const start=performance.now();requestAnimationFrame(()=>requestAnimationFrame(()=>window.__qualificationPaint.push(performance.now()-start)));},true);
+        document.addEventListener('keydown',event=>{if(event.key.length!==1||event.ctrlKey||event.altKey||event.metaKey||!document.activeElement?.classList.contains('cm-content'))return;const start=performance.now();requestAnimationFrame(()=>requestAnimationFrame(()=>window.__qualificationPaint.push(performance.now()-start)));},true);
       }
       const values=[...window.__qualificationPaint].sort((a,b)=>a-b);
       return {viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
         timing:window.__qualificationTiming,
         reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,
         buttonTransitions:[...document.querySelectorAll('button')].map(button=>({name:button.textContent,transitionDuration:getComputedStyle(button).transitionDuration})),
-        measurement:'physical keydown to second requestAnimationFrame',samples:values.length,
+        measurement:'physical printable editor keydown to second requestAnimationFrame; excludes navigation and shortcuts',samples:values.length,
         p95ms:values[Math.max(0,Math.ceil(values.length*.95)-1)],values,
         workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),
         editor:document.querySelector('.cm-content')?.getAttribute('aria-label'),body:document.body.innerText};

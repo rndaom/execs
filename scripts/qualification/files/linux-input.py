@@ -97,7 +97,9 @@ for sample in range(20):
     key("Escape")
 key("ctrl+End")
 key("Return")
-subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "50", "// IME "], check=True)
+subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "80", "// paint latency abcdefghijklmnopqrstuvwxyz 0123456789"], check=True)
+key("Return")
+subprocess.run(["xdotool", "type", "--clearmodifiers", "--delay", "80", "// IME "], check=True)
 try:
     engine = subprocess.run(["ibus", "engine", "anthy"], capture_output=True, text=True)
     selected = subprocess.run(["ibus", "engine"], capture_output=True, text=True)
