@@ -1,4 +1,14 @@
-import { engineManagedLintOptions, lint } from "@execs/cfglint";
+import {
+  type CfgOrigin,
+  cfgPathIsEditable,
+  classifyCfgOrigin,
+  engineManagedLintOptions,
+  lint,
+  normalizeCfgPath,
+} from "@execs/cfglint";
+
+export { type CfgOrigin, classifyCfgOrigin, normalizeCfgPath } from "@execs/cfglint";
+
 import { canWrite } from "./write-gate";
 
 export type CfgFinding = {
@@ -8,6 +18,9 @@ export type CfgFinding = {
   file: string;
   line: number;
   col: number;
+  from?: number;
+  to?: number;
+  category?: "restriction" | "syntax" | "argument" | "availability" | "coverage" | "advice";
   /** Set when the offending command lives inside a bind/alias payload. */
   via?: string;
   /** Block finding demoted because it lives in a provided (non-user) file. */
@@ -16,11 +29,10 @@ export type CfgFinding = {
 
 export type LintBundleResult = {
   ok: boolean;
+  safetyComplete: boolean;
+  executionComplete: boolean;
   findings: CfgFinding[];
 };
-
-/** Where a listed cfg file came from — drives editability and lint strictness. */
-export type CfgOrigin = "user" | "app" | "engine" | "hud" | "pack" | "comfigImport";
 
 export type CfgFileMeta = {
   path: string;
@@ -33,26 +45,6 @@ export type CfgFileMeta = {
   badge: string | null;
 };
 
-const ENGINE_MANAGED_CONFIG_PATH = "tf/cfg/config.cfg";
-
-/** Valve-shipped cfg that can leak into snapshots — never user-authored. */
-const ENGINE_EXTRA_NAMES = new Set([
-  "mtp.cfg",
-  "360controller.cfg",
-  "360controller-linux.cfg",
-  "undo360controller.cfg",
-  "config_default.cfg",
-]);
-
-/** Files the app itself serializes (Binds/Gameplay/Comfig/Viewmodels panes). */
-const APP_MANAGED_NAMES = new Set([
-  "execs_binds.cfg",
-  "execs_gameplay.cfg",
-  "execs_preload.cfg",
-  "modules.cfg",
-  "setup_hook.cfg",
-]);
-
 const ORIGIN_BADGES: Record<CfgOrigin, string | null> = {
   user: null,
   app: "managed",
@@ -62,35 +54,10 @@ const ORIGIN_BADGES: Record<CfgOrigin, string | null> = {
   comfigImport: "comfig",
 };
 
-export function classifyCfgOrigin(path: string, hudId?: string | null): CfgOrigin {
-  const norm = normalizeCfgPath(path);
-  const name = norm.split("/").pop() ?? norm;
-  if (norm === ENGINE_MANAGED_CONFIG_PATH) {
-    return "engine";
-  }
-  if (ENGINE_EXTRA_NAMES.has(name)) {
-    return "engine";
-  }
-  if (norm.startsWith("tf/custom/comfig-custom/")) {
-    return "comfigImport";
-  }
-  if (norm.startsWith("tf/custom/")) {
-    const hud = hudId?.toLowerCase();
-    if (hud && (norm.startsWith(`tf/custom/${hud}/`) || norm.startsWith(`tf/custom/-${hud}/`))) {
-      return "hud";
-    }
-    return "pack";
-  }
-  if (APP_MANAGED_NAMES.has(name)) {
-    return "app";
-  }
-  return "user";
-}
-
 export function cfgFileMeta(path: string, hudId?: string | null): CfgFileMeta {
   const origin = classifyCfgOrigin(path, hudId);
-  const isConfigCfg = normalizeCfgPath(path) === ENGINE_MANAGED_CONFIG_PATH;
-  const editable = origin === "user" || origin === "app" || isConfigCfg;
+
+  const editable = cfgPathIsEditable(path, hudId);
   // config.cfg stays strict (with the narrow engine-managed exemptions); every
   // other non-user origin is advisory-only.
   const advisory = !editable;
@@ -172,6 +139,8 @@ export function lintBundle(
   const result = lint(files, engineManagedLintOptions(files, hudId));
   return {
     ok: result.ok,
+    safetyComplete: result.safetyComplete,
+    executionComplete: result.executionComplete,
     findings: result.findings.map((finding) => ({
       ruleId: finding.ruleId,
       tier: finding.tier,
@@ -179,12 +148,11 @@ export function lintBundle(
       file: finding.file,
       line: finding.line,
       col: finding.col,
+      from: finding.from,
+      to: finding.to,
+      category: finding.category,
       via: finding.via,
       advisory: finding.advisory === true,
     })),
   };
-}
-
-export function normalizeCfgPath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
 }
