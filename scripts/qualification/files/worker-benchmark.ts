@@ -102,6 +102,7 @@ export async function runWorkerBenchmark() {
     const started = performance.now();
     let error: string | null = null;
     let findingCount: number | null = null;
+    let budgetRefusal = false;
     try {
       const result = await analyzeFilesSnapshot({
         profile: "qualification",
@@ -109,6 +110,9 @@ export async function runWorkerBenchmark() {
         identity: fixture.name,
       });
       findingCount = result.result.findings.length;
+      budgetRefusal =
+        !result.result.safetyComplete &&
+        result.result.findings.some((finding) => finding.ruleId === "analysis-budget");
     } catch (failure) {
       error = failure instanceof Error ? failure.message : String(failure);
     }
@@ -126,9 +130,12 @@ export async function runWorkerBenchmark() {
       durationMs,
       maximumHeartbeatGap,
       findingCount,
+      budgetRefusal,
       error,
       expectedRefusal: fixture.refused ?? false,
-      expectationMet: fixture.refused ? error !== null : error === null,
+      expectationMet: fixture.refused
+        ? error !== null
+        : error === null && (!fixture.name.includes("high-token") || budgetRefusal),
     });
   }
   return {
