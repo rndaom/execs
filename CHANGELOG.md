@@ -5,6 +5,13 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Profiles: accepting external mod removal clears its installed record so exports
+  import successfully again; partial pack changes refresh file and byte counts.
+  Accepted HUD removal also clears its installed record. Keep and Restore preserve
+  the saved customization.
+
 ## [0.1.6] - 2026-09-18
 
 ### Fixed
