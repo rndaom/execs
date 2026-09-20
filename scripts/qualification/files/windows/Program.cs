@@ -101,7 +101,10 @@ internal static class Program
         }
         if (await web.ExecuteScriptAsync("!!document.querySelector('.cm-content')") != "true")
             throw new InvalidOperationException("Integrated Files editor was not rendered");
+        if (captureOnly && web.ZoomFactor == 2)
+            await web.CoreWebView2.CallDevToolsProtocolMethodAsync("Emulation.setEmulatedMedia", "{\"features\":[{\"name\":\"prefers-reduced-motion\",\"value\":\"reduce\"}]}");
         await Task.Delay(1500);
+        File.WriteAllText(Path.Combine(evidence, "display.json"), await web.ExecuteScriptAsync("({reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,buttonTransitions:[...document.querySelectorAll('button')].map(button=>({name:button.textContent,transitionDuration:getComputedStyle(button).transitionDuration})),viewport:{width:innerWidth,height:innerHeight}})"));
         using (var picture = File.Create(Path.Combine(evidence, "native-initial.png")))
             await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, picture);
         if (captureOnly) return;

@@ -34,6 +34,8 @@ window.set_default_size(args.width, args.height)
 context = WebKit2.WebContext.new_ephemeral()
 web = WebKit2.WebView.new_with_context(context)
 web.set_zoom_level(args.zoom)
+if args.zoom == 2:
+    Gtk.Settings.get_default().set_property("gtk-enable-animations", False)
 window.add(web)
 window.connect("destroy", Gtk.main_quit)
 
@@ -77,6 +79,8 @@ def capture():
       const values=[...window.__qualificationPaint].sort((a,b)=>a-b);
       return {viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
         timing:window.__qualificationTiming,
+        reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,
+        buttonTransitions:[...document.querySelectorAll('button')].map(button=>({name:button.textContent,transitionDuration:getComputedStyle(button).transitionDuration})),
         measurement:'physical keydown to second requestAnimationFrame',samples:values.length,
         p95ms:values[Math.max(0,Math.ceil(values.length*.95)-1)],values,
         workers:performance.getEntriesByType('resource').filter(x=>x.name.includes('worker')).map(x=>x.name),
