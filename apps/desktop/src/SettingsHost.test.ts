@@ -407,4 +407,42 @@ describe("settings snapshot integrity", () => {
       false,
     );
   });
+  it("refuses mixed source identities even when the active profile returns to its original id", async () => {
+    const path = "tf/cfg/execs_gameplay.cfg";
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "A",
+      layer: "vanilla",
+      files: [{ path }],
+      launchOptions: "",
+    });
+    api.readProfileFile.mockResolvedValue({
+      path,
+      text: "fov_desired 75\n",
+      source: {
+        profileId: "A",
+        root: "fixture",
+        layer: "vanilla",
+        sha256: "old",
+        librarySha256: "old",
+      },
+    });
+    await render();
+    api.readProfileFile.mockResolvedValue({
+      path,
+      text: "fov_desired 90\n",
+      source: {
+        profileId: "B",
+        root: "fixture",
+        layer: "vanilla",
+        sha256: "other",
+        librarySha256: "other",
+      },
+    });
+    await render({ refreshKey: 2 });
+    expect(capture.panes.gameplay.managedText).toBe("fov_desired 75\n");
+    expect(requiredElement('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(
+      true,
+    );
+    expect(container.textContent).toContain("Retry loading settings");
+  });
 });

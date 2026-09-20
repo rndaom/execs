@@ -227,6 +227,14 @@ export function SettingsHost({
         try {
           const content = await api.readProfileFile(file.path);
           if (stale()) return;
+          if (
+            content.source &&
+            context &&
+            (content.source.profileId !== context.profileId ||
+              content.source.root !== context.root ||
+              content.source.layer !== context.layer)
+          )
+            throw new Error("The Files source identity changed during loading.");
           if (content.text === null) {
             if (content.source?.sha256 === null && content.source.librarySha256 !== null) {
               loaded.push({ path: content.path, text: "", source: content.source });
