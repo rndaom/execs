@@ -92,6 +92,10 @@ beforeEach(() => {
   root = createRoot(container);
   capture.panes = {};
   api = {
+    getFilesContext: vi.fn(async () => {
+      const d = await api.getActiveProfileDetail();
+      return { profileId: d.id, root: "fixture", layer: d.layer };
+    }),
     getActiveProfileDetail: vi.fn(async () => ({
       id: "A",
       layer: "vanilla",

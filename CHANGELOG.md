@@ -5,10 +5,16 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- Files: create unsaved user cfgs in the verified profile layer, retain multiple
+  drafts while navigating or playing, and review changed sources before an explicit
+  save. Problems navigate to exact source locations and analysis runs in a bounded worker.
 - Files: add a syntax-colored editor with per-file undo history, find/replace,
   line navigation and offline TF2 completion that preserves normal Tab navigation.
 - Files: add offline command help, searchable cfg guides and reviewable draft snippets;
   explain source links and classify ownership by complete paths and recorded HUD identity.
+
 ### Fixed
 
 - Profiles: retain saved particle selections when repairing custom folder names,

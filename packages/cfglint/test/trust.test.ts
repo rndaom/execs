@@ -106,7 +106,7 @@ describe("engineManagedLintOptions", () => {
     expect(classifyCfgOrigin("tf/cfg/config.cfg")).toBe("engine");
     expect(classifyCfgOrigin("tf/cfg/undo360controller.cfg")).toBe("engine");
     expect(classifyCfgOrigin("tf/custom/mahud/cfg/x.cfg", "mahud")).toBe("hud");
-    expect(classifyCfgOrigin("tf/custom/-mahud/cfg/x.cfg", "mahud")).toBe("hud");
+    expect(classifyCfgOrigin("tf/custom/-mahud/cfg/x.cfg", "mahud")).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/other/cfg/x.cfg", "mahud")).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/comfig-custom/cfg/x.cfg")).toBe("comfigImport");
     expect(classifyCfgOrigin("TF\\CFG\\Overrides\\Autoexec.cfg")).toBe("user");

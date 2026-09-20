@@ -70,7 +70,7 @@ const colors = syntaxHighlighting(
     { tag: tags.comment, color: "var(--color-ink-muted)", fontStyle: "italic" },
     { tag: tags.keyword, color: "var(--color-ink)", fontWeight: "600" },
     { tag: tags.string, color: "var(--color-ok)" },
-    { tag: tags.number, color: "var(--color-team-blu)" },
+    { tag: tags.number, color: "var(--color-ink-muted)" },
   ]),
 );
 const theme = EditorView.theme(
@@ -89,11 +89,11 @@ const theme = EditorView.theme(
     ".cm-content": { padding: "8px 0", minHeight: "274px", caretColor: "var(--color-ink)" },
     ".cm-gutters": {
       backgroundColor: "var(--color-panel)",
-      color: "var(--color-ink-faint)",
+      color: "var(--color-ink-muted)",
       borderRight: "1px solid var(--color-edge)",
     },
     ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--color-edge)" },
-    "&.cm-focused": { outline: "1px solid var(--color-edge-strong)" },
+    "&.cm-focused": { outline: "1px solid var(--color-ink-muted)" },
     ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
       backgroundColor: "var(--color-edge-strong)",
     },
@@ -298,8 +298,10 @@ export function FilesEditor(props: FilesEditorProps) {
       Math.min(
         editor.state.doc.length,
         target.from ??
-          editor.state.doc.line(Math.max(1, Math.min(editor.state.doc.lines, target.line ?? 1)))
-            .from,
+          (target.line === undefined
+            ? editor.state.selection.main.anchor
+            : editor.state.doc.line(Math.max(1, Math.min(editor.state.doc.lines, target.line)))
+                .from),
       ),
     );
     const to = Math.max(from, Math.min(editor.state.doc.length, target.to ?? from));
@@ -330,14 +332,28 @@ export function FilesEditor(props: FilesEditorProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b border-edge px-3 py-1 text-xs text-ink-muted">
-        <button type="button" onClick={() => view.current && openSearchPanel(view.current)}>
+        <button
+          type="button"
+          className="rounded px-2 py-1 hover:bg-panel-raised focus-visible:outline"
+          onClick={() => view.current && openSearchPanel(view.current)}
+        >
           Find / replace
         </button>
-        <button type="button" onClick={() => view.current && gotoLine(view.current)}>
+        <button
+          type="button"
+          className="rounded px-2 py-1 hover:bg-panel-raised focus-visible:outline"
+          onClick={() => view.current && gotoLine(view.current)}
+        >
           Go to line
         </button>
-        <button type="button" aria-pressed={wrap} onClick={() => setWrap(!wrap)}>
-          Wrap lines
+        <button
+          type="button"
+          className="rounded px-2 py-1 hover:bg-panel-raised focus-visible:outline"
+          aria-label="Wrap lines"
+          aria-pressed={wrap}
+          onClick={() => setWrap(!wrap)}
+        >
+          Wrap lines: {wrap ? "On" : "Off"}
         </button>
         <span className="ml-auto tabular-nums">{position}</span>
       </div>

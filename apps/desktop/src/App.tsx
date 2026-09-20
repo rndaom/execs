@@ -330,6 +330,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 filesCloseReady={filesExit.ready}
                 settingsDraftStore={settingsDraftStore}
                 tab={settingsTab}
+                onNavigate={setSettingsTab}
                 running={lock.running}
                 externalBusy={
                   busy || progress.state.active || recoveryTargetId !== null || lifecycleBusy

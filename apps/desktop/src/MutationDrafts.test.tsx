@@ -63,6 +63,11 @@ beforeEach(() => {
   comfig = { preset: "medium", modules: {}, addons: [] };
   api = {
     getActiveProfileDetail: vi.fn(async () => detail),
+    getFilesContext: vi.fn(async () => ({
+      profileId: detail.id,
+      root: "fixture",
+      layer: detail.layer,
+    })),
     readProfileFile: vi.fn(async () => ({ path, text: cfg })),
     getComfigState: vi.fn(async () => comfig),
     getStockCrosshairSprites: vi.fn(async () => ({})),

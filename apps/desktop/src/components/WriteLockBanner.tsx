@@ -39,7 +39,7 @@ export function WriteLockBanner({
       data-testid="tf2-write-lock"
       className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
     >
-      TF2 is running — editable settings stay as drafts and save when it closes.
+      TF2 is running — settings keep drafts until it closes. Files requires Save after closing TF2.
     </div>
   );
 }
