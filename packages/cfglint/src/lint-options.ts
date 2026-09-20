@@ -40,7 +40,10 @@ export function normalizeCfgPath(path: string): string {
 export function classifyCfgOrigin(path: string, hudId?: string | null): CfgOrigin {
   const norm = normalizeCfgPath(path);
   const name = norm.split("/").pop() ?? norm;
-  if (norm === ENGINE_MANAGED_CONFIG_PATH || ENGINE_EXTRA_NAMES.has(name)) {
+  if (
+    norm === ENGINE_MANAGED_CONFIG_PATH ||
+    (norm === `tf/cfg/${name}` && ENGINE_EXTRA_NAMES.has(name))
+  ) {
     return "engine";
   }
   if (norm.startsWith("tf/custom/comfig-custom/")) {
@@ -48,12 +51,15 @@ export function classifyCfgOrigin(path: string, hudId?: string | null): CfgOrigi
   }
   if (norm.startsWith("tf/custom/")) {
     const hud = hudId?.toLowerCase();
-    if (hud && (norm.startsWith(`tf/custom/${hud}/`) || norm.startsWith(`tf/custom/-${hud}/`))) {
+    if (hud && !hud.includes("/") && !hud.includes("\\") && norm.startsWith(`tf/custom/${hud}/`)) {
       return "hud";
     }
     return "pack";
   }
-  if (APP_MANAGED_NAMES.has(name)) {
+  if (
+    APP_MANAGED_NAMES.has(name) &&
+    (norm === `tf/cfg/${name}` || norm === `tf/cfg/overrides/${name}`)
+  ) {
     return "app";
   }
   return "user";

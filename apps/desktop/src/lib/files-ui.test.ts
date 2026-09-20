@@ -35,7 +35,7 @@ describe("origin classification", () => {
     expect(classifyCfgOrigin("tf/cfg/mtp.cfg")).toBe("engine");
     expect(classifyCfgOrigin("tf/cfg/360controller-linux.cfg")).toBe("engine");
     expect(classifyCfgOrigin("tf/custom/rayshud/cfg/hud_reset.cfg", "rayshud")).toBe("hud");
-    expect(classifyCfgOrigin("tf/custom/-rayshud/cfg/hud_reset.cfg", "rayshud")).toBe("hud");
+    expect(classifyCfgOrigin("tf/custom/-rayshud/cfg/hud_reset.cfg", "rayshud")).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/someotherpack/cfg/extra.cfg", "rayshud")).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/someotherpack/cfg/extra.cfg", null)).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/comfig-custom/user.cfg")).toBe("comfigImport");
