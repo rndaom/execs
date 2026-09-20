@@ -246,7 +246,10 @@ it("retains editor bytes and the original token after native FileConflict", asyn
     text: draft.text,
     expected: draft.expected,
     dirty: true,
+    conflict: true,
+    source: "echo external change\n",
   });
+  expect(box.textContent).toContain("Compare current source");
   expect((await api.readProfileFile(draft.path)).text).toBe("echo external change\n");
 });
 
