@@ -28,6 +28,7 @@ import {
 } from "./bridge";
 import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
+import { isNewCfgPath } from "./files-create";
 import { editorPathFits, editorTextBytes } from "./files-limits";
 import { defaultGameplay, parseCvarMap } from "./gameplay-ui";
 import { PREVIEW_HUD_BROWSER_CATALOG, PREVIEW_HUD_BROWSER_STATS } from "./hud-browser-preview";
@@ -397,7 +398,6 @@ export function createPreviewApi(state: PreviewState): Api {
           "FileConflict",
         );
       }
-      const prefix = context.layer === "comfig" ? "tf/cfg/overrides/" : "tf/cfg/";
       if (
         !path.startsWith("tf/cfg/") ||
         !path.endsWith(".cfg") ||
@@ -406,7 +406,7 @@ export function createPreviewApi(state: PreviewState): Api {
           .some(
             (part) => !part || part === "." || part === ".." || part.toLowerCase() === "user",
           ) ||
-        (!current && !path.startsWith(prefix))
+        (!current && !isNewCfgPath(path, context.layer))
       ) {
         throw new BridgeError("That cfg destination is not allowed.", "ForbiddenPath");
       }

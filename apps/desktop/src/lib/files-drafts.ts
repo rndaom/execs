@@ -145,6 +145,7 @@ export function createFilesDraftStore() {
       const entry = drafts.get(key(profile, path));
       if (entry) {
         entry.baseline = submitted;
+        entry.source = submitted;
         entry.created = false;
         entry.missing = false;
         entry.missingReviewed = false;

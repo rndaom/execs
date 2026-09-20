@@ -29,6 +29,19 @@ describe("retained file baselines", () => {
     expect(store.read("a", "cfg", "80")).toBe("80");
   });
 
+  it("makes a newly created document clean after its first acknowledged save", () => {
+    const store = createFilesDraftStore();
+    store.create("a", "new.cfg", token(null), "echo created");
+    store.acknowledge("a", "new.cfg", "echo created", token("committed"));
+    expect(store.state("a", "new.cfg")).toMatchObject({
+      text: "echo created",
+      source: "echo created",
+      baseline: "echo created",
+      dirty: false,
+      created: false,
+    });
+  });
+
   it("preserves newer unsaved bytes through acknowledgement and external drift", () => {
     const store = createFilesDraftStore();
     store.read("a", "cfg", "90");

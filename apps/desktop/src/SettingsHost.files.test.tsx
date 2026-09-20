@@ -33,7 +33,7 @@ const noop = () => {};
 
 async function click(label: string) {
   await act(async () => {
-    const button = [...box.querySelectorAll("button")].find(
+    const button = [...document.querySelectorAll("button")].find(
       (element) => element.textContent?.trim() === label,
     );
     if (!button) throw Error(`Missing button ${label}`);
@@ -211,16 +211,15 @@ it.each([false, true])(
 it("creates an empty cfg draft without writing and saves only with an absent-source token", async () => {
   const write = vi.spyOn(api, "writeOwnedFile");
   await click("New cfg");
+  await click("Helper");
   await act(async () => {
     const input = box.querySelector<HTMLInputElement>("#new-cfg-name");
     if (!input) throw Error("Missing name input");
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
-      input,
-      "helpers/first",
-    );
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "first");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await click("Open unsaved draft");
+  await click("helpers");
+  await click("Start editing");
   const draft = store.dirty()[0];
   expect(draft.path).toMatch(/\/helpers\/first\.cfg$/);
   expect(draft.text).toBe("");
@@ -233,6 +232,49 @@ it("creates an empty cfg draft without writing and saves only with an absent-sou
   );
   expect((await api.readProfileFile(draft.path)).text).toBe("");
   expect(store.dirty()).toEqual([]);
+});
+
+it("saves the current buffer under a new cfg identity with an absent destination token", async () => {
+  const originalPath = store.selected(profile);
+  const context = await api.getFilesContext();
+  const destination = `${context.layer === "comfig" ? "tf/cfg/overrides" : "tf/cfg"}/copied_config.cfg`;
+  const write = vi.spyOn(api, "writeOwnedFile");
+  await edit("echo copied draft\n");
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 220));
+  });
+  await act(async () => {
+    editor().contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "S",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  expect(box.textContent).toContain("Save as new cfg");
+  await act(async () => {
+    const input = box.querySelector<HTMLInputElement>("#save-as-name");
+    if (!input) throw Error("Missing Save as name input");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+      input,
+      "copied_config",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click("Save new cfg");
+  expect(write).toHaveBeenCalledWith(
+    destination,
+    "echo copied draft\n",
+    expect.objectContaining({ sha256: null, librarySha256: null }),
+  );
+  expect((await api.readProfileFile(destination)).text).toBe("echo copied draft\n");
+  expect(store.selected(profile)).toBe(destination);
+  expect(store.dirty()).toEqual([]);
+  if (originalPath)
+    expect((await api.readProfileFile(originalPath)).text).not.toBe("echo copied draft\n");
 });
 
 it("retains editor bytes and the original token after native FileConflict", async () => {

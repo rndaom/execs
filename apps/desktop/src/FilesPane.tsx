@@ -1,14 +1,46 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BookOpenText,
+  DotsThree,
+  FileCode,
+  FilePlus,
+  MagnifyingGlass,
+  WarningCircle,
+  X,
+} from "@phosphor-icons/react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { FilesEditor } from "./components/FilesEditor";
 import { FilesReference } from "./components/FilesReference";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  type ContextMenuPosition,
+  ContextMenuSeparator,
+} from "./components/ui/ContextMenu";
+import { Segmented } from "./components/ui/Segmented";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity } from "./hooks/useAutosave";
 import { useFilesAnalysis } from "./hooks/useFilesAnalysis";
 import type { FilesContext, FilesSource } from "./lib/bridge";
-import { newCfgPath } from "./lib/files-create";
+import { copyToClipboard } from "./lib/copy-ui";
+import {
+  type CfgDestination,
+  cfgDestinations,
+  cfgLayerRoot,
+  cfgPathCollision,
+  newCfgPathIn,
+} from "./lib/files-create";
 import type { DirtyFileDraft, FilesDraftStore } from "./lib/files-drafts";
 import { editorTextBytes } from "./lib/files-limits";
-import { CLASS_CFG_NAMES, cfgExecutionRole, maskCfgPreview } from "./lib/files-reference";
+import { CLASS_CFG_NAMES } from "./lib/files-reference";
 import {
   blockingFindingsForFile,
   type CfgFinding,
@@ -53,10 +85,18 @@ function ProfileFilesPane({
   const running = gameRunning ?? statusRunning;
   const [revision, refresh] = useState(0);
   const [picked, setPicked] = useState<string | null>(() => draftStore.selected(profileId));
-  const [panel, setPanel] = useState<"explorer" | "problems" | "reference" | "new" | null>(null);
-  const [scope, setScope] = useState("current");
+  const [panel, setPanel] = useState<"problems" | "reference" | "new" | "saveAs" | null>(null);
+  const [fileMenu, setFileMenu] = useState<(ContextMenuPosition & { path: string }) | null>(null);
+  const [scope, setScope] = useState<"current" | "all">("current");
   const [query, setQuery] = useState("");
+  const [newKind, setNewKind] = useState<"startup" | "class" | "helper">("startup");
   const [newName, setNewName] = useState("autoexec");
+  const normalizedNewName = newName.replace(/\.cfg$/i, "");
+  const [newFolder, setNewFolder] = useState("");
+  const [newCustomFolder, setNewCustomFolder] = useState("");
+  const [saveAsName, setSaveAsName] = useState("");
+  const [saveAsFolder, setSaveAsFolder] = useState("");
+  const [saveAsCustomFolder, setSaveAsCustomFolder] = useState("");
   const [command, setCommand] = useState<string | null>(null);
   const [target, setTarget] = useState<{
     id: number;
@@ -72,17 +112,15 @@ function ProfileFilesPane({
   const savingRef = useRef(false);
   const identity = useRef(0);
   const actionId = useRef(0);
-  const auxiliary = useRef<HTMLDivElement>(null);
+  const newCfgName = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (!panel || !active) return;
+    if (panel !== "new" || newKind !== "helper" || !active) return;
     const frame = requestAnimationFrame(() => {
-      auxiliary.current?.scrollIntoView?.({ block: "start" });
-      const field = auxiliary.current?.querySelector<HTMLInputElement>("input");
-      if (field) field.focus({ preventScroll: true });
-      else auxiliary.current?.focus({ preventScroll: true });
+      newCfgName.current?.focus({ preventScroll: true });
+      newCfgName.current?.select();
     });
     return () => cancelAnimationFrame(frame);
-  }, [panel, active]);
+  }, [panel, active, newKind]);
   for (const file of files) draftStore.read(profileId, file.path, file.text, file.source);
   draftStore.markMissing(profileId, new Set(files.map((file) => file.path)));
   const documents = draftStore.documents(profileId);
@@ -132,26 +170,171 @@ function ProfileFilesPane({
     closeReady;
   const links = analysis.links;
   const shownFindings = findings.filter((finding) =>
-    scope === "provided"
-      ? finding.advisory
-      : scope === "editable"
-        ? !finding.advisory
-        : finding.file === selected,
+    scope === "all" ? true : finding.file === selected,
   );
+  const currentFindingCount = findings.filter((finding) => finding.file === selected).length;
   const filtered = listed.filter(
-    (file) =>
-      !query ||
-      file.path.toLowerCase().includes(query.toLowerCase()) ||
-      maskCfgPreview(documents.find((doc) => doc.path === file.path)?.text ?? "")
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+    (file) => !query || file.path.toLowerCase().includes(query.toLowerCase()),
   );
-  const creation = newCfgPath(newName, context?.layer ?? "vanilla");
+  const layer = context?.layer ?? "vanilla";
+  const destinationOptions = withHelpersDestination(
+    cfgDestinations(
+      listed.filter((file) => file.editable).map((file) => file.path),
+      layer,
+    ),
+    layer,
+  );
+  const creation = newCfgPathIn(
+    newName,
+    newKind === "helper" ? chosenFolder(newFolder, newCustomFolder) : "",
+    layer,
+  );
+  const creationCollision = creation.path
+    ? cfgPathCollision(
+        creation.path,
+        listed.map((file) => file.path),
+      )
+    : null;
+  const saveAsTarget = newCfgPathIn(
+    saveAsName,
+    chosenFolder(saveAsFolder, saveAsCustomFolder),
+    layer,
+  );
+  const saveAsCollision = saveAsTarget.path
+    ? cfgPathCollision(
+        saveAsTarget.path,
+        listed.map((file) => file.path),
+      )
+    : null;
+  const canOpenSaveAs =
+    !!selected && !!context && context.profileId === profileId && !saving && closeReady;
+  const canSaveAs = canOpenSaveAs && !running && !busy;
+  const canSaveShortcut =
+    !!selected &&
+    editable &&
+    !!state?.dirty &&
+    !state.conflict &&
+    !saving &&
+    !running &&
+    (!busy || recovering) &&
+    closeReady;
+  const basenameCounts = listed.reduce((counts, file) => {
+    const name = file.path.split("/").pop()?.toLowerCase() ?? file.path.toLowerCase();
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const groups = (["Your files", "Created by execs", "Read-only"] as const).map((group) => ({
+    group,
+    files: filtered.filter((file) =>
+      group === "Read-only"
+        ? !file.editable
+        : group === "Created by execs"
+          ? file.origin === "app"
+          : file.editable && file.origin !== "app",
+    ),
+  }));
+  const visiblePaths = groups.flatMap((group) => group.files.map((file) => file.path));
+  const menuFile = fileMenu ? listed.find((file) => file.path === fileMenu.path) : null;
+  const menuState = menuFile ? draftStore.state(profileId, menuFile.path) : null;
+  const menuOwner = menuFile?.origin === "app" ? owningPane(menuFile.path) : null;
+  const menuLinks = fileMenu
+    ? links.flatMap((link) => [
+        ...(link.file === fileMenu.path
+          ? [
+              {
+                link,
+                incoming: false,
+                path: link.target,
+                line: link.targetLine ?? 1,
+              },
+            ]
+          : []),
+        ...(link.target === fileMenu.path
+          ? [{ link, incoming: true, path: link.file, line: link.line }]
+          : []),
+      ])
+    : [];
   function pick(path: string, line?: number, from?: number, to?: number) {
     draftStore.select(profileId, path);
     setPicked(path);
     setReviewConflict(false);
     setTarget({ id: ++actionId.current, line, from, to });
+  }
+  function openFileMenu(event: ReactMouseEvent<HTMLButtonElement>, path: string) {
+    event.preventDefault();
+    setFileMenu({ path, x: event.clientX, y: event.clientY });
+  }
+  function openFileMenuFromButton(event: ReactMouseEvent<HTMLButtonElement>, path: string) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setFileMenu({ path, x: bounds.right, y: bounds.bottom + 4 });
+  }
+  function openNewCfg() {
+    setPanel("new");
+  }
+  function openSaveAs(path = selected) {
+    if (!path) return;
+    const source = draftStore.state(profileId, path);
+    if (!source) return;
+    const base =
+      path
+        .split("/")
+        .pop()
+        ?.replace(/\.cfg$/i, "") || "config";
+    const folder = cfgFolderWithinLayer(path, layer);
+    const known = destinationOptions.some((destination) => destination.id === folder);
+    const preferredFolder = known ? folder : "__custom__";
+    const preferredCustom = known ? "" : folder;
+    let copyBase = `${base}_copy`;
+    if (!newCfgPathIn(copyBase, folder, layer).path) {
+      copyBase = `copy_${base.replace(/^\.+/, "") || "config"}`;
+    }
+    let candidate = copyBase;
+    let attempt = 1;
+    while (
+      cfgPathCollision(
+        newCfgPathIn(candidate, folder, layer).path ?? "",
+        listed.map((file) => file.path),
+      )
+    ) {
+      attempt += 1;
+      candidate = `${copyBase}_${attempt}`;
+    }
+    pick(path);
+    setSaveAsName(candidate);
+    setSaveAsFolder(preferredFolder);
+    setSaveAsCustomFolder(preferredCustom);
+    setPanel("saveAs");
+    setFileMenu(null);
+  }
+  function moveFileFocus(event: ReactKeyboardEvent<HTMLButtonElement>, path: string) {
+    if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+      event.preventDefault();
+      const bounds = event.currentTarget.getBoundingClientRect();
+      setFileMenu({ path, x: bounds.left + 24, y: bounds.top + 24 });
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const current = visiblePaths.indexOf(path);
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? visiblePaths.length - 1
+          : event.key === "ArrowDown"
+            ? Math.min(current + 1, visiblePaths.length - 1)
+            : Math.max(current - 1, 0);
+    const nextPath = visiblePaths[next];
+    if (!nextPath) return;
+    pick(nextPath);
+    requestAnimationFrame(() => {
+      [...document.querySelectorAll<HTMLButtonElement>("[data-testid=files-item]")]
+        .find((button) => button.dataset.path === nextPath)
+        ?.focus({ preventScroll: true });
+    });
+  }
+  async function copyPath(path: string) {
+    if ((await copyToClipboard(path)) === "failed") setError("Could not copy the file path.");
   }
   function update(text: string) {
     if (!selected || !editable || !closeReady) return;
@@ -162,19 +345,23 @@ function ProfileFilesPane({
     draftStore.edit(profileId, selected, text);
     refresh((value) => value + 1);
   }
-  async function save(all = false) {
+  async function save(all = false, requestedPath = selected) {
+    const requestedState = requestedPath ? draftStore.state(profileId, requestedPath) : null;
+    const requestedMeta = requestedPath ? cfgFileMeta(requestedPath, hudId) : null;
+    const requestedRecovering =
+      requestedState?.missingReviewed === true && recoveryAvailable === true;
     if (
       savingRef.current ||
       running ||
-      (busy && !recovering) ||
+      (busy && !requestedRecovering) ||
       !closeReady ||
-      (!all && (!editable || !state?.dirty || state.conflict)) ||
+      (!all && (!requestedMeta?.editable || !requestedState?.dirty || requestedState.conflict)) ||
       (analysis.result && hitAnalysisLimit(analysis.result))
     )
       return;
     const submissions = draftStore
       .dirty()
-      .filter((doc) => doc.profile === profileId && (all || doc.path === selected));
+      .filter((doc) => doc.profile === profileId && (all || doc.path === requestedPath));
     savingRef.current = true;
     setSaving(true);
     try {
@@ -203,12 +390,62 @@ function ProfileFilesPane({
       refresh((value) => value + 1);
     }
   }
+  async function saveAs() {
+    if (
+      !canSaveAs ||
+      savingRef.current ||
+      !selected ||
+      !context ||
+      !saveAsTarget.path ||
+      saveAsCollision
+    )
+      return;
+    const sourcePath = selected;
+    const sourceState = draftStore.state(profileId, sourcePath);
+    if (!sourceState) return;
+    const submittedText = sourceState.text;
+    const sourceRevision = sourceState.revision;
+    const destinationPath = saveAsTarget.path;
+    draftStore.create(
+      profileId,
+      destinationPath,
+      { ...context, sha256: null, librarySha256: null },
+      submittedText,
+    );
+    const submission = draftStore
+      .dirty()
+      .find((document) => document.profile === profileId && document.path === destinationPath);
+    if (!submission) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      if (!(await onSave(destinationPath, submittedText, submission))) {
+        draftStore.discard(profileId, destinationPath);
+        return;
+      }
+      draftStore.acknowledge(profileId, destinationPath, submittedText);
+      const latestSource = draftStore.state(profileId, sourcePath);
+      const newerText =
+        latestSource && latestSource.revision !== sourceRevision ? latestSource.text : null;
+      if (sourceState.dirty) draftStore.discard(profileId, sourcePath);
+      if (newerText !== null && newerText !== submittedText) {
+        draftStore.edit(profileId, destinationPath, newerText);
+      }
+      pick(destinationPath);
+      setPanel(null);
+    } catch (error) {
+      draftStore.discard(profileId, destinationPath);
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+      refresh((value) => value + 1);
+    }
+  }
   function create() {
     if (!context || !creation.path || context.profileId !== profileId || !closeReady) return;
-    const existing = listed.find(
-      (file) => file.path.toLowerCase() === creation.path?.toLowerCase(),
-    );
-    if (existing) pick(existing.path);
+    const existing = creationCollision;
+    if (existing) pick(existing);
     else {
       draftStore.create(profileId, creation.path, {
         ...context,
@@ -221,503 +458,932 @@ function ProfileFilesPane({
     setPanel(null);
   }
   const status = running
-    ? "Writes locked · explicit Save after TF2 closes"
+    ? "TF2 running · Save locked"
     : !editable
-      ? "Provided source · read-only"
+      ? "Read-only"
       : state?.conflict
-        ? "Source changed · review required"
+        ? "Changed outside execs"
         : analysis.error
           ? "Analysis unavailable"
           : !analysis.result
-            ? "Checking current drafts…"
+            ? "Checking…"
             : blocking.length
-              ? `${blocking.length} save restrictions`
+              ? `${blocking.length} blocking ${blocking.length === 1 ? "issue" : "issues"}`
               : limited
-                ? "Incomplete inventory"
+                ? "Files incomplete"
                 : !analysis.result.safetyComplete
-                  ? "Safety analysis incomplete"
+                  ? "Safety check incomplete"
                   : !analysis.result.executionComplete
-                    ? "Current checks · execution unresolved"
-                    : "Current draft checked";
+                    ? "Execution unresolved"
+                    : "No blocking issues";
   return (
-    <section data-testid="settings-files" className="flex min-w-0 flex-col gap-2 text-left">
-      <header className="flex flex-wrap items-center justify-between gap-2">
+    <section data-testid="settings-files" className="flex min-h-0 min-w-0 flex-col gap-3 text-left">
+      <header className="flex min-h-8 flex-wrap items-center justify-between gap-2">
         <h2 className="t-section">Files</h2>
-        <div className="flex flex-wrap gap-1">
-          {(
-            [
-              ["explorer", "Open file"],
-              ["problems", `Problems (${findings.length})`],
-              ["reference", "Reference"],
-              ["new", "New cfg"],
-            ] as const
-          ).map(([name, label]) => (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              key={name}
-              aria-expanded={panel === name}
-              onClick={() => setPanel(panel === name ? null : name)}
-            >
-              {label}
-            </button>
-          ))}
+        {dirtyDocuments.length > 1 && (
           <button
             type="button"
             className="btn btn-ghost"
-            onClick={() => {
-              setPanel(null);
-              setSnippet(null);
-              setTarget({ id: ++actionId.current, focusOnly: true });
-            }}
-            aria-label="Focus editor"
+            disabled={
+              running || busy || saving || !analysis.result || hitAnalysisLimit(analysis.result)
+            }
+            onClick={() => void save(true)}
           >
-            Focus
+            Save all {dirtyDocuments.length}
           </button>
-        </div>
-      </header>
-      <div className="surface min-w-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge px-3 py-2">
-          <div className="min-w-0 flex-1">
-            <h3 className="t-row truncate">
-              {selected?.split("/").pop() ?? "No file open"}
-              {state?.dirty ? " · Unsaved" : ""}
-            </h3>
-            <p className="t-meta break-all select-text">
-              {selected ?? "Create a cfg or open a provided source."}
-            </p>
-          </div>
-          {editable && (
-            <div className="flex flex-wrap gap-1">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={!state?.dirty || saving}
-                onClick={() => {
-                  if (selected) draftStore.discard(profileId, selected);
-                  refresh((value) => value + 1);
-                }}
-              >
-                Discard file
-              </button>
-              <button
-                type="button"
-                data-testid="files-save"
-                className="btn btn-primary"
-                disabled={!canSave}
-                onClick={() => void save()}
-              >
-                {saving ? "Saving…" : state?.missingReviewed ? "Restore file" : "Save file"}
-              </button>
-            </div>
-          )}
-        </div>
-        {selected ? (
-          <FilesEditor
-            profileId={profileId}
-            path={selected}
-            value={draft}
-            readOnly={!editable || !closeReady}
-            active={active}
-            onChange={update}
-            onSave={() => void save()}
-            files={snapshot.files}
-            target={target}
-            insertion={insertion}
-            onCommandChange={setCommand}
-          />
-        ) : (
-          <p className="t-meta min-h-60 p-4">
-            No .cfg files in this profile. New cfg creates an unsaved draft.
-          </p>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-edge px-3 py-2">
-          <p role="status" data-testid="files-lint-badge" className="t-meta">
-            {status}
-          </p>
-          {dirtyDocuments.length > 1 && (
+      </header>
+
+      <div className="surface grid min-w-0 overflow-hidden min-[720px]:grid-cols-[200px_minmax(0,1fr)]">
+        <aside
+          aria-label="Profile files"
+          className="min-w-0 border-edge border-b min-[720px]:border-r min-[720px]:border-b-0"
+        >
+          <div className="flex items-center gap-1.5 border-edge border-b p-2">
+            <label className="sr-only" htmlFor="files-search">
+              Filter files by path
+            </label>
+            <div className="relative min-w-0 flex-1">
+              <MagnifyingGlass
+                size={14}
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-ink-muted"
+              />
+              <input
+                id="files-search"
+                type="search"
+                className="input w-full py-1.5 pr-2 pl-7"
+                placeholder="Filter files"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setQuery("");
+                }}
+              />
+            </div>
             <button
               type="button"
-              className="btn btn-ghost"
-              disabled={
-                running || busy || saving || !analysis.result || hitAnalysisLimit(analysis.result)
-              }
-              onClick={() => void save(true)}
+              data-testid="files-new"
+              className={`flex shrink-0 items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors duration-150 hover:bg-panel-raised hover:text-ink focus-visible:outline ${
+                panel === "new" ? "bg-panel-raised text-ink" : "text-ink-muted"
+              }`}
+              aria-label="New cfg"
+              aria-expanded={panel === "new"}
+              title="New cfg (Ctrl+N)"
+              onClick={() => setPanel(panel === "new" ? null : "new")}
             >
-              Save all {dirtyDocuments.length} drafts
+              <FilePlus size={15} aria-hidden="true" />
+              <span>New cfg</span>
             </button>
-          )}
-        </div>
-      </div>
-      {analysis.error && (
-        <p role="alert" className="t-meta">
-          {analysis.error}{" "}
-          <button type="button" className="btn btn-ghost" onClick={analysis.retry}>
-            Retry analysis
-          </button>
-        </p>
-      )}
-      {state?.conflict && (
-        <div role="alert" className="surface p-3">
-          <p className="t-row">
-            {state.missing ? "This source was removed." : "This source changed outside your draft."}
-          </p>
-          <p className="t-meta">
-            Your draft is retained. Compare it with the current source before saving.
-          </p>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setReviewConflict(!reviewConflict)}
-          >
-            Compare current source
-          </button>
-          {reviewConflict && (
-            <>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <h4 className="t-row">Current source</h4>
-                  <pre className="whitespace-pre-wrap break-all text-sm">
-                    {state.missing ? "Source no longer exists" : state.source}
-                  </pre>
-                </div>
-                <div>
-                  <h4 className="t-row">Your draft</h4>
-                  <pre className="whitespace-pre-wrap break-all text-sm">{draft}</pre>
-                </div>
+          </div>
+
+          {panel === "new" ? (
+            <section className="p-3" aria-label="New cfg">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="t-row">New cfg</h3>
+                <button
+                  type="button"
+                  className="rounded p-1.5 text-ink-muted hover:bg-panel-raised hover:text-ink focus-visible:outline"
+                  aria-label="Close new cfg"
+                  onClick={() => setPanel(null)}
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
               </div>
-              <p className="t-meta">
-                Review differences above. Keeping the draft uses this displayed source as its new
-                baseline; Save still rechecks it.
+              <fieldset className="m-0 flex min-w-0 gap-1 border-0 p-0">
+                <legend className="sr-only">When this cfg runs</legend>
+                {[
+                  ["startup", "Startup"],
+                  ["class", "Class"],
+                  ["helper", "Helper"],
+                ].map(([kind, label]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="btn btn-ghost px-2 py-1"
+                    aria-pressed={newKind === kind}
+                    onClick={() => {
+                      setNewKind(kind as "startup" | "class" | "helper");
+                      setNewName(
+                        kind === "startup" ? "autoexec" : kind === "class" ? "scout" : "my_config",
+                      );
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </fieldset>
+              {newKind === "class" && (
+                <fieldset className="m-0 mt-3 flex min-w-0 flex-wrap gap-1 border-0 p-0">
+                  <legend className="sr-only">TF2 class</legend>
+                  {CLASS_CFG_NAMES.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className="btn btn-ghost px-2 py-1 capitalize"
+                      aria-pressed={normalizedNewName === name}
+                      onClick={() => {
+                        setNewKind("class");
+                        setNewName(name);
+                      }}
+                    >
+                      {name === "heavyweapons" ? "Heavy" : name}
+                    </button>
+                  ))}
+                </fieldset>
+              )}
+              {newKind === "helper" ? (
+                <CfgTargetFields
+                  id="new-cfg"
+                  name={newName}
+                  inputRef={newCfgName}
+                  onName={setNewName}
+                  folder={newFolder}
+                  onFolder={setNewFolder}
+                  customFolder={newCustomFolder}
+                  onCustomFolder={setNewCustomFolder}
+                  destinations={destinationOptions}
+                />
+              ) : (
+                <div className="mt-3">
+                  <span className="t-meta">Location</span>
+                  <div
+                    className="mt-1 truncate rounded-md border border-edge px-2 py-1.5 text-xs"
+                    title={cfgLayerRoot(layer)}
+                  >
+                    {layer === "comfig" ? "Overrides root" : "CFG root"}
+                  </div>
+                </div>
+              )}
+              <p
+                className={`t-meta mt-3 ${creation.error ? "text-danger" : ""}`}
+                title={creation.path ?? undefined}
+              >
+                {!context
+                  ? "Waiting for profile…"
+                  : creation.error
+                    ? creation.error
+                    : creationCollision
+                      ? `Already exists: ${creationCollision}`
+                      : creation.path}
               </p>
+              {!creation.error && !creationCollision && newKind !== "helper" && (
+                <p className="t-meta mt-1">
+                  {newKind === "startup"
+                    ? "Runs when TF2 starts."
+                    : `Runs when you play ${normalizedNewName === "heavyweapons" ? "Heavy" : normalizedNewName}.`}
+                </p>
+              )}
+              {!creation.error && !creationCollision && newKind === "helper" && (
+                <p className="t-meta mt-1">Runs when another cfg calls it.</p>
+              )}
               <button
                 type="button"
-                disabled={state.missing && state.currentExpected?.sha256 !== null}
-                className="btn btn-ghost"
-                onClick={() => {
-                  if (selected) draftStore.reviewCurrent(profileId, selected);
-                  setReviewConflict(false);
-                  refresh((value) => value + 1);
-                }}
+                className="btn btn-primary mt-3 w-full"
+                disabled={!context || !!creation.error || !closeReady}
+                onClick={create}
               >
-                {state.missing ? "Review draft for restoration" : "Keep reviewed draft"}
+                {creationCollision ? `Open ${creationCollision.split("/").pop()}` : "Start editing"}
               </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => {
-                  if (selected) draftStore.discard(profileId, selected);
-                  refresh((value) => value + 1);
-                }}
+            </section>
+          ) : panel === "saveAs" ? (
+            <section className="p-3" aria-label="Save as new cfg">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="t-row">Save as new cfg</h3>
+                <button
+                  type="button"
+                  className="rounded p-1.5 text-ink-muted hover:bg-panel-raised hover:text-ink focus-visible:outline"
+                  aria-label="Close Save as"
+                  onClick={() => setPanel(null)}
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </div>
+              <CfgTargetFields
+                id="save-as"
+                name={saveAsName}
+                onName={setSaveAsName}
+                folder={saveAsFolder}
+                onFolder={setSaveAsFolder}
+                customFolder={saveAsCustomFolder}
+                onCustomFolder={setSaveAsCustomFolder}
+                destinations={destinationOptions}
+              />
+              <p
+                className={`t-meta mt-3 ${saveAsTarget.error || saveAsCollision ? "text-danger" : ""}`}
+                title={saveAsTarget.path ?? undefined}
               >
-                Discard draft and use current source
-              </button>
+                {!context
+                  ? "Waiting for profile…"
+                  : saveAsTarget.error
+                    ? saveAsTarget.error
+                    : saveAsCollision
+                      ? `Already exists: ${saveAsCollision}`
+                      : saveAsTarget.path}
+              </p>
+              {running && <p className="t-meta mt-1">Close TF2 to save this copy.</p>}
+              {saveAsCollision ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost mt-3 w-full"
+                  onClick={() => {
+                    pick(saveAsCollision);
+                    setPanel(null);
+                  }}
+                >
+                  Open existing
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="files-save-as-confirm"
+                  className="btn btn-primary mt-3 w-full"
+                  disabled={!canSaveAs || !!saveAsTarget.error}
+                  onClick={() => void saveAs()}
+                >
+                  {saving ? "Saving…" : "Save new cfg"}
+                </button>
+              )}
+            </section>
+          ) : (
+            <>
+              {limited && (
+                <p className="t-meta border-edge border-b px-3 py-2">
+                  Some files could not be loaded.
+                </p>
+              )}
+              <div data-testid="files-list" className="py-2">
+                {groups.map(({ group, files: groupFiles }) => {
+                  if (groupFiles.length === 0) return null;
+                  return (
+                    <div key={group} className="mb-2 last:mb-0">
+                      <h3 className="px-3 py-1 text-[11px] font-medium text-ink-muted">{group}</h3>
+                      {groupFiles.map((file) => {
+                        const dirty = draftStore.state(profileId, file.path)?.dirty;
+                        const name = file.path.split("/").pop();
+                        return (
+                          <button
+                            type="button"
+                            key={file.path}
+                            data-testid="files-item"
+                            data-path={file.path}
+                            data-origin={file.origin}
+                            data-active={selected === file.path}
+                            className={`flex w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left transition-colors duration-150 hover:bg-panel-raised ${
+                              selected === file.path ? "bg-panel-raised text-ink" : "text-ink-muted"
+                            }`}
+                            aria-label={`${name}${dirty ? ", unsaved" : ""}${file.editable ? "" : ", read-only"}. ${file.path}`}
+                            aria-current={selected === file.path ? "true" : undefined}
+                            tabIndex={
+                              selected === file.path ||
+                              (!visiblePaths.includes(selected ?? "") &&
+                                visiblePaths[0] === file.path)
+                                ? 0
+                                : -1
+                            }
+                            title={file.path}
+                            onClick={() => pick(file.path)}
+                            onContextMenu={(event) => openFileMenu(event, file.path)}
+                            onKeyDown={(event) => moveFileFocus(event, file.path)}
+                          >
+                            <FileCode size={15} className="shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                              {name}
+                              {dirty ? (
+                                <>
+                                  <span aria-hidden="true"> •</span>
+                                  <span className="sr-only"> Unsaved</span>
+                                </>
+                              ) : null}
+                            </span>
+                            {(basenameCounts.get(name?.toLowerCase() ?? "") ?? 0) > 1 && (
+                              <span className="max-w-16 truncate text-[11px] text-ink-faint">
+                                {fileParentLabel(file.path)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <p className="t-meta px-3 py-2">No matching cfg files.</p>
+                )}
+              </div>
             </>
           )}
-        </div>
-      )}
-      <div ref={auxiliary} tabIndex={-1} className="outline-none">
-        {panel === "explorer" && (
-          <section className="surface p-3" aria-label="Profile files">
-            <label className="t-row" htmlFor="files-search">
-              Search filenames, paths and draft content
-            </label>
-            <input
-              id="files-search"
-              className="input mt-2 w-full"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <p className="t-meta my-2">
-              {listed.length} loaded cfg documents, including unsaved drafts.{" "}
-              {limited ? "Inventory is incomplete." : "VPK and unscanned sources are not searched."}{" "}
-              Credential values are masked in search.
-            </p>
-            <div data-testid="files-list">
-              {["Your cfgs", "Managed by execs", "Provided"].map((group) => (
-                <div key={group}>
-                  <h3 className="eyebrow my-2">{group}</h3>
-                  {filtered
-                    .filter((file) =>
-                      group === "Provided"
-                        ? !file.editable
-                        : group === "Managed by execs"
-                          ? file.origin === "app"
-                          : file.editable && file.origin !== "app",
-                    )
-                    .map((file) => (
+        </aside>
+
+        <div className="min-w-0">
+          <div className="flex min-h-11 min-w-0 items-center gap-2 border-edge border-b bg-bg px-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+              <FileCode size={15} className="shrink-0 text-ink-muted" aria-hidden="true" />
+              <span className="truncate">{selected?.split("/").pop() ?? "No file open"}</span>
+              {state?.dirty ? (
+                <>
+                  <span className="text-ink-muted" aria-hidden="true">
+                    •
+                  </span>
+                  <span className="sr-only">Unsaved</span>
+                </>
+              ) : null}
+              {!editable && selected ? <span className="t-meta shrink-0">Read-only</span> : null}
+            </div>
+            {selected && (
+              <div className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  data-testid="files-actions"
+                  className="btn btn-ghost px-2"
+                  aria-label="File actions"
+                  title="File actions"
+                  onClick={(event) => openFileMenuFromButton(event, selected)}
+                >
+                  <DotsThree size={17} weight="bold" aria-hidden="true" />
+                </button>
+                {editable && (
+                  <>
+                    {state?.dirty && (
                       <button
                         type="button"
-                        key={file.path}
-                        data-testid="files-item"
-                        data-path={file.path}
-                        data-origin={file.origin}
-                        data-active={selected === file.path}
-                        className="flex w-full flex-wrap items-center justify-between gap-2 border-b border-edge py-2 text-left"
-                        aria-current={selected === file.path ? "true" : undefined}
+                        className="btn btn-ghost"
+                        aria-label="Discard file"
+                        disabled={saving}
                         onClick={() => {
-                          pick(file.path);
-                          setPanel(null);
+                          if (selected) draftStore.discard(profileId, selected);
+                          refresh((value) => value + 1);
                         }}
                       >
-                        <span>
-                          <strong className="t-row">{file.path.split("/").pop()}</strong>
-                          <span className="t-meta block break-all">{file.path}</span>
-                        </span>
-                        <span className="t-meta">
-                          {draftStore.state(profileId, file.path)?.dirty ? "Unsaved · " : ""}
-                          {file.badge}
-                        </span>
+                        Discard
                       </button>
-                    ))}
+                    )}
+                    <button
+                      type="button"
+                      data-testid="files-save"
+                      className="btn btn-primary"
+                      disabled={!canSave}
+                      onClick={() => void save()}
+                    >
+                      {saving ? "Saving…" : state?.missingReviewed ? "Restore file" : "Save"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {selected ? (
+            <FilesEditor
+              profileId={profileId}
+              path={selected}
+              value={draft}
+              readOnly={!editable || !closeReady}
+              active={active}
+              compact={panel === "problems" || panel === "reference"}
+              onChange={update}
+              onSave={() => void save()}
+              onSaveAs={() => openSaveAs()}
+              onNewCfg={openNewCfg}
+              canSave={canSave}
+              canSaveShortcut={canSaveShortcut}
+              canSaveAs={canOpenSaveAs}
+              onShowProblems={() => {
+                setScope("current");
+                setPanel("problems");
+              }}
+              onShowHelp={() => setPanel("reference")}
+              files={snapshot.files}
+              target={target}
+              insertion={insertion}
+              onCommandChange={setCommand}
+              statusStart={
+                <div className="flex min-w-0 items-center gap-1">
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition-colors duration-150 hover:bg-panel-raised hover:text-ink focus-visible:outline ${
+                      panel === "problems" ? "bg-panel-raised text-ink" : "text-ink-muted"
+                    }`}
+                    aria-pressed={panel === "problems"}
+                    onClick={() => setPanel(panel === "problems" ? null : "problems")}
+                  >
+                    <WarningCircle size={14} aria-hidden="true" />
+                    <span>Problems{currentFindingCount ? ` ${currentFindingCount}` : ""}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 transition-colors duration-150 hover:bg-panel-raised hover:text-ink focus-visible:outline ${
+                      panel === "reference" ? "bg-panel-raised text-ink" : "text-ink-muted"
+                    }`}
+                    aria-pressed={panel === "reference"}
+                    onClick={() => {
+                      if (panel === "reference") setSnippet(null);
+                      setPanel(panel === "reference" ? null : "reference");
+                    }}
+                  >
+                    <BookOpenText size={14} aria-hidden="true" />
+                    <span>Help</span>
+                  </button>
+                  <span
+                    role="status"
+                    data-testid="files-lint-badge"
+                    className={
+                      status === "No blocking issues" ? "sr-only" : "truncate px-1 text-ink-muted"
+                    }
+                  >
+                    {status}
+                  </span>
                 </div>
-              ))}
+              }
+            />
+          ) : (
+            <p className="t-meta min-h-80 p-4">No cfg files in this profile.</p>
+          )}
+
+          {analysis.error && (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 border-edge border-t px-3 py-2"
+            >
+              <p className="t-meta">{analysis.error}</p>
+              <button type="button" className="btn btn-ghost shrink-0" onClick={analysis.retry}>
+                Retry analysis
+              </button>
             </div>
-          </section>
-        )}
-        {panel === "problems" && (
-          <section className="surface p-3" aria-label="Problems">
-            <div className="flex flex-wrap gap-2">
-              {[
-                ["current", "This document"],
-                ["editable", "All editable"],
-                ["provided", "Provided advisories"],
-              ].map(([value, label]) => (
+          )}
+
+          {state?.conflict && (
+            <div role="alert" className="border-edge border-t p-3">
+              <p className="t-row">
+                {state.missing ? "This source was removed." : "This source changed outside execs."}
+              </p>
+              <p className="t-meta mt-1">Your draft is still here. Compare before saving.</p>
+              <button
+                type="button"
+                className="btn btn-ghost mt-2"
+                onClick={() => setReviewConflict(!reviewConflict)}
+              >
+                Compare current source
+              </button>
+              {reviewConflict && (
+                <>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <h4 className="t-row">Current source</h4>
+                      <pre className="mt-1 whitespace-pre-wrap break-all text-sm">
+                        {state.missing ? "Source no longer exists" : state.source}
+                      </pre>
+                    </div>
+                    <div>
+                      <h4 className="t-row">Your draft</h4>
+                      <pre className="mt-1 whitespace-pre-wrap break-all text-sm">{draft}</pre>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      disabled={state.missing && state.currentExpected?.sha256 !== null}
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        if (selected) draftStore.reviewCurrent(profileId, selected);
+                        setReviewConflict(false);
+                        refresh((value) => value + 1);
+                      }}
+                    >
+                      {state.missing ? "Review draft for restoration" : "Keep draft"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        if (selected) draftStore.discard(profileId, selected);
+                        refresh((value) => value + 1);
+                      }}
+                    >
+                      Use current source
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {(panel === "problems" || panel === "reference") && (
+            <section
+              aria-label={panel === "problems" ? "Problems" : "Help"}
+              className="border-edge border-t bg-panel"
+            >
+              <header className="flex h-9 items-center justify-between border-edge border-b px-3">
+                <h3 className="flex items-center gap-2 t-row">
+                  {panel === "problems" ? (
+                    <WarningCircle size={15} aria-hidden="true" />
+                  ) : (
+                    <BookOpenText size={15} aria-hidden="true" />
+                  )}
+                  {panel === "problems" ? "Problems" : "Help"}
+                </h3>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  key={value}
-                  aria-pressed={scope === value}
-                  onClick={() => setScope(value)}
+                  className="rounded p-1 text-ink-muted hover:bg-panel-raised hover:text-ink focus-visible:outline"
+                  aria-label={`Close ${panel === "problems" ? "Problems" : "Help"}`}
+                  onClick={() => {
+                    if (panel === "reference") setSnippet(null);
+                    setPanel(null);
+                  }}
                 >
-                  {label} (
-                  {
-                    findings.filter((f) =>
-                      value === "current"
-                        ? f.file === selected
-                        : value === "provided"
-                          ? f.advisory
-                          : !f.advisory,
-                    ).length
-                  }
-                  )
+                  <X size={15} aria-hidden="true" />
                 </button>
-              ))}
-            </div>
-            <p className="t-meta my-2">
-              Static analysis covers loaded cfg text and retained drafts. Unresolved execs, mount
-              order and server behavior can limit execution knowledge.
-            </p>
-            {!analysis.result ? (
-              <p className="t-meta">{analysis.error ?? "Checking current drafts…"}</p>
-            ) : shownFindings.length === 0 ? (
-              <p className="t-meta">
-                No findings in this scope. This does not prove runtime behavior.
-              </p>
-            ) : (
-              <ul>
-                {shownFindings.map((finding) => (
-                  <FindingRow
-                    key={findingKey(finding)}
-                    finding={finding}
-                    onOpen={() => {
-                      pick(finding.file, finding.line, finding.from, finding.to);
-                    }}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-        {panel === "reference" && (
-          <section className="surface p-3">
-            <FilesReference
-              command={command}
-              selectedPath={selected}
-              editable={editable}
-              onInsert={setSnippet}
-            />
-          </section>
-        )}
-        {snippet !== null && (
-          <section className="surface p-3" aria-label="Snippet preview">
-            <h3 className="t-row">Insert into {selected}</h3>
-            <p className="t-meta">
-              Replaces the selected text in this unsaved draft. Undo restores it. Nothing executes
-              or saves.
-            </p>
-            <pre className="my-2 whitespace-pre-wrap">{snippet}</pre>
-            <button
-              type="button"
-              disabled={!editable || !closeReady}
-              className="btn btn-primary"
-              onClick={() => {
-                setInsertion({ id: ++actionId.current, text: snippet });
-                setSnippet(null);
+              </header>
+              <div className="p-3">
+                {panel === "problems" && (
+                  <>
+                    <Segmented
+                      label="Problem scope"
+                      size="sm"
+                      value={scope}
+                      onChange={setScope}
+                      options={[
+                        {
+                          id: "current",
+                          label: (
+                            <span className="flex items-center gap-1.5">
+                              This file
+                              <span className="tabular-nums text-ink-muted">
+                                {findings.filter((finding) => finding.file === selected).length}
+                              </span>
+                            </span>
+                          ),
+                        },
+                        {
+                          id: "all",
+                          label: (
+                            <span className="flex items-center gap-1.5">
+                              All files
+                              <span className="tabular-nums text-ink-muted">{findings.length}</span>
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                    {!analysis.result ? (
+                      <p className="t-meta mt-3">{analysis.error ?? "Checking…"}</p>
+                    ) : shownFindings.length === 0 ? (
+                      <p className="mt-3 rounded-lg border border-edge bg-panel-raised p-3 text-sm">
+                        Nothing to review here.
+                      </p>
+                    ) : (
+                      <ul className="mt-3 grid gap-2">
+                        {shownFindings.map((finding) => (
+                          <FindingRow
+                            key={findingKey(finding)}
+                            finding={finding}
+                            selected={selected}
+                            onOpen={() =>
+                              pick(finding.file, finding.line, finding.from, finding.to)
+                            }
+                          />
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+
+                {panel === "reference" && (
+                  <>
+                    {snippet !== null && (
+                      <section
+                        className="mb-4 border-edge border-b pb-4"
+                        aria-label="Snippet preview"
+                      >
+                        <h4 className="t-row">Insert into {selected}</h4>
+                        <pre className="my-2 whitespace-pre-wrap text-sm">{snippet}</pre>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            disabled={!editable || !closeReady}
+                            className="btn btn-primary"
+                            onClick={() => {
+                              setInsertion({ id: ++actionId.current, text: snippet });
+                              setSnippet(null);
+                            }}
+                          >
+                            Insert
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => setSnippet(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </section>
+                    )}
+                    <FilesReference
+                      command={command}
+                      selectedPath={selected}
+                      editable={editable}
+                      onInsert={setSnippet}
+                    />
+                  </>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+      {fileMenu && menuFile && (
+        <ContextMenu
+          label={`${menuFile.path.split("/").pop()} actions`}
+          position={fileMenu}
+          onClose={() => setFileMenu(null)}
+        >
+          <ContextMenuItem
+            onSelect={() => {
+              pick(menuFile.path);
+              setFileMenu(null);
+            }}
+          >
+            {menuFile.path === selected ? "Focus editor" : "Open"}
+          </ContextMenuItem>
+          {menuFile.editable && (
+            <ContextMenuItem
+              detail="Ctrl+S"
+              disabled={
+                !menuState?.dirty ||
+                menuState.conflict ||
+                saving ||
+                running ||
+                busy ||
+                !analysis.result ||
+                hitAnalysisLimit(analysis.result) ||
+                blockingFindingsForFile(findings, menuFile.path).length > 0
+              }
+              onSelect={() => {
+                void save(false, menuFile.path);
+                setFileMenu(null);
               }}
             >
-              Insert into draft
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setSnippet(null)}>
-              Cancel
-            </button>
-          </section>
-        )}
-        {panel === "new" && (
-          <section className="surface p-3" aria-label="New cfg">
-            <h3 className="t-row">New user cfg</h3>
-            <div className="my-2 flex flex-wrap gap-1">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setNewName("autoexec")}
-              >
-                Autoexec
-              </button>
-              {CLASS_CFG_NAMES.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setNewName(name)}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-            <label className="t-meta" htmlFor="new-cfg-name">
-              Name or relative helper path
-            </label>
-            <input
-              id="new-cfg-name"
-              className="input mt-1 w-full"
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-            <p className="t-meta my-2">
-              {!context
-                ? "Waiting for verified profile and cfg layer."
-                : (creation.error ?? creation.path)}
-            </p>
-            <p className="t-meta">
-              {newName.replace(/\.cfg$/i, "") === "autoexec"
-                ? "Runs at startup in the detected cfg layer."
-                : (CLASS_CFG_NAMES as readonly string[]).includes(newName.replace(/\.cfg$/i, ""))
-                  ? "Runs when this class is selected."
-                  : "Manual helper: creating it does not add a startup exec."}
-            </p>
-            <button
-              type="button"
-              className="btn btn-primary mt-2"
-              disabled={!context || !!creation.error || !closeReady}
-              onClick={create}
-            >
-              Open unsaved draft
-            </button>
-          </section>
-        )}
-      </div>
-      {selected && (
-        <details className="text-sm">
-          <summary className="cursor-pointer text-ink-muted">File ownership and execution</summary>
-          <p className="t-meta mt-2">
-            {selected.toLowerCase() === "tf/cfg/config.cfg"
-              ? "Engine-managed, editable here. TF2 can serialize settings and binds over this file."
-              : meta?.origin === "app"
-                ? "Managed by execs. Its settings pane may rewrite these commands after a manual edit."
-                : editable
-                  ? "Your profile cfg. Save updates its allowed live projection while TF2 is closed."
-                  : "Provided engine, HUD or pack source. Read-only here; findings are advisory."}
-          </p>
-          {meta?.origin === "app" && onNavigate && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() =>
-                onNavigate(
-                  selected.includes("execs_binds")
-                    ? "binds"
-                    : selected.includes("execs_gameplay")
-                      ? "gameplay"
-                      : selected.includes("execs_preload")
-                        ? "mods"
-                        : "comfig",
-                )
-              }
-            >
-              Open owning settings pane
-            </button>
+              Save
+            </ContextMenuItem>
           )}
-          <p className="t-meta">
-            {cfgExecutionRole(selected, snapshot.files, context?.layer === "comfig")}
-          </p>
-          <p className="t-meta">
-            Links are static candidates. Scanned cfgs may be dormant; bind and alias payloads run
-            only when invoked.
-          </p>
-          {links
-            .flatMap((link) => [
-              ...(link.file === selected
-                ? [{ link, incoming: false, path: link.target, line: link.targetLine ?? 1 }]
-                : []),
-              ...(link.target === selected
-                ? [{ link, incoming: true, path: link.file, line: link.line }]
-                : []),
-            ])
-            .map(({ link, incoming, path, line }) => (
-              <button
-                key={`${incoming}:${link.file}:${link.line}:${link.kind}:${link.target}:${link.targetLine}:${link.deferred}`}
-                type="button"
-                data-testid="files-source-link"
-                data-direction={incoming ? "incoming" : "outgoing"}
-                data-deferred={link.deferred}
-                className="btn btn-ghost"
-                disabled={!path}
-                onClick={() => {
-                  if (path) pick(path, line);
+          <ContextMenuItem
+            detail="Ctrl+Shift+S"
+            disabled={!canOpenSaveAs}
+            onSelect={() => openSaveAs(menuFile.path)}
+          >
+            Save as new cfg…
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => {
+              pick(menuFile.path);
+              setScope("current");
+              setPanel("problems");
+              setFileMenu(null);
+            }}
+          >
+            Show problems
+          </ContextMenuItem>
+          {menuLinks.length > 0 && <ContextMenuSeparator />}
+          {menuLinks.map(({ link, incoming, path, line }) => (
+            <ContextMenuItem
+              key={`${incoming}:${link.file}:${link.line}:${link.kind}:${link.target}:${link.targetLine}:${link.deferred}`}
+              data-testid="files-source-link"
+              data-direction={incoming ? "incoming" : "outgoing"}
+              data-deferred={link.deferred}
+              disabled={!path}
+              detail={link.deferred ? "Deferred" : undefined}
+              title={path ? `${path}:${line}` : "Unresolved"}
+              onSelect={() => {
+                if (path) pick(path, line);
+                setFileMenu(null);
+              }}
+            >
+              {incoming ? "Referenced by" : link.label}: {path ? `${path}:${line}` : "Unresolved"}
+            </ContextMenuItem>
+          ))}
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            onSelect={() => {
+              void copyPath(menuFile.path);
+              setFileMenu(null);
+            }}
+          >
+            Copy path
+          </ContextMenuItem>
+          {menuOwner && onNavigate && (
+            <ContextMenuItem
+              onSelect={() => {
+                onNavigate(menuOwner.tab);
+                setFileMenu(null);
+              }}
+            >
+              {menuOwner.label}
+            </ContextMenuItem>
+          )}
+          {menuState?.dirty && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                disabled={saving}
+                onSelect={() => {
+                  draftStore.discard(profileId, menuFile.path);
+                  refresh((value) => value + 1);
+                  setFileMenu(null);
                 }}
               >
-                {incoming ? "Referenced by" : link.label}:{" "}
-                {path ? `${path}:${line}` : "Unresolved in loaded cfgs"}
-                {incoming ? ` · ${link.kind}` : ` · from line ${link.line}`}
-                {link.deferred ? " · Deferred bind/alias payload" : ""}
-              </button>
-            ))}
-        </details>
+                Discard changes
+              </ContextMenuItem>
+            </>
+          )}
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            onSelect={() => {
+              openNewCfg();
+              setFileMenu(null);
+            }}
+            detail="Ctrl+N"
+          >
+            New cfg…
+          </ContextMenuItem>
+        </ContextMenu>
       )}
     </section>
   );
 }
-function FindingRow({ finding, onOpen }: { finding: CfgFinding; onOpen: () => void }) {
+
+function CfgTargetFields({
+  id,
+  name,
+  inputRef,
+  onName,
+  folder,
+  onFolder,
+  customFolder,
+  onCustomFolder,
+  destinations,
+}: {
+  id: string;
+  name: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  onName: (value: string) => void;
+  folder: string;
+  onFolder: (value: string) => void;
+  customFolder: string;
+  onCustomFolder: (value: string) => void;
+  destinations: readonly CfgDestination[];
+}) {
+  const choices = destinations.slice(0, 6);
+  return (
+    <div className="mt-3 grid gap-3">
+      <label className="block t-meta" htmlFor={`${id}-name`}>
+        File name
+        <input
+          ref={inputRef}
+          id={`${id}-name`}
+          className="input mt-1 w-full"
+          value={name}
+          onChange={(event) => onName(event.target.value)}
+        />
+      </label>
+      <fieldset className="m-0 min-w-0 border-0 p-0">
+        <legend className="t-meta">Location</legend>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {choices.map((destination) => (
+            <button
+              key={destination.id}
+              type="button"
+              className={`rounded-md border px-2 py-1 text-xs transition-colors duration-150 focus-visible:outline ${
+                folder === destination.id
+                  ? "border-brand bg-brand/6 text-ink"
+                  : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
+              }`}
+              aria-pressed={folder === destination.id}
+              title={destination.path}
+              onClick={() => onFolder(destination.id)}
+            >
+              {destination.id ? destination.label : "Root"}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`rounded-md border px-2 py-1 text-xs transition-colors duration-150 focus-visible:outline ${
+              folder === "__custom__"
+                ? "border-brand bg-brand/6 text-ink"
+                : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
+            }`}
+            aria-pressed={folder === "__custom__"}
+            onClick={() => onFolder("__custom__")}
+          >
+            Custom
+          </button>
+        </div>
+        {folder === "__custom__" && (
+          <label className="mt-2 block t-meta" htmlFor={`${id}-folder`}>
+            Folder
+            <input
+              id={`${id}-folder`}
+              className="input mt-1 w-full"
+              placeholder="practice/server"
+              value={customFolder}
+              onChange={(event) => onCustomFolder(event.target.value)}
+            />
+          </label>
+        )}
+      </fieldset>
+    </div>
+  );
+}
+
+function chosenFolder(folder: string, customFolder: string) {
+  return folder === "__custom__" ? customFolder : folder;
+}
+
+function withHelpersDestination(destinations: CfgDestination[], layer: "vanilla" | "comfig") {
+  if (destinations.some((destination) => destination.id.toLowerCase() === "helpers")) {
+    return destinations;
+  }
+  return [
+    destinations[0],
+    {
+      id: "helpers",
+      label: "helpers",
+      path: `${cfgLayerRoot(layer)}/helpers`,
+    },
+    ...destinations.slice(1),
+  ].filter((destination): destination is CfgDestination => !!destination);
+}
+
+function cfgFolderWithinLayer(path: string, layer: "vanilla" | "comfig") {
+  const normalized = path.replaceAll("\\", "/");
+  const root = cfgLayerRoot(layer);
+  const prefix = `${root}/`;
+  if (!normalized.toLowerCase().startsWith(prefix.toLowerCase())) return "";
+  const relative = normalized.slice(prefix.length);
+  return relative.split("/").slice(0, -1).join("/");
+}
+
+function fileParentLabel(path: string) {
+  const normalized = path.replaceAll("\\", "/");
+  const parent = normalized.split("/").slice(0, -1).join("/");
+  if (parent.toLowerCase() === "tf/cfg") return "CFG";
+  if (parent.toLowerCase() === "tf/cfg/overrides") return "Overrides";
+  const relative = parent.replace(/^tf\/cfg\/overrides\//i, "").replace(/^tf\/cfg\//i, "");
+  return relative || parent.split("/").slice(-2).join("/");
+}
+
+function owningPane(path: string): { tab: SettingsTab; label: string } {
+  if (path.includes("execs_binds")) return { tab: "binds", label: "Open Binds" };
+  if (path.includes("execs_gameplay")) return { tab: "gameplay", label: "Open Gameplay" };
+  if (path.includes("execs_preload")) return { tab: "mods", label: "Open Mods" };
+  return { tab: "comfig", label: "Open Comfig" };
+}
+
+function FindingRow({
+  finding,
+  selected,
+  onOpen,
+}: {
+  finding: CfgFinding;
+  selected: string | null;
+  onOpen: () => void;
+}) {
+  const location =
+    finding.file === selected
+      ? `Line ${finding.line}, column ${finding.col}`
+      : `${finding.file.split("/").pop()}:${finding.line}:${finding.col}`;
   return (
     <li
       data-testid="files-finding"
       data-tier={finding.tier}
       data-advisory={finding.advisory}
-      className="border-t border-edge py-3"
+      className="rounded-lg border border-edge bg-panel-raised p-3"
     >
-      <button
-        type="button"
-        className="text-left text-sm underline underline-offset-4"
-        onClick={onOpen}
-      >
-        {finding.file}:{finding.line}:{finding.col}
-      </button>
-      <span className={`badge ml-2 ${findingTierClass(finding.tier)}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <WarningCircle size={16} className="shrink-0 text-ink-muted" aria-hidden="true" />
+        <button
+          type="button"
+          className="text-left text-sm font-medium hover:underline hover:underline-offset-4"
+          onClick={onOpen}
+        >
+          {location}
+        </button>
+        <span className={`badge ${findingTierClass(finding.tier)}`}>
+          {finding.advisory
+            ? "Advisory"
+            : finding.tier === "block"
+              ? "Save restriction"
+              : "Warning"}
+        </span>
+      </div>
+      <p className="mt-2 text-sm leading-5">{findingMessage(finding.message)}</p>
+      {finding.via && <p className="t-meta mt-1">Via {finding.via}</p>}
+      <p className="t-meta mt-1">
         {finding.advisory
-          ? "Advisory"
+          ? "Read-only source"
           : finding.tier === "block"
-            ? "Save restriction"
-            : finding.tier}
-      </span>
-      <p className="mt-1 text-sm leading-6">{findingMessage(finding.message)}</p>
-      {finding.via && <p className="t-meta">Trace: {finding.via}</p>}
-      <p className="t-meta">
-        {finding.advisory
-          ? "Read-only source; this does not block your saves."
-          : finding.tier === "block"
-            ? "Review this command at its source before saving. Nothing is stripped."
-            : "Review the command and its Reference entry; this finding does not block saving."}
+            ? "Fix before saving"
+            : "Save is allowed"}
       </p>
     </li>
   );

@@ -1,4 +1,4 @@
-export const PREVIEW_APP_VERSION = "0.1.0";
+export const PREVIEW_APP_VERSION = __APP_VERSION__;
 export const PREVIEW_UPDATE_VERSION = "0.2.0";
 
 export const INSTALL_LABEL = "Install";
