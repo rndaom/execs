@@ -43,6 +43,46 @@ describe("retained file baselines", () => {
 });
 
 describe("source-bound retained documents", () => {
+  it("removes clean missing documents but retains edited missing documents", () => {
+    const store = createFilesDraftStore();
+    store.read("a", "clean.cfg", "original", token("one"));
+    store.read("a", "dirty.cfg", "original", token("two"));
+    store.edit("a", "dirty.cfg", "keep this");
+    store.markMissing("a", new Set());
+    expect(store.state("a", "clean.cfg")).toBeNull();
+    expect(store.documents("a").map((file) => file.path)).toEqual(["dirty.cfg"]);
+    expect(store.state("a", "dirty.cfg")).toMatchObject({
+      text: "keep this",
+      missing: true,
+      conflict: true,
+    });
+  });
+  it("requires a verified live absence and explicit review to restore a retained draft", () => {
+    const store = createFilesDraftStore();
+    store.read("a", "cfg", "original", token("one"));
+    store.edit("a", "cfg", "keep this");
+    const absent = { ...token(null), librarySha256: "one" };
+    store.read("a", "cfg", "", absent);
+    expect(store.state("a", "cfg")).toMatchObject({
+      missing: true,
+      conflict: true,
+      expected: token("one"),
+    });
+    expect(store.reviewCurrent("a", "cfg")).toBe(true);
+    expect(store.state("a", "cfg")).toMatchObject({
+      text: "keep this",
+      expected: absent,
+      missingReviewed: true,
+      dirty: true,
+      conflict: false,
+    });
+    store.read("a", "cfg", "external replacement", token("replacement"));
+    expect(store.state("a", "cfg")).toMatchObject({
+      missingReviewed: false,
+      conflict: true,
+      expected: absent,
+    });
+  });
   it("keeps document selection and edits isolated by profile", () => {
     const store = createFilesDraftStore();
     store.read("a", "same.cfg", "first");

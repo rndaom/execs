@@ -70,18 +70,24 @@ beforeEach(async () => {
   api = createPreviewApi("settings-files");
   store = createFilesDraftStore();
   profile = (await api.getActiveProfileDetail())?.id ?? "";
+  await renderHost();
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
+});
+async function renderHost(refreshKey = 1, running = false) {
   await act(async () =>
     root.render(
       <ToastProvider>
-        <AppStatusProvider value={{ error: null, setError: noop, running: false, busy: false }}>
+        <AppStatusProvider value={{ error: null, setError: noop, running, busy: false }}>
           <SettingsHost
             api={api}
             filesDraftStore={store}
             filesSaver={saver}
             tab="files"
-            running={false}
+            running={running}
             externalBusy={false}
-            refreshKey={1}
+            refreshKey={refreshKey}
             bindSyncRequest={null}
             onBindSyncHandled={noop}
             onBusyChange={noop}
@@ -91,7 +97,7 @@ beforeEach(async () => {
       </ToastProvider>,
     ),
   );
-});
+}
 afterEach(async () => {
   await act(async () => root.unmount());
   box.remove();
@@ -99,6 +105,108 @@ afterEach(async () => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
+
+async function saveShortcut() {
+  await act(async () => {
+    editor().contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "s",
+        code: "KeyS",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+}
+
+it("Ctrl+S immediately validates and saves the current edit before the debounce settles", async () => {
+  const write = vi.spyOn(api, "writeOwnedFile");
+  await edit("echo immediate shortcut\n");
+  expect(box.querySelector('[data-testid="files-lint-badge"]')?.textContent).toContain("Checking");
+  await saveShortcut();
+  expect(write).toHaveBeenCalledWith(
+    expect.any(String),
+    "echo immediate shortcut\n",
+    expect.any(Object),
+  );
+  expect(store.dirty()).toEqual([]);
+});
+
+it("Ctrl+S cannot save a newly blocked command behind stale clean diagnostics", async () => {
+  const write = vi.spyOn(api, "writeOwnedFile");
+  await edit("unbind escape\n");
+  await saveShortcut();
+  expect(write).not.toHaveBeenCalled();
+  expect(editor().state.doc.toString()).toBe("unbind escape\n");
+  expect(store.dirty()).toHaveLength(1);
+});
+
+it.each(["exec config_default\n", "exec missing_personal_helper\n"])(
+  "permits unresolved personal exec warnings when saving %j",
+  async (text) => {
+    await edit(text);
+    const write = vi.spyOn(api, "writeOwnedFile");
+    expect(await save()).toBe(true);
+    expect(write).toHaveBeenCalledWith(expect.any(String), text, expect.any(Object));
+  },
+);
+
+it("does not turn provided pack advisories into a personal-file save restriction", async () => {
+  store.read(profile, "tf/custom/provided/cfg/helper.cfg", "unbind escape\n");
+  await edit("echo personal safe command\n");
+  expect(await save()).toBe(true);
+});
+
+it.each([false, true])(
+  "restores a reviewed missing live file only while TF2 is closed (running=%s)",
+  async (running) => {
+    await edit("echo retained restoration draft\n");
+    const draft = store.dirty()[0];
+    const originalRead = api.readProfileFile;
+    const originalWrite = api.writeOwnedFile;
+    const existing = await originalRead(draft.path);
+    let missing = true;
+    const absent = { ...existing.source, sha256: null };
+    vi.spyOn(api, "readProfileFile").mockImplementation(async (...args) =>
+      args[0] === draft.path && missing
+        ? { ...existing, text: null, source: absent }
+        : originalRead(...args),
+    );
+    const write = vi
+      .spyOn(api, "writeOwnedFile")
+      .mockImplementation(async (path, text, expected) => {
+        expect(path).toBe(draft.path);
+        expect(expected).toEqual(absent);
+        missing = false;
+        return originalWrite(path, text, existing.source);
+      });
+    await renderHost(2, running);
+    expect(store.state(profile, draft.path)).toMatchObject({
+      missing: true,
+      conflict: true,
+      text: draft.text,
+    });
+    await click("Compare current source");
+    await click("Review draft for restoration");
+    expect(store.state(profile, draft.path)).toMatchObject({
+      missingReviewed: true,
+      expected: absent,
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 220));
+    });
+    await click("Restore file");
+    if (running) {
+      expect(write).not.toHaveBeenCalled();
+      expect(store.state(profile, draft.path)?.dirty).toBe(true);
+    } else {
+      expect(write).toHaveBeenCalledOnce();
+      expect(store.state(profile, draft.path)).toMatchObject({ dirty: false, missing: false });
+      expect((await originalRead(draft.path)).text).toBe(draft.text);
+    }
+  },
+);
 
 it("creates an empty cfg draft without writing and saves only with an absent-source token", async () => {
   const write = vi.spyOn(api, "writeOwnedFile");
