@@ -1,0 +1,46 @@
+{
+  "source_commit": "d7ded7359bf30f7d04e00ca599fde340e745a66e",
+  "description": "Production build after Files integration and Focus/completion follow-up. Raw asset bytes; no startup or memory inference.",
+  "assets": [
+    {
+      "file": "app-COFKWOAd.js",
+      "bytes": 247,
+      "sha256": "93ee7c8269708c0d1a66272ca8d0f914d411be118d875cd98c6d0618b5bfe3a6"
+    },
+    {
+      "file": "files-analysis.worker-DYiVjpKz.js",
+      "bytes": 760604,
+      "sha256": "a203d74621f42bc1ca2ae41ffe55430d365e4d24893e2fed8ff1107f886a1637"
+    },
+    {
+      "file": "FilesPane-DTqGgkS_.js",
+      "bytes": 383278,
+      "sha256": "1dd2a37290f291ac1590769d65d2df456b62891a228f52bb2598c4317a0907df"
+    },
+    {
+      "file": "index-BdNCzc1f.js",
+      "bytes": 334,
+      "sha256": "2511b7cd1a825313e9c761eda073e895e6651840dbc51a26a10b86e6e11dfc62"
+    },
+    {
+      "file": "index-CYDLIQzS.js",
+      "bytes": 1353152,
+      "sha256": "a98797b3b76e53327d4468d35cda7b4f880b7afe6d8adf93ff986100cc151158"
+    },
+    {
+      "file": "index-CzHiXLlx.css",
+      "bytes": 51256,
+      "sha256": "0e5c6e73ba0be971913a310673d47446149a50e07a4dfe2dd8b726fb720ad7a7"
+    },
+    {
+      "file": "index-yAXEDFBW.js",
+      "bytes": 1077,
+      "sha256": "6a4a09b730832b2364ca6405cddcf4fc365f3b7ad15a49dac4983e464d89a1fd"
+    },
+    {
+      "file": "window-C6pl6yjE.js",
+      "bytes": 13979,
+      "sha256": "9e9cebd6788787c3c9db0437cfb03910d708da89ab3b6a098ff08412239383e5"
+    }
+  ]
+}
