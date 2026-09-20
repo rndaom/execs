@@ -21,6 +21,7 @@ export function ModList({
   mods,
   locked,
   running,
+  first = false,
   onImportArchive,
   onImportFolder,
   onRemove,
@@ -29,11 +30,13 @@ export function ModList({
   /** TF2 is running or a write is in flight. */
   locked: boolean;
   running: boolean;
+  first?: boolean;
   onImportArchive: () => void;
   onImportFolder: () => void;
   onRemove: (id: string) => void;
 }) {
   const [confirming, setConfirming] = useState<ModRecord | null>(null);
+  const [importing, setImporting] = useState(false);
 
   function remove(mod: ModRecord) {
     if (modNeedsRemoveConfirm(mod)) {
@@ -45,31 +48,20 @@ export function ModList({
 
   return (
     <PaneSection
-      title="Your mods"
+      title="Installed mods"
       id="mods-yours"
+      first={first}
       meta={
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            data-testid="mods-import-archive"
-            className="btn btn-ghost"
-            disabled={locked}
-            onClick={onImportArchive}
-          >
-            <UploadSimple size={14} />
-            Add mods…
-          </button>
-          <button
-            type="button"
-            data-testid="mods-import-folder"
-            className="btn btn-ghost"
-            disabled={locked}
-            onClick={onImportFolder}
-          >
-            <FolderOpen size={14} />
-            Add folder…
-          </button>
-        </div>
+        <button
+          type="button"
+          data-testid="mods-import"
+          className="btn btn-ghost"
+          disabled={locked}
+          onClick={() => setImporting(true)}
+        >
+          <UploadSimple size={14} />
+          Import mod…
+        </button>
       }
     >
       {locked ? (
@@ -93,7 +85,7 @@ export function ModList({
                 className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge py-3 last:border-b-0"
               >
                 <span className="min-w-48 flex-1">
-                  <span className="t-row block truncate">{mod.name}</span>
+                  <span className="t-row block break-words">{mod.name}</span>
                   <span className="t-meta mt-0.5 block">{modMetaLine(mod)}</span>
                 </span>
                 {url ? (
@@ -112,6 +104,7 @@ export function ModList({
                   type="button"
                   data-testid={`mods-remove-${modDomId(mod.id)}`}
                   className="btn btn-ghost"
+                  aria-label={`Remove ${mod.name}`}
                   disabled={locked}
                   onClick={() => remove(mod)}
                 >
@@ -122,6 +115,53 @@ export function ModList({
           })}
         </ul>
       )}
+
+      {importing ? (
+        <Modal
+          open
+          testId="mods-import-modal"
+          title="Import a mod"
+          description="Choose one archive, VPK, or extracted mod folder. Ambiguous packs stay unchanged so you can follow the author’s instructions."
+          className="fixed top-24 left-1/2 z-50 w-[min(440px,calc(100vw-2.5rem))] -translate-x-1/2"
+          onClose={() => setImporting(false)}
+        >
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              data-testid="mods-import-archive"
+              className="btn btn-ghost justify-start"
+              disabled={locked}
+              onClick={() => {
+                setImporting(false);
+                onImportArchive();
+              }}
+            >
+              <UploadSimple size={15} />
+              Choose archive or VPK
+            </button>
+            <button
+              type="button"
+              data-testid="mods-import-folder"
+              className="btn btn-ghost justify-start"
+              disabled={locked}
+              onClick={() => {
+                setImporting(false);
+                onImportFolder();
+              }}
+            >
+              <FolderOpen size={15} />
+              Choose extracted folder
+            </button>
+            <button
+              type="button"
+              className="btn btn-quiet mt-1 justify-self-start"
+              onClick={() => setImporting(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      ) : null}
 
       {confirming ? (
         <Modal

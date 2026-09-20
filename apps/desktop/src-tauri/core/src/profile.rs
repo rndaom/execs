@@ -104,6 +104,7 @@ pub enum ProfileError {
     InvalidPath,
     InvalidName,
     NoConfirmedRoot,
+    ParticleSourceSelected(String),
     Io(String),
 }
 
@@ -130,6 +131,7 @@ impl ProfileError {
             Self::InvalidPath => "InvalidPath",
             Self::InvalidName => "InvalidName",
             Self::NoConfirmedRoot => "NoConfirmedRoot",
+            Self::ParticleSourceSelected(_) => "ParticleSourceSelected",
             Self::Io(_) => "Io",
         }
     }
@@ -169,6 +171,9 @@ impl ProfileError {
             Self::InvalidPath => "That file path is not allowed in a profile.".into(),
             Self::InvalidName => "Give the profile a name.".into(),
             Self::NoConfirmedRoot => "Confirm a TF2 install first.".into(),
+            Self::ParticleSourceSelected(name) => format!(
+                "{name} is still saved as a Casual particle source on this profile. Deselect it and choose Apply mods, or Restore stock files, before removing its source pack."
+            ),
             Self::Io(err) => format!("Could not update the profile library: {err}"),
         }
     }

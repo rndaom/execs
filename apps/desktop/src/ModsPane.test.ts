@@ -33,6 +33,7 @@ afterEach(async () => {
 function props(overrides: Partial<ModsPaneProps> = {}): ModsPaneProps {
   return {
     api: {} as Api,
+    active: false,
     profileId: "mvm",
     payload: PREVIEW_MODS_STATUS,
     catalog: PREVIEW_MODS_CATALOG,
@@ -53,7 +54,7 @@ function props(overrides: Partial<ModsPaneProps> = {}): ModsPaneProps {
     onImportArchive: vi.fn(),
     onImportFolder: vi.fn(),
     onRemoveMod: vi.fn(),
-    onInstallGameBananaMod: vi.fn(async () => {}),
+    onInstallGameBananaMod: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -65,6 +66,28 @@ function button(id: string): HTMLButtonElement {
 }
 
 describe("ModsPane profile particle containment", () => {
+  it("defaults to Browse, keeps task state mounted, and routes stale work to Casual setup", async () => {
+    const payload = {
+      ...PREVIEW_MODS_STATUS,
+      status: { ...PREVIEW_MODS_STATUS.status, stale: true },
+    };
+    await act(async () => root.render(createElement(ModsPane, props({ payload }))));
+
+    const browse = document.getElementById("mods-task-browse") as HTMLButtonElement;
+    const installed = document.getElementById("mods-task-installed") as HTMLButtonElement;
+    const casual = document.getElementById("mods-task-casual") as HTMLButtonElement;
+    expect(browse.getAttribute("aria-selected")).toBe("true");
+    expect(document.querySelector('[data-testid="mods-yours-list"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="mods-stale"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="mods-apply"]')).not.toBeNull();
+
+    await act(async () => installed.click());
+    expect(installed.getAttribute("aria-selected")).toBe("true");
+    await act(async () => casual.click());
+    expect(casual.getAttribute("aria-selected")).toBe("true");
+    expect(button("mods-apply").disabled).toBe(false);
+  });
+
   it("never applies a previous profile's hidden particle ID even with stale status", async () => {
     const id = "high-vis-mvm-cash-particles-gigantic";
     const cash = { ...PREVIEW_PROFILE_MODS[1], id, name: "High vis MvM cash particles" };
@@ -97,7 +120,7 @@ describe("ModsPane profile particle containment", () => {
 
     await act(async () => root.render(createElement(ModsPane, { ...initial, profileId: "other" })));
     expect(button("mods-particle-tf2-classic").getAttribute("aria-checked")).toBe("false");
-    expect(button("mods-apply").disabled).toBe(true);
+    expect(document.querySelector('[data-testid="mods-apply"]')).toBeNull();
   });
 
   it("resumes repair with only the current profile's available particle sources", async () => {

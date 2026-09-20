@@ -905,25 +905,52 @@ export type GameBananaMod = {
   author: string;
   category: string;
   categoryId: number;
-  likes: number;
-  views: number;
+  /** Listing metrics are absent on some index records. */
+  likes: number | null;
+  views: number | null;
   /** GameBanana withholds this on some listings. */
   downloads: number | null;
-  /** Unix seconds. */
-  updatedAt: number;
-  addedAt: number;
+  /** Unix seconds. These are separate upstream events and never substitute for one another. */
+  addedAt: number | null;
+  updatedAt: number | null;
+  modifiedAt: number | null;
   thumb: string | null;
   url: string;
   /** Flagged on GameBanana as mature content. */
   mature: boolean;
 };
 
+export type GameBananaTotal =
+  | { kind: "exact"; value: number }
+  | { kind: "estimated"; value: number }
+  | { kind: "capped"; value: number }
+  | { kind: "unknown" };
+
+export type GameBananaFilterScope = "global" | "page";
+
+export type GameBananaFilterScopes = {
+  query: GameBananaFilterScope;
+  category: GameBananaFilterScope;
+  contentRating: GameBananaFilterScope;
+  installability: GameBananaFilterScope;
+};
+
+export type GameBananaCacheInfo = {
+  source: "network" | "memory";
+  /** How much longer the native cache considers this response fresh. */
+  freshForMs: number;
+};
+
 export type GameBananaPage = {
+  /** Already ordered by GameBanana. Filtering must preserve this order. */
   records: GameBananaMod[];
-  total: number;
+  total: GameBananaTotal;
   perPage: number;
   /** No further pages to load. */
   complete: boolean;
+  ordering: "server";
+  filters: GameBananaFilterScopes;
+  cache: GameBananaCacheInfo;
 };
 
 export type GameBananaCategory = {
@@ -931,7 +958,7 @@ export type GameBananaCategory = {
   name: string;
 };
 
-export type GameBananaSort = "downloads" | "likes" | "views" | "updated" | "new";
+export type GameBananaSort = "new" | "updated" | "downloads" | "likes" | "views";
 
 /** Pick an archive or vpk and install it into the active profile. Null = cancelled. */
 export async function importModArchive(): Promise<ProfileDetail | null> {
@@ -948,12 +975,10 @@ export async function removeMod(id: string): Promise<ProfileDetail> {
 }
 
 /**
- * One page of GameBanana listings. `page` is 1-based. A search query cannot be
- * ordered server-side, so the caller sorts what it has loaded.
- *
- * With `includeMature` false, flagged records are dropped from the page by our
- * own client, so a page can hold fewer than `perPage` records; `total` and
- * `perPage` still describe the unfiltered run, and the pager rides those.
+ * One page of GameBanana listings. `page` is 1-based. Query, category, content
+ * rating and ordering are sent to the index together. Safety filtering for the
+ * aggregate "All" category remains page-local and is disclosed by `filters`.
+ * `refresh` bypasses both the browser's page cache and the native memory cache.
  */
 export async function searchGameBananaMods(
   query: string,
@@ -961,6 +986,7 @@ export async function searchGameBananaMods(
   category: number | null,
   page: number,
   includeMature = false,
+  refresh = false,
 ): Promise<GameBananaPage> {
   return call<GameBananaPage>("search_gamebanana_mods", {
     query,
@@ -968,11 +994,12 @@ export async function searchGameBananaMods(
     category,
     page,
     includeMature,
+    refresh,
   });
 }
 
-export async function gameBananaModCategories(): Promise<GameBananaCategory[]> {
-  return call<GameBananaCategory[]>("gamebanana_mod_categories");
+export async function gameBananaModCategories(refresh = false): Promise<GameBananaCategory[]> {
+  return call<GameBananaCategory[]>("gamebanana_mod_categories", { refresh });
 }
 
 export async function installGameBananaMod(id: number): Promise<ProfileDetail> {

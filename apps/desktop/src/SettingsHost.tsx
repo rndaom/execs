@@ -645,7 +645,7 @@ export function SettingsHost({
     await api.writeManagedCfg(path, text, profileId, scope);
   }
 
-  function pane(tab: SettingsTab) {
+  function pane(tab: SettingsTab, paneActive: boolean) {
     // This closure belongs to the originating retained pane, even after the
     // user navigates elsewhere while its save is queued or in flight.
     const label = tab === "hud" ? "HUD options" : SETTINGS_TAB_LABELS[tab];
@@ -950,6 +950,8 @@ export function SettingsHost({
       return (
         <ModsPane
           api={api}
+          active={paneActive}
+          previewData={import.meta.env.DEV && !isTauri()}
           profileId={profileId}
           payload={modsPayload}
           catalog={modsCatalog}
@@ -1136,8 +1138,8 @@ export function SettingsHost({
           }}
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
-          onInstallGameBananaMod={async (id) => {
-            await write(
+          onInstallGameBananaMod={(id) => {
+            return write(
               async () => {
                 await api.installGameBananaMod(id);
                 await refreshModsStatus().catch(() => {});
@@ -1271,7 +1273,7 @@ export function SettingsHost({
               : undefined
           }
         >
-          {pane(paneTab)}
+          {pane(paneTab, tab === paneTab)}
         </SettingsDraftBoundary>
       ))}
     </AppStatusProvider>

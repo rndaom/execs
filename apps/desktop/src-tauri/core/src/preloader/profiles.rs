@@ -87,6 +87,37 @@ pub fn selection_for_export(
     Ok(Some(chosen))
 }
 
+/// Selected profile-mod IDs owned by one profile. New manifests are
+/// authoritative; legacy global state is consulted only when its owner marker
+/// (or recorded migration list) names this profile.
+pub fn selected_profile_particle_mod_ids(
+    profiles: &Path,
+    id: &str,
+) -> Result<Vec<String>, ProfileError> {
+    let manifest = load_manifest(profiles, id)?;
+    let saved = manifest.preloader.as_ref();
+    let installed = selection_for_export(profiles, id)?;
+    Ok(selected_profile_particle_mod_union(
+        saved,
+        installed.as_ref(),
+    ))
+}
+
+fn selected_profile_particle_mod_union(
+    saved: Option<&PreloaderSelection>,
+    installed: Option<&PreloaderSelection>,
+) -> Vec<String> {
+    let mut selected = saved
+        .map(|selection| selection.profile_particle_mods.clone())
+        .unwrap_or_default();
+    if let Some(installed) = installed {
+        selected.extend(installed.profile_particle_mods.iter().cloned());
+    }
+    selected.sort();
+    selected.dedup();
+    selected
+}
+
 /// Save before replacing the shared projection. A newly imported profile is
 /// never enrolled in migration just because it happens to be active.
 pub fn capture_installed_selections(
@@ -290,4 +321,27 @@ pub fn clear_saved_profile_selection(
         },
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{selected_profile_particle_mod_union, PreloaderSelection};
+
+    fn selection(ids: &[&str]) -> PreloaderSelection {
+        PreloaderSelection {
+            profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+            ..PreloaderSelection::default()
+        }
+    }
+
+    #[test]
+    fn removal_guard_unions_saved_and_newer_installed_owner_selections() {
+        assert_eq!(
+            selected_profile_particle_mod_union(
+                Some(&selection(&["saved", "shared"])),
+                Some(&selection(&["installed", "shared"])),
+            ),
+            ["installed", "saved", "shared"]
+        );
+    }
 }

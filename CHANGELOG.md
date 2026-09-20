@@ -22,9 +22,17 @@ User-facing changes only. The release workflow publishes the matching
 - Inventory preview: identify war paints, killstreak kit targets and fabricator
   outputs, including available wear, sheen and effect names. Preview installed
   war-paint pattern swatches without implying a rendered weapon or wear preview.
+- Mods: open on GameBanana browsing and organize Browse, Installed and Casual setup as separate
+  tasks. Results expose clearer source details, honest paging, refresh and retry controls, and one
+  import flow for archives, VPKs or extracted folders.
 
 ### Fixed
 
+- Mods: preserve GameBanana's global search and ranking order, distinguish added and updated dates,
+  report unavailable metrics without inventing zeroes, and recover from hidden or failed category
+  loads without stale results taking over the current request.
+- Mods: refuse direct or absorbed removal of an active profile's selected particle-source mod until
+  its selection is changed, without modifying the profile, preload state, snapshots or VPK directory.
 - Profiles: retain saved particle selections when repairing custom folder names,
   including profiles that are not active.
 - Profiles: switch shared preloader selections with the target profile.

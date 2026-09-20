@@ -3,7 +3,7 @@ import { GameBananaBrowser } from "./components/GameBananaBrowser";
 import { ModList } from "./components/ModList";
 import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
-import { Disclosure } from "./components/ui/Disclosure";
+import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { Switch, SwitchRow } from "./components/ui/Switch";
@@ -34,6 +34,7 @@ import {
   repairPollDelay,
   repairReadyForConfirmation,
   repairStateAfterBackendRead,
+  selectionDirty,
   serializeModSelection,
   summarizeReport,
   toggleName,
@@ -42,7 +43,10 @@ import {
 
 export type ModsPaneProps = {
   api: Api;
-  /** Active profile; disclosure state is remembered per profile. */
+  /** Whether the retained Mods pane is the visible pane. */
+  active: boolean;
+  previewData?: boolean;
+  /** Active profile; draft selection is remembered per profile. */
   profileId: string | null;
   payload: PreloaderStatusPayload | null;
   catalog: ModsCatalog | null;
@@ -69,11 +73,15 @@ export type ModsPaneProps = {
   onImportFolder: () => void;
   onRemoveMod: (id: string) => void;
   /** Resolves once the install and the profile reload behind it finished. */
-  onInstallGameBananaMod: (id: number) => Promise<void>;
+  onInstallGameBananaMod: (id: number) => Promise<boolean>;
 };
+
+type ModsTask = "browse" | "installed" | "casual";
 
 export function ModsPane({
   api,
+  active,
+  previewData = false,
   profileId,
   payload,
   catalog,
@@ -121,7 +129,7 @@ export function ModsPane({
   // lit over something nothing on screen can switch off.
   const selection = visibleModSelection(draft, particleSources);
   const { addons, particleMods, profileParticleMods } = selection;
-  const [browsing, setBrowsing] = useState(false);
+  const [task, setTask] = useState<ModsTask>("browse");
   // Steam's verify runs outside the app; while it does, poll the status and,
   // once every stale file reads as stock again, put the selection back.
   const [repair, setRepair] = useState<RepairState>("idle");
@@ -134,6 +142,7 @@ export function ModsPane({
     payload?.recoveryRequired === true ||
     repair === "waiting";
   const canApply = modsApplyEnabled(payload, selection);
+  const showApply = selectionDirty(payload, selection) || status?.stale === true;
   const untracked = status?.untrackedModified ?? [];
 
   // The backend owns verification state so navigation/remounts cannot unlock
@@ -228,69 +237,38 @@ export function ModsPane({
 
   return (
     <div data-testid="settings-mods" className="min-w-0 text-left">
-      <PaneHeader title="Mods" lede={PRELOADER_EXPLAINER} />
+      <PaneHeader title="Mods" lede="Find, install, and prepare profile mods." />
 
-      {/* The status hero: the three facts, then the two actions that change
-          them. Everything the library offers sits below. */}
-      {/* Casual preload lives here and only here: the profile's preload on
-          launch (what viewmodel packs and mods both need) and the gameinfo
-          bypass that keeps preloaded content live on Valve servers. */}
       <div className="hero-row">
         <div className="min-w-0">
-          <h2 className="t-section">Casual preload</h2>
-          <p className="t-meta mt-1 max-w-[62ch]">
-            Valve Casual runs sv_pure — content only survives if it is precached first.
-          </p>
-          <div className="mt-3 max-w-xl">
-            <SwitchRow
-              id="mods-profile-preload"
-              testId="mods-profile-preload"
-              label="Preload on launch"
-              description="Loads itemtest briefly at startup; community servers work without it."
-              checked={payload?.profilePreload ?? false}
-              disabled={locked || !payload}
-              onChange={onTogglePreload}
-            />
-            <SwitchRow
-              id="mods-bypass-toggle"
-              testId="mods-bypass-toggle"
-              label="Material bypass"
-              description="Keeps preloaded materials live on sv_pure; edits one line in gameinfo.txt, backed up first."
-              checked={status?.gameinfoBypassed ?? false}
-              disabled={locked || !status?.gameinfoFound}
-              onChange={onToggleBypass}
+          <h2 className="t-section">Choose a task</h2>
+          <p className="t-meta mt-1 max-w-[62ch]">Each task keeps its place while you switch.</p>
+          <div className="mt-3">
+            <ClassTabs
+              tabs={[
+                { id: "browse", label: "Browse" },
+                { id: "installed", label: "Installed", meta: mods.length },
+                { id: "casual", label: "Casual setup" },
+              ]}
+              selected={task}
+              label="Mod tasks"
+              idPrefix="mods-task"
+              panelId="mods-task-panel"
+              onSelect={setTask}
             />
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              data-testid="mods-revert"
-              className="btn btn-ghost"
-              disabled={locked || !anythingInstalled}
-              onClick={onRevert}
-            >
-              Restore stock files
-            </button>
-          </div>
-          <p className="mt-3 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
-            Restore puts back every patched byte, un-comments gameinfo.txt and removes the addon
-            pack. Building a pack or applying mods turns Preload on by itself.
-          </p>
         </div>
-
-        {status ? (
-          <dl className="hero-preview surface m-0 self-start p-5">
-            <Stat label="Preload" value={payload?.profilePreload ? "On" : "Off"} />
-            <Stat label="Bypass" value={status.gameinfoBypassed ? "On" : "Off"} />
-            <Stat label="Patched files" value={String(status.patchedFiles.length)} />
-            <Stat label="Addon pack" value={status.customVpkPresent ? "Installed" : "None"} />
-          </dl>
-        ) : null}
+        <dl className="hero-preview surface m-0 grid grid-cols-2 gap-x-4 self-start px-4 py-2">
+          <Stat label="Installed mods" value={String(mods.length)} />
+          <Stat label="Casual preload" value={payload?.profilePreload ? "On" : "Off"} />
+          <Stat label="Material bypass" value={status?.gameinfoBypassed ? "On" : "Off"} />
+          <Stat label="Patched files" value={String(status?.patchedFiles.length ?? 0)} />
+        </dl>
       </div>
 
       {payload?.recoveryRequired ? (
         <Alert tone="warn" testId="mods-recovery-required" className="mt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="flex flex-wrap items-center justify-between gap-3">
             <span>An interrupted mod change must finish before other files can be changed.</span>
             <button
               type="button"
@@ -300,13 +278,18 @@ export function ModsPane({
             >
               Finish recovery
             </button>
-          </div>
+          </span>
         </Alert>
       ) : null}
 
       {status?.stale ? (
         <Alert tone="warn" testId="mods-stale" className="mt-6">
-          TF2 updated — the old patches are gone. Apply again to re-install them.
+          <span className="flex flex-wrap items-center justify-between gap-3">
+            <span>TF2 updated — the old patches are gone. Apply again to re-install them.</span>
+            <button type="button" className="btn btn-ghost" onClick={() => setTask("casual")}>
+              Open Casual setup
+            </button>
+          </span>
         </Alert>
       ) : null}
       {payload && anythingInstalled && payload.profilePreload && !payload.preloadLaunchInSteam ? (
@@ -390,189 +373,248 @@ export function ModsPane({
         </Alert>
       ) : null}
 
-      <ModList
-        mods={mods}
-        locked={locked}
-        running={running}
-        onImportArchive={onImportArchive}
-        onImportFolder={onImportFolder}
-        onRemove={onRemoveMod}
-      />
+      <div
+        id="mods-task-panel"
+        role="tabpanel"
+        aria-labelledby={`mods-task-${task}`}
+        className="mt-7"
+      >
+        <div hidden={task !== "browse"}>
+          <PaneSection
+            title="Browse GameBanana"
+            description="Search TF2 listings and install into this profile."
+            id="mods-gamebanana"
+            first
+          >
+            <GameBananaBrowser
+              api={api}
+              active={active && task === "browse"}
+              installed={mods}
+              locked={locked}
+              running={running}
+              previewData={previewData}
+              onInstall={onInstallGameBananaMod}
+            />
+          </PaneSection>
+        </div>
 
-      <PaneSection title="Browse GameBanana" id="mods-gamebanana">
-        <Disclosure
-          profileId={profileId}
-          storageKey="mods-gamebanana"
-          summary="Search and install"
-          testId="mods-gamebanana-disclosure"
-          onOpenChange={setBrowsing}
-        >
-          <GameBananaBrowser
-            api={api}
-            active={browsing}
-            installed={mods}
+        <div hidden={task !== "installed"}>
+          <ModList
+            first
+            mods={mods}
             locked={locked}
             running={running}
-            onInstall={onInstallGameBananaMod}
+            onImportArchive={onImportArchive}
+            onImportFolder={onImportFolder}
+            onRemove={onRemoveMod}
           />
-        </Disclosure>
-      </PaneSection>
+        </div>
 
-      <PaneSection
-        title="Default mod library"
-        meta={
-          payload && !payload.modsCached ? (
+        <div hidden={task !== "casual"}>
+          <PaneSection
+            title="Casual behavior"
+            description={PRELOADER_EXPLAINER}
+            id="mods-casual"
+            first
+            meta="Saves immediately"
+          >
+            <div className="mt-3 max-w-2xl">
+              <SwitchRow
+                id="mods-profile-preload"
+                testId="mods-profile-preload"
+                label="Preload on launch"
+                description="Loads itemtest briefly at startup; community servers work without it."
+                checked={payload?.profilePreload ?? false}
+                disabled={locked || !payload}
+                onChange={onTogglePreload}
+              />
+              <SwitchRow
+                id="mods-bypass-toggle"
+                testId="mods-bypass-toggle"
+                label="Material bypass"
+                description="Keeps preloaded materials live on sv_pure; edits one line in gameinfo.txt, backed up first."
+                checked={status?.gameinfoBypassed ?? false}
+                disabled={locked || !status?.gameinfoFound}
+                onChange={onToggleBypass}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="mods-revert"
+                className="btn btn-ghost"
+                disabled={locked || !anythingInstalled}
+                onClick={onRevert}
+              >
+                Restore stock files
+              </button>
+            </div>
+            <p className="mt-3 max-w-[62ch] text-[12.5px] leading-5 text-ink-faint">
+              Restore puts back every patched byte, un-comments gameinfo.txt and removes the addon
+              pack. Applying mods turns Preload on by itself.
+            </p>
+          </PaneSection>
+
+          <PaneSection
+            title="Default mod library"
+            description="Choose changes, then Apply mods."
+            meta={
+              payload && !payload.modsCached ? (
+                <button
+                  type="button"
+                  data-testid="mods-download"
+                  className="btn btn-primary"
+                  disabled={busy || loading}
+                  onClick={onDownloadLibrary}
+                >
+                  {loading
+                    ? "Downloading…"
+                    : `Download library (${formatModBytes(payload.modsSizeBytes)})`}
+                </button>
+              ) : null
+            }
+          >
+            {payload && !payload.modsCached && !loading ? (
+              <p className="t-meta mt-4">One-time download, verified and cached.</p>
+            ) : null}
+            {loading && !catalog ? (
+              <p className="t-meta mt-4" role="status">
+                Loading library…
+              </p>
+            ) : null}
+
+            {catalog ? (
+              <div className="mt-4 grid gap-8 lg:grid-cols-2">
+                <div>
+                  <h3 className="eyebrow">Addons</h3>
+                  <p className="mt-1 text-[12px] leading-5 text-ink-faint">
+                    Packed into execs-preloader.vpk in tf/custom.
+                  </p>
+                  <ul className="mt-3 list-none p-0">
+                    {catalog.addons.map((addon) => (
+                      <AddonRow
+                        key={addon.id}
+                        addon={addon}
+                        checked={addons.includes(addon.id)}
+                        disabled={locked}
+                        onToggle={() =>
+                          setSelection((current) => ({
+                            ...current,
+                            addons: toggleName(current.addons, addon.id),
+                          }))
+                        }
+                      />
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="eyebrow">Particle mods</h3>
+                  <p className="mt-1 text-[12px] leading-5 text-ink-faint">
+                    Patched into tf2_misc in place; later picks win contested files.
+                  </p>
+                  <ul className="mt-3 list-none p-0">
+                    {catalog.particleMods.map((mod) => (
+                      <ParticleRow
+                        key={mod.name}
+                        mod={mod}
+                        checked={particleMods.includes(mod.name)}
+                        disabled={locked}
+                        onToggle={() =>
+                          setSelection((current) => ({
+                            ...current,
+                            particleMods: toggleName(current.particleMods, mod.name),
+                          }))
+                        }
+                      />
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Particles the user's own packs bring: same patching, same Apply. */}
+            {particleSources.length > 0 ? (
+              <div data-testid="mods-profile-particles" className="mt-8">
+                <h3 className="eyebrow">From your mods</h3>
+                <ul className="mt-3 list-none p-0">
+                  {particleSources.map((source) => (
+                    <ProfileParticleRow
+                      key={source.modId}
+                      source={source}
+                      checked={profileParticleMods.includes(source.modId)}
+                      disabled={locked}
+                      onToggle={() =>
+                        setSelection((current) => ({
+                          ...current,
+                          profileParticleMods: toggleName(
+                            current.profileParticleMods,
+                            source.modId,
+                          ),
+                        }))
+                      }
+                    />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </PaneSection>
+
+          {report ? (
+            <section className="section" data-testid="mods-report">
+              <h2 className="t-section">Last install</h2>
+              <p className="t-meta mt-1" aria-live="polite">
+                {summarizeReport(report)}
+              </p>
+              {report.skipped.length > 0 ? (
+                <ul className="mt-3 list-none p-0 font-mono text-[12px] leading-5 text-ink-faint">
+                  {report.skipped.map((notice) => (
+                    <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
+                      {notice.file}
+                      {notice.modName ? ` (${notice.modName})` : ""} — {notice.reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : status && status.skipped.length > 0 ? (
+            <section className="section">
+              <h2 className="t-section">Skipped last time</h2>
+              <ul className="mt-3 list-none p-0 font-mono text-[12px] leading-5 text-ink-faint">
+                {status.skipped.map((notice) => (
+                  <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
+                    {notice.file}
+                    {notice.modName ? ` (${notice.modName})` : ""} — {notice.reason}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <p className="t-meta mt-12 text-ink-faint">
+            {PRELOADER_CREDIT}{" "}
             <button
               type="button"
-              data-testid="mods-download"
-              className="btn btn-primary"
-              disabled={busy || loading}
-              onClick={onDownloadLibrary}
+              className="cursor-pointer border-0 bg-transparent p-0 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+              onClick={onOpenRepo}
             >
-              {loading
-                ? "Downloading…"
-                : `Download library (${formatModBytes(payload.modsSizeBytes)})`}
+              casual-pre-loader on GitHub
             </button>
-          ) : null
-        }
-      >
-        {payload && !payload.modsCached && !loading ? (
-          <p className="t-meta mt-4">One-time download, verified and cached.</p>
-        ) : null}
-        {loading && !catalog ? (
-          <p className="t-meta mt-4" role="status">
-            Loading library…
           </p>
-        ) : null}
 
-        {catalog ? (
-          <div className="mt-4 grid gap-8 lg:grid-cols-2">
-            <div>
-              <h3 className="eyebrow">Addons</h3>
-              <p className="mt-1 text-[12px] leading-5 text-ink-faint">
-                Packed into execs-preloader.vpk in tf/custom.
-              </p>
-              <ul className="mt-3 list-none p-0">
-                {catalog.addons.map((addon) => (
-                  <AddonRow
-                    key={addon.id}
-                    addon={addon}
-                    checked={addons.includes(addon.id)}
-                    disabled={locked}
-                    onToggle={() =>
-                      setSelection((current) => ({
-                        ...current,
-                        addons: toggleName(current.addons, addon.id),
-                      }))
-                    }
-                  />
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="eyebrow">Particle mods</h3>
-              <p className="mt-1 text-[12px] leading-5 text-ink-faint">
-                Patched into tf2_misc in place; later picks win contested files.
-              </p>
-              <ul className="mt-3 list-none p-0">
-                {catalog.particleMods.map((mod) => (
-                  <ParticleRow
-                    key={mod.name}
-                    mod={mod}
-                    checked={particleMods.includes(mod.name)}
-                    disabled={locked}
-                    onToggle={() =>
-                      setSelection((current) => ({
-                        ...current,
-                        particleMods: toggleName(current.particleMods, mod.name),
-                      }))
-                    }
-                  />
-                ))}
-              </ul>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Particles the user's own packs bring: same patching, same Apply. */}
-        {particleSources.length > 0 ? (
-          <div data-testid="mods-profile-particles" className="mt-8">
-            <h3 className="eyebrow">From your mods</h3>
-            <ul className="mt-3 list-none p-0">
-              {particleSources.map((source) => (
-                <ProfileParticleRow
-                  key={source.modId}
-                  source={source}
-                  checked={profileParticleMods.includes(source.modId)}
-                  disabled={locked}
-                  onToggle={() =>
-                    setSelection((current) => ({
-                      ...current,
-                      profileParticleMods: toggleName(current.profileParticleMods, source.modId),
-                    }))
-                  }
-                />
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </PaneSection>
-
-      {report ? (
-        <section className="section" data-testid="mods-report">
-          <h2 className="t-section">Last install</h2>
-          <p className="t-meta mt-1" aria-live="polite">
-            {summarizeReport(report)}
-          </p>
-          {report.skipped.length > 0 ? (
-            <ul className="mt-3 list-none p-0 font-mono text-[12px] leading-5 text-ink-faint">
-              {report.skipped.map((notice) => (
-                <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
-                  {notice.file}
-                  {notice.modName ? ` (${notice.modName})` : ""} — {notice.reason}
-                </li>
-              ))}
-            </ul>
+          {showApply ? (
+            <ApplyBar
+              status={modsStatusLine(payload, selection, running)}
+              actionLabel="Apply mods"
+              lockedLabel="Close TF2 to apply"
+              running={running}
+              locked={locked}
+              dirty={canApply}
+              testId="mods-apply"
+              onApply={() => onApply(addons, particleMods, profileParticleMods)}
+            />
           ) : null}
-        </section>
-      ) : status && status.skipped.length > 0 ? (
-        <section className="section">
-          <h2 className="t-section">Skipped last time</h2>
-          <ul className="mt-3 list-none p-0 font-mono text-[12px] leading-5 text-ink-faint">
-            {status.skipped.map((notice) => (
-              <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
-                {notice.file}
-                {notice.modName ? ` (${notice.modName})` : ""} — {notice.reason}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <p className="t-meta mt-12 text-ink-faint">
-        {PRELOADER_CREDIT}{" "}
-        <button
-          type="button"
-          className="cursor-pointer border-0 bg-transparent p-0 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-          onClick={onOpenRepo}
-        >
-          casual-pre-loader on GitHub
-        </button>
-      </p>
-
-      <ApplyBar
-        status={modsStatusLine(payload, selection, running)}
-        actionLabel="Apply mods"
-        lockedLabel="Close TF2 to apply"
-        running={running}
-        locked={locked}
-        // Not `selectionDirty`: a TF2 update wipes the patches without touching
-        // the recorded selection, so gating on it would disable Apply exactly
-        // when the stale notice tells the user to press it.
-        dirty={canApply}
-        testId="mods-apply"
-        onApply={() => onApply(addons, particleMods, profileParticleMods)}
-      />
+        </div>
+      </div>
     </div>
   );
 }
@@ -696,7 +738,7 @@ function ProfileParticleRow({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="row">
+    <div className="flex min-w-0 items-baseline justify-between gap-2 border-b border-edge py-2">
       <dt className="t-meta">{label}</dt>
       <dd className="tnum m-0 text-[15px] font-medium text-ink">{value}</dd>
     </div>

@@ -13,6 +13,8 @@ import {
   BridgeError,
   type ComfigState,
   type FilesSource,
+  type GameBananaMod,
+  type GameBananaSort,
   type HitsoundRecord,
   type HitsoundSlotChange,
   type HudUiState,
@@ -54,7 +56,6 @@ import {
   PREVIEW_MODS_STATUS,
   PREVIEW_PARTICLE_SOURCES,
   PREVIEW_PROFILE_MODS,
-  sortGameBananaMods,
 } from "./mods-ui";
 import {
   type PreviewState,
@@ -67,6 +68,34 @@ import {
   previewUpdate,
 } from "./preview";
 import { previewViewmodelRecord } from "./viewmodel-ui";
+
+/** Preview-only simulation of GameBanana's global server order. Production
+ * records are already ordered and must never pass through this helper. */
+function previewGameBananaOrder(records: GameBananaMod[], sort: GameBananaSort): GameBananaMod[] {
+  const value = (record: GameBananaMod): number | null => {
+    switch (sort) {
+      case "downloads":
+        return record.downloads;
+      case "likes":
+        return record.likes;
+      case "views":
+        return record.views;
+      case "updated":
+        return record.updatedAt;
+      case "new":
+        return record.addedAt;
+    }
+  };
+  return records
+    .map((record, index) => ({ record, index, value: value(record) }))
+    .sort((a, b) => {
+      if (a.value === null && b.value === null) return a.index - b.index;
+      if (a.value === null) return 1;
+      if (b.value === null) return -1;
+      return b.value - a.value || a.index - b.index;
+    })
+    .map(({ record }) => record);
+}
 
 const PREVIEW_FILES: { path: string; text: string }[] = [
   {
@@ -813,26 +842,36 @@ export function createPreviewApi(state: PreviewState): Api {
       category: number | null,
       page: number,
       includeMature = false,
+      _refresh = false,
     ) {
       const needle = query.trim().toLowerCase();
       const matching = PREVIEW_GAMEBANANA_RECORDS.filter((record) => {
-        const hitsQuery =
-          needle === "" ||
-          record.name.toLowerCase().includes(needle) ||
-          record.author.toLowerCase().includes(needle);
-        return hitsQuery && (category === null || record.categoryId === category);
+        const hitsQuery = needle === "" || record.name.toLowerCase().includes(needle);
+        return (
+          hitsQuery &&
+          (category === null || record.categoryId === category) &&
+          (includeMature || !record.mature)
+        );
       });
-      // A small page so the preview exercises the pager, not one long grid.
-      const perPage = 3;
+      const perPage = 20;
       const start = (page - 1) * perPage;
-      const slice = sortGameBananaMods(matching, sort).slice(start, start + perPage);
+      const slice = previewGameBananaOrder(matching, sort).slice(start, start + perPage);
       return {
-        // Flagged records are dropped from the page, not from the run: the
-        // count and the pager still describe every listing, like the real one.
-        records: includeMature ? slice : slice.filter((record) => !record.mature),
-        total: matching.length,
+        records: slice,
+        total:
+          category === null
+            ? ({ kind: "estimated", value: matching.length } as const)
+            : ({ kind: "exact", value: matching.length } as const),
         perPage,
         complete: start + slice.length >= matching.length,
+        ordering: "server" as const,
+        filters: {
+          query: "global" as const,
+          category: "global" as const,
+          contentRating: "global" as const,
+          installability: category === null ? ("page" as const) : ("global" as const),
+        },
+        cache: { source: "network" as const, freshForMs: 10 * 60_000 },
       };
     },
     async gameBananaModCategories() {

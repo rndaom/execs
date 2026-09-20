@@ -300,8 +300,25 @@ where
     let Some(profile_id) = library.active_profile_id.clone() else {
         return Ok(library);
     };
-    repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     if choice == PackChoice::Update {
+        // This read-only preflight precedes even interrupted-write repair.
+        // Updating a missing selected source must not change profile, live, or
+        // recovery bytes before telling the caller to clear the selection.
+        let before_repair = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+        refuse_selected_particle_source_removal(
+            profiles_dir,
+            &profile_id,
+            &before_repair.pack_live_files,
+        )?;
+    }
+    repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
+    let mut classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    if choice == PackChoice::Update {
+        refuse_selected_particle_source_removal(
+            profiles_dir,
+            &profile_id,
+            &classified.pack_live_files,
+        )?;
         // Update is the user changing their mind about every pack they had
         // previously kept out, so the ignore list has to go before `classify`
         // filters those packs back out of the delta.
@@ -309,10 +326,10 @@ where
         if !manifest.ignored_packs.is_empty() {
             manifest.ignored_packs.clear();
             crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+            classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
         }
     }
 
-    let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     if choice == PackChoice::Restore {
         // The removed packs are still in the manifest, so the library still
         // holds their bytes. Added packs are not part of this answer.
@@ -376,6 +393,32 @@ where
         &running,
     )?;
     load_library_from(profiles_dir, Some(tf2_root))
+}
+
+/// Profile selections own their particle sources. An accepted external
+/// removal must stop before publishing any profile mutation whenever the
+/// missing pack still owns one of this profile's selected IDs. Keep and
+/// Restore do not delete library sources and never call this guard.
+fn refuse_selected_particle_source_removal(
+    profiles_dir: &Path,
+    profile_id: &str,
+    live_packs: &BTreeMap<String, Vec<String>>,
+) -> Result<(), ProfileError> {
+    let selected = crate::preloader::selected_profile_particle_mod_ids(profiles_dir, profile_id)?;
+    if selected.is_empty() {
+        return Ok(());
+    }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    for record in &manifest.mods {
+        if !selected.iter().any(|id| id == &record.id) {
+            continue;
+        }
+        let rel = format!("tf/custom/{}", record.pack);
+        if pack_key(&rel).is_some_and(|pack| !live_packs.contains_key(&pack)) {
+            return Err(ProfileError::ParticleSourceSelected(record.name.clone()));
+        }
+    }
+    Ok(())
 }
 
 /// The pack step of a profile switch: take the packs the user added into the
