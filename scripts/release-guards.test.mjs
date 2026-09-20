@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { packagedAssetUrl } from "./qualification/files/packaged-worker.mjs";
 import { releaseNotesFromChangelog } from "./release-notes.mjs";
 import {
   parseReleaseVersion,
@@ -39,6 +40,19 @@ function signatureFixture() {
   ).toString("base64");
   return { bytes, signature, key };
 }
+
+test("packaged worker assets resolve from the inspected Tauri page URL", () => {
+  assert.equal(
+    packagedAssetUrl("http://tauri.localhost/", "files-analysis.worker-test.js"),
+    "http://tauri.localhost/assets/files-analysis.worker-test.js",
+  );
+  assert.equal(
+    packagedAssetUrl("tauri://localhost/", "files-analysis.worker-test.js"),
+    "tauri://localhost/assets/files-analysis.worker-test.js",
+  );
+  assert.throws(() => packagedAssetUrl("about:blank", "files-analysis.worker-test.js"));
+  assert.throws(() => packagedAssetUrl("", "files-analysis.worker-test.js"));
+});
 
 test("Minisign verification rejects changed bytes, signatures, keys and comments", () => {
   const { bytes, signature, key } = signatureFixture();

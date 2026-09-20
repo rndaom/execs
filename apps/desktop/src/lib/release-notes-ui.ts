@@ -5,7 +5,7 @@ const PENDING_RELEASE_KEY = "execs:pending-release-notes";
 
 /** Exact-revision fallback for manual updates or an updater body without notes. */
 const BUNDLED_NOTES: Record<string, string> = {
-  "0.1.7+1": `### Fixed
+  "0.1.7+2": `### Fixed
 
 - Files: replace the stacked settings page with a compact editor workspace that keeps the file list, selected cfg and Save action clear.
 - Files: make Problems and Help easier to scan, move secondary actions into file and editor menus, and let Find close from the same button.

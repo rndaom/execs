@@ -13,6 +13,16 @@ import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+
+export function packagedAssetUrl(pageUrl, asset) {
+  const base = new URL(pageUrl);
+  const isPackagedOrigin =
+    base.hostname === "tauri.localhost" ||
+    (base.protocol === "tauri:" && base.hostname === "localhost");
+  assert.ok(isPackagedOrigin, `Expected packaged Tauri page URL, received ${pageUrl}`);
+  return new URL(`assets/${asset}`, base).href;
+}
+
 async function eventually(operation, description) {
   let failure;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -191,6 +201,7 @@ async function cdpSession(application, environment, evidence) {
       maxResourceBufferSize: 256 * 1024,
     });
     return {
+      baseUrl: page.url,
       async evaluate(expression) {
         const result = await command("Runtime.evaluate", {
           expression,
@@ -342,8 +353,15 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
     evidence,
   );
   try {
+    const pageUrl =
+      session.baseUrl ??
+      (await eventually(async () => {
+        const page = await session.evaluate("({href:location.href,ready:document.readyState})");
+        return page.href && page.ready !== "loading" ? page.href : null;
+      }, "packaged app document"));
+    const workerUrl = packagedAssetUrl(pageUrl, worker);
     const assetResponse = await session.evaluate(`(async()=>{
-      const url=new URL(${JSON.stringify(`assets/${worker}`)},location.href).href;
+      const url=${JSON.stringify(workerUrl)};
       const response=await fetch(url);
       return {url:response.url,status:response.status,ok:response.ok,mime:response.headers.get('content-type'),headers:[...response.headers],source:await response.text(),page:location.href};
     })()`);
@@ -366,7 +384,7 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
       "Packaged worker must have a JavaScript MIME type",
     );
     const result = await session.evaluate(`(async()=>{
-      const url=new URL(${JSON.stringify(`assets/${worker}`)},location.href).href;
+      const url=${JSON.stringify(workerUrl)};
       const violations=[];
       const violation=event=>{if(violations.length<20)violations.push({blockedURI:event.blockedURI,violatedDirective:event.violatedDirective,effectiveDirective:event.effectiveDirective,originalPolicy:event.originalPolicy,sourceFile:event.sourceFile,lineNumber:event.lineNumber});};
       document.addEventListener('securitypolicyviolation',violation);

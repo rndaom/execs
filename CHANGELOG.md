@@ -5,9 +5,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-## [0.1.7+1] - 2026-09-20
+## [0.1.7+2] - 2026-09-20
 
-0.1.7 Hotfix 1. Installs through the normal updater and keeps the displayed
+0.1.7 Hotfix 2. Installs through the normal updater and keeps the displayed
 product version at 0.1.7. Existing profiles and exports remain supported.
 
 ### Fixed
