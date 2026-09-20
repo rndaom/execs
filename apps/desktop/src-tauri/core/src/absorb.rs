@@ -835,6 +835,25 @@ where
     if batch.is_empty() && remove_paths.is_empty() {
         return Ok(());
     }
+    let before = load_manifest(profiles_dir, profile_id)?;
+    let selected_hud = crate::hud::selected_hud_pack(&before);
+    let previous_files: HashMap<&str, &ProfileFile> = before
+        .files
+        .iter()
+        .map(|file| (file.path.as_str(), file))
+        .collect();
+    let touched: BTreeSet<String> = paths
+        .iter()
+        .chain(remove_paths)
+        .filter_map(|path| pack_key(path))
+        .collect();
+    let lengths: HashMap<&str, u64> = batch
+        .iter()
+        .filter_map(|(path, source)| match source {
+            FileSource::PathExact { expected_len, .. } => Some((path.as_str(), *expected_len)),
+            _ => None,
+        })
+        .collect();
     refuse_absorb_mutation()?;
     mutate_profile_files_to(
         profiles_dir,
@@ -844,7 +863,48 @@ where
         remove_paths,
         ProfileLiveProjection::LibraryOnly,
         running,
-        |_| Ok(()),
+        |manifest| {
+            // Reconcile only accepted changes, against the planned manifest, not
+            // the live tree. Kept/Restored packs and inactive HUDs still belong
+            // to the library even when absent from the live inventory.
+            let groups = group_by_pack(manifest.files.iter().map(|file| &file.path));
+            let mut records = Vec::with_capacity(manifest.mods.len());
+            for mut record in manifest.mods.iter().cloned() {
+                let key = pack_key(&format!("tf/custom/{}", record.pack));
+                if let Some(key) = key.filter(|key| touched.contains(key)) {
+                    let Some(files) = groups.get(&key) else {
+                        continue;
+                    };
+                    record.files = files.len();
+                    record.bytes = files.iter().try_fold(0u64, |total, path| {
+                        let len = match lengths.get(path.as_str()) {
+                            Some(len) => *len,
+                            None => {
+                                let file = previous_files
+                                    .get(path.as_str())
+                                    .ok_or(ProfileError::InvalidPath)?;
+                                source_file_len(&manifest_source_path(
+                                    profiles_dir,
+                                    profile_id,
+                                    file,
+                                )?)?
+                            }
+                        };
+                        total.checked_add(len).ok_or_else(|| {
+                            ProfileError::Io("Mod size exceeds the supported limit".into())
+                        })
+                    })?;
+                }
+                records.push(record);
+            }
+            manifest.mods = records;
+            if selected_hud.as_ref().is_some_and(|pack| {
+                touched.contains(pack) && !crate::hud::hud_packs(&manifest.files).contains(pack)
+            }) {
+                manifest.hud = None;
+            }
+            Ok(())
+        },
     )?;
     Ok(())
 }

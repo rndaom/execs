@@ -1,0 +1,48 @@
+{
+  "durationMs": 39214,
+  "steps": [
+    {
+      "detail": { "path": "tf/cfg/overrides/qualification/native_a.cfg" },
+      "name": "Created unsaved helper in disclosed cfg layer",
+      "elapsedMs": 1111
+    },
+    { "name": "Numeric warning has text severity and selects exact argument", "elapsedMs": 14504 },
+    {
+      "elapsedMs": 15508,
+      "name": "Bundled reference displays command, provenance and sourced bounds"
+    },
+    {
+      "name": "Two unsaved documents preserve Unicode, literal backslashes and quoted separators",
+      "detail": {
+        "pathA": "tf/cfg/overrides/qualification/native_a.cfg",
+        "pathB": "tf/cfg/overrides/qualification/native_b.cfg"
+      },
+      "elapsedMs": 19649
+    },
+    { "elapsedMs": 20653, "name": "Resolved exec link navigates to retained helper draft" },
+    {
+      "name": "Both fixture saves acknowledged and reopen exact submitted source",
+      "elapsedMs": 35184
+    },
+    { "elapsedMs": 36196, "name": "Find/replace opens through accessible button" },
+    { "elapsedMs": 37207, "name": "Go-to-line opens through accessible button" },
+    {
+      "name": "Provided source is read-only with no Save action",
+      "detail": {
+        "contentEditable": "false",
+        "ariaReadonly": "true",
+        "path": "tf/custom/qualification/cfg/provided.cfg",
+        "accessibleName": "Contents of tf/custom/qualification/cfg/provided.cfg",
+        "focusReachedContent": true
+      },
+      "elapsedMs": 38712
+    }
+  ],
+  "remaining": [
+    "vanilla versus comfig autoexec creation needs separate fresh fixture",
+    "external source conflict and native transition proof require integration/native tests",
+    "screen-reader speech must be checked independently"
+  ],
+  "passed": true,
+  "scope": "Public DOM interactions in a disposable native-engine fixture; not physical keyboard, real filesystem, Cloud or source-conflict proof"
+}

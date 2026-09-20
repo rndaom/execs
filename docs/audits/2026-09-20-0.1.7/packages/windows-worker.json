@@ -1,0 +1,36 @@
+{
+  "application": "D:\\a\\_temp\\execs-windows-candidate\\installed\\execs.exe",
+  "workerAsset": "files-analysis.worker-w7-5NpzE.js",
+  "workerSha256": "41baa82693129e08666553977dbc0f549e4f46b5faba583c20f097f0973a92af",
+  "url": "http://tauri.localhost/assets/files-analysis.worker-w7-5NpzE.js",
+  "violations": [],
+  "origin": "http://tauri.localhost",
+  "page": "http://tauri.localhost/",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 Edg/152.0.0.0",
+  "csp": [],
+  "durationMs": 40.5,
+  "outcome": {
+    "identity": "packaged-origin-worker",
+    "result": {
+      "ok": true,
+      "safetyComplete": true,
+      "executionComplete": true,
+      "findings": [
+        {
+          "ruleId": "argument-number",
+          "tier": "warn",
+          "message": "fov_desired: value expects a number; Source may coerce this text instead of rejecting it",
+          "file": "tf/cfg/autoexec.cfg",
+          "line": 3,
+          "col": 13,
+          "from": 40,
+          "to": 46,
+          "category": "argument",
+          "advisory": false
+        }
+      ]
+    },
+    "links": []
+  },
+  "packagedWorkerSha256": "41baa82693129e08666553977dbc0f549e4f46b5faba583c20f097f0973a92af"
+}

@@ -1,5 +1,6 @@
+import { lookupCommand } from "./catalog.ts";
 import { lookupCvar } from "./corpus.ts";
-import { MAX_ALIAS_DEPTH, MAX_EXEC_DEPTH, RCON_NAMES } from "./rules-data.ts";
+import { BUILTIN_COMMANDS, MAX_ALIAS_DEPTH, MAX_EXEC_DEPTH, RCON_NAMES } from "./rules-data.ts";
 import type { Command, CvarValue } from "./types.ts";
 
 type ExecutionContext = {
@@ -41,6 +42,14 @@ export function evaluateStartup(ctx: ExecutionContext): {
         break;
       }
       const { name, args } = cmd;
+      if (cmd.tokens.some((token) => !token.closed)) {
+        stop(
+          "execution-incomplete",
+          "Startup contains an unclosed quote; settings are incomplete",
+          cmd,
+        );
+        continue;
+      }
       // Findings identify credentials without exposing their bytes through
       // the returned settings map or its human-readable summary.
       if (name === "password" || RCON_NAMES.has(name)) continue;
@@ -100,7 +109,8 @@ export function evaluateStartup(ctx: ExecutionContext): {
         continue;
       }
       const entry = lookupCvar(name);
-      if (entry) {
+      if (BUILTIN_COMMANDS.has(name)) continue;
+      if (entry && lookupCommand(name)?.kind !== "alias") {
         if (entry.c === 0 && args.length > 0) {
           effective.set(name, { value: args.join(" "), file: cmd.file, line: cmd.line });
         }
@@ -117,6 +127,12 @@ export function evaluateStartup(ctx: ExecutionContext): {
           continue;
         }
         commands(ctx.payloadCommands(alias.payload, alias.site), chain, [...aliasStack, name]);
+      } else {
+        stop(
+          "execution-incomplete",
+          `Startup ${name} has no inspected implementation; plugin and external alias effects are unknown`,
+          cmd,
+        );
       }
     }
   }

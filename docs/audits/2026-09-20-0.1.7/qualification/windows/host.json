@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:8765/?preview=settings-files",
+  "width": 1200,
+  "height": 800,
+  "zoom": 1,
+  "browser": "152.0.4191.66",
+  "navigationSucceeded": true,
+  "navigationMs": 3843,
+  "viewport": "\u0022{\\\u0022width\\\u0022:1200,\\\u0022height\\\u0022:800,\\\u0022dpr\\\u0022:1,\\\u0022preview\\\u0022:true}\u0022",
+  "scope": "Native engine preview; not packaged Tauri/IPC or screen-reader certification"
+}

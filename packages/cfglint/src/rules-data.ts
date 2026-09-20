@@ -102,16 +102,6 @@ export const MAX_EXEC_DEPTH = 4;
 export const MAX_COMMAND_VISITS = 25_000;
 export const MAX_EXEC_VISITS = 5_000;
 
-/** Sane ranges for net cvars; outside → warn. */
-export const NET_CVAR_RANGES: Record<string, { min: number; max: number }> = {
-  cl_interp: { min: 0, max: 0.5 },
-  cl_interp_ratio: { min: 0, max: 5 },
-  cl_cmdrate: { min: 10, max: 132 },
-  cl_updaterate: { min: 10, max: 132 },
-  rate: { min: 20000, max: 10000000 },
-  cl_timeout: { min: 10, max: 300 },
-};
-
 export const CLASS_CFG_NAMES: Record<string, string> = {
   "scout.cfg": "scout",
   "soldier.cfg": "soldier",

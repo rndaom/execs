@@ -1,0 +1,42 @@
+{
+  "commit": "2cc4fb096b2be4c81230cf7043070e46f45269de",
+  "scope": "Production frontend before Files implementation integration; source UI matches public 0.1.6",
+  "cssGzipBytes": 10250,
+  "architecture": "AMD64",
+  "node": "v24.14.0",
+  "assets": [
+    {
+      "sha256": "70a0421f69c478409e51e50177f2e59deb32f73cbe3ee7e9a2f52c01e6dd87f8",
+      "bytes": 247,
+      "name": "app-CB9B8XOY.js"
+    },
+    {
+      "sha256": "b2b3937e21fb5405e7bf7458945d648e418efd4b4262dd50a317ab0058be1ac3",
+      "bytes": 52574,
+      "name": "index-B0PWFs25.css"
+    },
+    {
+      "sha256": "480416047aabfeea8b14e2f486a464e112aaf6cb482a08ef472fadd0bfacf9f5",
+      "bytes": 927867,
+      "name": "index-BaYVXsog.js"
+    },
+    {
+      "sha256": "22e49244a03c393e433178a4eb1f52c7d9b66f77ae9c737dbe16a6025548fada",
+      "bytes": 334,
+      "name": "index-BsJ9FPM0.js"
+    },
+    {
+      "sha256": "b51b5dc5fd535d2d50f571b6b692c2ec7fd2c4510c0c16f3956d8e82562d4453",
+      "bytes": 1077,
+      "name": "index-CIpld3BX.js"
+    },
+    {
+      "sha256": "cf7635fb6e514da54ad0f49c28546f88eb6deb65aec436a3b94bffdbd99106ab",
+      "bytes": 13979,
+      "name": "window-DPnOfKUY.js"
+    }
+  ],
+  "mainJavascriptGzipBytes": 267580,
+  "platform": "Microsoft Windows NT 10.0.26200.0",
+  "note": "Gzip values rounded from Vite output. Startup and runtime memory not measured by this build."
+}

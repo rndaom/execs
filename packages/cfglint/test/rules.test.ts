@@ -140,10 +140,10 @@ describe("warn-tier rules", () => {
     expect(ids.filter((i) => i === "warn:mouse-tamper")).toHaveLength(2);
   });
 
-  it("warns on net cvars outside sane ranges", () => {
-    expect(rules(one("cl_interp 2")).ids).toContain("warn:net-extreme");
+  it("does not present unsourced tuning ranges as engine limits", () => {
+    expect(rules(one("cl_interp 2")).ids).not.toContain("warn:net-extreme");
     expect(rules(one("cl_interp 0.033")).ids).not.toContain("warn:net-extreme");
-    expect(rules(one("cl_cmdrate 1")).ids).toContain("warn:net-extreme");
+    expect(rules(one("cl_cmdrate 1")).ids).not.toContain("warn:net-extreme");
   });
 
   it("warns on alias cycles instead of hanging", () => {
@@ -248,7 +248,9 @@ describe("clean configs and metadata", () => {
 
   it("flags unknown commands as info, never block", () => {
     const { result } = rules(one("totally_made_up_command 1"));
-    expect(result.findings[0]).toMatchObject({ tier: "info", ruleId: "unknown-command" });
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ tier: "info", ruleId: "unknown-command" }),
+    );
     expect(result.ok).toBe(true);
   });
 

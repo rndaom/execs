@@ -137,7 +137,11 @@ afterEach(async () => {
 describe("retained settings feedback", () => {
   it("keeps incomplete startup cfgs blocked through the retained-pane boundary", async () => {
     tab = "gameplay";
-    await api.writeOwnedFile("tf/cfg/overrides/autoexec.cfg", "exec overrides/missing\n");
+    await api.writeOwnedFile(
+      "tf/cfg/overrides/autoexec.cfg",
+      "exec overrides/missing\n",
+      (await api.readProfileFile("tf/cfg/overrides/autoexec.cfg")).source,
+    );
     const save = vi.spyOn(api, "writeManagedCfg");
     await render();
     expect(element("settings-surface-gameplay").hasAttribute("inert")).toBe(true);

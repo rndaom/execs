@@ -1,6 +1,5 @@
-// The corpus is built by tools/build-corpus.mjs from mastercomfig's pinned
-// `docs/tf2/cvarlist_win.md` and `docs/tf2/hiddencvars.md` (MIT, Copyright (c)
-// mastercomfig contributors), which are dumps of Valve's own `cvarlist`.
+// Compatibility API over the sourced catalog. See CATALOG.md for provenance,
+// platform scope and deliberately missing metadata.
 import corpus from "./cvars.gen.ts";
 
 export interface CorpusEntry {
@@ -15,5 +14,6 @@ export interface CorpusEntry {
 }
 
 export function lookupCvar(name: string): CorpusEntry | undefined {
-  return corpus[name.toLowerCase()];
+  const key = name.toLowerCase();
+  return Object.hasOwn(corpus, key) ? corpus[key] : undefined;
 }

@@ -18,7 +18,8 @@ on the user's machine, pinned to a specific release or commit.
 | [casual-pre-loader](https://github.com/cueki/casual-pre-loader) by cueki | The preload mechanism (gameinfo toggle, in-place particle patches) was re-implemented in Rust from observed behaviour; no upstream code is included. The default mod library (`mods.zip`, pinned and checksummed) is downloaded on demand. | GPL-3.0 (upstream tool); mods belong to their authors |
 | [Venom Crosshairs](https://github.com/hbivnm/Venom-Crosshairs) and the [community list](https://github.com/hbivnm/Venom-Crosshairs-List) by HbiVnm and contributors | 173 crosshair textures are downloaded pinned and written unchanged into the user's pack. | Tool GPL-3.0; list unlicensed, crosshairs belong to their authors |
 | [TF2Hitsounds](https://github.com/WishingStardust/TF2Hitsounds) by WishingStardust | 32 community hit sounds downloaded pinned. | Unlicensed; sounds belong to their authors |
-| [mastercomfig cvar reference](https://github.com/mastercomfig/mastercomfig/tree/release/docs/tf2) | `packages/cfglint/src/cvars.gen.ts` is generated from `cvarlist_win.md` and `hiddencvars.md`. | MIT |
+| [mastercomfig cvar reference](https://github.com/mastercomfig/mastercomfig/tree/release/docs/tf2) | `packages/cfglint/src/cvars.gen.ts` contains pinned Windows/hidden command dumps and alias metadata from comfig configuration. Source revisions and applicability accompany the offline catalog. | MIT |
+| [Valve Source SDK](https://github.com/ValveSoftware/source-sdk-2013) | Independently described command argument and bound facts with source provenance supplement the offline catalog; no SDK implementation is copied or vendored. | Source SDK license (upstream); metadata only. See `packages/cfglint/CATALOG.md`. |
 | ICE cipher by Matthew Kwan | `core/src/ice.rs` is a port of the reference implementation, used to read weapon scripts from the user's own game files. | Public domain |
 
 The Mods pane browses and downloads from [GameBanana](https://gamebanana.com) through its public API; each mod
@@ -33,6 +34,10 @@ redistributed.
 - [Phosphor Icons](https://phosphoricons.com/). MIT.
 
 ## Libraries
+
+- [CodeMirror 6](https://codemirror.net/) and [Lezer](https://lezer.codemirror.net/)
+  power the local Files editor, search, history and completion. MIT licenses;
+  package versions and full notices are included in the dependency inventory.
 
 Runtime dependencies are listed in `apps/desktop/package.json` and
 `apps/desktop/src-tauri/Cargo.toml`. The Rust and JavaScript dependency inventory records permissive licenses

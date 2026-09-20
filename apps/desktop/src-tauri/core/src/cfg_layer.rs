@@ -77,6 +77,77 @@ pub fn cfg_layer_from_manifest(
     cfg_layer_from_sources(sources.iter().map(|(rel, source)| (*rel, source.as_path())))
 }
 
+/// Read only loader candidates, never enumerate or hash unrelated mod trees.
+/// Uses the same mount ordering and bounded VPK parser as profile detection.
+pub(crate) fn cfg_layer_from_live(root: &Path) -> Result<CfgLayer, ProfileError> {
+    let mut sources = Vec::new();
+    let mut add = |rel: String| -> Result<(), ProfileError> {
+        let path = root.join(&rel);
+        match std::fs::symlink_metadata(&path) {
+            Ok(_) => {
+                crate::hash::validate_file_within(root, &path)
+                    .map_err(|e| ProfileError::Io(e.to_string()))?;
+                sources.push((rel, path));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(ProfileError::Io(e.to_string())),
+        }
+        Ok(())
+    };
+    add("tf/cfg/autoexec.cfg".into())?;
+    add("tf/cfg/comfig/comfig.cfg".into())?;
+    let custom = root.join("tf/custom");
+    match std::fs::symlink_metadata(&custom) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(ProfileError::Io(e.to_string())),
+        Ok(_) => {
+            crate::hash::validate_dir_within(root, &custom)
+                .map_err(|e| ProfileError::Io(e.to_string()))?;
+            for (count, entry) in std::fs::read_dir(custom)
+                .map_err(|e| ProfileError::Io(e.to_string()))?
+                .enumerate()
+            {
+                if count >= 40_000 {
+                    return Err(ProfileError::Io(
+                        "Too many custom entries to inspect the cfg loader.".into(),
+                    ));
+                }
+                let entry = entry.map_err(|e| ProfileError::Io(e.to_string()))?;
+                let name = entry
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| ProfileError::InvalidPath)?;
+                let rel = format!("tf/custom/{name}");
+                if name.starts_with('.')
+                    || crate::profile::is_profile_junk_name(&name)
+                    || crate::surface::is_stock_custom_entry(&rel)
+                    || crate::surface::is_global_custom_file(&rel)
+                {
+                    continue;
+                }
+                let meta = entry
+                    .file_type()
+                    .map_err(|e| ProfileError::Io(e.to_string()))?;
+                if meta.is_dir() {
+                    crate::hash::validate_dir_within(root, &entry.path())
+                        .map_err(|e| ProfileError::Io(e.to_string()))?;
+                    add(format!("{rel}/cfg/autoexec.cfg"))?;
+                    add(format!("{rel}/cfg/comfig/comfig.cfg"))?;
+                } else if name.to_ascii_lowercase().ends_with(".vpk") {
+                    add(rel)?;
+                } else if meta.is_symlink() {
+                    return Err(ProfileError::InvalidPath);
+                }
+            }
+        }
+    }
+    cfg_layer_from_sources(
+        sources
+            .iter()
+            .map(|(rel, path)| (rel.as_str(), path.as_path())),
+    )
+}
+
 /// Sources have already passed the live inventory or manifest containment
 /// checks. Read only two bounded members from each VPK, never its full payload.
 pub(crate) fn cfg_layer_from_sources<'a>(

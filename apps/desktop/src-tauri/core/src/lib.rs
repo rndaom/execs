@@ -7,6 +7,7 @@ pub mod cfg_script;
 pub mod comfig;
 pub mod crosshair;
 pub mod custom_folders;
+pub mod files_workspace;
 pub mod finder;
 pub mod first_run;
 pub mod hash;

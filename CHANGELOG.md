@@ -5,6 +5,36 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-20
+
+### Added
+
+- Files: Focus returns to the current editor selection, and completion keeps spoken
+  source details concise while preserving full provenance in Reference.
+- Files: create unsaved user cfgs in the verified profile layer, retain multiple
+  drafts while navigating or playing, and review changed sources before an explicit
+  save. Problems navigate to exact source locations and analysis runs in a bounded worker.
+- Files: add a syntax-colored editor with per-file undo history, find/replace,
+  line navigation and offline TF2 completion that preserves normal Tab navigation.
+- Files: add offline command help, searchable cfg guides and reviewable draft snippets;
+  explain source links and classify ownership by complete paths and recorded HUD identity.
+
+### Fixed
+
+- Profiles: accepting external mod removal clears its installed record so exports
+  import successfully again; partial pack changes refresh file and byte counts.
+  Accepted HUD removal also clears its installed record. Keep and Restore preserve
+  the saved customization.
+- Files: show incoming cfg references at their caller and identify deferred bind/alias
+  payloads; opening a reference keeps the current drafts intact.
+- Files: keep provided read-only sources reachable by keyboard for selection,
+  search and reference without allowing edits or saves.
+- Files: recognize TF2 voice commands, button actions and sourced comfig aliases offline;
+  explain numeric mistakes, exact finding locations and incomplete analysis without
+  treating routine personal mouse settings or menu-restoring binds as hostile configs.
+- Files: refuse stale saves after profile, install, loader or source changes, and
+  create new user cfg files through the existing recoverable profile transaction.
+
 ## [0.1.6] - 2026-09-18
 
 ### Fixed

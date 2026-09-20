@@ -124,7 +124,8 @@ describe("startup execution is separate from safety scanning", () => {
       autoexec('r_drawviewmodel 1\nfuture\nalias future "r_drawviewmodel 0"\ndormant'),
       { path: "tf/cfg/optional.cfg", text: 'alias dormant "r_drawviewmodel 0"' },
     ]);
-    expect(result.effective.get("r_drawviewmodel")?.value).toBe("1");
+    expect(result.executionComplete).toBe(false);
+    expect(result.effective.size).toBe(0);
   });
 
   it("executes invoked aliases, including execs and definitions inside their payloads", () => {

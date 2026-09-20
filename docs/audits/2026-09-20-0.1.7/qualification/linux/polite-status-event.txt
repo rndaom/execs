@@ -1,0 +1,39 @@
+05:17:55.666678 - EVENT MANAGER: object:children-changed:add for [status bar | ] in [application | webkit.py] (0, 0, [footer | ])
+05:17:55.667068 - EVENT MANAGER: Not ignoring due to lack of cause
+05:17:55.667199 - EVENT MANAGER: Queueing object:children-changed:add [status bar | ] (0,0,[footer | ]) from [application | webkit.py]
+05:17:55.667658 - EVENT MANAGER: Dequeued object:children-changed:add [status bar | ] (0,0,[footer | ]) from [application | webkit.py]
+
+vvvvv PROCESS OBJECT EVENT object:children-changed:add vvvvv
+05:17:55.667719 - OBJECT EVENT: object:children-changed:add (0, 0, [footer | ])
+                                app.name='webkit.py' name='' role='status bar'
+                                description=''
+                                states='enabled sensitive visible'
+                                relations=''
+                                interfaces='Accessible Action Collection Component Hypertext'
+                                attributes='relevant:additions text, container-atomic:true, container-live-role:status, atomic:true, computed-role:status, toolkit:WebKitGTK, container-live:polite, container-relevant:additions text, xml-roles:status, live:polite, tag:div'
+                                path=[-1, 0, 0, 0, 0, 0, 1]
+
+                                ANY DATA:
+                                name='' role='footer'
+                                description=''
+                                states='enabled sensitive showing visible'
+                                relations=''
+                                interfaces='Accessible Action Collection Component Hypertext Text'
+                                attributes='container-atomic:true, container-live-role:paragraph, computed-role:paragraph, toolkit:WebKitGTK, container-live:polite, container-relevant:additions text, tag:p'
+                                path=[-1, 0, 0, 0, 0, 0, 1, 0]
+
+05:17:55.675923 - EVENT MANAGER: Getting script for [application | webkit.py] (check: False)
+05:17:55.676306 - EVENT MANAGER: Script is <orca.scripts.toolkits.gtk.script.Script object at 0x7fbd7e737400>
+05:17:55.676347 - EVENT MANAGER: Change active script: False (No reason found to activate a different script.)
+05:17:55.676374 - EVENT MANAGER: locusOfFocus: [push button | Save file] activeScript: <orca.scripts.toolkits.WebKitGtk.script.Script object at 0x7fbd7e736ec0>
+TOTAL PROCESSING TIME: 0.0087
+^^^^^ PROCESS OBJECT EVENT object:children-changed:add ^^^^^
+
+
+05:17:55.677084 - EVENT MANAGER: object:children-changed:add for [unknown | ] in [application | webkit.py] (0, 0, [unknown | File ownership and execution])
+05:17:55.677404 - EVENT MANAGER: Not ignoring due to lack of cause
+05:17:55.677548 - EVENT MANAGER: Queueing object:children-changed:add [unknown | ] (0,0,[unknown | File ownership and execution]) from [application | webkit.py]
+05:17:55.678030 - EVENT MANAGER: Dequeued object:children-changed:add [unknown | ] (0,0,[unknown | File ownership and execution]) from [application | webkit.py]
+
+vvvvv PROCESS OBJECT EVENT object:children-changed:add vvvvv
+05:17:55.678065 - OBJECT EVENT: object:children-changed:add (0, 0, [unknown | File ownership and execution])

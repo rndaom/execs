@@ -106,7 +106,7 @@ describe("engineManagedLintOptions", () => {
     expect(classifyCfgOrigin("tf/cfg/config.cfg")).toBe("engine");
     expect(classifyCfgOrigin("tf/cfg/undo360controller.cfg")).toBe("engine");
     expect(classifyCfgOrigin("tf/custom/mahud/cfg/x.cfg", "mahud")).toBe("hud");
-    expect(classifyCfgOrigin("tf/custom/-mahud/cfg/x.cfg", "mahud")).toBe("hud");
+    expect(classifyCfgOrigin("tf/custom/-mahud/cfg/x.cfg", "mahud")).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/other/cfg/x.cfg", "mahud")).toBe("pack");
     expect(classifyCfgOrigin("tf/custom/comfig-custom/cfg/x.cfg")).toBe("comfigImport");
     expect(classifyCfgOrigin("TF\\CFG\\Overrides\\Autoexec.cfg")).toBe("user");
@@ -174,7 +174,7 @@ describe("engineManagedLintOptions", () => {
     ];
     const result = lint(bundle, engineManagedLintOptions(bundle));
     const tampers = result.findings.filter((f) => f.ruleId === "mouse-tamper");
-    expect(tampers.map((f) => f.file)).toEqual(["tf/cfg/overrides/autoexec.cfg"]);
+    expect(tampers).toEqual([]);
     // Exempting the warn must not drop the value from the derived state.
     expect(result.effective.get("sensitivity")?.value).toBe("3");
     expect(result.effective.get("m_yaw")?.value).toBe("0.022");

@@ -9,8 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 
-const OLD_COMMIT: &str = "9976464bd7a4a79faf53b6e6ca3dab2219633bdd";
-const OLD_CORE_TREE: &str = "f2d03158fd4435d931db1f55fc50da1b2ef67478";
+const OLD_COMMIT: &str = "871abd751d278ca5105b64e9cfe3ee9e7f3067bb";
+const OLD_CORE_TREE: &str = "4764f475d8d61c374f636b4293aa7e52179eb1a0";
 
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
@@ -89,7 +89,8 @@ fn seed_root(path: &Path) {
 
 fn fixture_payload() -> BTreeMap<String, Vec<u8>> {
     let mut files = BTreeMap::from([
-        ("tf/cfg/config.cfg".into(), b"// v0.1.5 exporter fixture\nunbindall\nbind \"w\" \"+forward\"\nsensitivity \"2.75\"\ncl_crosshair_scale \"28\"\n".to_vec()),
+        ("tf/cfg/user.scr".into(), b"// Opaque Advanced Options bytes from a public profile.\nVERSION 1.0\nDESCRIPTION INFO_OPTIONS\n{\n}\n".to_vec()),
+        ("tf/cfg/config.cfg".into(), b"// v0.1.6 exporter fixture\nunbindall\nbind \"w\" \"+forward\"\nsensitivity \"2.75\"\ncl_crosshair_scale \"28\"\n".to_vec()),
         ("tf/cfg/overrides/autoexec.cfg".into(), b"exec overrides/execs_gameplay\nexec overrides/compat_nested/profile\n".to_vec()),
         ("tf/cfg/overrides/execs_gameplay.cfg".into(), b"fov_desired \"90\"\nviewmodel_fov \"75\"\ncl_flipviewmodels \"0\"\n".to_vec()),
         ("tf/cfg/overrides/compat_nested/profile.cfg".into(), b"// Nested cfg stays byte-for-byte intact.\nbind \"F6\" \"slot1\"\n".to_vec()),
@@ -201,7 +202,7 @@ fn main() {
     let new_source = source(&new_repo, &new_core_tree);
     assert_eq!(old_source["commit"], OLD_COMMIT);
     assert_eq!(
-        git(&old_repo, &["rev-parse", "v0.1.5^{commit}"]),
+        git(&old_repo, &["rev-parse", "v0.1.6^{commit}"]),
         OLD_COMMIT
     );
 
@@ -263,7 +264,7 @@ fn main() {
     let old = old_core::profile::create_populated_profile_to(
         &old_library,
         &old_root,
-        "Public 0.1.5 compatibility fixture",
+        "Public 0.1.6 compatibility fixture",
         &puts,
         true,
         std::iter::empty::<&str>(),
@@ -288,7 +289,7 @@ fn main() {
     let old_id = old.active_profile_id.as_ref().unwrap();
     let old_manifest = old_core::profile::load_manifest(&old_library, old_id).unwrap();
     let old_library_before = snapshot(&old_library);
-    let public_zip = run.join("public-0.1.5.zip");
+    let public_zip = run.join("public-0.1.6.zip");
     old_core::export_profile_to(&old_library, &old_root, old_id, &public_zip)
         .expect("actual public exporter");
     assert_eq!(
@@ -304,7 +305,7 @@ fn main() {
         portable(serde_json::to_value(&old_manifest).unwrap()),
         metadata
     );
-    write_json(&run.join("public-0.1.5-manifest.json"), &metadata);
+    write_json(&run.join("public-0.1.6-manifest.json"), &metadata);
 
     let empty_library = run.join("new-empty-library");
     let empty = new_core::import_profile_from(
@@ -313,7 +314,7 @@ fn main() {
         &public_zip,
         std::iter::empty::<&str>(),
     )
-    .expect("0.1.6 imports public export into empty library");
+    .expect("0.1.7 imports public export into empty library");
     assert_eq!(empty.profiles.len(), 1);
     assert_eq!(
         empty.active_profile_id, None,
@@ -352,7 +353,7 @@ fn main() {
         &public_zip,
         std::iter::empty::<&str>(),
     )
-    .expect("0.1.6 imports public export beside active profile");
+    .expect("0.1.7 imports public export beside active profile");
     assert_eq!(active.profiles.len(), 2);
     assert_eq!(
         active.active_profile_id.as_deref(),
@@ -377,10 +378,10 @@ fn main() {
         &metadata,
     );
 
-    let reexport_zip = run.join("reexport-0.1.6.zip");
+    let reexport_zip = run.join("reexport-0.1.7.zip");
     let empty_library_before_export = snapshot(&empty_library);
     new_core::export_profile_to(&empty_library, &new_root, empty_id, &reexport_zip)
-        .expect("0.1.6 re-exports imported profile");
+        .expect("0.1.7 re-exports imported profile");
     assert_eq!(snapshot(&empty_library), empty_library_before_export);
     assert_eq!(
         zip_entries(&reexport_zip),
@@ -399,7 +400,7 @@ fn main() {
         &reexport_zip,
         std::iter::empty::<&str>(),
     )
-    .expect("0.1.6 imports its re-export");
+    .expect("0.1.7 imports its re-export");
     assert_eq!(roundtrip.profiles.len(), 1);
     assert_eq!(roundtrip.active_profile_id, None);
     let roundtrip_result = verify_import(
@@ -430,7 +431,7 @@ fn main() {
 
     let report = json!({
         "result": "PASS",
-        "scope": "actual public v0.1.5 export -> integrated 0.1.6 import -> re-export -> re-import, synthetic filesystem only",
+        "scope": "actual public v0.1.6 export -> integrated 0.1.7 import -> re-export -> re-import, synthetic filesystem only",
         "oldSource": old_source,
         "newSource": new_source,
         "newSourceAfter": new_source_after,

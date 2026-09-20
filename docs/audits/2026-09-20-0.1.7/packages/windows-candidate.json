@@ -1,0 +1,9 @@
+{
+  "source": "6ecbcc007d748139149352c9db5e406272921cc6",
+  "installer": "execs_0.1.7_x64-setup.exe",
+  "installerSha256": "1b4fdaec473a5b4a7e10387797aeb224069aa8134fea124a7755f0622f1960ff",
+  "signed": true,
+  "originalBuildRun": "35491010492",
+  "releaseTargetCommitish": "1e3719f822dbd16789da273d358dee875e999775",
+  "probeCommit": "eb76839397e1f2c7195266a3b6c53d922a1a3e3c"
+}

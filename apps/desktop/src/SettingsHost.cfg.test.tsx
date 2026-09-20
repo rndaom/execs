@@ -42,6 +42,7 @@ function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "v
     files[path] = text;
   });
   const api = {
+    getFilesContext: vi.fn(async () => ({ profileId: "A", root: "fixture", layer })),
     getActiveProfileDetail: vi.fn(async () => ({
       id: "A",
       layer,
