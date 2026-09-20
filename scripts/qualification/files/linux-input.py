@@ -55,6 +55,11 @@ else:
 
 (evidence / "accessibility-initial.json").write_text(json.dumps(rows, indent=2))
 subprocess.run(["xdotool", "search", "--sync", "--name", "execs 0.1.7 isolated Files qualification", "windowactivate", "--sync"], check=True)
+subprocess.run(["ibus", "engine", "xkb:us::eng"], check=True)
+initial_engine = subprocess.run(["ibus", "engine"], capture_output=True, text=True, check=True)
+(evidence / "initial-input-engine.txt").write_text(initial_engine.stdout)
+if initial_engine.stdout.strip() != "xkb:us::eng":
+    raise RuntimeError("English keyboard checks require the selected US engine")
 
 editor_reached = False
 for step in range(100):
