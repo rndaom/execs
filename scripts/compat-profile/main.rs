@@ -89,6 +89,7 @@ fn seed_root(path: &Path) {
 
 fn fixture_payload() -> BTreeMap<String, Vec<u8>> {
     let mut files = BTreeMap::from([
+        ("tf/cfg/user.scr".into(), b"// Opaque Advanced Options bytes from a public profile.\nVERSION 1.0\nDESCRIPTION INFO_OPTIONS\n{\n}\n".to_vec()),
         ("tf/cfg/config.cfg".into(), b"// v0.1.6 exporter fixture\nunbindall\nbind \"w\" \"+forward\"\nsensitivity \"2.75\"\ncl_crosshair_scale \"28\"\n".to_vec()),
         ("tf/cfg/overrides/autoexec.cfg".into(), b"exec overrides/execs_gameplay\nexec overrides/compat_nested/profile\n".to_vec()),
         ("tf/cfg/overrides/execs_gameplay.cfg".into(), b"fov_desired \"90\"\nviewmodel_fov \"75\"\ncl_flipviewmodels \"0\"\n".to_vec()),
