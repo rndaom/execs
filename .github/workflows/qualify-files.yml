@@ -1,0 +1,42 @@
+name: Qualify Files native engines
+on:
+  workflow_dispatch:
+  push:
+    branches: [rndaom/qualify-0.1.7-files]
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y orca speech-dispatcher speech-dispatcher-espeak-ng gir1.2-webkit2-4.1 python3-pyatspi xvfb xdotool dbus-x11 openbox pulseaudio ibus ibus-anthy ibus-gtk3 fonts-noto-cjk
+      - name: Native WebKitGTK, Orca and IME
+        run: xvfb-run -a -s '-screen 0 1600x1200x24' dbus-run-session -- bash scripts/qualification/files/linux.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: files-native-linux
+          path: /tmp/files-qualification
+  windows-host:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build isolated WebView2 qualification host
+        run: dotnet build scripts/qualification/files/windows/FilesQualification.csproj --configuration Release --output host
+      - uses: actions/upload-artifact@v4
+        with:
+          name: files-native-windows-host
+          path: host
