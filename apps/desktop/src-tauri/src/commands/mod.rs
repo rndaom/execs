@@ -9,6 +9,7 @@ pub mod finder;
 pub mod first_run;
 pub mod hitsound;
 pub mod hud;
+pub mod inventory;
 pub mod launch;
 pub mod library;
 pub mod lifecycle;

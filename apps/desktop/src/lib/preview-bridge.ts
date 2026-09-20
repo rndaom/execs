@@ -212,6 +212,39 @@ export function createPreviewApi(state: PreviewState): Api {
   }
 
   const api: Api = {
+    async getInventory() {
+      return {
+        steamId: "Preview data",
+        capacity: 300,
+        warning: "Preview data · These are fixture items, not a Steam inventory.",
+        items: [
+          { id: "preview-1", definition: 13, position: 1, quality: 6, level: 1, customName: null },
+          {
+            id: "preview-2",
+            definition: 13,
+            position: 51,
+            quality: 11,
+            level: 10,
+            customName: "A familiar scattergun",
+          },
+          {
+            id: "preview-3",
+            definition: 5002,
+            position: 0,
+            quality: 6,
+            level: 1,
+            customName: null,
+          },
+        ],
+        definitions: {
+          "13": { name: "Scattergun", kind: "Scattergun", classes: ["scout"], icon: null },
+          "5002": { name: "Refined Metal", kind: "Crafting Item", classes: [], icon: null },
+        },
+      };
+    },
+    async getInventoryIcons() {
+      return {};
+    },
     // --- finder -------------------------------------------------------------
     async scanTf2Installs() {
       return installs;

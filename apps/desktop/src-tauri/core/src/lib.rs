@@ -17,6 +17,7 @@ pub mod hud_apply;
 pub mod hud_schema_compat;
 mod hud_text_edit;
 pub mod ice;
+pub mod inventory;
 pub mod launch;
 mod managed_cfg;
 pub use managed_cfg::ManagedCfgScope;

@@ -656,6 +656,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            commands::inventory::get_inventory,
+            commands::inventory::get_inventory_icons,
             commands::finder::scan_tf2_installs,
             commands::finder::browse_tf2_root,
             commands::finder::confirm_tf2_root,

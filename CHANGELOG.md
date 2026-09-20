@@ -5,6 +5,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- Development builds: browse a read-only Steam backpack snapshot with pages,
+  search, quality filters, item details, and base artwork from the installed TF2.
+  Inventory organization remains in development and is not enabled in release builds.
+
 ### Fixed
 
 - Profiles: retain saved particle selections when repairing custom folder names,

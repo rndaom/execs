@@ -1,4 +1,5 @@
 import {
+  Backpack,
   Crosshair,
   FolderOpen,
   GameController,
@@ -26,6 +27,7 @@ const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
   mods: Package,
   files: FolderOpen,
   launch: Play,
+  inventory: Backpack,
 };
 
 /**

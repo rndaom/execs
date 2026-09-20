@@ -1,10 +1,74 @@
 //! Minimal, independently declared wire fields for a read-only TF2 probe.
 //! Wire references and limitations are documented in ../README.md.
 use prost::Message;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snapshot {
+    pub steam_id: String,
+    pub capacity: u32,
+    pub items: Vec<InventoryItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryItem {
+    pub id: String,
+    pub definition: u32,
+    pub position: u32,
+    pub quality: u32,
+    pub level: u32,
+    pub custom_name: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct Account {
+    #[prost(uint32, tag = "1")]
+    additional_slots: u32,
+    #[prost(bool, tag = "2")]
+    trial: bool,
+}
 
 pub const PROTOBUF: u32 = 1 << 31;
 pub const MAX_MESSAGE: usize = 8 * 1024 * 1024;
+
+#[derive(Clone, PartialEq, Message)]
+pub struct SubscriptionCheck {
+    #[prost(fixed64, optional, tag = "1")]
+    pub owner: Option<u64>,
+    #[prost(message, optional, tag = "3")]
+    pub owner_soid: Option<Owner>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct Refresh {
+    #[prost(fixed64, optional, tag = "1")]
+    pub owner: Option<u64>,
+    #[prost(message, optional, tag = "2")]
+    pub owner_soid: Option<Owner>,
+}
+
+pub fn refresh(body: &[u8], steam_id: u64) -> Result<Vec<u8>, String> {
+    let check = SubscriptionCheck::decode(body).map_err(|e| e.to_string())?;
+    if check.owner_soid.as_ref().and_then(|o| o.id).or(check.owner) != Some(steam_id)
+        || check.owner.is_some_and(|id| id != steam_id)
+    {
+        return Err("Subscription belongs to another account".into());
+    }
+    let kind = PROTOBUF | 28;
+    let mut message = kind.to_le_bytes().to_vec();
+    message.extend(0u32.to_le_bytes());
+    message.extend(
+        Refresh {
+            owner: check.owner,
+            owner_soid: check.owner_soid,
+        }
+        .encode_to_vec(),
+    );
+    Ok(message)
+}
 
 #[derive(Clone, PartialEq, Message)]
 pub struct Cache {
@@ -42,6 +106,69 @@ pub struct Item {
     pub inventory: Option<u32>,
     #[prost(uint32, optional, tag = "4")]
     pub definition: Option<u32>,
+    #[prost(uint32, tag = "6")]
+    pub level: u32,
+    #[prost(uint32, tag = "7")]
+    pub quality: u32,
+    #[prost(string, optional, tag = "10")]
+    pub custom_name: Option<String>,
+}
+
+pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
+    summary(body, steam_id)?;
+    let cache = Cache::decode(body).map_err(|e| e.to_string())?;
+    let accounts: Vec<_> = cache
+        .objects
+        .iter()
+        .filter(|o| o.kind == Some(7))
+        .flat_map(|o| &o.data)
+        .collect();
+    if accounts.len() != 1 {
+        return Err("Missing or ambiguous backpack capacity".into());
+    }
+    let account = Account::decode(accounts[0].as_slice()).map_err(|e| e.to_string())?;
+    let capacity = account
+        .additional_slots
+        .checked_add(if account.trial { 50 } else { 300 })
+        .ok_or("Invalid capacity")?;
+    if capacity > 100_000 {
+        return Err("Backpack capacity exceeds limit".into());
+    }
+    let mut items = Vec::new();
+    let mut positions = HashSet::new();
+    for bytes in cache
+        .objects
+        .iter()
+        .filter(|o| o.kind == Some(1))
+        .flat_map(|o| &o.data)
+    {
+        let item = Item::decode(bytes.as_slice()).map_err(|e| e.to_string())?;
+        let value = item.inventory.ok_or("Missing position")?;
+        let position = if value & (1 << 30) != 0 {
+            0
+        } else {
+            value & 0xffff
+        };
+        if position > capacity || (position != 0 && !positions.insert(position)) {
+            return Err("Invalid or duplicate backpack slot".into());
+        }
+        items.push(InventoryItem {
+            id: item.id.ok_or("Missing ID")?.to_string(),
+            definition: item.definition.ok_or("Missing item definition")?,
+            position,
+            quality: item.quality,
+            level: item.level,
+            custom_name: item.custom_name,
+        });
+    }
+    if items.len() > 100_000 {
+        return Err("Item count exceeds limit".into());
+    }
+    Ok(Snapshot {
+        steam_id: steam_id.to_string(),
+        capacity,
+        items,
+    })
 }
 
 /// Unknown protobuf fields are retained by neither this diagnostic nor its output.
@@ -115,6 +242,7 @@ mod tests {
             account: Some(USER as u32),
             inventory: Some(position),
             definition: Some(13),
+            ..Default::default()
         }
     }
 
@@ -155,5 +283,40 @@ mod tests {
         }
         bytes[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
         assert!(payload(kind, &bytes).is_err());
+    }
+
+    #[test]
+    fn snapshot_requires_capacity_and_preserves_string_ids() {
+        let mut c = cache(vec![item(u64::MAX, 301)]);
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+        c.objects.push(ObjectType {
+            kind: Some(7),
+            data: vec![Account {
+                additional_slots: 50,
+                trial: false,
+            }
+            .encode_to_vec()],
+        });
+        let result = snapshot(&c.encode_to_vec(), USER).unwrap();
+        assert_eq!(result.capacity, 350);
+        assert_eq!(result.items[0].id, u64::MAX.to_string());
+        assert!(serde_json::to_string(&result)
+            .unwrap()
+            .contains("\"18446744073709551615\""));
+        c.objects[0].data.push(item(2, 301).encode_to_vec());
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+    }
+
+    #[test]
+    fn refresh_is_bound_to_the_account_and_has_the_right_envelope() {
+        let check = SubscriptionCheck {
+            owner: Some(USER),
+            owner_soid: None,
+        }
+        .encode_to_vec();
+        assert!(refresh(&check, USER + 1).is_err());
+        let request = refresh(&check, USER).unwrap();
+        let decoded = Refresh::decode(payload(PROTOBUF | 28, &request).unwrap()).unwrap();
+        assert_eq!(decoded.owner, Some(USER));
     }
 }

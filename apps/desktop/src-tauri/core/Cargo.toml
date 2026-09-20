@@ -28,6 +28,10 @@ winreg = "0.52"
 probes = []
 
 [[example]]
+name = "inventory_metadata_probe"
+required-features = ["probes"]
+
+[[example]]
 name = "mdl_probe"
 required-features = ["probes"]
 

@@ -2,6 +2,36 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 
+export type InventoryItem = {
+  id: string;
+  definition: number;
+  position: number;
+  quality: number;
+  level: number;
+  customName: string | null;
+};
+export type InventoryDefinition = {
+  name: string;
+  kind: string;
+  classes: string[];
+  icon: string | null;
+};
+export type InventorySnapshot = {
+  steamId: string;
+  capacity: number;
+  items: InventoryItem[];
+  definitions: Record<string, InventoryDefinition>;
+  warning: string | null;
+};
+export function getInventory(): Promise<InventorySnapshot> {
+  return call("get_inventory");
+}
+export function getInventoryIcons(
+  paths: string[],
+): Promise<Record<string, { width: number; height: number; rgba: number[] }>> {
+  return call("get_inventory_icons", { paths });
+}
+
 export type Tf2Install = {
   path: string;
 };

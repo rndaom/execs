@@ -10,6 +10,7 @@ import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { useHudResources } from "./hooks/useHudResources";
 import type { SetOperationError } from "./hooks/useOperationErrors";
+import { InventoryPane } from "./InventoryPane";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
 import {
@@ -1206,7 +1207,7 @@ export function SettingsHost({
   if (visited.current.profile !== profileId) {
     visited.current = { profile: profileId, tabs: new Set() };
   }
-  if (profileId) visited.current.tabs.add(tab);
+  if (profileId && tab !== "inventory") visited.current.tabs.add(tab);
   if (tab === "files" && filesInspection) visited.current.tabs.add("files");
 
   return (
@@ -1237,6 +1238,16 @@ export function SettingsHost({
         <p role="alert" className="mb-4 text-warn">
           {maps.reason ?? CFG_INCOMPLETE_MESSAGE}
         </p>
+      ) : null}
+      {import.meta.env.DEV ? (
+        <div hidden={tab !== "inventory"}>
+          <InventoryPane
+            api={api}
+            active={tab === "inventory"}
+            running={running}
+            busy={busy || externalBusy}
+          />
+        </div>
       ) : null}
       {[...visited.current.tabs].map((paneTab) => (
         <SettingsDraftBoundary
