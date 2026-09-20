@@ -42,6 +42,7 @@ The surrounding UI retains the existing typography and theme tokens.
 * [CodeMirror completion](https://codemirror.net/examples/autocompletion/)
 * [CodeMirror keyboard exit contract](https://codemirror.net/examples/tab/)
 * [CodeMirror state configuration](https://codemirror.net/examples/config/)
+* [CodeMirror read-only keyboard focus](https://github.com/codemirror/website/blob/main/site/examples/readonly/index.md)
 * [Monaco integration and support](https://github.com/microsoft/monaco-editor)
 * [Monaco ESM workers](https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md)
 * [Tauri CSP](https://v2.tauri.app/security/csp/)
@@ -56,3 +57,8 @@ parent supplies a distinct action id so repeating an action is observable.
 `readOnly` blocks DOM editing and document transactions. The existing file byte
 limit rejects oversized edits before they enter the draft. No formatting,
 command reordering, file writing or global keyboard listener is installed.
+
+Content has `tabindex="0"` in both modes. With `EditorView.editable` disabled,
+the content is otherwise a plain div outside the keyboard tab order. The
+explicit tab stop preserves keyboard selection, search and reference access;
+the state read-only facet, transaction filter and Save guard still refuse edits.

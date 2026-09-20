@@ -26,6 +26,8 @@ User-facing changes only. The release workflow publishes the matching
   import successfully again; partial pack changes refresh file and byte counts.
   Accepted HUD removal also clears its installed record. Keep and Restore preserve
   the saved customization.
+- Files: keep provided read-only sources reachable by keyboard for selection,
+  search and reference without allowing edits or saves.
 - Files: recognize TF2 voice commands, button actions and sourced comfig aliases offline;
   explain numeric mistakes, exact finding locations and incomplete analysis without
   treating routine personal mouse settings or menu-restoring binds as hostile configs.

@@ -111,6 +111,25 @@ describe("Files editor model isolation", () => {
     render();
     expect(box.querySelector(".cm-editor")).toBeNull();
   });
+  it("keeps provided content keyboard-focusable without permitting edits or Save", () => {
+    props = { ...props, readOnly: true, target: { id: 1, focusOnly: true } };
+    render();
+    const view = editor();
+    expect(document.activeElement).toBe(view.contentDOM);
+    expect(view.contentDOM.getAttribute("tabindex")).toBe("0");
+    expect(box.textContent).toContain("Read-only source · Ctrl+F searches");
+    expect(box.textContent).not.toContain("Ctrl+S saves");
+    act(() => view.dispatch({ changes: { from: 0, insert: "bad" } }));
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(view.state.doc.toString()).toBe("echo hi");
+    expect(props.onChange).not.toHaveBeenCalled();
+    expect(props.onSave).not.toHaveBeenCalled();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    view.contentDOM.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(false);
+  });
   it("external discard removes obsolete undo history and applies insertion as one edit", () => {
     render();
     props = { ...props, insertion: { id: 1, text: "hello" } };
