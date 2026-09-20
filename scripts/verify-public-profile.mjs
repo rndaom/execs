@@ -15,7 +15,7 @@ if (run("git", ["status", "--porcelain", "--", "apps/desktop/src-tauri/core"]).t
 const work = mkdtempSync(join(tmpdir(), "execs-public-compat-"));
 const oldRepo = join(work, "public");
 const helper = join(work, "probe");
-run("git", ["worktree", "add", "--detach", oldRepo, "v0.1.5"], {
+run("git", ["worktree", "add", "--detach", oldRepo, "v0.1.6"], {
   stdio: "inherit",
 });
 mkdirSync(join(helper, "src"), { recursive: true });
