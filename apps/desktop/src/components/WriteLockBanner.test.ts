@@ -9,7 +9,8 @@ describe("WriteLockBanner", () => {
       createElement(WriteLockBanner, { running: true, degraded: null, maintenance: null }),
     );
 
-    expect(markup).toContain("editable settings stay as drafts and save when it closes");
+    expect(markup).toContain("settings keep drafts until it closes");
+    expect(markup).toContain("Files requires Save after closing TF2");
     expect(markup).not.toContain("read-only");
   });
 });

@@ -5,6 +5,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+- Files: add a syntax-colored editor with per-file undo history, find/replace,
+  line navigation and offline TF2 completion that preserves normal Tab navigation.
+- Files: add offline command help, searchable cfg guides and reviewable draft snippets;
+  explain source links and classify ownership by complete paths and recorded HUD identity.
 ### Fixed
 
 - Profiles: accepting external mod removal clears its installed record so exports
@@ -16,8 +20,6 @@ User-facing changes only. The release workflow publishes the matching
   treating routine personal mouse settings or menu-restoring binds as hostile configs.
 - Files: refuse stale saves after profile, install, loader or source changes, and
   create new user cfg files through the existing recoverable profile transaction.
-- Files: add offline command help, searchable cfg guides and reviewable draft snippets;
-  explain source links and classify ownership by complete paths and recorded HUD identity.
 
 ## [0.1.6] - 2026-09-18
 
