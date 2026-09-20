@@ -97,6 +97,8 @@ key("Tab")
 if not any("sensitivity" in row.get("text", "") for row in snapshot() if row["focused"]):
     raise RuntimeError("Physical completion did not accept sensitivity")
 key("Escape")
+for character in range(6):
+    key("BackSpace")
 for sample in range(20):
     key("ctrl+space")
     key("Escape")

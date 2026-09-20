@@ -13,7 +13,7 @@ export function observeQualificationTiming() {
     (event) => {
       if (
         event.ctrlKey &&
-        event.code === "Space" &&
+        event.key === " " &&
         document.activeElement?.classList.contains("cm-content")
       ) {
         completionStarted = performance.now();

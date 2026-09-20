@@ -78,17 +78,24 @@ internal static class Program
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern short VkKeyScan(char value);
+
+    private static void Emit(byte key, bool release = false)
+    {
+        var extended = key is 0x21 or 0x22 or 0x23 or 0x24 or 0x25 or 0x26 or 0x27 or 0x28 or 0x2D or 0x2E;
+        keybd_event(key, (byte)MapVirtualKey(key, 0), (release ? 2u : 0u) | (extended ? 1u : 0u), UIntPtr.Zero);
+    }
 
     private static async Task Key(IntPtr window, byte key, byte modifier = 0, byte secondModifier = 0)
     {
         if (GetForegroundWindow() != window) throw new InvalidOperationException("Qualification window lost foreground; no input sent");
-        if (modifier != 0) keybd_event(modifier, 0, 0, UIntPtr.Zero);
-        if (secondModifier != 0) keybd_event(secondModifier, 0, 0, UIntPtr.Zero);
-        keybd_event(key, 0, 0, UIntPtr.Zero);
-        keybd_event(key, 0, 2, UIntPtr.Zero);
-        if (secondModifier != 0) keybd_event(secondModifier, 0, 2, UIntPtr.Zero);
-        if (modifier != 0) keybd_event(modifier, 0, 2, UIntPtr.Zero);
+        if (modifier != 0) Emit(modifier);
+        if (secondModifier != 0) Emit(secondModifier);
+        Emit(key);
+        Emit(key, true);
+        if (secondModifier != 0) Emit(secondModifier, true);
+        if (modifier != 0) Emit(modifier, true);
         await Task.Delay(150);
     }
 
@@ -159,6 +166,7 @@ internal static class Program
         if (!(await web.ExecuteScriptAsync("document.querySelector('.cm-content')?.textContent")).Contains("sensitivity"))
             throw new InvalidOperationException("Tab did not accept command completion");
         await Key(handle, 0x1B);
+        for (var character = 0; character < 6; character++) await Key(handle, 0x08);
         for (var sample = 0; sample < 20; sample++)
         {
             await Key(handle, 0x20, 0x11);
