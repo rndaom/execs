@@ -27,9 +27,15 @@ export async function runFilesWorkflows() {
     if (found.disabled) throw Error(`Disabled workflow button: ${name}`);
     return found;
   };
-  const click = async (name: string | RegExp, root?: ParentNode) => {
-    button(name, root).click();
+  const focusThenClick = async (target: HTMLElement) => {
+    target.focus();
+    // Observe real accessibility events; never inject or synthesize speech.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    target.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
+  };
+  const click = async (name: string | RegExp, root?: ParentNode) => {
+    await focusThenClick(button(name, root));
   };
   const content = () => {
     const element = pane().querySelector<HTMLElement>(".cm-content");
@@ -91,8 +97,7 @@ export async function runFilesWorkflows() {
       (element) => element.dataset.path === path,
     );
     if (!item) throw Error(`Missing listed draft: ${path}`);
-    item.click();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await focusThenClick(item);
   };
   const save = async () => {
     await wait(() => {
@@ -124,7 +129,7 @@ export async function runFilesWorkflows() {
     const jump = row?.querySelector<HTMLButtonElement>("button");
     if (!jump || !row?.textContent?.includes("warn"))
       throw Error("Numeric finding lacks non-color severity/location");
-    jump.click();
+    await focusThenClick(jump);
     await wait(
       () => window.getSelection()?.toString() === "banana",
       "precise diagnostic selection",
@@ -193,7 +198,7 @@ export async function runFilesWorkflows() {
     ].find((element) => ["hud", "pack", "comfigImport"].includes(element.dataset.origin ?? ""));
     if (!provided) throw Error("No provided source in representative fixture");
     const providedPath = provided.dataset.path;
-    provided.click();
+    await focusThenClick(provided);
     await wait(
       () =>
         content().getAttribute("contenteditable") === "false" ||
@@ -202,7 +207,15 @@ export async function runFilesWorkflows() {
     );
     if (pane().querySelector('[data-testid="files-save"]'))
       throw Error("Provided source exposes a Save action");
-    await record("Provided source is read-only with no Save action", { path: providedPath });
+    const providedContent = content();
+    providedContent.focus();
+    await record("Provided source is read-only with no Save action", {
+      path: providedPath,
+      focusReachedContent: document.activeElement === providedContent,
+      accessibleName: providedContent.getAttribute("aria-label"),
+      ariaReadonly: providedContent.getAttribute("aria-readonly"),
+      contentEditable: providedContent.getAttribute("contenteditable"),
+    });
     return {
       passed: true,
       steps,
