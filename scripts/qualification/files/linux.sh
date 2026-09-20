@@ -37,7 +37,11 @@ done
 python3 scripts/qualification/files/webkit.py --evidence "$FILES_EVIDENCE/1200x800" >"$FILES_EVIDENCE/webkit.log" 2>&1 &
 host_pid=$!
 trap 'kill "$host_pid" 2>/dev/null || true' EXIT
-python3 scripts/qualification/files/linux-input.py
+if [ "${FILES_SPEECH_ONLY:-0}" = 1 ]; then
+  python3 scripts/qualification/files/linux-speech.py
+else
+  python3 scripts/qualification/files/linux-input.py
+fi
 kill "$host_pid"
 wait "$host_pid" || true
 trap - EXIT
@@ -46,4 +50,6 @@ python3 scripts/qualification/files/webkit.py --width 1280 --height 800 --captur
 python3 scripts/qualification/files/webkit.py --zoom 2 --capture-seconds 12 --evidence "$FILES_EVIDENCE/1200x800-200pct"
 grep -E 'SPEECH OUTPUT|SPEECH GENERATOR|Traceback|ERROR' "$FILES_EVIDENCE/orca.log" >"$FILES_EVIDENCE/speech-summary.txt" || true
 grep -q 'SPEECH OUTPUT:.*Contents of' "$FILES_EVIDENCE/speech-summary.txt"
-python3 -c 'import json,os; from pathlib import Path; result=json.loads((Path(os.environ["FILES_EVIDENCE"])/"ime-result.json").read_text()); assert result["passed"], result'
+if [ "${FILES_SPEECH_ONLY:-0}" != 1 ]; then
+  python3 -c 'import json,os; from pathlib import Path; result=json.loads((Path(os.environ["FILES_EVIDENCE"])/"ime-result.json").read_text()); assert result["passed"], result'
+fi

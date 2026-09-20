@@ -1,6 +1,11 @@
 name: Qualify Files native engines
 on:
   workflow_dispatch:
+    inputs:
+      speech_only:
+        description: Linux diagnostic-row and settled-save speech follow-up only
+        type: boolean
+        default: false
   push:
     branches: [rndaom/qualify-0.1.7-files]
 permissions:
@@ -20,6 +25,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y orca speech-dispatcher speech-dispatcher-espeak-ng gir1.2-webkit2-4.1 python3-pyatspi xvfb xdotool dbus-x11 openbox pulseaudio ibus ibus-anthy ibus-gtk3 fonts-noto-cjk
       - name: Native WebKitGTK, Orca and IME
+        env:
+          FILES_SPEECH_ONLY: ${{ inputs.speech_only && '1' || '0' }}
         run: xvfb-run -a -s '-screen 0 1600x1200x24' dbus-run-session -- bash scripts/qualification/files/linux.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -33,6 +40,7 @@ jobs:
             /tmp/files-qualification/*/*.png
             /tmp/files-qualification/*/runtime-error.txt
   windows-host:
+    if: ${{ !inputs.speech_only }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
