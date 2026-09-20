@@ -41,7 +41,14 @@ async function render(profileId = "a", visible = true) {
           value: { error: null, setError, running, busy: false },
         },
         visible
-          ? createElement(FilesPane, { profileId, files, hudId: null, draftStore: store, onSave })
+          ? createElement(FilesPane, {
+              profileId,
+              files,
+              context: { profileId, root: "G:/TF2", layer: "vanilla" },
+              hudId: null,
+              draftStore: store,
+              onSave,
+            })
           : null,
       ),
     ),
@@ -59,9 +66,25 @@ async function edit(text: string) {
 }
 async function click(selector: string) {
   await act(async () => {
-    const button = container.querySelector<HTMLButtonElement>(selector);
+    const button =
+      container.querySelector<HTMLButtonElement>(selector) ??
+      document.querySelector<HTMLButtonElement>(selector);
     if (!button) throw new Error(`Missing button ${selector}`);
     button.click();
+  });
+}
+async function contextMenu(selector: string) {
+  await act(async () => {
+    const target = container.querySelector<HTMLElement>(selector);
+    if (!target) throw new Error(`Missing context-menu target ${selector}`);
+    target.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 20,
+        clientY: 20,
+      }),
+    );
   });
 }
 async function button(label: string) {
@@ -74,7 +97,6 @@ async function button(label: string) {
   });
 }
 async function pick(path: string) {
-  await button("Open file");
   await click(`[data-path="${path}"]`);
 }
 async function checked() {
@@ -127,48 +149,45 @@ describe("Files draft navigation", () => {
     const retained = `${files[0].text}echo unsaved\n`;
     await edit(retained);
     await checked();
-    await act(async () => container.querySelector<HTMLElement>("summary")?.click());
+    expect(container.querySelector('[aria-label="File info"]')).toBeNull();
+    await contextMenu(`[data-path="${first}"]`);
     const outgoing =
       '[data-testid="files-source-link"][data-direction="outgoing"][data-deferred="false"]';
-    expect(container.querySelector(outgoing)?.textContent).toContain(`${second}:1`);
+    expect(document.querySelector(outgoing)?.textContent).toContain(`${second}:1`);
     await click(outgoing);
     expect(editor().contentDOM.getAttribute("aria-label")).toBe(`Contents of ${second}`);
+    await contextMenu(`[data-path="${second}"]`);
     const incoming =
       '[data-testid="files-source-link"][data-direction="incoming"][data-deferred="false"]';
-    expect(container.querySelector(incoming)?.textContent).toContain(`Referenced by: ${first}:2`);
+    expect(document.querySelector(incoming)?.textContent).toContain(`Referenced by: ${first}:2`);
     await click(incoming);
     expect(editor().contentDOM.getAttribute("aria-label")).toBe(`Contents of ${first}`);
     expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(2);
     expect(editor().state.doc.toString()).toBe(retained);
     await pick(second);
+    await contextMenu(`[data-path="${second}"]`);
     const deferredCaller =
       '[data-testid="files-source-link"][data-direction="incoming"][data-deferred="true"]';
-    expect(container.querySelector(deferredCaller)?.textContent).toContain(`${first}:3`);
-    expect(container.querySelector(deferredCaller)?.textContent).toContain(
-      "Deferred bind/alias payload",
-    );
+    expect(document.querySelector(deferredCaller)?.textContent).toContain(`${first}:3`);
+    expect(document.querySelector(deferredCaller)?.textContent).toContain("Deferred");
     await click(deferredCaller);
     expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(3);
     expect(editor().state.doc.toString()).toBe(retained);
     expect(onSave).not.toHaveBeenCalled();
   });
-  it("Focus returns to the editor without changing selection, scroll or draft", async () => {
+  it("keeps the Explorer visible while file switching restores the current draft", async () => {
     await render();
     await edit(Array.from({ length: 80 }, (_, i) => `echo line${i}`).join("\n"));
     const view = editor();
     await act(async () => view.dispatch({ selection: { anchor: 20, head: 26 } }));
-    await button("Open file");
     view.scrollDOM.scrollTop = 120;
     view.scrollDOM.scrollLeft = 30;
     const before = view.state.doc.toString();
-    await click('[aria-label="Focus editor"]');
-    expect(document.activeElement).toBe(view.contentDOM);
-    expect(view.state.selection.main.anchor).toBe(20);
-    expect(view.state.selection.main.head).toBe(26);
-    expect(view.scrollDOM.scrollTop).toBe(120);
-    expect(view.scrollDOM.scrollLeft).toBe(30);
-    expect(view.state.doc.toString()).toBe(before);
-    expect(container.querySelector('[aria-label="Profile files"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Profile files"]')).not.toBeNull();
+    await pick(second);
+    await pick(first);
+    const restored = editor();
+    expect(restored.state.doc.toString()).toBe(before);
     expect(onSave).not.toHaveBeenCalled();
   });
   it("retains drafts and selected file across pane exit, file navigation and profile switches without saving", async () => {
@@ -260,7 +279,7 @@ describe("Files draft navigation", () => {
     await edit(changed);
     await pick(second);
     await edit(newer);
-    await button("Discard file");
+    await button("Discard");
     expect(editor().state.doc.toString()).toBe(original);
     await pick(first);
     expect(editor().state.doc.toString()).toBe(changed);
@@ -277,6 +296,21 @@ describe("Files draft navigation", () => {
     expect(container.querySelector<HTMLButtonElement>('[data-testid="files-save"]')?.disabled).toBe(
       true,
     );
+    await act(async () => {
+      editor().contentDOM.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "S",
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(container.querySelector("#save-as-name")).not.toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-testid="files-save-as-confirm"]')?.disabled,
+    ).toBe(true);
     running = false;
     await render();
     await checked();
@@ -313,5 +347,108 @@ describe("Files draft navigation", () => {
       false,
     );
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("creates helper drafts in a chosen safe folder and labels collisions as Open", async () => {
+    await render();
+    await click('[data-testid="files-new"]');
+    await button("Helper");
+    const input = container.querySelector<HTMLInputElement>("#new-cfg-name");
+    if (!input) throw Error("Missing cfg name");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "practice",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await button("helpers");
+    expect(container.textContent).toContain("tf/cfg/helpers/practice.cfg");
+    await button("Start editing");
+    expect(store.state("a", "tf/cfg/helpers/practice.cfg")).toMatchObject({
+      created: true,
+      dirty: true,
+    });
+
+    await click('[data-testid="files-new"]');
+    await button("Helper");
+    const nextInput = container.querySelector<HTMLInputElement>("#new-cfg-name");
+    if (!nextInput) throw Error("Missing cfg name");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        nextInput,
+        "a",
+      );
+      nextInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await button("Root");
+    expect(container.textContent).toContain(`Already exists: ${first}`);
+    expect(container.textContent).toContain("Open a.cfg");
+  });
+
+  it("offers Save as for read-only cfgs, blocks collisions, and keeps the source after failure", async () => {
+    const provided = "tf/custom/hud/scripts/provided.cfg";
+    files.push({ path: provided, text: "echo provided\n" });
+    onSave.mockResolvedValue(false);
+    await render();
+    await pick(provided);
+    await checked();
+    await act(async () => {
+      editor().contentDOM.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "S",
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>("#save-as-name");
+    if (!input) throw Error("Missing Save as name");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "b");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(container.textContent).toContain(`Already exists: ${second}`);
+    expect(container.textContent).toContain("Open existing");
+    expect(onSave).not.toHaveBeenCalled();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "provided_copy",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click('[data-testid="files-save-as-confirm"]');
+    expect(onSave).toHaveBeenCalledWith(
+      "tf/cfg/provided_copy.cfg",
+      "echo provided\n",
+      expect.objectContaining({
+        path: "tf/cfg/provided_copy.cfg",
+        expected: expect.objectContaining({ sha256: null, librarySha256: null }),
+      }),
+    );
+    expect(store.state("a", provided)?.text).toBe("echo provided\n");
+    expect(store.state("a", "tf/cfg/provided_copy.cfg")).toBeNull();
+  });
+
+  it("disambiguates duplicate file names and moves through files with arrow keys", async () => {
+    files.push({ path: "tf/cfg/helpers/a.cfg", text: "echo nested\n" });
+    await render();
+    const duplicateRows = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="files-item"]'),
+    ].filter((item) => item.textContent?.includes("a.cfg"));
+    expect(duplicateRows.map((row) => row.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining("CFG"), expect.stringContaining("helpers")]),
+    );
+    duplicateRows[0]?.focus();
+    await act(async () => {
+      duplicateRows[0]?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }),
+      );
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(document.activeElement).not.toBe(duplicateRows[0]);
   });
 });

@@ -5,6 +5,12 @@ const PENDING_RELEASE_KEY = "execs:pending-release-notes";
 
 /** Exact-revision fallback for manual updates or an updater body without notes. */
 const BUNDLED_NOTES: Record<string, string> = {
+  "0.1.7+1": `### Fixed
+
+- Files: replace the stacked settings page with a compact editor workspace that keeps the file list, selected cfg and Save action clear.
+- Files: make Problems and Help easier to scan, move secondary actions into file and editor menus, and let Find close from the same button.
+- Files: add Save as new cfg for editable and provided files, with safe destinations inside the active cfg layer and no overwrites.
+- Files: separate helper filenames from their locations, identify existing targets before opening them, and improve keyboard file navigation and search highlights.`,
   "0.1.3+1": `### Fixed
 
 - HUDs: replaced and legacy disabled HUDs stay out of TF2's active search paths. Their files are preserved as backups and no longer reported as external profile changes.
