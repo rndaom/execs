@@ -18,6 +18,9 @@ gsettings set org.freedesktop.ibus.general engines-order "['xkb:us::eng', 'anthy
 gsettings set org.freedesktop.ibus.general use-global-engine true
 gsettings set org.freedesktop.ibus.general use-system-keyboard-layout true
 gsettings set org.freedesktop.ibus.general.hotkey triggers "[]"
+gsettings set org.freedesktop.ibus.engine.anthy.common input-mode 0
+gsettings set org.freedesktop.ibus.engine.anthy.common typing-method 0
+gsettings get org.freedesktop.ibus.engine.anthy.common input-mode >"$FILES_EVIDENCE/anthy-input-mode.txt"
 ibus-daemon --daemonize --xim --replace --cache=refresh >"$FILES_EVIDENCE/ibus.log" 2>&1
 for attempt in $(seq 1 30); do
   ibus list-engine >"$FILES_EVIDENCE/ibus-engines.txt" 2>>"$FILES_EVIDENCE/ibus.log" && break
