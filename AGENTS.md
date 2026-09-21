@@ -110,6 +110,8 @@ Private `workflow_dispatch` candidates require the matching `vX.Y.Z` input. Cand
 
 Release verification accepts GitHub's temporary `untagged-...` draft browser slug only when it matches that draft's `html_url` and the feed references its stable API asset URL. The exact `tag_name`, revision and signatures remain mandatory. Previous-installer downloads select actual public asset names, including either literal or normalized numeric build suffixes.
 
+**Release handoff:** A release request is complete as soon as the authorized tag workflow has published the stable release and the public release, updater feed, signatures and provenance have passed the required verification. Report that completion to the owner immediately. Do not delay the handoff to wait for forward-porting, branch cleanup, documentation follow-ups, duplicate post-merge CI, or any other housekeeping. Those tasks may continue only as clearly identified non-blocking follow-up work. Never repeatedly poll an already-adequate CI result merely to obtain redundant confirmation; if a background check remains active, give its link and stop waiting unless the owner explicitly asks to babysit it.
+
 GitHub Issues and Discussions are the public inbox. Linear execs is the backlog. A public thread that becomes work gets a Linear issue labeled `from-github` (and `compat` when it touches profiles, the data dir, the write surface, or the updater). Do not keep a second backlog on GitHub. Every user-facing change adds its `[Unreleased]` changelog line in the same commit.
 
 ## Design system
