@@ -4,7 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { packagedAssetUrl } from "./qualification/files/packaged-worker.mjs";
+import {
+  packagedAssetUrl,
+  readyPackagedDocumentUrl,
+} from "./qualification/files/packaged-worker.mjs";
 import { releaseNotesFromChangelog } from "./release-notes.mjs";
 import {
   parseReleaseVersion,
@@ -52,6 +55,23 @@ test("packaged worker assets resolve from the inspected Tauri page URL", () => {
   );
   assert.throws(() => packagedAssetUrl("about:blank", "files-analysis.worker-test.js"));
   assert.throws(() => packagedAssetUrl("", "files-analysis.worker-test.js"));
+});
+
+test("packaged worker qualification waits for the native document", () => {
+  assert.equal(readyPackagedDocumentUrl({ href: "about:blank", ready: "complete" }), null);
+  assert.equal(readyPackagedDocumentUrl({ href: "http://tauri.localhost/" }), null);
+  assert.equal(
+    readyPackagedDocumentUrl({ href: "http://tauri.localhost/", ready: "loading" }),
+    null,
+  );
+  assert.equal(
+    readyPackagedDocumentUrl({ href: "http://tauri.localhost/", ready: "interactive" }),
+    "http://tauri.localhost/",
+  );
+  assert.equal(
+    readyPackagedDocumentUrl({ href: "tauri://localhost/", ready: "complete" }),
+    "tauri://localhost/",
+  );
 });
 
 test("Minisign verification rejects changed bytes, signatures, keys and comments", () => {

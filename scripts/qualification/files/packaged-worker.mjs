@@ -23,6 +23,16 @@ export function packagedAssetUrl(pageUrl, asset) {
   return new URL(`assets/${asset}`, base).href;
 }
 
+export function readyPackagedDocumentUrl(page) {
+  if (!page?.href || !["interactive", "complete"].includes(page.ready)) return null;
+  try {
+    packagedAssetUrl(page.href, "qualification-probe.js");
+    return page.href;
+  } catch {
+    return null;
+  }
+}
+
 async function eventually(operation, description) {
   let failure;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -201,7 +211,6 @@ async function cdpSession(application, environment, evidence) {
       maxResourceBufferSize: 256 * 1024,
     });
     return {
-      baseUrl: page.url,
       async evaluate(expression) {
         const result = await command("Runtime.evaluate", {
           expression,
@@ -353,12 +362,10 @@ export async function qualifyPackagedWorker(application, parentEnvironment, evid
     evidence,
   );
   try {
-    const pageUrl =
-      session.baseUrl ??
-      (await eventually(async () => {
-        const page = await session.evaluate("({href:location.href,ready:document.readyState})");
-        return page.href && page.ready !== "loading" ? page.href : null;
-      }, "packaged app document"));
+    const pageUrl = await eventually(async () => {
+      const page = await session.evaluate("({href:location.href,ready:document.readyState})");
+      return readyPackagedDocumentUrl(page);
+    }, "packaged app document");
     const workerUrl = packagedAssetUrl(pageUrl, worker);
     const assetResponse = await session.evaluate(`(async()=>{
       const url=${JSON.stringify(workerUrl)};
