@@ -17,6 +17,7 @@ pub struct Inventory {
     #[serde(flatten)]
     snapshot: Snapshot,
     definitions: BTreeMap<u32, execs_core::inventory::Definition>,
+    item_descriptions: BTreeMap<String, execs_core::inventory::ItemDescription>,
     warning: Option<String>,
 }
 
@@ -116,28 +117,50 @@ pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventor
         let context = RootContext::capture(&root);
         let snapshot = read_snapshot(&root)?;
         let ids: BTreeSet<_> = snapshot.items.iter().map(|i| i.definition).collect();
-        let (definitions, warning) = match execs_core::inventory::definitions(&root, &ids) {
-            Ok(definitions) => {
-                let missing = ids.len().saturating_sub(definitions.len());
-                (
-                    definitions,
-                    (missing > 0).then(|| {
-                        format!("Names and artwork are unavailable for {missing} item definitions.")
-                    }),
-                )
-            }
-            Err(error) => (
-                BTreeMap::new(),
-                Some(format!(
-                    "Local item descriptions could not be read: {error}"
-                )),
-            ),
-        };
+        let inputs: Vec<_> = snapshot
+            .items
+            .iter()
+            .map(|item| execs_core::inventory::ItemInput {
+                id: &item.id,
+                definition: item.definition,
+                attributes: item
+                    .attributes
+                    .iter()
+                    .map(|attribute| (attribute.definition, attribute.value_bytes.as_slice()))
+                    .collect(),
+            })
+            .collect();
+        let (definitions, item_descriptions, warning) =
+            match execs_core::inventory::metadata(&root, &inputs) {
+                Ok(metadata) => {
+                    let missing = ids
+                        .iter()
+                        .filter(|id| !metadata.definitions.contains_key(id))
+                        .count();
+                    (
+                        metadata.definitions,
+                        metadata.item_descriptions,
+                        (missing > 0).then(|| {
+                            format!(
+                                "Names and artwork are unavailable for {missing} item definitions."
+                            )
+                        }),
+                    )
+                }
+                Err(error) => (
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                    Some(format!(
+                        "Local item descriptions could not be read: {error}"
+                    )),
+                ),
+            };
         context.ensure_current(&super::shared::confirmed_root()?)?;
         execs_core::refuse_if_running()?;
         Ok(Inventory {
             snapshot,
             definitions,
+            item_descriptions,
             warning,
         })
     })

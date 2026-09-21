@@ -2,7 +2,7 @@ mod native;
 mod protocol;
 
 pub use native::read_inventory;
-pub use protocol::{InventoryItem, Snapshot};
+pub use protocol::{InventoryItem, ItemAttribute, Snapshot};
 
 /// Called only in a dedicated process, before Tauri or any worker is initialized.
 pub fn helper(path: &std::path::Path) {

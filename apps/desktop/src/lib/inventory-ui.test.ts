@@ -34,4 +34,36 @@ describe("inventory browsing", () => {
     expect(snapshot.items[0].position).toBe(51);
     expect(itemName(snapshot, snapshot.items[0])).toBe("Named gun");
   });
+  it("sorts a compact view without moving slots or mutating the snapshot", () => {
+    const before = structuredClone(snapshot);
+    const byName = inventoryPage(snapshot, "", null, 1, "name");
+    expect(byName.slots.map((slot) => slot.item?.id)).toEqual(["9007199254740993", "2"]);
+    expect(byName.pages).toBe(1);
+    expect(byName.slots.map((slot) => slot.position)).toEqual([51, 0]);
+    expect(
+      inventoryPage(snapshot, "", null, 1, "quality").slots.map((slot) => slot.item?.quality),
+    ).toEqual([11, 6]);
+    expect(snapshot).toEqual(before);
+    expect(inventoryPage(snapshot, "", null, 2, "position").slots[0].position).toBe(51);
+  });
+  it("searches per-instance paint and kit details and honors missing variant artwork", () => {
+    const enriched = {
+      ...snapshot,
+      itemDescriptions: {
+        "2": {
+          name: "Mercenary Grade War Paint",
+          kind: "War Paint",
+          classes: [],
+          icon: null,
+          details: ["War paint: Autumn", "Minimal Wear"],
+        },
+      },
+    };
+    expect(itemName(enriched, enriched.items[1])).toBe("Mercenary Grade War Paint");
+    expect(inventoryPage(enriched, "autumn", null, 1).slots[0].item?.id).toBe("2");
+    expect(inventoryPage(enriched, "minimal wear", null, 1).matchCount).toBe(1);
+    expect(inventoryPage(enriched, "", null, 1, "type").slots.map((slot) => slot.item?.id)).toEqual(
+      ["9007199254740993", "2"],
+    );
+  });
 });

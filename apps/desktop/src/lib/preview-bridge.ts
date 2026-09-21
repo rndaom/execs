@@ -215,10 +215,28 @@ export function createPreviewApi(state: PreviewState): Api {
     async getInventory() {
       return {
         steamId: "Preview data",
+        personaName: "Preview player",
+        avatar: null,
         capacity: 300,
         warning: "Preview data · These are fixture items, not a Steam inventory.",
         items: [
           { id: "preview-1", definition: 13, position: 1, quality: 6, level: 1, customName: null },
+          {
+            id: "preview-paint",
+            definition: 17286,
+            position: 2,
+            quality: 15,
+            level: 1,
+            customName: null,
+          },
+          {
+            id: "preview-kit",
+            definition: 6526,
+            position: 3,
+            quality: 6,
+            level: 1,
+            customName: null,
+          },
           {
             id: "preview-2",
             definition: 13,
@@ -239,6 +257,24 @@ export function createPreviewApi(state: PreviewState): Api {
         definitions: {
           "13": { name: "Scattergun", kind: "Scattergun", classes: ["scout"], icon: null },
           "5002": { name: "Refined Metal", kind: "Crafting Item", classes: [], icon: null },
+          "17286": { name: "War Paint", kind: "War Paint", classes: [], icon: null },
+          "6526": { name: "Killstreak Kit", kind: "Tool", classes: [], icon: null },
+        },
+        itemDescriptions: {
+          "preview-paint": {
+            name: "Skull Cracked War Paint",
+            kind: "War Paint",
+            classes: [],
+            icon: null,
+            details: ["Minimal Wear", "Pattern preview unavailable"],
+          },
+          "preview-kit": {
+            name: "Professional Killstreak Kit · Rocket Launcher",
+            kind: "Tool",
+            classes: [],
+            icon: null,
+            details: ["Sheen: Team Shine", "Killstreaker: Fire Horns"],
+          },
         },
       };
     },

@@ -5,11 +5,23 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Improved
+
+- Inventory loads automatically and refreshes every two minutes while visible
+  and focused, and after TF2 closes. Background refreshes retain your place and
+  artwork; connection failures retry with backoff and offer a Retry button.
+
 ### Added
 
 - Development builds: browse a read-only Steam backpack snapshot with pages,
   search, quality filters, item details, and base artwork from the installed TF2.
   Inventory organization remains in development and is not enabled in release builds.
+- Inventory preview: show your Steam name and avatar, inspect larger item artwork,
+  and browse by name, quality, or type with one page control. View sorting keeps
+  Steam backpack positions unchanged.
+- Inventory preview: identify war paints, killstreak kit targets and fabricator
+  outputs, including available wear, sheen and effect names. Preview installed
+  war-paint pattern swatches without implying a rendered weapon or wear preview.
 
 ### Fixed
 

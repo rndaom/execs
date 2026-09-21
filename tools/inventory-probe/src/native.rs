@@ -1,9 +1,10 @@
 //! Steam transport used only inside a dedicated development helper process.
 use crate::protocol;
+use base64::Engine;
 
 use libloading::Library;
 use std::{
-    ffi::{c_char, c_void},
+    ffi::{c_char, c_void, CStr},
     time::{Duration, Instant},
 };
 use sysinfo::{ProcessesToUpdate, System};
@@ -22,6 +23,107 @@ struct Coordinator {
 }
 
 struct Shutdown(unsafe extern "C" fn());
+
+fn avatar_png(width: u32, height: u32, rgba: &[u8]) -> Option<String> {
+    if width == 0
+        || height == 0
+        || width > 184
+        || height > 184
+        || rgba.len() != width as usize * height as usize * 4
+    {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut bytes, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.write_header().ok()?.write_image_data(rgba).ok()?;
+    }
+    Some(format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+// Optional local Steam presentation data. A missing SDK export or unloaded avatar
+// never turns a valid backpack into an error. No web profile scraping is needed.
+unsafe fn persona(
+    library: &Library,
+    client: Interface,
+    user: i32,
+    pipe: i32,
+    steam_id: u64,
+) -> (Option<String>, Option<String>) {
+    type GetFriends = unsafe extern "C" fn(Interface, i32, i32, *const c_char) -> Interface;
+    let read = || -> Option<(Option<String>, Option<String>)> {
+        let get_friends = library
+            .get::<GetFriends>(b"SteamAPI_ISteamClient_GetISteamFriends\0")
+            .ok()?;
+        let friends = get_friends(client, user, pipe, c"SteamFriends017".as_ptr());
+        if friends.is_null() {
+            return None;
+        }
+        let get_name = library
+            .get::<unsafe extern "C" fn(Interface) -> *const c_char>(
+                b"SteamAPI_ISteamFriends_GetPersonaName\0",
+            )
+            .ok()?;
+        let name = get_name(friends);
+        let name = if name.is_null() {
+            None
+        } else {
+            let value = CStr::from_ptr(name).to_string_lossy();
+            (!value.trim().is_empty()).then(|| value.chars().take(128).collect())
+        };
+        let avatar = (|| -> Option<String> {
+            let get_avatar = library
+                .get::<unsafe extern "C" fn(Interface, u64) -> i32>(
+                    b"SteamAPI_ISteamFriends_GetMediumFriendAvatar\0",
+                )
+                .ok()?;
+            let image = get_avatar(friends, steam_id);
+            if image <= 0 {
+                return None;
+            }
+            let get_utils = library
+                .get::<unsafe extern "C" fn(Interface, i32, *const c_char) -> Interface>(
+                    b"SteamAPI_ISteamClient_GetISteamUtils\0",
+                )
+                .ok()?;
+            let utils = get_utils(client, pipe, c"SteamUtils010".as_ptr());
+            if utils.is_null() {
+                return None;
+            }
+            let size = library
+                .get::<unsafe extern "C" fn(Interface, i32, *mut u32, *mut u32) -> bool>(
+                    b"SteamAPI_ISteamUtils_GetImageSize\0",
+                )
+                .ok()?;
+            let pixels = library
+                .get::<unsafe extern "C" fn(Interface, i32, *mut u8, i32) -> bool>(
+                    b"SteamAPI_ISteamUtils_GetImageRGBA\0",
+                )
+                .ok()?;
+            let (mut width, mut height) = (0, 0);
+            if !size(utils, image, &mut width, &mut height)
+                || width == 0
+                || height == 0
+                || width > 184
+                || height > 184
+            {
+                return None;
+            }
+            let mut rgba = vec![0; width as usize * height as usize * 4];
+            if !pixels(utils, image, rgba.as_mut_ptr(), rgba.len() as i32) {
+                return None;
+            }
+            avatar_png(width, height, &rgba)
+        })();
+        Some((name, avatar))
+    };
+    read().unwrap_or_default()
+}
 impl Drop for Shutdown {
     fn drop(&mut self) {
         // SAFETY: constructed only after successful initialization; DLL outlives guard.
@@ -136,9 +238,13 @@ unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protoco
     let mut last_hello = None;
     let mut welcomed = false;
     let mut snapshot = None;
+    let mut account_presentation = (None, None);
     while started.elapsed() < Duration::from_secs(30) {
         refuse_game(system)?;
         callbacks();
+        if account_presentation.1.is_none() {
+            account_presentation = persona(&library, client, user_handle, pipe, steam_id);
+        }
         if !logged_on(user) || identity(user) != steam_id {
             return Err("Steam disconnected or changed account; discarded the snapshot".into());
         }
@@ -210,14 +316,35 @@ unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protoco
             }
         }
         if welcomed {
-            if let Some(snapshot) = snapshot {
+            if let Some(mut snapshot) = snapshot {
                 if !logged_on(user) || identity(user) != steam_id {
                     return Err("Account changed before completion".into());
                 }
+                snapshot.persona_name = account_presentation.0;
+                snapshot.avatar = account_presentation.1;
                 return Ok(snapshot);
             }
         }
         std::thread::sleep(Duration::from_millis(100));
     }
     Err(format!("Timed out waiting for a complete backpack (coordinator welcome: {welcomed}); no empty inventory was inferred").into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn avatar_is_bounded_and_encoded_as_png() {
+        assert!(avatar_png(185, 1, &[0; 740]).is_none());
+        assert!(avatar_png(1, 1, &[0; 3]).is_none());
+        let url = avatar_png(1, 1, &[12, 34, 56, 255]).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(url.strip_prefix("data:image/png;base64,").unwrap())
+            .unwrap();
+        let mut decoder = png::Decoder::new(bytes.as_slice()).read_info().unwrap();
+        let mut decoded = vec![0; decoder.output_buffer_size()];
+        decoder.next_frame(&mut decoded).unwrap();
+        assert_eq!(decoded, [12, 34, 56, 255]);
+    }
 }

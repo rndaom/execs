@@ -1,6 +1,7 @@
 import type { InventoryItem, InventorySnapshot } from "./bridge";
 
 export const INVENTORY_PAGE_SIZE = 50;
+export type InventorySort = "position" | "name" | "quality" | "type";
 export const QUALITY_NAMES: Record<number, string> = {
   0: "Normal",
   1: "Genuine",
@@ -16,21 +17,23 @@ export const QUALITY_NAMES: Record<number, string> = {
   15: "Decorated",
 };
 export function itemName(snapshot: InventorySnapshot, item: InventoryItem): string {
-  return (
-    item.customName || snapshot.definitions[item.definition]?.name || `Item #${item.definition}`
-  );
+  return item.customName || itemDescription(snapshot, item)?.name || `Item #${item.definition}`;
+}
+export function itemDescription(snapshot: InventorySnapshot, item: InventoryItem) {
+  return snapshot.itemDescriptions?.[item.id] ?? snapshot.definitions[item.definition];
 }
 export function inventoryPage(
   snapshot: InventorySnapshot,
   query: string,
   quality: number | null,
   page: number,
+  sort: InventorySort = "position",
 ) {
   const needle = query.trim().toLocaleLowerCase();
-  const filtered = needle.length > 0 || quality !== null;
+  const filtered = needle.length > 0 || quality !== null || sort !== "position";
   const matches = snapshot.items
     .filter((item) => {
-      const definition = snapshot.definitions[item.definition];
+      const definition = itemDescription(snapshot, item);
       return (
         (quality === null || item.quality === quality) &&
         (!needle ||
@@ -38,6 +41,7 @@ export function inventoryPage(
             itemName(snapshot, item),
             definition?.name,
             definition?.kind,
+            ...(snapshot.itemDescriptions?.[item.id]?.details ?? []),
             ...(definition?.classes ?? []),
             item.id,
             String(item.definition),
@@ -45,11 +49,30 @@ export function inventoryPage(
           ].some((part) => part?.toLocaleLowerCase().includes(needle)))
       );
     })
-    .sort(
-      (a, b) =>
+    .sort((a, b) => {
+      const names = () =>
+        itemName(snapshot, a).localeCompare(itemName(snapshot, b), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      const order =
+        sort === "name"
+          ? names()
+          : sort === "quality"
+            ? (QUALITY_NAMES[a.quality] ?? String(a.quality)).localeCompare(
+                QUALITY_NAMES[b.quality] ?? String(b.quality),
+              ) || names()
+            : sort === "type"
+              ? (itemDescription(snapshot, a)?.kind ?? "").localeCompare(
+                  itemDescription(snapshot, b)?.kind ?? "",
+                ) || names()
+              : 0;
+      return (
+        order ||
         (a.position || Number.MAX_SAFE_INTEGER) - (b.position || Number.MAX_SAFE_INTEGER) ||
-        a.id.localeCompare(b.id),
-    );
+        a.id.localeCompare(b.id)
+      );
+    });
   const pages = Math.max(
     1,
     Math.ceil((filtered ? matches.length : snapshot.capacity) / INVENTORY_PAGE_SIZE),

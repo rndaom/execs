@@ -8,6 +8,10 @@ use std::collections::HashSet;
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub steam_id: String,
+    #[serde(default)]
+    pub persona_name: Option<String>,
+    #[serde(default)]
+    pub avatar: Option<String>,
     pub capacity: u32,
     pub items: Vec<InventoryItem>,
 }
@@ -21,6 +25,25 @@ pub struct InventoryItem {
     pub quality: u32,
     pub level: u32,
     pub custom_name: Option<String>,
+    #[serde(default)]
+    pub attributes: Vec<ItemAttribute>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAttribute {
+    pub definition: u32,
+    pub value_bytes: Vec<u8>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct Attribute {
+    #[prost(uint32, optional, tag = "1")]
+    pub definition: Option<u32>,
+    #[prost(uint32, optional, tag = "2")]
+    pub value: Option<u32>,
+    #[prost(bytes = "vec", optional, tag = "3")]
+    pub value_bytes: Option<Vec<u8>>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -112,6 +135,8 @@ pub struct Item {
     pub quality: u32,
     #[prost(string, optional, tag = "10")]
     pub custom_name: Option<String>,
+    #[prost(message, repeated, tag = "12")]
+    pub attributes: Vec<Attribute>,
 }
 
 pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
@@ -143,6 +168,14 @@ pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
         .flat_map(|o| &o.data)
     {
         let item = Item::decode(bytes.as_slice()).map_err(|e| e.to_string())?;
+        if item.attributes.len() > 256
+            || item
+                .attributes
+                .iter()
+                .any(|a| a.value_bytes.as_ref().is_some_and(|v| v.len() > 4096))
+        {
+            return Err("Item attributes exceed limit".into());
+        }
         let value = item.inventory.ok_or("Missing position")?;
         let position = if value & (1 << 30) != 0 {
             0
@@ -159,6 +192,18 @@ pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
             quality: item.quality,
             level: item.level,
             custom_name: item.custom_name,
+            attributes: item
+                .attributes
+                .into_iter()
+                .filter_map(|a| {
+                    Some(ItemAttribute {
+                        definition: a.definition?,
+                        value_bytes: a
+                            .value_bytes
+                            .or_else(|| a.value.map(|v| v.to_le_bytes().to_vec()))?,
+                    })
+                })
+                .collect(),
         });
     }
     if items.len() > 100_000 {
@@ -166,6 +211,8 @@ pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
     }
     Ok(Snapshot {
         steam_id: steam_id.to_string(),
+        persona_name: None,
+        avatar: None,
         capacity,
         items,
     })
@@ -304,6 +351,37 @@ mod tests {
             .unwrap()
             .contains("\"18446744073709551615\""));
         c.objects[0].data.push(item(2, 301).encode_to_vec());
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+    }
+
+    #[test]
+    fn snapshot_preserves_attribute_bytes_and_rejects_oversized_values() {
+        let mut source = item(1, 1);
+        source.attributes = vec![
+            Attribute {
+                definition: Some(834),
+                value: Some(99),
+                value_bytes: Some(vec![1, 2, 3, 4]),
+            },
+            Attribute {
+                definition: Some(725),
+                value: Some(0x12345678),
+                value_bytes: None,
+            },
+        ];
+        let mut c = cache(vec![source.clone()]);
+        c.objects.push(ObjectType {
+            kind: Some(7),
+            data: vec![Account::default().encode_to_vec()],
+        });
+        let result = snapshot(&c.encode_to_vec(), USER).unwrap();
+        assert_eq!(result.items[0].attributes[0].value_bytes, [1, 2, 3, 4]);
+        assert_eq!(
+            result.items[0].attributes[1].value_bytes,
+            [0x78, 0x56, 0x34, 0x12]
+        );
+        source.attributes[0].value_bytes = Some(vec![0; 4097]);
+        c.objects[0].data[0] = source.encode_to_vec();
         assert!(snapshot(&c.encode_to_vec(), USER).is_err());
     }
 

@@ -18,9 +18,12 @@ export type InventoryDefinition = {
 };
 export type InventorySnapshot = {
   steamId: string;
+  personaName?: string | null;
+  avatar?: string | null;
   capacity: number;
   items: InventoryItem[];
   definitions: Record<string, InventoryDefinition>;
+  itemDescriptions?: Record<string, InventoryDefinition & { details: string[] }>;
   warning: string | null;
 };
 export function getInventory(): Promise<InventorySnapshot> {

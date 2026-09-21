@@ -20,6 +20,11 @@ release has been assigned yet.
   write gate and terminates a hung helper after 40 seconds.
 - Only ClientHello and account-bound SOCacheSubscriptionRefresh are sent.
   No move, sort, equip, craft, delete, trade, or item-acknowledgment requests exist.
+- The signed-in persona name and avatar are read through Steam Friends and Utils
+  in the same bounded helper session. Missing presentation data remains optional;
+  avatars cross IPC as bounded PNG data URLs, with no web-profile request.
+- Item attributes retain their exact value bytes (or legacy little-endian uint32)
+  for local schema interpretation, capped at 256 attributes and 4096 bytes each.
 - The initial cache must match the connected account and provide capacity,
   unique item identities, and valid non-colliding placed slots. Missing data
   fails instead of becoming an empty backpack. IDs cross JSON as strings.
