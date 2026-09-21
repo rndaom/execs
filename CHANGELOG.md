@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-20
+
 ### Added
 
 - Mods: open on GameBanana browsing and organize Browse, Installed and Casual setup as separate
