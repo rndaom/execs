@@ -1,9 +1,10 @@
 //! Regressions for incomplete inventories and case-only renames. These tests
 //! isolate both profiles and the live surface and never discover real Steam.
 use execs_core::absorb::{absorb_owned_to, absorb_packs_to, AbsorbOptions, PackChoice};
-use execs_core::mods::{install_mod_to, ModContent, ModSource};
+use execs_core::mods::{install_mod_to, ModContent, ModRecord, ModSource};
+use execs_core::preloader::PreloaderState;
 use execs_core::profile::{
-    create_profile_record_to, exclusive_file_path, load_manifest, save_current_as_to,
+    create_profile_record_to, exclusive_file_path, load_manifest, save_current_as_to, ProfileError,
     SaveCurrentOptions,
 };
 use execs_core::switch::switch_profile_to;
@@ -103,6 +104,34 @@ impl Fixture {
             .clone()
     }
 
+    fn install_particle_mod(&self, id: &str, name: &str, pcf: &str) -> ModRecord {
+        install_mod_to(
+            &self.profiles,
+            &self.root,
+            id,
+            name,
+            ModContent::Tree(vec![(format!("particles/{pcf}"), b"pcf".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap()
+        .mods
+        .into_iter()
+        .find(|record| record.name == name)
+        .unwrap()
+    }
+
+    fn save_selected_sources(&self, ids: &[&str]) -> Vec<u8> {
+        let state = PreloaderState {
+            profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+            ..PreloaderState::default()
+        };
+        let bytes = serde_json::to_vec_pretty(&state).unwrap();
+        fs::create_dir_all(self.base.join("preloader")).unwrap();
+        fs::write(self.base.join("preloader/state.json"), &bytes).unwrap();
+        bytes
+    }
+
     fn choose(&self, choice: PackChoice) {
         absorb_packs_to(
             &self.profiles,
@@ -175,6 +204,93 @@ fn accepted_mod_removal_exports_imports_and_switches_without_stale_records() {
             .mods
             .is_empty());
     }
+}
+
+#[test]
+fn selected_particle_source_external_removal_is_refused_before_update_mutates_state() {
+    let f = Fixture::new();
+    let id = f.save();
+    let first = f.install_particle_mod(&id, "Particle source A", "a.pcf");
+    let second = f.install_particle_mod(&id, "Particle source B", "b.pcf");
+    let selected_state = f.save_selected_sources(&[&first.id, &second.id]);
+    let snapshot = f.base.join("preloader/originals/sentinel");
+    fs::create_dir_all(snapshot.parent().unwrap()).unwrap();
+    fs::write(&snapshot, b"pristine snapshot").unwrap();
+    let misc_dir = f.root.join("tf/tf2_misc_dir.vpk");
+    fs::write(&misc_dir, b"stock directory VPK bytes").unwrap();
+    execs_core::profile::mutate_profile_files_to(
+        &f.profiles,
+        &f.root,
+        &id,
+        &[],
+        &[],
+        execs_core::profile::ProfileLiveProjection::LibraryOnly,
+        unlocked(),
+        |manifest| {
+            manifest.ignored_packs.push(first.pack.clone());
+            Ok(())
+        },
+    )
+    .unwrap();
+    let before = load_manifest(&f.profiles, &id).unwrap();
+    let first_live = f.root.join("tf/custom").join(&first.pack);
+    let second_live = f.root.join("tf/custom").join(&second.pack);
+    fs::remove_dir_all(&first_live).unwrap();
+
+    let err = absorb_packs_to(
+        &f.profiles,
+        &f.root,
+        PackChoice::Update,
+        ["tf_win64.exe"],
+        absorb_options(),
+    )
+    .unwrap_err();
+    assert_eq!(err, ProfileError::GameRunning);
+    assert_eq!(load_manifest(&f.profiles, &id).unwrap(), before);
+    assert_eq!(
+        fs::read(f.base.join("preloader/state.json")).unwrap(),
+        selected_state
+    );
+
+    let err = absorb_packs_to(
+        &f.profiles,
+        &f.root,
+        PackChoice::Update,
+        unlocked(),
+        absorb_options(),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        &err,
+        ProfileError::ParticleSourceSelected(name) if name == "Particle source A"
+    ));
+    assert_eq!(err.code(), "ParticleSourceSelected");
+    assert_eq!(load_manifest(&f.profiles, &id).unwrap(), before);
+    assert_eq!(
+        fs::read(f.base.join("preloader/state.json")).unwrap(),
+        selected_state
+    );
+    assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+    assert_eq!(fs::read(&misc_dir).unwrap(), b"stock directory VPK bytes");
+    assert!(!first_live.exists());
+    assert!(second_live.exists());
+
+    let retained_state = f.save_selected_sources(&[&second.id]);
+    f.choose(PackChoice::Update);
+    let after = load_manifest(&f.profiles, &id).unwrap();
+    assert_eq!(after.mods, vec![second.clone()]);
+    assert!(after.ignored_packs.is_empty());
+    assert!(!after
+        .files
+        .iter()
+        .any(|file| file.path.starts_with(&format!("tf/custom/{}/", first.pack))));
+    assert!(second_live.exists());
+    assert_eq!(
+        fs::read(f.base.join("preloader/state.json")).unwrap(),
+        retained_state
+    );
+    assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+    assert_eq!(fs::read(&misc_dir).unwrap(), b"stock directory VPK bytes");
 }
 
 #[test]

@@ -551,6 +551,13 @@ pub fn profile_particle_cleanup_selection(
     }))
 }
 
+/// Profile-mod IDs named by the installed global selection. This is a
+/// read-only removal guard for the 0.1.x shared preloader: callers must not
+/// delete a source pack while its ID is still recorded here.
+pub fn selected_profile_particle_mod_ids(data_dir: &Path) -> Result<Vec<String>, String> {
+    Ok(load_state(data_dir)?.profile_particle_mods)
+}
+
 pub fn apply_preloader_selection_with_sampler(
     tf2_root: &Path,
     data_dir: &Path,

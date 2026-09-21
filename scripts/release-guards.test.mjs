@@ -4,7 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { packagedAssetUrl } from "./qualification/files/packaged-worker.mjs";
+import {
+  packagedAssetUrl,
+  readyPackagedDocumentUrl,
+} from "./qualification/files/packaged-worker.mjs";
 import { releaseNotesFromChangelog } from "./release-notes.mjs";
 import {
   parseReleaseVersion,
@@ -52,6 +55,23 @@ test("packaged worker assets resolve from the inspected Tauri page URL", () => {
   );
   assert.throws(() => packagedAssetUrl("about:blank", "files-analysis.worker-test.js"));
   assert.throws(() => packagedAssetUrl("", "files-analysis.worker-test.js"));
+});
+
+test("packaged worker qualification waits for the native document", () => {
+  assert.equal(readyPackagedDocumentUrl({ href: "about:blank", ready: "complete" }), null);
+  assert.equal(readyPackagedDocumentUrl({ href: "http://tauri.localhost/" }), null);
+  assert.equal(
+    readyPackagedDocumentUrl({ href: "http://tauri.localhost/", ready: "loading" }),
+    null,
+  );
+  assert.equal(
+    readyPackagedDocumentUrl({ href: "http://tauri.localhost/", ready: "interactive" }),
+    "http://tauri.localhost/",
+  );
+  assert.equal(
+    readyPackagedDocumentUrl({ href: "tauri://localhost/", ready: "complete" }),
+    "tauri://localhost/",
+  );
 });
 
 test("Minisign verification rejects changed bytes, signatures, keys and comments", () => {
@@ -403,6 +423,30 @@ test("package smoke derives and passes the immediately previous changelog releas
   assert.doesNotMatch(smoke, /execs_0\.1\.1_/);
   assert.match(probe, /args\[4\]\.parse\(\)/);
   assert.doesNotMatch(probe, /context\.package_info_mut\(\)\.version = "0\.1\.1"/);
+});
+
+test("profile compatibility uses the actual previous public hotfix consistently", () => {
+  const expectedTag = "v0.1.7+2";
+  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+  const fetchedTags = [...ci.matchAll(/git fetch origin tag (\S+) --no-tags/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(fetchedTags, [expectedTag, expectedTag]);
+
+  const launcher = readFileSync("scripts/verify-public-profile.mjs", "utf8");
+  assert.match(launcher, /const publicTag = "v0\.1\.7\+2"/);
+  assert.match(launcher, /EXECS_COMPAT_PUBLIC_REPO/);
+  assert.match(launcher, /EXECS_COMPAT_CANDIDATE_REPO/);
+  assert.match(launcher, /version = "0\.1\.7\+2\.compat"/);
+  assert.match(launcher, /path = \$\{tomlPath\(publicBuild\)\}/);
+  assert.doesNotMatch(launcher, /v0\.1\.6|EXECS_COMPAT_(?:OLD|NEW)_REPO/);
+
+  const probe = readFileSync("scripts/compat-profile/main.rs", "utf8");
+  assert.match(probe, /const PUBLIC_VERSION: &str = "0\.1\.7\+2"/);
+  assert.match(probe, /const PUBLIC_TAG: &str = "v0\.1\.7\+2"/);
+  assert.match(probe, /const PUBLIC_COMMIT: &str = "15086ea569178402d927bf4990828dc436c8ec40"/);
+  assert.match(probe, /const PUBLIC_CORE_TREE: &str = "0246e1fdc7dfd32c19306459df5de289a45c5fdd"/);
+  assert.doesNotMatch(probe, /v0\.1\.6|OLD_(?:COMMIT|CORE_TREE)/);
 });
 
 test("release workflow always waits for the reusable CI gate", () => {

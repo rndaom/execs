@@ -9,8 +9,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 
-const OLD_COMMIT: &str = "871abd751d278ca5105b64e9cfe3ee9e7f3067bb";
-const OLD_CORE_TREE: &str = "4764f475d8d61c374f636b4293aa7e52179eb1a0";
+const PUBLIC_VERSION: &str = "0.1.7+2";
+const PUBLIC_TAG: &str = "v0.1.7+2";
+const PUBLIC_COMMIT: &str = "15086ea569178402d927bf4990828dc436c8ec40";
+const PUBLIC_CORE_TREE: &str = "0246e1fdc7dfd32c19306459df5de289a45c5fdd";
 
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
@@ -90,7 +92,7 @@ fn seed_root(path: &Path) {
 fn fixture_payload() -> BTreeMap<String, Vec<u8>> {
     let mut files = BTreeMap::from([
         ("tf/cfg/user.scr".into(), b"// Opaque Advanced Options bytes from a public profile.\nVERSION 1.0\nDESCRIPTION INFO_OPTIONS\n{\n}\n".to_vec()),
-        ("tf/cfg/config.cfg".into(), b"// v0.1.6 exporter fixture\nunbindall\nbind \"w\" \"+forward\"\nsensitivity \"2.75\"\ncl_crosshair_scale \"28\"\n".to_vec()),
+        ("tf/cfg/config.cfg".into(), format!("// v{PUBLIC_VERSION} exporter fixture\nunbindall\nbind \"w\" \"+forward\"\nsensitivity \"2.75\"\ncl_crosshair_scale \"28\"\n").into_bytes()),
         ("tf/cfg/overrides/autoexec.cfg".into(), b"exec overrides/execs_gameplay\nexec overrides/compat_nested/profile\n".to_vec()),
         ("tf/cfg/overrides/execs_gameplay.cfg".into(), b"fov_desired \"90\"\nviewmodel_fov \"75\"\ncl_flipviewmodels \"0\"\n".to_vec()),
         ("tf/cfg/overrides/compat_nested/profile.cfg".into(), b"// Nested cfg stays byte-for-byte intact.\nbind \"F6\" \"slot1\"\n".to_vec()),
@@ -116,7 +118,7 @@ fn fixture_payload() -> BTreeMap<String, Vec<u8>> {
         let content = BTreeMap::from([("cfg/compat-fixture.cfg".into(), cfg.as_bytes().to_vec())]);
         files.insert(
             format!("tf/custom/{pack}"),
-            old_core::vpk::write_vpk_v2(&content),
+            public_core::vpk::write_vpk_v2(&content),
         );
     }
     files
@@ -152,7 +154,8 @@ fn verify_import(
     metadata: &Value,
 ) -> Value {
     assert_ne!(id, source_id, "import must create a new identity");
-    let manifest = new_core::profile::load_manifest(library, id).expect("load new manifest");
+    let manifest =
+        candidate_core::profile::load_manifest(library, id).expect("load candidate manifest");
     assert_eq!(
         portable(serde_json::to_value(&manifest).unwrap()),
         *metadata
@@ -164,14 +167,20 @@ fn verify_import(
     assert_eq!(manifest.files.len(), expected.len());
     for entry in &manifest.files {
         let expected_bytes = expected.get(&entry.path).expect("no unexpected file path");
-        assert_eq!(entry.sha256, old_core::hash::sha256_hex(expected_bytes));
-        assert_eq!(entry.sha256, new_core::hash::sha256_hex(expected_bytes));
+        assert_eq!(entry.sha256, public_core::hash::sha256_hex(expected_bytes));
+        assert_eq!(
+            entry.sha256,
+            candidate_core::hash::sha256_hex(expected_bytes)
+        );
         let stored = if entry.path == "tf/custom/mastercomfig-base.vpk" {
-            assert_eq!(entry.storage, new_core::profile::FileStorage::Shared);
-            new_core::blob::blob_path(library, &entry.sha256)
+            assert_eq!(entry.storage, candidate_core::profile::FileStorage::Shared);
+            candidate_core::blob::blob_path(library, &entry.sha256)
         } else {
-            assert_eq!(entry.storage, new_core::profile::FileStorage::Exclusive);
-            new_core::profile::exclusive_file_path(library, id, &entry.path)
+            assert_eq!(
+                entry.storage,
+                candidate_core::profile::FileStorage::Exclusive
+            );
+            candidate_core::profile::exclusive_file_path(library, id, &entry.path)
         };
         assert_eq!(
             fs::read(&stored).unwrap(),
@@ -179,9 +188,12 @@ fn verify_import(
             "bytes changed: {}",
             entry.path
         );
-        assert_eq!(new_core::hash::sha256_file(&stored).unwrap(), entry.sha256);
+        assert_eq!(
+            candidate_core::hash::sha256_file(&stored).unwrap(),
+            entry.sha256
+        );
     }
-    let readback = new_core::profile::load_library_from(library, Some(root)).unwrap();
+    let readback = candidate_core::profile::load_library_from(library, Some(root)).unwrap();
     assert!(readback.usable);
     assert!(readback
         .profiles
@@ -195,15 +207,21 @@ fn verify_import(
 
 fn main() {
     let helper = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let new_core_tree = std::env::var("EXECS_COMPAT_NEW_TREE").expect("candidate source tree");
-    let old_repo = PathBuf::from(std::env::var("EXECS_COMPAT_OLD_REPO").unwrap());
-    let new_repo = PathBuf::from(std::env::var("EXECS_COMPAT_NEW_REPO").unwrap());
-    let old_source = source(&old_repo, OLD_CORE_TREE);
-    let new_source = source(&new_repo, &new_core_tree);
-    assert_eq!(old_source["commit"], OLD_COMMIT);
+    let candidate_core_tree =
+        std::env::var("EXECS_COMPAT_CANDIDATE_TREE").expect("candidate source tree");
+    let public_repo =
+        PathBuf::from(std::env::var("EXECS_COMPAT_PUBLIC_REPO").expect("public repository"));
+    let candidate_repo =
+        PathBuf::from(std::env::var("EXECS_COMPAT_CANDIDATE_REPO").expect("candidate repository"));
+    let public_source = source(&public_repo, PUBLIC_CORE_TREE);
+    let candidate_source = source(&candidate_repo, &candidate_core_tree);
+    assert_eq!(public_source["commit"], PUBLIC_COMMIT);
     assert_eq!(
-        git(&old_repo, &["rev-parse", "v0.1.6^{commit}"]),
-        OLD_COMMIT
+        git(
+            &public_repo,
+            &["rev-parse", &format!("{PUBLIC_TAG}^{{commit}}")]
+        ),
+        PUBLIC_COMMIT
     );
 
     let epoch = SystemTime::now()
@@ -235,7 +253,7 @@ fn main() {
     let old_library = run.join("old-library");
     let puts: Vec<_> = expected
         .iter()
-        .map(|(name, bytes)| (name.clone(), old_core::profile::FileSource::Bytes(bytes)))
+        .map(|(name, bytes)| (name.clone(), public_core::profile::FileSource::Bytes(bytes)))
         .collect();
     let records: Vec<_> = [
         "compat-pack",
@@ -250,10 +268,10 @@ fn main() {
             .iter()
             .filter(|(path, _)| **path == prefix || path.starts_with(&format!("{prefix}/")))
             .collect();
-        old_core::mods::ModRecord {
+        public_core::mods::ModRecord {
             id: pack.trim_end_matches(".vpk").to_string(),
             name: format!("Public export {pack}"),
-            source: old_core::mods::ModSource::Local,
+            source: public_core::mods::ModSource::Local,
             pack: pack.to_string(),
             files: owned.len(),
             bytes: owned.iter().map(|(_, bytes)| bytes.len() as u64).sum(),
@@ -261,20 +279,20 @@ fn main() {
         }
     })
     .collect();
-    let old = old_core::profile::create_populated_profile_to(
+    let public = public_core::profile::create_populated_profile_to(
         &old_library,
         &old_root,
-        "Public 0.1.6 compatibility fixture",
+        &format!("Public {PUBLIC_VERSION} compatibility fixture"),
         &puts,
         true,
         std::iter::empty::<&str>(),
         |manifest| {
             manifest.launch_options = "-novid -nojoy".into();
             manifest.launch_sync_pending = false;
-            manifest.hud = Some(old_core::profile::HudRecord {
+            manifest.hud = Some(public_core::profile::HudRecord {
                 id: "compat-hud".into(),
                 hash: None,
-                source: old_core::profile::HudSource::Local,
+                source: public_core::profile::HudSource::Local,
                 options: BTreeMap::from([
                     ("minmode".into(), "true".into()),
                     ("accentColor".into(), "128 180 255 255".into()),
@@ -286,11 +304,11 @@ fn main() {
         },
     )
     .expect("public core creates complete synthetic profile");
-    let old_id = old.active_profile_id.as_ref().unwrap();
-    let old_manifest = old_core::profile::load_manifest(&old_library, old_id).unwrap();
+    let public_id = public.active_profile_id.as_ref().unwrap();
+    let public_manifest = public_core::profile::load_manifest(&old_library, public_id).unwrap();
     let old_library_before = snapshot(&old_library);
-    let public_zip = run.join("public-0.1.6.zip");
-    old_core::export_profile_to(&old_library, &old_root, old_id, &public_zip)
+    let public_zip = run.join(format!("public-{PUBLIC_VERSION}.zip"));
+    public_core::export_profile_to(&old_library, &old_root, public_id, &public_zip)
         .expect("actual public exporter");
     assert_eq!(
         snapshot(&old_library),
@@ -302,19 +320,22 @@ fn main() {
     assert_eq!(metadata["schema"], 1);
     assert!(metadata.get("id").is_none() && metadata.get("tf2Root").is_none());
     assert_eq!(
-        portable(serde_json::to_value(&old_manifest).unwrap()),
+        portable(serde_json::to_value(&public_manifest).unwrap()),
         metadata
     );
-    write_json(&run.join("public-0.1.6-manifest.json"), &metadata);
+    write_json(
+        &run.join(format!("public-{PUBLIC_VERSION}-manifest.json")),
+        &metadata,
+    );
 
     let empty_library = run.join("new-empty-library");
-    let empty = new_core::import_profile_from(
+    let empty = candidate_core::import_profile_from(
         &empty_library,
         &new_root,
         &public_zip,
         std::iter::empty::<&str>(),
     )
-    .expect("0.1.7 imports public export into empty library");
+    .expect("candidate imports public export into empty library");
     assert_eq!(empty.profiles.len(), 1);
     assert_eq!(
         empty.active_profile_id, None,
@@ -325,7 +346,7 @@ fn main() {
         &empty_library,
         &new_root,
         empty_id,
-        old_id,
+        public_id,
         &expected,
         &metadata,
     );
@@ -333,9 +354,9 @@ fn main() {
     let active_library = run.join("new-active-library");
     let sentinel = [(
         "tf/cfg/config.cfg".into(),
-        new_core::profile::FileSource::Bytes(b"// active library sentinel\nsensitivity 1\n"),
+        candidate_core::profile::FileSource::Bytes(b"// active library sentinel\nsensitivity 1\n"),
     )];
-    let active_before = new_core::profile::create_populated_profile_to(
+    let active_before = candidate_core::profile::create_populated_profile_to(
         &active_library,
         &new_root,
         "Keep active",
@@ -347,13 +368,13 @@ fn main() {
     .unwrap();
     let active_id = active_before.active_profile_id.clone().unwrap();
     let active_profile_before = snapshot(&active_library.join(&active_id));
-    let active = new_core::import_profile_from(
+    let active = candidate_core::import_profile_from(
         &active_library,
         &new_root,
         &public_zip,
         std::iter::empty::<&str>(),
     )
-    .expect("0.1.7 imports public export beside active profile");
+    .expect("candidate imports public export beside active profile");
     assert_eq!(active.profiles.len(), 2);
     assert_eq!(
         active.active_profile_id.as_deref(),
@@ -373,15 +394,15 @@ fn main() {
         &active_library,
         &new_root,
         imported_id,
-        old_id,
+        public_id,
         &expected,
         &metadata,
     );
 
-    let reexport_zip = run.join("reexport-0.1.7.zip");
+    let reexport_zip = run.join("reexport-candidate.zip");
     let empty_library_before_export = snapshot(&empty_library);
-    new_core::export_profile_to(&empty_library, &new_root, empty_id, &reexport_zip)
-        .expect("0.1.7 re-exports imported profile");
+    candidate_core::export_profile_to(&empty_library, &new_root, empty_id, &reexport_zip)
+        .expect("candidate re-exports imported profile");
     assert_eq!(snapshot(&empty_library), empty_library_before_export);
     assert_eq!(
         zip_entries(&reexport_zip),
@@ -394,13 +415,13 @@ fn main() {
         "the re-export ZIP must match the actual public export byte for byte"
     );
     let roundtrip_library = run.join("new-roundtrip-library");
-    let roundtrip = new_core::import_profile_from(
+    let roundtrip = candidate_core::import_profile_from(
         &roundtrip_library,
         &new_root,
         &reexport_zip,
         std::iter::empty::<&str>(),
     )
-    .expect("0.1.7 imports its re-export");
+    .expect("candidate imports its re-export");
     assert_eq!(roundtrip.profiles.len(), 1);
     assert_eq!(roundtrip.active_profile_id, None);
     let roundtrip_result = verify_import(
@@ -426,15 +447,17 @@ fn main() {
         old_library_before,
         "new imports must not touch the source library"
     );
-    source(&old_repo, OLD_CORE_TREE);
-    let new_source_after = source(&new_repo, &new_core_tree);
+    source(&public_repo, PUBLIC_CORE_TREE);
+    let candidate_source_after = source(&candidate_repo, &candidate_core_tree);
 
     let report = json!({
         "result": "PASS",
-        "scope": "actual public v0.1.6 export -> integrated 0.1.7 import -> re-export -> re-import, synthetic filesystem only",
-        "oldSource": old_source,
-        "newSource": new_source,
-        "newSourceAfter": new_source_after,
+        "scope": format!("actual public {PUBLIC_VERSION} export -> candidate import -> re-export -> re-import, synthetic filesystem only"),
+        "publicVersion": PUBLIC_VERSION,
+        "publicTag": PUBLIC_TAG,
+        "publicSource": public_source,
+        "candidateSource": candidate_source,
+        "candidateSourceAfter": candidate_source_after,
         "output": run,
         "schema": metadata["schema"],
         "fileCount": expected.len(),
@@ -453,9 +476,9 @@ fn main() {
         "emptyLibraryImport": empty_result,
         "activeLibraryImport": { "activeIdBefore": active_id, "activeIdAfter": active.active_profile_id, "imported": active_result },
         "reexportRoundtrip": roundtrip_result,
-        "publicZipSha256": new_core::hash::sha256_file(&public_zip).unwrap(),
-        "reexportZipSha256": new_core::hash::sha256_file(&reexport_zip).unwrap(),
-        "payload": expected.iter().map(|(path, bytes)| json!({ "path": path, "bytes": bytes.len(), "sha256": new_core::hash::sha256_hex(bytes) })).collect::<Vec<_>>(),
+        "publicZipSha256": candidate_core::hash::sha256_file(&public_zip).unwrap(),
+        "reexportZipSha256": candidate_core::hash::sha256_file(&reexport_zip).unwrap(),
+        "payload": expected.iter().map(|(path, bytes)| json!({ "path": path, "bytes": bytes.len(), "sha256": candidate_core::hash::sha256_hex(bytes) })).collect::<Vec<_>>(),
         "limits": ["Small synthetic fixture, not every public profile", "Core API verification; no packaged UI, Steam handoff, actual TF2, or installed profile library exercised"]
     });
     write_json(&run.join("result.json"), &report);

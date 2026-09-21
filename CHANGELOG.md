@@ -5,6 +5,24 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-20
+
+### Added
+
+- Mods: open on GameBanana browsing and organize Browse, Installed and Casual setup as separate
+  tasks. Results expose clearer source details, honest paging, refresh and retry controls, and one
+  import flow for archives, VPKs or extracted folders.
+
+### Fixed
+
+- Mods: preserve GameBanana's global search and ranking order, distinguish added and updated dates,
+  report unavailable metrics without inventing zeroes, and recover from hidden or failed category
+  loads without stale results taking over the current request.
+- Mods: refuse direct or absorbed removal of an active profile's selected particle-source mod until
+  its selection is changed, without modifying the profile, preload state, snapshots or VPK directory.
+- Releases: compare profile compatibility against the actual public 0.1.7 Hotfix 2 core instead of
+  the older 0.1.6 baseline.
+
 ## [0.1.7+2] - 2026-09-20
 
 0.1.7 Hotfix 2. Installs through the normal updater and keeps the displayed

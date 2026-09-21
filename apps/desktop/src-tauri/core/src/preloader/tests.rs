@@ -1344,6 +1344,10 @@ fn profile_particle_cleanup_keeps_current_sources_and_handles_legacy_state() {
         ..PreloaderState::default()
     };
     save_state(&data, &state).unwrap();
+    assert_eq!(
+        selected_profile_particle_mod_ids(&data).unwrap(),
+        ["cash", "trails"]
+    );
     assert!(
         profile_particle_cleanup_selection(&data, &["cash".into(), "trails".into()])
             .unwrap()
@@ -1355,6 +1359,7 @@ fn profile_particle_cleanup_keeps_current_sources_and_handles_legacy_state() {
     assert_eq!(selection.profile_particle_mods, ["trails"]);
     state.profile_particle_mods.clear();
     save_state(&data, &state).unwrap();
+    assert!(selected_profile_particle_mod_ids(&data).unwrap().is_empty());
     assert!(profile_particle_cleanup_selection(&data, &[])
         .unwrap()
         .is_none());
