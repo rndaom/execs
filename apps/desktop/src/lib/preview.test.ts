@@ -111,4 +111,18 @@ describe("preview query", () => {
     expect(previewLocked("settings-locked")).toBe(true);
     expect(previewFirstRunKind("settings-comfig")).toBeNull();
   });
+
+  it("provides saved profiles without an active selection for the library entry point", () => {
+    expect(previewStateFromSearch("?preview=inactive-library")).toBe("inactive-library");
+    expect(previewConfirmed("inactive-library")?.path).toContain("Team Fortress 2");
+    expect(previewLibrary("inactive-library")).toMatchObject({
+      initialized: true,
+      usable: true,
+      rootMismatch: false,
+      activeProfileId: null,
+      profiles: [{ name: "Main" }, { name: "Imported" }],
+    });
+    expect(previewFirstRunKind("inactive-library")).toBeNull();
+    expect(previewSettingsTab("inactive-library")).toBeNull();
+  });
 });

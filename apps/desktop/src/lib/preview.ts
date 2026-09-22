@@ -15,6 +15,7 @@ export const PREVIEW_STATES = [
   "confirmed",
   "locked",
   "library",
+  "inactive-library",
   "saved",
   "absorb",
   "switch",
@@ -60,6 +61,7 @@ const READY: PreviewState[] = [
   "confirmed",
   "locked",
   "library",
+  "inactive-library",
   "saved",
   "absorb",
   "switch",
@@ -136,6 +138,9 @@ export function previewFirstRunReasons(state: PreviewState): string[] {
 }
 
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
+  if (state === "inactive-library") {
+    return { ...previewImportedLibrary(ONE.path), activeProfileId: null };
+  }
   if (state === "folder-repair") {
     const library = previewSavedLibrary(ONE.path);
     return {

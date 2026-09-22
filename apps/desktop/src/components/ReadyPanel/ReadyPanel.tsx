@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
@@ -49,8 +49,17 @@ export function ReadyPanel({
   onCancelLaunch: () => void;
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
+  const [profileMenuRequest, setProfileMenuRequest] = useState(0);
   const controlsBusy = busy || progress.state.active;
   const { library } = profiles;
+  const hasInactiveLibrary =
+    library?.initialized &&
+    library.usable &&
+    !library.rootMismatch &&
+    !library.activeProfileId &&
+    !library.pendingSwitchProfileId &&
+    recoveryTargetId === null &&
+    library.profiles.length > 0;
   const recoveryTarget = library?.profiles.find((profile) => profile.id === recoveryTargetId);
   const unsafeActive = library?.profiles.find(
     (profile) =>
@@ -89,6 +98,7 @@ export function ReadyPanel({
             draftName={draftName}
             running={running}
             controlsBusy={controlsBusy}
+            openRequest={profileMenuRequest}
             recoveryTargetId={recoveryTargetId}
             onDraftName={onDraftName}
             onSave={onSave}
@@ -174,18 +184,40 @@ export function ReadyPanel({
 
       {settings ?? (
         <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-          <p className="eyebrow">Profile library</p>
-          <p className="t-body mt-3 max-w-md text-ink-muted">
-            {library ? libraryStatusCopy(library) : "Loading profiles…"}
-          </p>
-          <button
-            type="button"
-            onClick={onChangeInstall}
-            disabled={controlsBusy}
-            className="btn btn-ghost mt-5"
-          >
-            Change install
-          </button>
+          {hasInactiveLibrary ? (
+            <>
+              <p className="eyebrow">No active profile</p>
+              <h1 className="t-pane mt-3">Choose a profile</h1>
+              <p className="t-body mt-3 max-w-md text-ink-muted">
+                {running
+                  ? "Close TF2 before switching to a saved profile."
+                  : "Switching profiles replaces your installed TF2 setup."}
+              </p>
+              <button
+                type="button"
+                onClick={() => setProfileMenuRequest((request) => request + 1)}
+                disabled={controlsBusy}
+                className="btn btn-primary mt-6"
+              >
+                Choose profile
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="eyebrow">Profile library</p>
+              <p className="t-body mt-3 max-w-md text-ink-muted">
+                {library ? libraryStatusCopy(library) : "Loading profiles…"}
+              </p>
+              <button
+                type="button"
+                onClick={onChangeInstall}
+                disabled={controlsBusy}
+                className="btn btn-ghost mt-5"
+              >
+                Change install
+              </button>
+            </>
+          )}
         </div>
       )}
 

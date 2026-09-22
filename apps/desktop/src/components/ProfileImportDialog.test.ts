@@ -51,6 +51,8 @@ describe("profile import dialog", () => {
     expect(markup).toContain("16 left out");
     expect(markup).toContain("Trust and import");
     expect(markup).toContain("Saved server credentials are kept");
+    expect(markup).toContain("Your TF2 setup stays unchanged until you switch.");
+    expect(markup).not.toContain("Your current profile stays active");
     expect(markup).toContain("<details");
     expect(markup).toContain("config.cfg contains");
   });

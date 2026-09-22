@@ -5,7 +5,7 @@ import {
   Plus,
   UploadSimple,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ProfileLibrary } from "../../lib/bridge";
 import {
   canCreateNew,
@@ -25,6 +25,7 @@ export function ProfileMenu({
   draftName,
   running,
   controlsBusy,
+  openRequest = 0,
   recoveryTargetId,
   onDraftName,
   onSave,
@@ -40,6 +41,8 @@ export function ProfileMenu({
   draftName: string;
   running: boolean;
   controlsBusy: boolean;
+  /** An explicit request from the inactive-library action; never opens on load. */
+  openRequest?: number;
   recoveryTargetId: string | null;
   onDraftName: (name: string) => void;
   onSave: () => void;
@@ -53,7 +56,42 @@ export function ProfileMenu({
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const summaryRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [actions, setActions] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  const positionMenu = useCallback(() => {
+    const panel = panelRef.current;
+    if (!detailsRef.current?.open || !summaryRef.current || !panel) return;
+    const anchor = summaryRef.current.getBoundingClientRect();
+    const top = Math.max(16, Math.min(anchor.bottom + 10, window.innerHeight - 96));
+    const left = Math.max(16, Math.min(anchor.left, window.innerWidth - panel.offsetWidth - 16));
+    panel.style.setProperty("--profile-menu-top", `${top}px`);
+    panel.style.setProperty("--profile-menu-left", `${left}px`);
+  }, []);
+
+  // The inactive shell and status banners can move the header without resizing
+  // its summary. Re-measure on renders as well as actual scroll/resize events.
+  useLayoutEffect(positionMenu);
+  useEffect(() => {
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [positionMenu]);
+
+  useEffect(() => {
+    if (openRequest === 0 || !detailsRef.current) return;
+    detailsRef.current.open = true;
+    positionMenu();
+    // Start with a saved profile, including its repair/export action when
+    // switching is unavailable. Opening the library never activates a profile.
+    const firstProfileAction = detailsRef.current.querySelector<HTMLButtonElement>(
+      "li button:not(:disabled)",
+    );
+    (firstProfileAction ?? summaryRef.current)?.focus();
+  }, [openRequest, positionMenu]);
 
   useEffect(() => {
     function close(restoreFocus: boolean) {
@@ -97,7 +135,12 @@ export function ProfileMenu({
   const activeProfile = library?.profiles.find((profile) => profile.id === library.activeProfileId);
 
   return (
-    <details ref={detailsRef} data-testid="profile-library" className="group relative">
+    <details
+      ref={detailsRef}
+      onToggle={positionMenu}
+      data-testid="profile-library"
+      className="group relative"
+    >
       <summary
         ref={summaryRef}
         className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink hover:bg-panel [&::-webkit-details-marker]:hidden"
@@ -114,7 +157,7 @@ export function ProfileMenu({
         ) : null}
       </summary>
 
-      <div className="overlay absolute top-[calc(100%+10px)] left-0 z-50 w-[min(430px,calc(100vw-2rem))] p-4 text-left">
+      <div ref={panelRef} className="profile-menu-panel overlay p-4 text-left">
         <div className="flex items-start justify-between gap-4 border-b border-edge pb-3">
           <div>
             <p className="t-row">Profiles</p>

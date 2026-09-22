@@ -111,7 +111,7 @@ export function ProfileImportDialog({
               {review.skippedFiles > 0 ? ` · ${review.skippedFiles} left out` : ""}
             </p>
             <p className="t-body mt-3 text-ink-muted">
-              Your current profile stays active until you switch.
+              Your TF2 setup stays unchanged until you switch.
             </p>
           </div>
           {huds.length > 1 ? (
