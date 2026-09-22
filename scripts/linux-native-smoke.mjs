@@ -10,7 +10,12 @@ import {
   linuxNativeEnvironment,
   seedLinuxNativeFixture,
 } from "./linux-native-fixture.mjs";
-import { assertMenuGeometry, NativeWebDriver, waitUntil } from "./linux-native-webdriver.mjs";
+import {
+  assertMenuGeometry,
+  classifyClickTrace,
+  NativeWebDriver,
+  waitUntil,
+} from "./linux-native-webdriver.mjs";
 import { assertNoSteamDirectories, linuxSteamCandidates } from "./package-smoke-fixture.mjs";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -20,6 +25,7 @@ const nativeState = `return {
   heading: document.querySelector('h1')?.textContent,
   motion: document.documentElement.dataset.motion ?? 'system',
   focusedTag: document.activeElement?.tagName,
+  scrollX, scrollY,
   menuOpen: document.querySelector('[data-testid="profile-library"]')?.open ?? false
 };`;
 const menuState = `const panel = document.querySelector('.profile-menu-panel');
@@ -234,14 +240,31 @@ export async function main() {
   }
 
   async function capture(name) {
-    const state = await driver.read(nativeState);
-    const bytes = Buffer.from(await driver.command("GET", "screenshot"), "base64");
-    assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+    await waitUntil("native fonts and motion settled", () =>
+      driver.read(`return document.fonts.status === 'loaded' &&
+      document.getAnimations().every((animation) => animation.playState !== 'running');`),
+    );
+    let previous;
+    let identical = 0;
+    const { state, bytes } = await waitUntil("three stable native screenshot frames", async () => {
+      await driver.nextPaint();
+      const state = await driver.read(nativeState);
+      const bytes = Buffer.from(await driver.command("GET", "screenshot"), "base64");
+      assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+      const unchanged =
+        previous &&
+        bytes.equals(previous.bytes) &&
+        JSON.stringify(state) === JSON.stringify(previous.state);
+      identical = unchanged ? identical + 1 : 1;
+      previous = { state, bytes };
+      return identical >= 3 && previous;
+    });
     writeFileSync(join(evidence, `${name}.png`), bytes);
     report.captures.push({
       file: `${name}.png`,
       state,
       pixels: [bytes.readUInt32BE(16), bytes.readUInt32BE(20)],
+      stableFrames: identical,
     });
     saveReport();
   }
@@ -291,8 +314,40 @@ export async function main() {
     }
     const zoomed = zoomSteps.at(-1);
     assert.ok(zoomed.width < baseline.width * 0.7 && zoomed.width > baseline.width * 0.3);
-    await openMenu();
-    await driver.click("#profile-name");
+    report.checks.push({ label: "real-keyboard-zoom-dimensions", baseline, zoomSteps });
+    saveReport();
+    // WebKitWebDriver may dispatch an element click in unscaled coordinates
+    // after page zoom. Prove the actual event position before attributing it.
+    const chooser = "//button[normalize-space(.)='Choose profile']";
+    const chooserTabs = await driver.tabTo(chooser, "xpath");
+    await driver.nextPaint();
+    const zoomClick = await driver.observeClick(
+      "//button[normalize-space(.)='Choose profile']",
+      "xpath",
+    );
+    const clickResult = classifyClickTrace(zoomClick);
+    report.checks.push({
+      label: "zoomed-native-pointer-diagnostic",
+      chooserTabs,
+      result: clickResult,
+      zoomClick,
+    });
+    saveReport();
+    if (clickResult === "on-target") {
+      await waitUntil(
+        "on-target native click opens menu",
+        async () => (await driver.read(menuState)).open,
+      );
+      await escapeMenu();
+    }
+    // Always qualify zoomed keyboard access independently of pointer support.
+    await driver.tabTo(chooser, "xpath");
+    await driver.key("\uE007");
+    await waitUntil("keyboard opens six native profile rows", async () => {
+      const state = await driver.read(menuState);
+      return state.open && state.profiles === 6;
+    });
+    await driver.tabTo("#profile-name");
     await driver.key("\uE004");
     await driver.key("\uE004");
     const zoomMenu = await waitUntil("zoomed final action remains visible", async () => {
@@ -300,7 +355,7 @@ export async function main() {
       assertMenuGeometry(state, true);
       return state;
     });
-    report.checks.push({ label: "real-keyboard-zoom", baseline, zoomSteps, zoomMenu });
+    report.checks.push({ label: "zoomed-native-keyboard-menu", zoomMenu });
     await capture("03-native-keyboard-zoom-menu");
     await escapeMenu();
     await driver.key("0", true);

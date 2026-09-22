@@ -1,6 +1,6 @@
 # Linux native runtime smoke
 
-Status, September 22, 2026: **harness implemented and locally tested; first Linux runtime run pending**. No Linux screenshot or runtime pass is claimed by this document. The local host is Windows, and the native runner deliberately refuses it. Nothing has been pushed, dispatched, packaged or released by this scoped implementation task.
+Status, September 22, 2026: **first Linux native run failed after native launch, minimum-size menu geometry and keyboard zoom succeeded**. Its screenshots are rejected as unsettled/stale evidence. See the [first-run qualification report](first-run-35761390985.md). A harness-only diagnostic and capture correction is locally tested but not yet retried. No overall Linux runtime pass is claimed. The local host is Windows, and the native runner deliberately refuses it. The parent pushed the development branch to trigger the PR job; no installer or release was published.
 
 ## What the workflow will establish
 
@@ -10,7 +10,7 @@ The bounded native sequence is:
 
 1. Launch with a confirmed synthetic installation and six inactive owned profiles. Require the real Tauri runtime, bundled content origin and the rendered Choose a profile state. Capture 1200×800 content.
 2. Resize the native window to 960×640 content and use Choose profile. Require six rows, a viewport-contained overlay and hit testing that proves its final action is unobstructed. Escape must restore focus to the profile summary.
-3. Send five genuine WebDriver Ctrl+= key sequences. Each must reduce the observed CSS content width; the resulting width must be consistent with substantial enlargement. Open the menu, focus its name input, then Tab to Import and Change install. Require the final action to be visible and unobstructed. Escape and Ctrl+0 must restore focus and the original content dimensions. The harness does not infer working zoom from the configuration file.
+3. Send five genuine WebDriver Ctrl+= key sequences. Each must reduce the observed CSS content width; the resulting width must be consistent with substantial enlargement. Observe one native element click at zoom: record a passive trusted-event trace against the stable control rectangle and hit test. An on-target click must open the menu; only a demonstrably off-target event can be labeled a driver coordinate mismatch. Independently, use real Tab/Enter input to open the menu, Tab to its name field and then Import/Change install. Require the final action to be visible and unobstructed. Escape and Ctrl+0 must restore focus and the original content dimensions. The harness does not infer working zoom from the configuration file or use DOM focus/click calls to bypass native input.
 4. Open App settings. Require its native-reported data location to equal this run's isolated directory. Click the visible Reduce radio label. Observe the real `settings.json` change, the root motion preference, and preservation of the profile library and synthetic install.
 5. Close the native session and its owned process group, launch a new native process, and require the Reduce preference to reload and appear selected. Recheck all fixture identities, payload hashes and synthetic live bytes after process exit.
 
@@ -56,13 +56,14 @@ Run it through the disposable workflow, not against a player account or by weake
 
 ## Evidence and acceptance
 
-The artifact `linux-native-smoke-<workflow SHA>` contains `results.json`, `fixture-baseline.json`, driver logs and native PNGs. The report retains the exact checked-out revision, binary SHA-256, fixture provenance, capabilities, actual CSS/pixel dimensions, zoom steps, menu geometry/hit tests and preservation results. PR runs usually test a merge revision; the report's revision identifies the binary's actual source.
+The artifact `linux-native-smoke-<workflow SHA>` contains `results.json`, `fixture-baseline.json`, driver logs and native PNGs. The report retains the exact checked-out revision, binary SHA-256, fixture provenance, capabilities, actual CSS/pixel dimensions, zoom steps, menu geometry/hit tests and preservation results. PR runs usually test a merge revision; the report's revision identifies the binary's actual source. The corrected capture routine waits for fonts and finite animations, then requires three identical PNGs with stable native state across animation-frame boundaries. Human inspection remains required; identical images alone do not establish that the compositor captured the expected state.
 
-Expected success captures are `01-native-inactive-1200.png`, `02-native-menu-960.png`, `03-native-keyboard-zoom-menu.png`, `04-native-preferences-saved.png` and `05-native-preferences-after-restart.png`. These are future outputs, not existing evidence. After a successful run, inspect the PNGs and attach the exact workflow URL plus the report before marking this bounded Linux runtime gap complete.
+Expected success captures are `01-native-inactive-1200.png`, `02-native-menu-960.png`, `03-native-keyboard-zoom-menu.png`, `04-native-preferences-saved.png` and `05-native-preferences-after-restart.png`. The initial run's 01/02/failure images are retained only as rejected evidence. After a successful corrected run, inspect the PNGs and attach the exact workflow URL plus the report before marking this bounded Linux runtime gap complete.
 
 Local verification completed on Windows:
 
-- `node --test scripts/linux-native-smoke.test.mjs scripts/package-smoke-fixture.test.mjs`: **22 passed, 0 failed, 0 skipped** (11 new harness checks plus 11 existing fixture checks).
+- Initial harness: **22 passed, 0 failed, 0 skipped** (11 new harness checks plus 11 existing fixture checks).
+- After the first-run diagnostic/capture correction, `node --test scripts/linux-native-smoke.test.mjs scripts/package-smoke-fixture.test.mjs`: **24 passed, 0 failed, 0 skipped** (13 harness checks plus 11 existing fixture checks).
 - Targeted Biome for the four new scripts and root package wiring: passed.
 - Workflow YAML parsed successfully with the installed `yaml` parser; events, read-only permission and job shape were inspected. This is syntax validation, not GitHub execution.
 

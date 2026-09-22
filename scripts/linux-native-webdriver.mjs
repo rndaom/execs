@@ -79,6 +79,58 @@ export class NativeWebDriver {
     return this.command("POST", `element/${encodeURIComponent(id)}/click`, {});
   }
 
+  async observeClick(value, using) {
+    const id = await this.element(value, using);
+    await this.read(
+      `const target = arguments[0];
+      const box = target.getBoundingClientRect().toJSON();
+      const probe = {
+        expected: { box, width: innerWidth, height: innerHeight,
+          hit: target.contains(document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2)) },
+        events: [], target
+      };
+      probe.listener = (event) => probe.events.push({type: event.type, trusted: event.isTrusted,
+        x: event.clientX, y: event.clientY, onTarget: target.contains(event.target),
+        target: event.target.tagName + ':' + event.target.textContent.trim().slice(0, 80)});
+      window.__execsNativeClickProbe = probe;
+      document.addEventListener('pointerdown', probe.listener, true);
+      document.addEventListener('click', probe.listener, true);`,
+      [{ [ELEMENT_KEY]: id }],
+    );
+    let trace;
+    try {
+      await this.command("POST", `element/${encodeURIComponent(id)}/click`, {});
+    } finally {
+      trace = await this.read(`const probe = window.__execsNativeClickProbe;
+        document.removeEventListener('pointerdown', probe.listener, true);
+        document.removeEventListener('click', probe.listener, true);
+        delete window.__execsNativeClickProbe;
+        return { expected: probe.expected, events: probe.events,
+          afterBox: probe.target.getBoundingClientRect().toJSON() };`);
+    }
+    return trace;
+  }
+
+  async tabTo(value, using = "css selector", maximum = 40) {
+    const id = await this.element(value, using);
+    for (let tabs = 0; tabs <= maximum; tabs++) {
+      if (
+        await this.read("return document.activeElement === arguments[0];", [{ [ELEMENT_KEY]: id }])
+      )
+        return tabs;
+      if (tabs < maximum) await this.key("\uE004");
+    }
+    throw new Error(`Native keyboard did not reach ${value} in ${maximum} tabs`);
+  }
+
+  nextPaint() {
+    return this.command("POST", "execute/async", {
+      script:
+        "const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(() => done(true)));",
+      args: [],
+    });
+  }
+
   async key(key, control = false) {
     const actions = [
       ...(control ? [{ type: "keyDown", value: "\uE009" }] : []),
@@ -97,6 +149,32 @@ export class NativeWebDriver {
     this.sessionId = null;
     await this.request("DELETE", `/session/${encodeURIComponent(id)}`);
   }
+}
+
+/** Classify actual native input; never excuse an on-target application failure. */
+export function classifyClickTrace(trace) {
+  const { box, width, height, hit } = trace.expected;
+  assert.ok(hit && box.width > 0 && box.height > 0, "Intended control is not hit-testable");
+  assert.ok(
+    box.left >= 0 && box.top >= 0 && box.right <= width + 1 && box.bottom <= height + 1,
+    "Intended control is outside the viewport",
+  );
+  for (const key of ["left", "right", "top", "bottom"]) {
+    assert.ok(
+      Math.abs(box[key] - trace.afterBox[key]) <= 1,
+      "Control moved during native click; coordinate result is ambiguous",
+    );
+  }
+  const click = trace.events.findLast((event) => event.type === "click");
+  assert.ok(click?.trusted, "No trusted native click was observed");
+  const inBox =
+    click.x >= box.left && click.x <= box.right && click.y >= box.top && click.y <= box.bottom;
+  if (click.onTarget) {
+    assert.ok(inBox, "Native target and event coordinates disagree");
+    return "on-target";
+  }
+  assert.ok(!inBox, "Native click hit another element inside the intended control");
+  return "driver-coordinate-mismatch";
 }
 
 export function assertMenuGeometry(state, focused = false) {

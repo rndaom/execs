@@ -23,6 +23,7 @@ import {
 import { assertNativeRuntime } from "./linux-native-smoke.mjs";
 import {
   assertMenuGeometry,
+  classifyClickTrace,
   ELEMENT_KEY,
   NativeWebDriver,
   waitUntil,
@@ -224,6 +225,32 @@ test("menu evidence checks clipping and hit testing instead of accepting off-scr
   );
 });
 
+test("zoom input diagnosis distinguishes an off-target driver coordinate from an app hit-test failure", () => {
+  const box = { left: 180, top: 80, right: 300, bottom: 120, width: 120, height: 40 };
+  const trace = {
+    expected: { box, width: 480, height: 320, hit: true },
+    afterBox: box,
+    events: [{ type: "click", trusted: true, x: 240, y: 100, onTarget: true }],
+  };
+  assert.equal(classifyClickTrace(trace), "on-target");
+  assert.equal(
+    classifyClickTrace({
+      ...trace,
+      events: [{ type: "click", trusted: true, x: 120, y: 50, onTarget: false }],
+    }),
+    "driver-coordinate-mismatch",
+  );
+  for (const changed of [
+    { ...trace, events: [] },
+    { ...trace, events: [{ ...trace.events[0], trusted: false }] },
+    { ...trace, events: [{ ...trace.events[0], onTarget: false }] },
+    { ...trace, events: [{ ...trace.events[0], x: 120 }] },
+    { ...trace, expected: { ...trace.expected, hit: false } },
+    { ...trace, afterBox: { ...box, top: 100 } },
+  ])
+    assert.throws(() => classifyClickTrace(changed));
+});
+
 // This is protocol contract testing only. It is not native runtime evidence.
 async function withDriverServer(callback, handler) {
   const requests = [];
@@ -304,6 +331,36 @@ test("WebDriver errors remain failures and requests cannot select an arbitrary r
       assert.throws(() => driver.command("POST", "actions", {}), /has not started/);
     },
     () => ({ status: 500, value: { error: "unsupported operation", message: "unavailable" } }),
+  );
+});
+
+test("native keyboard navigation uses bounded Tab input to reach the exact observed element", async () => {
+  let reads = 0;
+  await withDriverServer(
+    async (driver, requests) => {
+      driver.sessionId = "keyboard";
+      assert.equal(await driver.tabTo("#profile-name"), 2);
+      const keys = requests.filter(({ path }) => path.endsWith("/actions"));
+      assert.equal(keys.length, 2);
+      assert.deepEqual(keys[0].body.actions[0].actions, [
+        { type: "keyDown", value: "\uE004" },
+        { type: "keyUp", value: "\uE004" },
+      ]);
+    },
+    ({ path }) => {
+      if (path.endsWith("/element")) return { value: { [ELEMENT_KEY]: "profile-input" } };
+      if (path.endsWith("/execute/sync")) return { value: ++reads === 3 };
+      return { value: null };
+    },
+  );
+  await withDriverServer(
+    async (driver, requests) => {
+      driver.sessionId = "keyboard";
+      await assert.rejects(driver.tabTo("#missing-focus", "css selector", 2), /in 2 tabs/);
+      assert.equal(requests.filter(({ path }) => path.endsWith("/actions")).length, 2);
+    },
+    ({ path }) =>
+      path.endsWith("/element") ? { value: { [ELEMENT_KEY]: "hidden-input" } } : { value: false },
   );
 });
 
