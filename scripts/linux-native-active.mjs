@@ -96,7 +96,18 @@ export async function main() {
   }
 
   async function copyExpected(text, label) {
-    const copied = await copyEditorText(session.driver, childEnv, text);
+    let copied;
+    try {
+      copied = await copyEditorText(session.driver, childEnv, text);
+    } catch (error) {
+      report.checks.push({
+        label,
+        result: "failed",
+        copyDiagnostics: error.copyDiagnostics ?? null,
+      });
+      saveReport();
+      throw error;
+    }
     report.checks.push({
       label,
       nativeClipboardSha256: sha256(copied),

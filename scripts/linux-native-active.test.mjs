@@ -6,6 +6,7 @@ import { parseOwnedProcessRows, X11_CLOSE_HELPER } from "./linux-native-active-c
 import {
   assertEditorRetained,
   copyEditorText,
+  copyTextDiagnostic,
   KEYS,
   press,
   typeEditorText,
@@ -46,7 +47,7 @@ test("native key chords release modifiers after bounded repeated selection input
   assert.equal(calls.length, 1);
 });
 
-test("native fixture typing requires focus and uses the W3C element input command", async () => {
+test("native fixture typing requires focus and sends the trailing newline as a real Enter key", async () => {
   const calls = [];
   const driver = {
     element: async () => "editor/id",
@@ -58,7 +59,23 @@ test("native fixture typing requires focus and uses the W3C element input comman
     [
       "POST",
       "element/editor%2Fid/value",
-      { text: "// owned fixture\n", value: [..."// owned fixture\n"] },
+      { text: "// owned fixture", value: [..."// owned fixture"] },
+    ],
+    [
+      "POST",
+      "actions",
+      {
+        actions: [
+          {
+            type: "key",
+            id: "native-keyboard",
+            actions: [
+              { type: "keyDown", value: KEYS.enter },
+              { type: "keyUp", value: KEYS.enter },
+            ],
+          },
+        ],
+      },
     ],
   ]);
   await assert.rejects(
@@ -67,7 +84,29 @@ test("native fixture typing requires focus and uses the W3C element input comman
   );
   for (const text of ["", "x".repeat(1025), "\uE009", "\0"])
     await assert.rejects(typeEditorText(driver, text));
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+});
+
+test("native multiline input preserves leading and consecutive LF through explicit Enter actions", async () => {
+  const calls = [];
+  const driver = {
+    element: async () => "editor",
+    read: async () => true,
+    command: async (...args) => calls.push(args),
+  };
+  await typeEditorText(driver, "\n// next\n\n");
+  assert.deepEqual(
+    calls.map(([, path]) => path),
+    ["actions", "element/editor/value", "actions", "actions"],
+  );
+  assert.equal(calls[1][2].text, "// next");
+  for (const [, path, body] of calls) {
+    if (path === "actions")
+      assert.deepEqual(body.actions[0].actions, [
+        { type: "keyDown", value: KEYS.enter },
+        { type: "keyUp", value: KEYS.enter },
+      ]);
+  }
 });
 
 const retained = {
@@ -103,16 +142,49 @@ test("native copy cannot pass from a stale clipboard without its trusted complet
     [],
     [{ trusted: false, text: "expected" }],
     [{ trusted: true, text: "other" }],
+    [{ trusted: true, text: "expected", truncated: true }],
   ]) {
     let reads = 0;
     const driver = {
       tabTo: async () => 0,
       command: async () => undefined,
-      read: async () => (++reads === 1 ? undefined : trace),
+      read: async () => {
+        reads++;
+        return reads === 1 ? undefined : reads === 2 ? trace : { position: "Ln 130, Col 33" };
+      },
     };
-    await assert.rejects(copyEditorText(driver, {}, "expected"), /trusted copy event/);
-    assert.equal(reads, 2);
+    await assert.rejects(
+      copyEditorText(driver, {}, "expected", { readClipboard: () => "expected" }),
+      (error) => {
+        assert.match(error.message, /trusted copy event/);
+        assert.equal(error.copyDiagnostics.expected.matchesExpected, true);
+        assert.equal(error.copyDiagnostics.clipboard.matchesExpected, true);
+        assert.equal(error.copyDiagnostics.events.length, trace.length);
+        assert.equal(error.copyDiagnostics.editor.position, "Ln 130, Col 33");
+        return true;
+      },
+    );
+    assert.equal(reads, 3);
   }
+});
+
+test("copy diagnostics retain the exact missing trailing LF and bound recorded text without normalizing", () => {
+  const mismatch = copyTextDiagnostic("// accepted", "// accepted\n");
+  assert.equal(mismatch.matchesExpected, false);
+  assert.equal(mismatch.characters, 11);
+  assert.equal(mismatch.bytes, 11);
+  assert.deepEqual(mismatch.firstDifference, {
+    index: 11,
+    actualCodePoint: null,
+    expectedCodePoint: 10,
+  });
+  assert.notEqual(mismatch.sha256, copyTextDiagnostic("// accepted\n", "// accepted\n").sha256);
+  assert.equal(mismatch.text, "// accepted");
+  const bounded = copyTextDiagnostic("x".repeat(20_000), "expected");
+  assert.equal(bounded.characters, 20_000);
+  assert.equal(bounded.text.length, 16_384);
+  assert.equal(bounded.truncated, true);
+  assert.deepEqual(copyTextDiagnostic(null, "expected"), { available: false });
 });
 
 test("close ownership selects exactly one native process from the owned driver group", () => {

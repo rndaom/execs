@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-22T18:27:46.774Z",
+  "updatedAt": "2026-09-22T19:08:42.189Z",
   "purpose": "Current Foundry implementation acceptance, owned work and evidence ledger; integrated and native qualification remain separate.",
   "authorization": {
     "scope": "Foundry only; whole application, all 14 selected issues plus overhaul, multiple implementation agents, tests, visual verification, repository and Linear updates",
@@ -14,8 +14,8 @@
     "direction": "Foundry",
     "ownerSelected": true,
     "designSelectionGate": "satisfied",
-    "implementationStatus": "Foundry development candidate with native zoom/reflow and Files editor scroll retention committed; remaining native/package/engine acceptance stays open",
-    "verificationStatus": "1,086 local automated tests, TypeScript and production frontend build pass. Named browser scroll/draft sequence and 27 rendered contrast pairs pass. Bounded Windows zoom/preferences/import-export-restart and Linux native launch/zoom/preferences/restart pass with exact recorded build identities. Full installer/Cloud/retail-TF2/PresentMon qualification remains open.",
+    "implementationStatus": "Foundry development candidate with retained pane review focus, complete dialog paths and live close/write guards; original native/package/engine acceptance stays open",
+    "verificationStatus": "1,107 integrated local tests pass (882 desktop, 160 cfglint, 65 tooling; four skips). TypeScript and production frontend pass. Eight browser captures verify dialog paths and pending-pane focus. Active Linux run 35770490260 read all 4,848 original bytes but failed at the post-typing exact-copy assertion before Save; all 12 protected files remained unchanged. Save/close/restart remains unverified. Prior native evidence retains its original identities and scope.",
     "boards": [
       "docs/design/2026-09-22-overhaul/options/01-foundry/01-core.png",
       "docs/design/2026-09-22-overhaul/options/01-foundry/02-customization.png",
@@ -55,8 +55,8 @@
     "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
     "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
     "pullRequestUrl": "https://github.com/rndaom/execs/pull/60",
-    "currentProductCommit": "c006dda154ddae164ed540beb9df40c28a1d80e6",
-    "currentProductUrl": "https://github.com/rndaom/execs/commit/c006dda154ddae164ed540beb9df40c28a1d80e6"
+    "currentProductCommit": "31b38b912f67734f3bb27fec09fef5e6ee64ae84",
+    "currentProductUrl": "https://github.com/rndaom/execs/commit/31b38b912f67734f3bb27fec09fef5e6ee64ae84"
   },
   "evidencePolicy": {
     "owners": "Assigned by the parent; see each selected issue and overhaul workstreams.",
@@ -4249,6 +4249,66 @@
         "productVersionsUnchanged": true,
         "noTagOrRelease": true
       }
+    },
+    "activeFilesCheckpoint": {
+      "productCommit": "31b38b912f67734f3bb27fec09fef5e6ee64ae84",
+      "report": "docs/design/2026-09-22-overhaul/active-files-follow-up.md",
+      "localChecks": {
+        "desktop": 882,
+        "cfglint": 160,
+        "tooling": 65,
+        "passed": 1107,
+        "failed": 0,
+        "skipped": 4,
+        "typeScript": "passed",
+        "productionFrontend": "passed",
+        "biomeFiles": 572
+      },
+      "browser": {
+        "captures": 8,
+        "report": "docs/design/2026-09-22-overhaul/implementation/close-dialog-follow-up/README.md",
+        "longPathCharacters": 109,
+        "widths": [1200, 960, 480],
+        "reviewWidths": [1280, 960],
+        "status": "passed within documented fixture scope",
+        "gallery": "Two new supplemental cards verified in the existing in-app browser gallery, including both full-size viewers and their source/limit captions; primary 85/15/5 counts unchanged."
+      },
+      "native": {
+        "status": "first hosted run failed before Save; input correction underway",
+        "runId": 35770490260,
+        "url": "https://github.com/rndaom/execs/actions/runs/35770490260",
+        "report": "docs/design/2026-09-22-overhaul/implementation/linux-native/active-files.md",
+        "fixturePlan": "docs/design/2026-09-22-overhaul/implementation/linux-native/active-fixture-plan.md",
+        "expectedCaptures": 9,
+        "testedMerge": "7680602a89a3bc630c0902ae5440468b3cecf8d0",
+        "binarySha256": "05c6b4e14f204dc4c2d48e285616e4b456358079e06f2608965ee82a461be4b4",
+        "firstRunReport": "docs/design/2026-09-22-overhaul/implementation/linux-native/active-first-run-35770490260.md",
+        "initialBytesRead": 4848,
+        "protectedFilesUnchanged": 12,
+        "inspectedCaptures": ["initial native Files", "failure after typing"],
+        "saveCloseRestartQualified": false,
+        "inactiveScenarioConclusion": "success"
+      },
+      "ci": {
+        "status": "in progress",
+        "runId": 35770490421,
+        "url": "https://github.com/rndaom/execs/actions/runs/35770490421"
+      },
+      "precedingCi": {
+        "head": "5bda798115b936d5d6f796d42614a0955f6748bf",
+        "runId": 35767498661,
+        "conclusion": "success",
+        "inactiveNativeRunId": 35767498473,
+        "inactiveNativeConclusion": "success"
+      },
+      "packageProposal": {
+        "path": "docs/design/2026-09-22-overhaul/implementation/package-smoke/development-run-plan.md",
+        "implemented": false,
+        "executed": false,
+        "implementationStatus": "Linux workflow, runner and fixture validator implementation underway; no package execution"
+      },
+      "acceptancePreserved": true,
+      "releaseAuthorized": false
     }
   }
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { ELEMENT_KEY, waitUntil } from "./linux-native-webdriver.mjs";
 
 export const EDITOR = '[data-testid="settings-files"] .cm-content';
@@ -47,10 +48,18 @@ export async function typeEditorText(driver, text) {
     await driver.read("return document.activeElement === arguments[0];", [{ [ELEMENT_KEY]: id }]),
     "The native editor must be focused before typing",
   );
-  await driver.command("POST", `element/${encodeURIComponent(id)}/value`, {
-    text,
-    value: [...text],
-  });
+  const lines = text.split("\n");
+  for (const [index, line] of lines.entries()) {
+    if (line) {
+      await driver.command("POST", `element/${encodeURIComponent(id)}/value`, {
+        text: line,
+        value: [...line],
+      });
+    }
+    // The first run's visible caret suggested that text input omitted its LF.
+    // Use the actual Enter editing key; keep the exact expected bytes unchanged.
+    if (index < lines.length - 1) await press(driver, KEYS.enter);
+  }
 }
 
 export async function readEditorState(driver) {
@@ -91,13 +100,61 @@ export function assertEditorRetained(before, after) {
   }
 }
 
+const COPY_TEXT_LIMIT = 16 * 1_024;
+
+export function copyTextDiagnostic(actual, expected) {
+  if (typeof actual !== "string") return { available: false };
+  let firstDifference = 0;
+  while (
+    firstDifference < Math.min(actual.length, expected.length) &&
+    actual[firstDifference] === expected[firstDifference]
+  )
+    firstDifference++;
+  return {
+    available: true,
+    characters: actual.length,
+    bytes: Buffer.byteLength(actual),
+    sha256: createHash("sha256").update(actual).digest("hex"),
+    matchesExpected: actual === expected,
+    firstDifference:
+      actual === expected
+        ? null
+        : {
+            index: firstDifference,
+            actualCodePoint: actual.codePointAt(firstDifference) ?? null,
+            expectedCodePoint: expected.codePointAt(firstDifference) ?? null,
+          },
+    text: actual.slice(0, COPY_TEXT_LIMIT),
+    truncated: actual.length > COPY_TEXT_LIMIT,
+  };
+}
+
+function nativeClipboard(childEnv) {
+  return execFileSync("xclip", ["-selection", "clipboard", "-out"], {
+    env: childEnv,
+    encoding: "utf8",
+    timeout: 3_000,
+    maxBuffer: 256 * 1_024,
+  });
+}
+
 /** Copy through real native keys, then read this disposable X server's clipboard. */
-export async function copyEditorText(driver, childEnv, expected) {
+export async function copyEditorText(
+  driver,
+  childEnv,
+  expected,
+  { readClipboard = nativeClipboard } = {},
+) {
+  assert.ok(expected.length <= COPY_TEXT_LIMIT, "Authored copy probe must remain bounded");
   await driver.tabTo(EDITOR, "css selector", 80);
   await press(driver, "a", { control: true });
   await driver.read(`const probe = { events: [] };
-    probe.listener = (event) => probe.events.push({ trusted: event.isTrusted,
-      text: event.clipboardData?.getData('text/plain') ?? null });
+    probe.listener = (event) => {
+      const text = event.clipboardData?.getData('text/plain') ?? null;
+      probe.events.push({ trusted: event.isTrusted,
+        text: text?.slice(0, ${COPY_TEXT_LIMIT}) ?? null,
+        truncated: text !== null && text.length > ${COPY_TEXT_LIMIT} });
+    };
     window.__execsActiveCopyProbe = probe;
     document.addEventListener('copy', probe.listener);`);
   let trace;
@@ -109,18 +166,40 @@ export async function copyEditorText(driver, childEnv, expected) {
       delete window.__execsActiveCopyProbe;
       return probe.events;`);
   }
-  assert.ok(
-    trace.some((event) => event.trusted && event.text === expected),
-    "No trusted copy event carried the complete draft bytes",
-  );
-  return waitUntil("native editor clipboard bytes match authored draft", () => {
-    const text = execFileSync("xclip", ["-selection", "clipboard", "-out"], {
-      env: childEnv,
-      encoding: "utf8",
-      timeout: 3_000,
-      maxBuffer: 256 * 1_024,
+  try {
+    assert.ok(
+      trace.some((event) => event.trusted && !event.truncated && event.text === expected),
+      "No trusted copy event carried the complete draft bytes",
+    );
+    return await waitUntil("native editor clipboard bytes match authored draft", () => {
+      const text = readClipboard(childEnv);
+      assert.equal(text, expected, "Native copied draft bytes differ");
+      return text;
     });
-    assert.equal(text, expected, "Native copied draft bytes differ");
-    return text;
-  });
+  } catch (error) {
+    let clipboard;
+    let editor;
+    try {
+      clipboard = copyTextDiagnostic(readClipboard(childEnv), expected);
+    } catch (readError) {
+      clipboard = { error: String(readError) };
+    }
+    try {
+      editor = await readEditorState(driver);
+      if (editor?.selection) editor.selection = editor.selection.slice(0, COPY_TEXT_LIMIT);
+    } catch (readError) {
+      editor = { error: String(readError) };
+    }
+    error.copyDiagnostics = {
+      expected: copyTextDiagnostic(expected, expected),
+      events: trace.slice(0, 8).map((event) => ({
+        trusted: event.trusted,
+        sourceTruncated: event.truncated ?? false,
+        text: copyTextDiagnostic(event.text, expected),
+      })),
+      clipboard,
+      editor,
+    };
+    throw error;
+  }
 }

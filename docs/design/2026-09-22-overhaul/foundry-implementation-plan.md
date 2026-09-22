@@ -8,9 +8,9 @@ The scope is **all 14 selected existing issues plus the whole-app overhaul track
 
 [Linear project](https://linear.app/rndaom/project/execs-a89f9a30e95c) · [Existing combined plan](https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6) · [Combined local scope](combined-release-plan.md) · [Machine-readable source and status](planning-status.json).
 
-## Current native and reflow checkpoint
+## Current draft and native Files checkpoint
 
-Product **6ff6400** adds native zoom and enlarged workspace/menu fixes; **c006dda** preserves the Files editor's scroll across pane navigation. The [current follow-up](native-reflow-follow-up.md) records 1,086 passing automated checks, the exact Sounds → Mods → Files draft/scroll sequence, 27 passing rendered-text contrast samples, Windows preference failure/Retry and inactive profile import/export/restart, and a passed bounded Linux native smoke. Build identities and browser/native limits remain separate. The earlier checkpoint below is retained as history; original acceptance and no-release scope remain unchanged.
+Product **31b38b9** fixes complete cfg-path wrapping, keyboard focus when reviewing a pending pane and the close/write timing race. The [current checkpoint](active-files-follow-up.md) records 1,107 passing local tests and eight accepted browser captures. Its first active Linux run read the file correctly but failed at the post-typing exact-copy assertion before Save; all 12 protected files remained unchanged. The input correction retains exact byte checks. Native Save/close/restart remains unverified. The [prior native and reflow report](native-reflow-follow-up.md) retains its exact earlier build identities, 27 contrast samples and Windows/Linux results. All original acceptance and the no-release scope remain unchanged.
 
 ## Earlier follow-up checkpoint — September 22, 2026
 

@@ -1,8 +1,8 @@
 # Active native Files and close workflow
 
-Status, September 22, 2026: implementation and independent review are complete; **hosted native execution is pending**. Local tests validate the harness and preservation assertions, not Linux Files behavior. This result remains separate from the accepted inactive-menu/preference smoke.
+Status, September 22, 2026: the [first hosted active run](active-first-run-35770490260.md) **failed before Save** at its post-typing exact-copy assertion. Initial native file read and preservation passed; the inactive scenario passed separately. The input correction retains exact expected bytes and adds failure diagnostics. Save, close decisions and restart remain unverified until a subsequent run passes.
 
-The [active runner](../../../../../scripts/linux-native-active.mjs) launches the normal bundled Linux release executable through the existing external Tauri/WebKitGTK driver. It uses a new, disposable HOME and XDG environment and two wholly authored Vanilla profiles: A is active with exact matching live files, and B is an unchanged control. Neither profile contains imported player data, credentials, packs or launch options. The synthetic installation has no game executable, and all eight native/Flatpak/Snap Steam discovery candidates must remain absent. The [fixture implementation](../../../../../scripts/linux-native-active-fixture.mjs) and its [negative tests](../../../../../scripts/linux-native-active-fixture.test.mjs) define the exact accepted mutations.
+The [active runner](../../../../../scripts/linux-native-active.mjs) launches the normal optimized Linux executable with its production frontend through the existing external Tauri/WebKitGTK driver. It uses a new, disposable HOME and XDG environment and two wholly authored Vanilla profiles: A is active with exact matching live files, and B is an unchanged control. Neither profile contains imported player data, credentials, packs or launch options. The synthetic installation has no game executable, and all eight native/Flatpak/Snap Steam discovery candidates must remain absent. The [fixture implementation](../../../../../scripts/linux-native-active-fixture.mjs) and its [negative tests](../../../../../scripts/linux-native-active-fixture.test.mjs) define the exact accepted mutations.
 
 ## Native sequence and expectations
 
@@ -40,8 +40,9 @@ The runner refuses non-Linux, non-CI, self-hosted and existing execs/Steam/TF2 c
 
 Local verification on Windows:
 
-- Combined active harness, active fixture, inactive harness and package fixture suite: **44 tests, 43 passed, 0 failed, 1 platform skip**. The skipped Python helper syntax check runs on Linux.
-- Active-only portion: **20 tests, 19 passed, 1 platform skip**.
+- After the first-run input correction, the combined active harness, active fixture, inactive harness and package fixture suite has **46 tests, 45 passed, 0 failed, 1 platform skip**. The skipped Python helper syntax check runs on Linux.
+- Active-only portion: **22 tests, 21 passed, 1 platform skip**.
+- The complete tooling suite separately passes **67 tests**, with four platform skips. The unchanged product suites retain their 31b38b9 result: 882 desktop and 160 cfglint. Together these give 1,109 passing checks, with that attribution preserved.
 - Scoped Biome: passed for the new runner/helpers/tests.
 - The embedded Python sender also passed a separate syntax-only compile with the bundled Windows Python. No X11/native code was executed by that local check.
 - Independent read-only review repeated the combined tests and cleared the implementation for its first hosted execution.
