@@ -49,6 +49,7 @@ User-facing changes only. The release workflow publishes the matching
 ### Fixed
 
 - Refresh packaged credits and dependency licenses to match the current application.
+- Files: keep the editor's position when Tab returns focus after visiting another pane.
 - Offer a clear Choose profile action when saved profiles exist but none is active.
   Import review now describes the unchanged TF2 setup without assuming an active profile.
 - Keep profile actions visible in inactive libraries and enlarged interfaces, with scrolling

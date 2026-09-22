@@ -307,6 +307,13 @@ export function FilesEditor(props: FilesEditorProps) {
 
   useEffect(() => {
     if (!host.current || !props.active) return;
+    let keyboardViewport: {
+      state: EditorState;
+      top: number;
+      left: number;
+      trigger: KeyboardEvent;
+    } | null = null;
+    const focusMeasure = {};
     const updatePosition = (state: EditorState) => {
       const cursor = state.selection.main.head;
       const line = state.doc.lineAt(cursor);
@@ -341,6 +348,35 @@ export function FilesEditor(props: FilesEditorProps) {
         spellcheck: "false",
       }),
       EditorView.domEventHandlers({
+        focus: (_event, editor) => {
+          const captured = keyboardViewport;
+          if (!captured) return false;
+          const unchanged = () =>
+            keyboardViewport === captured &&
+            view.current === editor &&
+            editor.hasFocus &&
+            !captured.trigger.defaultPrevented &&
+            editor.state.doc === captured.state.doc &&
+            editor.state.selection.eq(captured.state.selection);
+          editor.requestMeasure({
+            key: focusMeasure,
+            read: unchanged,
+            write: (ready) => {
+              if (!ready || !unchanged()) {
+                if (keyboardViewport === captured) keyboardViewport = null;
+                return;
+              }
+              keyboardViewport = null;
+              // WebKit can reset both axes during default keyboard focus.
+              // Synchronize CodeMirror's DOM selection before restoring the
+              // viewport; moving the caret into view would lose that viewport.
+              editor.focus();
+              editor.scrollDOM.scrollTop = captured.top;
+              editor.scrollDOM.scrollLeft = captured.left;
+            },
+          });
+          return false;
+        },
         keydown: (event) => {
           if (
             (event.ctrlKey || event.metaKey) &&
@@ -466,6 +502,33 @@ export function FilesEditor(props: FilesEditorProps) {
       : EditorState.create({ doc: latest.current.value, extensions });
     const editor = new EditorView({ state, parent: host.current, scrollTo: matching?.scroll });
     view.current = editor;
+    const owner = editor.dom.ownerDocument;
+    const cancelKeyboardViewport = () => {
+      keyboardViewport = null;
+    };
+    const captureKeyboardViewport = (event: KeyboardEvent) => {
+      cancelKeyboardViewport();
+      if (
+        event.key !== "Tab" ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        editor.hasFocus ||
+        event.defaultPrevented
+      )
+        return;
+      const { scrollTop: top, scrollLeft: left } = editor.scrollDOM;
+      if (top || left) keyboardViewport = { state: editor.state, top, left, trigger: event };
+    };
+    const focusElsewhere = (event: FocusEvent) => {
+      if (event.target !== editor.contentDOM) cancelKeyboardViewport();
+    };
+    // Observe the browser's actual Tab destination without resolving or
+    // preventing its focus order, including reverse Tab and the Find panel.
+    owner.addEventListener("keydown", captureKeyboardViewport, true);
+    owner.addEventListener("focusin", focusElsewhere, true);
+    owner.addEventListener("pointerdown", cancelKeyboardViewport, true);
+    owner.addEventListener("wheel", cancelKeyboardViewport, { capture: true, passive: true });
     if (matching) {
       // Set the initial pixels; CodeMirror's snapshot keeps the same text in
       // place after virtualized line heights are measured on the next frame.
@@ -474,6 +537,11 @@ export function FilesEditor(props: FilesEditorProps) {
     }
     updatePosition(state);
     return () => {
+      cancelKeyboardViewport();
+      owner.removeEventListener("keydown", captureKeyboardViewport, true);
+      owner.removeEventListener("focusin", focusElsewhere, true);
+      owner.removeEventListener("pointerdown", cancelKeyboardViewport, true);
+      owner.removeEventListener("wheel", cancelKeyboardViewport, true);
       editor.destroy();
       view.current = null;
       setMenuPosition(null);

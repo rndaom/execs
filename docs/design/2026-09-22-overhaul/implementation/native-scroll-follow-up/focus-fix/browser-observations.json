@@ -1,0 +1,139 @@
+{
+  "source": "In-app browser fixture with authored native helper text; no Save",
+  "viewport": [1200, 800],
+  "before": {
+    "focused": true,
+    "left": 1938,
+    "position": "Ln 80, Col 363",
+    "selected": "SELECTION-A",
+    "top": 1255
+  },
+  "rendered": {
+    "focused": "settings-tab-files",
+    "left": 1938,
+    "position": "Ln 80, Col 363",
+    "top": 1255
+  },
+  "trace": [
+    {
+      "editorFocused": false,
+      "label": "Files",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Launch",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Inventory",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "App settings",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "New cfg",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "autoexec.cfg, unsaved. tf/cfg/overrides/autoexec.cfg",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "File actions",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Discard file",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Save",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Find",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Wrap lines",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "",
+      "top": 1255
+    },
+    {
+      "editorFocused": true,
+      "label": "Contents of tf/cfg/overrides/autoexec.cfg",
+      "left": 1938,
+      "position": "Ln 80, Col 363",
+      "selected": "SELECTION-A",
+      "top": 1255
+    }
+  ],
+  "tabExit": {
+    "editor": false,
+    "label": "Problems"
+  },
+  "reverse": {
+    "focused": true,
+    "left": 1938,
+    "position": "Ln 80, Col 363",
+    "selected": "SELECTION-A",
+    "top": 1255
+  },
+  "draft": {
+    "bytes": 4881,
+    "sha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+    "exact": true
+  }
+}

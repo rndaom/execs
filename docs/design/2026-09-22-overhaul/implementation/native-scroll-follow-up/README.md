@@ -1,6 +1,6 @@
 # Files scroll retention: native failure and browser comparison
 
-September 22, 2026. **Native retention remains failed; no product fix is claimed.** The corrected newline input passed in [Linux run 35772324501](https://github.com/rndaom/execs/actions/runs/35772324501), but returning from Binds to Files reset the visible editor viewport. Explicit Save, native close decisions and restart were not reached.
+September 22, 2026. **Native retention remains failed; the reset is now isolated to keyboard focus entering the restored editor.** The corrected newline input passed in [Linux run 35772324501](https://github.com/rndaom/execs/actions/runs/35772324501), but returning from Binds to Files reset the visible editor viewport. The diagnostic follow-up below proves render restoration succeeds before Tab enters CodeMirror. Explicit Save, native close decisions and restart were not reached.
 
 ## Observed native result
 
@@ -33,3 +33,23 @@ The harness now persists the before-navigation state, first render and settled r
 The existing `EditorSessionBoundary` and CodeMirror scroll snapshot are already present in this failed binary. Another fix for the previously corrected passive-cleanup issue would not explain this result. The next trace must establish whether WebKitGTK loses the viewport before focus or while entering it; then a targeted product regression and corrected native run can support a fix.
 
 Local verification of the diagnostic changes: the complete existing tooling suite passes **70 tests**, with four platform skips and zero failures. The three added tests cover focus-induced geometry changes, retained failed observations and bounded nested error causes. Installer, updater, Steam Cloud, retail game and accessibility acceptance remain separate.
+
+## Diagnostic execution: focus entry causes the reset
+
+[Run 35775130580](https://github.com/rndaom/execs/actions/runs/35775130580) tested diagnostic head `c40e2743a88e0d5c29c137ba4ee5e4b2c868cb8e` through merge `6a738eebb77de9594219de389667397c509380f0`. The product ELF remains SHA-256 `05c6b4e14f204dc4c2d48e285616e4b456358079e06f2608965ee82a461be4b4`. Build and inactive native assertions passed. The active sequence failed retention again.
+
+[Exact trace](../linux-native/run-35775130580/linux-native-smoke-6a738eebb77de9594219de389667397c509380f0/execs-linux-native-active-ggs17m/evidence/results.gen.json) establishes:
+
+| Observation | Editor top / left | Selection and position |
+| --- | --- | --- |
+| Before capture and immediately before navigation | 1210 / 2234 | `SELECTION-A`; `Ln 80, Col 363` |
+| First render and settled paint after returning to Files | 1210 / 2234 | The stored line/column remains 80 / 363; editor is unfocused. |
+| Tab destinations 0–10, ending at Wrap lines | 1210 / 2234 | Editor remains unfocused. |
+| Tab 11 enters `.cm-content` | **0 / 0** | Editor focused; `SELECTION-A` and line/column unchanged. |
+| 96 retention polls, final 20 retained | **0 / 0** | The reset persists. |
+
+The pane and window scroll remain zero throughout. Thus the existing before-hide capture and initial render restoration work in this run; the observed reset happens on keyboard entry into CodeMirror. The trace does not distinguish WebKit's default focus behavior from CodeMirror's subsequent DOM-selection synchronization. A focused product correction is required, without replacing the saved viewport with a generic “scroll to caret.”
+
+All three current PNGs were individually inspected together: [initial native Files](../linux-native/run-35775130580/linux-native-smoke-6a738eebb77de9594219de389667397c509380f0/execs-linux-native-active-ggs17m/evidence/01-native-active-files.png), [selected draft before navigation](../linux-native/run-35775130580/linux-native-smoke-6a738eebb77de9594219de389667397c509380f0/execs-linux-native-active-ggs17m/evidence/02-native-draft-before-navigation.png), and [failed return](../linux-native/run-35775130580/linux-native-smoke-6a738eebb77de9594219de389667397c509380f0/execs-linux-native-active-ggs17m/evidence/failure.png). They show the same bounded Files composition and failed viewport transition as the preceding run, with no blank/loading capture accepted.
+
+Both full-byte copy checks pass before navigation, including the exact 4,881-byte draft. Every protected file remains byte-exact through final cleanup. No Save, close decision or restart is claimed. Raw JSON suffix changes preserve bytes; the active results hash is `22cf110a53173a0681f3678b857f4093d5f623361de8c1da860efda47423d039`.
