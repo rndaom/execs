@@ -187,6 +187,16 @@ byId("open-current").addEventListener("click", () => {
 });
 byId("open-reference").addEventListener("click", openReference);
 byId("open-board").addEventListener("click", openReference);
+for (const button of document.querySelectorAll(".supplemental-image")) {
+  button.addEventListener("click", () => {
+    openImage(
+      button.dataset.kind,
+      button.dataset.title,
+      button.querySelector("img").getAttribute("src"),
+      button.dataset.caption,
+    );
+  });
+}
 byId("lightbox-close").addEventListener("click", () => lightbox.close());
 lightbox.addEventListener("close", () => opener?.focus());
 lightboxImage.addEventListener("load", updateZoom);
@@ -226,10 +236,15 @@ try {
   byId("review-count").textContent =
     `${captureCount} accepted captures · ${manifest.pages.length} pages and flows`;
   renderNavigation();
-  const [pageId, requestedCapture] = location.hash.slice(1).split("/");
+  const initialHash = location.hash;
+  const [pageId, requestedCapture] = initialHash.slice(1).split("/");
   const page = manifest.pages.find((entry) => entry.id === pageId) || manifest.pages[0];
   const index = Number.parseInt(requestedCapture, 10) - 1;
   selectPage(page, Number.isFinite(index) ? index : 0);
+  if (initialHash === "#follow-up-evidence") {
+    history.replaceState(null, "", initialHash);
+    byId("follow-up-evidence").scrollIntoView();
+  }
 } catch (error) {
   byId("page-title").textContent = "The review could not load";
   byId("page-description").textContent =

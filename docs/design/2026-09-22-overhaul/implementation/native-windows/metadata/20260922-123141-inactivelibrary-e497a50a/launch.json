@@ -1,0 +1,19 @@
+{
+  "scenario": "InactiveLibrary",
+  "helperPid": 9296,
+  "helperPackageCode": 15700,
+  "helperParentPid": 30156,
+  "helperParentName": "explorer.exe",
+  "helperParentPackageCode": 15700,
+  "appPid": 16372,
+  "appPackageCode": 15700,
+  "executable": "G:\\Projects\\execs\\apps\\desktop\\src-tauri\\target\\release\\execs.exe",
+  "executableSha256": "F6A0B0DE2B33E51A2F65D8BBFA25CE5746E07A852A63F60FE4AEC00AA538409F",
+  "appData": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\roaming",
+  "localAppData": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\local",
+  "webviewUserDataFolder": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\webview2",
+  "workingDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\work",
+  "defaultTauriLocalData": "C:\\Users\\Random\\AppData\\Local\\com.rndaom.execs",
+  "defaultTauriLocalDataExistedBefore": true,
+  "launchedUtc": "2026-09-22T16:32:00.7843398Z"
+}

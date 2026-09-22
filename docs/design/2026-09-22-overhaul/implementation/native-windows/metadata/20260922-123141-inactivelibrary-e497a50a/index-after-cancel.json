@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "tf2Root": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\tf2-root",
+  "activeProfileId": null,
+  "profiles": [
+    {
+      "id": "47d4da8f-5d98-4a7c-a2a3-eacaf57e5bfa",
+      "name": "QA inactive - no HUD",
+      "createdAt": "2026-09-22T16:31:41.1571146Z",
+      "updatedAt": "2026-09-22T16:31:41.1571146Z"
+    },
+    {
+      "id": "446b1f15-bccb-4f95-afc9-a37adbf5c1d6",
+      "name": "QA inactive - single HUD",
+      "createdAt": "2026-09-22T16:31:41.1703333Z",
+      "updatedAt": "2026-09-22T16:31:41.1703333Z"
+    }
+  ]
+}

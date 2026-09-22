@@ -1,0 +1,85 @@
+Window: "execs", App: execs.exe.
+	0 window execs Secondary Actions: Raise
+		1 pane
+			2 pane execs
+				3 pane (disabled)
+				4 region execs - Web content
+					5 region
+						6 region
+							7 region
+								8 region
+								9 region
+									10 region
+										11 region
+											12 region
+												13 region
+												23 document execs Value: http://tauri.localhost/ ID: RootWebArea
+													136 group
+														24 group ID: root
+															25 main
+																26 section header
+																	27 text execs
+																	28 details
+																		29 disclosure triangle Profile Profiles
+																			30 text Profile
+																			31 text Profiles
+																			32 graphic
+																		116 text Profiles
+																		117 text 2 profiles
+																		118 button New profile
+																			119 graphic
+																		120 list
+																			121 list item QA inactive - no HUDSwitch
+																				122 button QA inactive - no HUD Switch
+																				123 button Actions for QA inactive - no HUD Description: Actions for QA inactive - no HUD
+																					124 graphic
+																			125 list item QA inactive - single HUDSwitch
+																				126 button QA inactive - single HUD Switch
+																				127 button Actions for QA inactive - single HUD Description: Actions for QA inactive - single HUD
+																					128 graphic
+																		129 text Profile name
+																		130 edit (settable, string) Profile name Description: Save current as… ID: profile-name
+																		131 button (disabled) Save
+																		132 button Import
+																			133 graphic
+																		134 button Change install
+																			135 graphic
+																	33 group Description: G:\Projects\execs\.artifacts\native-isolation\20260922-120750-inactivelibrary-ff33a080\tf2-root
+																		34 text tf2-root
+																	35 button Copy install path Description: Copy install path — G:\Projects\execs\.artifacts\native-isolation\20260922-120750-inactivelibrary-ff33a080\tf2-root
+																		36 graphic
+																		37 group
+																	38 button Launch TF2
+																		39 graphic
+																40 text PROFILE LIBRARY
+																41 text 2 profiles
+																42 button Change install
+																43 group Description: execs 0.2.0
+																	44 text v0.2.0
+																45 text ·
+																46 button Check for updates
+																47 text ·
+																48 button Report a bug
+																49 text ·
+																50 button Copy diagnostics
+																51 text ·
+																52 button App settings
+																53 text execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+															54 status
+														137 menu Profile actions
+															138 menu item Export profile
+															139 separator
+															140 menu item Delete profile…
+								14 region
+						15 region
+						16 region
+		17 title bar (settable, string) Value: execs
+			18 menu bar System ID: MenuBar
+				19 menu item System
+			20 button Minimize
+			21 button Maximize
+			22 button Close
+
+Document text: ```
+￼
+```

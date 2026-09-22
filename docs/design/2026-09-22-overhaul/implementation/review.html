@@ -17,6 +17,7 @@
       <span class="review-phase">Foundry / Implementation review</span>
       <nav aria-label="Review links">
         <a href="../index.html">Concept history</a>
+        <a href="#follow-up-evidence">Follow-up evidence</a>
         <a href="../design-qa.md" target="_blank" rel="noopener">Integrated QA</a>
         <a href="http://127.0.0.1:1422/?preview=settings-comfig" target="_blank" rel="noopener">Interactive fixture</a>
       </nav>
@@ -62,6 +63,25 @@
         <p id="review-status" class="review-status-message" role="status" aria-live="polite"></p>
       </section>
     </main>
+    <section id="follow-up-evidence" class="review-followup" aria-labelledby="follow-up-title">
+      <div class="state-heading"><div><p class="eyebrow">Supplemental checks</p><h2 id="follow-up-title">Follow-up evidence</h2></div><span class="meta">Separate from the 85 primary captures</span></div>
+      <p class="review-description">Later interaction corrections and scoped native checks. Reports retain each check's exact limits and candidate identity.</p>
+      <div class="followup-grid">
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect browser Choose profile entry point" data-kind="Browser fixture · inactive library" data-title="Choose a profile" data-caption="1920 × 945 browser fixture. The new entry point opens the existing profile menu; it does not activate a profile. Native re-verification is tracked separately in the Windows report."><img src="profile-management/inactive-library/01-choose-profile.png" alt="Centered Choose a profile heading, switching explanation and one copper Choose profile button." width="1920" height="945" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Browser fixture</p><h3>A clear inactive-library entry</h3><p class="meta">Choose profile opens the saved-profile menu without activating a profile.</p><a class="text-link meta" href="profile-management/inactive-library/verification.md" target="_blank" rel="noopener">Entry-point verification</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect native Windows preferences after reopening" data-kind="Native Windows · isolated candidate" data-title="Preferences retained after reopening" data-caption="Actual Windows app capture, including its OS frame. Reduce motion and startup update preferences persisted across a normal close and reopen. This local executable check does not establish installer or packaged release qualification."><img src="native-windows/08-preferences-after-reopen.jpg" alt="Native Windows App settings with Reduce selected and checking for updates on startup enabled." width="1202" height="832" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Native Windows · isolated data</p><h3>Preferences survive a restart</h3><p class="meta">Actual app evidence. The report tracks startup, settings, picker/import cancellation, deletion and subsequent rechecks.</p><a class="text-link meta" href="native-windows/README.md" target="_blank" rel="noopener">Latest scoped Windows results</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect corrected browser profile-menu reflow" data-kind="Browser fixture · CSS reflow" data-title="Six-profile menu: keyboard access at 480 × 320" data-caption="Final corrected 480 × 320 CSS reflow capture of an inactive library with six profiles. The menu is anchored to its actual header and clamped to the viewport; keyboard navigation scrolls Change install fully into view. This is reduced available CSS space, not direct native zoom or OS text-scaling evidence."><img src="interaction-completion/11-inactive-keyboard-fixed-480.png" alt="Scrolled profile menu beneath the inactive-library header, with the Change install footer action fully visible and keyboard focused." width="480" height="320" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Browser fixture · CSS reflow</p><h3>Profile actions stay reachable</h3><p class="meta">The final six-profile menu correction keeps keyboard access to footer actions within the narrow viewport.</p><a class="text-link meta" href="interaction-completion/design-qa.md" target="_blank" rel="noopener">Interaction and reflow audit</a></figcaption>
+        </figure>
+      </div>
+      <div class="followup-qualification"><p><a class="text-link" href="package-smoke/README.md" target="_blank" rel="noopener">Package smoke harness qualification</a> checks fixture preservation and the harness itself. It is not an executed installer, update, rendered-webview or release pass.</p><p class="meta">Historical native captures 10 and 12 record the old blank entry state and import copy; they are not presented as accepted current UI. The Windows report links later native re-verification as it becomes available.</p></div>
+    </section>
     <footer class="review-footer"><p>Local review artifact. Screenshots do not certify Steam, native media, installers, or the Windows/Linux packaged matrix.</p><div><a href="../combined-release-plan.md" target="_blank" rel="noopener">Release plan</a><a href="../research/rnd-290-startup-error.md" target="_blank" rel="noopener">Native startup diagnostics</a><a href="review-data.json" target="_blank" rel="noopener">Accepted capture manifest</a></div></footer>
     <dialog class="image-dialog" id="review-lightbox" aria-labelledby="lightbox-title" aria-describedby="lightbox-caption">
       <div class="image-dialog-header"><div><p class="eyebrow" id="lightbox-kind">Implementation screenshot</p><h2 id="lightbox-title">Full-size image</h2></div><button id="lightbox-close" class="button subtle" type="button" autofocus>Close</button></div>

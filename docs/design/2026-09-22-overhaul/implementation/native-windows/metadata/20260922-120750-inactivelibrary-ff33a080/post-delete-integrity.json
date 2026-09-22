@@ -1,0 +1,83 @@
+{
+  "passed": true,
+  "checkedUtc": "2026-09-22T16:31:24.7377918Z",
+  "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080",
+  "executableSha256": "E7BC62505EFC1257ACE629EDECB8640EDAEE3860CA2505DED68038FF00D40FAD",
+  "appPid": 4680,
+  "appExitedUtc": "2026-09-22T16:26:46.8893428Z",
+  "deletedProfileId": "e8be0ee4-6480-4836-8013-01401d858c59",
+  "retainedProfileId": "7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd",
+  "baselineSha256": "9858F68631BD97F005DEA1C98A6D155D41F195517030F774DD12B1FDE5CA8F7A",
+  "baselineFiles": 20,
+  "actualFiles": 16,
+  "unchangedFiles": 15,
+  "checks": {
+    "exactCandidateIdentity": true,
+    "unpackagedExplorerHelperAndApp": true,
+    "normalExit": true,
+    "onlyExpectedTargetFilesRemoved": true,
+    "targetDirectoryRemoved": true,
+    "noFilesAdded": true,
+    "onlyIndexBytesChanged": true,
+    "indexSchemaAndRootRetained": true,
+    "activeProfileRemainsNull": true,
+    "exactlyExpectedProfileRemains": true,
+    "noPendingSwitchFields": true,
+    "noRecoveryOrStagingRemnants": true,
+    "retainedProfileUnchanged": true,
+    "sharedBlobsUnchanged": true,
+    "syntheticLiveRootUnchanged": true,
+    "importArchiveUnchanged": true,
+    "settingsUnchanged": true
+  },
+  "preservedGroups": {
+    "retainedProfile": {
+      "files": 8,
+      "allBytesUnchanged": true
+    },
+    "sharedBlobs": {
+      "files": 1,
+      "allBytesUnchanged": true
+    },
+    "syntheticLiveRoot": {
+      "files": 4,
+      "allBytesUnchanged": true
+    },
+    "importArchive": {
+      "files": 1,
+      "allBytesUnchanged": true
+    },
+    "settings": {
+      "files": 1,
+      "allBytesUnchanged": true
+    }
+  },
+  "removedFiles": [
+    "roaming/execs/profiles/e8be0ee4-6480-4836-8013-01401d858c59/files/tf/cfg/config.cfg",
+    "roaming/execs/profiles/e8be0ee4-6480-4836-8013-01401d858c59/files/tf/cfg/overrides/compat.cfg",
+    "roaming/execs/profiles/e8be0ee4-6480-4836-8013-01401d858c59/files/tf/custom/compat-pack.vpk",
+    "roaming/execs/profiles/e8be0ee4-6480-4836-8013-01401d858c59/manifest.json"
+  ],
+  "changedFiles": ["roaming/execs/profiles/index.json"],
+  "addedFiles": [],
+  "remnants": [],
+  "actualSha256": {
+    "imports/review-multiple-huds-v018.zip": "77CC3C6F9DED610E56084F1EF7DDD410DEFE6F04162303054A0CEE274D234727",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/cfg/config.cfg": "53C7675E94164580863502AA86B63FA40F97C3311E2B8865A1C8EEAA9352EE42",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/cfg/overrides/autoexec.cfg": "961A4EF6E4780DF60386E092D63EB87ADB65CFFA753CDCABC398B29F77EF56E4",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/cfg/overrides/compat.cfg": "F7EB300C9AC50115770D3FE42E21B0C00B5BD301ADE525FEF359FA3DBB4E916B",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2CB46D2FF86CF7B64CFDBFFB7834A423539F2A65F2EF25EB849354329668F0A2",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/custom/compat-pack.vpk": "351BC47C2D89705E0EF6B4BDEF6C568722D8ABD3230C97D3EF636698B461F145",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/custom/fixturehud/info.vdf": "D7FB73F2D549C176EE27FC70D38BD136984F3268A7F82D255896EA1FD958D6B8",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/files/tf/custom/fixturehud/resource/ui/layout.res": "0F43D579CA286B3103B6CBDBD11182A8F726B8931FEB18022F0A0A627CDE2388",
+    "roaming/execs/profiles/7c6441ad-2d6d-4e79-a451-ad3e3ad27fcd/manifest.json": "E9EC98589FE69FC672395BF31278FB29354A92166E0966EF1ABDACAD0CFBC15E",
+    "roaming/execs/profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "EC5533EDF34C665DA9FF4BE240472C1E0EB30532F15D55F304037A9173A74FB7",
+    "roaming/execs/profiles/index.json": "3ABA7CB948DA867AB98C362A1C6AF2752FCB4770155327F13B5DE3CC6BFC26B3",
+    "roaming/execs/settings.json": "B555531485DCC3B6761D074FAB29E4C10F148A037C38AFBAAC3113ED0C9773EC",
+    "tf2-root/tf/cfg/autoexec.cfg": "5EECA1376EBDEADD9CE8AEC402741CBBD976F8ACC8DF40B280BF60BADD84A055",
+    "tf2-root/tf/cfg/config_default.cfg": "C9916CAC69DF86F48C2145C7D264163D9DB4424ECAD2A0AB2C4EB4A00908698B",
+    "tf2-root/tf/custom/native-qa-sentinel/resource/preserved.txt": "460362E7E7DE02836ABEF2496CC54920A582CBCF7B64E72A0186D8AED481DA11",
+    "tf2-root/tf/steam.inf": "11C3F9632246ECFFE381CCD84AB8F5DAB25E4B8713470820C0790242DA7CD1A0"
+  },
+  "note": "Read-only post-delete validation of disposable app-data/library/import/synthetic-live files. Browser caches and OS files are outside this comparison. No fixture file was changed by this validator."
+}

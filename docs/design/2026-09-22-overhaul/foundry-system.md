@@ -43,6 +43,7 @@ Computed foreground contrast across the three solid surfaces is at least 12.13:1
 | `ClassTabs` | Existing API and keyboard navigation; orange underline for selected tab; real space before count metadata |
 | `Segmented`, `OptionTile`, `Switch` | Existing real radio/checkbox/switch semantics; selected rings and finite thumb movement |
 | `Modal` | Existing trap, stack and restore behavior; optional `initialFocusRef` designates a contained, enabled safe initial action |
+| `.profile-menu-panel` | Fixed 430px maximum overlay, positioned from the actual summary with a 10px gap and clamped to 16px viewport insets. Available height follows the measured top; bounded scrolling and scroll padding keep actions and keyboard focus visible in inactive libraries, enlarged interfaces and shifted headers. |
 
 Files keeps a full-width `.settings-content[data-pane="files"]` with 16px outer padding. Its bounded editor and source font remain separate pane concerns. These helpers do not impose a uniform card layout on different tasks. Keep original labels, source attribution, numeric ranges, autosave versus explicit actions, and honest unavailable-art states.
 

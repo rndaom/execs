@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-22T15:35:55Z",
+  "updatedAt": "2026-09-22T16:49:01.502Z",
   "purpose": "Current Foundry implementation acceptance, owned work and evidence ledger; integrated and native qualification remain separate.",
   "authorization": {
     "scope": "Foundry only; whole application, all 14 selected issues plus overhaul, multiple implementation agents, tests, visual verification, repository and Linear updates",
@@ -14,8 +14,8 @@
     "direction": "Foundry",
     "ownerSelected": true,
     "designSelectionGate": "satisfied",
-    "implementationStatus": "committed development candidate; explicitly recorded gaps remain",
-    "verificationStatus": "Five-job Windows/Linux CI, local Windows checks, accepted browser/gallery review and four actual v0.1.8 Windows library compatibility cases pass. Native/package/Cloud/TF2/PresentMon qualification remains open.",
+    "implementationStatus": "Foundry development candidate plus completed scoped follow-up product commit 44bc5f4; native/package/engine qualification gaps remain",
+    "verificationStatus": "Historical five-job CI at 542b3dd remains attached to that head. Follow-up code 44bc5f4 has passing local frontend/tooling, final production build and separate bounded E7/F6/7D Windows native scopes; both scoped menu findings are corrected. Final formatting of the last evidence addition is parent-owned. Whole native/package/Cloud/TF2/PresentMon qualification remains open.",
     "boards": [
       "docs/design/2026-09-22-overhaul/options/01-foundry/01-core.png",
       "docs/design/2026-09-22-overhaul/options/01-foundry/02-customization.png",
@@ -3691,6 +3691,374 @@
         },
         "linuxTranscriptSha256": "e9ef62c640ad4f1c0c51fd290fb16b512e115c27579bed43cdcf9fe3ef08b17f"
       }
-    ]
+    ],
+    "followupCheckpoint": {
+      "timestamp": "2026-09-22T16:32:08.715Z",
+      "status": "scoped follow-up and final evidence-format checks passed; release qualification remains open",
+      "sourceIdentity": {
+        "branch": "rndaom/foundry-overhaul",
+        "workingTreeFollowup": false,
+        "priorCiHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+        "priorCiRun": "https://github.com/rndaom/execs/actions/runs/35744828442",
+        "priorCiResultUnchanged": true,
+        "newCiResultClaimed": false,
+        "nativeInitialExecutableSha256": "E7BC62505EFC1257ACE629EDECB8640EDAEE3860CA2505DED68038FF00D40FAD",
+        "postFixNativeExecutable": {
+          "sha256": "F6A0B0DE2B33E51A2F65D8BBFA25CE5746E07A852A63F60FE4AEC00AA538409F",
+          "bytes": 23439872,
+          "build": "pnpm desktop build --no-bundle",
+          "buildDuration": "3m09s",
+          "case": "20260922-123141-inactivelibrary-e497a50a",
+          "status": "passed within targeted inactive-library native scope",
+          "source": "root operator result; native-windows evidence owner archiving captures 19–23",
+          "assertions": [
+            "Choose profile CTA opens existing menu",
+            "keyboard-visible focus",
+            "Escape and Return",
+            "corrected import copy and Cancel",
+            "all 20 fixture files unchanged",
+            "both profiles retained and activeProfileId null",
+            "normal exit 0"
+          ],
+          "fixtureFilesUnchanged": 20,
+          "exitCode": 0,
+          "nativeFullMatrixQualified": false
+        },
+        "workingTreeBaseHead": "f82b5118a20145f41ab0d841f6f9bb9045ac4d8e",
+        "followupCodeCommit": "44bc5f4f54ba4d41bd9ddd27342223ae08b971da",
+        "followupCodeCommitUrl": "https://github.com/rndaom/execs/commit/44bc5f4f54ba4d41bd9ddd27342223ae08b971da",
+        "documentationPendingParentCommit": true,
+        "noRustProductionChanges": true,
+        "finalNativeExecutable": {
+          "codeCommit": "44bc5f4f54ba4d41bd9ddd27342223ae08b971da",
+          "sha256": "7D03B4A55499835DDEF908D228842347C60E8D2FD5803732B1DB8C0D8CBA6CA4",
+          "bytes": 23439872,
+          "build": "pnpm desktop build --no-bundle",
+          "buildDuration": "3m08s",
+          "buildStatus": "passed; existing Vite chunk advisory only",
+          "case": "20260922-124450-inactivelibrary-fc1d31c3",
+          "viewport": "1200x800",
+          "status": "passed within final positioned-menu native spot check",
+          "assertions": [
+            "Choose profile opens measured fixed-position menu",
+            "all menu actions visible",
+            "Escape restores Summary focus",
+            "normal Alt+F4 exit 0",
+            "all 20 fixture files unchanged",
+            "both profile IDs retained with activeProfileId null"
+          ],
+          "exitedUtc": "2026-09-22T16:46:36Z",
+          "exitCode": 0,
+          "fixtureFilesUnchanged": 20,
+          "source": "root operator's final result and capture24; app_settings is archiving final case metadata",
+          "capture": "docs/design/2026-09-22-overhaul/implementation/native-windows/24-native-final-positioned-menu.jpg",
+          "report": "docs/design/2026-09-22-overhaul/implementation/native-windows/README.md",
+          "limits": "This final build check is the 1200x800 inactive menu only. It does not repeat E7 startup/preferences/deletion or F6 import review. Six-profile960/600/480 coverage remains browser evidence, not native evidence.",
+          "packagedInstallerQualified": false,
+          "fullNativeMatrixQualified": false
+        },
+        "earlierNativeBuildsPredateFinalGeometry": true
+      },
+      "browserInteraction": {
+        "status": "passed within bounded browser scope",
+        "report": "docs/design/2026-09-22-overhaul/implementation/interaction-completion/design-qa.md",
+        "resolvedFinding": "P2 profile-menu clipping at 480x320 CSS pixels; viewport inset, bounded menu scroll and visible keyboard focus preserve reachable actions",
+        "viewports": ["1200x800", "600x400", "480x320"],
+        "actualNativeZoomOrOsScaling": false,
+        "scrollSequence": [
+          {
+            "pane": "Comfig",
+            "scrollTop": 196
+          },
+          {
+            "pane": "Launch",
+            "scrollTop": 0
+          },
+          {
+            "pane": "Comfig",
+            "scrollTop": 196
+          }
+        ],
+        "changedProfileScrollTop": 0,
+        "noRealProfileOrGameWrites": true,
+        "additionalFinding": {
+          "severity": "P2",
+          "case": "six inactive profiles at 960x640",
+          "description": "ancestor overflow clips lower profile actions despite menu max-height",
+          "owner": "/root/surface_inventory",
+          "status": "resolved; final 960/600/480 browser geometry and keyboard checks, active 1200px and running-banner960 offsets, ReadyPanel 10/TypeScript/Biome passed; parent accepted",
+          "plannedCorrection": "fixed-position menu measured from summary and clamped to viewport",
+          "finalCaptures": [
+            "09-inactive-keyboard-fixed-600.png",
+            "10-inactive-six-profiles-fixed-960.png",
+            "11-inactive-keyboard-fixed-480.png",
+            "12-active-six-profiles-fixed-1200.png",
+            "13-banner-offset-fixed-960.png"
+          ],
+          "nativeGeometryVerification": "Final 7D native 1200px menu spot passed; six-profile960/600/480 and banner geometry are separately passed browser scope"
+        }
+      },
+      "inactiveLibrary": {
+        "status": "implemented; browser and F6 targeted native CTA/import-copy pass; subsequent menu geometry correction separately browser-verified",
+        "report": "docs/design/2026-09-22-overhaul/implementation/profile-management/inactive-library/verification.md",
+        "changes": [
+          "Choose profile CTA opens the existing header menu and focuses its first enabled saved-profile action without activation",
+          "Import review describes the unchanged TF2 setup without assuming an active profile"
+        ],
+        "readyPanelTestsPassed": 10,
+        "relatedImportPreviewFirstRunTestsPassed": 16,
+        "browserActions": [
+          "pointer and Enter open",
+          "keyboard-visible first action focus",
+          "Escape restore",
+          "no implicit activation",
+          "import review Cancel"
+        ]
+      },
+      "packageSmoke": {
+        "status": "harness strengthened; signed package execution not performed",
+        "report": "docs/design/2026-09-22-overhaul/implementation/package-smoke/README.md",
+        "newToolingTestsPassed": 11,
+        "allToolingTests": {
+          "passed": 32,
+          "failed": 0,
+          "existingPlatformSkips": 3
+        },
+        "reviewNote": "Parent removed the implementation-mirroring source-string assertion; all four tooling files reran successfully afterward. Earlier 33-pass log remains historical.",
+        "taggedExporter": "v0.1.8 / 85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+        "fixture": {
+          "profiles": 2,
+          "payloadReferences": 12,
+          "storedPayloads": 11,
+          "libraryIndexSettingsAndLiveRoot": "authored, disposable",
+          "manifestsAndPayloads": "actual tagged old exporter"
+        },
+        "independentCoreValidation": {
+          "platform": "Windows",
+          "coreVersions": ["0.1.8", "0.2.0"],
+          "payloadComparisons": 24,
+          "exports": 4,
+          "appDataUnchanged": true,
+          "liveFixtureUnchanged": true
+        },
+        "renderedPackagedWebviewQualified": false,
+        "nativeUiImportSwitchRoundTripQualified": false
+      },
+      "nativeWindows": {
+        "status": "bounded E7 startup/rootless/inactive deletion, F6 CTA/import-Cancel and 7D final menu geometry native scopes passed; whole native/package matrix open",
+        "report": "docs/design/2026-09-22-overhaul/implementation/native-windows/README.md",
+        "executableVersion": "0.2.0",
+        "executableSha256": "E7BC62505EFC1257ACE629EDECB8640EDAEE3860CA2505DED68038FF00D40FAD",
+        "executableBytes": 23439872,
+        "subsystem": "Windows GUI (2)",
+        "webviewVersion": "153.0.4234.48",
+        "completedScope": [
+          "native pre-webview startup error without console, full path copied and recovery marker unchanged",
+          "rootless App settings, Reduce preference and keyboard update switch",
+          "copy isolated data location",
+          "native folder picker Cancel with no install confirmation",
+          "normal close and preference persistence on reopen",
+          "manual native update check; no download/install"
+        ],
+        "inactiveImportCancelAndDelete": {
+          "status": "passed within isolated inactive-only scope",
+          "case": "20260922-120750-inactivelibrary-ff33a080",
+          "proof": "docs/design/2026-09-22-overhaul/implementation/native-windows/metadata/20260922-120750-inactivelibrary-ff33a080/post-delete-integrity.json",
+          "checkedUtc": "2026-09-22T16:31:24.7377918Z",
+          "exitedUtc": "2026-09-22T16:26:46.8893428Z",
+          "exitCode": 0,
+          "baselineFiles": 20,
+          "finalFiles": 16,
+          "removedTargetFiles": 4,
+          "unchangedRemainingFiles": 15,
+          "onlyChangedFile": "roaming/execs/profiles/index.json",
+          "preservedGroups": {
+            "retainedProfile": {
+              "files": 8,
+              "allBytesUnchanged": true
+            },
+            "sharedBlobs": {
+              "files": 1,
+              "allBytesUnchanged": true
+            },
+            "syntheticLiveRoot": {
+              "files": 4,
+              "allBytesUnchanged": true
+            },
+            "importArchive": {
+              "files": 1,
+              "allBytesUnchanged": true
+            },
+            "settings": {
+              "files": 1,
+              "allBytesUnchanged": true
+            }
+          },
+          "activeProfileRemainsNull": true,
+          "noActivationOrRecoveryRemnants": true,
+          "finalReport": "docs/design/2026-09-22-overhaul/implementation/native-windows/README.md",
+          "archivedProofSha256": "AB230412456BF4051F5E5605E3454CBEB872630A4333DBAC84E76E4A4CCF7F64",
+          "reportFinalized": true
+        },
+        "postEmptyStateFixConfirmation": "passed on F6A0B0DE executable; all 20 fixture files unchanged and normal exit 0",
+        "isolation": "Explorer-launched, GetPackageFullName 15700, redirected app data/temp/WebView2 cache; actual Steam discovery remains possible, so no profile activation/live-setting scope",
+        "packagedInstallerQualified": false,
+        "linuxNativeQualified": false,
+        "fullNativeMatrixQualified": false,
+        "targetedCorrection": {
+          "sha256": "F6A0B0DE2B33E51A2F65D8BBFA25CE5746E07A852A63F60FE4AEC00AA538409F",
+          "bytes": 23439872,
+          "build": "pnpm desktop build --no-bundle",
+          "buildDuration": "3m09s",
+          "case": "20260922-123141-inactivelibrary-e497a50a",
+          "status": "passed within targeted inactive-library native scope",
+          "source": "docs/design/2026-09-22-overhaul/implementation/native-windows/README.md and its independent post-cancel-integrity.json",
+          "assertions": [
+            "Choose profile CTA opens existing menu",
+            "keyboard-visible focus",
+            "Escape and Return",
+            "corrected import copy and Cancel",
+            "all 20 fixture files unchanged",
+            "both profiles retained and activeProfileId null",
+            "normal exit 0"
+          ],
+          "fixtureFilesUnchanged": 20,
+          "exitCode": 0,
+          "nativeFullMatrixQualified": false,
+          "checkedUtc": "2026-09-22T16:40:12.3662180Z",
+          "exitedUtc": "2026-09-22T16:35:00.168309Z",
+          "currentGeometryNote": "F6 predates the measured fixed-position menu correction; do not infer its native geometry from this result",
+          "archivedProofSha256": "9B4E13AADDC243DB616309FA9EDB261016532F53BC097ADE80A13247057C8EB0",
+          "reportFinalized": true
+        },
+        "evidenceTransferPolicy": "E7 startup/preferences/deletion, F6 CTA/import-Cancel and 7D final 1200px menu have separate evidence identities; no result is transferred to an unexercised build or case.",
+        "finalGeometry": {
+          "codeCommit": "44bc5f4f54ba4d41bd9ddd27342223ae08b971da",
+          "sha256": "7D03B4A55499835DDEF908D228842347C60E8D2FD5803732B1DB8C0D8CBA6CA4",
+          "bytes": 23439872,
+          "build": "pnpm desktop build --no-bundle",
+          "buildDuration": "3m08s",
+          "buildStatus": "passed; existing Vite chunk advisory only",
+          "case": "20260922-124450-inactivelibrary-fc1d31c3",
+          "viewport": "1200x800",
+          "status": "passed within final positioned-menu native spot check",
+          "assertions": [
+            "Choose profile opens measured fixed-position menu",
+            "all menu actions visible",
+            "Escape restores Summary focus",
+            "normal Alt+F4 exit 0",
+            "all 20 fixture files unchanged",
+            "both profile IDs retained with activeProfileId null"
+          ],
+          "exitedUtc": "2026-09-22T16:46:36Z",
+          "exitCode": 0,
+          "fixtureFilesUnchanged": 20,
+          "source": "root operator's final result and capture24; app_settings is archiving final case metadata",
+          "capture": "docs/design/2026-09-22-overhaul/implementation/native-windows/24-native-final-positioned-menu.jpg",
+          "report": "docs/design/2026-09-22-overhaul/implementation/native-windows/README.md",
+          "limits": "This final build check is the 1200x800 inactive menu only. It does not repeat E7 startup/preferences/deletion or F6 import review. Six-profile960/600/480 coverage remains browser evidence, not native evidence.",
+          "packagedInstallerQualified": false,
+          "fullNativeMatrixQualified": false
+        }
+      },
+      "currentChecks": {
+        "fullPnpmTest": {
+          "status": "passed",
+          "desktop": 874,
+          "desktopFiles": 102,
+          "cfglint": 160,
+          "cfglintFiles": 10,
+          "toolingPassed": 33,
+          "toolingFailed": 0,
+          "toolingSkipped": 3,
+          "toolingTotal": 36,
+          "source": "parent full working-tree run observed in task tool output; no standalone transcript retained",
+          "stage": "before final measured menu geometry correction; later ReadyPanel 10/TypeScript/browser verification covers that correction"
+        },
+        "subsequentToolingRun": {
+          "status": "passed after removal of the source-string assertion",
+          "passed": 32,
+          "failed": 0,
+          "skipped": 3,
+          "total": 35,
+          "newFixtureTests": 11,
+          "source": "parent reran all four tooling files; desktop/cfglint unchanged"
+        },
+        "frontendTypeScriptAndViteBuild": {
+          "status": "passed in final no-bundle production build",
+          "limitation": "existing Vite chunk-size advisory only",
+          "source": "root final build result; no full-build log path supplied to ledger agent"
+        },
+        "nativeRustLink": {
+          "status": "passed",
+          "build": "pnpm desktop build --no-bundle",
+          "duration": "3m08s",
+          "sha256": "7D03B4A55499835DDEF908D228842347C60E8D2FD5803732B1DB8C0D8CBA6CA4",
+          "codeCommit": "44bc5f4f54ba4d41bd9ddd27342223ae08b971da",
+          "packagedInstaller": false
+        },
+        "pnpmCheck": {
+          "status": "passed",
+          "files": 432,
+          "stage": "after final product changes, before last native metadata addition",
+          "source": "root result"
+        },
+        "countPolicy": "Scoped checks overlap the full current run; prior local/remote counts remain attached to their recorded historical candidate.",
+        "afterLastMenuCorrection": {
+          "status": "passed: ReadyPanel 10, TypeScript, browser geometry/keyboard/banner, production frontend/native build and bounded native1200 menu spot",
+          "noNewRustProductCode": true
+        },
+        "rustProductUnchangedThisFollowup": true,
+        "finalEvidenceFormatCheck": {
+          "status": "passed after the final native case archive",
+          "files": 443,
+          "codeCheckAlreadyPassed": true
+        },
+        "diffCheck": {
+          "status": "passed for product changes and final evidence archive",
+          "source": "root result",
+          "ledgerScoped": "passed"
+        }
+      },
+      "unchangedScope": {
+        "selectedIssues": 14,
+        "issueState": "In Progress",
+        "optionalCandidates": 25,
+        "inventory": "development-only",
+        "acceptanceDescriptionsAndStatesPreserved": true,
+        "protectedSourceSha256": "5ad530f72db04b1ebf9f2360c9c03f2e87f8c687c79383ca690cf2975c680760"
+      },
+      "linearUpdated": true,
+      "linearDocumentReadback": {
+        "timestamp": "2026-09-22T16:53:11.644Z",
+        "documentId": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+        "url": "https://linear.app/rndaom/document/020-foundry-implementation-and-combined-release-plan-1fe7c93751c6",
+        "originalBaselineAndAcceptanceSuffixUnchanged": true,
+        "singleFollowupHeading": true,
+        "codeCommitPresent": true,
+        "native24Present": true,
+        "noReleaseClaim": true
+      },
+      "issueStateChanges": [],
+      "publicationAuthorized": false,
+      "openQualification": [
+        "signed NSIS/AppImage/.deb candidate execution and real update lifecycle",
+        "packaged UI profile import/switch and restart",
+        "Linux native WebKitGTK",
+        "dirty Files/native-close and full native pane matrix",
+        "Steam Cloud acknowledgement and approved retail TF2/Casual/PresentMon",
+        "RND-324 complete engine criteria"
+      ],
+      "commitsOrPushesByLedgerAgent": false,
+      "finalizedAt": "2026-09-22T16:49:01.502Z",
+      "originalSourceValidation": {
+        "selectedIssueObjectsUnchanged": 14,
+        "optionalCandidatesUnchanged": 25,
+        "originalScopeAndPriorCiCheckpointHistoryUnchanged": true,
+        "noIssueDone": true,
+        "linearUpdatedByLedgerAgent": false,
+        "markdownAcceptanceBlocksUnchanged": 14
+      }
+    }
   }
 }
