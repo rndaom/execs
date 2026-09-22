@@ -1,0 +1,361 @@
+{
+  "scratch": "/home/runner/work/_temp/execs-linux-native-JudcgZ",
+  "childEnv": {
+    "HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/home",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/config",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-linux-native-JudcgZ/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-linux-native-JudcgZ/tmp"
+  },
+  "data": "/home/runner/work/_temp/execs-linux-native-JudcgZ/data/execs",
+  "library": "/home/runner/work/_temp/execs-linux-native-JudcgZ/data/execs/profiles",
+  "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2",
+  "settings": {
+    "schema": 1,
+    "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2",
+    "preferences": {
+      "checkForUpdatesOnStartup": false,
+      "motion": "system"
+    }
+  },
+  "metadata": {
+    "f2000001-0000-4000-8000-000000000001/manifest.json": {
+      "schema": 1,
+      "name": "Main",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f2000001-0000-4000-8000-000000000001",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2"
+    },
+    "f2000001-0000-4000-8000-000000000002/manifest.json": {
+      "schema": 1,
+      "name": "Casual",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f2000001-0000-4000-8000-000000000002",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2"
+    },
+    "f2000001-0000-4000-8000-000000000003/manifest.json": {
+      "schema": 1,
+      "name": "Competitive",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f2000001-0000-4000-8000-000000000003",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2"
+    },
+    "f2000001-0000-4000-8000-000000000004/manifest.json": {
+      "schema": 1,
+      "name": "Practice",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f2000001-0000-4000-8000-000000000004",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2"
+    },
+    "f2000001-0000-4000-8000-000000000005/manifest.json": {
+      "schema": 1,
+      "name": "Experiments",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f2000001-0000-4000-8000-000000000005",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2"
+    },
+    "f2000001-0000-4000-8000-000000000006/manifest.json": {
+      "schema": 1,
+      "name": "Archived setup",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f2000001-0000-4000-8000-000000000006",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2"
+    },
+    "index.json": {
+      "schema": 1,
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-JudcgZ/fixture-tf2",
+      "activeProfileId": null,
+      "profiles": [
+        {
+          "id": "f2000001-0000-4000-8000-000000000001",
+          "name": "Main",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        },
+        {
+          "id": "f2000001-0000-4000-8000-000000000002",
+          "name": "Casual",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        },
+        {
+          "id": "f2000001-0000-4000-8000-000000000003",
+          "name": "Competitive",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        },
+        {
+          "id": "f2000001-0000-4000-8000-000000000004",
+          "name": "Practice",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        },
+        {
+          "id": "f2000001-0000-4000-8000-000000000005",
+          "name": "Experiments",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        },
+        {
+          "id": "f2000001-0000-4000-8000-000000000006",
+          "name": "Archived setup",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "libraryHashes": {
+    "blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+    "f2000001-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f2000001-0000-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f2000001-0000-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f2000001-0000-4000-8000-000000000001/manifest.json": "0f8ebca776cfffedef811c1633a9b2c7908a6684792e046f0c060a756f9684dc",
+    "f2000001-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f2000001-0000-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f2000001-0000-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f2000001-0000-4000-8000-000000000002/manifest.json": "4e9f9eec1f52393a6741f4218b259db308c016ca319cf6e1f029180bf465819a",
+    "f2000001-0000-4000-8000-000000000003/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f2000001-0000-4000-8000-000000000003/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f2000001-0000-4000-8000-000000000003/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f2000001-0000-4000-8000-000000000003/manifest.json": "6be36460684e1ef22de762d85eeb96e857f68c91422cb7f8331eca2fe1cdff32",
+    "f2000001-0000-4000-8000-000000000004/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f2000001-0000-4000-8000-000000000004/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f2000001-0000-4000-8000-000000000004/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f2000001-0000-4000-8000-000000000004/manifest.json": "1bddb231e5ba6905d06084e62169baa10ed494b184cb6b3999036bee596b5639",
+    "f2000001-0000-4000-8000-000000000005/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f2000001-0000-4000-8000-000000000005/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f2000001-0000-4000-8000-000000000005/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f2000001-0000-4000-8000-000000000005/manifest.json": "3b32342add4df524968a42522bec34e260f2f63c74a705a064c6ed7b88ce1c70",
+    "f2000001-0000-4000-8000-000000000006/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f2000001-0000-4000-8000-000000000006/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f2000001-0000-4000-8000-000000000006/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f2000001-0000-4000-8000-000000000006/manifest.json": "861267af1514b10fdc0a7855be48e3142607ca49924a0e8d24bf7378f5c20948",
+    "index.json": "69714c27c7805613140fecf8a15ca064bc41b5f3ce70643cba00c7f26f10672f"
+  },
+  "liveHashes": {
+    "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "tf/cfg/config_default.cfg": "f5b4ad697ac8c0c7b2440b6c1b4e5dc199a380e552273308058a7760ca61c340",
+    "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+    "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+  },
+  "provenance": {
+    "exporterTag": "v0.1.8",
+    "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "sourceArchiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38",
+    "authored": "Six inactive identities, index/settings and synthetic TF2 root; owned no-HUD payload bytes reused unchanged. This is runtime evidence, not an upgrade test."
+  }
+}

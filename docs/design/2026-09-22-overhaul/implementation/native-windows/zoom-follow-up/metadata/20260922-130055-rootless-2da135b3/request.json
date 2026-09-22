@@ -1,0 +1,13 @@
+{
+  "scenario": "Rootless",
+  "executable": "G:\\Projects\\execs\\apps\\desktop\\src-tauri\\target\\release\\execs.exe",
+  "executableSha256": "7D03B4A55499835DDEF908D228842347C60E8D2FD5803732B1DB8C0D8CBA6CA4",
+  "executableLength": 23439872,
+  "executableModifiedUtc": "2026-09-22T16:44:14.5295628Z",
+  "executableProductVersion": "0.2.0",
+  "helperExecutable": "C:\\Users\\Random\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe",
+  "helperExecutableSha256": "362A356CE7F0940EC74F73A8FC2C990A2CC24A38A11C90BBD8ECA947110AD139",
+  "markerSha256": null,
+  "inactiveFixture": null,
+  "preparedUtc": "2026-09-22T17:00:55.3621423Z"
+}

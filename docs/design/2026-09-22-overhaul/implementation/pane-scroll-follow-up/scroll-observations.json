@@ -1,0 +1,1525 @@
+[
+  {
+    "label": "1200 Sounds first visit",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": 81
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Sounds retained offset",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Mods first visit",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": 81
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Mods retained offset",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Files first visit",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 711,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Files draft baseline",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 711,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Files help expanded",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 711,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Files guides expanded",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Files retained offset",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Sounds revisit with Files draft",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Mods revisit with Files draft",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "1200 Files revisit before editor focus",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "before 960 resize with retained Files draft",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "before 960 Files scroll baseline",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Files",
+      "y": -365
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 438,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "before 960 Sounds revisit",
+    "activeNavigation": {
+      "bottom": 324,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 288
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 2776,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "before 960 Mods revisit",
+    "activeNavigation": {
+      "bottom": 389.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 353.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 3323,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "before 960 Files revisit",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Files",
+      "y": -365
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 438,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Sounds first visit",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": 81
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Sounds baseline",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Mods first visit",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": 81
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Mods baseline",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Files first visit",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 0,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 711,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Files baseline",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 518,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Files settled baseline",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Sounds restored",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Mods restored",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Files restored",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1337,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "intermediate snapshot-only: after 1200 Files settled restored",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1337,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Sounds first visit",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": 81
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Sounds baseline",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Mods first visit",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": 81
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Mods baseline",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Files first visit",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 0,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 711,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Files baseline",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1009,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Sounds restored",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": -1643
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 1724,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Mods restored",
+    "activeNavigation": {
+      "bottom": 465.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 429.5
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Mods",
+      "y": -996
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2277,
+    "scrollTop": 1077,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Files restored",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1009,
+    "heading": {
+      "text": "Files",
+      "y": -205
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 278,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final resized Files 1200 to 960",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Sounds first visit",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Sounds",
+      "y": 81
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 2776,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Sounds baseline",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Sounds",
+      "y": -1723
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 2776,
+    "scrollTop": 1804,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Mods first visit",
+    "activeNavigation": {
+      "bottom": 389.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 353.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Mods",
+      "y": 81
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 3323,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Mods baseline",
+    "activeNavigation": {
+      "bottom": 389.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 353.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Mods",
+      "y": -1786
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 3323,
+    "scrollTop": 1867,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Files first visit",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 0,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 572,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Files baseline",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1129,
+    "heading": {
+      "text": "Files",
+      "y": -365
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 438,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Sounds restored",
+    "activeNavigation": {
+      "bottom": 324,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 288
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Sounds",
+      "y": -1723
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 2776,
+    "scrollTop": 1804,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Mods restored",
+    "activeNavigation": {
+      "bottom": 389.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Mods",
+      "top": 353.5
+    },
+    "clientHeight": 551,
+    "heading": {
+      "text": "Mods",
+      "y": -1786
+    },
+    "pane": "mods",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 3323,
+    "scrollTop": 1867,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 Files restored",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1129,
+    "heading": {
+      "text": "Files",
+      "y": -365
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 438,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final 960 restored editor revealed by keyboard",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1129,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final resized Files 960 to 1200",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 711,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": 73
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final 1200 Sounds first-visit capture refresh",
+    "activeNavigation": {
+      "bottom": 388,
+      "fullyVisible": true,
+      "navBottom": 715,
+      "navTop": 57,
+      "text": "Sounds",
+      "top": 352
+    },
+    "clientHeight": 711,
+    "heading": {
+      "text": "Sounds",
+      "y": 81
+    },
+    "pane": "sounds",
+    "root": {
+      "scrollWidth": 1200,
+      "scrollY": 0
+    },
+    "scrollHeight": 2757,
+    "scrollTop": 0,
+    "viewport": {
+      "height": 800,
+      "width": 1200
+    }
+  },
+  {
+    "label": "final original resize path Files baseline 960",
+    "activeNavigation": {
+      "bottom": 501.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 465.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": -247
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 320,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final original resize path Files restored 960",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1099,
+    "heading": {
+      "text": "Files",
+      "y": -247
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 320,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final original resize path Files settled 960",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": -247
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 320,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final matched original 960 Files baseline",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": -365
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 438,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  {
+    "label": "final matched original 960 Files restored",
+    "activeNavigation": {
+      "bottom": 425.5,
+      "fullyVisible": true,
+      "navBottom": 555,
+      "navTop": 57,
+      "text": "Files",
+      "top": 389.5
+    },
+    "clientHeight": 551,
+    "editorScrollLeft": 0,
+    "editorScrollTop": 1309,
+    "heading": {
+      "text": "Files",
+      "y": -365
+    },
+    "pane": "files",
+    "root": {
+      "scrollWidth": 960,
+      "scrollY": 0
+    },
+    "scrollHeight": 989,
+    "scrollTop": 438,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  }
+]

@@ -8,7 +8,11 @@ The scope is **all 14 selected existing issues plus the whole-app overhaul track
 
 [Linear project](https://linear.app/rndaom/project/execs-a89f9a30e95c) · [Existing combined plan](https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6) · [Combined local scope](combined-release-plan.md) · [Machine-readable source and status](planning-status.json).
 
-## Follow-up checkpoint — September 22, 2026
+## Current native and reflow checkpoint
+
+Product **6ff6400** adds native zoom and enlarged workspace/menu fixes; **c006dda** preserves the Files editor's scroll across pane navigation. The [current follow-up](native-reflow-follow-up.md) records 1,086 passing automated checks, the exact Sounds → Mods → Files draft/scroll sequence, 27 passing rendered-text contrast samples, Windows preference failure/Retry and inactive profile import/export/restart, and a passed bounded Linux native smoke. Build identities and browser/native limits remain separate. The earlier checkpoint below is retained as history; original acceptance and no-release scope remain unchanged.
+
+## Earlier follow-up checkpoint — September 22, 2026
 
 The follow-up product changes are committed as **44bc5f4f54ba4d41bd9ddd27342223ae08b971da**. This checkpoint records their bounded verification separately from the earlier CI candidate. The five-job result at **542b3dd20f2847fc90a1a4e990584f03830fcc6d** and all original acceptance remain unchanged; it is not a CI result for these later edits.
 

@@ -1,0 +1,314 @@
+[
+  {
+    "name": "No Pyroland",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 266.78125
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-no-pyroland",
+    "workspace": {
+      "height": 311,
+      "top": 1355,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "No soundscapes",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 266.875
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-no-soundscapes",
+    "workspace": {
+      "height": 311,
+      "top": 1421,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "No tutorial",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 266.96875
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-no-tutorial",
+    "workspace": {
+      "height": 311,
+      "top": 1487,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Low memory",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 267.0625
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-lowmem",
+    "workspace": {
+      "height": 311,
+      "top": 1553,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Null-canceling movement",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 266.15625
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-null-canceling-movement",
+    "workspace": {
+      "height": 311,
+      "top": 1620,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Flat mouse",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 266.25
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-flat-mouse",
+    "workspace": {
+      "height": 311,
+      "top": 1686,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Transparent viewmodels",
+    "rect": {
+      "height": 24,
+      "width": 40,
+      "x": 534,
+      "y": 266.34375
+    },
+    "role": "switch",
+    "tag": "BUTTON",
+    "testId": "comfig-addon-transparent-viewmodels",
+    "workspace": {
+      "height": 311,
+      "top": 1752,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Update packages",
+    "rect": {
+      "height": 37.6875,
+      "width": 144.21875,
+      "x": 80,
+      "y": 330.53125
+    },
+    "role": null,
+    "tag": "BUTTON",
+    "testId": "comfig-update",
+    "workspace": {
+      "height": 311,
+      "top": 1852,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Import comfig-custom…",
+    "rect": {
+      "height": 39.6875,
+      "width": 190.125,
+      "x": 232.21875,
+      "y": 221.53125
+    },
+    "role": null,
+    "tag": "BUTTON",
+    "testId": "comfig-import",
+    "workspace": {
+      "height": 311,
+      "top": 1960,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Open extras",
+    "rect": {
+      "height": 39.6875,
+      "width": 129.515625,
+      "x": 430.34375,
+      "y": 221.53125
+    },
+    "role": null,
+    "tag": "BUTTON",
+    "testId": "comfig-extras",
+    "workspace": {
+      "height": 311,
+      "top": 1960,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "comfig.app",
+    "rect": {
+      "height": 19.5,
+      "width": 69.515625,
+      "x": 404.53125,
+      "y": 304.71875
+    },
+    "role": null,
+    "tag": "BUTTON",
+    "testId": null,
+    "workspace": {
+      "height": 311,
+      "top": 1960,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "donate page",
+    "rect": {
+      "height": 19.5,
+      "width": 77.046875,
+      "x": 212.71875,
+      "y": 324.21875
+    },
+    "role": null,
+    "tag": "BUTTON",
+    "testId": null,
+    "workspace": {
+      "height": 311,
+      "top": 1960,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  },
+  {
+    "name": "Check for updates",
+    "rect": {
+      "height": 17.046875,
+      "width": 95.8125,
+      "x": 59.734375,
+      "y": 375.96875
+    },
+    "role": null,
+    "tag": "BUTTON",
+    "testId": "app-update-check",
+    "workspace": {
+      "height": 311,
+      "top": 1960,
+      "width": 536,
+      "x": 64,
+      "y": 57
+    },
+    "geometry": {
+      "height": 400,
+      "htmlHeight": 400,
+      "scrollY": 0
+    }
+  }
+]

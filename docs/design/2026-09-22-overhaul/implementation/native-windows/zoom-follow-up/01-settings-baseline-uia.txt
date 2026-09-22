@@ -1,0 +1,125 @@
+Window: "execs", App: execs.exe.
+	0 window execs Secondary Actions: Raise
+		1 pane
+			2 pane execs
+				3 pane (disabled)
+				4 region execs - Web content
+					5 region
+						6 region
+							7 region
+								8 region
+								9 region
+									10 region
+										11 region
+											12 region
+												13 region
+												14 document execs Value: http://tauri.localhost/ ID: RootWebArea
+													15 group ID: root
+														16 main
+															53 section header
+																54 heading App settings
+																55 text Preferences for execs, across all your profiles.
+																56 text execs 0.2.0
+																57 button Back to setup
+															58 group
+																59 region Appearance
+																	60 heading Appearance ID: app-appearance
+																	61 text Foundry, wherever you play.
+																	62 text Motion
+																	63 group Motion
+																		64 text Motion
+																		65 radio button (selectable, settable, string) Follow system ID: segmented-motion-_r_3_-system
+																		66 radio button (selectable, settable, string) Reduce ID: segmented-motion-_r_3_-reduce
+																	67 text Follow system respects your device’s reduced motion setting. Reduce turns off transitions in execs.
+																68 region Updates
+																	69 heading Updates ID: app-updates
+																	70 text Keep execs up to date.
+																	71 text Check for updates on startup
+																	72 switch (settable, string) Check for updates on startup
+																	73 button Check for updates
+																	74 button Release notes
+																	75 group
+																		76 text Updates install only when you choose Install.
+																77 region TF2 installation
+																	78 heading TF2 installation ID: app-installation
+																	79 text The game folder execs uses.
+																	80 text No TF2 folder confirmed yet.
+																	81 button Find TF2
+																	82 button (disabled) Copy install location
+																		83 group
+																84 region App data
+																	85 heading App data ID: app-storage
+																	86 text Profiles, preferences and logs.
+																	87 text G:\Projects\execs\.artifacts\native-isolation\20260922-130055-rootless-2da135b3\roaming\execs
+																	88 button Copy data location
+																		89 group
+																90 region Support
+																	91 heading Support ID: app-support
+																	92 text Get help or report an issue.
+																	93 button Copy diagnostics
+																		94 group
+																	95 button Report a bug
+																	96 text Diagnostics include your install path and active profile name.
+																	97 details
+																		98 disclosure triangle Credits and third-party notices
+																			99 text Credits and third-party notices
+															32 group Description: execs 0.2.0
+																33 text v0.2.0
+															34 text ·
+															35 button Check for updates
+															36 text ·
+															37 button Report a bug
+															38 text ·
+															39 button Copy diagnostics
+															40 text ·
+															41 button App settings
+															42 text execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+														43 status
+								44 region
+						45 region
+						46 region
+		47 title bar (settable, string) Value: execs
+			48 menu bar System ID: MenuBar
+				49 menu item System
+			50 button Minimize
+			51 button Maximize
+			52 button Close
+
+Document text: ```
+App settings
+Preferences for execs, across all your profiles.
+execs 0.2.0
+Back to setup
+Appearance
+Foundry, wherever you play.
+Motion
+Motion
+￼
+￼
+Follow system respects your device’s reduced motion setting. Reduce turns off transitions in execs.
+Updates
+Keep execs up to date.
+Check for updates on startup
+Check for updates on startup
+Check for updates
+Release notes
+Updates install only when you choose Install.
+TF2 installation
+The game folder execs uses.
+No TF2 folder confirmed yet.
+Find TF2
+Copy install location
+App data
+Profiles, preferences and logs.
+G:\Projects\execs\.artifacts\native-isolation\20260922-130055-rootless-2da135b3\roaming\execs
+Copy data location
+Support
+Get help or report an issue.
+Copy diagnostics
+Report a bug
+Diagnostics include your install path and active profile name.
+Credits and third-party notices
+v0.2.0 · Check for updates · Report a bug · Copy diagnostics · App settings
+execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+￼
+```

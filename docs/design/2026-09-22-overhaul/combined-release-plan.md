@@ -2,7 +2,11 @@
 
 **Foundry selected — September 22, 2026. Implementation underway; no release authorized.** The owner chose Foundry only from the three image-generated alternatives and authorized the whole application and all selected features to be implemented, tested and visually verified with multiple agents. The design-selection gate is satisfied. The combined scope remains all 14 selected existing issues plus the whole-app overhaul. Do not bump product versions, tag or publish. See the [Foundry implementation plan](foundry-implementation-plan.md) and [planning status](planning-status.json) for exact acceptance, source evidence, ownership and open native/platform checks.
 
-## Follow-up checkpoint — September 22, 2026
+## Current native and reflow checkpoint
+
+Product **6ff6400** adds native zoom and enlarged workspace/menu fixes; **c006dda** preserves the Files editor's scroll across pane navigation. The [current follow-up](native-reflow-follow-up.md) records 1,086 passing automated checks, the exact Sounds → Mods → Files draft/scroll sequence, 27 passing rendered-text contrast samples, Windows preference failure/Retry and inactive profile import/export/restart, and a passed bounded Linux native smoke. Build identities and browser/native limits remain separate. The earlier checkpoint below is retained as history; original acceptance and no-release scope remain unchanged.
+
+## Earlier follow-up checkpoint — September 22, 2026
 
 The follow-up product changes are committed as **44bc5f4f54ba4d41bd9ddd27342223ae08b971da**. This checkpoint records their bounded verification separately from the earlier CI candidate. The five-job result at **542b3dd20f2847fc90a1a4e990584f03830fcc6d** and all original acceptance remain unchanged; it is not a CI result for these later edits.
 

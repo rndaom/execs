@@ -1,0 +1,200 @@
+[
+  {
+    "file": "01-sounds-first-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "02-sounds-scrolled-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "03-mods-first-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "04-mods-scrolled-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "05-files-first-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "06-files-draft-selection-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "07-files-scrolled-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "08-sounds-restored-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "09-mods-restored-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "10-files-restored-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "11-files-before-navigation-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "12-files-lost-scroll-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "20-sounds-first-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "21-mods-first-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "22-files-first-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "23-files-baseline-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "24-sounds-restored-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "25-mods-restored-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "26-files-restored-fixed-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "27-files-resize-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "30-sounds-first-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "31-mods-first-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "32-files-first-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "33-files-baseline-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "34-sounds-restored-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "35-mods-restored-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "36-files-restored-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "37-files-editor-restored-fixed-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "38-files-resize-1200.png",
+    "width": 1200,
+    "height": 800,
+    "format": "JPEG"
+  },
+  {
+    "file": "40-resized-files-baseline-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "41-resized-files-restored-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "42-matched-files-baseline-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  },
+  {
+    "file": "43-matched-files-restored-960.png",
+    "width": 960,
+    "height": 640,
+    "format": "JPEG"
+  }
+]

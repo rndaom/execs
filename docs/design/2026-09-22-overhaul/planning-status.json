@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-22T16:49:01.502Z",
+  "updatedAt": "2026-09-22T18:27:46.774Z",
   "purpose": "Current Foundry implementation acceptance, owned work and evidence ledger; integrated and native qualification remain separate.",
   "authorization": {
     "scope": "Foundry only; whole application, all 14 selected issues plus overhaul, multiple implementation agents, tests, visual verification, repository and Linear updates",
@@ -14,8 +14,8 @@
     "direction": "Foundry",
     "ownerSelected": true,
     "designSelectionGate": "satisfied",
-    "implementationStatus": "Foundry development candidate plus completed scoped follow-up product commit 44bc5f4; native/package/engine qualification gaps remain",
-    "verificationStatus": "Historical five-job CI at 542b3dd remains attached to that head. Follow-up code 44bc5f4 has passing local frontend/tooling, final production build and separate bounded E7/F6/7D Windows native scopes; both scoped menu findings are corrected. Final formatting of the last evidence addition is parent-owned. Whole native/package/Cloud/TF2/PresentMon qualification remains open.",
+    "implementationStatus": "Foundry development candidate with native zoom/reflow and Files editor scroll retention committed; remaining native/package/engine acceptance stays open",
+    "verificationStatus": "1,086 local automated tests, TypeScript and production frontend build pass. Named browser scroll/draft sequence and 27 rendered contrast pairs pass. Bounded Windows zoom/preferences/import-export-restart and Linux native launch/zoom/preferences/restart pass with exact recorded build identities. Full installer/Cloud/retail-TF2/PresentMon qualification remains open.",
     "boards": [
       "docs/design/2026-09-22-overhaul/options/01-foundry/01-core.png",
       "docs/design/2026-09-22-overhaul/options/01-foundry/02-customization.png",
@@ -54,7 +54,9 @@
     "note": "Product commit 7c78fbed1907dceb37bf348596fca48a8f654e66 and documentation head 542b3dd20f2847fc90a1a4e990584f03830fcc6d are pushed in draft PR #60. All five CI jobs passed on that exact head; native/package/live acceptance remains open.",
     "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
     "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
-    "pullRequestUrl": "https://github.com/rndaom/execs/pull/60"
+    "pullRequestUrl": "https://github.com/rndaom/execs/pull/60",
+    "currentProductCommit": "c006dda154ddae164ed540beb9df40c28a1d80e6",
+    "currentProductUrl": "https://github.com/rndaom/execs/commit/c006dda154ddae164ed540beb9df40c28a1d80e6"
   },
   "evidencePolicy": {
     "owners": "Assigned by the parent; see each selected issue and overhaul workstreams.",
@@ -105,7 +107,7 @@
       "id": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
       "title": "0.2.0 Foundry implementation and combined release plan",
       "url": "https://linear.app/rndaom/document/020-foundry-implementation-and-combined-release-plan-1fe7c93751c6",
-      "updatedAt": "2026-09-22T14:31:01.052Z"
+      "updatedAt": "2026-09-22T18:28:25.366Z"
     },
     "overhaulIssue": {
       "id": "RND-208",
@@ -4058,6 +4060,194 @@
         "noIssueDone": true,
         "linearUpdatedByLedgerAgent": false,
         "markdownAcceptanceBlocksUnchanged": 14
+      }
+    },
+    "nativeReflowCheckpoint": {
+      "timestamp": "2026-09-22T18:09:48.221Z",
+      "codeCommit": "c006dda154ddae164ed540beb9df40c28a1d80e6",
+      "report": "docs/design/2026-09-22-overhaul/native-reflow-follow-up.md",
+      "status": "bounded Windows/Linux native and browser follow-ups passed; full original acceptance remains open",
+      "checks": {
+        "desktop": 880,
+        "desktopFiles": 104,
+        "cfglint": 160,
+        "tooling": 46,
+        "passed": 1086,
+        "platformSkips": 3,
+        "failures": 0,
+        "typeScript": "passed",
+        "biome": "passed",
+        "importValidatorDataOnlyTests": 17,
+        "productionFrontendBuild": "passed",
+        "biomeFiles": 563,
+        "attribution": "880 desktop and 160 cfglint pass at product c006dda; the complete tooling suite has 46 passes after release-history correction 9d8085c. The history correction changes no runtime product code."
+      },
+      "priorCi": {
+        "head": "6ff64004c4366084d997dba25a9076f61f46fb71",
+        "url": "https://github.com/rndaom/execs/actions/runs/35761390677",
+        "conclusion": "success",
+        "jobs": 5,
+        "scope": "Exact prior native zoom/settings product head; not reassigned to later Files changes."
+      },
+      "browserReflow": {
+        "viewports": ["600x400", "480x320"],
+        "panes": ["Comfig", "Binds", "Files", "Launch"],
+        "report": "docs/design/2026-09-22-overhaul/implementation/zoom-reflow/reflow-qa.md",
+        "nativeClaim": false
+      },
+      "nativeWindows": {
+        "executableSha256": "E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65",
+        "zoomAndRetryReport": "docs/design/2026-09-22-overhaul/implementation/native-windows/zoom-follow-up/README.md",
+        "importExportReport": "docs/design/2026-09-22-overhaul/implementation/native-windows/import-export-follow-up/README.md",
+        "importExportCase": "20260922-131412-inactiveimport-65ffd4ab",
+        "importedPayloadMatches": 10,
+        "exportedPayloadMatches": 10,
+        "unchangedPreExistingFilesExceptIndex": 19,
+        "unchangedFilesAfterReopen": 31,
+        "activeProfileId": null,
+        "exportDestinationCaveat": "Native picker used its default filename despite UIA value change; exact verified ZIP was relocated within the same case, with before/after hashes and original path recorded.",
+        "customExportPathEntryQualified": true,
+        "osTextScalingQualified": false,
+        "packagedInstallerQualified": false,
+        "fullNativeMatrixQualified": false,
+        "correctedErrorCopy": {
+          "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+          "productCommit": "6ff64004c4366084d997dba25a9076f61f46fb71",
+          "case": "20260922-134210-rootless-0c2a95b3",
+          "status": "actual native exclusive-file-lock failure kept exact bytes; corrected app-settings/OS reason; Retry saved requested preference and cleared error; normal exit0",
+          "repeatedZoomOrRestart": false
+        },
+        "customExportPath": {
+          "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+          "case": "20260922-134811-inactivelibrary-55ac7ac8",
+          "method": "Separate coordinate focus, real text entry, Tab, settled path verification, then Save",
+          "exactPayloads": 4,
+          "unchangedOriginalFiles": 20,
+          "unchangedIndex": true,
+          "onlyAddedFile": "exports/keyboard-path-check.zip",
+          "exportSha256": "B72B83E32F47B916390C32B575228BBD8AA6100A3B3828EAB014F6C17D9C3E92",
+          "normalExit": true,
+          "earlierMismatchRetained": true
+        },
+        "schedulingObservation": {
+          "report": "docs/design/2026-09-22-overhaul/implementation/native-windows/import-export-follow-up/metadata/export-path-7d3/process-priority-observation.json",
+          "processPriority": "Normal",
+          "normalThreadCount": 46,
+          "scope": "One foreground-targeted app-process snapshot only; no changed priorities, WebView2 child observation, background comparison or TF2/PresentMon performance conclusion."
+        },
+        "startupVariants": {
+          "report": "docs/design/2026-09-22-overhaul/implementation/native-windows/startup-variants/README.md",
+          "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+          "productCommit": "6ff64004c4366084d997dba25a9076f61f46fb71",
+          "variants": ["UnsetAppData", "MismatchedToken", "MultipleMarkers", "UnreadableMarker"],
+          "nativeDialogsObserved": 4,
+          "fullClipboardDiagnostics": 4,
+          "normalExits": 4,
+          "allSettingsAndMarkersExact": true,
+          "mainWindowOrWebviewObserved": false,
+          "releaseOrLinuxClaim": false
+        }
+      },
+      "linuxNative": {
+        "status": "passed for bounded native smoke scope",
+        "url": "https://github.com/rndaom/execs/actions/runs/35764804171",
+        "report": "docs/design/2026-09-22-overhaul/implementation/linux-native/retry-35763403785.md",
+        "prHead": "c006dda154ddae164ed540beb9df40c28a1d80e6",
+        "testedMerge": "b321d3d0aacc99ab16777cc3c9670b1310f28907",
+        "binarySha256": "f2cda2ec6f81957c9bd4ae2801949d89e72155769565f1c28a61838f9f0288e7",
+        "environment": "Ubuntu22.04 / X11-Xvfb / software rendering / WebKitGTK2.50.4",
+        "acceptedScreenshots": 5,
+        "keyboardZoomPercent": 200,
+        "preferenceRestartPreserved": true,
+        "fixturePreservationPassed": true,
+        "pointerLimit": "Normal-scale pointer passed; WebDriver trusted events at200% landed at half intended coordinates. Physical Linux pointer at200% remains unqualified.",
+        "firstFailedRun": "https://github.com/rndaom/execs/actions/runs/35761390985",
+        "noInstallerOrRelease": true,
+        "earlierAcceptedRun": {
+          "url": "https://github.com/rndaom/execs/actions/runs/35763403785",
+          "prHead": "0687af0e44fed7d1f70bc71b1acbe2475ce897ff",
+          "testedMerge": "9522bd3e1d61f2f10c7e95228a1f12b4ef28a999",
+          "binarySha256": "4d99ade0ca2686045014ae8d03efd6a33b7961c4989e7ec92eb0261a3c5d7ad1"
+        },
+        "allFiveCurrentCandidateScreenshotsInspected": true
+      },
+      "gallery": {
+        "primaryCaptures": 85,
+        "flows": 15,
+        "foundryBoards": 5,
+        "newCapturesAreSupplementary": true
+      },
+      "acceptanceAudit": "docs/design/2026-09-22-overhaul/follow-up-acceptance-audit.md",
+      "linear": {
+        "documentUpdated": true,
+        "priorIntroAndHistoricalContentReadbackExact": true,
+        "issueStatusesChanged": false,
+        "optionalSelectionChanged": false,
+        "updatedAt": "2026-09-22T18:28:25.366Z"
+      },
+      "published": false,
+      "tagged": false,
+      "versionBumped": false,
+      "browserPaneScroll": {
+        "report": "docs/design/2026-09-22-overhaul/implementation/pane-scroll-follow-up/README.md",
+        "status": "passed after Files lifecycle correction",
+        "viewports": ["1200x800", "960x640"],
+        "sequence": ["Sounds", "Mods", "Files"],
+        "retainedDraftBytes": 2470,
+        "retainedDraftSha256": "ffa9a7f314dbf11805e58c834b14a3d17e290e440efe53e90f4e02b34b587024",
+        "selectionPreserved": true,
+        "internalScrollPreserved": true,
+        "nativeClaim": false
+      },
+      "renderedContrast": {
+        "report": "docs/design/2026-09-22-overhaul/implementation/contrast-follow-up/README.md",
+        "samples": 27,
+        "passed": 27,
+        "normalTextThreshold": 4.5,
+        "minimumRatio": 5.4247,
+        "screenshots": 9,
+        "scope": "Actual Chrome computed styles, composed foreground/background layers and listed fixture states only; no native or full accessibility certification."
+      },
+      "ci": {
+        "head": "c006dda154ddae164ed540beb9df40c28a1d80e6",
+        "url": "https://github.com/rndaom/execs/actions/runs/35764804146",
+        "status": "completed",
+        "conclusion": "success",
+        "jobs": [
+          {
+            "name": "rust-windows",
+            "conclusion": "success"
+          },
+          {
+            "name": "inventory-probe (windows-latest)",
+            "conclusion": "success"
+          },
+          {
+            "name": "inventory-probe (ubuntu-22.04)",
+            "conclusion": "success"
+          },
+          {
+            "name": "frontend",
+            "conclusion": "success"
+          },
+          {
+            "name": "rust-linux",
+            "conclusion": "success"
+          }
+        ],
+        "allFivePassed": true
+      },
+      "releaseHistory": {
+        "commit": "9d8085c52b87090efe4418ad90b7faa3b8fd14cc",
+        "publishedSectionsRestored": ["0.1.8", "0.1.7+2"],
+        "source": "immutable v0.1.8:CHANGELOG.md",
+        "shippedDuplicateBulletsRemoved": 5,
+        "previousUpgradeBaseline": "0.1.8",
+        "regressionFailedBeforeAndPassedAfter": true,
+        "toolingPassed": 46,
+        "platformSkips": 3,
+        "productVersionsUnchanged": true,
+        "noTagOrRelease": true
       }
     }
   }

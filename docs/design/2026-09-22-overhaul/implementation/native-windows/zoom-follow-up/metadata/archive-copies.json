@@ -1,0 +1,315 @@
+{
+  "collectedUtc": "2026-09-22T17:22:36.0154617Z",
+  "note": "Executed disposable rootless fixture records and current reusable local helper scripts. Source and archive hashes are separate because text is normalized. Runtime caches, executable binaries and real player data are not copied. Helper snapshots are recorded at collection; historical per-session script hashes were not captured.",
+  "files": [
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\Start-IsolatedExecs.ps1",
+      "archivedRelativePath": "reproduction/Start-IsolatedExecs.ps1",
+      "sourceSha256": "3D52CC96545BAD1037D735B9B30398E473F90ECC4B7F34DF31B49120396790E5",
+      "archivedSha256": "3D52CC96545BAD1037D735B9B30398E473F90ECC4B7F34DF31B49120396790E5",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\Lock-FixtureSettings.ps1",
+      "archivedRelativePath": "reproduction/Lock-FixtureSettings.ps1",
+      "sourceSha256": "CDF71C3EB79B6ACE0CB75BEF93406A160DE7D766710684AD8BF2D2FAF4E969C1",
+      "archivedSha256": "CDF71C3EB79B6ACE0CB75BEF93406A160DE7D766710684AD8BF2D2FAF4E969C1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\request.json",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/request.json",
+      "sourceSha256": "1463EF05F817D0086A3EC361F4475022066A80B023D6B1979FCE809C7F4CBDD8",
+      "archivedSha256": "E70777E0D5FD40FFF4149E03D4F874CAD4C49F2E891FBE35CC9D7EBECAC6247F",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/bootstrap.json",
+      "sourceSha256": "63A9D3BAF52F1F85B07246204B71124CB29AE6F2A410E4A59D5855BB219DFCEF",
+      "archivedSha256": "8EA4CD8F7607331A1A2E2F40666BA6C8188DCD671C9AB13D28642C963BCB40A0",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\launch.json",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/launch.json",
+      "sourceSha256": "128DCCE2DD079725E041ACB4A09218F14D70613A64150AC0793A5439C74C9683",
+      "archivedSha256": "E227E939182F012CE19B170CAB50571C7826158974DED8E09286F70F5DB76B3D",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\exit.json",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/exit.json",
+      "sourceSha256": "CD02A77306C47B8AF62D2C2D8658B173BB4032419206076DEB8178C5D5269BE0",
+      "archivedSha256": "AF8B72DD9AC99266A16366E9D56E5807A144A35D139F7CF6D298FFC739A5C446",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/webview-processes.json",
+      "sourceSha256": "D2D87990235A60AD8573F1EA89A2C03A8ABD7D18A40B8FAE41494C866B0888E7",
+      "archivedSha256": "4E49AB57B3CF24115A481E66717E445A3A02B9F14185072E23D2143CA954E88F",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-130055-rootless-2da135b3/settings-after-close.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\request.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/request.json",
+      "sourceSha256": "7960FCC2AE57EC1C0107830D87A5079A40C820BADDC2E3652D69A05D1ABFD4DF",
+      "archivedSha256": "7AA7A8F9A3DCAB6528882E7A939DA4AE3E30E2EF43B446138C3292BF2F64F1C1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\session-01\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/session-01/bootstrap.json",
+      "sourceSha256": "D4398E4B956B7C926ACD2B2A93E9078D6950671628CE8BA6F521B4D00AC68ECE",
+      "archivedSha256": "21EE9BB9B60FD0349EFFA8DFF86BF663FD5D701DC010B4637A5C3625B191A63F",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/bootstrap.json",
+      "sourceSha256": "15DF9D5572F353D31FA18EA1CD1D555B309856F925BC408882720A1D8F1814DE",
+      "archivedSha256": "3B0D1C38A42608D4BC7EDA88B93760190CDBDEFCD452D8BE33B770A9747B7AB0",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\session-01\\launch.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/session-01/launch.json",
+      "sourceSha256": "93DA51D34BE8FD4EA9EB03D1431F1428851FCC4B756EB38EA4FEF7B8BB987081",
+      "archivedSha256": "83FCA6C94560906F9C539714F4F3ABDB3C4D4EC38DA9CFF749F1503C6A84A977",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\launch.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/launch.json",
+      "sourceSha256": "6928F7248BB061FA0D28ADCC1BF3E2AEC8050D544CB5AFA1AADA90175AE2E1BA",
+      "archivedSha256": "D9708F5FDC83AF00E19FC0AF635DEFDAF32454BF8F0878CB64B65322131780F1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\session-01\\exit.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/session-01/exit.json",
+      "sourceSha256": "6A8B2560B50A8922B5DE4DDA55005B6F8271E463897A5ABC34B6A3858300C043",
+      "archivedSha256": "AACBA0645B7B10941598660363DAE5E49BDA59F4DC305EF36302B8F38B0DAAD1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\exit.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/exit.json",
+      "sourceSha256": "8CEB03C93E2C683ACF8636B61B3F798FFAE04956DB6A4BEAB789255E472FF2A2",
+      "archivedSha256": "9EE5F579A573348F86A7DA3A69205E541AB1374840EA02A1FEA96E47ACA2B249",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\session-01\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/session-01/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\session-01\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/session-01/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\session-01\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/session-01/webview-processes.json",
+      "sourceSha256": "9B8848A6E5992B5BB7DAC92BD1D8617046837A212DDD1606CAE4096A44B9719D",
+      "archivedSha256": "AF884714D140FD9E058A1B9F1E8C984E2BA3340122AA718E95782CDBEF382EB2",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/webview-processes.json",
+      "sourceSha256": "26432504FB5D82DCB350ED6179C32D6F7F8043E9E3A4E793F981B2ABB45734EC",
+      "archivedSha256": "938C294413A2C11993DC6CA8C27F449488C09FE2A00B5EC41FC39293F6F823DD",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-before-failure.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/settings-before-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-after-failure.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/settings-after-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-after-retry.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/settings-after-retry.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "archivedSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-lock.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/settings-lock.json",
+      "sourceSha256": "F9888BE90067FC0CB7F5DC70B1AD0321C64E69C016D3A29E626C6230BCD9FF78",
+      "archivedSha256": "B8569630FB0F62580FD26D0719B8308185E2761444F86D1C6D06D7D34E7A01D7",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-lock-released.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/settings-lock-released.json",
+      "sourceSha256": "4CED507F2A4347915A8DAE7349A39A4BC95D0C425373832663B27CDD72CE4BF6",
+      "archivedSha256": "18A6DF33DFAA7C9D7FEF60FEBA8AC7F6B3D1C03A97112997694338EAD40130AB",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\release-settings-lock",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/release-settings-lock",
+      "sourceSha256": "A4D451EC23463726F72C43D64C710968F6B602CD653B4DE8ADEE1B556240A829",
+      "archivedSha256": "3933E3274B63DC01FD286D6D939A626867C83A4603FC4347E0F8B8856F1B98FD",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-130804-rootless-4ed33d3a/reopened-session/settings-after-close.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "archivedSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\request.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/request.json",
+      "sourceSha256": "FEAA4B5E5EC1D8C8668E05DDBC87B3FC4ECC7F860A7E00856C3DB7B004ED4A6F",
+      "archivedSha256": "BF2973D57461BE0AFD5046C4DD0F5B86407D2646D3479BFA977B2C93C4ABE2DF",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/bootstrap.json",
+      "sourceSha256": "B3B4E66134AD88F1468C021F35E0BD1B65701D5C3BAA4D691303B86380078198",
+      "archivedSha256": "ADBE93338ED190BA8CBD88600E77F5F2E13F6F7D9BD6CCCE388CE629902FA84F",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\launch.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/launch.json",
+      "sourceSha256": "F63982EDAD3F67433FB1E7611E3DD87C85FDA91DF3CFE7A3815CCDFB6864A662",
+      "archivedSha256": "C78427DAA0F0E97E76E61CECC37D10A09408C22256A23855182AC274DF0D731B",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\exit.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/exit.json",
+      "sourceSha256": "6D1F6424C73136C8C405E35EA792CABCBFF0431D4841859A8183E769BFC130F7",
+      "archivedSha256": "8A3D5B5BA9C6BB4C1B4906972BD861EFDC836E06B1D25F0902693E545E8C0CB8",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/webview-processes.json",
+      "sourceSha256": "197FF6CA244DB1C2CD48D106601E2C9F57A020C9AB21F7B71D69C3C3264E4A8D",
+      "archivedSha256": "F1D367109167BC6FC29FFEFDB7A5C4ED97980F7CB5AE0B42FF305687A2F87B20",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-before-failure.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/settings-before-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-after-failure.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/settings-after-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-after-retry.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/settings-after-retry.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "archivedSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-lock.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/settings-lock.json",
+      "sourceSha256": "79B3D155CCF5A5ED6BC0B1FD3A8B90373C5A4C2FFF0C1B80213DC98840EB089A",
+      "archivedSha256": "1776EACB7DC1179A89A3436B91D804898DC604242F6FFCF9BB99662504B5979C",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-lock-released.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/settings-lock-released.json",
+      "sourceSha256": "F4EFA042786228A80AC6251E5FE508BBE5EB8742488ED01B0805ABF91EB3C72A",
+      "archivedSha256": "19A9247E9DF677920E16646A5D7E357DE0536CB35D8FECC441280F18AB55BAFE",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\release-settings-lock",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/release-settings-lock",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-134210-rootless-0c2a95b3/settings-after-close.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "archivedSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text retained; archived text is not asserted byte-identical to the source."
+    }
+  ],
+  "lastExtendedUtc": "2026-09-22T17:48:59.0821095Z"
+}

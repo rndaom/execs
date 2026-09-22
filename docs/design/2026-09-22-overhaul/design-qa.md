@@ -4,7 +4,11 @@ September 22, 2026. **Implemented development candidate; browser QA passed withi
 
 The product implementation is committed as `7c78fbed1907dceb37bf348596fca48a8f654e66` on `rndaom/foundry-overhaul`, building on `e1fecdaaf4de2c7257eb2dbe875ac45f22ee4dcc` and the shipped 0.1.8 Mods foundation. The original 67 captures/66 accepted screenshots and 15 generated boards remain the dated design exploration. Current implementation captures are under `implementation/`; reference comparisons use all five `options/01-foundry` boards.
 
-## Follow-up checkpoint — September 22, 2026
+## Current native and reflow checkpoint
+
+Product **6ff6400** adds native zoom and enlarged workspace/menu fixes; **c006dda** preserves the Files editor's scroll across pane navigation. The [current follow-up](native-reflow-follow-up.md) records 1,086 passing automated checks, the exact Sounds → Mods → Files draft/scroll sequence, 27 passing rendered-text contrast samples, Windows preference failure/Retry and inactive profile import/export/restart, and a passed bounded Linux native smoke. Build identities and browser/native limits remain separate. The earlier checkpoint below is retained as history; original acceptance and no-release scope remain unchanged.
+
+## Earlier follow-up checkpoint — September 22, 2026
 
 The follow-up product changes are committed as **44bc5f4f54ba4d41bd9ddd27342223ae08b971da**. This checkpoint records their bounded verification separately from the earlier CI candidate. The five-job result at **542b3dd20f2847fc90a1a4e990584f03830fcc6d** and all original acceptance remain unchanged; it is not a CI result for these later edits.
 

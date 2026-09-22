@@ -1,0 +1,12 @@
+{
+  "browser": "Chrome through CUA extension",
+  "version": "Not read by this audit",
+  "viewportOverrideApplied": false,
+  "fontFamily": "Inter, ui-sans-serif, sans-serif",
+  "observedAt": "2026-09-22T17:55:09.763Z",
+  "viewport": {
+    "dpr": 1,
+    "height": 889,
+    "width": 1920
+  }
+}
