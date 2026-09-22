@@ -45,9 +45,6 @@ User-facing changes only. The release workflow publishes the matching
 - Inventory preview: identify war paints, killstreak kit targets and fabricator
   outputs, including available wear, sheen and effect names. Preview installed
   war-paint pattern swatches without implying a rendered weapon or wear preview.
-- Mods: open on GameBanana browsing and organize Browse, Installed and Casual setup as separate
-  tasks. Results expose clearer source details, honest paging, refresh and retry controls, and one
-  import flow for archives, VPKs or extracted folders.
 
 ### Fixed
 
@@ -76,14 +73,37 @@ User-facing changes only. The release workflow publishes the matching
 - Keep Casual preload console history, remove an invalid post-disconnect script call, and avoid
   duplicate managed launch hooks. The supported offline preload step remains explicit.
 - Correct installer, platform and Casual compatibility descriptions in the README and promo.
+- Releases: restore published changelog entries so upgrade validation starts from the correct
+  previous public version.
+- Profiles: retain saved particle selections when repairing custom folder names,
+  including profiles that are not active.
+- Profiles: switch shared preloader selections with the target profile.
+
+## [0.1.8] - 2026-09-20
+
+### Added
+
+- Mods: open on GameBanana browsing and organize Browse, Installed and Casual setup as separate
+  tasks. Results expose clearer source details, honest paging, refresh and retry controls, and one
+  import flow for archives, VPKs or extracted folders.
+
+### Fixed
+
 - Mods: preserve GameBanana's global search and ranking order, distinguish added and updated dates,
   report unavailable metrics without inventing zeroes, and recover from hidden or failed category
   loads without stale results taking over the current request.
 - Mods: refuse direct or absorbed removal of an active profile's selected particle-source mod until
   its selection is changed, without modifying the profile, preload state, snapshots or VPK directory.
-- Profiles: retain saved particle selections when repairing custom folder names,
-  including profiles that are not active.
-- Profiles: switch shared preloader selections with the target profile.
+- Releases: compare profile compatibility against the actual public 0.1.7 Hotfix 2 core instead of
+  the older 0.1.6 baseline.
+
+## [0.1.7+2] - 2026-09-20
+
+0.1.7 Hotfix 2. Installs through the normal updater and keeps the displayed
+product version at 0.1.7. Existing profiles and exports remain supported.
+
+### Fixed
+
 - Files: replace the stacked disclosure page with a quiet editor workspace: a persistent file list,
   one stable editor, one Save action, and Problems, Help and file details available on demand. File
   paths stay out of the way, and New cfg now asks only when the file should run before showing

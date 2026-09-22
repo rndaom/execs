@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { publicProfileFixture } from "./package-smoke-fixture.mjs";
 import { releaseNotesFromChangelog } from "./release-notes.mjs";
 import {
   parseReleaseVersion,
@@ -266,6 +267,29 @@ test("updater history selects the immediately preceding stable release or numeri
         `${current} after ${previous}`,
       );
     }
+  } finally {
+    removeFixture(root);
+  }
+});
+
+test("repository release history selects the public version used by the package fixture", () => {
+  const root = mkdtempSync(join(tmpdir(), "execs-release-repo-history-"));
+  try {
+    const version = JSON.parse(
+      readFileSync(new URL("../apps/desktop/package.json", import.meta.url), "utf8"),
+    ).version;
+    const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+    // Rehearse freezing development notes without changing the real changelog.
+    const candidate = changelog.includes(`## [${version}]`)
+      ? changelog
+      : changelog.replace(/^## \[Unreleased\][ \t]*\r?$/m, `## [${version}]`);
+    writeProductVersion(root, version);
+    writeFileSync(join(root, "CHANGELOG.md"), candidate);
+    assert.equal(
+      `v${previousReleaseVersion(root, releaseVersion(root))}`,
+      publicProfileFixture.exporterTag,
+      "The upgrade source and tagged profile fixture must cover the same previous public release",
+    );
   } finally {
     removeFixture(root);
   }
