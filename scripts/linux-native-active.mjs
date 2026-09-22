@@ -131,7 +131,15 @@ export async function main() {
   }
 
   async function closeRequest(label, expectDialog = true) {
-    const trace = requestOwnedNativeClose(session.nativeProcess, runtime.binary, childEnv);
+    const trace = requestOwnedNativeClose(
+      session.nativeProcess,
+      runtime.binary,
+      childEnv,
+      (observation) => {
+        report.checks.push({ label: `${label}-x11-${observation.mode}`, observation });
+        saveReport();
+      },
+    );
     report.checks.push({ label, closeRequest: trace });
     saveReport();
     if (!expectDialog) return;

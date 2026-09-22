@@ -3,11 +3,13 @@ import { execFileSync, spawn } from "node:child_process";
 import { createWriteStream, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join, posix } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { regularFile, requireContained, sha256 } from "./development-package-guard.mjs";
 import {
   ownedNativeProcessExited,
   parseOwnedProcessRows,
   requestOwnedNativeClose,
+  selectOwnedMainWindow,
   verifyOwnedNativeProcess,
   X11_CLOSE_HELPER,
 } from "./linux-native-active-close.mjs";
@@ -38,16 +40,115 @@ async function freePort() {
   return port;
 }
 
-export function selectOwnedDialog(observation, pid, title) {
+function dialogWindows(observation, pid, title) {
   assert.ok(Number.isInteger(pid) && pid > 1);
   assert.ok(["Export profile", "Import profile"].includes(title));
-  const matches = observation.windows.filter(
-    (window) => window.pid === pid && window.title === title && window.deleteProtocol,
+  assert.equal(observation.pid, pid, "Dialog inspection returned a different process");
+  assert.ok(Array.isArray(observation.windows) && observation.windows.length <= 128);
+  assert.ok(Array.isArray(observation.treeWindowIds) && observation.treeWindowIds.length <= 4096);
+  assert.ok(observation.treeWindowIds.every((id) => Number.isSafeInteger(id) && id > 0));
+  assert.equal(new Set(observation.treeWindowIds).size, observation.treeWindowIds.length);
+  const windows = observation.windows;
+  assert.equal(new Set(windows.map(({ id }) => id)).size, windows.length, "Duplicate X11 IDs");
+  for (const window of windows) {
+    assert.ok(Number.isSafeInteger(window.id) && window.id > 0);
+    assert.ok(
+      observation.treeWindowIds.includes(window.id),
+      "Candidate is outside observed X tree",
+    );
+    assert.equal(window.pid, pid, "Dialog inspection contains a foreign process");
+    assert.equal(window.deleteProtocol, true, "Dialog inspection lost close-protocol identity");
+    assert.ok([0, 1, 2].includes(window.mapState), "Unknown X11 map state");
+  }
+  return { windows, main: selectOwnedMainWindow(observation, { pid }) };
+}
+
+function assertDialogShape(window, main) {
+  assert.equal(window.windowClass, 1, "GTK dialog must be an InputOutput window");
+  assert.equal(window.overrideRedirect, false, "GTK dialog overrides window management");
+  assert.equal(window.root, main.root, "GTK dialog is on another root");
+  assert.equal(window.parent, window.root, "GTK dialog is not an ordinary root child");
+  assert.ok(
+    window.transientFor === null || window.transientFor === main.id,
+    "GTK dialog has an unknown transient parent",
   );
-  assert.equal(matches.length, 1, `Expected one owned ${title} GTK dialog`);
-  const id = matches[0].id;
-  assert.ok(Number.isSafeInteger(id) && id > 0);
-  return matches[0];
+  assert.ok(
+    Number.isSafeInteger(window.geometry?.width) &&
+      window.geometry.width > 0 &&
+      Number.isSafeInteger(window.geometry?.height) &&
+      window.geometry.height > 0,
+    "GTK dialog has no positive geometry",
+  );
+}
+
+export function selectOwnedDialog(observation, pid, title, { allowAbsent = false } = {}) {
+  const { windows, main } = dialogWindows(observation, pid, title);
+  const matches = windows.filter((window) => window.title === title && window.mapState === 2);
+  assert.ok(matches.length <= 1, `Ambiguous owned ${title} GTK dialogs`);
+  const dialog = matches[0];
+  assert.ok(
+    windows.every((window) => window.mapState !== 2 || [main.id, dialog?.id].includes(window.id)),
+    "Unexpected visible owned window during GTK dialog selection",
+  );
+  if (!dialog) {
+    assert.ok(allowAbsent, `Expected one viewable owned ${title} GTK dialog`);
+    return null;
+  }
+  assertDialogShape(dialog, main);
+  return { ...dialog, mainWindowId: main.id };
+}
+
+/** GTK responds by hiding its dialog; a retained XID is not an open dialog. */
+export function ownedDialogDismissal(observation, pid, dialog) {
+  assert.equal(dialog.pid, pid);
+  assert.equal(dialog.mapState, 2, "A dialog must have been observed viewable before input");
+  const { windows, main } = dialogWindows(observation, pid, dialog.title);
+  assert.equal(main.id, dialog.mainWindowId, "Owned main window changed during GTK interaction");
+  assertDialogShape(dialog, main);
+  const current = windows.find(({ id }) => id === dialog.id);
+  assert.ok(
+    windows.every((window) => window.mapState !== 2 || [main.id, dialog.id].includes(window.id)),
+    "Another visible owned window prevents proving GTK dialog dismissal",
+  );
+  if (!current) {
+    assert.ok(
+      !observation.treeWindowIds.includes(dialog.id),
+      "Original GTK XID remains in tree without verified ownership/protocol identity",
+    );
+    return { state: "absent-from-observed-tree", dialogId: dialog.id, mainWindowId: main.id };
+  }
+  for (const key of [
+    "pid",
+    "title",
+    "deleteProtocol",
+    "windowClass",
+    "overrideRedirect",
+    "root",
+    "parent",
+    "transientFor",
+  ])
+    assert.equal(current[key], dialog[key], `GTK dialog identity changed: ${key}`);
+  assertDialogShape(current, main);
+  assert.notEqual(current.mapState, 1, "Ancestor-unviewable is not an unmapped GTK dialog");
+  return current.mapState === 0
+    ? { state: "unmapped", dialogId: dialog.id, mainWindowId: main.id }
+    : null;
+}
+
+/** Missing/unchanged state can settle; ownership or ambiguity errors are fatal. */
+export async function waitForDialogState(
+  label,
+  inspect,
+  decide,
+  { timeout = 15_000, now = Date.now, pause = delay } = {},
+) {
+  const deadline = now() + timeout;
+  do {
+    const result = decide(inspect());
+    if (result) return result;
+    await pause(Math.min(150, Math.max(0, deadline - now())));
+  } while (now() < deadline);
+  throw new Error(`Timed out: ${label}`);
 }
 
 export function verifyAppImageMount(executable, temporaryDirectory, mountInfo) {
@@ -278,54 +379,102 @@ export class DevelopmentPackageSession {
   async chooseFile(title, path, label) {
     requireContained(this.fixture.scratch, path);
     assert.match(path, /^[\x20-\x7E]+$/u);
+    assert.match(label, /^[a-z0-9-]+$/);
+    const receipt = {
+      label,
+      title,
+      requestedPath: path,
+      process: this.native,
+      status: "observing",
+      input: "XTest keys to verified viewable owned GTK window",
+      proofRequired: "Exact requested file and independent archive/fixture checks",
+      observations: [],
+      captures: [],
+    };
+    this.report.dialogs ??= [];
+    this.report.dialogs.push(receipt);
+    let lastObservation;
+    let phase = "awaiting-dialog";
     const inspect = () => {
       verifyOwnedNativeProcess(this.native, this.native.executable);
-      return JSON.parse(
+      const observation = JSON.parse(
         execFileSync("python3", ["-c", X11_CLOSE_HELPER, String(this.native.pid), "inspect"], {
           env: this.childEnv,
           encoding: "utf8",
           timeout: 5_000,
         }),
       );
+      const serialized = JSON.stringify({ phase, observation });
+      if (serialized !== lastObservation) {
+        assert.ok(receipt.observations.length < 128, "Unbounded GTK dialog state changes");
+        receipt.observations.push({ at: new Date().toISOString(), phase, ...observation });
+        lastObservation = serialized;
+        this.saveReport();
+      }
+      return observation;
     };
-    const dialog = await waitUntil(`owned ${title} dialog`, () =>
-      selectOwnedDialog(inspect(), this.native.pid, title),
-    );
     const xdo = (args) =>
       execFileSync("xdotool", args, { env: this.childEnv, encoding: "utf8", timeout: 5_000 });
-    const verifyFocus = () => {
-      assert.equal(selectOwnedDialog(inspect(), this.native.pid, title).id, dialog.id);
-      assert.equal(
-        Number(xdo(["getwindowfocus"]).trim()),
-        dialog.id,
-        "File dialog lost native keyboard focus",
+    try {
+      const dialog = await waitForDialogState(`owned ${title} dialog`, inspect, (observation) =>
+        selectOwnedDialog(observation, this.native.pid, title, { allowAbsent: true }),
       );
-    };
-    xdo(["windowfocus", "--sync", String(dialog.id)]);
-    verifyFocus();
-    execFileSync(
-      "import",
-      ["-window", String(dialog.id), join(this.evidence, `${label}-dialog.png`)],
-      { env: this.childEnv, timeout: 5_000 },
-    );
-    xdo(["key", "--clearmodifiers", "ctrl+l"]);
-    verifyFocus();
-    xdo(["key", "--clearmodifiers", "ctrl+a"]);
-    xdo(["type", "--clearmodifiers", "--delay", "1", "--", path]);
-    verifyFocus();
-    xdo(["key", "--clearmodifiers", "Return"]);
-    await waitUntil(
-      "file dialog accepts the exact owned path",
-      () => !inspect().windows.some((window) => window.id === dialog.id),
-    );
-    this.report.checks.push({
-      label,
-      dialog,
-      requestedPath: path,
-      input: "XTest keys to verified owned GTK window",
-      actualFileVerifiedSeparately: true,
-    });
-    this.saveReport();
+      receipt.dialog = dialog;
+      const verifyFocus = () => {
+        const current = selectOwnedDialog(inspect(), this.native.pid, title);
+        assert.equal(current.id, dialog.id);
+        assert.equal(current.mainWindowId, dialog.mainWindowId);
+        assert.equal(
+          Number(xdo(["getwindowfocus"]).trim()),
+          dialog.id,
+          "File dialog lost native keyboard focus",
+        );
+      };
+      const input = (nextPhase, args) => {
+        phase = nextPhase;
+        verifyFocus();
+        xdo(args);
+      };
+      const capture = (suffix) => {
+        verifyFocus();
+        const file = `${label}-${suffix}.png`;
+        const destination = join(this.evidence, file);
+        execFileSync("import", ["-window", String(dialog.id), destination], {
+          env: this.childEnv,
+          timeout: 5_000,
+        });
+        receipt.captures.push({ file, sha256: sha256(regularFile(destination, 16 * 1024 * 1024)) });
+        this.saveReport();
+      };
+      phase = "focus-dialog";
+      assert.equal(selectOwnedDialog(inspect(), this.native.pid, title).id, dialog.id);
+      xdo(["windowfocus", "--sync", String(dialog.id)]);
+      capture("dialog");
+      input("open-location-entry", ["key", "--clearmodifiers", "ctrl+l"]);
+      input("select-location-entry", ["key", "--clearmodifiers", "ctrl+a"]);
+      input("type-owned-path", ["type", "--clearmodifiers", "--delay", "1", "--", path]);
+      capture("path");
+      input("accept-path", ["key", "--clearmodifiers", "Return"]);
+      phase = "awaiting-dismissal";
+      receipt.dismissal = await waitForDialogState(
+        "owned GTK dialog becomes unmapped or absent after native input",
+        inspect,
+        (observation) => ownedDialogDismissal(observation, this.native.pid, dialog),
+      );
+      receipt.status = "dismissed-awaiting-file-proof";
+      this.saveReport();
+    } catch (cause) {
+      receipt.status = "failed";
+      receipt.error = cause.stack ?? String(cause);
+      try {
+        this.saveReport();
+      } catch (saveError) {
+        throw new AggregateError([cause, saveError], "GTK action and evidence write failed", {
+          cause,
+        });
+      }
+      throw cause;
+    }
   }
 
   async exportPrevious(path, profileName) {

@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
-import { parseOwnedProcessRows, X11_CLOSE_HELPER } from "./linux-native-active-close.mjs";
+import {
+  parseOwnedProcessRows,
+  selectOwnedMainWindow,
+  X11_CLOSE_HELPER,
+  X11_MAIN_WINDOW_SELECTOR,
+} from "./linux-native-active-close.mjs";
 import {
   assertEditorRetained,
   copyEditorText,
@@ -257,6 +262,124 @@ test("close ownership selects exactly one native process from the owned driver g
   assert.throws(() => parseOwnedProcessRows(`${table} 104 100 execs\n`, 100), /exactly one/);
   assert.throws(() => parseOwnedProcessRows("1 100 execs\n", 100));
   assert.throws(() => parseOwnedProcessRows(table, 1));
+});
+
+const ownedMainWindow = {
+  id: 400,
+  pid: 103,
+  title: "execs",
+  deleteProtocol: true,
+  protocolAtoms: [10, 11],
+  mapState: 2,
+  windowClass: 1,
+  overrideRedirect: false,
+  parent: 100,
+  root: 100,
+  transientFor: null,
+  classHint: { name: "execs", class: "execs" },
+  geometry: { x: 0, y: 0, width: 1200, height: 800, borderWidth: 0, depth: 24 },
+};
+const nonMainWindowPatches = [
+  { pid: 104 },
+  { title: "toolkit helper" },
+  { deleteProtocol: false },
+  { mapState: 0 },
+  { mapState: 1 },
+  { windowClass: 2 },
+  { overrideRedirect: true },
+  { parent: 200 },
+  { transientFor: 400 },
+  { geometry: { ...ownedMainWindow.geometry, width: 0 } },
+  { geometry: { ...ownedMainWindow.geometry, height: 0 } },
+];
+
+test("native close selects one viewable main window while retaining unmapped candidate evidence", () => {
+  const identity = { pid: 103, processGroup: 100, executable: "/owned/execs", startTime: "42" };
+  const windows = [
+    { ...ownedMainWindow, id: 401, mapState: 0 },
+    ownedMainWindow,
+    { ...ownedMainWindow, id: 402, mapState: 1 },
+  ];
+  const observations = [];
+  // A window without the owned PID or close protocol is still present in the tree.
+  const treeWindowIds = [100, 400, 401, 402, 900];
+  const selected = selectOwnedMainWindow(
+    { pid: 103, mode: "inspect", windows, treeWindowIds },
+    identity,
+    (value) => observations.push(value),
+  );
+  assert.equal(selected.id, 400);
+  assert.deepEqual(selected.rejectionReasons, []);
+  assert.deepEqual(observations[0].process, identity);
+  assert.equal(observations[0].windows.length, 3);
+  assert.deepEqual(observations[0].treeWindowIds, treeWindowIds);
+  assert.equal(
+    observations[0].windows.some((window) => window.id === 900),
+    false,
+  );
+  assert.match(observations[0].windows[0].rejectionReasons.join(" "), /Not viewable/);
+  assert.deepEqual(observations[0].windows[0].geometry, ownedMainWindow.geometry);
+});
+
+test("native close refuses ambiguous visible windows and every incomplete main-window proof", () => {
+  const identity = { pid: 103 };
+  const ambiguous = [ownedMainWindow, { ...ownedMainWindow, id: 401 }];
+  let retained;
+  assert.throws(
+    () =>
+      selectOwnedMainWindow({ pid: 103, windows: ambiguous }, identity, (value) => {
+        retained = value;
+      }),
+    /single viewable owned main/,
+  );
+  assert.equal(retained.windows.length, 2);
+  assert.ok(retained.windows.every((window) => window.rejectionReasons.length === 0));
+  for (const patch of nonMainWindowPatches) {
+    assert.throws(
+      () =>
+        selectOwnedMainWindow({ pid: 103, windows: [{ ...ownedMainWindow, ...patch }] }, identity),
+      /single viewable owned main/,
+    );
+  }
+  assert.throws(
+    () => selectOwnedMainWindow({ pid: 104, windows: [ownedMainWindow] }, identity),
+    /different process/,
+  );
+  assert.throws(
+    () => selectOwnedMainWindow({ pid: 103, windows: [] }, identity),
+    /single viewable owned main/,
+  );
+});
+
+test("Python's pre-send X11 selector applies the same owned visible-window safety cases", {
+  skip: process.platform !== "linux",
+}, () => {
+  const cases = [
+    [ownedMainWindow, { ...ownedMainWindow, id: 401, mapState: 0 }],
+    [ownedMainWindow, { ...ownedMainWindow, id: 401 }],
+    ...nonMainWindowPatches.map((patch) => [{ ...ownedMainWindow, ...patch }]),
+  ];
+  const result = spawnSync(
+    "python3",
+    [
+      "-c",
+      `${X11_MAIN_WINDOW_SELECTOR}
+import json, sys
+print(json.dumps([[w['id'] for w in eligible_main_windows(windows, 103)] for windows in json.load(sys.stdin)]))`,
+    ],
+    {
+      input: JSON.stringify(cases),
+      encoding: "utf8",
+      timeout: 5_000,
+    },
+  );
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), [
+    [400],
+    [400, 401],
+    ...nonMainWindowPatches.map(() => []),
+  ]);
 });
 
 test("active runner refuses non-Linux, non-CI and self-hosted environments before process access", () => {

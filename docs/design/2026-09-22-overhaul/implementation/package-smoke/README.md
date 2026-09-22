@@ -2,7 +2,7 @@
 
 2026-09-22. The package harness now checks realistic, bounded profile data preservation. **No installer, package workflow, desktop app, Steam or TF2 was run for this work.** RND-251's packaged runtime, rendered-webview and UI round-trip requirements remain open.
 
-Later checkpoint: a separate [Linux development package workflow and native harness](development-implementation.md) now implements unsigned AppImage/Debian package qualification for review. It has not run on a hosted worker; Windows remains unimplemented there. The existing signed release harness and the historical validation below remain unchanged.
+Later checkpoint: the separate [Linux development package workflow and native harness](development-implementation.md) has now run on a hosted worker. [Run 35777278336](run-35777278336/README.md) passes optimized AppImage/Debian builds and authentic old-AppImage startup/read, then stops during native Export at its GTK dialog-destruction wait. A file at the exact export path was observed but its payload was not inspected; candidate runtime, Debian runtime and the round trip remain unverified. The [Windows hosted route](windows-automation-research.md) is being implemented separately. The existing signed release harness and the historical validation below retain their own scope and results.
 
 ## Problem and implemented checks
 

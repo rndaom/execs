@@ -26,8 +26,10 @@ import {
 } from "./development-package-guard.mjs";
 import {
   DevelopmentPackageSession,
+  ownedDialogDismissal,
   selectOwnedDialog,
   verifyAppImageMount,
+  waitForDialogState,
 } from "./development-package-native.mjs";
 import {
   assertNoPlayerProcesses,
@@ -171,16 +173,177 @@ test("package authenticity refuses tampered downloaded bytes before any executab
     assert.throws(() => regularFile(join(root, "fixture.deb"), 2), /size/);
   }));
 
-test("GTK dialog selection refuses a foreign PID, ambiguous window or different title", () => {
-  const window = { id: 123, pid: 700, title: "Export profile", deleteProtocol: true };
-  assert.equal(selectOwnedDialog({ windows: [window] }, 700, "Export profile").id, 123);
-  assert.throws(() => selectOwnedDialog({ windows: [window] }, 701, "Export profile"));
+const mainWindow = {
+  id: 100,
+  pid: 700,
+  title: "execs",
+  deleteProtocol: true,
+  mapState: 2,
+  windowClass: 1,
+  overrideRedirect: false,
+  parent: 1,
+  root: 1,
+  transientFor: null,
+  geometry: { width: 1200, height: 800 },
+};
+const gtkDialog = { ...mainWindow, id: 123, title: "Export profile", transientFor: 100 };
+const observe = (windows) => ({
+  pid: 700,
+  windows,
+  treeWindowIds: [1, ...windows.map(({ id }) => id)],
+});
+
+test("GTK dialog selection requires one viewable owned input window and retained main", () => {
+  assert.equal(selectOwnedDialog(observe([mainWindow, gtkDialog]), 700, "Export profile").id, 123);
+  assert.throws(() => selectOwnedDialog(observe([mainWindow, gtkDialog]), 701, "Export profile"));
+  assert.throws(() => selectOwnedDialog(observe([mainWindow, gtkDialog]), 700, "Import profile"));
+  assert.throws(() => selectOwnedDialog(observe([gtkDialog]), 700, "Export profile"));
+  for (const patch of [
+    { pid: 701 },
+    { id: -1 },
+    { deleteProtocol: false },
+    { mapState: 0 },
+    { mapState: 1 },
+    { mapState: undefined },
+    { windowClass: 2 },
+    { overrideRedirect: true },
+    { root: 2 },
+    { parent: 100 },
+    { transientFor: 999 },
+    { geometry: { width: 0, height: 800 } },
+  ])
+    assert.throws(() =>
+      selectOwnedDialog(observe([mainWindow, { ...gtkDialog, ...patch }]), 700, "Export profile"),
+    );
   assert.throws(() =>
-    selectOwnedDialog({ windows: [window, { ...window, id: 124 }] }, 700, "Export profile"),
+    selectOwnedDialog(
+      observe([mainWindow, gtkDialog, { ...gtkDialog, id: 124 }]),
+      700,
+      "Export profile",
+    ),
   );
-  assert.throws(() => selectOwnedDialog({ windows: [window] }, 700, "Import profile"));
   assert.throws(() =>
-    selectOwnedDialog({ windows: [{ ...window, deleteProtocol: false }] }, 700, "Export profile"),
+    selectOwnedDialog(observe([mainWindow, gtkDialog, gtkDialog]), 700, "Export profile"),
+  );
+  assert.throws(() =>
+    selectOwnedDialog(
+      observe([mainWindow, gtkDialog, { ...gtkDialog, id: 124, title: "Overwrite?" }]),
+      700,
+      "Export profile",
+    ),
+  );
+});
+
+test("hidden GTK instances cannot receive input or make one visible dialog ambiguous", () => {
+  const hidden = { ...gtkDialog, id: 124, mapState: 0 };
+  assert.equal(
+    selectOwnedDialog(observe([mainWindow, hidden]), 700, "Export profile", { allowAbsent: true }),
+    null,
+  );
+  assert.equal(
+    selectOwnedDialog(observe([mainWindow, hidden, gtkDialog]), 700, "Export profile").id,
+    gtkDialog.id,
+  );
+});
+
+test("GTK response accepts observed unmapping or full-tree absence, not mere filtered absence", () => {
+  const initial = selectOwnedDialog(observe([mainWindow, gtkDialog]), 700, "Export profile");
+  assert.equal(ownedDialogDismissal(observe([mainWindow, gtkDialog]), 700, initial), null);
+  assert.deepEqual(
+    ownedDialogDismissal(observe([mainWindow, { ...gtkDialog, mapState: 0 }]), 700, initial),
+    { state: "unmapped", dialogId: 123, mainWindowId: 100 },
+  );
+  assert.deepEqual(ownedDialogDismissal(observe([mainWindow]), 700, initial), {
+    state: "absent-from-observed-tree",
+    dialogId: 123,
+    mainWindowId: 100,
+  });
+  assert.throws(
+    () =>
+      ownedDialogDismissal(
+        { ...observe([mainWindow]), treeWindowIds: [1, 100, 123] },
+        700,
+        initial,
+      ),
+    /remains in tree without verified ownership/,
+  );
+  for (const patch of [
+    { mapState: 1 },
+    { mapState: undefined },
+    { mapState: 0, pid: 701 },
+    { mapState: 0, title: "Different dialog" },
+    { mapState: 0, deleteProtocol: false },
+    { mapState: 0, windowClass: 2 },
+    { mapState: 0, transientFor: null },
+  ])
+    assert.throws(() =>
+      ownedDialogDismissal(observe([mainWindow, { ...gtkDialog, ...patch }]), 700, initial),
+    );
+});
+
+test("GTK dismissal refuses main-window loss/replacement or another visible dialog", () => {
+  const initial = selectOwnedDialog(observe([mainWindow, gtkDialog]), 700, "Export profile");
+  for (const windows of [
+    [],
+    [{ ...mainWindow, mapState: 0 }],
+    [{ ...mainWindow, id: 101 }],
+    [mainWindow, { ...gtkDialog, id: 124 }],
+    [mainWindow, { ...gtkDialog, mapState: 0 }, { ...gtkDialog, id: 124, title: "Error" }],
+  ])
+    assert.throws(() => ownedDialogDismissal(observe(windows), 700, initial));
+  assert.throws(() =>
+    ownedDialogDismissal(observe([mainWindow]), 700, { ...initial, mapState: 0 }),
+  );
+  for (const patch of [
+    { treeWindowIds: undefined },
+    { treeWindowIds: [1, 100, 100] },
+    { treeWindowIds: [1] },
+  ])
+    assert.throws(() => ownedDialogDismissal({ ...observe([mainWindow]), ...patch }, 700, initial));
+});
+
+test("GTK state polling settles real transitions and does not swallow ownership failures", async () => {
+  const initial = selectOwnedDialog(observe([mainWindow, gtkDialog]), 700, "Export profile");
+  let reads = 0;
+  const snapshots = [
+    observe([mainWindow, gtkDialog]),
+    observe([mainWindow, { ...gtkDialog, mapState: 0 }]),
+  ];
+  const result = await waitForDialogState(
+    "GTK response",
+    () => snapshots[reads++],
+    (value) => ownedDialogDismissal(value, 700, initial),
+    { pause: async () => {} },
+  );
+  assert.equal(result.state, "unmapped");
+  assert.equal(reads, 2);
+  reads = 0;
+  await assert.rejects(
+    waitForDialogState(
+      "GTK response",
+      () => {
+        reads++;
+        return observe([mainWindow, { ...gtkDialog, pid: 701 }]);
+      },
+      (value) => ownedDialogDismissal(value, 700, initial),
+      { pause: async () => assert.fail("Ownership errors must not be retried") },
+    ),
+    /foreign process/,
+  );
+  assert.equal(reads, 1);
+});
+
+test("GTK state polling times out a still-viewable dialog", async () => {
+  const initial = selectOwnedDialog(observe([mainWindow, gtkDialog]), 700, "Export profile");
+  let time = 0;
+  await assert.rejects(
+    waitForDialogState(
+      "GTK response",
+      () => observe([mainWindow, gtkDialog]),
+      (value) => ownedDialogDismissal(value, 700, initial),
+      { timeout: 2, now: () => time++, pause: async () => {} },
+    ),
+    /Timed out: GTK response/,
   );
 });
 

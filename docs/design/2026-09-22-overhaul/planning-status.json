@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-22T19:37:37.424Z",
+  "updatedAt": "2026-09-22T20:28:45.733Z",
   "purpose": "Current Foundry implementation acceptance, owned work and evidence ledger; integrated and native qualification remain separate.",
   "authorization": {
     "scope": "Foundry only; whole application, all 14 selected issues plus overhaul, multiple implementation agents, tests, visual verification, repository and Linear updates",
@@ -14,8 +14,8 @@
     "direction": "Foundry",
     "ownerSelected": true,
     "designSelectionGate": "satisfied",
-    "implementationStatus": "Foundry development candidate with retained pane review focus, complete dialog paths and live close/write guards; original native/package/engine acceptance stays open",
-    "verificationStatus": "Product 31b38b9 passes 1,107 integrated local tests and all five CI jobs. Subsequent diagnostic/package tooling passes 94 tests with four existing platform skips; product suites are unchanged. Native retry 35772324501 passes exact 4,881-byte draft input, then fails editor scroll retention on return from Binds. Selection/position and all 12 protected disk files remain intact. Three native and three matching browser images are inspected; the browser route passes. Native Save/close/restart remains unverified. Linux package automation is implemented/reviewed but has not executed.",
+    "implementationStatus": "Foundry development candidate with native Files keyboard-focus retention and explicit Save verified; native close and package qualification continue, original acceptance retained",
+    "verificationStatus": "All five current-product CI jobs pass. Local product checks pass: 890 desktop + 160 cfglint, TypeScript and production frontend. Native d80 verifies exact Files scroll/selection/draft retention and explicit Save; five active images inspected. Close stopped at a harness window-ambiguity guard. Linux package builds pass; authenticated old AppImage reads its fixture, but export completion stopped at GTK dialog detection. No native close/restart or candidate packaged UI pass is inferred.",
     "boards": [
       "docs/design/2026-09-22-overhaul/options/01-foundry/01-core.png",
       "docs/design/2026-09-22-overhaul/options/01-foundry/02-customization.png",
@@ -55,8 +55,8 @@
     "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
     "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
     "pullRequestUrl": "https://github.com/rndaom/execs/pull/60",
-    "currentProductCommit": "31b38b912f67734f3bb27fec09fef5e6ee64ae84",
-    "currentProductUrl": "https://github.com/rndaom/execs/commit/31b38b912f67734f3bb27fec09fef5e6ee64ae84"
+    "currentProductCommit": "d80fe576f90fc0ca8a4e5c37ea8decb8274c4475",
+    "currentProductUrl": "https://github.com/rndaom/execs/commit/d80fe576f90fc0ca8a4e5c37ea8decb8274c4475"
   },
   "evidencePolicy": {
     "owners": "Assigned by the parent; see each selected issue and overhaul workstreams.",
@@ -4352,6 +4352,174 @@
         "skipped": 4,
         "failed": 0,
         "attribution": "70 existing tooling tests including three new retention diagnostics, plus 24 development package tests; unchanged product tests retain 31b38b9 results."
+      }
+    },
+    "keyboardFocusCheckpoint": {
+      "productCommit": "d80fe576f90fc0ca8a4e5c37ea8decb8274c4475",
+      "report": "docs/design/2026-09-22-overhaul/implementation/native-scroll-follow-up/focus-fix/README.md",
+      "localChecks": {
+        "desktop": 890,
+        "cfglint": 160,
+        "tooling": 94,
+        "passed": 1144,
+        "failed": 0,
+        "skipped": 4,
+        "typeScript": "passed",
+        "productionFrontend": "passed",
+        "biomeFiles": 581
+      },
+      "regression": {
+        "focusedTests": 18,
+        "integrationTests": 27,
+        "redBeforeGreenAfter": true,
+        "independentReview": "No actionable findings; native rerun still required"
+      },
+      "diagnostic": {
+        "runId": 35775130580,
+        "head": "c40e2743a88e0d5c29c137ba4ee5e4b2c868cb8e",
+        "testedMerge": "6a738eebb77de9594219de389667397c509380f0",
+        "status": "failed on native Tab11 focus entry",
+        "beforeRenderAndTabs0To10": {
+          "top": 1210,
+          "left": 2234
+        },
+        "afterEditorFocus": {
+          "top": 0,
+          "left": 0,
+          "position": "Ln80,Col363",
+          "selection": "SELECTION-A"
+        },
+        "protectedFilesUnchanged": 12,
+        "inspectedImages": 3,
+        "saveCloseRestartQualified": false
+      },
+      "browser": {
+        "viewport": [1200, 800],
+        "captures": 3,
+        "top": 1255,
+        "left": 1938,
+        "selection": "SELECTION-A",
+        "position": "Ln80,Col363",
+        "forwardAndReverseTab": "passed",
+        "tabExit": "Problems",
+        "exactDraftBytes": 4881,
+        "sha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "saved": false
+      },
+      "nativeRun": {
+        "runId": 35777278322,
+        "url": "https://github.com/rndaom/execs/actions/runs/35777278322",
+        "status": "failed at harness close-window ambiguity after passing product retention and explicit Save",
+        "testedMerge": "30624b62b2af65d6fd48ecae1d62618ad2cbc1fa",
+        "binarySha256": "e0eff8183241835bb3d7bab989730b91d2c0b37add4ab651e57be5968bb11791",
+        "report": "docs/design/2026-09-22-overhaul/implementation/linux-native/run-35777278322/README.md",
+        "retention": {
+          "top": 1210,
+          "left": 2162,
+          "selection": "SELECTION-A",
+          "position": "Ln 80, Col 363",
+          "draftBytes": 4881,
+          "passed": true,
+          "assertionUnchanged": true
+        },
+        "explicitSave": {
+          "passed": true,
+          "bytes": 4881,
+          "sha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+          "libraryLiveManifestVerified": true,
+          "unrelatedFilesAndMetadataPreserved": true
+        },
+        "closeCandidate": {
+          "draftBytes": 4927,
+          "memoryOnly": true,
+          "candidateWindows": 3,
+          "requestSent": false,
+          "cancelDiscardSaveCloseRestart": "not executed"
+        },
+        "finalCheckpointPreserved": true,
+        "inspectedActiveImages": 5,
+        "newInactiveVisualReview": false,
+        "resultsSha256": "662d0b65557a703f99ae853644586891067969162a273179466f75902a8b06b2"
+      },
+      "packageRun": {
+        "runId": 35777278336,
+        "url": "https://github.com/rndaom/execs/actions/runs/35777278336",
+        "status": "failed waiting for GTK Save window destruction; no candidate launch",
+        "testedMerge": "30624b62b2af65d6fd48ecae1d62618ad2cbc1fa",
+        "report": "docs/design/2026-09-22-overhaul/implementation/package-smoke/run-35777278336/README.md",
+        "harnessTestsPassed": 48,
+        "noticesVerified": 470,
+        "optimizedAppImageAndDebBuild": "passed",
+        "previousPublic": {
+          "version": "0.1.8",
+          "signatureVerified": true,
+          "normalPrivateReadOnlyFuse": true,
+          "renderedNativeFiles": true,
+          "exactConfigBytes": 55,
+          "binarySha256": "1a89c77daa1dde4d66f37a584db68dc1e280d85aabd028461a4a2a049ea86369"
+        },
+        "export": {
+          "exactDestinationFileObserved": true,
+          "sha256": "6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2",
+          "archiveRetained": false,
+          "payloadValidated": false,
+          "dialogFinalVisibility": "not observed"
+        },
+        "inspectedImages": 3,
+        "sourceLiveComparisonPassedBeforeUnexpectedExportAssertion": true,
+        "candidateLaunch": false,
+        "debRuntimeCases": false,
+        "originalFailurePreserved": true
+      },
+      "packagedNotices": {
+        "fixCommit": "6482ecb",
+        "firstWorkflowRunId": 35775130896,
+        "firstResult": "48 Linux harness tests passed, then credits preflight failed; zero packages/native cases",
+        "currentGeneratorCheck": "470 dependency packages verified",
+        "existingBlocksUnchanged": 466,
+        "addedBlocks": ["itertools0.14.0", "libloading0.8.9", "prost0.13.5", "prost-derive0.13.5"],
+        "report": "docs/design/2026-09-22-overhaul/implementation/package-smoke/run-35775130896/README.md"
+      },
+      "acceptancePreserved": true,
+      "releaseAuthorized": false,
+      "ci": {
+        "runId": 35777278516,
+        "url": "https://github.com/rndaom/execs/actions/runs/35777278516",
+        "status": "success",
+        "head": "d80fe576f90fc0ca8a4e5c37ea8decb8274c4475",
+        "jobs": [
+          "frontend",
+          "rust-windows",
+          "inventory-probe (ubuntu-22.04)",
+          "inventory-probe (windows-latest)",
+          "rust-linux"
+        ]
+      },
+      "nativeDialogHarnessFollowup": {
+        "status": "independently reviewed; next hosted execution pending",
+        "productSourceChanged": false,
+        "acceptanceUnchanged": true,
+        "changes": [
+          "Unique viewable owned main window, full attributes and rejection reasons retained",
+          "Complete bounded X11 tree IDs; failed tree reads cannot prove absence",
+          "GTK native input requires mapped ownership/focus; completion requires exact dialog unmapped or fully absent and main retained",
+          "Real close requests and exact path/archive/fixture validators preserved"
+        ],
+        "completeTooling": {
+          "passed": 101,
+          "failed": 0,
+          "skipped": 5
+        },
+        "finalFocused": {
+          "passed": 33,
+          "failed": 0,
+          "skipped": 2
+        },
+        "python": "Full helper syntax and 13 selector cases passed separately without opening X",
+        "review": "No remaining actionable findings after filtered-absence observation gap corrected",
+        "formatting": "201 scoped files checked; no fixes",
+        "gallery": "11 supplemental cards; latest native card and full-size view visually verified; primary85/15/5 unchanged",
+        "report": "docs/design/2026-09-22-overhaul/implementation/linux-native/x11-main-window-correction.md"
       }
     }
   }
