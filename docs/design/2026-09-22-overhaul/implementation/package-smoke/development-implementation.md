@@ -1,6 +1,6 @@
 # Linux development package harness
 
-2026-09-22. The Linux part of the [accepted development proposal](development-run-plan.md) is implemented for review. **It has not been dispatched or run on a hosted worker.** No installer or desktop app was run locally. Windows NSIS remains unimplemented in this new workflow. RND-251 remains open.
+2026-09-22. The Linux part of the [accepted development proposal](development-run-plan.md) is implemented and independently reviewed. Its [first hosted workflow](run-35775130896/README.md) passed all 48 harness tests, then failed the existing packaged-credits preflight before any package was built or launched. The notices generator now adds the missing design-inspiration credit and four dependency license blocks; `--check` verifies all 470 packages locally. The original 466 blocks are unchanged. A fresh hosted package execution is still required. No installer or desktop app was run locally. Windows NSIS remains unimplemented in this new workflow. RND-251 remains open.
 
 ## Implemented scope
 

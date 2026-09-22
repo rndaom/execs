@@ -28,6 +28,15 @@ downloads linked from hud-db, links out to authors' imgur albums, and reads down
 counts from [tf2huds.dev](https://tf2huds.dev). Nothing from those hosts is
 redistributed.
 
+## Design inspiration
+
+The inventory organizer under development is inspired by
+[Jengerer's Item Manager (JIM)](https://www.jengerer.com/item_manager/), by
+Jengerer and its contributors. No JIM code or assets are copied or distributed.
+No reuse license was identified in its public repository. The standalone
+development probe and its protocol references are documented in
+[`tools/inventory-probe/README.md`](tools/inventory-probe/README.md).
+
 ## Fonts and icons
 
 - [Inter](https://rsms.me/inter/) by Rasmus Andersson, via `@fontsource/inter`. SIL Open Font License 1.1.
