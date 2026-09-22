@@ -314,6 +314,7 @@ a:focus-visible,
   }
 
   .settings-nav {
+    position: relative;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -385,6 +386,9 @@ a:focus-visible,
   }
 
   .settings-content {
+    /* Keep absolute screen-reader labels inside their scroll region. Without
+       a local containing block they can enlarge and scroll the root at zoom. */
+    position: relative;
     width: 100%;
     max-width: var(--content-max);
     min-height: 100%;

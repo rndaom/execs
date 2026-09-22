@@ -23,11 +23,25 @@ export function ContextMenu({
   useEffect(() => {
     const element = menu.current;
     if (!element) return;
-    returnFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const bounds = element.getBoundingClientRect();
-    element.style.left = `${Math.max(8, Math.min(position.x, window.innerWidth - bounds.width - 8))}px`;
-    element.style.top = `${Math.max(8, Math.min(position.y, window.innerHeight - bounds.height - 8))}px`;
+    // StrictMode may set up the effect again after it focused the first item.
+    // Keep the original opener instead of replacing it with our own child.
+    if (
+      document.activeElement instanceof HTMLElement &&
+      !element.contains(document.activeElement)
+    ) {
+      returnFocus.current = document.activeElement;
+    }
+    const place = () => {
+      const bounds = element.getBoundingClientRect();
+      element.style.left = `${Math.max(8, Math.min(position.x, window.innerWidth - bounds.width - 8))}px`;
+      element.style.top = `${Math.max(8, Math.min(position.y, window.innerHeight - bounds.height - 8))}px`;
+    };
+    place();
+    // Analysis can add menu items after opening, and zoom changes the available
+    // viewport. Keep the bounded menu in view without resetting its focus.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    observer?.observe(element);
+    window.addEventListener("resize", place);
     element
       .querySelector<HTMLButtonElement>("button:not(:disabled)")
       ?.focus({ preventScroll: true });
@@ -41,6 +55,8 @@ export function ContextMenu({
     window.addEventListener("pointerdown", closeOutside, true);
     window.addEventListener("keydown", closeOnEscape, true);
     return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
       window.removeEventListener("pointerdown", closeOutside, true);
       window.removeEventListener("keydown", closeOnEscape, true);
       const target = returnFocus.current;
@@ -79,7 +95,7 @@ export function ContextMenu({
       ref={menu}
       role="menu"
       aria-label={label}
-      className="overlay menu-enter fixed z-[100] w-64 max-w-[calc(100vw-16px)] p-1 text-sm text-ink"
+      className="overlay menu-enter fixed z-[100] max-h-[calc(100dvh-16px)] w-64 max-w-[calc(100vw-16px)] overflow-y-auto p-1 text-sm text-ink"
       style={{ left: position.x, top: position.y }}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={moveFocus}

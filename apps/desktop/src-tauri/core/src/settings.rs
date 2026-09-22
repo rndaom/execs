@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::archive::read_regular_file_bounded_within;
 use crate::finder::{normalize_tf2_root, user_path_string, Tf2RootError};
 use crate::hash::{validate_dir_within, write_atomic_within};
+use crate::profile::ProfileError;
 
 pub const SETTINGS_SCHEMA: u32 = 1;
 const MAX_SETTINGS_BYTES: usize = 64 * 1024;
@@ -150,7 +151,15 @@ pub fn read_settings_from(file: &Path) -> Result<Option<Settings>, String> {
         .parent()
         .ok_or_else(|| "The settings path has no parent directory.".to_string())?;
     let bytes = read_regular_file_bounded_within(parent, file, MAX_SETTINGS_BYTES as u64)
-        .map_err(|err| format!("Could not read app settings: {}", err.message()))?
+        .map_err(|err| {
+            // The guarded reader is shared with profiles; retain its I/O
+            // reason without the unrelated profile-library write context.
+            let detail = match err {
+                ProfileError::Io(detail) => detail,
+                other => other.message(),
+            };
+            format!("Could not read app settings: {detail}")
+        })?
         .ok_or_else(|| "The app settings file exceeds the read limit.".to_string())?;
     let settings: Settings = serde_json::from_slice(&bytes)
         .map_err(|err| format!("Could not read app settings: {err}"))?;
@@ -455,6 +464,47 @@ mod tests {
             assert!(set_app_preferences_to(&file, AppPreferences::default()).is_err());
             assert_eq!(fs::read(&file).unwrap(), original);
         }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn locked_settings_keep_app_context_and_allow_retry_without_losing_root() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        let original = Settings {
+            tf2_root: "D:/remembered-tf2-root".into(),
+            ..Settings::default()
+        };
+        save_settings_to(&file, &original).unwrap();
+        let original_bytes = fs::read(&file).unwrap();
+        let preferences = AppPreferences {
+            check_for_updates_on_startup: false,
+            motion: MotionPreference::Reduce,
+        };
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&file)
+            .unwrap();
+
+        let error = set_app_preferences_to(&file, preferences.clone()).unwrap_err();
+        assert!(error.starts_with("Could not read app settings:"));
+        assert!(error.contains(&std::io::Error::from_raw_os_error(32).to_string()));
+        assert!(!error.contains("profile library"), "{error}");
+
+        drop(held);
+        assert_eq!(fs::read(&file).unwrap(), original_bytes);
+        assert!(!file.with_extension("json.execs-part").exists());
+        assert_eq!(
+            set_app_preferences_to(&file, preferences.clone()).unwrap(),
+            preferences
+        );
+        let saved = read_settings_from(&file).unwrap().unwrap();
+        assert_eq!(saved.tf2_root, original.tf2_root);
+        assert_eq!(saved.preferences, preferences);
         let _ = fs::remove_dir_all(&dir);
     }
 

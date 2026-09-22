@@ -19,6 +19,7 @@
         "height": 800,
         "minWidth": 960,
         "minHeight": 640,
+        "zoomHotkeysEnabled": true,
         "backgroundColor": {
           "red": 18,
           "green": 18,

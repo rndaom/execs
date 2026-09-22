@@ -127,6 +127,8 @@ Foundry tokens live only in `apps/desktop/src/index.css` `@theme`: bg `#151310` 
 
 The shared shell uses a stable header, 180px sidebar, separate global App settings and per-pane scroll memory. Profile/install changes reset profile-owned pane positions; account Inventory and App settings retain their separate context. Hidden panes release captures, overlays and playback while keeping session drafts. Motion is 150ms color/opacity and 220ms local movement, with no perpetual decoration; `prefers-reduced-motion` or app Reduce removes transitions. Copy uses sentence case, short ledes, descriptions that explain a rule, and buttons that say what happens. Verify layouts at 1200×800 and 960×640 with genuine source imagery; generated concept boards never supply shipped preview assets.
 
+The main window enables native page zoom with Ctrl + Plus / Minus and Ctrl + 0. Linux uses Tauri's zoom handler and the main-window-only webview zoom capability. Enlarged layouts retain keyboard access; browser viewport reflow alone does not prove native zoom behavior.
+
 ## Gotchas worth remembering
 
 - On Windows, launching the dev executable directly from packaged Codex can inherit its MSIX AppData virtualization and mix real profiles with `OpenAI.Codex_*/LocalCache/Roaming/execs` copies. Launch through the existing Explorer desktop's `Document.Application.ShellExecute` instead; confirm `GetPackageFullName` returns `APPMODEL_ERROR_NO_PACKAGE` (15700). Keep profile containment checks intact and do not merge or delete either library to work around this launch-context problem.

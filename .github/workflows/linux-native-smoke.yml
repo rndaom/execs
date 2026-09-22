@@ -1,0 +1,71 @@
+name: Linux native smoke (development only)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/linux-native-smoke.yml
+      - scripts/linux-native-*.mjs
+      - scripts/package-smoke-fixture.mjs
+      - scripts/fixtures/package-smoke-v018.json
+      - apps/desktop/src-tauri/tauri.conf.json
+      - apps/desktop/src-tauri/capabilities/**
+      - apps/desktop/src-tauri/Cargo.lock
+      - apps/desktop/src-tauri/core/src/settings.rs
+      - apps/desktop/src-tauri/src/commands/app_settings.rs
+      - apps/desktop/src/components/ReadyPanel/**
+      - apps/desktop/src/App.tsx
+      - apps/desktop/src/AppSettingsPane.tsx
+      - apps/desktop/src/hooks/useAppPreferences.ts
+      - apps/desktop/src/index.css
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-native-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-webkitgtk:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install native runtime and automation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb xauth dbus-x11
+          command -v WebKitWebDriver
+          dpkg-query -W libwebkit2gtk-4.1-0 webkit2gtk-driver xvfb
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: linux-native-smoke
+      - run: pnpm install --frozen-lockfile
+      - name: Test isolation and WebDriver harness
+        run: node --test scripts/linux-native-smoke.test.mjs
+      - name: Install pinned external Tauri driver
+        run: cargo install tauri-driver --version 2.0.6 --locked
+      - name: Build bundled frontend and real native binary without installer
+        run: pnpm --filter @execs/desktop tauri build --ci --no-bundle -- --locked
+      - name: Native launch, menu, keyboard zoom and persisted preferences
+        timeout-minutes: 6
+        run: xvfb-run -a -s '-screen 0 1600x1200x24' dbus-run-session -- node scripts/linux-native-smoke.mjs
+      - name: Retain fixture-only native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-smoke-${{ github.sha }}
+          path: ${{ runner.temp }}/execs-linux-native-*/evidence/
+          if-no-files-found: warn
+          retention-days: 7

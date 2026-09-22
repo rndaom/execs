@@ -12,6 +12,8 @@ User-facing changes only. The release workflow publishes the matching
   task, and the app follows system reduced motion or your own Reduce preference.
 - Keep separate scroll positions for visited panes and App settings. Profile changes reset
   profile-specific positions while preserving account-owned Inventory browsing.
+- Enlarge or reduce the interface with Ctrl + Plus / Minus, and restore its original size with
+  Ctrl + 0. The layout reflows while keeping keyboard access to controls.
 - Crosshair: keep the designer beside its preview, retain unfinished designs, and distinguish
   saving a design to the library from building the installed pack. Weapon pickers stay in view.
 - Viewmodels: organize all nine classes and 64 groups around an adjacent preview and build action.
@@ -53,6 +55,9 @@ User-facing changes only. The release workflow publishes the matching
   Import review now describes the unchanged TF2 setup without assuming an active profile.
 - Keep profile actions visible in inactive libraries and enlarged interfaces, with scrolling
   for short windows and longer profile lists.
+- Keep menus, pending-review actions and keyboard focus reachable when the interface is enlarged.
+- App settings errors identify the failed settings read without blaming the profile library;
+  Retry preserves the requested preference and existing installation choice.
 - Clear an obsolete update offer after a successful newer check reports no update, and prevent
   out-of-order checks or repeated install clicks from changing the intended update.
 - Show an actionable native error when startup recovery checks fail, including the app version,
