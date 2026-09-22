@@ -4,6 +4,8 @@ Status, September 22, 2026: **bounded Linux native smoke passed on current produ
 
 ## What the workflow will establish
 
+The subsequent [active Files/draft/close case](active-files.md) has a separate authored fixture and strict save checkpoints. Its implementation and local review are complete; native execution remains pending until its own current-product evidence is inspected.
+
 The [development-only workflow](../../../../../.github/workflows/linux-native-smoke.yml) builds the normal production frontend and Linux release binary with `tauri build --ci --no-bundle -- --locked`. It drives that ELF executable through external `tauri-driver` 2.0.6 and the runner's `WebKitWebDriver` under Xvfb and a fresh D-Bus session. It does not start Vite or use `?preview=`, a mock bridge, injected native results, an embedded testing plugin, or a test-only production branch.
 
 The bounded native sequence is:

@@ -20,7 +20,9 @@ export function PaneHeader({
   return (
     <header className={`pane-header${compact ? " pane-header-compact" : ""}`}>
       <div className="min-w-0">
-        <h1 className="t-pane">{title}</h1>
+        <h1 className="t-pane" data-pane-heading tabIndex={-1}>
+          {title}
+        </h1>
         {lede ? <p className="t-meta mt-1.5 max-w-[62ch]">{lede}</p> : null}
       </div>
       {actions ? <div className="pane-actions">{actions}</div> : null}

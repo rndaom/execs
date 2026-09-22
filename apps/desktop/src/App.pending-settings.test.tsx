@@ -107,6 +107,42 @@ it("identifies a failed HUD save after navigating to Sounds and retries the reta
   expect(api.launchTf2).toHaveBeenCalledOnce();
 });
 
+it("focuses the reviewed pane while Cancel restores the original control and retains drafts", async () => {
+  vi.spyOn(api, "applyHudOptions").mockRejectedValue(Error("HUD refused"));
+  vi.spyOn(api, "writeManagedCfg").mockRejectedValue(Error("sounds refused"));
+  await act(async () => element("#hud-surface-installed").click());
+  await clickId("hud-opt-minmode");
+  await debounce();
+  await clickId("settings-tab-sounds");
+  await clickId("sounds-hit-enabled");
+  await debounce();
+  await clickId("settings-tab-hud");
+  const opener = element('[data-testid="hud-opt-minmode"]');
+  expect(opener.closest("[hidden], [inert]")).toBeNull();
+  opener.focus();
+
+  await act(async () => close({ preventDefault: vi.fn() }));
+  await click("Cancel");
+  expect(document.activeElement === opener).toBe(true);
+
+  await act(async () => close({ preventDefault: vi.fn() }));
+  await click("Open Sounds");
+  const heading = element('[data-testid="settings-surface-sounds"] h1');
+  expect(document.activeElement === heading).toBe(true);
+  expect(heading.closest("[hidden], [inert]")).toBeNull();
+  expect(box.querySelector('[data-testid="files-exit-guard"]')).toBeNull();
+  expect(element('[data-testid="sounds-hit-enabled"]').getAttribute("aria-checked")).toBe("true");
+  expect(opener.getAttribute("aria-checked")).toBe("true");
+  expect(reason()).toContain("HUD");
+  expect(reason()).toContain("Sounds");
+  expect(native.destroy).not.toHaveBeenCalled();
+
+  const nav = element('[data-testid="settings-tab-hud"]');
+  nav.focus();
+  await clickId("settings-tab-hud");
+  expect(document.activeElement).toBe(nav);
+});
+
 it("keeps multiple panes protected until each resolves, and explicit discard restores persisted controls", async () => {
   vi.spyOn(api, "applyHudOptions").mockRejectedValue(Error("HUD refused"));
   const write = vi.spyOn(api, "writeManagedCfg").mockRejectedValue(Error("sound refused"));

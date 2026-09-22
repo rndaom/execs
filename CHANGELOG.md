@@ -55,6 +55,9 @@ User-facing changes only. The release workflow publishes the matching
 - Keep menus, pending-review actions and keyboard focus reachable when the interface is enlarged.
 - Files: restore the editor's scroll position when returning from another pane, alongside its
   draft, selection and undo history.
+- Keep complete cfg paths readable in the unsaved-changes dialog without horizontal scrolling.
+- Pending-change review moves keyboard focus to the selected pane; close requests also wait
+  for settings writes that start before the busy indicator renders.
 - App settings errors identify the failed settings read without blaming the profile library;
   Retry preserves the requested preference and existing installation choice.
 - Clear an obsolete update offer after a successful newer check reports no update, and prevent

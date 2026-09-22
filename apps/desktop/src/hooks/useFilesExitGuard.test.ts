@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createFilesDraftStore } from "../lib/files-drafts";
+import { SettingsBusyQueue } from "../lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraft } from "../lib/settings-drafts";
 import { useFilesExitGuard } from "./useFilesExitGuard";
 
@@ -118,6 +119,35 @@ it("waits for a settings write without inventing Files drafts or requiring a sav
   await act(async () => root.render(createElement(Harness)));
   await act(async () => button("Continue").click());
   expect(save).not.toHaveBeenCalled();
+  expect(native.destroy).toHaveBeenCalledOnce();
+});
+
+it("checks a newly started native write before the next React render", async () => {
+  store.discardAll();
+  const queue = new SettingsBusyQueue(vi.fn());
+  settings.registerWriteGuard(() => queue.active);
+  await act(async () => root.render(createElement(Harness)));
+
+  // Native queue state is synchronous; its React busy update can still be pending.
+  let release!: () => void;
+  const operation = queue.run(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  await requestClose();
+  expect(native.destroy).not.toHaveBeenCalled();
+  expect(box.textContent).toContain("Finish current operation?");
+  expect(button("Continue").disabled).toBe(true);
+  expect(save).not.toHaveBeenCalled();
+
+  await act(async () => {
+    release();
+    await operation;
+    root.render(createElement(Harness));
+  });
+  await act(async () => button("Continue").click());
   expect(native.destroy).toHaveBeenCalledOnce();
 });
 

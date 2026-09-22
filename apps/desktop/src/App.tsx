@@ -63,6 +63,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const [cancelLaunchOpen, setCancelLaunchOpen] = useState(false);
   const appSettingsButton = useRef<HTMLButtonElement>(null);
   const appSettingsReturnFocus = useRef<HTMLElement | null>(null);
+  const profileSettings = useRef<HTMLDivElement>(null);
+  const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
     () => previewSettingsTab(preview) ?? "comfig",
   );
@@ -70,6 +72,22 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     setAppSettingsOpen(false);
     setSettingsTab(tab);
   }, []);
+  const reviewSettings = useCallback(
+    (tab: SettingsTab) => {
+      navigateSettings(tab);
+      setSettingsReviewRequest((request) => request + 1);
+    },
+    [navigateSettings],
+  );
+  useEffect(() => {
+    if (settingsReviewRequest === 0 || document.querySelector('[aria-modal="true"]')) return;
+    // Review changes routes out of a dialog. Focus after its layout cleanup;
+    // ordinary navigation and Cancel keep their existing focus behavior.
+    const heading = Array.from(
+      profileSettings.current?.querySelectorAll<HTMLElement>("[data-pane-heading]") ?? [],
+    ).find((node) => !node.closest("[hidden], [inert]"));
+    heading?.focus();
+  }, [settingsReviewRequest]);
   const closeAppSettings = useCallback(() => {
     setAppSettingsOpen(false);
     (appSettingsReturnFocus.current ?? appSettingsButton.current)?.focus();
@@ -127,7 +145,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       progress.state.active ||
       update.progress !== null,
     settingsDraftStore,
-    navigateSettings,
+    reviewSettings,
   );
   const anyBusy =
     busy ||
@@ -416,7 +434,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                 </button>
               }
             >
-              <div hidden={appSettingsOpen}>
+              <div ref={profileSettings} hidden={appSettingsOpen}>
                 <SettingsHost
                   api={api}
                   visible={!appSettingsOpen}

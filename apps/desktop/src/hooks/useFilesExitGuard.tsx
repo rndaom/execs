@@ -28,7 +28,14 @@ export function useFilesExitGuard(
   const cancelButton = useRef<HTMLButtonElement>(null);
   function request(next: () => void | Promise<void>, native = false) {
     if (action.current || saving.current) return;
-    if (store.dirty().length === 0 && settings.getSnapshot().length === 0 && !operationBusy) {
+    const current = latest.current;
+    const pendingSettings = settings.getSnapshot();
+    if (
+      store.dirty().length === 0 &&
+      pendingSettings.length === 0 &&
+      !current.busy &&
+      !settings.isWriting()
+    ) {
       void Promise.resolve()
         .then(next)
         .catch((err) => {
@@ -44,10 +51,10 @@ export function useFilesExitGuard(
     if (
       native &&
       store.dirty().length === 0 &&
-      !running &&
-      !busy &&
-      settings.getSnapshot().length > 0 &&
-      settings.getSnapshot().every((entry) => entry.save && !entry.save.locked)
+      !current.running &&
+      !current.busy &&
+      pendingSettings.length > 0 &&
+      pendingSettings.every((entry) => entry.save && !entry.save.locked)
     ) {
       void finish(true, true);
     }
@@ -148,7 +155,7 @@ export function useFilesExitGuard(
         testId="files-exit-guard"
         className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto"
       >
-        <ul className="t-meta text-ink-muted">
+        <ul className="t-meta mt-3 space-y-2 text-ink-muted [overflow-wrap:anywhere]">
           {drafts.map((draft) => (
             <li key={JSON.stringify([draft.profile, draft.path])}>{draft.path}</li>
           ))}

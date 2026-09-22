@@ -11,12 +11,25 @@ on:
       - apps/desktop/src-tauri/tauri.conf.json
       - apps/desktop/src-tauri/capabilities/**
       - apps/desktop/src-tauri/Cargo.lock
+      - apps/desktop/src-tauri/core/src/files_workspace*.rs
+      - apps/desktop/src-tauri/core/src/cfg_layer.rs
+      - apps/desktop/src-tauri/core/src/profile.rs
+      - apps/desktop/src-tauri/core/src/surface.rs
       - apps/desktop/src-tauri/core/src/settings.rs
       - apps/desktop/src-tauri/src/commands/app_settings.rs
+      - apps/desktop/src-tauri/src/commands/files.rs
       - apps/desktop/src/components/ReadyPanel/**
+      - apps/desktop/src/components/FilesEditor.tsx
+      - apps/desktop/src/components/ui/Modal.tsx
+      - apps/desktop/src/components/ui/PaneHeader.tsx
       - apps/desktop/src/App.tsx
       - apps/desktop/src/AppSettingsPane.tsx
+      - apps/desktop/src/FilesPane.tsx
       - apps/desktop/src/hooks/useAppPreferences.ts
+      - apps/desktop/src/hooks/useFilesExitGuard.tsx
+      - apps/desktop/src/hooks/useNativeCloseGuard.ts
+      - apps/desktop/src/lib/files-drafts.ts
+      - apps/desktop/src/lib/settings-drafts.ts
       - apps/desktop/src/index.css
 
 permissions:
@@ -38,9 +51,11 @@ jobs:
       - name: Install native runtime and automation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb xauth dbus-x11
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb xauth dbus-x11 xclip python3
           command -v WebKitWebDriver
-          dpkg-query -W libwebkit2gtk-4.1-0 webkit2gtk-driver xvfb
+          command -v xclip
+          python3 --version
+          dpkg-query -W libwebkit2gtk-4.1-0 webkit2gtk-driver xvfb xclip libx11-6
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -53,7 +68,7 @@ jobs:
           key: linux-native-smoke
       - run: pnpm install --frozen-lockfile
       - name: Test isolation and WebDriver harness
-        run: node --test scripts/linux-native-smoke.test.mjs
+        run: node --test scripts/linux-native-smoke.test.mjs scripts/linux-native-active*.test.mjs
       - name: Install pinned external Tauri driver
         run: cargo install tauri-driver --version 2.0.6 --locked
       - name: Build bundled frontend and real native binary without installer
@@ -61,6 +76,9 @@ jobs:
       - name: Native launch, menu, keyboard zoom and persisted preferences
         timeout-minutes: 6
         run: xvfb-run -a -s '-screen 0 1600x1200x24' dbus-run-session -- node scripts/linux-native-smoke.mjs
+      - name: Active native Files saves, draft retention and close decisions
+        timeout-minutes: 8
+        run: xvfb-run -a -s '-screen 0 1600x1200x24' dbus-run-session -- node scripts/linux-native-active.mjs
       - name: Retain fixture-only native evidence
         if: always()
         uses: actions/upload-artifact@v4
