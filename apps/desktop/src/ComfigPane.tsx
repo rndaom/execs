@@ -192,19 +192,6 @@ export function ComfigPane({
         <div className="min-w-0">
           <PaneHeader
             title="Comfig"
-            lede={
-              <>
-                Performance and visuals, powered by{" "}
-                <button
-                  type="button"
-                  onClick={() => void openExternal("https://comfig.app")}
-                  className="text-ink underline decoration-edge-strong underline-offset-4 hover:text-ink"
-                >
-                  mastercomfig
-                </button>
-                .
-              </>
-            }
             actions={
               statusProblem ? (
                 <p aria-live="polite" className="badge">

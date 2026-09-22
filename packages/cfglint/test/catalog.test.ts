@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { enumerateCatalog, lookupCommand } from "../src/catalog.ts";
+import {
+  enumerateCatalog,
+  lookupCommand,
+  suggestCvarByRemovingOneCharacter,
+} from "../src/catalog.ts";
 import { lookupCvar } from "../src/corpus.ts";
 
 describe("offline command catalog", () => {
@@ -52,6 +56,13 @@ describe("offline command catalog", () => {
     expect(lookupCommand("resetclass")?.kind).toBe("alias");
     expect(lookupCommand("resetclass")?.applicability).toContain("mastercomfig");
     expect(lookupCommand("texture_quality=low")?.kind).toBe("alias");
+    for (const name of ["r_lightmap_bicubic_set", "m_rawinput_onetime_reset"]) {
+      const supplement = lookupCommand(name);
+      expect(supplement?.kind).toBe("cvar");
+      expect(supplement?.defaultValue).toBeUndefined();
+      expect(supplement?.applicability).toContain("current retail availability");
+      expect(supplement?.sources[0]?.url).toContain("mastercomfig");
+    }
     expect(lookupCommand("exec")?.syntax).toBe("exec <cfg path>");
     expect(lookupCommand("exec")?.arguments).toBeUndefined();
     expect(lookupCommand("not_a_known_command")).toBeUndefined();
@@ -63,5 +74,9 @@ describe("offline command catalog", () => {
     expect(lookupCommand("sv_backspeed")?.defaultValue).toBeUndefined();
     expect(lookupCommand("sv_backspeed")?.applicability).toContain("defaults differ");
     expect(lookupCommand("sv_backspeed")?.sources).toHaveLength(2);
+  });
+  it("suggests only an unambiguous catalogued cvar for an extra character", () => {
+    expect(suggestCvarByRemovingOneCharacter("viewwmodel_fov")).toBe("viewmodel_fov");
+    expect(suggestCvarByRemovingOneCharacter("plugin_setting")).toBeNull();
   });
 });

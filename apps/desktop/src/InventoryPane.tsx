@@ -93,23 +93,28 @@ export function InventoryPane({
     if (missing.length === 0) return;
     async function readIcons() {
       const images = [];
+      let error: string | null = null;
       const artwork = missing.filter((path) => !path.startsWith("materials/patterns/"));
       const patterns = missing.filter((path) => path.startsWith("materials/patterns/"));
-      // Pattern textures are larger: keep each request within the native 32 MiB
-      // aggregate cap, and decode batches sequentially to bound peak memory.
+      // Pattern textures may each approach the native 16 MiB entry cap. Read
+      // them individually to stay within the 32 MiB aggregate cap.
       for (const [paths, size] of [
         [artwork, 50],
-        [patterns, 8],
+        [patterns, 1],
       ] as const) {
         for (let start = 0; start < paths.length; start += size) {
-          if (cancelled) return [];
-          images.push(await api.getInventoryIcons(paths.slice(start, start + size)));
+          if (cancelled) return { images, error };
+          try {
+            images.push(await api.getInventoryIcons(paths.slice(start, start + size)));
+          } catch (reason) {
+            error ??= String(reason);
+          }
         }
       }
-      return images;
+      return { images, error };
     }
     readIcons()
-      .then((images) => {
+      .then(({ images, error }) => {
         if (cancelled) return;
         const next: Record<string, string> = {};
         for (const [path, image] of images.flatMap((batch) => Object.entries(batch))) {
@@ -125,6 +130,7 @@ export function InventoryPane({
         }
         iconCache.current = { ...iconCache.current, ...next };
         setIcons(iconCache.current);
+        setIconError(error);
       })
       .catch((reason) => {
         if (!cancelled) setIconError(String(reason));
@@ -138,6 +144,7 @@ export function InventoryPane({
     if (!snapshot) return null;
     const name = itemName(snapshot, entry);
     const path = itemDescription(snapshot, entry)?.icon;
+    const qualityColor = snapshot.qualityColors?.[entry.quality];
     return (
       <button
         type="button"
@@ -147,6 +154,7 @@ export function InventoryPane({
         title={name}
         onClick={() => setSelected(entry.id)}
         className={`inventory-item ${selected === entry.id ? "inventory-item-selected" : ""}`}
+        style={{ borderColor: qualityColor, borderWidth: qualityColor ? 2 : undefined }}
       >
         <span className="t-meta absolute top-1 left-1.5 text-ink-faint">{position || "New"}</span>
         {selected === entry.id ? (
@@ -210,7 +218,6 @@ export function InventoryPane({
       <PaneHeader
         compact
         title="Inventory"
-        lede="View-only items from your Steam account."
         actions={
           <>
             <span className="badge">Development preview</span>
@@ -359,7 +366,12 @@ export function InventoryPane({
                 </p>
                 {navigation()}
               </div>
-              <section ref={grid} className="inventory-grid" aria-label="Backpack items">
+              <section
+                ref={grid}
+                className="inventory-grid"
+                style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+                aria-label="Backpack items"
+              >
                 {view.slots.map(({ position, item }) =>
                   item ? (
                     card(item, position)

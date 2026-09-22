@@ -145,13 +145,15 @@ describe("retained settings feedback", () => {
     const save = vi.spyOn(api, "writeManagedCfg");
     await render();
     expect(element("settings-surface-gameplay").hasAttribute("inert")).toBe(true);
-    expect(box.textContent).toContain("Startup settings could not be resolved");
+    expect(box.textContent).toContain(
+      "Startup settings are unresolved at tf/cfg/overrides/autoexec.cfg:1",
+    );
     // Fault-inject a queued input despite the inert UI. The write path must
     // still reject an incomplete snapshot, including a retained-pane flush.
     await click("gameplay-draw-viewmodel");
     await advance(700);
     expect(save).not.toHaveBeenCalled();
-    expect(toast()).toContain("Startup settings could not be resolved");
+    expect(toast()).toContain("Startup settings are unresolved at tf/cfg/overrides/autoexec.cfg:1");
     expect(pending).toBe(true);
   });
 

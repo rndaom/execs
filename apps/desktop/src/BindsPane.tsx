@@ -183,7 +183,7 @@ export function BindsPane({
 
   return (
     <section data-testid="settings-binds" className="min-w-0 text-left">
-      <PaneHeader title="Binds" lede="Your keys, mouse buttons and scroll wheel." />
+      <PaneHeader title="Binds" />
 
       <div data-bind-navigation>
         <ClassTabs

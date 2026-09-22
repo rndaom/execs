@@ -59,3 +59,17 @@ export function enumerateCatalog(): readonly CatalogEntry[] {
 export function lookupCommand(name: string): CatalogEntry | undefined {
   return byName.get(name.toLowerCase());
 }
+
+/** A bounded typo hint, not evidence that an unknown command is harmless. */
+export function suggestCvarByRemovingOneCharacter(name: string): string | null {
+  const normalized = name.toLowerCase();
+  if (normalized.length < 3 || normalized.length > 64 || !/^[a-z0-9_]+$/.test(normalized))
+    return null;
+  const matches = new Set<string>();
+  for (let i = 0; i < normalized.length; i++) {
+    const candidate = normalized.slice(0, i) + normalized.slice(i + 1);
+    if (byName.get(candidate)?.kind === "cvar") matches.add(candidate);
+    if (matches.size > 1) return null;
+  }
+  return [...matches][0] ?? null;
+}

@@ -7,6 +7,7 @@ import {
   cfgHudFolder,
   cfgSourceLinks,
   maskCfgPreview,
+  searchCfgCommands,
   searchCfgGuides,
 } from "./files-reference";
 
@@ -16,6 +17,11 @@ describe("offline cfg guides", () => {
     expect(searchCfgGuides("exec paths").some((guide) => guide.id === "exec")).toBe(true);
     expect(searchCfgGuides(" ")).toHaveLength(CFG_GUIDES.length);
     expect(CLASS_CFG_NAMES).toHaveLength(9);
+  });
+  it("finds catalog entries by command name with prefix matches first", () => {
+    expect(searchCfgCommands("fov_desired")[0]?.name).toBe("fov_desired");
+    expect(searchCfgCommands("model_fov", 2).map((entry) => entry.name)).toContain("viewmodel_fov");
+    expect(searchCfgCommands(" ")).toEqual([]);
   });
   it("keeps snippets harmless and independent of install paths", () => {
     for (const snippet of CFG_SNIPPETS) {

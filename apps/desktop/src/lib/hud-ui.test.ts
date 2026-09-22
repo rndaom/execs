@@ -7,7 +7,9 @@ import {
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
   type HudSort,
+  hudAuthorCopy,
   hudCatalogControls,
+  hudDisplayName,
   hudOptionsDirty,
   hudPageLinks,
   hudStatCopy,
@@ -272,7 +274,7 @@ describe("hud sorting", () => {
       "hud-0",
     ]);
     expect(sortHudCatalog(catalog, metrics, "updated").map((entry) => entry.id)).toEqual(["hud-0"]);
-    expect(hudStatCopy(values[0])).toBe("0 downloads · 0 views · updated Feb 2024");
+    expect(hudStatCopy(values[0])).toBe("0 downloads · 0 views · listing activity Feb 2024");
     expect(hudStatCopy(values[2])).toBeNull();
     expect(hudStatCopy(values[3])).toBeNull();
   });
@@ -303,12 +305,21 @@ describe("hud sorting", () => {
   });
 
   it("describes what is known in one line", () => {
-    expect(hudStatCopy(stats.rayshud)).toBe("398k downloads · 1.2M views · updated Jan 2026");
-    expect(hudStatCopy({ updated: "2024-03-02" })).toBe("updated Mar 2024");
+    expect(hudStatCopy(stats.rayshud)).toBe(
+      "398k downloads · 1.2M views · listing activity Jan 2026",
+    );
+    expect(hudStatCopy({ updated: "2024-03-02" })).toBe("listing activity Mar 2024");
     expect(hudStatCopy(undefined)).toBeNull();
     expect(hudStatCopy({})).toBeNull();
     expect(compactCount(999)).toBe("999");
     expect(compactCount(12_345)).toBe("12k");
     expect(compactCount(12_345_678)).toBe("12M");
+  });
+
+  it("does not present an uncredited HUD creator as a person named Unknown", () => {
+    expect(hudAuthorCopy({ author: "Unknown" })).toBe("Creator uncredited");
+    expect(hudAuthorCopy({ author: "raysfire" })).toBe("by raysfire");
+    expect(hudDisplayName({ name: "512561891" })).toBe("Untitled HUD");
+    expect(hudDisplayName({ name: "7HUD" })).toBe("7HUD");
   });
 });

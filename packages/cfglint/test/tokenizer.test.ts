@@ -38,6 +38,13 @@ describe("tokenizeCommands", () => {
     expect(flat("volume 0.5\r\nsensitivity 2\r\n")).toEqual(flat("volume 0.5\nsensitivity 2\n"));
   });
 
+  it("does not turn a UTF-8 BOM into an unknown command", () => {
+    expect(flat("\uFEFFnet_graph 0\n\uFEFFvolume 0.5")).toEqual([
+      ["net_graph", "0"],
+      ["volume", "0.5"],
+    ]);
+  });
+
   it("records accurate line and column spans", () => {
     const [[first], [second]] = tokenizeCommands("volume 0.5\n  sensitivity 2");
     expect({ line: first.line, col: first.col }).toEqual({ line: 1, col: 1 });

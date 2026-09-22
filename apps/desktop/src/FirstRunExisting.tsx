@@ -1,4 +1,4 @@
-import { FolderOpen, ShieldCheck } from "@phosphor-icons/react";
+import { FolderOpen } from "@phosphor-icons/react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
 import { OperationError } from "./components/ui/OperationError";
 import { useAppStatus } from "./hooks/useAppStatus";
@@ -28,10 +28,7 @@ export function FirstRunExisting({
 
   return (
     <OnboardingFrame
-      eyebrow="Existing setup found"
-      icon={<ShieldCheck aria-hidden="true" size={13} weight="bold" />}
       title="Keep your current setup"
-      lede="Save your existing customization as a profile."
       width="wide"
       testId="first-run-existing"
       steps={[

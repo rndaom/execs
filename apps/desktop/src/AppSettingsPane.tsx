@@ -42,7 +42,7 @@ function SettingsSection({
 }: {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
@@ -54,7 +54,7 @@ function SettingsSection({
         <h2 id={id} className="t-section">
           {title}
         </h2>
-        <p className="t-meta mt-1.5 max-w-[28ch]">{description}</p>
+        {description ? <p className="t-meta mt-1.5 max-w-[28ch]">{description}</p> : null}
       </div>
       <div className="min-w-0 md:border-l md:border-edge md:pl-5">{children}</div>
     </section>
@@ -125,7 +125,6 @@ export function AppSettingsPane({
     <div data-testid="app-settings" className="min-w-0 text-left">
       <PaneHeader
         title="App settings"
-        lede="Preferences for execs, across all your profiles."
         actions={
           <>
             <span className="t-meta mr-2 flex items-center gap-2">
@@ -157,11 +156,7 @@ export function AppSettingsPane({
       {actionError ? <Alert className="mb-6">{actionError}</Alert> : null}
 
       <div className="space-y-3" aria-busy={settings.loading || settings.saving}>
-        <SettingsSection
-          id="app-appearance"
-          title="Appearance"
-          description="Foundry, wherever you play."
-        >
+        <SettingsSection id="app-appearance" title="Appearance">
           <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
             <span className="t-row">Motion</span>
             <Segmented
@@ -179,7 +174,7 @@ export function AppSettingsPane({
           </p>
         </SettingsSection>
 
-        <SettingsSection id="app-updates" title="Updates" description="Keep execs up to date.">
+        <SettingsSection id="app-updates" title="Updates">
           <div className="flex min-h-8 items-center justify-between gap-4">
             <span className="t-row">Check for updates on startup</span>
             <Switch
@@ -218,11 +213,7 @@ export function AppSettingsPane({
           </p>
         </SettingsSection>
 
-        <SettingsSection
-          id="app-installation"
-          title="TF2 installation"
-          description="The game folder execs uses."
-        >
+        <SettingsSection id="app-installation" title="TF2 installation">
           <p className="t-body break-all text-ink-muted" data-testid="app-install-location">
             {confirmedRoot ?? "No TF2 folder confirmed yet."}
           </p>
@@ -283,11 +274,7 @@ export function AppSettingsPane({
           </div>
         </SettingsSection>
 
-        <SettingsSection
-          id="app-support"
-          title="Support"
-          description="Get help or report an issue."
-        >
+        <SettingsSection id="app-support" title="Support">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

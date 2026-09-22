@@ -1,5 +1,7 @@
 import {
   ArrowClockwise,
+  ArrowLeft,
+  ArrowRight,
   ArrowSquareOut,
   MagnifyingGlass,
   Play,
@@ -56,12 +58,16 @@ import {
   communityEntries,
   filterSoundLibrary,
   ownEntry,
+  pageSoundLibrary,
+  parseSoundPageJump,
+  SOUND_LIBRARY_PAGE_SIZE,
   SOUND_SORTS,
   SOUND_SOURCE_LABELS,
   type SoundLibraryEntry,
   type SoundSort,
   type SoundSourceId,
   soundAccessibleNames,
+  soundPageLinks,
   stockEntries,
 } from "./lib/sound-library";
 
@@ -134,6 +140,7 @@ export function SoundsPane({
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SoundSort>("name-asc");
   const [source, setSource] = useState<SoundSourceId | "all">("all");
+  const [page, setPage] = useState(0);
   const [picked, setPicked] = useState<PickedHitsound | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -201,6 +208,11 @@ export function SoundsPane({
     () => filterSoundLibrary(library, query, sort, source === "all" ? null : new Set([source])),
     [library, query, sort, source],
   );
+  useEffect(() => {
+    const lastPage = Math.max(0, Math.ceil(rows.length / SOUND_LIBRARY_PAGE_SIZE) - 1);
+    setPage((current) => Math.min(current, lastPage));
+  }, [rows.length]);
+  const paged = useMemo(() => pageSoundLibrary(rows, page), [rows, page]);
   const accessibleNames = useMemo(() => soundAccessibleNames(library), [library]);
 
   const dirty = serializeSoundsDraft(draft) !== serializeSoundsDraft(seeded);
@@ -238,6 +250,7 @@ export function SoundsPane({
         setPicked(next);
         setSource("all");
         setQuery("");
+        setPage(0);
       }
     } catch (err) {
       setPickError(err instanceof Error ? err.message : "Could not read that file.");
@@ -271,7 +284,7 @@ export function SoundsPane({
 
   return (
     <section data-testid="settings-sounds" className="min-w-0 text-left">
-      <PaneHeader title="Sounds" lede="Choose a sound for each hit and kill." />
+      <PaneHeader title="Sounds" />
 
       <div className="pane-split gap-y-6">
         {(["hit", "kill"] as const).map((kind) => (
@@ -400,7 +413,10 @@ export function SoundsPane({
             testIdPrefix="sounds-source"
             options={SOURCE_FILTERS}
             value={source}
-            onChange={setSource}
+            onChange={(next) => {
+              setSource(next);
+              setPage(0);
+            }}
           />
           <label className="relative block min-w-40 flex-1">
             <span className="sr-only">Search sounds</span>
@@ -413,7 +429,10 @@ export function SoundsPane({
               type="search"
               data-testid="sounds-search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
               placeholder="Search by name…"
               className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
             />
@@ -424,12 +443,30 @@ export function SoundsPane({
             testIdPrefix="sounds-sort"
             options={SOUND_SORTS}
             value={sort}
-            onChange={setSort}
+            onChange={(next) => {
+              setSort(next);
+              setPage(0);
+            }}
           />
         </div>
 
+        <p className="t-meta mt-2">
+          These sound sources do not publish dates or popularity counts.
+        </p>
+        {paged.pageCount > 1 ? (
+          <SoundPagination
+            position="top"
+            page={paged.page}
+            pageCount={paged.pageCount}
+            first={paged.first}
+            last={paged.last}
+            total={rows.length}
+            onPage={setPage}
+          />
+        ) : null}
+
         <ul data-testid="sounds-library" className="mt-2 list-none p-0">
-          {rows.map((entry) => {
+          {paged.entries.map((entry) => {
             const hitChoice = entry.choiceFor("hit");
             const killChoice = entry.choiceFor("kill");
             const hitPick = entry.pickFor("hit");
@@ -487,14 +524,23 @@ export function SoundsPane({
               <p className="t-row">
                 {source === "own" && !picked ? "Add a WAV to make it yours." : "No sounds match."}
               </p>
-              <p className="t-meta mt-1">
-                {source === "own" && !picked
-                  ? "Choose Add a WAV, then assign it to Hit or Kill."
-                  : "Try another name or source."}
-              </p>
             </li>
           ) : null}
         </ul>
+        {paged.pageCount > 1 ? (
+          <SoundPagination
+            position="bottom"
+            page={paged.page}
+            pageCount={paged.pageCount}
+            first={paged.first}
+            last={paged.last}
+            total={rows.length}
+            onPage={(next) => {
+              setPage(next);
+              document.getElementById("sound-library")?.scrollIntoView?.({ block: "start" });
+            }}
+          />
+        ) : null}
         {comfigError || stockError ? (
           <div className="pane-toolbar mt-3 rounded-md border border-edge bg-panel p-3">
             <div className="min-w-0">
@@ -544,6 +590,112 @@ export function SoundsPane({
         . execs is not affiliated with either.
       </p>
     </section>
+  );
+}
+
+function SoundPagination({
+  position,
+  page,
+  pageCount,
+  first,
+  last,
+  total,
+  onPage,
+}: {
+  position: "top" | "bottom";
+  page: number;
+  pageCount: number;
+  first: number;
+  last: number;
+  total: number;
+  onPage: (page: number) => void;
+}) {
+  const [jump, setJump] = useState(String(page + 1));
+  useEffect(() => setJump(String(page + 1)), [page]);
+  const jumpPage = parseSoundPageJump(jump, pageCount);
+  return (
+    <nav
+      aria-label={`Sound library pages, ${position}`}
+      data-testid={`sounds-pagination-${position}`}
+      className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+    >
+      <p className="t-meta tnum" aria-live={position === "top" ? "polite" : "off"}>
+        {first}–{last} of {total}
+      </p>
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          data-testid={`sounds-page-prev-${position}`}
+          aria-label="Previous sound page"
+          disabled={page === 0}
+          onClick={() => onPage(page - 1)}
+          className="btn btn-quiet p-2"
+        >
+          <ArrowLeft size={14} />
+        </button>
+        {soundPageLinks(page, pageCount).map((link) =>
+          typeof link === "number" ? (
+            <button
+              key={link}
+              type="button"
+              aria-label={`Sound page ${link}`}
+              aria-current={link === page + 1 ? "page" : undefined}
+              onClick={() => onPage(link - 1)}
+              className={`btn btn-quiet tnum min-w-8 px-2 py-1.5 ${
+                link === page + 1 ? "bg-brand/6 ring-1 ring-brand" : ""
+              }`}
+            >
+              {link}
+            </button>
+          ) : (
+            <span key={link} className="t-meta px-0.5" aria-hidden="true">
+              …
+            </span>
+          ),
+        )}
+        <button
+          type="button"
+          data-testid={`sounds-page-next-${position}`}
+          aria-label="Next sound page"
+          disabled={page >= pageCount - 1}
+          onClick={() => onPage(page + 1)}
+          className="btn btn-quiet p-2"
+        >
+          <ArrowRight size={14} />
+        </button>
+      </div>
+      <form
+        className="flex items-center gap-1.5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (jumpPage !== null) onPage(jumpPage);
+        }}
+      >
+        <label htmlFor={`sounds-page-jump-${position}`} className="t-meta">
+          Page
+        </label>
+        <input
+          id={`sounds-page-jump-${position}`}
+          data-testid={`sounds-page-jump-${position}`}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]+"
+          value={jump}
+          onChange={(event) => setJump(event.target.value)}
+          aria-label={`Sound page number, 1 to ${pageCount}`}
+          aria-invalid={jump !== "" && jumpPage === null ? true : undefined}
+          className="field tnum w-12 px-2 py-1.5 text-center text-[13px] text-ink focus:outline-none"
+        />
+        <span className="t-meta tnum">/ {pageCount}</span>
+        <button
+          type="submit"
+          disabled={jumpPage === null || jumpPage === page}
+          className="btn btn-quiet px-2 py-1.5"
+        >
+          Go
+        </button>
+      </form>
+    </nav>
   );
 }
 

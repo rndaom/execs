@@ -35,6 +35,46 @@ export const SOUND_SORTS: { id: SoundSort; label: string }[] = [
   { id: "source", label: "Source" },
 ];
 
+export const SOUND_LIBRARY_PAGE_SIZE = 24;
+
+export function pageSoundLibrary(entries: SoundLibraryEntry[], requestedPage: number) {
+  const pageCount = Math.ceil(entries.length / SOUND_LIBRARY_PAGE_SIZE);
+  const page = Math.min(Math.max(0, requestedPage), Math.max(0, pageCount - 1));
+  const start = page * SOUND_LIBRARY_PAGE_SIZE;
+  return {
+    page,
+    pageCount,
+    first: entries.length ? start + 1 : 0,
+    last: Math.min(start + SOUND_LIBRARY_PAGE_SIZE, entries.length),
+    entries: entries.slice(start, start + SOUND_LIBRARY_PAGE_SIZE),
+  };
+}
+
+export function soundPageLinks(
+  page: number,
+  pageCount: number,
+): (number | "gap-start" | "gap-end")[] {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+  const keep = new Set([1, pageCount, page, page + 1, page + 2]);
+  const ordered = [...keep]
+    .filter((value) => value >= 1 && value <= pageCount)
+    .sort((a, b) => a - b);
+  const links: (number | "gap-start" | "gap-end")[] = [];
+  ordered.forEach((value, index) => {
+    if (index > 0 && value - ordered[index - 1] > 1) {
+      links.push(value === pageCount ? "gap-end" : "gap-start");
+    }
+    links.push(value);
+  });
+  return links;
+}
+
+export function parseSoundPageJump(value: string, pageCount: number): number | null {
+  if (!/^[1-9]\d*$/.test(value)) return null;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page <= pageCount ? page - 1 : null;
+}
+
 const SOURCE_ORDER: SoundSourceId[] = ["own", "stock", "community", "comfig"];
 
 export function stockEntries(): SoundLibraryEntry[] {

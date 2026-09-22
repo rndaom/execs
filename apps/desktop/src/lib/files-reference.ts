@@ -1,4 +1,9 @@
-import { createCfgResolver, normalizeCfgPath, parseCommands } from "@execs/cfglint";
+import {
+  createCfgResolver,
+  enumerateCatalog,
+  normalizeCfgPath,
+  parseCommands,
+} from "@execs/cfglint";
 
 export const CLASS_CFG_NAMES = [
   "scout",
@@ -11,7 +16,7 @@ export const CLASS_CFG_NAMES = [
   "sniper",
   "spy",
 ] as const;
-export const REFERENCE_REVIEWED = "2026-09-20";
+export const REFERENCE_REVIEWED = "2026-09-22";
 export const CFG_GUIDES = [
   {
     id: "first",
@@ -63,7 +68,35 @@ export const CFG_GUIDES = [
     title: "Server and cheat restrictions",
     text: "A recognized command may still be unavailable in your game build or disallowed by the server. Cheat-flagged settings require server permission; replicated values can be server-controlled. A documented default is source metadata, never your draft value or a measurement of the running game. This bundled reference may lag TF2 updates.",
   },
+  {
+    id: "findings",
+    title: "Issues and catalog gaps",
+    text: "Issues flag syntax, safety or analysis limits. Catalog gaps mean a name is absent from the pinned offline reference; they do not prove that TF2 rejects it. Files checks dormant class scripts and bind or alias payloads too, so a finding does not mean that command ran at startup.",
+  },
+  {
+    id: "credentials",
+    title: "Saved credentials",
+    text: "TF2 can archive a server password into config.cfg. A nonempty password or remote-console setting is a save restriction because profiles and exports must not copy credentials. Remove the command explicitly in Files after reviewing what it is used for; execs will not silently strip it.",
+  },
+  {
+    id: "incomplete",
+    title: "Unresolved startup settings",
+    text: "Binds, Gameplay, Crosshair and Sounds need a reliable startup cfg map before saving. An unresolved exec, unknown command or dynamic setting command can make that map incomplete. Open Files at the startup cfg and review Issues and Catalog gaps. Plugin or external alias effects cannot be inferred from a command name alone.",
+  },
 ] as const;
+
+/** Bounded, name-first lookup over the pinned offline catalog. */
+export function searchCfgCommands(query: string, limit = 12) {
+  const term = query.trim().toLowerCase();
+  if (!term) return [];
+  const prefix = [];
+  const other = [];
+  for (const entry of enumerateCatalog()) {
+    if (entry.name.startsWith(term)) prefix.push(entry);
+    else if (entry.name.includes(term)) other.push(entry);
+  }
+  return [...prefix, ...other].slice(0, limit);
+}
 
 export const CFG_SNIPPETS = [
   {

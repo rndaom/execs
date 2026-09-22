@@ -140,6 +140,21 @@ afterEach(async () => {
 });
 
 describe("Files draft navigation", () => {
+  it("separates review issues from offline catalog gaps", async () => {
+    files = [{ path: first, text: 'viewwmodel_fov 90\nbind p ""show_quest_log"' }];
+    await render();
+    await checked();
+    await button("Problems 1");
+    expect(container.querySelectorAll('[data-testid="files-finding"]')).toHaveLength(1);
+    expect(
+      container.querySelector('[data-testid="files-finding"]')?.getAttribute("data-tier"),
+    ).toBe("warn");
+    await click('input[type="radio"][value="catalog"]');
+    expect(container.querySelectorAll('[data-testid="files-finding"]')).toHaveLength(1);
+    expect(
+      container.querySelector('[data-testid="files-finding"]')?.getAttribute("data-tier"),
+    ).toBe("info");
+  });
   it("opens incoming callers at their source line and identifies deferred payloads without losing drafts", async () => {
     files = [
       { path: first, text: 'echo start\nexec b\nbind f "helper_alias"\n' },

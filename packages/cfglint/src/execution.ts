@@ -11,6 +11,7 @@ type ExecutionContext = {
   takeCommand: (at: Command) => boolean;
   takeExec: (at: Command) => boolean;
   incomplete: (rule: string, message: string, at: Command) => void;
+  allowMalformedBinds: boolean;
 };
 
 /**
@@ -43,6 +44,10 @@ export function evaluateStartup(ctx: ExecutionContext): {
       }
       const { name, args } = cmd;
       if (cmd.tokens.some((token) => !token.closed)) {
+        // A malformed bind cannot establish that key, but a newline-bound
+        // parser recovery can still establish later, unrelated settings.
+        // Keep the syntax finding from the safety pass for the user to fix.
+        if (ctx.allowMalformedBinds && name === "bind") continue;
         stop(
           "execution-incomplete",
           "Startup contains an unclosed quote; settings are incomplete",

@@ -1,5 +1,6 @@
 //! Minimal VTF reader: frame 0 of the largest mip, decoded to RGBA. Covers the
-//! formats TF2 uses for crosshair sprites and community crosshair packs
+//! formats TF2 uses for crosshair sprites, community crosshair packs and
+//! installed war-paint swatches
 //! (BGRA8888, RGBA8888, I8, IA88, A8, DXT1, DXT3, DXT5). Read-only; never
 //! writes game files.
 
@@ -98,7 +99,7 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
     let low_res_format = read_i32(bytes, 57).ok_or("VTF header truncated.")?;
     let low_res_w = u32::from(*bytes.get(61).ok_or("VTF header truncated.")?);
     let low_res_h = u32::from(*bytes.get(62).ok_or("VTF header truncated.")?);
-    if width == 0 || height == 0 || width > 1024 || height > 1024 {
+    if width == 0 || height == 0 || width > 2048 || height > 2048 {
         return Err(format!("Unsupported VTF dimensions {width}x{height}."));
     }
     let max_mip_count = u32::BITS - width.max(height).leading_zeros();
@@ -387,6 +388,15 @@ mod tests {
         let decoded = decode_vtf_frame0(&bytes).unwrap();
         assert_eq!((decoded.width, decoded.height, decoded.frames), (8, 8, 2));
         assert_eq!(&decoded.rgba[0..4], &[30, 20, 10, 255]);
+    }
+
+    #[test]
+    fn decodes_a_large_installed_pattern_within_the_swatch_bound() {
+        let mut bytes = header(2, 2048, 2048, 1, FORMAT_DXT5, 1, 80);
+        bytes.extend(vec![0u8; 2048 * 2048]);
+        let decoded = decode_vtf_frame0(&bytes).unwrap();
+        assert_eq!((decoded.width, decoded.height), (2048, 2048));
+        assert_eq!(decoded.rgba.len(), 2048 * 2048 * 4);
     }
 
     #[test]

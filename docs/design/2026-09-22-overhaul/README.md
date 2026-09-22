@@ -1,6 +1,6 @@
-# execs Foundry implementation review
+# execs overhaul review
 
-Foundry is now implemented in the production application. Open [the implementation review](http://127.0.0.1:1424/implementation/review.html) to compare **85 accepted captures across 15 pages and flows** with the selected Foundry concepts. The [integrated QA report](design-qa.md) records the current implementation, verification results and platform limits.
+The current development direction uses neutral black, gray and white with TF2 orange selections and necessary highlights, and removes decorative text. The earlier Foundry concept gallery and its **85 accepted captures across 15 pages and flows** document the previous candidate; they are retained as historical evidence and do not verify the revised appearance. The [integrated QA report](design-qa.md) records that earlier implementation and its platform limits. The [combined plan](combined-release-plan.md) records the current direction.
 
 The review is a local screenshot artifact. It makes no native calls, saves no product settings and uses no external dependencies. Its interactive-fixture link opens the separate development app at `http://127.0.0.1:1422/?preview=settings-comfig`; the screenshots show production UI running browser fixture data, not a packaged native session. Inventory remains development-only. No release or deployment is part of this review.
 

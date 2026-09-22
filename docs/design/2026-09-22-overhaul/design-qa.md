@@ -1,5 +1,7 @@
 # Foundry integrated design and implementation review
 
+Historical candidate review. The owner subsequently selected a neutral dark overhaul with TF2 orange highlights and removed the Foundry name from the active product direction. See [the combined plan](combined-release-plan.md); the captures and checks below predate that revision.
+
 September 22, 2026. **Implemented development candidate; browser QA passed within the evidence below. Native release qualification remains open.** Foundry is the selected and only product direction. No version bump, release tag or publication is authorized by this work.
 
 The product implementation is committed as `7c78fbed1907dceb37bf348596fca48a8f654e66` on `rndaom/foundry-overhaul`, building on `e1fecdaaf4de2c7257eb2dbe875ac45f22ee4dcc` and the shipped 0.1.8 Mods foundation. The original 67 captures/66 accepted screenshots and 15 generated boards remain the dated design exploration. Current implementation captures are under `implementation/`; reference comparisons use all five `options/01-foundry` boards.

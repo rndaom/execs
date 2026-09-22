@@ -7,12 +7,9 @@ export type OnboardingStep = {
 
 /**
  * The one frame the three onboarding screens share (finder, first-run existing,
- * setup wizard) so they read as the same family: wordmark, eyebrow, a balanced
- * title, one short lede, then the content column.
+ * setup wizard) so they read as the same family: wordmark, title, and content.
  */
 export function OnboardingFrame({
-  eyebrow,
-  icon,
   title,
   lede,
   width = "narrow",
@@ -22,8 +19,6 @@ export function OnboardingFrame({
   children,
   footer,
 }: {
-  eyebrow: string;
-  icon?: ReactNode;
   title: string;
   lede?: string;
   /** A bounded setup workspace, independent of the customization sidebar. */
@@ -43,15 +38,11 @@ export function OnboardingFrame({
         width === "wide" ? "max-w-[880px]" : "max-w-[640px]"
       }`}
     >
-      <div className="flex w-full flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
+      <div className="flex w-full items-center border-b border-edge pb-4">
         <p className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-ink">
           <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
           execs
         </p>
-        <div className="eyebrow flex items-center gap-2">
-          {icon}
-          <span>{eyebrow}</span>
-        </div>
       </div>
       <div
         className={

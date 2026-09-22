@@ -311,7 +311,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       return (
         <>
           <SetupWizard
-            title={isCreate ? "New profile" : "Unused install"}
             draftName={draftName}
             preset={firstRun.preset}
             addons={firstRun.addons}

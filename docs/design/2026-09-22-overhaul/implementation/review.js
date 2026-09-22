@@ -116,7 +116,7 @@ function selectCapture(index) {
   currentImage.alt = `${selectedPage.name}: ${capture.title}, captured at ${capture.viewport}.`;
   byId("current-original").href = capture.file;
   referenceImage.src = referenceBoard.file;
-  referenceImage.alt = `Foundry ${referenceBoard.title} concept board, focused on its ${view.label.toLowerCase()}.`;
+  referenceImage.alt = `Previous ${referenceBoard.title} concept board, focused on its ${view.label.toLowerCase()}.`;
   referenceImage.style.width = `${(1672 / width) * 100}%`;
   referenceImage.style.transform = `translate(${(-x / 1672) * 100}%, ${(-y / 941) * 100}%)`;
   byId("open-reference").style.aspectRatio = `${width} / ${height}`;
@@ -166,7 +166,7 @@ function openImage(kind, title, src, caption) {
 
 function openReference() {
   openImage(
-    "Original Foundry concept board",
+    "Original concept board",
     referenceBoard.title,
     referenceBoard.file,
     "Generated concept reference. Catalog artwork, labels and counts are illustrative; the implemented UI and scoped QA reports establish current behavior.",

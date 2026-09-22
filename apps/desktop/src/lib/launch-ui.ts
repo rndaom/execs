@@ -1,5 +1,53 @@
 export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
 
+/** Curated from Steam Support and https://docs.comfig.app/latest/customization/launch_options/. */
+export const LAUNCH_PRESETS = [
+  { id: "novid", label: "Skip intro video", token: "-novid", kind: "flag" },
+  { id: "nojoy", label: "Disable joystick", token: "-nojoy", kind: "flag" },
+  {
+    id: "nosteamcontroller",
+    label: "Disable Steam controller",
+    token: "-nosteamcontroller",
+    kind: "flag",
+  },
+  { id: "nohltv", label: "Disable SourceTV hosting", token: "-nohltv", kind: "flag" },
+  { id: "particles", label: "Reduce beam count", token: "-particles 1", kind: "flag" },
+  { id: "console", label: "Open developer console", token: "-console", kind: "flag" },
+  { id: "nostartupsound", label: "Mute menu music", token: "-nostartupsound", kind: "flag" },
+  { id: "freq", label: "Refresh rate", token: "-freq", kind: "refresh" },
+  { id: "resolution", label: "Resolution", token: "-w", kind: "resolution" },
+] as const;
+
+export type LaunchPreset = (typeof LAUNCH_PRESETS)[number];
+export type LaunchPresetId = LaunchPreset["id"];
+export type LaunchPresetValues = { refresh: string; width: string; height: string };
+
+export function launchPresetPresent(raw: string, preset: LaunchPreset): boolean {
+  const groups = launchOptionGroups(raw);
+  if (!groups) return false;
+  const tokens = groups.map((group) => group.text.split(/\s+/, 1)[0].toLowerCase());
+  return preset.kind === "resolution"
+    ? tokens.includes("-w") || tokens.includes("-h")
+    : tokens.includes(preset.token.split(" ", 1)[0].toLowerCase());
+}
+
+/** Only known options and bounded decimal values can enter the guided composer. */
+export function buildLaunchPreset(preset: LaunchPreset, values: LaunchPresetValues): string | null {
+  if (preset.kind === "flag") return preset.token;
+  const decimal = (raw: string, min: number, max: number) => {
+    if (!/^[0-9]{1,5}$/.test(raw)) return null;
+    const value = Number(raw);
+    return value >= min && value <= max ? String(value) : null;
+  };
+  if (preset.kind === "refresh") {
+    const refresh = decimal(values.refresh, 30, 1000);
+    return refresh === null ? null : `-freq ${refresh}`;
+  }
+  const width = decimal(values.width, 640, 16384);
+  const height = decimal(values.height, 480, 16384);
+  return width === null || height === null ? null : `-w ${width} -h ${height}`;
+}
+
 /** The official mastercomfig set new and wizard profiles start from. */
 export function recommendedLaunchOptions(): string {
   return "-novid -nojoy -nosteamcontroller -nohltv -particles 1";

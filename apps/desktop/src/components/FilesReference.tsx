@@ -1,7 +1,12 @@
 import { lookupCommand } from "@execs/cfglint";
 import { CaretRight } from "@phosphor-icons/react";
-import { useId, useState } from "react";
-import { CFG_SNIPPETS, REFERENCE_REVIEWED, searchCfgGuides } from "../lib/files-reference";
+import { useEffect, useId, useState } from "react";
+import {
+  CFG_SNIPPETS,
+  REFERENCE_REVIEWED,
+  searchCfgCommands,
+  searchCfgGuides,
+} from "../lib/files-reference";
 
 type FilesReferenceProps = {
   command: string | null;
@@ -15,15 +20,60 @@ type HelpSection = "details" | "guides" | "snippets";
 
 export function FilesReference({ command, selectedPath, editable, onInsert }: FilesReferenceProps) {
   const [query, setQuery] = useState("");
+  const [commandQuery, setCommandQuery] = useState("");
+  const [chosenCommand, setChosenCommand] = useState<{
+    name: string;
+    cursor: string | null;
+  } | null>(null);
   const [section, setSection] = useState<HelpSection | null>(null);
   const queryId = useId();
-  const entry = command ? lookupCommand(command) : undefined;
+  const commandQueryId = useId();
+  useEffect(() => {
+    setChosenCommand((chosen) => (chosen?.cursor === command ? chosen : null));
+  }, [command]);
+  const entry =
+    chosenCommand || command ? lookupCommand(chosenCommand?.name ?? command ?? "") : undefined;
+  const commands = searchCfgCommands(commandQuery);
   const guides = searchCfgGuides(query);
   const toggle = (next: HelpSection) => setSection((current) => (current === next ? null : next));
 
   return (
     <section aria-label="Offline cfg reference" className="grid gap-2">
-      {!command ? (
+      <label htmlFor={commandQueryId} className="sr-only">
+        Search commands
+      </label>
+      <input
+        id={commandQueryId}
+        type="search"
+        value={commandQuery}
+        onChange={(event) => setCommandQuery(event.target.value)}
+        className="input w-full"
+        placeholder="Search commands"
+      />
+      {commandQuery.trim() && (
+        <div className="max-h-40 overflow-y-auto rounded-lg border border-edge bg-panel-raised p-1">
+          {commands.length ? (
+            commands.map((match) => (
+              <button
+                key={match.name}
+                type="button"
+                className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-bg"
+                onClick={() => {
+                  setChosenCommand({ name: match.name, cursor: command });
+                  setSection("details");
+                  setCommandQuery("");
+                }}
+              >
+                <code>{match.name}</code>
+                {match.help && <span className="ml-2 text-ink-muted">{match.help}</span>}
+              </button>
+            ))
+          ) : (
+            <p className="p-2 text-sm text-ink-muted">No match in the offline catalog.</p>
+          )}
+        </div>
+      )}
+      {!chosenCommand && !command ? (
         <p className="rounded-lg border border-edge bg-panel-raised p-3 text-sm">
           Place the cursor on a command to see help.
         </p>

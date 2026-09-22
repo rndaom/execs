@@ -274,7 +274,10 @@ describe("sound acknowledgements through the real host", () => {
         await input("#sounds-hit-pitch-min", "80");
       }
       if (field === "boost") await click('[data-testid="sounds-hit-boost-12"]');
-      if (field === "source") await click('[data-testid="sounds-assign-hit-comfig:next-hash"]');
+      if (field === "source") {
+        await input('[data-testid="sounds-search"]', "Next sound");
+        await click('[data-testid="sounds-assign-hit-comfig:next-hash"]');
+      }
       await act(async () => pending.resolve(null));
       if (field === "volume")
         expect(element<HTMLInputElement>("#sounds-hit-volume").value).toBe("40");

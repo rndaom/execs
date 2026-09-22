@@ -36,7 +36,9 @@ import {
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
   HUD_SORTS,
+  hudAuthorCopy,
   hudCatalogControls,
+  hudDisplayName,
   hudInstallSourceCopy,
   hudOptionsDirty,
   hudPageLinks,
@@ -164,7 +166,11 @@ export function HudPane({
   const paged = paginateHudCatalog(filtered, page);
   const missingStats = matching.length - filtered.length;
   const metric =
-    sort === "updated" ? "update dates" : sort === "downloads" ? "download counts" : "view counts";
+    sort === "updated"
+      ? "TF2 HUDs listing activity dates"
+      : sort === "downloads"
+        ? "download counts"
+        : "view counts";
   // The schema options are a draft of the HUD's own file: they autosave, so
   // nothing in that block is disabled — the lock defers the write instead.
   const dirty = hudOptionsDirty(draft, seeded);
@@ -315,9 +321,11 @@ export function HudPane({
             >
               <div className="min-w-0">
                 <div className="min-w-0">
-                  <h2 className="t-pane">{installedEntry?.name ?? installedId}</h2>
+                  <h2 className="t-pane">
+                    {installedEntry ? hudDisplayName(installedEntry) : installedId}
+                  </h2>
                   <p className="t-meta mt-1">
-                    {installedEntry ? `by ${installedEntry.author} · ` : ""}
+                    {installedEntry ? `${hudAuthorCopy(installedEntry)} · ` : ""}
                     {installedLabel}
                   </p>
                   {state.inferred ? (
@@ -624,9 +632,9 @@ export function HudPane({
                     type="button"
                     onClick={() => setViewer({ entry: installedEntry, index: 0 })}
                     className="surface m-0 w-full cursor-zoom-in"
-                    aria-label={`View ${installedEntry.name} screenshots`}
+                    aria-label={`View ${hudDisplayName(installedEntry)} screenshots`}
                   >
-                    <HudPreview src={installedEntry.banner} name={installedEntry.name} />
+                    <HudPreview src={installedEntry.banner} name={hudDisplayName(installedEntry)} />
                   </button>
                   <figcaption className="t-meta mt-2">
                     Author’s screenshot. Open TF2 to see your saved options.
@@ -638,7 +646,6 @@ export function HudPane({
             <div className="py-8">
               <p className="eyebrow">Current HUD</p>
               <h2 className="t-pane mt-2">Stock Team Fortress 2</h2>
-              <p className="t-meta mt-2">Choose a community HUD or import one you downloaded.</p>
               <button
                 type="button"
                 className="btn btn-primary mt-5"
@@ -694,12 +701,11 @@ export function HudPane({
 
           {statsLoading ? (
             <p data-testid="hud-stats-loading" role="status" className="t-meta mt-3">
-              Loading dates and popularity…
+              Loading HUD activity and popularity…
             </p>
           ) : statsError ? (
             <Alert tone="warn" testId="hud-stats-error" className="mt-3 py-2">
-              Dates and popularity refresh is incomplete. {statsError} Available data is still
-              shown.
+              HUD activity refresh is incomplete. {statsError} Available data is still shown.
               <button
                 type="button"
                 className="ml-2 underline"
@@ -734,6 +740,9 @@ export function HudPane({
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {sort === "updated" ? (
+            <p className="t-meta mt-2">Activity dates describe changes to tf2huds.dev listings.</p>
           ) : null}
 
           {paged.total > 0 ? (
@@ -822,12 +831,14 @@ export function HudPane({
                     >
                       <button
                         type="button"
-                        title={hasPictures ? `View ${entry.name} screenshots` : undefined}
+                        title={
+                          hasPictures ? `View ${hudDisplayName(entry)} screenshots` : undefined
+                        }
                         disabled={!hasPictures}
                         onClick={() => setViewer({ entry, index: 0 })}
                         className="block aspect-[16/7] w-full shrink-0 cursor-zoom-in overflow-hidden bg-panel disabled:cursor-default"
                       >
-                        <HudPreview src={entry.banner} name={entry.name} compact />
+                        <HudPreview src={entry.banner} name={hudDisplayName(entry)} compact />
                       </button>
                       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 px-3 pt-2">
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -836,13 +847,13 @@ export function HudPane({
                             data-testid={`hud-details-${entry.id}`}
                             onClick={() => setDetailsEntry(entry)}
                             className="t-row text-left hover:underline"
-                            aria-label={`${entry.name} details`}
+                            aria-label={`${hudDisplayName(entry)} details`}
                           >
-                            {entry.name}
+                            {hudDisplayName(entry)}
                           </button>
                           {current ? <span className="badge">Installed</span> : null}
                         </div>
-                        <p className="t-meta truncate">by {entry.author}</p>
+                        <p className="t-meta truncate">{hudAuthorCopy(entry)}</p>
                         {sort !== "name" ? (
                           <p className="t-meta w-full mt-1">
                             {hudStatCopy(stats[entry.id.toLowerCase()] ?? stats[entry.id])}
@@ -855,7 +866,7 @@ export function HudPane({
                             type="button"
                             data-testid={`hud-screenshots-${entry.id}`}
                             onClick={() => setViewer({ entry, index: 0 })}
-                            aria-label={`${entry.name} screenshots`}
+                            aria-label={`${hudDisplayName(entry)} screenshots`}
                             title="Screenshots"
                             className="btn btn-quiet p-2"
                           >
@@ -865,7 +876,7 @@ export function HudPane({
                         <button
                           type="button"
                           onClick={() => void openExternal(entry.comfigUrl)}
-                          aria-label={`${entry.name} on comfig.app`}
+                          aria-label={`${hudDisplayName(entry)} on comfig.app`}
                           title="Open on comfig.app"
                           className="btn btn-quiet p-2"
                         >
@@ -934,6 +945,14 @@ export function HudPane({
         >
           comfig.app
         </button>
+        . Popularity and listing activity from{" "}
+        <button
+          type="button"
+          onClick={() => void openExternal("https://tf2huds.dev/huds")}
+          className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+        >
+          TF2 HUDs
+        </button>
         . Option schemas from{" "}
         <button
           type="button"
@@ -950,20 +969,26 @@ export function HudPane({
         <Modal
           open
           testId="hud-details-dialog"
-          title={detailsEntry.name}
-          description={`by ${detailsEntry.author}`}
+          title={hudDisplayName(detailsEntry)}
+          description={hudAuthorCopy(detailsEntry)}
           className="fixed top-1/2 left-1/2 z-50 w-[min(40rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2"
           onClose={() => setDetailsEntry(null)}
         >
           <div className="surface mt-4 overflow-hidden">
-            <HudPreview src={detailsEntry.banner} name={detailsEntry.name} />
+            <HudPreview src={detailsEntry.banner} name={hudDisplayName(detailsEntry)} />
           </div>
           <div className="t-meta mt-4 space-y-2">
             <p>
               {hudStatCopy(stats[detailsEntry.id.toLowerCase()] ?? stats[detailsEntry.id]) ??
-                "Dates and popularity are unavailable for this HUD."}
+                "Activity and popularity are unavailable for this HUD."}
             </p>
             {detailsEntry.flags.length > 0 ? <p>{detailsEntry.flags.join(" · ")}</p> : null}
+            {detailsEntry.contributors?.length ? (
+              <p>Contributors: {detailsEntry.contributors.join(", ")}</p>
+            ) : null}
+            {hudDisplayName(detailsEntry) !== detailsEntry.name ? (
+              <p>Catalog ID: {detailsEntry.id}</p>
+            ) : null}
             <p>
               {hudInstallSourceCopy(detailsEntry) ?? "From GitHub"}. Catalog information from
               comfig.app.
@@ -1011,7 +1036,7 @@ export function HudPane({
         <Modal
           open
           testId="hud-replace-dialog"
-          title={`Replace ${installedEntry?.name ?? installedId}?`}
+          title={`Replace ${installedEntry ? hudDisplayName(installedEntry) : installedId}?`}
           description="This profile uses one HUD at a time."
           className="fixed top-1/2 left-1/2 z-50 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2"
           onClose={() => setReplacement(null)}
@@ -1019,13 +1044,15 @@ export function HudPane({
           <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-y border-edge py-4">
             <div className="min-w-0">
               <p className="eyebrow">Current</p>
-              <p className="t-row mt-1 break-words">{installedEntry?.name ?? installedId}</p>
+              <p className="t-row mt-1 break-words">
+                {installedEntry ? hudDisplayName(installedEntry) : installedId}
+              </p>
             </div>
             <ArrowRight size={18} className="text-ink-muted" aria-hidden="true" />
             <div className="min-w-0">
               <p className="eyebrow">Replace with</p>
-              <p className="t-row mt-1 break-words">{currentReplacement.entry.name}</p>
-              <p className="t-meta mt-1">by {currentReplacement.entry.author}</p>
+              <p className="t-row mt-1 break-words">{hudDisplayName(currentReplacement.entry)}</p>
+              <p className="t-meta mt-1">{hudAuthorCopy(currentReplacement.entry)}</p>
             </div>
           </div>
           <p className="t-meta mt-4">
@@ -1140,7 +1167,7 @@ function HudPreview({
   return src && failedSource !== src ? (
     <img
       src={src}
-      alt={`${name} HUD preview`}
+      alt={`${name} preview`}
       loading="lazy"
       onError={() => setFailedSource(src)}
       className={compact ? "h-full w-full object-contain" : "aspect-video w-full object-contain"}
@@ -1351,8 +1378,8 @@ function HudLightbox({
     <Modal
       open
       testId="hud-lightbox"
-      title={entry.name}
-      description={`by ${entry.author}${count > 0 ? ` · ${safeIndex + 1} of ${count}` : ""}${
+      title={hudDisplayName(entry)}
+      description={`${hudAuthorCopy(entry)}${count > 0 ? ` · ${safeIndex + 1} of ${count}` : ""}${
         albumNote ? ` · ${albumNote}` : ""
       }`}
       className="fixed inset-4 z-50 flex flex-col sm:inset-8"
@@ -1398,7 +1425,7 @@ function HudLightbox({
             key={current.url}
             data-testid="hud-lightbox-image"
             src={current.url}
-            alt={`${entry.name} screenshot ${safeIndex + 1}`}
+            alt={`${hudDisplayName(entry)} screenshot ${safeIndex + 1}`}
             className="enter-fade max-h-full min-h-0 max-w-full rounded-lg border border-edge object-contain"
           />
         ) : (

@@ -1,9 +1,7 @@
-//! Popularity and recency for the HUD catalog, from the two places that
-//! actually publish them. hud-db itself carries neither: comfig.app bakes a
-//! "Last updated" date into its listing pages (all listed HUDs, newest
-//! first), and tf2huds.dev exposes per-HUD download and view counts through
-//! its SvelteKit data endpoint (about 170 HUDs). Both are read once a day and
-//! cached; a HUD absent from either simply has no number.
+//! Popularity and site activity for the HUD catalog. tf2huds.dev exposes
+//! per-HUD download and view counts and a listing update timestamp through
+//! its SvelteKit data endpoint. The timestamp describes TF2 HUDs' listing,
+//! not the version installed from hud-db. Values are cached for a day.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
@@ -14,10 +12,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::net::{self, RemoteSource, MIB};
 
-const COMFIG_LIST_BASE: &str = "https://comfig.app/huds";
-/// comfig.app lists twelve HUDs per page; 20 pages today, so 40 is a wide
-/// ceiling that still stops the walk if the site ever loops.
-const COMFIG_MAX_PAGES: usize = 40;
 const TF2HUDS_BASE: &str = "https://tf2huds.dev";
 const TF2HUDS_MAX_PAGES: usize = 40;
 const STATS_IDS_PER_PAGE_LIMIT: usize = 256;
@@ -26,11 +20,11 @@ const TF2HUDS_RESPONSE_MAX_BYTES: u64 = 512 * 1024;
 const TF2HUDS_MAX_DATA_NODES: usize = 32;
 const TF2HUDS_MAX_VALUES_PER_NODE: usize = 8192;
 const STATS_WORKERS: usize = 8;
-/// How long a read that reached the end of both listings is served.
+/// How long a read that reached the end of the listing is served.
 const STATS_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 /// How long a read the deadline cut short, or one whose source was down, is
 /// served before the next HUD pane load tries again. Never caching it meant
-/// every pane load re-walked ~200 requests for up to 90 s while comfig.app
+/// every pane load re-walked ~200 requests for up to 90 s while the source
 /// was down or its markup had moved.
 const PARTIAL_STATS_TTL: Duration = Duration::from_secs(60 * 60);
 /// Wall clock for one whole refresh. Both walks are paginated and tf2huds.dev
@@ -39,12 +33,12 @@ const PARTIAL_STATS_TTL: Duration = Duration::from_secs(60 * 60);
 /// briefly.
 const STATS_DEADLINE: Duration = Duration::from_secs(90);
 const STATS_CACHE_MAX_BYTES: u64 = 16 * MIB;
-const STATS_SOURCE_VERSION: u32 = 2;
+const STATS_SOURCE_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HudStat {
-    /// ISO date (`YYYY-MM-DD`) of the last update comfig.app shows.
+    /// ISO date (`YYYY-MM-DD`) when the tf2huds.dev listing last changed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -58,8 +52,8 @@ pub struct HudStat {
 pub struct HudStatsCache {
     pub fetched_at: u64,
     pub stats: BTreeMap<String, HudStat>,
-    /// Both walks reached the end of their listings. Caches written before
-    /// this field existed were only ever written when that was true.
+    /// The source walk reached the end of its listing. Previous source
+    /// versions are rejected before this field is used.
     #[serde(default = "default_true")]
     pub complete: bool,
     #[serde(default)]
@@ -86,7 +80,9 @@ impl HudStatsCache {
             warning: if !self.warnings.is_empty() {
                 Some(self.warnings.join(" "))
             } else if !self.complete {
-                Some("The cached dates and popularity are incomplete. Retry Refresh to load the rest.".into())
+                Some(
+                    "The cached HUD activity is incomplete. Retry Refresh to load the rest.".into(),
+                )
             } else {
                 None
             },
@@ -114,8 +110,11 @@ struct Walk<T> {
     complete: bool,
 }
 
-/// `(downloads, views)` per hud-db id; None invalidates an ambiguous cached match.
-type Counts = BTreeMap<String, Option<(u64, u64)>>;
+/// `(downloads, views, listing date)` per hud-db id; None invalidates an
+/// ambiguous cached match.
+type Counts = BTreeMap<String, Option<(u64, u64, Option<String>)>>;
+/// Catalog id, downloads, views, and optional TF2 HUDs listing activity date.
+type Tf2HudsMatch = (String, u64, u64, Option<String>);
 
 fn cache_file(root: &std::path::Path) -> PathBuf {
     root.join("hud-catalog").join("stats-v1.json")
@@ -128,9 +127,8 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// The cached map when it is fresh, otherwise a new read of both sources.
-/// A failure on one source keeps the other's numbers; a failure on both
-/// keeps the stale cache rather than blanking every sort.
+/// The cached map when it is fresh, otherwise a new bounded source read.
+/// A failure keeps stale values rather than blanking every sort.
 pub fn load_or_fetch_stats(refresh: bool) -> Result<HudStatsPayload, String> {
     let now = now_secs();
     let root = execs_core::try_execs_data_dir()?;
@@ -151,27 +149,19 @@ pub fn load_or_fetch_stats(refresh: bool) -> Result<HudStatsPayload, String> {
         .map(catalog_repository_ids)
         .unwrap_or_default();
     let deadline = Instant::now() + STATS_DEADLINE;
-    // An unavailable dates source must not spend the counts source's budget.
-    let (updated, mut counts) = std::thread::scope(|scope| {
-        let dates = scope.spawn(|| fetch_comfig_updated(&client, deadline));
-        let counts = fetch_tf2huds_counts(&client, deadline, &repositories);
-        let dates = dates
-            .join()
-            .unwrap_or_else(|_| Err("Could not read HUD update dates.".into()));
-        (dates, counts)
-    });
+    let mut counts = fetch_tf2huds_counts(&client, deadline, &repositories);
     if !matches!(catalog, Ok(Some(_))) {
         if let Ok(walk) = &mut counts {
             walk.complete = false;
         }
     }
-    finish_stats_refresh(&root, now, cached.as_ref(), updated, counts)
+    finish_stats_refresh(&root, now, cached.as_ref(), counts)
 }
 
 fn source_warning<T>(source: &Result<Walk<T>, String>, name: &str) -> Option<String> {
     match source {
         Err(_) => Some(format!("{name} could not be refreshed.")),
-        Ok(walk) if !walk.complete => Some(format!("{name} were only partly refreshed; some values may be stale or missing. Retry Refresh to load the rest.")),
+        Ok(walk) if !walk.complete => Some(format!("{name} could only be partly refreshed; some values may be stale or missing. Retry Refresh to load the rest.")),
         Ok(_) => None,
     }
 }
@@ -180,19 +170,13 @@ fn finish_stats_refresh(
     root: &std::path::Path,
     now: u64,
     cached: Option<&HudStatsCache>,
-    updated: Result<Walk<BTreeMap<String, String>>, String>,
     counts: Result<Walk<Counts>, String>,
 ) -> Result<HudStatsPayload, String> {
-    let warnings: Vec<_> = [
-        source_warning(&updated, "Update dates from comfig.app"),
-        source_warning(&counts, "Download and view counts from tf2huds.dev"),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
-    let complete = matches!(&updated, Ok(walk) if walk.complete)
-        && matches!(&counts, Ok(walk) if walk.complete);
-    if updated.is_err() && counts.is_err() {
+    let warnings: Vec<_> = source_warning(&counts, "HUD activity from tf2huds.dev")
+        .into_iter()
+        .collect();
+    let complete = matches!(&counts, Ok(walk) if walk.complete);
+    if counts.is_err() {
         if let Some(cache) = cached {
             // Keep its original age. A failed Refresh must not renew the TTL.
             return Ok(HudStatsPayload {
@@ -206,12 +190,11 @@ fn finish_stats_refresh(
         .as_ref()
         .map(|cache| cache.stats.clone())
         .unwrap_or_default();
-    merge_updated(&mut stats, updated);
     merge_counts(&mut stats, counts);
     stats.retain(|_, stat| {
         stat.updated.is_some() || stat.downloads.is_some() || stat.views.is_some()
     });
-    // Only a refresh that read both sources to the end earns a day of TTL:
+    // Only a refresh that read the source to the end earns a day of TTL:
     // caching a walk the deadline cut short, or one whose source was down,
     // for that long would hold half the numbers back until tomorrow. It is
     // still cached for an hour, so a dead source costs one walk per hour
@@ -275,186 +258,21 @@ fn valid_stat_id(id: &str) -> bool {
         })
 }
 
-fn merge_updated(
-    stats: &mut BTreeMap<String, HudStat>,
-    source: Result<Walk<BTreeMap<String, String>>, String>,
-) {
-    let Ok(walk) = source else { return };
-    if walk.complete {
-        for stat in stats.values_mut() {
-            stat.updated = None;
-        }
-    }
-    for (id, date) in walk.found {
-        stats.entry(id).or_default().updated = Some(date);
-    }
-}
-
 fn merge_counts(stats: &mut BTreeMap<String, HudStat>, source: Result<Walk<Counts>, String>) {
     let Ok(walk) = source else { return };
     if walk.complete {
         for stat in stats.values_mut() {
+            stat.updated = None;
             stat.downloads = None;
             stat.views = None;
         }
     }
     for (id, counts) in walk.found {
         let stat = stats.entry(id).or_default();
-        stat.downloads = counts.map(|(downloads, _)| downloads);
-        stat.views = counts.map(|(_, views)| views);
+        stat.updated = counts.as_ref().and_then(|(_, _, date)| date.clone());
+        stat.downloads = counts.as_ref().map(|(downloads, _, _)| *downloads);
+        stat.views = counts.map(|(_, views, _)| views);
     }
-}
-
-// ---------------------------------------------------------------------------
-// comfig.app: "Last updated" per listed HUD
-// ---------------------------------------------------------------------------
-
-fn fetch_comfig_updated(
-    client: &reqwest::blocking::Client,
-    deadline: Instant,
-) -> Result<Walk<BTreeMap<String, String>>, String> {
-    let mut out = BTreeMap::new();
-    let mut complete = true;
-    let mut reached_end = false;
-    for page in 1..=COMFIG_MAX_PAGES {
-        if Instant::now() >= deadline {
-            complete = false;
-            break;
-        }
-        let url = format!("{COMFIG_LIST_BASE}/{page}/");
-        let html = match net::get_text_for(client, &url, RemoteSource::ComfigApp) {
-            Ok(html) => html,
-            // A failed later page is partial data, not a successful end.
-            Err(err) if page == 1 => return Err(err),
-            Err(_) => {
-                complete = false;
-                break;
-            }
-        };
-        let found = parse_comfig_listing(&html);
-        if found.len() > STATS_IDS_PER_PAGE_LIMIT {
-            return Err("comfig.app returned too many HUDs on one page.".into());
-        }
-        if found.is_empty() {
-            complete = false;
-            break;
-        }
-        let before = out.len();
-        out.extend(found);
-        if out.len() > STATS_IDS_TOTAL_LIMIT {
-            return Err("comfig.app returned too many HUDs.".into());
-        }
-        if out.len() == before {
-            complete = false;
-            break;
-        }
-        if !comfig_has_next_page(&html, page) {
-            reached_end = comfig_last_page(&html) == Some(page);
-            complete &= reached_end;
-            break;
-        }
-    }
-    // Pages that parse to nothing mean the listing's markup moved, not that
-    // comfig.app has no dates. Failing keeps that out of the cache.
-    if out.is_empty() {
-        return Err("comfig.app listed no HUD update dates.".to_string());
-    }
-    Ok(Walk {
-        found: out,
-        complete: complete && reached_end,
-    })
-}
-
-fn comfig_has_next_page(html: &str, page: usize) -> bool {
-    let path = format!("/huds/{}/", page + 1);
-    let path_without_slash = path.trim_end_matches('/');
-    [path.as_str(), path_without_slash].iter().any(|path| {
-        html.contains(&format!("href=\"{path}\"")) || html.contains(&format!("href='{path}'"))
-    })
-}
-
-fn comfig_last_page(html: &str) -> Option<usize> {
-    let icon = html.find("fa-angles-right")?;
-    let anchor = html[..icon].rfind("<a ")?;
-    let opening = html[anchor..icon].split_once('>')?.0;
-    for quote in ['"', '\''] {
-        let marker = format!("href={quote}/huds/");
-        if let Some((_, after)) = opening.split_once(&marker) {
-            let page = after.split(quote).next()?.trim_end_matches('/');
-            return page.parse().ok();
-        }
-    }
-    None
-}
-
-/// Pairs of (id, ISO date) from one listing page. Each card carries
-/// `href="/huds/page/<id>/"` followed by `Last updated <strong>Mon D, YYYY</strong>`.
-pub fn parse_comfig_listing(html: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let mut seen = HashSet::new();
-    let mut rest = html;
-    while let Some(start) = rest.find("href=\"/huds/page/") {
-        let after = &rest[start + "href=\"/huds/page/".len()..];
-        let Some(end) = after.find('/') else { break };
-        let id = after[..end].trim().to_ascii_lowercase();
-        rest = &after[end..];
-        // The date sits inside this card, before the next card's link.
-        let card_end = rest.find("href=\"/huds/page/").unwrap_or(rest.len());
-        let card = &rest[..card_end];
-        if let Some(date) = card
-            .find("Last updated")
-            .and_then(|at| {
-                card[at..]
-                    .find("<strong>")
-                    .map(|s| at + s + "<strong>".len())
-            })
-            .and_then(|from| {
-                card[from..]
-                    .find("</strong>")
-                    .map(|to| card[from..from + to].trim())
-            })
-            .and_then(parse_month_day_year)
-        {
-            if valid_stat_id(&id) && seen.insert(id.clone()) {
-                out.push((id, date));
-                if out.len() > STATS_IDS_PER_PAGE_LIMIT {
-                    break;
-                }
-            }
-        }
-    }
-    out
-}
-
-/// `Aug 28, 2026` → `2026-08-28`.
-fn parse_month_day_year(text: &str) -> Option<String> {
-    let mut parts = text.split_whitespace();
-    let month = match parts
-        .next()?
-        .trim_end_matches('.')
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "jan" => 1,
-        "feb" => 2,
-        "mar" => 3,
-        "apr" => 4,
-        "may" => 5,
-        "jun" => 6,
-        "jul" => 7,
-        "aug" => 8,
-        "sep" | "sept" => 9,
-        "oct" => 10,
-        "nov" => 11,
-        "dec" => 12,
-        _ => return None,
-    };
-    let day: u32 = parts.next()?.trim_end_matches(',').parse().ok()?;
-    let year: u32 = parts.next()?.parse().ok()?;
-    if !(1..=31).contains(&day) || year < 2000 {
-        return None;
-    }
-    Some(format!("{year:04}-{month:02}-{day:02}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -631,12 +449,12 @@ fn fetch_tf2huds_counts(
             match handle.join() {
                 Ok((batch, complete)) => {
                     walked_all &= complete;
-                    for (id, downloads, views) in batch {
+                    for (id, downloads, views, updated) in batch {
                         walked_all &= insert_unique_counts(
                             &mut out,
                             &mut duplicate_ids,
                             id,
-                            (downloads, views),
+                            (downloads, views, updated),
                         );
                     }
                 }
@@ -655,7 +473,7 @@ fn insert_unique_counts(
     counts: &mut Counts,
     duplicate_ids: &mut HashSet<String>,
     id: String,
-    value: (u64, u64),
+    value: (u64, u64, Option<String>),
 ) -> bool {
     if duplicate_ids.contains(&id) {
         return false;
@@ -732,7 +550,7 @@ fn tf2huds_list_ids(text: &str) -> Option<Vec<String>> {
 fn tf2huds_counts(
     text: &str,
     repositories: &BTreeMap<String, String>,
-) -> Option<Option<(String, u64, u64)>> {
+) -> Option<Option<Tf2HudsMatch>> {
     for data in devalue_nodes(text) {
         for value in &data {
             let Some(object) = value.as_object() else {
@@ -743,6 +561,8 @@ fn tf2huds_counts(
             }
             let views = devalue_lookup(&data, object, "viewCount")?.as_u64()?;
             let downloads = devalue_lookup(&data, object, "downloadCount")?.as_u64()?;
+            let updated =
+                devalue_lookup(&data, object, "updatedDatetime").and_then(parse_svelte_date);
             let url = devalue_lookup(&data, object, "comfigHudsUrl")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
@@ -752,10 +572,43 @@ fn tf2huds_counts(
                 tf2huds_repository(&data, object)
                     .and_then(|repository| repositories.get(&repository).cloned())
             };
-            return Some(id.map(|id| (id, downloads, views)));
+            return Some(id.map(|id| (id, downloads, views, updated)));
         }
     }
     None
+}
+
+fn parse_svelte_date(value: &serde_json::Value) -> Option<String> {
+    let tagged = value.as_array()?;
+    let [kind, value] = tagged.as_slice() else {
+        return None;
+    };
+    if kind.as_str()? != "Date" {
+        return None;
+    }
+    let timestamp = value.as_str()?;
+    if !timestamp.ends_with('Z') || timestamp.as_bytes().get(10) != Some(&b'T') {
+        return None;
+    }
+    let date = timestamp.get(..10)?;
+    let year: u32 = date.get(..4)?.parse().ok()?;
+    let month: u32 = date.get(5..7)?.parse().ok()?;
+    let day: u32 = date.get(8..10)?.parse().ok()?;
+    if date.as_bytes().get(4) != Some(&b'-') || date.as_bytes().get(7) != Some(&b'-') {
+        return None;
+    }
+    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return None,
+    };
+    if !(2000..=9999).contains(&year) || !(1..=days).contains(&day) {
+        return None;
+    }
+    Some(date.to_string())
 }
 
 fn catalog_repository_ids(entries: &[execs_core::HudCatalogEntry]) -> BTreeMap<String, String> {
@@ -856,15 +709,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn refresh_result_discloses_failed_partial_and_recovered_sources_without_losing_cached_values()
-    {
+    fn refresh_result_discloses_partial_and_failed_source_without_losing_cached_values() {
         let root =
             std::env::temp_dir().join(format!("execs-stats-refresh-result-{}", std::process::id()));
         std::fs::create_dir_all(root.join("hud-catalog")).unwrap();
         let cached = HudStatsCache {
             fetched_at: 1,
             stats: BTreeMap::from([(
-                "hud".into(),
+                "old".into(),
                 HudStat {
                     updated: Some("2026-01-01".into()),
                     downloads: Some(10),
@@ -876,84 +728,43 @@ mod tests {
             warnings: Vec::new(),
         };
         std::fs::write(cache_file(&root), serde_json::to_vec(&cached).unwrap()).unwrap();
-        fn failed<T>() -> Result<T, String> {
-            Err("fixture source offline".into())
-        }
-        let both = finish_stats_refresh(&root, 50, Some(&cached), failed(), failed()).unwrap();
-        assert_eq!(both.stats, cached.stats);
-        let warning = both.warning.unwrap();
-        assert!(warning.contains("comfig.app") && warning.contains("tf2huds.dev"));
-        assert_eq!(
-            load_stats_cache(&root, 50).unwrap().unwrap().fetched_at,
-            1,
-            "failed refresh must not renew cache age"
-        );
-        let no_cache = finish_stats_refresh(&root, 50, None, failed(), failed()).unwrap_err();
-        assert!(no_cache.contains("comfig.app") && no_cache.contains("tf2huds.dev"));
+        let failed = || Err("fixture source offline".into());
+        let stale = finish_stats_refresh(&root, 50, Some(&cached), failed()).unwrap();
+        assert_eq!(stale.stats, cached.stats);
+        assert!(stale.warning.unwrap().contains("tf2huds.dev"));
+        assert_eq!(load_stats_cache(&root, 50).unwrap().unwrap().fetched_at, 1);
+        assert!(finish_stats_refresh(&root, 50, None, failed()).is_err());
 
-        let dates = || {
-            Ok(Walk {
-                found: BTreeMap::from([("hud".into(), "2026-09-14".into())]),
-                complete: true,
-            })
-        };
-        let one = finish_stats_refresh(&root, 60, Some(&cached), dates(), failed()).unwrap();
-        assert_eq!(one.stats["hud"].updated.as_deref(), Some("2026-09-14"));
-        assert_eq!(one.stats["hud"].views, Some(20));
-        assert!(one.warning.as_deref().unwrap().contains("tf2huds.dev"));
-        assert!(!one.warning.as_deref().unwrap().contains("comfig.app"));
-        assert!(load_stats_cache(&root, 60)
-            .unwrap()
-            .unwrap()
-            .payload()
-            .warning
-            .is_some());
-
-        let counts = || {
-            Ok(Walk {
-                found: BTreeMap::from([("hud".into(), Some((30, 40)))]),
-                complete: true,
-            })
-        };
-        let one = finish_stats_refresh(&root, 70, Some(&cached), failed(), counts()).unwrap();
-        assert_eq!(one.stats["hud"].updated, cached.stats["hud"].updated);
-        assert_eq!(one.stats["hud"].views, Some(40));
-        assert!(one.warning.as_deref().unwrap().contains("comfig.app"));
-        assert!(!one.warning.as_deref().unwrap().contains("tf2huds.dev"));
-
-        let truncated = finish_stats_refresh(
+        let partial = finish_stats_refresh(
             &root,
-            80,
+            60,
             Some(&cached),
             Ok(Walk {
-                found: BTreeMap::new(),
+                found: BTreeMap::from([("new".into(), Some((30, 40, Some("2026-09-14".into()))))]),
                 complete: false,
             }),
-            counts(),
         )
         .unwrap();
-        assert_eq!(truncated.stats["hud"].updated, cached.stats["hud"].updated);
-        assert!(truncated
-            .warning
-            .as_deref()
-            .unwrap()
-            .contains("only partly refreshed"));
-        let partial = load_stats_cache(&root, 80).unwrap().unwrap();
-        assert!(!partial.complete);
-        let recovered = finish_stats_refresh(&root, 90, Some(&partial), dates(), counts()).unwrap();
-        assert_eq!(
-            recovered.stats["hud"].updated.as_deref(),
-            Some("2026-09-14")
-        );
-        assert_eq!(recovered.stats["hud"].views, Some(40));
-        assert!(recovered.warning.is_none());
-        assert!(load_stats_cache(&root, 90).unwrap().unwrap().complete);
-        let json = serde_json::to_value(recovered).unwrap();
-        assert_eq!(json["stats"]["hud"]["views"], 40);
-        assert!(json["warning"].is_null());
+        assert_eq!(partial.stats["old"].updated.as_deref(), Some("2026-01-01"));
+        assert_eq!(partial.stats["new"].updated.as_deref(), Some("2026-09-14"));
+        assert!(partial.warning.unwrap().contains("partly refreshed"));
+        assert!(!load_stats_cache(&root, 60).unwrap().unwrap().complete);
+
+        let whole = finish_stats_refresh(
+            &root,
+            70,
+            Some(&cached),
+            Ok(Walk {
+                found: BTreeMap::from([("new".into(), Some((50, 60, Some("2026-09-15".into()))))]),
+                complete: true,
+            }),
+        )
+        .unwrap();
+        assert!(!whole.stats.contains_key("old"));
+        assert_eq!(whole.stats["new"].updated.as_deref(), Some("2026-09-15"));
+        assert!(whole.warning.is_none());
         std::fs::remove_dir_all(root).unwrap();
     }
-
     #[test]
     fn listing_only_requests_huds_and_distinguishes_malformed_from_empty() {
         let listing = r#"{"nodes":[{"data":[{"huds":1},[2],{"id":3,"name":3,"cover":4},"LOL-!!-HUD",{"id":5,"name":6},"image-uuid","cover.png"]}]}"#;
@@ -995,7 +806,7 @@ mod tests {
         let record = r#"{"nodes":[{"data":[{"viewCount":1,"downloadCount":2,"comfigHudsUrl":3,"githubUrl":4},931686,330446,"","https://github.com/N0kk/AHud.git/"]}]}"#;
         assert_eq!(
             tf2huds_counts(record, &repositories),
-            Some(Some(("ahud".into(), 330446, 931686)))
+            Some(Some(("ahud".into(), 330446, 931686, None)))
         );
         assert_eq!(
             tf2huds_counts(&record.replace("AHud.git/", "other"), &repositories),
@@ -1007,7 +818,7 @@ mod tests {
         );
         assert_eq!(
             tf2huds_counts(&explicit, &repositories),
-            Some(Some(("explicit".into(), 330446, 931686)))
+            Some(Some(("explicit".into(), 330446, 931686, None)))
         );
         for url in [
             "http://github.com/n0kk/ahud",
@@ -1025,7 +836,7 @@ mod tests {
         let repositories = BTreeMap::from([("n0kk/ahud".into(), "ahud".into())]);
         assert_eq!(
             tf2huds_counts(record, &repositories),
-            Some(Some(("ahud".into(), 6, 0)))
+            Some(Some(("ahud".into(), 6, 0, None)))
         );
     }
 
@@ -1037,19 +848,19 @@ mod tests {
             &mut counts,
             &mut duplicate_ids,
             "hud".into(),
-            (10, 20)
+            (10, 20, None)
         ));
         assert!(!insert_unique_counts(
             &mut counts,
             &mut duplicate_ids,
             "hud".into(),
-            (50, 100)
+            (50, 100, None)
         ));
         assert!(!insert_unique_counts(
             &mut counts,
             &mut duplicate_ids,
             "hud".into(),
-            (2, 3)
+            (2, 3, None)
         ));
         assert_eq!(counts["hud"], None);
         let mut stats = BTreeMap::from([(
@@ -1069,7 +880,7 @@ mod tests {
         );
         assert_eq!(stats["hud"].downloads, None);
         assert_eq!(stats["hud"].views, None);
-        assert_eq!(stats["hud"].updated.as_deref(), Some("2026-01-01"));
+        assert_eq!(stats["hud"].updated, None);
     }
 
     #[test]
@@ -1102,53 +913,6 @@ mod tests {
         std::fs::remove_file(cache_file(&root)).unwrap();
         std::fs::remove_dir(root.join("hud-catalog")).unwrap();
         std::fs::remove_dir(root).unwrap();
-    }
-
-    #[test]
-    fn comfig_pagination_requires_an_explicit_last_page() {
-        let html = r#"<a href="/huds/2">next</a><a href="/huds/20" class="btn"><span class="fas fa-angles-right fa-fw"></span></a>"#;
-        assert!(comfig_has_next_page(html, 1));
-        assert!(!comfig_has_next_page(html, 2));
-        assert_eq!(comfig_last_page(html), Some(20));
-        assert_eq!(
-            comfig_last_page("<a href=\"/huds/page/rayshud/\">hud</a>"),
-            None
-        );
-    }
-
-    #[test]
-    fn comfig_listing_pairs_ids_with_dates() {
-        let html = r#"<a href="/huds/page/rayshud/">rayshud</a> by raysfire
-        <span>Last updated <strong>Jan 11, 2026</strong></span>
-        <a href="/huds/page/budhud/"><img></a><p>Last updated <strong>Aug 28, 2026</strong></p>
-        <a href="/huds/page/nodate/">x</a>"#;
-        assert_eq!(
-            parse_comfig_listing(html),
-            vec![
-                ("rayshud".to_string(), "2026-01-11".to_string()),
-                ("budhud".to_string(), "2026-08-28".to_string()),
-            ]
-        );
-        assert_eq!(
-            parse_month_day_year("Sept 3, 2025").as_deref(),
-            Some("2025-09-03")
-        );
-        assert_eq!(parse_month_day_year("Yesterday"), None);
-    }
-
-    #[test]
-    fn comfig_listing_returns_only_an_overflow_sentinel() {
-        let html = (0..400)
-            .map(|index| {
-                format!(
-                    "<a href=\"/huds/page/hud-{index}/\">x</a><span>Last updated <strong>Jan 1, 2026</strong></span>"
-                )
-            })
-            .collect::<String>();
-        assert_eq!(
-            parse_comfig_listing(&html).len(),
-            STATS_IDS_PER_PAGE_LIMIT + 1
-        );
     }
 
     #[test]
@@ -1190,7 +954,12 @@ mod tests {
         let hud = r#"{"type":"data","nodes":[{"type":"data","data":[{"hud":1},{"id":2,"viewCount":3,"downloadCount":4,"comfigHudsUrl":5,"updatedDatetime":6},"rayshud",1168295,398380,"https://comfig.app/huds/page/RaysHUD/",["Date","2026-01-25T00:00:00.000Z"]]}]}"#;
         assert_eq!(
             tf2huds_counts(hud, &BTreeMap::new()),
-            Some(Some(("rayshud".to_string(), 398380, 1168295)))
+            Some(Some((
+                "rayshud".to_string(),
+                398380,
+                1168295,
+                Some("2026-01-25".into())
+            )))
         );
         // An unmatched HUD is valid source data, not a failed request.
         let orphan = r#"{"type":"data","nodes":[{"type":"data","data":[{"viewCount":1,"downloadCount":2,"comfigHudsUrl":3},5,6,null]}]}"#;
@@ -1200,6 +969,22 @@ mod tests {
             comfig_page_id("https://comfig.app.evil.test/huds/page/rayshud/"),
             None
         );
+    }
+
+    #[test]
+    fn site_activity_date_requires_a_real_utc_calendar_date() {
+        let date = |text: &str| serde_json::json!(["Date", text]);
+        assert_eq!(
+            parse_svelte_date(&date("2024-02-29T00:00:00Z")),
+            Some("2024-02-29".into())
+        );
+        for invalid in [
+            "2025-02-29T00:00:00Z",
+            "2026-13-01T00:00:00Z",
+            "2026-09-22T00:00:00+02:00",
+        ] {
+            assert_eq!(parse_svelte_date(&date(invalid)), None);
+        }
     }
 
     #[test]
@@ -1227,10 +1012,10 @@ mod tests {
                 views: Some(20),
             },
         )]);
-        merge_updated(
+        merge_counts(
             &mut stats,
             Ok(Walk {
-                found: BTreeMap::from([("new".into(), "2026-01-01".into())]),
+                found: BTreeMap::from([("new".into(), Some((30, 40, Some("2026-01-01".into()))))]),
                 complete: false,
             }),
         );
@@ -1238,15 +1023,15 @@ mod tests {
         assert_eq!(stats["old"].updated.as_deref(), Some("2025-01-01"));
         assert_eq!(stats["old"].downloads, Some(10));
 
-        merge_updated(
+        merge_counts(
             &mut stats,
             Ok(Walk {
-                found: BTreeMap::from([("new".into(), "2026-02-02".into())]),
+                found: BTreeMap::from([("new".into(), Some((50, 60, Some("2026-02-02".into()))))]),
                 complete: true,
             }),
         );
         assert_eq!(stats["old"].updated, None);
-        assert_eq!(stats["old"].downloads, Some(10));
+        assert_eq!(stats["old"].downloads, None);
         assert_eq!(stats["new"].updated.as_deref(), Some("2026-02-02"));
     }
 }

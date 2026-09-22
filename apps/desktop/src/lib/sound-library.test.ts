@@ -6,6 +6,10 @@ import {
   communityEntries,
   filterSoundLibrary,
   ownEntry,
+  pageSoundLibrary,
+  parseSoundPageJump,
+  SOUND_LIBRARY_PAGE_SIZE,
+  soundPageLinks,
   stockEntries,
 } from "./sound-library";
 
@@ -88,6 +92,47 @@ describe("sound library", () => {
     expect(sameChoice(installedCommunity, { kind: "community", id: "quack" })).toBe(true);
     expect(sameChoice({ kind: "community", id: "pop" }, installedCommunity)).toBe(false);
     expect(sameChoice({ kind: "stock", effect: 0 }, installedCommunity)).toBe(false);
+  });
+
+  it("pages filtered sounds and clamps a stale page after the result count changes", () => {
+    const entries = Array.from({ length: SOUND_LIBRARY_PAGE_SIZE * 2 + 1 }, (_, index) => ({
+      ...OWN,
+      id: `own:${index}`,
+    }));
+    expect(pageSoundLibrary(entries, 0)).toMatchObject({
+      page: 0,
+      pageCount: 3,
+      first: 1,
+      last: SOUND_LIBRARY_PAGE_SIZE,
+    });
+    expect(pageSoundLibrary(entries, 2)).toMatchObject({
+      page: 2,
+      first: SOUND_LIBRARY_PAGE_SIZE * 2 + 1,
+      last: entries.length,
+      entries: [entries.at(-1)],
+    });
+    expect(pageSoundLibrary(entries.slice(0, 2), 2)).toMatchObject({
+      page: 0,
+      pageCount: 1,
+      first: 1,
+      last: 2,
+    });
+    expect(pageSoundLibrary([], 2)).toMatchObject({
+      page: 0,
+      pageCount: 0,
+      first: 0,
+      last: 0,
+      entries: [],
+    });
+  });
+
+  it("keeps distant pages reachable and rejects invalid page jumps", () => {
+    expect(soundPageLinks(0, 25)).toEqual([1, 2, "gap-end", 25]);
+    expect(soundPageLinks(12, 25)).toEqual([1, "gap-start", 12, 13, 14, "gap-end", 25]);
+    expect(parseSoundPageJump("25", 25)).toBe(24);
+    expect(parseSoundPageJump("0", 25)).toBeNull();
+    expect(parseSoundPageJump("26", 25)).toBeNull();
+    expect(parseSoundPageJump("1.5", 25)).toBeNull();
   });
 });
 

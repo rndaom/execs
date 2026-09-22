@@ -25,6 +25,7 @@ export type InventorySnapshot = {
   items: InventoryItem[];
   definitions: Record<string, InventoryDefinition>;
   itemDescriptions?: Record<string, InventoryDefinition & { details: string[] }>;
+  qualityColors?: Record<string, string>;
   warning: string | null;
 };
 export function getInventory(): Promise<InventorySnapshot> {
@@ -408,6 +409,8 @@ export type HudCatalogEntry = {
   id: string;
   name: string;
   author: string;
+  /** hud-db lists prior creators or maintainers here; not the active author. */
+  contributors?: string[];
   repo: string;
   hash: string;
   github: boolean;

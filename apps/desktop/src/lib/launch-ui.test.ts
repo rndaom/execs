@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   appendLaunchOption,
+  buildLaunchPreset,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
+  LAUNCH_PRESETS,
+  type LaunchPreset,
+  type LaunchPresetId,
   launchOptionGroups,
+  launchPresetPresent,
   recommendedLaunchOptions,
   removeLaunchOption,
   steamWriteCopy,
@@ -13,6 +18,12 @@ import {
 import { canWrite } from "./write-gate";
 
 const RECOMMENDED = "-novid -nojoy -nosteamcontroller -nohltv -particles 1";
+
+function preset(id: LaunchPresetId): LaunchPreset {
+  const found = LAUNCH_PRESETS.find((candidate) => candidate.id === id);
+  if (!found) throw new Error(`Missing launch preset ${id}`);
+  return found;
+}
 
 describe("launch UI helpers", () => {
   it("matches the Rust recommended set", () => {
@@ -66,6 +77,20 @@ describe("forbidden launch flags", () => {
 });
 
 describe("launch option editing", () => {
+  it("builds only catalog options with bounded numeric values", () => {
+    const values = { refresh: "144", width: "1920", height: "1080" };
+    expect(buildLaunchPreset(preset("console"), values)).toBe("-console");
+    expect(buildLaunchPreset(preset("freq"), values)).toBe("-freq 144");
+    expect(buildLaunchPreset(preset("resolution"), values)).toBe("-w 1920 -h 1080");
+    expect(buildLaunchPreset(preset("freq"), { ...values, refresh: "144 +quit" })).toBeNull();
+    expect(buildLaunchPreset(preset("resolution"), { ...values, height: "0" })).toBeNull();
+  });
+  it("detects options already present in a profile", () => {
+    expect(launchPresetPresent("-novid -freq 144", preset("novid"))).toBe(true);
+    expect(launchPresetPresent("-novid -freq 144", preset("freq"))).toBe(true);
+    expect(launchPresetPresent("-w 1920", preset("resolution"))).toBe(true);
+    expect(launchPresetPresent("-novid", preset("console"))).toBe(false);
+  });
   it("does not guess removal boundaries for quoted option-looking data or wrappers", () => {
     expect(launchOptionGroups('+echo "-not a flag" -novid')).toBeNull();
     expect(launchOptionGroups('"-novid" -console')).toBeNull();

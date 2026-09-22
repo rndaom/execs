@@ -262,7 +262,6 @@ export function CrosshairPane({
     <section data-testid="settings-crosshair" className="min-w-0 text-left">
       <PaneHeader
         title="Crosshair"
-        lede="Find your focus. Make it your own."
         actions={
           <Segmented
             label="Crosshair mode"

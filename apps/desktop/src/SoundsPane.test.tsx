@@ -147,3 +147,69 @@ it("names clip actions, duplicate sources and slot volumes without changing row 
     vi.unstubAllGlobals();
   }
 });
+
+it("shows one sound page at a time and resets to the first page when the source changes", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const api = {
+    listStockHitsounds: async () => ["hitsound"],
+    comfigHitsoundIndex: async () =>
+      Array.from({ length: 26 }, (_, index) => ({
+        hash: String(index),
+        name: `Clip ${String(index + 1).padStart(2, "0")}`,
+        kind: "hit",
+      })),
+  } as unknown as Api;
+  try {
+    await act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            effective={{}}
+            managedText=""
+            onSave={async () => {}}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    await act(async () =>
+      (box.querySelector('label[for$="-comfig"]') as HTMLLabelElement)?.click(),
+    );
+    expect(box.querySelectorAll('[data-testid^="sounds-row-comfig:"]')).toHaveLength(24);
+    expect(box.querySelector('[data-testid="sounds-row-comfig:0"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid="sounds-row-comfig:24"]')).toBeNull();
+    await act(async () =>
+      (box.querySelector('[data-testid="sounds-page-next-top"]') as HTMLButtonElement).click(),
+    );
+    expect(box.querySelectorAll('[data-testid^="sounds-row-comfig:"]')).toHaveLength(2);
+    expect(box.querySelector('[data-testid="sounds-row-comfig:0"]')).toBeNull();
+    expect(box.querySelector('[data-testid="sounds-row-comfig:24"]')).not.toBeNull();
+    await act(async () => (box.querySelector('label[for$="-stock"]') as HTMLLabelElement)?.click());
+    await act(async () =>
+      (box.querySelector('label[for$="-comfig"]') as HTMLLabelElement)?.click(),
+    );
+    expect(box.querySelector('[data-testid="sounds-row-comfig:0"]')).not.toBeNull();
+    expect(
+      box.querySelector('[data-testid="sounds-page-prev-top"]')?.hasAttribute("disabled"),
+    ).toBe(true);
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});

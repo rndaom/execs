@@ -110,11 +110,12 @@ describe("Launch workspace", () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
-  it("protects an unfinished addition, retains it while hidden, and only autosaves after Add", async () => {
+  it("retains a guided value while hidden and only autosaves after Add", async () => {
     await render();
     await click('[data-testid="launch-add-open"]');
-    expect(document.activeElement).toBe(element("input"));
-    await input("input", '+exec "another config.cfg"');
+    expect(document.activeElement).toBe(element('[data-testid="launch-preset-nojoy"]'));
+    await click('[data-testid="launch-preset-freq"]');
+    await input('[data-testid="launch-value-refresh"]', "144");
     expect(element<HTMLButtonElement>('[data-testid="launch-steam-retry"]').disabled).toBe(true);
     await debounce();
     expect(save).not.toHaveBeenCalled();
@@ -123,9 +124,9 @@ describe("Launch workspace", () => {
     await render();
     active = true;
     await render();
-    expect(element<HTMLInputElement>("input").value).toBe('+exec "another config.cfg"');
+    expect(element<HTMLInputElement>('[data-testid="launch-value-refresh"]').value).toBe("144");
     await click('[data-testid="launch-add-submit"]');
-    expect(draft).toBe('-novid +exec "my config.cfg" -particles 1 +exec "another config.cfg"');
+    expect(draft).toBe('-novid +exec "my config.cfg" -particles 1 -freq 144');
     expect(document.activeElement).toBe(element('[data-testid="launch-add-open"]'));
     await debounce();
     expect(save).toHaveBeenCalledTimes(1);
@@ -134,20 +135,20 @@ describe("Launch workspace", () => {
   it("cancels an addition with Escape and never carries it into another profile", async () => {
     await render();
     await click('[data-testid="launch-add-open"]');
-    await input("input", "-console");
+    await click('[data-testid="launch-preset-console"]');
     await act(async () =>
-      element("input").dispatchEvent(
+      element('[data-testid="launch-preset-console"]').dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       ),
     );
-    expect(box.querySelector("input")).toBeNull();
+    expect(box.querySelector('[data-testid="launch-preset-console"]')).toBeNull();
     expect(document.activeElement).toBe(element('[data-testid="launch-add-open"]'));
     expect([...pending.values()].some(Boolean)).toBe(false);
     await click('[data-testid="launch-add-open"]');
-    await input("input", "-console");
+    await click('[data-testid="launch-preset-console"]');
     profileId = "profile-b";
     await render();
-    expect(box.querySelector("input")).toBeNull();
+    expect(box.querySelector('[data-testid="launch-preset-console"]')).toBeNull();
     expect(draft).toBe(saved);
     expect([...pending.values()].some(Boolean)).toBe(false);
   });
@@ -206,5 +207,31 @@ describe("Launch workspace", () => {
     expect(clipboard).toHaveBeenCalledWith(draft);
     expect(element('[data-testid="launch-copy"]').textContent).toContain("Copied");
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("shows manual Steam steps only when its write did not complete", async () => {
+    await render();
+    expect(box.querySelector("#launch-steam-guide")).toBeNull();
+    status = "steam_open";
+    await render();
+    expect(element("#launch-steam-guide").textContent).toBe("Apply through Steam");
+    status = "written";
+    await render();
+    expect(box.querySelector("#launch-steam-guide")).toBeNull();
+  });
+
+  it("adds width and height together and prevents duplicate guided options", async () => {
+    await render();
+    await click('[data-testid="launch-add-open"]');
+    expect(element<HTMLButtonElement>('[data-testid="launch-preset-novid"]').disabled).toBe(true);
+    await click('[data-testid="launch-preset-resolution"]');
+    await input('[data-testid="launch-value-width"]', "1920");
+    await input('[data-testid="launch-value-height"]', "1080");
+    await click('[data-testid="launch-add-submit"]');
+    expect(draft).toBe('-novid +exec "my config.cfg" -particles 1 -w 1920 -h 1080');
+    await click('[data-testid="launch-add-open"]');
+    expect(element<HTMLButtonElement>('[data-testid="launch-preset-resolution"]').disabled).toBe(
+      true,
+    );
   });
 });

@@ -7,20 +7,25 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
-- Refresh every pane with Foundry: warm dark surfaces, clearer type and selection, compact
-  navigation, consistent dialogs and restrained motion. Each pane keeps a layout suited to its
-  task, and the app follows system reduced motion or your own Reduce preference.
+- Refresh every pane with the overhaul: neutral dark surfaces, TF2 orange selection, clearer type,
+  less redundant copy, compact navigation, consistent dialogs and restrained motion. Each pane
+  keeps a layout suited to its task, and the app follows system reduced motion or your own Reduce
+  preference.
 - Keep separate scroll positions for visited panes and App settings. Profile changes reset
   profile-specific positions while preserving account-owned Inventory browsing.
 - Enlarge or reduce the interface with Ctrl + Plus / Minus, and restore its original size with
   Ctrl + 0. The layout reflows while keeping keyboard access to controls.
 - Crosshair: keep the designer beside its preview, retain unfinished designs, and distinguish
   saving a design to the library from building the installed pack. Weapon pickers stay in view.
-- Viewmodels: organize all nine classes and 64 groups around an adjacent preview and build action.
-- Sounds: keep hit and kill slots together above the searchable library, with advanced controls
-  and clearer source retry feedback.
+- HUD: sort by sourced TF2 HUDs listing activity and popularity, show uncredited creators without
+  inventing names, and refresh older catalog and statistics caches for accurate metadata.
+- Viewmodels: organize all nine classes and 64 groups around an adjacent preview and build action;
+  label Hide weapon reference images clearly where a hands-only source image is unavailable.
+- Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
+  controls and clearer source retry feedback. Sorts use only data the sources actually publish.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum
-  window size. Launch options gain removable option groups while retaining direct text editing.
+  window size. Launch options gain a guided option picker with validated values, removable groups
+  and direct text editing of the complete string.
 - Reduce background lifecycle polling while execs is hidden or unfocused, refresh on return,
   and back off failed reads while keeping launch and maintenance state guarded.
 - Inventory loads automatically and refreshes every two minutes while visible
@@ -45,9 +50,14 @@ User-facing changes only. The release workflow publishes the matching
 - Inventory preview: identify war paints, killstreak kit targets and fabricator
   outputs, including available wear, sheen and effect names. Preview installed
   war-paint pattern swatches without implying a rendered weapon or wear preview.
+- Inventory preview: show TF2 quality borders, complete 50-slot rows, and larger installed
+  war-paint swatches without hiding other artwork when one pattern fails.
 
 ### Fixed
 
+- Files separates actionable findings from offline command catalog gaps, expands searchable command
+  help, and points startup-setting failures to the first cfg path and line. UTF-8 BOMs and malformed
+  individual binds no longer create unrelated findings or hide later known settings.
 - Refresh packaged credits and dependency licenses to match the current application.
 - Files: keep the editor's position when Tab returns focus after visiting another pane.
 - Offer a clear Choose profile action when saved profiles exist but none is active.

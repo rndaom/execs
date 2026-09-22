@@ -94,7 +94,7 @@ export function ViewmodelPane({
   const focus = groups.find((group) => group.id === focusGroup) ?? groups[0];
   const focusHidden = hiddenSet.has(focus.id);
   // Upstream has stock and fully hidden screenshots, but no weapon-only image.
-  // Show the stock reference honestly instead of implying it previews kept hands.
+  // Keep the stock frame as a reference and identify what the built pack changes.
   const weaponOnlyReference = focusHidden && draft.hideMode === "weapon";
   const stem = viewmodelStemForGroup(classId, focus.id, focusHidden && !weaponOnlyReference);
   const preview = useViewmodelPreview(api, native ? stem : null);
@@ -153,7 +153,6 @@ export function ViewmodelPane({
     <section data-testid="settings-viewmodels" className="min-w-0 text-left">
       <PaneHeader
         title="Viewmodels"
-        lede="Choose what stays in view."
         actions={
           record ? (
             <span data-testid="viewmodel-pack-status" className="badge">
@@ -236,6 +235,7 @@ export function ViewmodelPane({
             data-testid="viewmodel-stage"
             data-stem={stem}
             data-hidden={focusHidden ? "true" : "false"}
+            data-reference={weaponOnlyReference ? "true" : "false"}
             className="surface vm-stage relative m-0 aspect-video w-full overflow-hidden"
           >
             {stageSrc && stageSrc !== failedSrc ? (
@@ -253,21 +253,26 @@ export function ViewmodelPane({
                 <p className="t-row">
                   {preview.loading ? "Loading preview…" : "Preview unavailable"}
                 </p>
-                <p className="t-meta">Your visibility choices are still available.</p>
               </div>
             )}
+            {weaponOnlyReference ? (
+              <div className="absolute left-3 top-3 rounded-md bg-bg/90 px-3 py-2 text-[12px] leading-snug text-ink">
+                <span className="block font-semibold">Weapon hidden · hands visible</span>
+                <span className="text-ink-muted">Stock image shown for reference</span>
+              </div>
+            ) : null}
             <figcaption className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-bg/90 px-3 py-2 text-[12px] text-ink">
               <span>{preview.loading ? "Loading preview…" : stageCaption}</span>
               <span className="text-ink-muted">
-                {weaponOnlyReference ? "Stock reference" : focusHidden ? "Hidden" : "Shown"}
+                {weaponOnlyReference
+                  ? "Reference image"
+                  : focusHidden
+                    ? "Weapon and hands hidden"
+                    : "Weapon and hands shown"}
               </span>
             </figcaption>
           </figure>
-          <p className="t-meta mt-3">
-            {weaponOnlyReference
-              ? "The pack hides the weapon and keeps hands. This reference shows the stock viewmodel."
-              : focusInfo?.weapons}
-          </p>
+          {focusInfo?.weapons ? <p className="t-meta mt-3">{focusInfo.weapons}</p> : null}
           <div className="action-panel mt-4 block">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -302,9 +307,6 @@ export function ViewmodelPane({
             </div>
             <p className="t-meta mt-3" aria-live="polite">
               {buildStatus}
-            </p>
-            <p className="pane-note mt-2">
-              Builds locally on Windows. Building or importing enables Casual preload in Mods.
             </p>
           </div>
           {record ? (

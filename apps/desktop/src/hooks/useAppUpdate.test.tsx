@@ -69,7 +69,7 @@ async function renderUpdate(
 }
 
 describe("authoritative update checks", () => {
-  const offered = { version: "0.2.0", notes: "Foundry" };
+  const offered = { version: "0.2.0", notes: "Overhaul" };
 
   it("clears a previous offer and dismissed state when a manual check reports none", async () => {
     const check = vi.fn().mockResolvedValueOnce(offered).mockResolvedValueOnce(null);

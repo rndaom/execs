@@ -4,10 +4,21 @@ export type HudSort = "name" | "updated" | "downloads" | "views";
 
 export const HUD_SORTS: { id: HudSort; label: string }[] = [
   { id: "name", label: "A to Z" },
-  { id: "updated", label: "Last updated" },
+  { id: "updated", label: "TF2 HUDs activity" },
   { id: "downloads", label: "Most downloads" },
   { id: "views", label: "Most views" },
 ];
+
+/** hud-db's `Unknown` means the active author is not credited. */
+export function hudAuthorCopy(entry: Pick<HudCatalogEntry, "author">): string {
+  const author = entry.author.trim();
+  return !author || author.toLowerCase() === "unknown" ? "Creator uncredited" : `by ${author}`;
+}
+
+/** A numeric archive ID is searchable but is not a meaningful HUD title. */
+export function hudDisplayName(entry: Pick<HudCatalogEntry, "name">): string {
+  return /^\d+$/.test(entry.name.trim()) ? "Untitled HUD" : entry.name;
+}
 
 export type HudCatalogControls = { query: string; sort: HudSort; page: number };
 export type HudCatalogAction =
@@ -53,7 +64,10 @@ export function sortHudCatalog(
   sort: HudSort,
 ): HudCatalogEntry[] {
   const byName = (a: HudCatalogEntry, b: HudCatalogEntry) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+    hudDisplayName(a).localeCompare(hudDisplayName(b), undefined, {
+      sensitivity: "base",
+      numeric: true,
+    }) || a.id.localeCompare(b.id);
   const stat = (entry: HudCatalogEntry) => stats[entry.id.toLowerCase()] ?? stats[entry.id];
   if (sort === "name") return [...entries].sort(byName);
   const ranked = entries.flatMap((entry) => {
@@ -64,7 +78,7 @@ export function sortHudCatalog(
   return ranked.map(({ entry }) => entry);
 }
 
-/** "398k downloads · updated Jan 2026", or null when nothing is known. */
+/** "398k downloads · listing activity Jan 2026", or null when nothing is known. */
 export function hudStatCopy(stat: HudStat | undefined): string | null {
   if (!stat) {
     return null;
@@ -77,7 +91,7 @@ export function hudStatCopy(stat: HudStat | undefined): string | null {
     parts.push(`${compactCount(stat.views)} views`);
   }
   if (stat.updated && hudUpdatedTime(stat.updated) !== null) {
-    parts.push(`updated ${monthYear(stat.updated)}`);
+    parts.push(`listing activity ${monthYear(stat.updated)}`);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }
@@ -215,7 +229,7 @@ export function filterHudCatalog(entries: HudCatalogEntry[], query: string): Hud
     return entries;
   }
   return entries.filter((entry) => {
-    return [entry.name, entry.author, entry.id].some((value) =>
+    return [entry.name, hudDisplayName(entry), entry.author, entry.id].some((value) =>
       normalizeHudSearch(value).includes(needle),
     );
   });

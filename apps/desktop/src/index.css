@@ -5,10 +5,9 @@
 @import "tailwindcss";
 
 /*
- * Foundry: execs' warm, work-focused desktop design system.
+ * execs' neutral dark desktop design system.
  *
- * The TF2 influence lives in graphite, warm ink and copper selection. Real
- * game imagery stays source-owned. Flat rows, clear type and tailored corners
+ * Real game imagery stays source-owned. Flat rows, clear type and tailored corners
  * leave room for the different jobs each pane performs.
  *
  * Accent names action and selection; semantic colours name actual state.
@@ -20,26 +19,26 @@
  */
 @theme {
   /* Three-step surface scale. */
-  --color-bg: #151310;
-  --color-panel: #211e19;
-  --color-panel-raised: #2c2821;
+  --color-bg: #0e0e10;
+  --color-panel: #19191c;
+  --color-panel-raised: #252529;
 
   /* Hairlines are ink at low alpha so they read the same on every surface. */
-  --color-edge: rgb(240 233 219 / 0.1);
-  --color-edge-strong: rgb(240 233 219 / 0.2);
+  --color-edge: rgb(242 242 244 / 0.12);
+  --color-edge-strong: rgb(242 242 244 / 0.22);
 
-  --color-ink: #f0e9db;
-  --color-ink-muted: #bcb3a3;
-  --color-ink-faint: #a79c8b;
+  --color-ink: #f2f2f4;
+  --color-ink-muted: #c7c7cb;
+  --color-ink-faint: #a9a9af;
 
   --color-brand: #d98449;
   --color-brand-hover: #e69a61;
   --color-on-brand: #151310;
 
   /* Semantic states — meaning only, never decoration. */
-  --color-ok: #9fbd7d;
-  --color-warn: #e3bb78;
-  --color-error: #ec9185;
+  --color-ok: #83c596;
+  --color-warn: #e28b5e;
+  --color-error: #e58276;
   --color-danger: #a9453c;
   --color-danger-hover: #943f36;
 

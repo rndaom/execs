@@ -1,4 +1,3 @@
-import { SlidersHorizontal } from "@phosphor-icons/react";
 import { useState } from "react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
 import { OperationError } from "./components/ui/OperationError";
@@ -19,7 +18,6 @@ import {
 } from "./lib/first-run-ui";
 
 export function SetupWizard({
-  title,
   draftName,
   preset,
   addons,
@@ -32,7 +30,6 @@ export function SetupWizard({
   onApply,
   onCancel,
 }: {
-  title: string;
   draftName: string;
   preset: ComfigPresetId;
   addons: OfficialAddonId[];
@@ -58,10 +55,7 @@ export function SetupWizard({
 
   return (
     <OnboardingFrame
-      eyebrow={title}
-      icon={<SlidersHorizontal aria-hidden="true" size={13} weight="bold" />}
       title="Build your TF2 profile"
-      lede="Name it and pick a preset."
       width="wide"
       compact
       steps={

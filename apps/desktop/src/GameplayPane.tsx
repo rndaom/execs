@@ -73,7 +73,7 @@ export function GameplayPane({
     <section data-testid="settings-gameplay" className="min-w-0 text-left">
       <div className="hero-row gameplay-workspace">
         <div>
-          <PaneHeader title="Gameplay" lede="Field of view and viewmodels." />
+          <PaneHeader title="Gameplay" />
           <div className="grid gap-6">
             <SliderRow
               id="gameplay-fov"

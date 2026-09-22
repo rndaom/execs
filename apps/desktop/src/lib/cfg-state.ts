@@ -46,18 +46,28 @@ export function mapsFromFiles(
       return cfg !== null && hudRoots.has(cfg[1]);
     });
   const complete = result.executionComplete && !shadowed && !uncertainHuds;
+  const unresolved = result.findings.find(
+    (finding) =>
+      finding.ruleId === "execution-incomplete" || finding.ruleId === "execution-unsupported",
+  );
   return {
     binds: complete ? Object.fromEntries(result.binds) : {},
     effective: complete
       ? Object.fromEntries([...result.effective].map(([name, entry]) => [name, entry.value]))
       : {},
     complete,
-    reason: uncertainHuds ? CFG_HUD_PROJECTION_MESSAGE : shadowed ? CFG_SHADOWED_MESSAGE : null,
+    reason: uncertainHuds
+      ? CFG_HUD_PROJECTION_MESSAGE
+      : shadowed
+        ? CFG_SHADOWED_MESSAGE
+        : unresolved
+          ? `Startup settings are unresolved at ${unresolved.file}:${unresolved.line}. Review this command in Files.`
+          : null,
   };
 }
 
 export const CFG_INCOMPLETE_MESSAGE =
-  "Startup settings could not be resolved. Review cfg findings in Files before changing these settings.";
+  "Startup settings could not be resolved. Review the startup cfg in Files before changing these settings.";
 
 export const CFG_SHADOWED_MESSAGE =
   "A custom pack overrides the cfg files used to save these settings. Adjust or remove that pack before changing these controls.";

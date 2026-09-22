@@ -106,15 +106,18 @@ describe("Viewmodels workspace", () => {
     ).toBe("false");
   });
 
-  it("labels weapon-only imagery as a stock reference and never implies that hidden hands are a preview", async () => {
+  it("distinguishes the weapon-only result from its stock reference image", async () => {
     await render();
     await click('[data-testid="viewmodel-visibility-weapon"]');
-    expect(box.textContent).toContain("Stock reference");
-    expect(box.textContent).toContain("keeps hands");
+    expect(box.textContent).toContain("Weapon hidden · hands visible");
+    expect(box.textContent).toContain("Stock image shown for reference");
+    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-reference")).toBe("true");
     expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-stem")).toBe(
       "scout_scattergun",
     );
     await click('[data-testid="viewmodel-visibility-full"]');
+    expect(box.textContent).toContain("Weapon and hands hidden");
+    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-reference")).toBe("false");
     expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-stem")).toBe(
       "scout_blank",
     );

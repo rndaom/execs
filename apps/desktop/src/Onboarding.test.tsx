@@ -52,7 +52,6 @@ function wizardProps(
   overrides: Partial<ComponentProps<typeof SetupWizard>> = {},
 ): ComponentProps<typeof SetupWizard> {
   return {
-    title: "Unused install",
     draftName: "Main",
     preset: "medium",
     addons: [],
@@ -64,7 +63,7 @@ function wizardProps(
   };
 }
 
-describe("Foundry onboarding", () => {
+describe("Onboarding", () => {
   it("selects a full install path without confirming it, then requires the explicit confirm action", async () => {
     const props: ComponentProps<typeof FinderPanel> = {
       installs: [{ path: installPath }],

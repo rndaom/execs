@@ -193,6 +193,8 @@ pub struct HudCatalogEntry {
     pub id: String,
     pub name: String,
     pub author: String,
+    #[serde(default)]
+    pub contributors: Vec<String>,
     pub repo: String,
     pub hash: String,
     pub github: bool,
@@ -552,6 +554,8 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
     struct RawHud {
         name: String,
         author: String,
+        #[serde(default)]
+        contributors: Vec<String>,
         repo: String,
         hash: serde_json::Value,
         #[serde(default)]
@@ -596,6 +600,7 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         id,
         name: parsed.name,
         author: parsed.author,
+        contributors: parsed.contributors,
         repo,
         hash,
         flags: parsed.flags,
@@ -610,8 +615,8 @@ pub fn catalog_cache_dir() -> PathBuf {
 }
 
 pub fn catalog_cache_file(dir: &Path) -> PathBuf {
-    // v3: entries gained the install kind; old caches are ignored and refetched.
-    dir.join("catalog-v3.json")
+    // v4: entries carry upstream contributor attribution; reload old caches.
+    dir.join("catalog-v4.json")
 }
 
 pub fn load_catalog_cache_from(dir: &Path) -> Option<HudCatalogCache> {
@@ -2669,10 +2674,11 @@ mod tests {
     fn catalog_entry_marks_github_and_toonhud() {
         let rays = catalog_entry_from_json(
             "rayshud",
-            r#"{"name":"rayshud","author":"raysfire","repo":"https://github.com/raysfire/rayshud","hash":"abc123","resources":["banner"]}"#,
+            r#"{"name":"rayshud","author":"raysfire","contributors":["CriticalFlaw"],"repo":"https://github.com/raysfire/rayshud","hash":"abc123","resources":["banner"]}"#,
         )
         .unwrap();
         assert!(rays.github);
+        assert_eq!(rays.contributors, vec!["CriticalFlaw"]);
         assert_eq!(
             hud_zip_url(&rays.repo, &rays.hash).as_deref(),
             Some("https://codeload.github.com/raysfire/rayshud/legacy.zip/abc123")

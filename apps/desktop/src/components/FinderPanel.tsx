@@ -1,4 +1,3 @@
-import { MagnifyingGlass } from "@phosphor-icons/react";
 import type { Tf2Install } from "../lib/bridge";
 import { formatInstallLabel } from "../lib/finder-ui";
 import { OnboardingFrame } from "./OnboardingFrame";
@@ -33,10 +32,7 @@ export function FinderPanel({
 }) {
   return (
     <OnboardingFrame
-      eyebrow="Find TF2"
-      icon={<MagnifyingGlass aria-hidden="true" size={13} weight="bold" />}
       title="Find your Team Fortress 2 install"
-      lede="Choose the folder your profiles will use."
       width="wide"
       steps={[
         { label: "Find TF2", state: selected ? "complete" : "current" },

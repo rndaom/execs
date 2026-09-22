@@ -4,6 +4,9 @@
 recognition and help. `lookupCvar()` retains its compact compatibility shape. The catalog
 does not inspect executables, launch TF2 or contact a service at runtime. Unknown names
 mean absent from this catalog: installed plugins and local aliases may supply them.
+A malformed personal bind is reported and omitted from the startup map; later
+complete commands on new lines remain usable. Unknown invocations still make
+startup unresolved because a plugin or external alias may affect tracked settings.
 
 Run `pnpm --filter @execs/cfglint build-corpus` to regenerate. Every source is an immutable
 Git revision with its own review date and URL in the generated output. Generation gathers
@@ -15,6 +18,12 @@ The Windows and hidden dumps come from mastercomfig revision
 `c7b52734b252bb521cd22e8243bca6f81dd3ab41`. The same revision supplies top-level aliases from
 `comfig.cfg` and `define_presets.cfg`. These are conditional on that configuration, not
 built-in commands. Nested aliases and arbitrary installed scripts are not catalog claims.
+`r_lightmap_bicubic_set` is a narrow supplement: pinned `comfig.cfg` writes it as a
+setting, and a [Source-1-Games runtime diagnostic](https://github.com/ValveSoftware/Source-1-Games/issues/7218)
+lists the same name among ConVars for another Source game. Its current TF2 default,
+flags and availability are not claimed. The supplement is checked during regeneration.
+The same diagnostic lists `m_rawinput_onetime_reset`; the pinned mastercomfig
+`flat-mouse.cfg` also writes it. This second supplement carries the same limits.
 Module-level names such as `texture_quality=low` retain their literal equals sign. The `exec`
 and `alias` syntax strings describe forms observed in this pinned configuration; they
 do not establish exhaustive engine arity. The SDK does not ship engine command handlers

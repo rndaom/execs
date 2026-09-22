@@ -258,7 +258,6 @@ export function ModsPane({
       <PaneHeader
         compact
         title="Mods"
-        lede="Find, install, and prepare profile mods."
         actions={
           <ModImport
             active={active}

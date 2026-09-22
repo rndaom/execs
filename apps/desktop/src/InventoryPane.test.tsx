@@ -35,6 +35,7 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
     capacity: 50,
     items: [{ id: "123", definition: 13, position: 1, quality: 6, level: 1, customName: null }],
     definitions: { "13": { name: "Scattergun", kind: "Weapon", classes: ["scout"], icon: null } },
+    qualityColors: { "6": "#FFD700" },
     warning: null,
   });
   const api = {
@@ -57,6 +58,14 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
       "data:image/png;base64,avatar",
     );
     expect(box.querySelectorAll('nav[aria-label="Backpack pages"]')).toHaveLength(1);
+    expect(
+      box.querySelector<HTMLElement>('[aria-label="Backpack items"]')?.style.gridTemplateColumns,
+    ).toBe("repeat(5, minmax(0, 1fr))");
+    expect(box.querySelectorAll('[aria-label="Backpack items"] > *')).toHaveLength(50);
+    expect(
+      box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.style
+        .borderColor,
+    ).toBe("rgb(255, 215, 0)");
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.click(),
     );
@@ -155,6 +164,55 @@ it("loads an unplaced item's own artwork and keeps the preview while paging", as
     box.remove();
     vi.restoreAllMocks();
     vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("keeps available artwork when one pattern cannot be decoded", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    putImageData: vi.fn(),
+  } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,ok");
+  const icon = "materials/backpack/gun.vtf";
+  const pattern = "materials/patterns/camo_jungle_green_02.vtf";
+  const getInventoryIcons = vi.fn(async (paths: string[]) => {
+    if (paths[0] === pattern) throw new Error("Pattern unavailable");
+    return { [icon]: { width: 1, height: 1, rgba: [255, 255, 255, 255] } };
+  });
+  const api = {
+    getInventory: vi.fn().mockResolvedValue({
+      steamId: "test-account",
+      capacity: 50,
+      warning: null,
+      items: [
+        { id: "gun", definition: 1, position: 1, quality: 6, level: 1, customName: null },
+        { id: "paint", definition: 2, position: 2, quality: 15, level: 1, customName: null },
+      ],
+      definitions: {
+        "1": { name: "Gun", kind: "Weapon", classes: [], icon },
+        "2": { name: "Paint", kind: "War Paint", classes: [], icon: pattern },
+      },
+    }),
+    getInventoryIcons,
+  } as unknown as Api;
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  try {
+    await act(async () =>
+      root.render(<InventoryPane api={api} active running={false} busy={false} />),
+    );
+    expect(getInventoryIcons).toHaveBeenCalledWith([icon]);
+    expect(getInventoryIcons).toHaveBeenCalledWith([pattern]);
+    expect(box.querySelector('img[src="data:image/png;base64,ok"]')).not.toBeNull();
+    expect(box.textContent).toContain("Pattern unavailable");
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   }

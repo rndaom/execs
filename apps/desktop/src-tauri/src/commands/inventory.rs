@@ -18,6 +18,7 @@ pub struct Inventory {
     snapshot: Snapshot,
     definitions: BTreeMap<u32, execs_core::inventory::Definition>,
     item_descriptions: BTreeMap<String, execs_core::inventory::ItemDescription>,
+    quality_colors: BTreeMap<u32, String>,
     warning: Option<String>,
 }
 
@@ -130,7 +131,7 @@ pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventor
                     .collect(),
             })
             .collect();
-        let (definitions, item_descriptions, warning) =
+        let (definitions, item_descriptions, quality_colors, warning) =
             match execs_core::inventory::metadata(&root, &inputs) {
                 Ok(metadata) => {
                     let missing = ids
@@ -140,6 +141,7 @@ pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventor
                     (
                         metadata.definitions,
                         metadata.item_descriptions,
+                        metadata.quality_colors,
                         (missing > 0).then(|| {
                             format!(
                                 "Names and artwork are unavailable for {missing} item definitions."
@@ -148,6 +150,7 @@ pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventor
                     )
                 }
                 Err(error) => (
+                    BTreeMap::new(),
                     BTreeMap::new(),
                     BTreeMap::new(),
                     Some(format!(
@@ -161,6 +164,7 @@ pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventor
             snapshot,
             definitions,
             item_descriptions,
+            quality_colors,
             warning,
         })
     })

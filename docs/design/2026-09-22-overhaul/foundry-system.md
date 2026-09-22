@@ -1,5 +1,7 @@
 # Foundry implementation contract
 
+Historical implementation contract. The owner subsequently revised the active visual direction; see [the combined plan](combined-release-plan.md) and `AGENTS.md` for current tokens and copy rules.
+
 The selected target is `options/01-foundry/01-core.png` through `05-states.png`. Product behavior remains authoritative over generated labels, as recorded in [concept-review.md](G:/Projects/execs/docs/design/2026-09-22-overhaul/concept-review.md). This document describes the shared implementation in progress; integrated browser verification remains required.
 
 ## Shared tokens

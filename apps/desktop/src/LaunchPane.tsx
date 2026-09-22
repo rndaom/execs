@@ -11,9 +11,14 @@ import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import { copyButtonLabel } from "./lib/copy-ui";
 import {
   appendLaunchOption,
+  buildLaunchPreset,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
+  LAUNCH_PRESETS,
+  type LaunchPresetId,
+  type LaunchPresetValues,
   launchOptionGroups,
+  launchPresetPresent,
   removeLaunchOption,
   type SteamWriteStatus,
   steamWriteCopy,
@@ -42,13 +47,18 @@ export function LaunchPane({
   onSave: () => Promise<boolean>;
 }) {
   const { running, busy } = useAppStatus();
-  const [composer, setComposer] = useSeededDraft(
-    { open: false, text: "" },
+  const [composer, setComposer] = useSeededDraft<{
+    open: boolean;
+    presetId: LaunchPresetId | null;
+    values: LaunchPresetValues;
+  }>(
+    { open: false, presetId: null, values: { refresh: "", width: "", height: "" } },
     JSON.stringify,
     draftRecordKey(profileId, "launch-option"),
   );
-  const { open: adding, text: option } = composer;
-  const composerPending = option.trim().length > 0;
+  const { open: adding, presetId, values } = composer;
+  const selectedPreset = LAUNCH_PRESETS.find((preset) => preset.id === presetId) ?? null;
+  const composerPending = presetId !== null;
   useExplicitDraft(composerPending);
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useSeededDraft<boolean>(
@@ -59,13 +69,13 @@ export function LaunchPane({
   const retryPending = useRef(false);
   const current = useRef({ profileId, value });
   current.current = { profileId, value };
-  const optionInput = useRef<HTMLInputElement>(null);
+  const firstPresetButton = useRef<HTMLButtonElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const tokenContainer = useRef<HTMLDivElement>(null);
   const focusAfterRemove = useRef<number | null>(null);
   const wasAdding = useRef(false);
   useEffect(() => {
-    if (adding) optionInput.current?.focus();
+    if (adding) firstPresetButton.current?.focus();
     else if (wasAdding.current) addButton.current?.focus();
     wasAdding.current = adding;
   }, [adding]);
@@ -92,7 +102,14 @@ export function LaunchPane({
   const forbidden = forbiddenLaunchTokens(value);
   const stripped = lastSave ? strippedLaunchTokens(lastSave.sent, lastSave.saved) : [];
   const groups = launchOptionGroups(value);
-  const closeComposer = () => setComposer({ open: false, text: "" });
+  const firstAvailablePresetId = LAUNCH_PRESETS.find(
+    (preset) => !launchPresetPresent(value, preset),
+  )?.id;
+  const closeComposer = () =>
+    setComposer({ open: false, presetId: null, values: { refresh: "", width: "", height: "" } });
+  const builtOption = selectedPreset ? buildLaunchPreset(selectedPreset, values) : null;
+  const updateValue = (key: keyof LaunchPresetValues, next: string) =>
+    setComposer({ ...composer, values: { ...values, [key]: next } });
 
   async function retrySteamWrite() {
     if (retryPending.current || running || busy || value !== saved || composerPending) return;
@@ -117,12 +134,12 @@ export function LaunchPane({
 
   return (
     <div data-testid="settings-launch" className="min-w-0 text-left">
-      <PaneHeader title="Launch options" lede="Startup options for this profile." />
+      <PaneHeader title="Launch options" />
 
       <div className="max-w-[980px]">
         <section aria-labelledby="launch-tokens-label">
           <h2 id="launch-tokens-label" className="t-section">
-            Launch option tokens
+            Current options
           </h2>
           <div
             ref={tokenContainer}
@@ -153,13 +170,21 @@ export function LaunchPane({
               ref={addButton}
               data-testid="launch-add-open"
               className="btn btn-ghost"
-              disabled={adding || groups === null}
+              disabled={adding || groups === null || !firstAvailablePresetId}
               title={
                 groups === null
                   ? "Edit this command sequence in the launch string below."
-                  : undefined
+                  : !firstAvailablePresetId
+                    ? "All guided options are already added."
+                    : undefined
               }
-              onClick={() => setComposer({ open: true, text: "" })}
+              onClick={() =>
+                setComposer({
+                  open: true,
+                  presetId: null,
+                  values: { refresh: "", width: "", height: "" },
+                })
+              }
               aria-expanded={adding}
             >
               <Plus size={15} aria-hidden="true" /> Add option
@@ -167,7 +192,7 @@ export function LaunchPane({
           </div>
           {adding ? (
             <form
-              className="mt-3 flex flex-wrap items-end gap-2"
+              className="surface mt-3 p-4"
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
@@ -176,34 +201,101 @@ export function LaunchPane({
               }}
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!option.trim() || groups === null) return;
-                onChange(appendLaunchOption(value, option));
+                if (!builtOption || !selectedPreset || launchPresetPresent(value, selectedPreset))
+                  return;
+                onChange(appendLaunchOption(value, builtOption));
                 closeComposer();
               }}
             >
-              <label className="t-meta min-w-0 flex-1">
-                Option and value
-                <input
-                  ref={optionInput}
-                  value={option}
-                  onChange={(event) => setComposer({ open: true, text: event.target.value })}
-                  placeholder="For example, -console"
-                  className="field mt-1 w-full px-3 py-2"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </label>
-              <button
-                type="submit"
-                data-testid="launch-add-submit"
-                className="btn btn-primary"
-                disabled={!option.trim() || groups === null}
-              >
-                Add option
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={closeComposer}>
-                Cancel
-              </button>
+              <fieldset>
+                <legend className="t-row">Choose an option</legend>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {LAUNCH_PRESETS.map((preset) => {
+                    const present = launchPresetPresent(value, preset);
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        ref={preset.id === firstAvailablePresetId ? firstPresetButton : undefined}
+                        data-testid={`launch-preset-${preset.id}`}
+                        aria-pressed={presetId === preset.id}
+                        disabled={present}
+                        onClick={() => setComposer({ ...composer, presetId: preset.id })}
+                        className={`min-h-12 rounded border px-3 py-2 text-left text-sm ${
+                          presetId === preset.id
+                            ? "border-brand bg-brand/10 text-ink ring-1 ring-brand"
+                            : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span>{preset.label}</span>
+                          {presetId === preset.id ? (
+                            <span aria-hidden="true" className="size-1.5 rounded-full bg-brand" />
+                          ) : null}
+                        </span>
+                        <span className="t-meta">
+                          {present
+                            ? "Already added"
+                            : preset.kind === "resolution"
+                              ? "-w / -h"
+                              : preset.token}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              {selectedPreset?.kind === "refresh" ? (
+                <label className="t-meta mt-4 block max-w-40">
+                  Refresh rate (Hz)
+                  <input
+                    data-testid="launch-value-refresh"
+                    value={values.refresh}
+                    onChange={(event) => updateValue("refresh", event.target.value)}
+                    inputMode="numeric"
+                    className="field mt-1 w-full px-3 py-2"
+                    autoComplete="off"
+                  />
+                </label>
+              ) : null}
+              {selectedPreset?.kind === "resolution" ? (
+                <div className="mt-4">
+                  <div className="flex gap-3">
+                    {(["width", "height"] as const).map((key) => (
+                      <label key={key} className="t-meta block w-40">
+                        {key === "width" ? "Width" : "Height"} (px)
+                        <input
+                          data-testid={`launch-value-${key}`}
+                          value={values[key]}
+                          onChange={(event) => updateValue(key, event.target.value)}
+                          inputMode="numeric"
+                          className="field mt-1 w-full px-3 py-2"
+                          autoComplete="off"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <p className="t-meta mt-2">
+                    Use TF2 Video settings for normal resolution changes. Launch flags can create an
+                    improper video mode.
+                  </p>
+                </div>
+              ) : null}
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="submit"
+                  data-testid="launch-add-submit"
+                  className="btn btn-primary"
+                  disabled={
+                    !builtOption || !selectedPreset || launchPresetPresent(value, selectedPreset)
+                  }
+                >
+                  Add option
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={closeComposer}>
+                  Cancel
+                </button>
+              </div>
             </form>
           ) : null}
           <div className="mt-6 flex items-center justify-between gap-3">
@@ -294,22 +386,24 @@ export function LaunchPane({
             </button>
           </div>
         </section>
-        <section
-          className="surface mt-4 flex items-start gap-3 p-4"
-          aria-labelledby="launch-steam-guide"
-        >
-          <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ink-muted" />
-          <div>
-            <h2 id="launch-steam-guide" className="t-row">
-              Apply through Steam
-            </h2>
-            <ol className="t-meta mt-2 list-decimal space-y-1 pl-4">
-              <li>Open Team Fortress 2 in your Steam Library.</li>
-              <li>Open Properties, then General → Launch Options.</li>
-              <li>Paste the launch options above.</li>
-            </ol>
-          </div>
-        </section>
+        {steamWrite && steamWrite !== "written" ? (
+          <section
+            className="surface mt-4 flex items-start gap-3 p-4"
+            aria-labelledby="launch-steam-guide"
+          >
+            <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ink-muted" />
+            <div>
+              <h2 id="launch-steam-guide" className="t-row">
+                Apply through Steam
+              </h2>
+              <ol className="t-meta mt-2 list-decimal space-y-1 pl-4">
+                <li>Open Team Fortress 2 in your Steam Library.</li>
+                <li>Open Properties, then General → Launch Options.</li>
+                <li>Paste the launch options above.</li>
+              </ol>
+            </div>
+          </section>
+        ) : null}
         <Disclosure
           profileId={profileId}
           storageKey="launch-removed-options"

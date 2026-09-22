@@ -63,6 +63,40 @@ describe("profile startup settings", () => {
     });
   });
 
+  it("keeps known pane settings when one personal bind is malformed", () => {
+    const files = [
+      {
+        path: "tf/cfg/config.cfg",
+        text: 'viewmodel_fov "70"',
+      },
+      {
+        path: "tf/cfg/overrides/autoexec.cfg",
+        text: "exec overrides/binds\nviewmodel_fov 90",
+      },
+      {
+        path: "tf/cfg/overrides/binds.cfg",
+        text: 'bind p ""show_quest_log"\nbind w +forward',
+      },
+    ];
+    expect(mapsFromFiles(files, "comfig")).toMatchObject({
+      complete: true,
+      effective: { viewmodel_fov: "90" },
+      binds: { w: "+forward" },
+    });
+  });
+
+  it("points to the unknown startup command without guessing plugin effects", () => {
+    const files = [
+      { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
+      { path: "tf/cfg/overrides/autoexec.cfg", text: "viewwmodel_fov 90" },
+    ];
+    expect(mapsFromFiles(files, "comfig")).toMatchObject({
+      complete: false,
+      effective: {},
+      reason: expect.stringContaining("tf/cfg/overrides/autoexec.cfg:1"),
+    });
+  });
+
   it.each(["config_default", "undo360controller", "pack_only"])(
     "keeps unavailable startup cfg %s incomplete",
     (target) => {

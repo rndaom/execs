@@ -1,5 +1,5 @@
 import { argumentFindings } from "./arguments.ts";
-import { lookupCommand } from "./catalog.ts";
+import { lookupCommand, suggestCvarByRemovingOneCharacter } from "./catalog.ts";
 import { lookupCvar } from "./corpus.ts";
 import { evaluateStartup } from "./execution.ts";
 import { parseCommands } from "./parser.ts";
@@ -630,10 +630,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     if (entry) return; // catalogued comfig alias; availability is conditional
 
     // Unknown token: +forward style actions and one-off community commands land here.
+    const suggestion = suggestCvarByRemovingOneCharacter(name);
     report(
       "info",
       "unknown-command",
-      `\`${name}\` is not in this offline catalog; a plugin or external alias may define it`,
+      `\`${name}\` is not in this offline catalog; a plugin or external alias may define it${suggestion ? `; did you mean \`${suggestion}\`?` : ""}`,
       { ...cmd, to: cmd.tokens[0]?.to ?? cmd.to },
       ctx.via,
     );
@@ -735,6 +736,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
           takeCommand: (at) => takeWork("command", at),
           takeExec: (at) => takeWork("exec", at),
           incomplete: (rule, message, at) => report("warn", rule, message, at),
+          allowMalformedBinds: trust === "self",
         });
   const { effective, binds, executionComplete } = execution;
 

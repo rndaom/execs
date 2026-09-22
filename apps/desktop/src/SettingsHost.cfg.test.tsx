@@ -245,7 +245,7 @@ describe("real Gameplay save preserves cfg settings", () => {
     });
     await render();
     expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(true);
-    expect(node.textContent).toContain("Startup settings could not be resolved");
+    expect(node.textContent).toContain("Startup settings are unresolved at tf/cfg/autoexec.cfg:2");
     // Even a dispatched event that bypasses native inert cannot write partial maps.
     await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
     await act(async () => vi.advanceTimersByTimeAsync(701));

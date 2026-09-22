@@ -88,6 +88,7 @@ function ProfileFilesPane({
   const [panel, setPanel] = useState<"problems" | "reference" | "new" | "saveAs" | null>(null);
   const [fileMenu, setFileMenu] = useState<(ContextMenuPosition & { path: string }) | null>(null);
   const [scope, setScope] = useState<"current" | "all">("current");
+  const [findingType, setFindingType] = useState<"issues" | "catalog">("issues");
   const [query, setQuery] = useState("");
   const [newKind, setNewKind] = useState<"startup" | "class" | "helper">("startup");
   const [newName, setNewName] = useState("autoexec");
@@ -169,10 +170,15 @@ function ProfileFilesPane({
     blocking.length === 0 &&
     closeReady;
   const links = analysis.links;
-  const shownFindings = findings.filter((finding) =>
+  const typedFindings = findings.filter((finding) =>
+    findingType === "catalog" ? finding.tier === "info" : finding.tier !== "info",
+  );
+  const shownFindings = typedFindings.filter((finding) =>
     scope === "all" ? true : finding.file === selected,
   );
-  const currentFindingCount = findings.filter((finding) => finding.file === selected).length;
+  const currentFindingCount = findings.filter(
+    (finding) => finding.file === selected && finding.tier !== "info",
+  ).length;
   const filtered = listed.filter(
     (file) => !query || file.path.toLowerCase().includes(query.toLowerCase()),
   );
@@ -479,10 +485,7 @@ function ProfileFilesPane({
   return (
     <section data-testid="settings-files" className="flex min-h-0 min-w-0 flex-col gap-3 text-left">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="t-pane">Files</h1>
-          <p className="t-meta mt-1">Edit configuration files for this profile.</p>
-        </div>
+        <h1 className="t-pane">Files</h1>
         {dirtyDocuments.length > 1 && (
           <button
             type="button"
@@ -1012,7 +1015,10 @@ function ProfileFilesPane({
                             <span className="flex items-center gap-1.5">
                               This file
                               <span className="tabular-nums text-ink-muted">
-                                {findings.filter((finding) => finding.file === selected).length}
+                                {
+                                  typedFindings.filter((finding) => finding.file === selected)
+                                    .length
+                                }
                               </span>
                             </span>
                           ),
@@ -1022,17 +1028,35 @@ function ProfileFilesPane({
                           label: (
                             <span className="flex items-center gap-1.5">
                               All files
-                              <span className="tabular-nums text-ink-muted">{findings.length}</span>
+                              <span className="tabular-nums text-ink-muted">
+                                {typedFindings.length}
+                              </span>
                             </span>
                           ),
                         },
                       ]}
                     />
+                    <Segmented
+                      label="Finding type"
+                      size="sm"
+                      value={findingType}
+                      onChange={setFindingType}
+                      options={[
+                        { id: "issues", label: "Issues" },
+                        { id: "catalog", label: "Catalog gaps" },
+                      ]}
+                    />
+                    {findingType === "catalog" && (
+                      <p className="t-meta mt-2">
+                        These commands are absent from the offline reference. That does not mean the
+                        cfg is invalid.
+                      </p>
+                    )}
                     {!analysis.result ? (
                       <p className="t-meta mt-3">{analysis.error ?? "Checking…"}</p>
                     ) : shownFindings.length === 0 ? (
                       <p className="mt-3 rounded-lg border border-edge bg-panel-raised p-3 text-sm">
-                        Nothing to review here.
+                        {findingType === "catalog" ? "No catalog gaps here." : "No issues here."}
                       </p>
                     ) : (
                       <ul className="mt-3 grid gap-2">
@@ -1376,18 +1400,13 @@ function FindingRow({
             ? "Advisory"
             : finding.tier === "block"
               ? "Save restriction"
-              : "Warning"}
+              : finding.tier === "info"
+                ? "Catalog gap"
+                : "Warning"}
         </span>
       </div>
       <p className="mt-2 text-sm leading-5">{findingMessage(finding.message)}</p>
       {finding.via && <p className="t-meta mt-1">Via {finding.via}</p>}
-      <p className="t-meta mt-1">
-        {finding.advisory
-          ? "Read-only source"
-          : finding.tier === "block"
-            ? "Fix before saving"
-            : "Save is allowed"}
-      </p>
     </li>
   );
 }

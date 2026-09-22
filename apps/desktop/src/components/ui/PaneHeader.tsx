@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 /**
- * The top of every settings pane: one title, one line of lede, and an
- * optional right-hand action. The shell carries no per-tab chrome, so each
+ * The top of every settings pane: one title, optional context that explains
+ * behavior, and an optional right-hand action. The shell carries no per-tab chrome, so each
  * pane owns its own header.
  */
 export function PaneHeader({

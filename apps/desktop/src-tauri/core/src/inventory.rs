@@ -39,6 +39,7 @@ pub struct ItemDescription {
 pub struct Metadata {
     pub definitions: BTreeMap<u32, Definition>,
     pub item_descriptions: BTreeMap<String, ItemDescription>,
+    pub quality_colors: BTreeMap<u32, String>,
 }
 
 fn bits(attributes: &[(u32, &[u8])], id: u32) -> Option<u32> {
@@ -132,7 +133,37 @@ pub fn metadata(root: &Path, inputs: &[ItemInput<'_>]) -> Result<Metadata, Strin
     Ok(Metadata {
         definitions,
         item_descriptions,
+        quality_colors: quality_colors(game),
     })
+}
+
+// The installed item schema owns quality colors. Only validated CSS hex colors
+// cross the native/UI boundary; unknown qualities keep the ordinary border.
+fn quality_colors(game: &VdfMap) -> BTreeMap<u32, String> {
+    let Some(qualities) = object(game, "qualities") else {
+        return BTreeMap::new();
+    };
+    let colors = object(game, "colors");
+    qualities
+        .entries
+        .iter()
+        .filter_map(|(_, value)| {
+            let quality = value.as_obj()?;
+            let id = string(quality, "value")?.parse::<u32>().ok()?;
+            let color = string(quality, "hexColor")
+                .or_else(|| string(quality, "hex_color"))
+                .or_else(|| {
+                    let key = string(quality, "color")?;
+                    colors
+                        .and_then(|colors| object(colors, key))
+                        .and_then(|color| string(color, "hex_color"))
+                })?;
+            (color.len() == 7
+                && color.starts_with('#')
+                && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))
+            .then(|| (id, color.to_string()))
+        })
+        .collect()
 }
 
 fn resolved_attributes(
@@ -484,7 +515,7 @@ pub fn icons(root: &Path, paths: &[String]) -> Result<BTreeMap<String, Icon>, St
     let archive = vpk::read_vpk_dir_file_filtered_bounded(
         &root.join("tf/tf2_textures_dir.vpk"),
         &|p| wanted.contains(p),
-        4 * 1024 * 1024,
+        16 * 1024 * 1024,
         32 * 1024 * 1024,
     )
     .map_err(|e| e.message())?;
@@ -671,6 +702,51 @@ mod tests {
         ] {
             assert!(!valid_icon(path));
         }
+    }
+    #[test]
+    fn quality_colors_come_from_validated_installed_schema_values() {
+        let game = parse_hud_vdf(
+            r##"
+            "qualities" {
+                "strange" { "value" "11" "hexColor" "#CF6A32" }
+                "vintage" { "value" "3" "color" "desc_vintage" }
+                "invalid" { "value" "14" "hexColor" "red; background: url(evil)" }
+            }
+            "colors" { "desc_vintage" { "hex_color" "#476291" } }
+            "##,
+        )
+        .unwrap();
+        assert_eq!(
+            quality_colors(&game),
+            [(3, "#476291".into()), (11, "#CF6A32".into())]
+                .into_iter()
+                .collect()
+        );
+    }
+    #[test]
+    fn pattern_vtf_larger_than_four_mib_still_produces_a_bounded_swatch() {
+        let root = crate::test_temp_dir();
+        std::fs::create_dir_all(root.join("tf")).unwrap();
+        let path = "materials/patterns/camo_jungle_green_02.vtf";
+        let mut vtf = vec![0u8; 80];
+        vtf[0..4].copy_from_slice(b"VTF\0");
+        vtf[4..8].copy_from_slice(&7u32.to_le_bytes());
+        vtf[8..12].copy_from_slice(&2u32.to_le_bytes());
+        vtf[12..16].copy_from_slice(&80u32.to_le_bytes());
+        vtf[16..18].copy_from_slice(&1024u16.to_le_bytes());
+        vtf[18..20].copy_from_slice(&1024u16.to_le_bytes());
+        vtf[24..26].copy_from_slice(&1u16.to_le_bytes());
+        vtf[52..56].copy_from_slice(&12i32.to_le_bytes()); // BGRA8888
+        vtf[56] = 1;
+        vtf[57..61].copy_from_slice(&(-1i32).to_le_bytes()); // no thumbnail
+        vtf.extend(vec![255u8; 1024 * 1024 * 4]);
+        assert!(vtf.len() > 4 * 1024 * 1024);
+        let archive = vpk::write_vpk_v2(&[(path.to_string(), vtf)].into_iter().collect());
+        std::fs::write(root.join("tf/tf2_textures_dir.vpk"), archive).unwrap();
+        let result = icons(&root, &[path.to_string()]).unwrap();
+        assert_eq!((result[path].width, result[path].height), (192, 192));
+        assert_eq!(result[path].rgba.len(), 192 * 192 * 4);
+        std::fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn prefab_overrides_keep_inherited_fields_and_reject_cycles() {

@@ -213,6 +213,8 @@ export function SettingsHost({
   );
   const cfgComplete = useRef(maps.complete);
   cfgComplete.current = maps.complete;
+  const cfgReason = useRef(maps.reason);
+  cfgReason.current = maps.reason;
 
   async function reload(opts?: { syncBinds?: boolean }) {
     // Every profile file is a separate IPC round trip, so a switch can easily
@@ -686,7 +688,7 @@ export function SettingsHost({
     scope?: "gameplay" | "crosshair" | "sounds",
   ) {
     if (!profileId) throw new Error("Select a profile before saving.");
-    if (!cfgComplete.current) throw new Error(CFG_INCOMPLETE_MESSAGE);
+    if (!cfgComplete.current) throw new Error(cfgReason.current ?? CFG_INCOMPLETE_MESSAGE);
     await api.writeManagedCfg(path, text, profileId, scope);
   }
 

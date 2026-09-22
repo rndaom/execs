@@ -194,7 +194,7 @@ export function useHudResources(
           setStatsError(result.warning);
         } catch (error) {
           if (request === statsRequest.current)
-            setStatsError(message(error, "Could not refresh dates and popularity."));
+            setStatsError(message(error, "Could not refresh HUD activity."));
         } finally {
           if (request === statsRequest.current) setStatsLoading(false);
         }

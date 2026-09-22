@@ -68,7 +68,9 @@ describe("source-bound authoring diagnostics", () => {
     const finding = result.findings.find((entry) => entry.ruleId === "syntax-quote");
     expect(text.slice(finding?.from, finding?.to)).toBe('"unterminated');
     expect(result.safetyComplete).toBe(false);
-    expect(result.executionComplete).toBe(false);
+    expect(result.executionComplete).toBe(true);
+    expect(result.binds.has("f")).toBe(false);
+    expect(result.effective.get("volume")?.value).toBe("1");
   });
 
   it("keeps safety coverage distinct from startup completeness", () => {

@@ -70,8 +70,8 @@ pub struct HudStatePayload {
     pub profile_id: String,
 }
 
-/// Popularity and recency per HUD id, from comfig.app (last updated) and
-/// tf2huds.dev (downloads, views). Cached for a day; `refresh` forces a read.
+/// TF2 HUDs listing activity and popularity per hud-db id. The date describes
+/// the tf2huds.dev listing, not a hud-db release. Cached for a day.
 #[tauri::command]
 pub async fn get_hud_stats(
     refresh: bool,
