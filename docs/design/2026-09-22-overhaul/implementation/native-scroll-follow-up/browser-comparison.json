@@ -1,0 +1,124 @@
+{
+  "viewport": [1200, 800],
+  "source": "In-app browser fixture; native authored text in autoexec draft",
+  "before": {
+    "focused": true,
+    "left": 1938,
+    "position": "Ln 80, Col 363",
+    "selection": "SELECTION-A",
+    "top": 1255
+  },
+  "restoredBeforeFocus": {
+    "focused": "<button type=\"button\" data-testid=\"settings-tab-files\" data-active=\"true\" title=\"Files\" class=\"settings-nav-item\" aria-current=\"page\"><span aria-hidden=\"true\" class=\"settings-nav-marker\"></span><span aria-hidden=\"true\" class=\"shrink-0\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" f",
+    "left": 1938,
+    "position": "Ln 80, Col 363",
+    "selected": "",
+    "top": 1255
+  },
+  "focusTrace": [
+    {
+      "editorFocused": false,
+      "label": "Files",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Launch",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Inventory",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "App settings",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "",
+      "left": 1938,
+      "tag": "INPUT",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "New cfg",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "autoexec.cfg, unsaved. tf/cfg/overrides/autoexec.cfg",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "File actions",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Discard file",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Save",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Find",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": false,
+      "label": "Wrap lines",
+      "left": 1938,
+      "tag": "BUTTON",
+      "top": 1255
+    },
+    {
+      "editorFocused": true,
+      "label": "Contents of tf/cfg/overrides/autoexec.cfg",
+      "left": 1938,
+      "tag": "DIV",
+      "top": 1255
+    }
+  ],
+  "after": {
+    "focused": true,
+    "left": 1938,
+    "position": "Ln 80, Col 363",
+    "selection": "SELECTION-A",
+    "top": 1255
+  },
+  "notes": "The editor was filled with authored native fixture text in a browser-only autoexec draft. The initial repeated locator.press setup reached a different line and was rejected; the matching sequence used focused Tab.pressKey(null,...) input. No Save was clicked.",
+  "completeDraft": {
+    "bytes": 4881,
+    "sha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+    "exact": true
+  }
+}

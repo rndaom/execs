@@ -66,6 +66,9 @@ export async function readEditorState(driver) {
   return driver.read(`const editor = document.querySelector(${JSON.stringify(EDITOR)});
     if (!editor) return null;
     const scroller = editor.closest('.cm-editor').querySelector('.cm-scroller');
+    const pane = document.querySelector('[data-testid="settings-scroll"]');
+    const active = document.activeElement;
+    const activeBox = active?.getBoundingClientRect();
     const selection = getSelection();
     const inside = selection && editor.contains(selection.anchorNode) && editor.contains(selection.focusNode);
     return {
@@ -80,6 +83,13 @@ export async function readEditorState(driver) {
       scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth,
       saveEnabled: document.querySelector('[data-testid="files-save"]')?.disabled === false,
       status: document.querySelector('#files-editor-keyboard-help')?.textContent,
+      activeElement: active && {
+        tag: active.tagName, id: active.id, testId: active.getAttribute('data-testid'),
+        label: active.getAttribute('aria-label') ?? active.textContent?.trim().slice(0, 160),
+        box: { x: activeBox.x, y: activeBox.y, width: activeBox.width, height: activeBox.height }
+      },
+      paneScroll: pane && { top: pane.scrollTop, left: pane.scrollLeft },
+      windowScroll: { top: scrollY, left: scrollX },
       width: innerWidth, height: innerHeight
     };`);
 }
@@ -97,6 +107,62 @@ export function assertEditorRetained(before, after) {
   }
   for (const key of ["top", "left"]) {
     assert.ok(Math.abs(after[key] - before[key]) <= 2, `Editor ${key} scroll was not retained`);
+  }
+}
+
+/** Keep the actual error chain; Error.stack alone omits waitUntil's last assertion. */
+export function nativeErrorDiagnostic(error, depth = 0) {
+  const result = {
+    name: String(error?.name ?? "Error").slice(0, 160),
+    message: String(error?.message ?? error).slice(0, 2_048),
+    stack: String(error?.stack ?? error).slice(0, 8_192),
+  };
+  if (error?.cause !== undefined) {
+    if (depth < 3) result.cause = nativeErrorDiagnostic(error.cause, depth + 1);
+    else result.causeTruncated = true;
+  }
+  return result;
+}
+
+/** Observe every real Tab destination, including any browser-induced scroll. */
+export async function tabToEditorWithTrace(driver, diagnostic, maximum = 80) {
+  assert.ok(Number.isInteger(maximum) && maximum >= 0 && maximum <= 80);
+  diagnostic.tabTraversal = [];
+  for (let tabs = 0; tabs <= maximum; tabs++) {
+    const state = await readEditorState(driver);
+    diagnostic.tabTraversal.push({ tabs, state });
+    if (state?.focused) return tabs;
+    if (tabs < maximum) await press(driver, KEYS.tab);
+  }
+  throw new Error(`Native keyboard did not reach the editor in ${maximum} tabs`);
+}
+
+/** Retain a bounded tail even when the unchanged retention assertion never passes. */
+export async function waitForEditorRetention(driver, before, diagnostic, timeout = 15_000) {
+  diagnostic.polls = [];
+  diagnostic.pollCount = 0;
+  diagnostic.lastAssertion = null;
+  try {
+    return await waitUntil(
+      "draft selection and scroll restored",
+      async () => {
+        const state = await readEditorState(driver);
+        diagnostic.pollCount++;
+        diagnostic.polls.push(state);
+        if (diagnostic.polls.length > 20) diagnostic.polls.shift();
+        try {
+          assertEditorRetained(before, state);
+        } catch (error) {
+          diagnostic.lastAssertion = nativeErrorDiagnostic(error);
+          throw error;
+        }
+        return state;
+      },
+      timeout,
+    );
+  } catch (error) {
+    diagnostic.error = nativeErrorDiagnostic(error);
+    throw error;
   }
 }
 

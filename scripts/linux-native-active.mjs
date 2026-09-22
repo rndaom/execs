@@ -18,13 +18,15 @@ import {
   sha256,
 } from "./linux-native-active-fixture.mjs";
 import {
-  assertEditorRetained,
   copyEditorText,
   EDITOR,
   KEYS,
+  nativeErrorDiagnostic,
   press,
   readEditorState,
+  tabToEditorWithTrace,
   typeEditorText,
+  waitForEditorRetention,
 } from "./linux-native-active-input.mjs";
 import { activeRuntimePreflight, LinuxActiveSession } from "./linux-native-active-runtime.mjs";
 import { linuxNativeEnvironment } from "./linux-native-fixture.mjs";
@@ -202,29 +204,39 @@ export async function main() {
         state?.selection === fixture.selectionText && state.top > 100 && state.left > 20 && state
       );
     });
-    await session.capture("02-native-draft-before-navigation");
-    await session.driver.click('[data-testid="settings-tab-binds"]');
-    await waitUntil("Files editor releases its active surface", () =>
-      session.driver.read(
-        'return document.querySelector("[data-testid=settings-tab-binds]")?.getAttribute("aria-current") === "page" && !document.querySelector(".cm-content");',
-      ),
-    );
-    preserve("away-pane-does-not-save-files");
-    await session.driver.click('[data-testid="settings-tab-files"]');
-    await waitUntil("Files editor restored", async () =>
-      Boolean(await readEditorState(session.driver)),
-    );
-    await session.driver.tabTo(EDITOR, "css selector", 80);
-    const after = await waitUntil("draft selection and scroll restored", async () => {
-      const state = await readEditorState(session.driver);
-      assertEditorRetained(before, state);
-      return state;
-    });
-    report.checks.push({
+    const retention = {
       label: "native-pane-navigation-retains-selection-and-scroll",
+      result: "running",
       before,
-      after,
-    });
+    };
+    report.checks.push(retention);
+    saveReport();
+    try {
+      await session.capture("02-native-draft-before-navigation");
+      retention.beforeNavigation = await readEditorState(session.driver);
+      await session.driver.click('[data-testid="settings-tab-binds"]');
+      await waitUntil("Files editor releases its active surface", () =>
+        session.driver.read(
+          'return document.querySelector("[data-testid=settings-tab-binds]")?.getAttribute("aria-current") === "page" && !document.querySelector(".cm-content");',
+        ),
+      );
+      preserve("away-pane-does-not-save-files");
+      await session.driver.click('[data-testid="settings-tab-files"]');
+      retention.firstRender = await waitUntil("Files editor restored", () =>
+        readEditorState(session.driver),
+      );
+      await session.driver.nextPaint();
+      retention.afterPaintBeforeFocus = await readEditorState(session.driver);
+      await tabToEditorWithTrace(session.driver, retention);
+      retention.after = await waitForEditorRetention(session.driver, before, retention);
+      retention.result = "passed";
+    } catch (error) {
+      retention.result = "failed";
+      retention.error = nativeErrorDiagnostic(error);
+      throw error;
+    } finally {
+      saveReport();
+    }
     await session.capture("03-native-draft-after-navigation");
     await copyExpected(savedText, "native-draft-bytes-after-navigation");
     preserve("retained-draft-is-still-memory-only");
@@ -309,6 +321,7 @@ export async function main() {
     smokeError = error;
     report.status = "failed";
     report.error = error.stack ?? String(error);
+    report.errorDiagnostic = nativeErrorDiagnostic(error);
     if (session.driver?.sessionId) {
       try {
         await session.capture("failure");

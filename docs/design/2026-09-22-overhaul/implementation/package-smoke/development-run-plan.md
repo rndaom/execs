@@ -2,6 +2,8 @@
 
 2026-09-22. Source inspected at `5bda798115b936d5d6f796d42614a0955f6748bf`. **Proposal only: no workflow, installer, desktop process or release operation was run for this report.** No issue acceptance or status changes. The current package fixture evidence remains [separately recorded](README.md).
 
+Later implementation checkpoint: the bounded [Linux workflow and harness](development-implementation.md) now exist for review, with no hosted execution yet. Windows remains unimplemented. The two-platform proposal below is retained as its original scope, not a claim that every proposed job exists or passed.
+
 Add one development workflow with two disposable GitHub-hosted jobs: Windows NSIS, and Linux AppImage plus Debian. Build ordinary optimized packages without updater signatures, install the actual previous public packages, and exercise the candidate through its installed native UI. This can qualify direct package installation, upgrade preservation and a bounded native profile round trip. Signed self-update and the real updater UI remain separate requirements.
 
 ## Why the existing entrypoints are insufficient
@@ -104,4 +106,4 @@ On successful execution, result JSON should report each package/scenario and nat
 
 ## Handoff
 
-The next concrete work is implementing this isolated workflow/harness and its mutation tests, then reviewing its exact diff before its first hosted execution. No product feature, version change, release-state mutation or local player-machine installation is needed. This report is the only file changed for this proposal.
+The original handoff was implementation followed by exact-diff review before first hosted execution. The [later implementation checkpoint](development-implementation.md) records current Linux-only progress and the remaining Windows/signing boundaries. No product feature, version change, release-state mutation or local player-machine installation is needed.

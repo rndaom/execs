@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-22T19:08:42.189Z",
+  "updatedAt": "2026-09-22T19:37:37.424Z",
   "purpose": "Current Foundry implementation acceptance, owned work and evidence ledger; integrated and native qualification remain separate.",
   "authorization": {
     "scope": "Foundry only; whole application, all 14 selected issues plus overhaul, multiple implementation agents, tests, visual verification, repository and Linear updates",
@@ -15,7 +15,7 @@
     "ownerSelected": true,
     "designSelectionGate": "satisfied",
     "implementationStatus": "Foundry development candidate with retained pane review focus, complete dialog paths and live close/write guards; original native/package/engine acceptance stays open",
-    "verificationStatus": "1,107 integrated local tests pass (882 desktop, 160 cfglint, 65 tooling; four skips). TypeScript and production frontend pass. Eight browser captures verify dialog paths and pending-pane focus. Active Linux run 35770490260 read all 4,848 original bytes but failed at the post-typing exact-copy assertion before Save; all 12 protected files remained unchanged. Save/close/restart remains unverified. Prior native evidence retains its original identities and scope.",
+    "verificationStatus": "Product 31b38b9 passes 1,107 integrated local tests and all five CI jobs. Subsequent diagnostic/package tooling passes 94 tests with four existing platform skips; product suites are unchanged. Native retry 35772324501 passes exact 4,881-byte draft input, then fails editor scroll retention on return from Binds. Selection/position and all 12 protected disk files remain intact. Three native and three matching browser images are inspected; the browser route passes. Native Save/close/restart remains unverified. Linux package automation is implemented/reviewed but has not executed.",
     "boards": [
       "docs/design/2026-09-22-overhaul/options/01-foundry/01-core.png",
       "docs/design/2026-09-22-overhaul/options/01-foundry/02-customization.png",
@@ -4274,7 +4274,7 @@
         "gallery": "Two new supplemental cards verified in the existing in-app browser gallery, including both full-size viewers and their source/limit captions; primary 85/15/5 counts unchanged."
       },
       "native": {
-        "status": "first hosted run failed before Save; input correction underway",
+        "status": "first hosted run failed at post-typing exact-copy; historical result retained, see retry",
         "runId": 35770490260,
         "url": "https://github.com/rndaom/execs/actions/runs/35770490260",
         "report": "docs/design/2026-09-22-overhaul/implementation/linux-native/active-files.md",
@@ -4287,12 +4287,47 @@
         "protectedFilesUnchanged": 12,
         "inspectedCaptures": ["initial native Files", "failure after typing"],
         "saveCloseRestartQualified": false,
-        "inactiveScenarioConclusion": "success"
+        "inactiveScenarioConclusion": "success",
+        "retry": {
+          "head": "28c0f0ed1ed5dcba61fab5414eca732b35fb1368",
+          "runId": 35772324501,
+          "url": "https://github.com/rndaom/execs/actions/runs/35772324501",
+          "testedMerge": "c89f1396abddb67b2bb7fed4f0775beb6a325add",
+          "binarySha256": "05c6b4e14f204dc4c2d48e285616e4b456358079e06f2608965ee82a461be4b4",
+          "status": "failed: editor top scroll not retained after Binds → Files and native Tab focus",
+          "initialBytesRead": 4848,
+          "exactDraftBytesBeforeNavigation": 4881,
+          "draftSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+          "selectionAndPositionRetained": true,
+          "protectedFilesUnchanged": 12,
+          "inspectedCaptures": [
+            "initial native Files",
+            "selected draft before pane navigation",
+            "viewport reset after returning"
+          ],
+          "report": "docs/design/2026-09-22-overhaul/implementation/native-scroll-follow-up/README.md",
+          "saveCloseRestartQualified": false,
+          "inactiveScenarioConclusion": "success",
+          "nextStep": "Persist native render/focus/geometry traces on failure; no product fix claimed."
+        },
+        "browserComparison": {
+          "captures": 3,
+          "viewport": [1200, 800],
+          "top": 1255,
+          "left": 1938,
+          "position": "Ln 80, Col 363",
+          "selection": "SELECTION-A",
+          "exactFinalDraftBytes": 4881,
+          "focusDestinations": 13,
+          "status": "passed within browser fixture; does not qualify WebKitGTK",
+          "report": "docs/design/2026-09-22-overhaul/implementation/native-scroll-follow-up/README.md"
+        }
       },
       "ci": {
-        "status": "in progress",
+        "status": "success",
         "runId": 35770490421,
-        "url": "https://github.com/rndaom/execs/actions/runs/35770490421"
+        "url": "https://github.com/rndaom/execs/actions/runs/35770490421",
+        "jobsPassed": 5
       },
       "precedingCi": {
         "head": "5bda798115b936d5d6f796d42614a0955f6748bf",
@@ -4303,12 +4338,21 @@
       },
       "packageProposal": {
         "path": "docs/design/2026-09-22-overhaul/implementation/package-smoke/development-run-plan.md",
-        "implemented": false,
+        "implemented": true,
         "executed": false,
-        "implementationStatus": "Linux workflow, runner and fixture validator implementation underway; no package execution"
+        "implementationStatus": "Linux AppImage manual replacement, Debian upgrade/first-install and native old-export/current-import/switch/reopen implemented and independently reviewed; first hosted execution pending. Windows NSIS unimplemented.",
+        "implementationReport": "docs/design/2026-09-22-overhaul/implementation/package-smoke/development-implementation.md",
+        "localTests": 24,
+        "priorExporterArchiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
       },
       "acceptancePreserved": true,
-      "releaseAuthorized": false
+      "releaseAuthorized": false,
+      "followupTooling": {
+        "passed": 94,
+        "skipped": 4,
+        "failed": 0,
+        "attribution": "70 existing tooling tests including three new retention diagnostics, plus 24 development package tests; unchanged product tests retain 31b38b9 results."
+      }
     }
   }
 }

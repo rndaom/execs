@@ -1,0 +1,81 @@
+name: Linux packages (development only)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/development-package-smoke.yml
+      - scripts/development-package-*.mjs
+      - scripts/package-smoke-fixture.mjs
+      - scripts/fixtures/package-smoke-v018.json
+      - scripts/linux-native-*.mjs
+      - scripts/release-version.mjs
+      - scripts/verify-release.mjs
+      - scripts/appimage-host-libraries.mjs
+      - scripts/third-party-notices.mjs
+      - scripts/linux-notices.py
+      - apps/desktop/**
+      - packages/cfglint/**
+      - pnpm-lock.yaml
+      - CHANGELOG.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: development-package-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-packages:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install build, package and native automation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb xauth dbus-x11 xclip xdotool imagemagick python3 libfuse2 fuse3
+          command -v WebKitWebDriver
+          command -v fusermount3
+          command -v import
+          dpkg-query -W libwebkit2gtk-4.1-0 webkit2gtk-driver libfuse2 fuse3 xdotool
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: development-linux-packages
+      - run: pnpm install --frozen-lockfile
+      - name: Test package harness and data boundaries
+        run: node --test scripts/development-package-*.test.mjs scripts/package-smoke-fixture.test.mjs scripts/release-guards.test.mjs
+      - name: Verify packaged notices
+        run: |
+          node scripts/third-party-notices.mjs --check
+          python3 scripts/linux-notices.py
+      - name: Prepare temporary unsigned bundle configuration
+        run: node scripts/development-package-guard.mjs --prepare
+      - name: Build optimized AppImage and Debian packages without updater signatures
+        run: pnpm --filter @execs/desktop tauri build --ci --bundles appimage,deb --config "$RUNNER_TEMP/execs-development-package-config.json" -- --locked
+      - name: Install pinned external native driver
+        run: cargo install tauri-driver --version 2.0.6 --locked
+      - name: Previous-public package upgrades, native round trip and Debian first install
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: xvfb-run -a -s '-screen 0 1600x1200x24' dbus-run-session -- node scripts/development-package-smoke.mjs
+      - name: Retain fixture-only qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: development-linux-packages-${{ github.sha }}
+          path: ${{ runner.temp }}/execs-development-packages-*/evidence/
+          if-no-files-found: warn
+          retention-days: 7

@@ -8,8 +8,11 @@ import {
   copyEditorText,
   copyTextDiagnostic,
   KEYS,
+  nativeErrorDiagnostic,
   press,
+  tabToEditorWithTrace,
   typeEditorText,
+  waitForEditorRetention,
 } from "./linux-native-active-input.mjs";
 import { activeCaptureSettled, activeRuntimePreflight } from "./linux-native-active-runtime.mjs";
 
@@ -135,6 +138,66 @@ test("retention requires actual selection and both nonzero editor scroll axes", 
     assert.throws(() => assertEditorRetained(retained, { ...retained, ...patch }));
   assert.throws(() => assertEditorRetained({ ...retained, top: 0 }, retained));
   assert.throws(() => assertEditorRetained({ ...retained, selection: "" }, retained));
+});
+
+test("native Tab diagnostics retain the focus destination that changes editor scroll", async () => {
+  const steps = [
+    { ...retained, focused: false, activeElement: { label: "Files" } },
+    { ...retained, focused: false, activeElement: { label: "Save" } },
+    { ...retained, top: 0, left: 0, activeElement: { label: retained.path } },
+  ];
+  let reads = 0;
+  const commands = [];
+  const driver = {
+    read: async () => steps[reads++],
+    command: async (...args) => commands.push(args),
+  };
+  const diagnostic = {};
+  assert.equal(await tabToEditorWithTrace(driver, diagnostic), 2);
+  assert.deepEqual(
+    diagnostic.tabTraversal,
+    steps.map((state, tabs) => ({ tabs, state })),
+  );
+  assert.equal(commands.length, 2);
+  for (const [method, path, body] of commands) {
+    assert.equal(method, "POST");
+    assert.equal(path, "actions");
+    assert.deepEqual(body.actions[0].actions, [
+      { type: "keyDown", value: KEYS.tab },
+      { type: "keyUp", value: KEYS.tab },
+    ]);
+  }
+  await assert.rejects(tabToEditorWithTrace(driver, {}, 81));
+});
+
+test("a failed retention wait preserves its last geometry and nested assertion without relaxing it", async () => {
+  const after = { ...retained, top: 0, left: 0 };
+  const diagnostic = {};
+  await assert.rejects(
+    waitForEditorRetention({ read: async () => after }, retained, diagnostic, 0),
+    (error) => {
+      assert.match(error.message, /Timed out: draft selection and scroll restored/);
+      assert.match(error.cause.message, /Editor top scroll was not retained/);
+      return true;
+    },
+  );
+  assert.deepEqual(diagnostic.polls, [after]);
+  assert.equal(diagnostic.pollCount, 1);
+  assert.match(diagnostic.lastAssertion.message, /Editor top scroll was not retained/);
+  assert.equal(diagnostic.error.cause.message, diagnostic.lastAssertion.message);
+  assert.deepEqual(
+    await waitForEditorRetention({ read: async () => retained }, retained, {}, 0),
+    retained,
+  );
+});
+
+test("native error diagnostics bound an unexpectedly cyclic cause chain", () => {
+  const error = new Error("x".repeat(10_000));
+  error.cause = error;
+  const diagnostic = nativeErrorDiagnostic(error);
+  assert.equal(diagnostic.message.length, 2_048);
+  assert.equal(diagnostic.stack.length, 8_192);
+  assert.equal(diagnostic.cause.cause.cause.causeTruncated, true);
 });
 
 test("native copy cannot pass from a stale clipboard without its trusted complete-text copy event", async () => {

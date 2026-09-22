@@ -2,6 +2,8 @@
 
 2026-09-22. The package harness now checks realistic, bounded profile data preservation. **No installer, package workflow, desktop app, Steam or TF2 was run for this work.** RND-251's packaged runtime, rendered-webview and UI round-trip requirements remain open.
 
+Later checkpoint: a separate [Linux development package workflow and native harness](development-implementation.md) now implements unsigned AppImage/Debian package qualification for review. It has not run on a hosted worker; Windows remains unimplemented there. The existing signed release harness and the historical validation below remain unchanged.
+
 ## Problem and implemented checks
 
 The previous `scripts/smoke-packages.mjs` wrote a text sentinel, checked it before application startup, and reported `packagedStartup: true` after ten seconds of process survival. Linux also searched for an `execs` window title. Those assertions could pass with lost profile data or an unusable webview.
