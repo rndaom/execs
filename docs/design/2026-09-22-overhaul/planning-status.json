@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-22T14:57:00Z",
+  "updatedAt": "2026-09-22T15:35:55Z",
   "purpose": "Current Foundry implementation acceptance, owned work and evidence ledger; integrated and native qualification remain separate.",
   "authorization": {
     "scope": "Foundry only; whole application, all 14 selected issues plus overhaul, multiple implementation agents, tests, visual verification, repository and Linear updates",
@@ -15,7 +15,7 @@
     "ownerSelected": true,
     "designSelectionGate": "satisfied",
     "implementationStatus": "committed development candidate; explicitly recorded gaps remain",
-    "verificationStatus": "Integrated Windows automated checks and accepted scoped browser review pass; Linux/native/package/Cloud/TF2/PresentMon qualification remains open.",
+    "verificationStatus": "Five-job Windows/Linux CI, local Windows checks, accepted browser/gallery review and four actual v0.1.8 Windows library compatibility cases pass. Native/package/Cloud/TF2/PresentMon qualification remains open.",
     "boards": [
       "docs/design/2026-09-22-overhaul/options/01-foundry/01-core.png",
       "docs/design/2026-09-22-overhaul/options/01-foundry/02-customization.png",
@@ -51,8 +51,10 @@
     "auditSource": "9ac45a3847b65da087661b1c08cf719fc6b9df11",
     "implementationBranch": "rndaom/foundry-overhaul",
     "integratedHead": "e1fecdaaf4de2c7257eb2dbe875ac45f22ee4dcc",
-    "note": "Public 0.1.8 forward-port is integrated at integratedHead. The local Foundry candidate commit has passing Windows automated and scoped browser evidence; Linux/native/package/live acceptance remains open.",
-    "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66"
+    "note": "Product commit 7c78fbed1907dceb37bf348596fca48a8f654e66 and documentation head 542b3dd20f2847fc90a1a4e990584f03830fcc6d are pushed in draft PR #60. All five CI jobs passed on that exact head; native/package/live acceptance remains open.",
+    "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
+    "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+    "pullRequestUrl": "https://github.com/rndaom/execs/pull/60"
   },
   "evidencePolicy": {
     "owners": "Assigned by the parent; see each selected issue and overhaul workstreams.",
@@ -176,7 +178,8 @@
           }
         ],
         "currentEvidenceSummary": "Final scoped App settings/updater run passed 32 tests: pane 7, preferences 5, updater 11, bridge 7 and footer 2. The delayed-resource-close and native-close readiness regressions pass; scoped TypeScript and Biome pass. Included in the passing 863-test desktop integration; actual update installation remains unperformed.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-246",
@@ -259,10 +262,27 @@
             "kind": "candidate verification evidence",
             "source": "/root",
             "recordedAt": "2026-09-22T14:57:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "Thirteen startup and two diagnostic-content fixtures pass on Windows, including exact marker preservation and unreadable-marker handling. The full Windows workspace passes. A packaged native dialog was not exercised.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "Thirteen startup and two diagnostic-content fixtures pass on Windows, including exact marker preservation and unreadable-marker handling. The full Windows workspace passes. A packaged native dialog was not exercised. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-290",
@@ -343,7 +363,8 @@
           }
         ],
         "currentEvidenceSummary": "Six SettingsLayout regressions passed; owner also reports Modal 8, Toast 5 and retained-pane 4 checks. Foundry shell visual evidence includes 960px Comfig/Gameplay and HUD/Mods views.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-291",
@@ -424,7 +445,8 @@
           }
         ],
         "currentEvidenceSummary": "Owner reports source-token calculations and direct shared-style inspection in HUD, Mods and core captures. These values do not certify every composited/native state.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-292",
@@ -535,7 +557,8 @@
           }
         ],
         "currentEvidenceSummary": "Standalone promo TypeScript check, 636-frame render and reviewed Mods/outro frames passed. See the documentation review; generated GIF hash retained. README, promo, release baseline and Unreleased entries are present in the committed candidate.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "initialImplementationAssessment": {
         "status": "missing documentation correction; source-confirmed",
@@ -643,7 +666,8 @@
           }
         ],
         "currentEvidenceSummary": "22 targeted frontend tests and 7 helper tests passed, with scoped Biome/Rust fmt/Clippy. Timer inventory and paired on/off PresentMon protocol are recorded.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "initialImplementationAssessment": {
         "status": "existing bounded monitoring; audit and benchmark still missing",
@@ -680,9 +704,9 @@
       "authoritativeDescription": "## Combined 0.2.0 candidate qualification — September 22, 2026\n\nThe remaining 0.1.9 planning bucket is absorbed into the owner-requested combined 0.2.0 release. This issue retains In Progress and its existing evidence/acceptance. Current public baseline is [v0.1.8](<https://github.com/rndaom/execs/releases/tag/v0.1.8>); use the actual latest public version at candidate time. October 1 is no longer a committed deadline; design selection and implementation estimation come first.\n\nQualify the selected whole-application visual implementation alongside the existing functional matrix: every production pane and major menu/dialog/selection/error/draft/recovery/update state, 1200×800 and 960×640, keyboard/focus, meaningful contrast, reduced motion, native Windows WebView2/Linux WebKitGTK and the actual 0.1.8 Mods forward-port. Preserve the distinction between browser fixtures, native accessibility/media, package/updater, and approved Cloud/TF2/Casual evidence. Images alone do not pass these gates. Development Inventory remains separately labeled and is not implicitly release scope.\n\n[Full combined plan and pane/state acceptance](<https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6>); whole-app overhaul work and owner design-selection gate are tracked in [RND-208](<https://linear.app/rndaom/issue/RND-208/validate-and-publish-the-combined-020-overhaul-and-profile-management>) because the workspace's free issue quota prevented a new tracker. Preserve the detailed historical matrix below; none of its unrun checks become passed by moving this issue.\n\n---\n\nThe September 5 deep audit passed local Windows tests and live source checks, but it does not establish packaged Linux behavior, a live Steam Cloud round trip, or Casual/preloader recovery. This is a concrete validation gate, not a newly alleged product bug.\n\nAttach candidate commit, installer hashes, platform and observed result for each:\n\n* Windows NSIS upgrade from the last published version, profile/settings preservation, restart and signed updater success/failure. Linux AppImage first launch/update and .deb first install; no .deb self-update offer.\n* TF2 open before launch, starting during a save/download/switch, quit/absorb, failed lock subscription, Steam-open launch-options copy/pending behavior and Steam-closed reconciliation.\n* Every pane: edit/save/reload, navigate during debounce/in-flight work, failed write retry, offline catalog behavior, A/B profile isolation. Verify <issue id=\"af0bdc31-c1df-44b5-aa2a-1f6a3caab3e1\" href=\"https://linear.app/rndaom/issue/RND-209/keep-unsaved-files-drafts-when-leaving-the-pane-or-switching-profiles\">RND-209</issue>/<issue id=\"804dd747-284c-4c7b-8b5f-cf9c57c1d42f\" href=\"https://linear.app/rndaom/issue/RND-210/wait-for-a-successful-cfg-save-before-save-and-switch-navigates\">RND-210</issue> and <issue id=\"4a8aab6e-a06c-4a56-80d2-a7840cb64d59\" href=\"https://linear.app/rndaom/issue/RND-233/record-right-and-middle-mouse-buttons-with-the-correct-tf2-bind-names\">RND-233</issue>–<issue id=\"fb712f50-bc22-4bb1-993b-074adade1b54\" href=\"https://linear.app/rndaom/issue/RND-250/keep-the-ui-write-lock-closed-after-subscription-failure-despite-late\">RND-250</issue>.\n* Native export/import from the public version; case-only paths, unreadable inventory, Keep/Restore, canceled creator review and interrupted transaction recovery.\n* Actual Steam Cloud server round trip plus offline restart without losing either local copy. A filesystem dual-write pass does not satisfy this item.\n* Viewmodel build/import/remove on Windows; supported prebuilt path and unavailable compiler feedback on Linux. Crosshair stock/custom behavior and installed sound playback on actual TF2.\n* Preloader Apply→Casual→Restore, selected carrier removal, TF2 update/Steam verification, restart after interruption, exact restoration of stock particle DATA and unchanged directory VPK.\n\nRun pnpm test/check/build, cargo fmt, workspace tests and Clippy, and both CI platform targets on the candidate. File new defects with reproduction and the earliest appropriate patch milestone; do not mark unmet rows pass or keep serious bugs waiting for a themed date.\n\nCompletion feeds <issue id=\"a1d54c31-0e84-4d81-b89d-0687b935c7b5\" href=\"https://linear.app/rndaom/issue/RND-208/validate-and-publish-020-after-the-functional-fixes-and-profile\">RND-208</issue>. Patches may combine or skip when empty; this checkpoint cannot force a ceremonial 0.1.9 tag. No game launch, installer change, or publication is implied by creating this issue.\n\n## September 13 audit matrix additions\n\nFresh main f089ea5 Windows frontend tests/check/build and Rust fmt/clippy/workspace tests pass. Existing latest main CI supplies Linux evidence; no fresh Linux runtime or signed 0.2.0 upgrade was run. Keep this gate In Progress.\n\nAdd native close with pending settings during debounce, locked TF2 and failed saves (<issue id=\"b87a7fdd-70be-457c-bcbc-5a6ff40e49b1\" href=\"https://linear.app/rndaom/issue/RND-273/protect-pending-settings-drafts-when-closing-execs\">RND-273</issue>); profile-owned preloader command switch/migration and selected-source remove/absorb (<issue id=\"90ca1d9a-49b0-470e-b4d7-94ad053509b9\" href=\"https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during\">RND-202</issue>/248); local-only particles without default library cache (<issue id=\"cf40160b-22b9-41f7-9448-b14b0a1da6f0\" href=\"https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod\">RND-274</issue>); owner Low flat textures ↔ Ultra Ultimate TF2 Fix Pack isolation across restart/export/import. Capture UI selections plus actual VPK/particle bytes and unchanged \\_dir.vpk. Cover notification provider integration (<issue id=\"80685816-a1a9-4b81-af11-eac93374658a\" href=\"https://linear.app/rndaom/issue/RND-269/renew-success-toast-lifetime-for-every-completion\">RND-269</issue>–272), not only passing reducer tests. Details: docs/audits/2026-09-13-release/README.md.\n\n## September 14 whole-project audit and stronger evidence gate\n\nFresh audit at main f089ea5: 544 JavaScript tests passed (418 desktop, 105 cfglint, 21 release scripts; three Linux-only script checks skipped); 690 Rust workspace tests passed and eight were ignored in that run. Four ignored live source tests subsequently passed. Typecheck/build, Biome, Rust fmt/Clippy, notice inventory and the locked glib disposition passed. Promo's standalone TypeScript check also passed. The Vite 902.77 kB main chunk is a profiling target, not measured native lag.\n\nNineteen browser fixture flows were captured at 1200×800, with the supported 960×640 minimum also checked. Twelve separate audit regressions intentionally fail against current frontend code; five native core scenarios reproduce four new defects plus the <issue id=\"feb09421-c354-4688-8417-70aeb664a6d3\" href=\"https://linear.app/rndaom/issue/RND-247/reconcile-installed-mod-records-after-absorb-accepts-an-external-pack\">RND-247</issue> export/import consequence. The safe Reqwest 0.13.4 loopback probe reproduces a missing stalled-body deadline. These findings do not make the normal suites fail, which demonstrates missing boundary coverage.\n\n**Add final-candidate evidence:** <issue id=\"7333da27-5181-4d8f-a02e-b19fe9c134cf\" href=\"https://linear.app/rndaom/issue/RND-275/preserve-distinct-dashed-and-undashed-custom-pack-identities-during\">RND-275</issue>, <issue id=\"87320907-02d0-4169-840a-136af3bc9c52\" href=\"https://linear.app/rndaom/issue/RND-277/avoid-source-reserved-directory-names-when-installing-loose-mods-and\">RND-277</issue>, <issue id=\"9af02bfe-0ca6-4797-999a-8b05c2604e88\" href=\"https://linear.app/rndaom/issue/RND-278/refuse-profile-export-when-vpk-cfg-members-contain-server-credentials\">RND-278</issue>, <issue id=\"040724a5-00b4-4d82-83c4-41350d289f09\" href=\"https://linear.app/rndaom/issue/RND-279/retain-new-crosshair-asset-bytes-when-build-pack-fails-or-is-refused\">RND-279</issue>, <issue id=\"357007d6-3ef7-4697-93a0-5970f3976e26\" href=\"https://linear.app/rndaom/issue/RND-280/preserve-newer-sound-edits-when-an-earlier-boost-save-finishes\">RND-280</issue>, <issue id=\"027dc825-f65d-4663-88f5-573f6c9c3a53\" href=\"https://linear.app/rndaom/issue/RND-281/stop-dormant-cfg-and-deferred-bind-or-alias-commands-from-seeding\">RND-281</issue>, <issue id=\"f08a2cb6-5ef6-456a-bef0-0e528dcd603c\" href=\"https://linear.app/rndaom/issue/RND-282/bound-total-cfg-exec-traversal-so-small-graphs-cannot-freeze-the\">RND-282</issue>, <issue id=\"a6fc3e21-7575-4405-8f78-7a19cc37728c\" href=\"https://linear.app/rndaom/issue/RND-288/time-out-stalled-updater-payload-downloads-and-release-the-update\">RND-288</issue>; cfg-layer/valid-FOV preservation; export re-import after deleted packs; false/cancel/native-error host callback conventions; sound edits during older save acknowledgement; harmless dormant/class cfgs and bounded repeated execs; literal dash peer packs; Source-reserved custom folders; packed cfg credential refusal; cached/partial HUD refresh; corrupt startup marker shown visibly; meaningful text contrast and per-pane navigation.\n\n**Strengthen the packaged smoke assertions:** scripts/smoke-packages.mjs:86 preserves a text sentinel; :229–244 checks process survival (and a Linux window name). These are useful limited checks, not proof that Windows rendered a usable webview or that a real prior-version profile migrated and remains switchable. Add/retain exact candidate screenshots or semantic interaction evidence and a realistic fixture library round trip on both packaged OS paths. Exercise the app's actual update lifecycle on stalled payloads, not only the updater example probe.\n\nKeep this gate In Progress. No fresh Linux runtime, actual installer/update, retail TF2 launch, Steam Cloud server round trip or Casual/preloader session was run in this audit. A full Tauri probe encountered a host loader failure before main and is not a product finding. Prior green Linux CI at this commit is supporting evidence, not a new runtime result. Steam's [Cloud documentation](<https://partner.steamgames.com/doc/features/cloud>) does not make a local dual-write an acknowledged upload. Include immediate relaunch, offline/reconnect, multiple accounts and cross-platform cases. Preserve directory-VPK hashes in all particle checks.\n\nCurrent audit bundle: docs/audits/2026-09-14-project/. Normal tests and documentation-source checks are separate from live compatibility coverage. No tag or publication is authorized by this audit update.",
       "authoritativeUpdatedAt": "2026-09-22T08:54:29.019Z",
       "implementation": {
-        "status": "Windows automated and scoped browser qualification passed; platform matrix open",
+        "status": "Windows/Linux automated CI passed; native and package matrix open",
         "existing": "Prior maintenance releases and audits provide scoped unit/fixture/CI/package evidence, including public v0.1.8. Those are inherited evidence, not proof of the new candidate.",
-        "remaining": "Linux CI/native runtime, packaged Windows/Linux startup and updater/profile compatibility, actual Cloud and approved TF2/Casual/performance matrix. A Linux-CI draft PR is planned but not created at this checkpoint.",
+        "remaining": "Native Windows/Linux runtime, packaged startup and updater/profile compatibility, actual Cloud and approved TF2/Casual/performance matrix. Four actual public-v0.1.8 export/import fixtures pass at the Windows core-library level; this does not close packaged migration acceptance. Draft PR #60 CI passes at 542b3dd20f2847fc90a1a4e990584f03830fcc6d.",
         "baselineAssessment": "cumulative qualification already in progress; candidate evidence pending",
         "baselineExisting": "Prior maintenance releases and audits provide scoped unit/fixture/CI/package evidence, including public v0.1.8. Those are inherited evidence, not proof of the new candidate.",
         "baselineRemaining": "Execute the complete current-candidate matrix below, with actual commit/build/platform/input/result/evidence for every row. Retain every unrun native/platform condition explicitly.",
@@ -708,7 +732,7 @@
         }
       ],
       "verification": {
-        "status": "Windows checks and scoped browser QA passed; native/Linux/release rows open",
+        "status": "Five-job CI and four actual 0.1.8 library fixtures passed; native/package/release rows open",
         "required": [
           "Full frontend/Rust/Windows/Linux checks on the integrated candidate; public-profile compatibility and actual UI/native flows.",
           "Visible packaged webview and realistic prior-version library round trip, not only process survival or text sentinels.",
@@ -767,10 +791,35 @@
             "kind": "candidate verification evidence",
             "source": "/root",
             "recordedAt": "2026-09-22T14:57:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/README.md",
+            "kind": "actual tagged-old-export/current-import fixture qualification",
+            "source": "/root/profile_management; archive hashes independently checked by /root and /root/release_scope",
+            "recordedAt": "2026-09-22T15:34:41.503Z",
+            "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+            "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "pnpm test: 863 desktop + 160 cfglint + 21 tooling passed, 3 platform skips. Windows workspace: 859 passed, 0 failed, 16 ignored. Required pinned HUD script separately passed 6 tests, exit 0. Biome, frontend build, Rust fmt, all-target workspace Clippy and diff checks pass.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "pnpm test: 863 desktop + 160 cfglint + 21 tooling passed, 3 platform skips. Windows workspace: 859 passed, 0 failed, 16 ignored. Required pinned HUD script separately passed 6 tests, exit 0. Biome, frontend build, Rust fmt, all-target workspace Clippy and diff checks pass. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head. The actual public v0.1.8 exporter (85aaf6bc0dd28f43351d4cb5cdb62502737688d5) to current importer/re-exporter (542b3dd20f2847fc90a1a4e990584f03830fcc6d) passed four disposable Windows core-library cases with 32 exact payload comparisons. All eight retained ZIP hashes were independently verified; active profile/manifest and synthetic live root were unchanged, imported preloader selections were empty, and ambiguous HUD choice/reset requirements were preserved. Packaged/native GUI/Linux/Cloud/live-engine qualification is not established by this fixture pass.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-251",
@@ -804,7 +853,7 @@
       "implementation": {
         "status": "safe profile deletion implemented; Windows fixtures and integration passed",
         "existing": "Profile create/import/export/switch and recoverable core transactions exist.",
-        "remaining": "Native dialogs/close, Linux and realistic prior-profile packaged compatibility. No real player library was deleted.",
+        "remaining": "Native Windows/Linux dialogs/close and realistic prior-profile packaged compatibility. No real player library was deleted.",
         "baselineAssessment": "new feature missing at baseline",
         "baselineExisting": "Profile create/import/export/switch and recoverable core transactions exist.",
         "baselineRemaining": "Implement deletion command, preview twin, menu action and themed review/export affordance. Inactive removes only own data; active chooses switch-away or leave-live-files/clear-tracking. Last profile cannot silently reset TF2. Preserve shared references and recovery.",
@@ -869,10 +918,27 @@
             "kind": "scoped implementation evidence",
             "source": "/root/profile_management",
             "recordedAt": "2026-09-22T14:28:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "Nine disposable core deletion tests, five native orchestration fixtures rerun after HUD metadata changes, 78 preloader-filter tests and the 31-test profile frontend group passed. Legacy HUD record removal covers sole and preserved-original branches. The integrated Windows suites pass; browser captures 00–06 show the final review flows.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "Nine disposable core deletion tests, five native orchestration fixtures rerun after HUD metadata changes, 78 preloader-filter tests and the 31-test profile frontend group passed. Legacy HUD record removal covers sole and preserved-original branches. The integrated Windows suites pass; browser captures 00–06 show the final review flows. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-213",
@@ -959,10 +1025,27 @@
             "kind": "scoped implementation evidence",
             "source": "/root/app_settings",
             "recordedAt": "2026-09-22T14:28:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "13 disposable core settings tests and native cargo check passed. Final shared frontend settings/updater group passed 32 tests, including pane 7, preferences 5, updater 11, bridge 7 and footer 2; native-close readiness regression passes. Scoped TypeScript/Biome and browser 1280/corrected 960x640 review pass.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "13 disposable core settings tests and native cargo check passed. Final shared frontend settings/updater group passed 32 tests, including pane 7, preferences 5, updater 11, bridge 7 and footer 2; native-close readiness regression passes. Scoped TypeScript/Biome and browser 1280/corrected 960x640 review pass. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-214",
@@ -996,7 +1079,7 @@
       "implementation": {
         "status": "profile-owned native preloader integration implemented; Windows fixtures passed",
         "existing": "Profile-owned preloader selection metadata, capture, projection, stock restoration and switch rollback journal exist. Selected-source removal now contains profile-aware transaction/capture work; old September issue evidence is not a description of every current path.",
-        "remaining": "Actual owner two-profile game/Casual/restart and stock-byte/presentation validation, plus Linux/native qualification.",
+        "remaining": "Actual owner two-profile game/Casual/restart and stock-byte/presentation validation, plus native Windows/Linux desktop qualification.",
         "baselineAssessment": "substantial implementation exists; command integration incomplete",
         "baselineExisting": "Profile-owned preloader selection metadata, capture, projection, stock restoration and switch rollback journal exist. Selected-source removal now contains profile-aware transaction/capture work; old September issue evidence is not a description of every current path.",
         "baselineRemaining": "The command still clears source particle state through legacy cleanup before core switch. Basic target validation checks manifest/path/hash but does not preflight every target preloader input. Reconcile all cleanup/migration/removal/absorb/normal/recovery entry points and prove recoverable ordering.",
@@ -1041,10 +1124,27 @@
             "kind": "scoped implementation evidence",
             "source": "/root/profile_management",
             "recordedAt": "2026-09-22T14:28:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "Five native orchestration fixtures were rerun successfully after HUD metadata changes. The 78 core preloader-filter tests and shared 31-test profile frontend group pass, and the final Windows workspace passes. Fixtures remain disposable; retail TF2/Cloud behavior was not exercised.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "Five native orchestration fixtures were rerun successfully after HUD metadata changes. The 78 core preloader-filter tests and shared 31-test profile frontend group pass, and the final Windows workspace passes. Fixtures remain disposable; retail TF2/Cloud behavior was not exercised. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-202",
@@ -1079,7 +1179,7 @@
       "implementation": {
         "status": "local-only library predicate implemented; Windows fixtures passed",
         "existing": "Apply and core catalog/archive readers already support local profile particle selections without default-library ZIP.",
-        "remaining": "Linux and native/offline/source-availability cases beyond the disposable Windows fixtures.",
+        "remaining": "Native Windows/Linux offline/source-availability cases beyond the disposable automated fixtures.",
         "baselineAssessment": "missing predicate correction; source-confirmed",
         "baselineExisting": "Apply and core catalog/archive readers already support local profile particle selections without default-library ZIP.",
         "baselineRemaining": "Target preparation still selects the empty-library path only when selection.is_empty(), so local-only particles require the default ZIP. Use actual default-addon/default-particle need consistently in normal switch and recovery.",
@@ -1115,10 +1215,27 @@
             "kind": "scoped implementation evidence",
             "source": "/root/profile_management",
             "recordedAt": "2026-09-22T14:28:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "Covered by five native orchestration fixtures and the 78 preloader tests reported for profile management; these are overlapping groups, not additional independent totals. Native orchestration fixtures were rerun after HUD changes and the final Windows workspace passes.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "Covered by five native orchestration fixtures and the 78 preloader tests reported for profile management; these are overlapping groups, not additional independent totals. Native orchestration fixtures were rerun after HUD changes and the final Windows workspace passes. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-274",
@@ -1150,9 +1267,9 @@
       "authoritativeDescription": "Installing HUD B must replace HUD A. There is no secondary-HUD product model. Preserve original/untracked bytes safely during migration and rollback; do not silently delete user content.\n\n**Confirmed September 5 native reproductions**\n\nAudited `086fdc2` plus existing working changes. `docs/audits/2026-09-05-functional/native/functional.rs` runs real execs-core operations in disposable Windows TF2/library folders:\n\n* F15: install firsthud, then secondhud. The first remains at `tf/custom/-firsthud/info.vdf`. Automatic absorb reports firsthud as added; choosing Update puts two HUD packs back in the manifest.\n* F16: install firsthud through HUD, then import another HUD-shaped tree through Mods. Both HUD folders remain enabled and the profile contains two HUD packs. The Mods installer bypasses HUD replacement.\n* Control: a TF2-running HUD install is rejected with the original manifest/files preserved.\n\nThese replace the earlier source-only evidence. They do not prove live server rendering or Linux behavior.\n\n**Implementation and acceptance**\n\n* Reconcile catalog install/update, archive/folder import, generic Mods import, creator/native profile import, switch and absorb to the same single-HUD policy.\n* Keep exactly the selected HUD managed and mounted; remove obsolete generated option cfgs/execs. Recovery copies must never be offered as newly discovered customization or silently adopted as secondary HUDs.\n* Legacy profiles/multi-HUD archives need an explicit keep/review policy. Preserve excluded original bytes safely and disclose the result; do not delete unknown or modified files.\n* Retain transactional rollback and case/path safety, including pre-existing disabled-name collisions.\n* Test A→B→absorb Update→switch away/back, same-HUD update, generic Mods import, mixed archives, failure mid-publish, restart recovery and running-game refusal on both platforms.\n\n**Release: 0.2.0**\n\nThe legacy ownership/absorb policy changes, so this remains on the minor track. Fixes for offline state and stale schemas are separate patch issues <issue id=\"87f3c3fc-8ad8-4abc-98db-070bfe09f6e1\" href=\"https://linear.app/rndaom/issue/RND-239/load-the-installed-hud-and-local-controls-when-the-catalog-is-offline\">RND-239</issue>/<issue id=\"3b7766c0-30b6-4c73-9961-d934091c3806\" href=\"https://linear.app/rndaom/issue/RND-243/clear-stale-hud-option-schemas-when-changing-huds-or-a-schema-fetch\">RND-243</issue> in 0.1.5. Any new write target or unreadable profile schema requires Breaking/migration treatment; do not backport that into 0.1.x. Add the changelog line and durable AGENTS.md decision with implementation. No implementation or publication performed by this audit.",
       "authoritativeUpdatedAt": "2026-09-14T13:29:39.537Z",
       "implementation": {
-        "status": "HUD ownership lifecycle and exact-byte boundaries implemented; Windows proof passed",
+        "status": "HUD ownership and exact-byte boundaries implemented; Windows and Linux fixtures passed",
         "existing": "Selected-HUD inference, inactive library HUD exclusion, safe backup-container moves, legacy recovery, switch projection and absorb exclusions exist with tests. Earlier F15 is not proof that those fixes are absent.",
-        "remaining": "Linux fixtures/native desktop, command/close/restart/recovery and packaged long-path/runtime qualification beyond the pinned Windows fixture run. No retail TF2/Cloud evidence is claimed.",
+        "remaining": "Native Windows/Linux desktop command/close/restart/recovery and packaged long-path/runtime qualification beyond the passing pinned fixture runs. No retail TF2/Cloud evidence is claimed.",
         "baselineAssessment": "substantial HUD lifecycle implementation exists; cross-entry policy incomplete",
         "baselineExisting": "Selected-HUD inference, inactive library HUD exclusion, safe backup-container moves, legacy recovery, switch projection and absorb exclusions exist with tests. Earlier F15 is not proof that those fixes are absent.",
         "baselineRemaining": "Generic Mods install still mirrors HUD-shaped tree bytes and extends mod records without HUD detection/replacement. Unify remaining entry points and provide explicit legacy/multi-HUD review/disclosure policy, while retaining exact excluded bytes.",
@@ -1186,7 +1303,7 @@
         }
       ],
       "verification": {
-        "status": "69 frontend, full Windows core/workspace and separate 6-test pinned corpus pass",
+        "status": "69 frontend, Windows/Linux CI workspace and separate corpus pass; native pending",
         "required": [
           "A→B→absorb Update→switch away/back; same HUD update; Mods import; creator/native and mixed archive policy.",
           "Case/path/disabled-name collisions, unknown/modified originals, obsolete generated cfg removal, mid-publish/restart/game-running refusal on both platforms."
@@ -1243,10 +1360,35 @@
             "kind": "candidate verification evidence",
             "source": "/root/foundry_hud",
             "recordedAt": "2026-09-22T14:57:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/README.md",
+            "kind": "actual tagged-old-export/current-import fixture qualification",
+            "source": "/root/profile_management; archive hashes independently checked by /root and /root/release_scope",
+            "recordedAt": "2026-09-22T15:34:41.503Z",
+            "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+            "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "HUD frontend seven-suite run passed 69 tests. Windows core passed 738 tests (709 unit + 29 integration), with 12 ignored as run; all-target core Clippy passed. The full Windows workspace passed 859 tests with 16 ignored. The required pinned HUD script separately passed 6 tests: four schema cases, one font-template case and exact-payload catalog install/update over three SHA-pinned HUD archives, including beyond-MAX_PATH fixture paths. Final browser captures 09–14 and 16–17 are documented.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "HUD frontend seven-suite run passed 69 tests. Windows core passed 738 tests (709 unit + 29 integration), with 12 ignored as run; all-target core Clippy passed. The full Windows workspace passed 859 tests with 16 ignored. The required pinned HUD script separately passed 6 tests: four schema cases, one font-template case and exact-payload catalog install/update over three SHA-pinned HUD archives, including beyond-MAX_PATH fixture paths. Final browser captures 09–14 and 16–17 are documented. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head. The actual public v0.1.8 exporter (85aaf6bc0dd28f43351d4cb5cdb62502737688d5) to current importer/re-exporter (542b3dd20f2847fc90a1a4e990584f03830fcc6d) passed four disposable Windows core-library cases with 32 exact payload comparisons. All eight retained ZIP hashes were independently verified; active profile/manifest and synthetic live root were unchanged, imported preloader selections were empty, and ambiguous HUD choice/reset requirements were preserved. Packaged/native GUI/Linux/Cloud/live-engine qualification is not established by this fixture pass.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-215",
@@ -1322,7 +1464,8 @@
           }
         ],
         "currentEvidenceSummary": "All 19 viewmodel fixtures passed in the reported integrated core run, including cfg/launch-token regressions. Mods frontend has 59 scoped checks and real browser evidence. These do not prove engine startup safety. The current bounded fixes are included in the passing Windows workspace. They do not establish the unresolved engine acceptance.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-324",
@@ -1354,9 +1497,9 @@
       "authoritativeDescription": "## Foundry selected; implementation underway — September 22, 2026\n\nThe owner selected **Foundry only** and explicitly authorized the complete application implementation, all 14 selected combined-scope issues, tests and visual verification, with parallel agents and repository/Linear updates. The design-selection gate is satisfied. **No release is authorized:** do not bump product versions, create a release tag, publish installers, or mark this release gate Done. Publication criteria below remain future release gates.\n\nImplement the five reviewed Foundry boards in `docs/design/2026-09-22-overhaul/options/01-foundry/`: `01-core.png`, `02-customization.png`, `03-workspaces.png`, `04-profiles.png`, and `05-states.png`. Signal and Afterhours are retained as historical alternatives. Reconcile the selected visuals with `concept-review.md`; generated metrics, navigation highlights, game art, sample lint, autosave/build wording and unsupported actions are not implementation requirements. Preserve task-specific pane layouts and all supported controls.\n\nCurrent scope remains **14 selected existing issues plus the whole-app overhaul under** <issue id=\"a1d54c31-0e84-4d81-b89d-0687b935c7b5\" href=\"https://linear.app/rndaom/issue/RND-208/validate-and-publish-the-combined-020-overhaul-and-profile-management\">RND-208</issue>; all 25 `execs-candidate` issues remain optional and unselected. Inventory remains account-owned, read-only and development-only. Public v0.1.8 remains the compatibility baseline; carry its Mods Browse/Installed/Casual behavior into the minor. The release date remains unset pending implementation and qualification estimates; the old October 1 checkpoint is superseded.\n\nThe implementation ledger is `docs/design/2026-09-22-overhaul/foundry-implementation-plan.md`, with exact Linear acceptance and per-item source evidence in `planning-status.json`. Existing core projection/HUD recovery code must be retained and qualified; do not equate old issue prose with an entirely missing implementation. Verify both 1200×800 and 960×640, keyboard/focus, computed contrast, reduced motion, native Windows WebView2/Linux WebKitGTK, drafts/errors/recovery and selected backend behavior. Browser concepts and tests do not stand in for unrun native, installer, Cloud or approved live TF2/Casual evidence.\n\nOnly this workstream's status changes to **In Progress** for this planning update. Other selected issue states remain unchanged until their owner implements and verifies them. No new issue is required; the existing quota fallback remains valid.\n\n---\n\n## Combined 0.2.0 plan — September 22, 2026\n\nThe owner requests one larger release combining the remaining 0.1.9 and selected 0.2.0 work with a complete application visual overhaul. The current public baseline is [v0.1.8](<https://github.com/rndaom/execs/releases/tag/v0.1.8>), published September 21, 2026 at 02:26:18 UTC. The owner has selected Foundry. The former October 1 checkpoint is superseded; the date remains unset pending an implementation/qualification estimate. No separate 0.1.9 tag is planned. This expands the former feature budget, but does not automatically select the optional execs-candidate pool or release development-only Inventory.\n\nThis gate now covers the 14 selected existing records plus the owner-requested overhaul. Qualify the selected design implementation, shipped 0.1.8 forward-port and native interaction/state coverage alongside existing compatibility gates. The historical baseline/scope/date below is preserved as evidence and superseded by this current plan where it conflicts. Do not mark the gate Done before authorized publication passes.\n\n## Whole-application overhaul workstream and design gate\n\nThis existing issue tracks the full added overhaul workstream because the free workspace issue limit prevented creating a separate issue. The detailed plan is [0.2.0 combined release and whole-application overhaul](<https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6>). No new issue was created. This workstream is now In Progress following the owner's Foundry selection; its dependencies are preserved.\n\nThe owner requests a complete visual overhaul for the combined 0.2.0 release, preceded by a whole-app visual audit and a choice among three complete image-generated alternatives. The outcome is a polished, professionally finished desktop tool with understated TF2 character and layouts suited to each task.\n\n## Deliverables and acceptance\n\n1. Capture and inspect every production pane and meaningful alternate state: Comfig, Binds, Gameplay, HUD, Crosshair, Viewmodels, Sounds, shipped 0.1.8 Mods, Files and Launch; shell/navigation/profile menus; finder/onboarding; profile import/switch/absorb/repair; save/draft/lock/error/recovery/update states. Include development Inventory distinctly labeled. Cover all materially different control patterns, not every numeric permutation. Maintain source/build/preview/native/viewport/state/artwork provenance and explicit unobserved gaps.\n2. Produce three separately organized, comparable image-generated directions using the same pane/state matrix. Each must show multiple relevant states of Comfig, Binds, Gameplay and HUD plus all other panes and global decisions, with full-size images and a comparison gallery. Include planned deletion and app settings flows with clear concept labels. Avoid treating optional candidates or Inventory shipment as selected scope.\n3. Give each direction a visual-system sheet and motion treatment: color/contrast, typography, spacing, density, controls, focus/selection, imagery, overlays, feedback, pane/selection/menu/dialog/disclosure transitions and reduced-motion equivalents. Include default 1200×800 and minimum 960×640 layouts. Static images cannot establish actual motion quality or accessibility.\n4. Record owner choice/refinement before app-wide product implementation. Document the chosen tokens and rules, build common shell/components, then adapt all pane compositions while preserving distinct jobs. TF2 influence must remain restrained; do not invent game preview assets, metrics, success states, cloud sharing or unsupported account actions.\n5. Preserve profile/session drafts, explicit Files Save, source-owned feedback, truthful progress, game/Steam write guards, ownership and recoverable transactions. Validate actual contrast/focus/keyboard behavior, native names/status announcements, resize/zoom/reduced motion and performance. Qualify Windows WebView2 and Linux WebKitGTK on the implementation candidate, not only browser fixtures.\n6. Design completion is separate from implementation/release completion. Final candidate gates remain <issue id=\"f577f8f5-365f-4d32-9962-74a1a9d8e542\" href=\"https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before\">RND-251</issue> and <issue id=\"a1d54c31-0e84-4d81-b89d-0687b935c7b5\" href=\"https://linear.app/rndaom/issue/RND-208/validate-and-publish-020-after-the-functional-fixes-and-profile\">RND-208</issue>, with latest-public profile/updater compatibility and required approved live evidence. The old October 1 date is tentative pending selected direction and estimate.\n\n## Baseline and dependencies\n\nPublic v0.1.8 is already released. Current inventory development branch is missing its Mods forward-port, so capture shipped Browse/Installed/Casual tasks separately and integrate/qualify them for the minor. Related selected work: [RND-291](<https://linear.app/rndaom/issue/RND-291/keep-each-settings-pane-at-a-predictable-scroll-position>), [RND-292](<https://linear.app/rndaom/issue/RND-292/make-meaningful-helper-and-status-text-meet-minimum-contrast>), [RND-214](<https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support>), [RND-213](<https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu>), [RND-325](<https://linear.app/rndaom/issue/RND-325/audit-execs-windows-polling-for-periodic-tf2-frame-stalls>), [RND-251](<https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before>).\n\nDetailed full pane/state matrix and phased acceptance: docs/design/2026-09-22-overhaul/combined-release-plan.md. Audit/source limits: docs/design/2026-09-22-overhaul/research/surface-inventory.md and research/release-scope.md. No implementation, issue completion, tag or publication is implied by creating this epic.\n\n## Exit gate\n\nThe owner selected Foundry, satisfying the visual-direction gate. Implementation and qualification are authorized; release publication is not. Do not mark this release qualification issue complete when audit/images are complete; implementation and final-candidate qualification remain separate stages, followed by authorized stable publication.\n\n---\n\n0.2.0 targets October 1, 2026, and skips if not ready. Published v0.1.4 is the current public baseline (September 13 audit). The intervening 0.1.2–0.1.9 milestones are provisional owner-requested release checkpoints; no fix waits for a theme/date and no empty patch is required.\n\n**Scope: at most three user-visible features**\n\n1. Creator ZIP import and trust review (<issue id=\"6b79e4c2-16e1-484f-8562-4338c78cdd72\" href=\"https://linear.app/rndaom/issue/RND-201/import-creator-cfgcustom-zips-with-a-themed-trust-review-and-real\">RND-201</issue>, implemented), with additive profile-preloader compatibility work <issue id=\"90ca1d9a-49b0-470e-b4d7-94ad053509b9\" href=\"https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during\">RND-202</issue>.\n2. Safe profile deletion (<issue id=\"8fcd4821-386b-49b9-a30f-6d3353a36516\" href=\"https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu\">RND-213</issue>).\n3. Focused app settings (<issue id=\"4d7dcf10-f473-4977-89a1-315215a917a8\" href=\"https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support\">RND-214</issue>).\n\nAlso include the already-promised single-HUD lifecycle correction <issue id=\"2d0dc29f-8fa7-40c6-a060-8c3cdaf72208\" href=\"https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and\">RND-215</issue>, the profile-owned selection cleanup from <issue id=\"e4506a6c-a508-4233-8641-7ee70f779aec\" href=\"https://linear.app/rndaom/issue/RND-248/prevent-removing-particle-source-mods-while-their-preloader-selections\">RND-248</issue>, and all shipped patch fixes. Crosshair mode switching shipped in 0.1.4. Expanded binds, sensitivity, uninstall and other new features remain prioritized backlog unless they replace a selected feature.\n\n**Release gates**\n\n* Verify <issue id=\"af0bdc31-c1df-44b5-aa2a-1f6a3caab3e1\" href=\"https://linear.app/rndaom/issue/RND-209/keep-unsaved-files-drafts-when-leaving-the-pane-or-switching-profiles\">RND-209</issue>/<issue id=\"804dd747-284c-4c7b-8b5f-cf9c57c1d42f\" href=\"https://linear.app/rndaom/issue/RND-210/wait-for-a-successful-cfg-save-before-save-and-switch-navigates\">RND-210</issue> and <issue id=\"4a8aab6e-a06c-4a56-80d2-a7840cb64d59\" href=\"https://linear.app/rndaom/issue/RND-233/record-right-and-middle-mouse-buttons-with-the-correct-tf2-bind-names\">RND-233</issue>–<issue id=\"fb712f50-bc22-4bb1-993b-074adade1b54\" href=\"https://linear.app/rndaom/issue/RND-250/keep-the-ui-write-lock-closed-after-subscription-failure-despite-late\">RND-250</issue> acceptance on the final candidate. Convert the audit's bad-outcome probes into meaningful regression expectations; passing diagnostic assertions currently means the bugs exist.\n* Import profiles exported by the last public version. Test creator review/cancel/replay, exact-byte trust, independent imported profiles, deletion rules, interrupted transactions, single-HUD reconciliation and settings persistence.\n* Test live Steam Cloud server round trip and offline restart. Filesystem dual-write tests alone are insufficient.\n* Test selected particle-carrier removal, preloader Apply/Restore, Casual compatibility, stock-byte restoration, TF2-update/Steam-verify recovery and interrupted switch. Confirm \\_dir.vpk is unchanged.\n* Run Windows and Linux CI and packaged runtime checks: NSIS upgrade, AppImage update, .deb first install, write-lock/Steam-running refusal, relaunch/recovery and signed updater. September 5 audit ran Windows only; it did not certify Linux, new installer upgrades or real Casual behavior.\n* Recheck dependency/third-party dispositions from <issue id=\"23f0036f-2029-4c7f-9762-ed932fc44257\" href=\"https://linear.app/rndaom/issue/RND-205/disposition-the-inherited-linux-glib-advisory-before-the-next-release\">RND-205</issue>/<issue id=\"d61441ec-7194-4971-a408-472c1013abe8\" href=\"https://linear.app/rndaom/issue/RND-206/record-community-source-permission-status-and-verify-packaged-third\">RND-206</issue>, preserving the completed 0.1.1 evidence; Authenticode remains separately tracked by <issue id=\"fd39b291-68ad-45dc-bf75-994eb3668411\" href=\"https://linear.app/rndaom/issue/RND-191/windows-code-signing-authenticode-for-the-installer-and-updater\">RND-191</issue>.\n* Freeze notes, add a real CHANGELOG version section, bump all four version files, then follow docs/RELEASE.md: tag, draft verification, both updater entries/signatures, installer verification, publication.\n\n**Audit evidence**\n\n`docs/audits/2026-09-05-functional/audit.md`: 16 real React/pure-code diagnostic probes, four native defect probes, a native lock control, installed-game read-only decoding, full existing test suites and four live source checks. <issue id=\"4a8aab6e-a06c-4a56-80d2-a7840cb64d59\" href=\"https://linear.app/rndaom/issue/RND-233/record-right-and-middle-mouse-buttons-with-the-correct-tf2-bind-names\">RND-233</issue>–<issue id=\"fb712f50-bc22-4bb1-993b-074adade1b54\" href=\"https://linear.app/rndaom/issue/RND-250/keep-the-ui-write-lock-closed-after-subscription-failure-despite-late\">RND-250</issue> were created; <issue id=\"2d0dc29f-8fa7-40c6-a060-8c3cdaf72208\" href=\"https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and\">RND-215</issue> gained native evidence. See the project roadmap for the dated schedule.\n\nImplementation Done does not mean released. This planning/audit task has not tagged, installed, upgraded, deleted profiles or published anything.\n\n## September 13 release audit\n\nMain f089ea5 passes fresh Windows frontend test/check/build and Rust fmt/clippy/workspace tests. Latest main CI and public 0.1.4 release workflow are green. No open GitHub issues/PRs at audit time. This does not certify a new 0.2.0 candidate: final changelog, fresh signed installers/upgrades and cumulative live Windows/Linux Steam Cloud/Casual matrix remain outstanding.\n\n<issue id=\"90ca1d9a-49b0-470e-b4d7-94ad053509b9\" href=\"https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during\">RND-202</issue> is reopened for command-level profile-preloader integration; <issue id=\"e4506a6c-a508-4233-8641-7ee70f779aec\" href=\"https://linear.app/rndaom/issue/RND-248/prevent-removing-particle-source-mods-while-their-preloader-selections\">RND-248</issue> has refreshed source-removal evidence; <issue id=\"cf40160b-22b9-41f7-9448-b14b0a1da6f0\" href=\"https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod\">RND-274</issue> fixes local-only particle switching without default cache. <issue id=\"b87a7fdd-70be-457c-bcbc-5a6ff40e49b1\" href=\"https://linear.app/rndaom/issue/RND-273/protect-pending-settings-drafts-when-closing-execs\">RND-273</issue> protects pending settings drafts on native close. <issue id=\"80685816-a1a9-4b81-af11-eac93374658a\" href=\"https://linear.app/rndaom/issue/RND-269/renew-success-toast-lifetime-for-every-completion\">RND-269</issue>–272 track notification lifecycles for 0.1.5 alongside newly assigned <issue id=\"102fc5e1-d78c-4722-a9c2-13b0b4f4e772\" href=\"https://linear.app/rndaom/issue/RND-265/fix-flawhud-option-saves-animation-directives-and-literal-backslash\">RND-265</issue>/266/268; carry maintenance fixes into the minor. Full current audit: docs/audits/2026-09-13-release/README.md.\n\nNo tag, publication, source fix or live profile mutation was performed.\n\n## September 14 whole-project audit and candidate scope\n\nThe September 14 whole-project audit adds 20 maintenance defects ([RND-275](<https://linear.app/rndaom/issue/RND-275/preserve-distinct-dashed-and-undashed-custom-pack-identities-during>)–[RND-294](<https://linear.app/rndaom/issue/RND-294/correct-installer-platform-and-casual-compatibility-claims-in-player>)) and eight optional feature/refactor candidates ([RND-295](<https://linear.app/rndaom/issue/RND-295/preview-profile-differences-before-switching>)–[RND-302](<https://linear.app/rndaom/issue/RND-302/remove-or-restrict-unused-whole-backup-gameinfo-restoration-helpers>)). Eight High defects and the confirmed <issue id=\"feb09421-c354-4688-8417-70aeb664a6d3\" href=\"https://linear.app/rndaom/issue/RND-247/reconcile-installed-mod-records-after-absorb-accepts-an-external-pack\">RND-247</issue> export/import failure are explicit blockers. Validate the complete patch stream before freezing the minor; no source changes or release actions occurred in this audit.\n\nMilestone 0.2.0 now contains 33 records because the owner requested the new-feature planning pool there. **26 are labeled execs-candidate and are not committed release scope.** Keep the three selected features <issue id=\"6b79e4c2-16e1-484f-8562-4338c78cdd72\" href=\"https://linear.app/rndaom/issue/RND-201/import-creator-cfgcustom-zips-with-a-themed-trust-review-and-real\">RND-201</issue>/<issue id=\"8fcd4821-386b-49b9-a30f-6d3353a36516\" href=\"https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu\">RND-213</issue>/<issue id=\"4d7dcf10-f473-4977-89a1-315215a917a8\" href=\"https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support\">RND-214</issue>, complete <issue id=\"90ca1d9a-49b0-470e-b4d7-94ad053509b9\" href=\"https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during\">RND-202</issue>/<issue id=\"cf40160b-22b9-41f7-9448-b14b0a1da6f0\" href=\"https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod\">RND-274</issue>/<issue id=\"2d0dc29f-8fa7-40c6-a060-8c3cdaf72208\" href=\"https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and\">RND-215</issue> and the minor slice of <issue id=\"e4506a6c-a508-4233-8641-7ee70f779aec\" href=\"https://linear.app/rndaom/issue/RND-248/prevent-removing-particle-source-mods-while-their-preloader-selections\">RND-248</issue>, and select/swap or defer candidate features before release freeze. Do not treat the milestone percentage as readiness or promise every candidate by October 1. The uncommitted candidate label also covers internal refactors and the externally dependent signing setup.\n\nFresh baseline checks pass; 12 separate frontend regressions fail intentionally and native/loopback probes expose missing boundary coverage. <issue id=\"f577f8f5-365f-4d32-9962-74a1a9d8e542\" href=\"https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before\">RND-251</issue> has the precise required follow-up matrix, including visible packaged startup and a realistic prior-version library rather than a text sentinel alone. No new Linux runtime, installer, remote Cloud or Casual test has been substituted by fixtures.\n\nFull current evidence and roadmap: docs/audits/2026-09-14-project/README.md, with all 19 UI steps and 28 accepted screenshots in ui-ux.md. Keep this issue Todo.",
       "authoritativeUpdatedAt": "2026-09-22T13:32:23.389Z",
       "implementation": {
-        "status": "Foundry development candidate committed; Windows and scoped browser proof passed",
+        "status": "Foundry candidate and accepted review gallery committed; five-job CI passed",
         "existing": "The whole-app screenshot audit and three image-generated alternatives exist. The owner selected Foundry's five boards. Public v0.1.8 and the combined scope are reconciled in planning.",
-        "remaining": "Resolve the RND-324 product/engine gap, complete native/Linux/package/Cloud/TF2/PresentMon qualification and any uncovered matrix states. Future release publication requires separate authorization. The implementation review gallery and a draft PR for Linux CI are being prepared, without completion or URL claims.",
+        "remaining": "Resolve the RND-324 product/engine gap and complete native/package/Cloud/TF2/PresentMon qualification and any uncovered matrix states. PR #60, the accepted 85-capture gallery and four passing actual v0.1.8 library compatibility cases are available. Future release publication requires separate authorization.",
         "baselineAssessment": "Foundry selected; implementation underway; release gate open",
         "baselineExisting": "The whole-app screenshot audit and three image-generated alternatives exist. The owner selected Foundry's five boards. Public v0.1.8 and the combined scope are reconciled in planning.",
         "baselineRemaining": "Implement all selected functional work and every Foundry pane/state, reconcile concept inaccuracies, qualify the integrated candidate, and keep future release steps pending. This issue also carries the overhaul because a separate issue hit the workspace quota.",
@@ -1382,7 +1525,7 @@
         }
       ],
       "verification": {
-        "status": "Committed development candidate; integrated Windows and scoped browser pass; no release",
+        "status": "Committed candidate, accepted gallery, five-job CI and bounded 0.1.8 compatibility pass; no release",
         "required": [
           "Common Foundry tokens/shell/controls plus task-specific layouts across every production pane, global flow and development Inventory.",
           "Exact selected acceptance plus cumulative RND-251; record meaningful visual differences and unrun native/platform checks.",
@@ -1428,10 +1571,35 @@
             "kind": "candidate verification evidence",
             "source": "/root with bounded pane agents",
             "recordedAt": "2026-09-22T14:57:00Z"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "kind": "Linux CI transcript",
+            "source": "GitHub Actions job 106803597602",
+            "recordedAt": "2026-09-22T15:18:04.696Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998",
+            "kind": "Windows CI transcript",
+            "source": "GitHub Actions job 106803597998",
+            "recordedAt": "2026-09-22T15:25:51.136Z",
+            "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+          },
+          {
+            "path": "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/README.md",
+            "kind": "actual tagged-old-export/current-import fixture qualification",
+            "source": "/root/profile_management; archive hashes independently checked by /root and /root/release_scope",
+            "recordedAt": "2026-09-22T15:34:41.503Z",
+            "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+            "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
           }
         ],
-        "currentEvidenceSummary": "The integrated design QA report links accepted 1200×800 and 960×640 browser captures and scoped reports. Windows frontend/tooling/Rust/static/build checks pass, and the six pinned HUD checks pass separately. No unresolved P0/P1 remains in the inspected browser scope; native/platform evidence remains separate.",
-        "candidateCheckpoint": "2026-09-22T14:57:00Z"
+        "currentEvidenceSummary": "The integrated design QA report links accepted 1200×800 and 960×640 browser captures and scoped reports. Windows frontend/tooling/Rust/static/build checks pass, and the six pinned HUD checks pass separately. No unresolved P0/P1 remains in the inspected browser scope; native/platform evidence remains separate. Linux CI at 542b3dd20f2847fc90a1a4e990584f03830fcc6d passed 867 workspace tests with 16 ignored; its separate pinned HUD step passed 6 tests. These are platform fixture results, not desktop/live qualification. The final Windows CI job also passed 859 workspace tests with 16 ignored and 6 separate pinned HUD checks; all five CI jobs succeeded on that same head. The actual public v0.1.8 exporter (85aaf6bc0dd28f43351d4cb5cdb62502737688d5) to current importer/re-exporter (542b3dd20f2847fc90a1a4e990584f03830fcc6d) passed four disposable Windows core-library cases with 32 exact payload comparisons. All eight retained ZIP hashes were independently verified; active profile/manifest and synthetic live root were unchanged, imported preloader selections were empty, and ambiguous HUD choice/reset requirements were preserved. Packaged/native GUI/Linux/Cloud/live-engine qualification is not established by this fixture pass.",
+        "candidateCheckpoint": "2026-09-22T14:57:00Z",
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "currentLinearReadback": {
         "id": "RND-208",
@@ -1452,7 +1620,7 @@
   "overhaul": {
     "codeOwner": "/root coordinates /root/surface_inventory and bounded pane agents",
     "status": "Foundry development candidate committed; qualification in progress",
-    "verification": "Integrated Windows automated checks and accepted scoped browser review pass; Linux/native/package/Cloud/TF2/PresentMon qualification remains open.",
+    "verification": "Five-job Windows/Linux CI, local Windows checks, accepted browser/gallery review and four actual v0.1.8 Windows library compatibility cases pass. Native/package/Cloud/TF2/PresentMon qualification remains open.",
     "acceptanceSource": "RND-208",
     "coverageMatrixMarkdown": "| Surface | Required Foundry implementation and verification coverage |\n| --- | --- |\n| Shell and navigation | Active profile/pane, wide and compact navigation, long-page scroll, profile menu open, hover/focus/selected states, install context, launch/locked state, footer and support. |\n| Finder and onboarding | No/one/multiple install results, selection and Confirm, invalid/missing path/error, existing-setup capture, unused-install wizard, new profile Current setup/Fresh TF2, preset/addon selections and busy/locked behavior. |\n| Profiles and imports | Active/inactive list, save current, export feedback, exact-byte ZIP review with findings expanded, trust/cancel, real progress/completion, switch stages, absorb Update/Restore/Keep, unsafe-folder review and recovery. Include active/inactive/last-profile deletion flows for RND-213. |\n| Comfig | Selected/default/None preset, all presets, module groups/search/no result, changed module, official addons, package install/update/import, locked/deferred differences. |\n| Binds | Action groups, bound/unbound rows, recording/listening, keyboard/mouse/scroll input, unsupported input/Escape, deferred draft and save outcome. |\n| Gameplay | Main FOV/viewmodel controls, changed values, Advanced expanded, switches with prerequisites, transparency’s explicit addon action and running-game draft state. |\n| HUD | Stock and installed/updated states, six-entry catalog/paging/jump, search/empty/missing artwork, each ranking with coverage, image lightbox, import modal, options including different schema-control types, unsupported/invalid controls, cached/partial/error/retry and reviewed HUD replacement. |\n| Crosshair | In-game/default/stock/custom modes, actual-size scene and tint, color popup/validation, built-in/My designs/Community/PNG sources, designer styles, empty/search/import error, per-weapon popup and all nine class groups, pending build/discard/remove and locked state. |\n| Viewmodels | All nine classes and their different group lists, shown/hidden group preview, Full/Weapon, Hide/Show all, no/imported/built pack, draft/build status, import/replace/remove and Windows/Linux capability feedback. |\n| Sounds | Hit/Kill slots, enabled/disabled and assigned states, stock/custom/boost, library sources/sort/search/empty, advanced pitch/repeat controls, playing/stopped/error, WAV import/removal, pending/deferred saves. Use real audio evidence for behavior claims. |\n| Mods — shipped 0.1.8 | Browse default, Installed and Casual setup tasks, truthful GameBanana filter/sort/result scope, top/bottom paging, source-rich card/detail/install/progress/retry states, Import mod choices, installed/remove confirmation, library/profile particle picks, Apply/Restore, skipped report and maintenance/recovery states. |\n| Files | Stable workbench and file list, editable/provided/read-only/dirty/multiple drafts, file/editor context menus, Find/replace/completion, New cfg/Save as/collision, Problems/Help/Guides/Snippets, source conflict/compare, analysis unavailable/retry, explicit Save and transition guards. |\n| Launch | Options draft, permitted/forbidden explanation, copy outcome, Steam-open/closed/pending state, saved state and game-running retention. Preserve the actual backend contract. |\n| App settings | RND-214 entry distinct from gameplay panes, usable before profiles; startup updates, Follow system/Reduce motion, confirmed install change, copy locations, diagnostics/support/credits, persistence/error/locked behavior. |\n| Shared operational states | Loading/empty/error/retry/partial-cache; selected vs focused; saving/success/persistent failure/deferred draft; Save/Discard/Cancel and route-to-pane guards; update available/checking/no update/downloading/installing/failure; release notes; actionable native startup error; real progress and recovery. |\n| Inventory — development only | Account/persona, backpack pages, selected detail and metadata, query/quality/sort/no result, ordinary/named/kit/war-paint items, stale/refresh/error/retry. Clearly label preview artwork/data and the absence of live rearrangement or release assignment. |",
     "candidateViewports": [
@@ -2896,7 +3064,7 @@
       "optionalPoolPreserved": true
     },
     "candidateCheckpoint": {
-      "timestamp": "2026-09-22T14:57:00Z",
+      "timestamp": "2026-09-22T15:25:51.136Z",
       "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
       "branch": "rndaom/foundry-overhaul",
       "publicBaseline": "0.1.8",
@@ -2952,7 +3120,7 @@
           "nativeQualified": false
         }
       },
-      "countPolicy": "Scoped tests overlap aggregate checks; do not sum them. Separate pinned HUD pass qualifies six default-ignored tests without rewriting the as-run 859/16 workspace result.",
+      "countPolicy": "Each default workspace retains its as-run total: Windows 859 passed/16 ignored, Linux 867 passed/16 ignored. Six default-ignored pinned HUD tests passed separately on each OS. Local/scoped checks overlap CI and are not additional unique counts.",
       "rnd324": {
         "status": "In Progress",
         "ownerQuestion": "Pending: retain disclosed offline itemtest workflow or require map-free completion.",
@@ -2961,11 +3129,17 @@
       },
       "reviewGallery": {
         "path": "docs/design/2026-09-22-overhaul/implementation/review.html",
-        "status": "being prepared; not claimed complete at this checkpoint"
+        "status": "accepted artifact and inspected controls",
+        "captures": 85,
+        "flows": 15,
+        "referenceBoards": 5,
+        "verification": "docs/design/2026-09-22-overhaul/implementation/review-qa.md",
+        "localUrl": "http://127.0.0.1:1424/implementation/review.html"
       },
       "linuxCiDraftPr": {
-        "status": "planned; not created at this checkpoint",
-        "url": null
+        "status": "draft PR open; branch and evidence pushed",
+        "url": "https://github.com/rndaom/execs/pull/60",
+        "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
       },
       "issueStateChanges": [],
       "externalCommentsOrMessages": false,
@@ -2974,20 +3148,22 @@
       "originalAcceptanceAndDescriptionsPreserved": true,
       "optionalPoolPreserved": true,
       "linearDocumentReadback": {
-        "timestamp": "2026-09-22 14:58:06 UTC",
+        "timestamp": "2026-09-22 15:35:55 UTC",
         "documentId": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
         "url": "https://linear.app/rndaom/document/020-foundry-implementation-and-combined-release-plan-1fe7c93751c6",
-        "updatedAt": "2026-09-22T14:57:28.817Z",
-        "candidate": true,
-        "frontend863": true,
-        "workspace859": true,
-        "default16": true,
-        "pinned6": true,
-        "qaPath": true,
-        "ownerQuestionPending": true,
-        "draftPrNotInvented": true,
+        "updatedAt": "2026-09-22T15:35:20.212Z",
+        "exactHead": true,
+        "allFivePassed": true,
+        "linux867": true,
+        "windows859": true,
+        "sixPinnedEach": true,
+        "compatibilityPassed": true,
+        "compatibilityBoundedWindowsLibrary": true,
+        "compatibilityReportLinked": true,
         "originalAcceptanceSuffixUnchanged": true,
-        "externalMutations": ["existing Linear document content only"]
+        "noIssueStateMutation": true,
+        "noCommentsOrMessages": true,
+        "noPublication": true
       },
       "sourcePreservation": {
         "sha256": "aec24cfbe676cd0bbcb479f78aff4399f627e193d4fcfae1a83d228cc6db5a52",
@@ -2996,10 +3172,525 @@
         "comparison": "Canonical in-memory snapshot immediately before this update; planning artifacts are not in the product commit."
       },
       "updatedArtifacts": [
+        "docs/design/2026-09-22-overhaul/planning-status.json",
         "docs/design/2026-09-22-overhaul/foundry-implementation-plan.md",
         "docs/design/2026-09-22-overhaul/combined-release-plan.md",
-        "docs/design/2026-09-22-overhaul/planning-status.json"
-      ]
-    }
+        "docs/design/2026-09-22-overhaul/design-qa.md",
+        "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+        "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt"
+      ],
+      "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+      "pullRequestUrl": "https://github.com/rndaom/execs/pull/60",
+      "remoteCi": {
+        "runId": 35744828442,
+        "url": "https://github.com/rndaom/execs/actions/runs/35744828442",
+        "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+        "recordedAt": "2026-09-22T15:25:51.136Z",
+        "status": "completed",
+        "finalConclusion": "success",
+        "source": "Final GitHub Actions readback and complete Linux/Windows job transcripts",
+        "jobs": {
+          "linux": {
+            "jobId": 106803597602,
+            "status": "completed",
+            "conclusion": "success",
+            "duration": "7m21s",
+            "workspace": {
+              "passed": 867,
+              "failed": 0,
+              "ignored": 16,
+              "app": 120,
+              "core": 722,
+              "absorb": 11,
+              "hudIntegrity": 3,
+              "packIdentity": 11
+            },
+            "pinnedHudSeparate": {
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            },
+            "fmt": "passed",
+            "clippy": "passed",
+            "advisoryDisposition": "passed",
+            "log": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602",
+            "completedAt": "2026-09-22T15:12:24Z"
+          },
+          "frontend": {
+            "status": "completed",
+            "conclusion": "success",
+            "jobId": 106803598005,
+            "completedAt": "2026-09-22T15:06:12Z",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803598005"
+          },
+          "inventoryProbeLinux": {
+            "status": "completed",
+            "conclusion": "success",
+            "jobId": 106803597835,
+            "completedAt": "2026-09-22T15:05:46Z",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597835"
+          },
+          "inventoryProbeWindows": {
+            "status": "completed",
+            "conclusion": "success",
+            "jobId": 106803598196,
+            "completedAt": "2026-09-22T15:07:20Z",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803598196"
+          },
+          "windows": {
+            "jobId": 106803597998,
+            "status": "completed",
+            "conclusion": "success",
+            "completedAt": "2026-09-22T15:22:02Z",
+            "workspace": {
+              "passed": 859,
+              "failed": 0,
+              "ignored": 16,
+              "app": 121,
+              "core": 709,
+              "absorb": 15,
+              "hudIntegrity": 3,
+              "packIdentity": 11
+            },
+            "pinnedHudSeparate": {
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            },
+            "clippy": "passed",
+            "log": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+            "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998"
+          }
+        },
+        "allFiveJobsPassed": true,
+        "completedAt": "2026-09-22T15:22:02Z"
+      },
+      "currentSourcePreservation": {
+        "sha256": "57c1f5b234daaf8d8b2c438705158d2fbfb4eb4a6f1c053831bee79aa9e0540a",
+        "originalAcceptanceDescriptionsAndStatesPreserved": true,
+        "optionalPoolPreserved": true
+      },
+      "linuxTranscriptSha256": "256eed4ad63fddd21916a8f1d3134eb97ae4a427df7783b9df59759fe89ef348",
+      "transcripts": {
+        "linux": {
+          "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+          "source": ".artifacts/foundry-rust-linux-ci.log",
+          "workspace": {
+            "passed": 867,
+            "failed": 0,
+            "ignored": 16
+          },
+          "pinnedHudSeparate": {
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          "sha256": "256eed4ad63fddd21916a8f1d3134eb97ae4a427df7783b9df59759fe89ef348",
+          "sourceSha256": "e9ef62c640ad4f1c0c51fd290fb16b512e115c27579bed43cdcf9fe3ef08b17f",
+          "normalization": "ANSI/VT controls removed; CRLF and CRCRLF normalized to LF; trailing spaces trimmed"
+        },
+        "windows": {
+          "path": "docs/design/2026-09-22-overhaul/implementation/verification/rust-windows-ci.txt",
+          "source": ".artifacts/foundry-rust-windows-ci.log",
+          "workspace": {
+            "passed": 859,
+            "failed": 0,
+            "ignored": 16
+          },
+          "pinnedHudSeparate": {
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          "sha256": "ac63dafdecb304f2cd1f2cd66c58764dbb21c9a16173b9732a2462c6aef6871e",
+          "sourceSha256": "e3b2a2ffeb66edbd65c0fa5c95316a51b7f70074efc167eed23d41bd18829b5a",
+          "normalization": "ANSI/VT controls removed; CRLF and CRCRLF normalized to LF; trailing spaces trimmed"
+        }
+      },
+      "compatibilityRoundTrip": {
+        "status": "passed",
+        "recordedAt": "2026-09-22T15:34:41.503Z",
+        "platform": "Windows",
+        "scope": "bounded actual tagged v0.1.8 exporter to current reviewed importer and re-exporter; core libraries in a disposable offline harness",
+        "exporterTag": "v0.1.8",
+        "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+        "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+        "caseCount": 4,
+        "payloadComparisons": 32,
+        "archiveHashesVerified": 8,
+        "cases": [
+          {
+            "name": "no-hud",
+            "payloadCount": 4,
+            "status": "passed",
+            "payloadHashesEqual": true,
+            "activeUnchanged": true,
+            "manifestUnchanged": true,
+            "liveRootUnchanged": true,
+            "newPreloaderSelectionEmpty": true,
+            "archiveHashMatches": true,
+            "reexportHashMatches": true,
+            "refusedWithoutMultiHudChoice": false,
+            "hudReviewPending": false,
+            "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38",
+            "reexportSha256": "97953dd14a3d20d1ef542aa9c4dda714084294362fa066ad48dd5f56a8fe1064"
+          },
+          {
+            "name": "single-hud",
+            "payloadCount": 8,
+            "status": "passed",
+            "payloadHashesEqual": true,
+            "activeUnchanged": true,
+            "manifestUnchanged": true,
+            "liveRootUnchanged": true,
+            "newPreloaderSelectionEmpty": true,
+            "archiveHashMatches": true,
+            "reexportHashMatches": true,
+            "refusedWithoutMultiHudChoice": false,
+            "hudReviewPending": false,
+            "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9",
+            "reexportSha256": "1e6c4750b3dfdc758a1f407529964c897393402f76b2738db17a43beb146bac3"
+          },
+          {
+            "name": "multi-hud-keep-owner",
+            "payloadCount": 10,
+            "status": "passed",
+            "payloadHashesEqual": true,
+            "activeUnchanged": true,
+            "manifestUnchanged": true,
+            "liveRootUnchanged": true,
+            "newPreloaderSelectionEmpty": true,
+            "archiveHashMatches": true,
+            "reexportHashMatches": true,
+            "refusedWithoutMultiHudChoice": true,
+            "hudReviewPending": false,
+            "archiveSha256": "77cc3c6f9ded610e56084f1ef7ddd410defe6f04162303054a0cee274d234727",
+            "reexportSha256": "47f4ebf32867f51a5ecf573a12d59dd9ef12a91a43b4c68251fc363f65d0b549"
+          },
+          {
+            "name": "multi-hud-change-owner",
+            "payloadCount": 10,
+            "status": "passed",
+            "payloadHashesEqual": true,
+            "activeUnchanged": true,
+            "manifestUnchanged": true,
+            "liveRootUnchanged": true,
+            "newPreloaderSelectionEmpty": true,
+            "archiveHashMatches": true,
+            "reexportHashMatches": true,
+            "refusedWithoutMultiHudChoice": true,
+            "hudReviewPending": true,
+            "archiveSha256": "77cc3c6f9ded610e56084f1ef7ddd410defe6f04162303054a0cee274d234727",
+            "reexportSha256": "be5f3472308c176cb88f6c604d1592c275eed58b9602ac65f4daadf57e7ae552"
+          }
+        ],
+        "report": "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/README.md",
+        "results": "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/results.json",
+        "harness": "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/harness/src/main.rs",
+        "oldSourceLibraryUnchanged": "asserted by executed harness and recorded in report",
+        "pendingHudResetReviewAssertedNotActivated": true,
+        "countedAsPassed": true,
+        "installerOrNativeRuntimeQualification": false,
+        "linuxCompatibilityExecution": false,
+        "cloudOrLiveGameQualification": false
+      },
+      "localDocumentValidation": {
+        "all14StillInProgress": true,
+        "optional25Preserved": true,
+        "originalAcceptanceDescriptionsAndStatesPreserved": true,
+        "ansiAndCarriageReturnsAbsent": true,
+        "temporaryScriptsRemoved": true
+      }
+    },
+    "candidateCheckpointHistory": [
+      {
+        "label": "Historical pre-PR local checkpoint; superseded by the current candidateCheckpoint",
+        "timestamp": "2026-09-22T14:57:00Z",
+        "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
+        "branch": "rndaom/foundry-overhaul",
+        "publicBaseline": "0.1.8",
+        "authority": "Parent-directed committed candidate/counts/QA update only. No issue-state changes, comments, messages, version changes, tag or publication.",
+        "integratedQa": "docs/design/2026-09-22-overhaul/design-qa.md",
+        "checks": {
+          "frontend": {
+            "desktopPassed": 863,
+            "cfglintPassed": 160,
+            "toolingPassed": 21,
+            "toolingSkipped": 3,
+            "failed": 0,
+            "log": "docs/design/2026-09-22-overhaul/implementation/verification/frontend-tests-windows.txt"
+          },
+          "windowsWorkspace": {
+            "passed": 859,
+            "failed": 0,
+            "ignored": 16,
+            "nativeAppPassed": 121,
+            "coreAndIntegrationPassed": 738,
+            "log": "docs/design/2026-09-22-overhaul/implementation/verification/workspace-tests-windows.txt"
+          },
+          "pinnedHudSeparate": {
+            "passed": 6,
+            "failed": 0,
+            "exitCode": 0,
+            "schemaCases": 4,
+            "fontTemplateCases": 1,
+            "catalogInstallUpdateCases": 1,
+            "archivePackages": ["hypnotizehud", "kinhud", "m0re-rockz"],
+            "exactPayloads": true,
+            "beyondMaxPathFixtures": true,
+            "defaultWorkspaceIgnoredCountUnchanged": 16,
+            "log": "docs/design/2026-09-22-overhaul/implementation/hud/pinned-huds-windows.txt"
+          },
+          "staticAndBuild": {
+            "biome": "passed; 375 files at product handoff",
+            "frontendBuild": "passed; existing large-chunk advisory",
+            "rustFmt": "passed",
+            "workspaceAllTargetClippy": "passed with -D warnings",
+            "diffCheck": "passed"
+          },
+          "helperScoped": {
+            "passed": 7,
+            "fmt": "passed",
+            "clippy": "passed"
+          },
+          "browser": {
+            "status": "passed within accepted inspected scope",
+            "primaryViewports": ["1200x800", "960x640"],
+            "additionalHudAppSettingsViewport": "1280x720",
+            "unresolvedP0P1InInspectedScope": 0,
+            "nativeQualified": false
+          }
+        },
+        "countPolicy": "Scoped tests overlap aggregate checks; do not sum them. Separate pinned HUD pass qualifies six default-ignored tests without rewriting the as-run 859/16 workspace result.",
+        "rnd324": {
+          "status": "In Progress",
+          "ownerQuestion": "Pending: retain disclosed offline itemtest workflow or require map-free completion.",
+          "acceptanceChanged": false,
+          "nativeEngineAcceptance": false
+        },
+        "reviewGallery": {
+          "path": "docs/design/2026-09-22-overhaul/implementation/review.html",
+          "status": "being prepared; not claimed complete at this checkpoint"
+        },
+        "linuxCiDraftPr": {
+          "status": "planned; not created at this checkpoint",
+          "url": null
+        },
+        "issueStateChanges": [],
+        "externalCommentsOrMessages": false,
+        "published": false,
+        "markedDone": false,
+        "originalAcceptanceAndDescriptionsPreserved": true,
+        "optionalPoolPreserved": true,
+        "linearDocumentReadback": {
+          "timestamp": "2026-09-22 14:58:06 UTC",
+          "documentId": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+          "url": "https://linear.app/rndaom/document/020-foundry-implementation-and-combined-release-plan-1fe7c93751c6",
+          "updatedAt": "2026-09-22T14:57:28.817Z",
+          "candidate": true,
+          "frontend863": true,
+          "workspace859": true,
+          "default16": true,
+          "pinned6": true,
+          "qaPath": true,
+          "ownerQuestionPending": true,
+          "draftPrNotInvented": true,
+          "originalAcceptanceSuffixUnchanged": true,
+          "externalMutations": ["existing Linear document content only"]
+        },
+        "sourcePreservation": {
+          "sha256": "aec24cfbe676cd0bbcb479f78aff4399f627e193d4fcfae1a83d228cc6db5a52",
+          "originalAcceptanceDescriptionsAndStatusesPreserved": true,
+          "optionalPoolPreserved": true,
+          "comparison": "Canonical in-memory snapshot immediately before this update; planning artifacts are not in the product commit."
+        },
+        "updatedArtifacts": [
+          "docs/design/2026-09-22-overhaul/foundry-implementation-plan.md",
+          "docs/design/2026-09-22-overhaul/combined-release-plan.md",
+          "docs/design/2026-09-22-overhaul/planning-status.json"
+        ]
+      },
+      {
+        "label": "Historical partial Linux CI checkpoint; superseded by final five-job result",
+        "timestamp": "2026-09-22T15:18:04.696Z",
+        "candidateCommit": "7c78fbed1907dceb37bf348596fca48a8f654e66",
+        "branch": "rndaom/foundry-overhaul",
+        "publicBaseline": "0.1.8",
+        "authority": "Parent-directed committed candidate/counts/QA update only. No issue-state changes, comments, messages, version changes, tag or publication.",
+        "integratedQa": "docs/design/2026-09-22-overhaul/design-qa.md",
+        "checks": {
+          "frontend": {
+            "desktopPassed": 863,
+            "cfglintPassed": 160,
+            "toolingPassed": 21,
+            "toolingSkipped": 3,
+            "failed": 0,
+            "log": "docs/design/2026-09-22-overhaul/implementation/verification/frontend-tests-windows.txt"
+          },
+          "windowsWorkspace": {
+            "passed": 859,
+            "failed": 0,
+            "ignored": 16,
+            "nativeAppPassed": 121,
+            "coreAndIntegrationPassed": 738,
+            "log": "docs/design/2026-09-22-overhaul/implementation/verification/workspace-tests-windows.txt"
+          },
+          "pinnedHudSeparate": {
+            "passed": 6,
+            "failed": 0,
+            "exitCode": 0,
+            "schemaCases": 4,
+            "fontTemplateCases": 1,
+            "catalogInstallUpdateCases": 1,
+            "archivePackages": ["hypnotizehud", "kinhud", "m0re-rockz"],
+            "exactPayloads": true,
+            "beyondMaxPathFixtures": true,
+            "defaultWorkspaceIgnoredCountUnchanged": 16,
+            "log": "docs/design/2026-09-22-overhaul/implementation/hud/pinned-huds-windows.txt"
+          },
+          "staticAndBuild": {
+            "biome": "passed; 375 files at product handoff",
+            "frontendBuild": "passed; existing large-chunk advisory",
+            "rustFmt": "passed",
+            "workspaceAllTargetClippy": "passed with -D warnings",
+            "diffCheck": "passed"
+          },
+          "helperScoped": {
+            "passed": 7,
+            "fmt": "passed",
+            "clippy": "passed"
+          },
+          "browser": {
+            "status": "passed within accepted inspected scope",
+            "primaryViewports": ["1200x800", "960x640"],
+            "additionalHudAppSettingsViewport": "1280x720",
+            "unresolvedP0P1InInspectedScope": 0,
+            "nativeQualified": false
+          }
+        },
+        "countPolicy": "Scoped tests overlap aggregate checks; do not sum them. Separate pinned HUD pass qualifies six default-ignored tests without rewriting the as-run 859/16 workspace result.",
+        "rnd324": {
+          "status": "In Progress",
+          "ownerQuestion": "Pending: retain disclosed offline itemtest workflow or require map-free completion.",
+          "acceptanceChanged": false,
+          "nativeEngineAcceptance": false
+        },
+        "reviewGallery": {
+          "path": "docs/design/2026-09-22-overhaul/implementation/review.html",
+          "status": "accepted artifact and inspected controls",
+          "captures": 85,
+          "flows": 15,
+          "referenceBoards": 5,
+          "verification": "docs/design/2026-09-22-overhaul/implementation/review-qa.md",
+          "localUrl": "http://127.0.0.1:1424/implementation/review.html"
+        },
+        "linuxCiDraftPr": {
+          "status": "draft PR open; branch and evidence pushed",
+          "url": "https://github.com/rndaom/execs/pull/60",
+          "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d"
+        },
+        "issueStateChanges": [],
+        "externalCommentsOrMessages": false,
+        "published": false,
+        "markedDone": false,
+        "originalAcceptanceAndDescriptionsPreserved": true,
+        "optionalPoolPreserved": true,
+        "linearDocumentReadback": {
+          "timestamp": "2026-09-22 14:58:06 UTC",
+          "documentId": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+          "url": "https://linear.app/rndaom/document/020-foundry-implementation-and-combined-release-plan-1fe7c93751c6",
+          "updatedAt": "2026-09-22T14:57:28.817Z",
+          "candidate": true,
+          "frontend863": true,
+          "workspace859": true,
+          "default16": true,
+          "pinned6": true,
+          "qaPath": true,
+          "ownerQuestionPending": true,
+          "draftPrNotInvented": true,
+          "originalAcceptanceSuffixUnchanged": true,
+          "externalMutations": ["existing Linear document content only"],
+          "label": "Historical last Linear readback; the current local CI update has not yet been sent to Linear."
+        },
+        "sourcePreservation": {
+          "sha256": "aec24cfbe676cd0bbcb479f78aff4399f627e193d4fcfae1a83d228cc6db5a52",
+          "originalAcceptanceDescriptionsAndStatusesPreserved": true,
+          "optionalPoolPreserved": true,
+          "comparison": "Canonical in-memory snapshot immediately before this update; planning artifacts are not in the product commit."
+        },
+        "updatedArtifacts": [
+          "docs/design/2026-09-22-overhaul/planning-status.json",
+          "docs/design/2026-09-22-overhaul/foundry-implementation-plan.md",
+          "docs/design/2026-09-22-overhaul/combined-release-plan.md",
+          "docs/design/2026-09-22-overhaul/design-qa.md",
+          "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt"
+        ],
+        "reviewHead": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+        "pullRequestUrl": "https://github.com/rndaom/execs/pull/60",
+        "remoteCi": {
+          "runId": 35744828442,
+          "url": "https://github.com/rndaom/execs/actions/runs/35744828442",
+          "headSha": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+          "recordedAt": "2026-09-22T15:18:04.696Z",
+          "status": "in_progress",
+          "finalConclusion": null,
+          "source": "Parent final Linux handoff plus complete job transcript; Windows final status awaited",
+          "jobs": {
+            "linux": {
+              "jobId": 106803597602,
+              "status": "completed",
+              "conclusion": "success",
+              "duration": "7m21s",
+              "workspace": {
+                "passed": 867,
+                "failed": 0,
+                "ignored": 16,
+                "app": 120,
+                "core": 722,
+                "absorb": 11,
+                "hudIntegrity": 3,
+                "packIdentity": 11
+              },
+              "pinnedHudSeparate": {
+                "passed": 6,
+                "failed": 0,
+                "ignored": 0
+              },
+              "fmt": "passed",
+              "clippy": "passed",
+              "advisoryDisposition": "passed",
+              "log": "docs/design/2026-09-22-overhaul/implementation/verification/rust-linux-ci.txt",
+              "url": "https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602"
+            },
+            "frontend": {
+              "status": "completed",
+              "conclusion": "success"
+            },
+            "inventoryProbeLinux": {
+              "status": "completed",
+              "conclusion": "success"
+            },
+            "inventoryProbeWindows": {
+              "status": "completed",
+              "conclusion": "success"
+            },
+            "windows": {
+              "jobId": 106803597998,
+              "status": "in_progress",
+              "workspace": "passed per parent",
+              "pinnedHud": "running",
+              "finalConclusion": null
+            }
+          }
+        },
+        "currentSourcePreservation": {
+          "sha256": "57c1f5b234daaf8d8b2c438705158d2fbfb4eb4a6f1c053831bee79aa9e0540a",
+          "originalAcceptanceDescriptionsAndStatesPreserved": true,
+          "optionalPoolPreserved": true
+        },
+        "linuxTranscriptSha256": "e9ef62c640ad4f1c0c51fd290fb16b512e115c27579bed43cdcf9fe3ef08b17f"
+      }
+    ]
   }
 }

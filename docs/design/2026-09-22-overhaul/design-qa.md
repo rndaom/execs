@@ -60,7 +60,41 @@ Final local checks on Windows:
 | Inventory helper | 7 fixture tests plus formatting and Clippy passed in the scoped polling work. |
 | `git diff --check` | Passed. |
 
-Logs: [frontend tests](implementation/verification/frontend-tests-windows.txt), [production build](implementation/verification/frontend-build.txt), [Rust workspace](implementation/verification/workspace-tests-windows.txt), [Clippy](implementation/verification/workspace-clippy-windows.txt), [pinned HUD corpus](implementation/hud/pinned-huds-windows.txt). Scoped test totals overlap the integrated suites and are not additional counts. The six pinned-corpus checks explicitly exercise tests ignored by the default run; its reported 16 ignores remain accurate as run. Remote Linux results must be recorded separately with their exact candidate identity.
+Logs: [frontend tests](implementation/verification/frontend-tests-windows.txt), [production build](implementation/verification/frontend-build.txt), [Rust workspace](implementation/verification/workspace-tests-windows.txt), [Clippy](implementation/verification/workspace-clippy-windows.txt), [pinned HUD corpus](implementation/hud/pinned-huds-windows.txt). Scoped test totals overlap the integrated suites and are not additional counts. The six pinned-corpus checks explicitly exercise tests ignored by the default run; its reported 16 ignores remain accurate as run. The exact Windows/Linux CI results and candidate are recorded below; those reruns remain separate from these local counts.
+
+## Remote CI and review checkpoint
+
+[Draft PR #60](https://github.com/rndaom/execs/pull/60) contains the pushed Foundry branch. **CI candidate: `542b3dd20f2847fc90a1a4e990584f03830fcc6d`**, which adds the design/evidence documentation to product commit `7c78fbed1907dceb37bf348596fca48a8f654e66`. The [implementation review gallery](implementation/review.html) is accepted: **85 captures across 15 pages and flows**, paired with the five selected Foundry boards. Its [verification report](implementation/review-qa.md) records actual asset, viewport and viewer checks.
+
+**[CI run 35744828442](https://github.com/rndaom/execs/actions/runs/35744828442) completed successfully: all five jobs passed on that exact head.** The last job, Windows Rust, completed at **September 22, 2026, 15:22:02 UTC**. The later documentation update records these results; it does not claim a different code revision was tested.
+
+| Job / check | Verified result |
+| --- | --- |
+| [rust-linux](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602) | Success. Default workspace: **867 passed, 0 failed, 16 ignored** (120 app + 722 core + 11 absorb + 3 HUD integrity + 11 pack identity). |
+| [rust-windows](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998) | Success. Default workspace: **859 passed, 0 failed, 16 ignored** (121 app + 709 core + 15 absorb + 3 HUD integrity + 11 pack identity). |
+| Pinned HUD corpus, separate step on each OS | **6 passed, 0 failed on Linux and 6 passed, 0 failed on Windows**: each runs 4 schema cases + 1 font-template case + 1 catalog installation/update case. Each default workspace's 16 ignored count remains accurate as run. |
+| Rust static/dependency gates | Linux fmt, both Rust Clippy jobs and Linux advisory disposition passed. Local Windows fmt also passed. |
+| [frontend](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803598005) | Success: unit tests, lint/format and production frontend build. |
+| [inventory-probe, Linux](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597835) and [Windows](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803598196) | Both jobs succeeded. |
+
+Evidence: complete [Linux CI transcript](implementation/verification/rust-linux-ci.txt) and [Windows CI transcript](implementation/verification/rust-windows-ci.txt), with ANSI controls removed, CRLF/CRCRLF normalized to LF and trailing spaces trimmed. Exact remote job links remain above. Local/scoped results overlap these runs and are not additional unique test counts.
+
+This closes the automated CI gate for the recorded candidate. It does **not** establish native Windows/WebKitGTK desktop behavior, native file/media dialogs, packaged prior-version upgrades, Cloud acknowledgement or retail TF2/Casual/PresentMon results. Those requirements and RND-324's engine criteria remain open. The separate actual public v0.1.8 exporter/current-importer fixture run also passed within the Windows library-level limits below. All 14 issues remain In Progress; no merge, version bump, tag or publication is recorded.
+
+### Actual public v0.1.8 export compatibility
+
+**Passed on Windows at the core-library level: four cases, 32 payload comparisons, eight retained archive hashes verified.** The actual public-tag exporter at `v0.1.8` / `85aaf6bc0dd28f43351d4cb5cdb62502737688d5` produced each source ZIP. The current importer and re-exporter at `542b3dd20f2847fc90a1a4e990584f03830fcc6d` reviewed, imported and re-exported it. The harness ran offline with the tagged dependency lock; no product code changed.
+
+| Case | Payloads | Result |
+| --- | ---: | --- |
+| No HUD | 4 | Exact import/re-export bytes preserved; no ownership review pending. |
+| Single HUD | 8 | HUD record, options, cfg and payloads preserved; no ownership review pending. |
+| Multiple HUDs, keep owner | 10 | Ambiguous import refused without a choice; explicit original-owner choice preserved both HUDs and cfg bytes. |
+| Multiple HUDs, change owner | 10 | Ambiguous import refused without a choice; changed choice preserved all original cfg/HUD bytes and requires the separate pending ownership-reset review before activation. |
+
+The old source library, current active profile id and manifest, and every synthetic live-root file remained unchanged. Imported preloader selections defaulted to empty. All source and current re-export ZIP hashes were independently rechecked from the retained files. [Final compatibility report](implementation/profile-management/compatibility-v018/README.md), [machine-readable results](implementation/profile-management/compatibility-v018/results.json) and [executed harness](implementation/profile-management/compatibility-v018/harness/src/main.rs) retain the revisions, exact archives, manifests, isolation and assertions.
+
+This is a bounded **Windows library-level compatibility pass for these four cases**. It does not qualify packaged installer/updater migration, native GUI, Linux compatibility execution, exhaustive historical profiles, real Steam Cloud, HUD rendering or live TF2/Casual/performance. The pending HUD ownership follow-up was asserted, not activated. Those remaining gates and all issue states are unchanged.
 
 ## Remaining qualification
 

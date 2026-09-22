@@ -49,14 +49,14 @@ All 14 selected issues remain **In Progress** with their assigned owners. Curren
 | RND-292 | /root/surface_inventory | Foundry contrast tokens implemented; accepted browser scope reviewed | Calculated token ratios and accepted browser scope; native pending |
 | RND-294 | /root/release_scope | documentation and promo corrections integrated in product commit | Docs/media checked and committed; public media remains explicitly earlier release |
 | RND-325 | /root/release_scope | source audit and bounded polling reductions implemented; runtime benchmark pending | 22 frontend + 7 helper tests; native trace pending |
-| RND-251 | /root | Windows automated and scoped browser qualification passed; platform matrix open | Windows checks and scoped browser QA passed; native/Linux/release rows open |
+| RND-251 | /root | Windows/Linux automated CI passed; native and package matrix open | Five-job CI and four actual 0.1.8 library fixtures passed; native/package/release rows open |
 | RND-213 | /root/profile_management | safe profile deletion implemented; Windows fixtures and integration passed | Disposable deletion/profile fixtures and full Windows integration passed |
 | RND-214 | /root/app_settings | global App settings implemented; Windows integration passed | 13 core + shared 32 frontend tests; integrated and scoped browser pass |
 | RND-202 | /root/profile_management | profile-owned native preloader integration implemented; Windows fixtures passed | 5 orchestration + 78 core fixtures and Windows integration passed |
 | RND-274 | /root/profile_management | local-only library predicate implemented; Windows fixtures passed | Shared orchestration/preloader fixtures and Windows integration passed |
-| RND-215 | /root/foundry_hud | HUD ownership lifecycle and exact-byte boundaries implemented; Windows proof passed | 69 frontend, full Windows core/workspace and separate 6-test pinned corpus pass |
+| RND-215 | /root/foundry_hud | HUD ownership and exact-byte boundaries implemented; Windows and Linux fixtures passed | 69 frontend, Windows/Linux CI workspace and separate corpus pass; native pending |
 | RND-324 | /root/foundry_mods | partial startup improvement; engine acceptance unresolved | Partial; 19 viewmodel fixtures; native engine gaps |
-| RND-208 | /root with bounded pane agents | Foundry development candidate committed; Windows and scoped browser proof passed | Committed development candidate; integrated Windows and scoped browser pass; no release |
+| RND-208 | /root with bounded pane agents | Foundry candidate and accepted review gallery committed; five-job CI passed | Committed candidate, accepted gallery, five-job CI and bounded 0.1.8 compatibility pass; no release |
 
 Launch token editing and the explicit **Write to Steam** action are parent-designed enhancements within the owner's authorized gap-filling scope. They preserve the native save/check/copy contract: profile-owned options, prohibited-token checks, no Steam configuration write while Steam runs, and truthful copy/pending/saved feedback. The [Launch review](implementation/launch/design-qa.md) records 19 component/helper checks and accepted 1200×800/960×640 browser behavior. Real Steam-file writes remain unperformed. The separate RND-231 candidate remains unselected.
 
@@ -64,7 +64,7 @@ App settings/updater has a 32-test scoped pass including delayed resource-close 
 
 ## Current verification checkpoint
 
-**Development candidate: `7c78fbed1907dceb37bf348596fca48a8f654e66` on `rndaom/foundry-overhaul`.** The product implementation is committed locally. Public compatibility baseline remains v0.1.8. The [integrated design QA report](design-qa.md) records the accepted browser evidence, resolved findings and native limits. No issue is Done or release-qualified; no version bump, tag or publication is authorized.
+**Development candidate: `7c78fbed1907dceb37bf348596fca48a8f654e66` on `rndaom/foundry-overhaul`.** The product implementation and evidence documentation are committed and pushed in [draft PR #60](https://github.com/rndaom/execs/pull/60); exact CI head is `542b3dd20f2847fc90a1a4e990584f03830fcc6d`. Public compatibility baseline remains v0.1.8. The [integrated design QA report](design-qa.md) records the accepted browser evidence, resolved findings and native limits. No issue is Done or release-qualified; no version bump, tag or publication is authorized.
 
 | Check | Recorded result | Evidence |
 | --- | --- | --- |
@@ -77,9 +77,43 @@ App settings/updater has a 32-test scoped pass including delayed resource-close 
 
 The separate pinned HUD run qualifies six tests that are ignored by the default workspace invocation; the recorded default total remains **859 passed / 16 ignored**. Scoped test groups overlap the integrated totals and are not added again. The successful build retains its existing large-chunk advisory.
 
-The earlier failed frontend/lint attempt remains preserved in [initial integration results](implementation/verification/2026-09-22-integration-results.md). Its stale Comfig selector and reported lint failures were corrected before the integrated pass above. The original design gallery has its own [accessibility/control verification](implementation/verification/gallery-accessibility-review.md). The implementation review gallery is being prepared at `implementation/review.html`; this checkpoint does not assert that gallery is finished.
+The earlier failed frontend/lint attempt remains preserved in [initial integration results](implementation/verification/2026-09-22-integration-results.md). Its stale Comfig selector and reported lint failures were corrected before the integrated pass above. The original design gallery has its own [accessibility/control verification](implementation/verification/gallery-accessibility-review.md). The accepted [implementation review gallery](implementation/review.html) now contains 85 captures across 15 pages and flows, paired with all five selected Foundry boards. Its [verification report](implementation/review-qa.md) records artifact and control checks; it does not extend native application qualification.
 
-**Open qualification:** RND-324 retains its disclosed offline itemtest workflow. The parent's optional owner question about retaining that behavior versus requiring map-free completion is pending; no answer or acceptance change is inferred. Initialization/re-entry/failure-cleanup and real TF2 presentation remain unproven. Windows packaged startup/pickers/media/close/updater, Linux CI and native runtime, realistic prior-library installer upgrades, Cloud acknowledgement, actual Casual/stock restoration and on/off PresentMon remain separate uncompleted rows. A draft PR for Linux CI is planned, but none was created at this checkpoint and no PR URL is recorded.
+**Open qualification:** RND-324 retains its disclosed offline itemtest workflow. The parent's optional owner question about retaining that behavior versus requiring map-free completion is pending; no answer or acceptance change is inferred. Initialization/re-entry/failure-cleanup and real TF2 presentation remain unproven. Windows packaged startup/pickers/media/close/updater, Linux native runtime, realistic prior-library installer upgrades, Cloud acknowledgement, actual Casual/stock restoration and on/off PresentMon remain separate uncompleted rows. Draft PR #60 is open and all five CI jobs passed on `542b3dd20f2847fc90a1a4e990584f03830fcc6d`; native/package/engine acceptance remains open.
+
+## Remote CI and review checkpoint
+
+[Draft PR #60](https://github.com/rndaom/execs/pull/60) contains the pushed Foundry branch. **CI candidate: `542b3dd20f2847fc90a1a4e990584f03830fcc6d`**, which adds the design/evidence documentation to product commit `7c78fbed1907dceb37bf348596fca48a8f654e66`. The [implementation review gallery](implementation/review.html) is accepted: **85 captures across 15 pages and flows**, paired with the five selected Foundry boards. Its [verification report](implementation/review-qa.md) records actual asset, viewport and viewer checks.
+
+**[CI run 35744828442](https://github.com/rndaom/execs/actions/runs/35744828442) completed successfully: all five jobs passed on that exact head.** The last job, Windows Rust, completed at **September 22, 2026, 15:22:02 UTC**. The later documentation update records these results; it does not claim a different code revision was tested.
+
+| Job / check | Verified result |
+| --- | --- |
+| [rust-linux](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597602) | Success. Default workspace: **867 passed, 0 failed, 16 ignored** (120 app + 722 core + 11 absorb + 3 HUD integrity + 11 pack identity). |
+| [rust-windows](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597998) | Success. Default workspace: **859 passed, 0 failed, 16 ignored** (121 app + 709 core + 15 absorb + 3 HUD integrity + 11 pack identity). |
+| Pinned HUD corpus, separate step on each OS | **6 passed, 0 failed on Linux and 6 passed, 0 failed on Windows**: each runs 4 schema cases + 1 font-template case + 1 catalog installation/update case. Each default workspace's 16 ignored count remains accurate as run. |
+| Rust static/dependency gates | Linux fmt, both Rust Clippy jobs and Linux advisory disposition passed. Local Windows fmt also passed. |
+| [frontend](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803598005) | Success: unit tests, lint/format and production frontend build. |
+| [inventory-probe, Linux](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803597835) and [Windows](https://github.com/rndaom/execs/actions/runs/35744828442/job/106803598196) | Both jobs succeeded. |
+
+Evidence: complete [Linux CI transcript](implementation/verification/rust-linux-ci.txt) and [Windows CI transcript](implementation/verification/rust-windows-ci.txt), with ANSI controls removed, CRLF/CRCRLF normalized to LF and trailing spaces trimmed. Exact remote job links remain above. Local/scoped results overlap these runs and are not additional unique test counts.
+
+This closes the automated CI gate for the recorded candidate. It does **not** establish native Windows/WebKitGTK desktop behavior, native file/media dialogs, packaged prior-version upgrades, Cloud acknowledgement or retail TF2/Casual/PresentMon results. Those requirements and RND-324's engine criteria remain open. The separate actual public v0.1.8 exporter/current-importer fixture run also passed within the Windows library-level limits below. All 14 issues remain In Progress; no merge, version bump, tag or publication is recorded.
+
+### Actual public v0.1.8 export compatibility
+
+**Passed on Windows at the core-library level: four cases, 32 payload comparisons, eight retained archive hashes verified.** The actual public-tag exporter at `v0.1.8` / `85aaf6bc0dd28f43351d4cb5cdb62502737688d5` produced each source ZIP. The current importer and re-exporter at `542b3dd20f2847fc90a1a4e990584f03830fcc6d` reviewed, imported and re-exported it. The harness ran offline with the tagged dependency lock; no product code changed.
+
+| Case | Payloads | Result |
+| --- | ---: | --- |
+| No HUD | 4 | Exact import/re-export bytes preserved; no ownership review pending. |
+| Single HUD | 8 | HUD record, options, cfg and payloads preserved; no ownership review pending. |
+| Multiple HUDs, keep owner | 10 | Ambiguous import refused without a choice; explicit original-owner choice preserved both HUDs and cfg bytes. |
+| Multiple HUDs, change owner | 10 | Ambiguous import refused without a choice; changed choice preserved all original cfg/HUD bytes and requires the separate pending ownership-reset review before activation. |
+
+The old source library, current active profile id and manifest, and every synthetic live-root file remained unchanged. Imported preloader selections defaulted to empty. All source and current re-export ZIP hashes were independently rechecked from the retained files. [Final compatibility report](implementation/profile-management/compatibility-v018/README.md), [machine-readable results](implementation/profile-management/compatibility-v018/results.json) and [executed harness](implementation/profile-management/compatibility-v018/harness/src/main.rs) retain the revisions, exact archives, manifests, isolation and assertions.
+
+This is a bounded **Windows library-level compatibility pass for these four cases**. It does not qualify packaged installer/updater migration, native GUI, Linux compatibility execution, exhaustive historical profiles, real Steam Cloud, HUD rendering or live TF2/Casual/performance. The pending HUD ownership follow-up was asserted, not activated. Those remaining gates and all issue states are unchanged.
 
 ## Added workstream: complete visual overhaul
 
