@@ -136,6 +136,7 @@ function notInPreview(what: string): BridgeError {
 
 export function createPreviewApi(state: PreviewState): Api {
   let appPreferences = { checkForUpdatesOnStartup: true, motion: "system" as "system" | "reduce" };
+  let failNextAppPreferenceSave = state === "settings-app-failure";
   const hudCatalog =
     state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
@@ -428,6 +429,13 @@ export function createPreviewApi(state: PreviewState): Api {
       return { ...requireDetail(), id: profileId };
     },
     async setAppPreferences(preferences) {
+      if (failNextAppPreferenceSave) {
+        failNextAppPreferenceSave = false;
+        throw new BridgeError(
+          "Could not save app settings (preview failure). Retry to try again.",
+          "PreviewOnly",
+        );
+      }
       appPreferences = { ...preferences };
       return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
     },

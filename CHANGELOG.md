@@ -56,6 +56,8 @@ User-facing changes only. The release workflow publishes the matching
 - Keep profile actions visible in inactive libraries and enlarged interfaces, with scrolling
   for short windows and longer profile lists.
 - Keep menus, pending-review actions and keyboard focus reachable when the interface is enlarged.
+- Files: restore the editor's scroll position when returning from another pane, alongside its
+  draft, selection and undo history.
 - App settings errors identify the failed settings read without blaming the profile library;
   Retry preserves the requested preference and existing installation choice.
 - Clear an obsolete update offer after a successful newer check reports no update, and prevent

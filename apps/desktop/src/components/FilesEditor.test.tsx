@@ -141,6 +141,70 @@ describe("Files editor model isolation", () => {
     expect(editor().state.doc.toString()).toBe("echo hi");
     expect(props.onChange).toHaveBeenLastCalledWith("echo hi");
   });
+  it("restores document scroll before hiding can erase layout, together with draft history and selection", () => {
+    const renderPane = () =>
+      act(() =>
+        root.render(
+          <div hidden={!props.active}>
+            <FilesEditor {...props} />
+          </div>,
+        ),
+      );
+    renderPane();
+    const first = editor();
+    act(() =>
+      first.dispatch({
+        changes: { from: 7, insert: " there" },
+        selection: { anchor: 13, head: 8 },
+      }),
+    );
+    props = { ...props, value: "echo hi there" };
+    renderPane();
+    // Browsers report zero after display:none or removal. jsdom has no layout,
+    // so model that browser behavior while keeping visible scroll observable.
+    const emulateBrowserLayout = (view: EditorView) => {
+      for (const [axis, value] of [
+        ["scrollTop", 380],
+        ["scrollLeft", 48],
+      ] as const) {
+        Object.defineProperty(view.scrollDOM, axis, {
+          configurable: true,
+          get: () => (view.dom.isConnected && !view.dom.closest("[hidden]") ? value : 0),
+        });
+      }
+    };
+    emulateBrowserLayout(first);
+    props = { ...props, active: false };
+    renderPane();
+    expect(box.querySelector(".cm-editor")).toBeNull();
+    props = { ...props, active: true };
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(380);
+    expect(editor().scrollDOM.scrollLeft).toBe(48);
+    expect(editor().state.doc.toString()).toBe("echo hi there");
+    expect(editor().state.selection.main.anchor).toBe(13);
+    expect(editor().state.selection.main.head).toBe(8);
+
+    props = { ...props, path: "cfg/other.cfg", value: "other" };
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(0);
+    props = { ...props, path: "cfg/autoexec.cfg", value: "echo hi there" };
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(380);
+    expect(editor().scrollDOM.scrollLeft).toBe(48);
+    emulateBrowserLayout(editor());
+    act(() => root.render(null));
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(380);
+    expect(editor().scrollDOM.scrollLeft).toBe(48);
+    expect(editor().state.selection.main.anchor).toBe(13);
+    expect(editor().state.selection.main.head).toBe(8);
+    act(() => {
+      undo(editor());
+    });
+    expect(editor().state.doc.toString()).toBe("echo hi");
+    expect(props.onSave).not.toHaveBeenCalled();
+  });
   it("blocks programmatic edits in read-only files and destroys hidden views", () => {
     props = { ...props, readOnly: true };
     render();

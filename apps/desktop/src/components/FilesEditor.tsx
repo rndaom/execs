@@ -31,7 +31,7 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { copyToClipboard } from "../lib/copy-ui";
 import {
   type CompletionCatalog,
@@ -71,7 +71,42 @@ export type FilesEditorProps = {
   insertion?: { id: number; text: string };
 };
 
-const sessions = new Map<string, { state: EditorState; top: number; left: number }>();
+const sessions = new Map<
+  string,
+  {
+    state: EditorState;
+    top: number;
+    left: number;
+    scroll: ReturnType<EditorView["scrollSnapshot"]>;
+  }
+>();
+
+type EditorSessionBoundaryProps = {
+  identity: string;
+  active: boolean;
+  capture: () => void;
+};
+
+/** Capture before an ancestor hides or removes the editor's scroll surface. */
+class EditorSessionBoundary extends Component<EditorSessionBoundaryProps> {
+  getSnapshotBeforeUpdate(previous: EditorSessionBoundaryProps) {
+    if (previous.active && (!this.props.active || previous.identity !== this.props.identity)) {
+      previous.capture();
+    }
+    return null;
+  }
+
+  componentDidUpdate() {}
+
+  componentWillUnmount() {
+    this.props.capture();
+  }
+
+  render() {
+    return null;
+  }
+}
+
 const cfgLanguage = StreamLanguage.define<{ command: boolean }>({
   startState: () => ({ command: true }),
   token(stream, state) {
@@ -425,23 +460,20 @@ export function FilesEditor(props: FilesEditorProps) {
     ];
     configuration.current = extensions;
     const cached = sessions.get(id);
-    const state =
-      cached?.state.doc.toString() === latest.current.value
-        ? cached.state.update({ effects: StateEffect.reconfigure.of(extensions) }).state
-        : EditorState.create({ doc: latest.current.value, extensions });
-    const editor = new EditorView({ state, parent: host.current });
+    const matching = cached?.state.doc.toString() === latest.current.value ? cached : undefined;
+    const state = matching
+      ? matching.state.update({ effects: StateEffect.reconfigure.of(extensions) }).state
+      : EditorState.create({ doc: latest.current.value, extensions });
+    const editor = new EditorView({ state, parent: host.current, scrollTo: matching?.scroll });
     view.current = editor;
-    if (cached) {
-      editor.scrollDOM.scrollTop = cached.top;
-      editor.scrollDOM.scrollLeft = cached.left;
+    if (matching) {
+      // Set the initial pixels; CodeMirror's snapshot keeps the same text in
+      // place after virtualized line heights are measured on the next frame.
+      editor.scrollDOM.scrollTop = matching.top;
+      editor.scrollDOM.scrollLeft = matching.left;
     }
     updatePosition(state);
     return () => {
-      sessions.set(id, {
-        state: editor.state,
-        top: editor.scrollDOM.scrollTop,
-        left: editor.scrollDOM.scrollLeft,
-      });
       editor.destroy();
       view.current = null;
       setMenuPosition(null);
@@ -551,6 +583,21 @@ export function FilesEditor(props: FilesEditorProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <EditorSessionBoundary
+        identity={id}
+        active={props.active}
+        capture={() => {
+          const editor = view.current;
+          if (!editor) return;
+          // Passive cleanup runs after display:none has already zeroed scroll.
+          sessions.set(id, {
+            state: editor.state,
+            top: editor.scrollDOM.scrollTop,
+            left: editor.scrollDOM.scrollLeft,
+            scroll: editor.scrollSnapshot(),
+          });
+        }}
+      />
       <div className="flex flex-wrap items-center gap-1 border-b border-edge px-2 py-1 text-xs text-ink-muted">
         <button
           type="button"

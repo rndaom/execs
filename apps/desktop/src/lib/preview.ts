@@ -40,6 +40,7 @@ export const PREVIEW_STATES = [
   "settings-files",
   "settings-launch",
   "settings-locked",
+  "settings-app-failure",
   "update-available",
   "update-installing",
   "release-notes",
@@ -85,6 +86,7 @@ const READY: PreviewState[] = [
   "settings-files",
   "settings-launch",
   "settings-locked",
+  "settings-app-failure",
   "update-available",
   "update-installing",
   "release-notes",
@@ -189,6 +191,7 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
     case "folder-repair":
     case "profile-import-huds":
     case "settings-locked":
+    case "settings-app-failure":
       return "comfig";
     case "settings-binds":
       return "binds";

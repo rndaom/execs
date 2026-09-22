@@ -35,6 +35,7 @@ describe("preview query", () => {
     expect(previewStateFromSearch("?preview=settings-files")).toBe("settings-files");
     expect(previewStateFromSearch("?preview=settings-launch")).toBe("settings-launch");
     expect(previewStateFromSearch("?preview=settings-locked")).toBe("settings-locked");
+    expect(previewStateFromSearch("?preview=settings-app-failure")).toBe("settings-app-failure");
     expect(previewStateFromSearch("?preview=update-available")).toBe("update-available");
     expect(previewStateFromSearch("?preview=update-installing")).toBe("update-installing");
     expect(previewStateFromSearch("")).toBeNull();
@@ -98,6 +99,9 @@ describe("preview query", () => {
     expect(previewSettingsTab("settings-files")).toBe("files");
     expect(previewSettingsTab("settings-launch")).toBe("launch");
     expect(previewSettingsTab("settings-locked")).toBe("comfig");
+    expect(previewSettingsTab("settings-app-failure")).toBe("comfig");
+    expect(previewConfirmed("settings-app-failure")?.path).toContain("Team Fortress 2");
+    expect(previewLibrary("settings-app-failure")?.activeProfileId).toBe("preview-1");
     expect(previewSettingsTab("update-available")).toBe("comfig");
     expect(previewSettingsTab("update-installing")).toBe("comfig");
     expect(previewSettingsTab("saved")).toBeNull();
