@@ -1,0 +1,740 @@
+{
+  "date": "2026-09-22",
+  "provenance": "Screenshots of the production React UI running browser fixtures. Native platform qualification is separate; no real player setup was changed for these captures.",
+  "boards": {
+    "core": {
+      "file": "../options/01-foundry/01-core.png",
+      "title": "Core pages"
+    },
+    "customization": {
+      "file": "../options/01-foundry/02-customization.png",
+      "title": "Customization"
+    },
+    "workspaces": {
+      "file": "../options/01-foundry/03-workspaces.png",
+      "title": "Workspaces"
+    },
+    "profiles": {
+      "file": "../options/01-foundry/04-profiles.png",
+      "title": "Profiles and setup"
+    },
+    "states": {
+      "file": "../options/01-foundry/05-states.png",
+      "title": "States and dialogs"
+    }
+  },
+  "views": {
+    "tl": {
+      "label": "Upper-left view",
+      "crop": [20, 12, 808, 456]
+    },
+    "tr": {
+      "label": "Upper-right view",
+      "crop": [844, 12, 808, 456]
+    },
+    "bl": {
+      "label": "Lower-left view",
+      "crop": [20, 482, 808, 424]
+    },
+    "br": {
+      "label": "Lower-right view",
+      "crop": [844, 482, 808, 424]
+    }
+  },
+  "pages": [
+    {
+      "id": "comfig",
+      "name": "Comfig",
+      "group": "Customize",
+      "description": "Preset decision and authentic preview, with modules and official addons in one workspace.",
+      "qa": ["core/design-qa.md"],
+      "reference": {
+        "board": "core",
+        "view": "tl"
+      },
+      "captures": [
+        {
+          "file": "core/01-comfig-1200.png",
+          "title": "Medium preset and Graphics",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "core/08-comfig-960.png",
+          "title": "Core choices at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "core/09-comfig-networking-1200.png",
+          "title": "Networking modules and addons",
+          "viewport": "1200 × 800",
+          "note": "Scrolled to the module workspace."
+        }
+      ]
+    },
+    {
+      "id": "binds",
+      "name": "Binds",
+      "group": "Customize",
+      "description": "Category workbench with stable, inline key recording.",
+      "qa": ["core/design-qa.md"],
+      "reference": {
+        "board": "core",
+        "view": "tr"
+      },
+      "captures": [
+        {
+          "file": "core/02-binds-1200.png",
+          "title": "Movement actions",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "core/03-binds-recording-1200.png",
+          "title": "Jump recording and local help",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "core/06-binds-960.png",
+          "title": "Movement at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "core/07-binds-combat-960.png",
+          "title": "Combat actions",
+          "viewport": "960 × 640"
+        }
+      ]
+    },
+    {
+      "id": "gameplay",
+      "name": "Gameplay",
+      "group": "Customize",
+      "description": "Two FOV controls, an honest reference image, and grouped weapon and advanced settings.",
+      "qa": ["core/design-qa.md"],
+      "reference": {
+        "board": "core",
+        "view": "bl"
+      },
+      "captures": [
+        {
+          "file": "core/04-gameplay-1200.png",
+          "title": "FOV and grouped controls",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "core/05-gameplay-960.png",
+          "title": "Gameplay at minimum size",
+          "viewport": "960 × 640"
+        }
+      ],
+      "limit": "The scene is a genuine reference image, not a calibrated live FOV render."
+    },
+    {
+      "id": "hud",
+      "name": "HUD",
+      "group": "Customize",
+      "description": "Browse genuine author previews and edit the installed HUD through its real schema.",
+      "qa": ["hud/design-qa.md"],
+      "reference": {
+        "board": "core",
+        "view": "br"
+      },
+      "captures": [
+        {
+          "file": "hud/09-catalog-final.png",
+          "title": "Catalog and browsing toolbar",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "hud/10-details-final.png",
+          "title": "HUD details and installation",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "hud/11-catalog-page-jump.png",
+          "title": "Last page and page jump",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "hud/12-screenshot-viewer.png",
+          "title": "Author screenshot viewer",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "hud/13-import-dialog.png",
+          "title": "Archive or folder import review",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "hud/14-minimum-window-catalog.png",
+          "title": "Catalog at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "hud/16-installed-final.png",
+          "title": "Installed HUD and options",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "customization",
+            "view": "tr"
+          }
+        },
+        {
+          "file": "hud/17-minimum-installed-top.png",
+          "title": "Installed options at minimum size",
+          "viewport": "960 × 640",
+          "reference": {
+            "board": "customization",
+            "view": "tr"
+          }
+        }
+      ],
+      "limit": "Catalog counts are fixture data. Author screenshots do not render the selected option values. Native installation qualification is tracked in the scoped QA."
+    },
+    {
+      "id": "crosshair",
+      "name": "Crosshair",
+      "group": "Customize",
+      "description": "Designer, stock controls, custom sources, and per-weapon override selection.",
+      "qa": ["customization/design-qa.md"],
+      "reference": {
+        "board": "customization",
+        "view": "tl"
+      },
+      "captures": [
+        {
+          "file": "customization/crosshair-designer-1200-final.png",
+          "title": "Designer and Save to library",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "customization/crosshair-designer-960-final.png",
+          "title": "Designer at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "customization/crosshair-color-1200-final.png",
+          "title": "Expanded color controls",
+          "viewport": "1200 × 800",
+          "note": "Scrolled to the expanded color controls."
+        },
+        {
+          "file": "customization/crosshair-stock-960-final.png",
+          "title": "Stock crosshair controls",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "customization/crosshair-custom-960-final.png",
+          "title": "Custom sources and Build pack",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "customization/crosshair-overrides-960-final.png",
+          "title": "Weapon override picker",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "customization/crosshair-overrides-pda-960-final.png",
+          "title": "PDA picker within the window",
+          "viewport": "960 × 640"
+        }
+      ],
+      "limit": "Save to library and Build pack remain separate actions. Native texture decoding and OS pickers require the desktop app."
+    },
+    {
+      "id": "viewmodels",
+      "name": "Viewmodels",
+      "group": "Customize",
+      "description": "Class groups beside a genuine reference, with an explicit pack build.",
+      "qa": ["customization/design-qa.md"],
+      "reference": {
+        "board": "customization",
+        "view": "bl"
+      },
+      "captures": [
+        {
+          "file": "customization/viewmodels-scout-1200.png",
+          "title": "Scout groups and preview",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "customization/viewmodels-scout-960-final.png",
+          "title": "Scout at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "customization/viewmodels-soldier-hide-weapon-1200.png",
+          "title": "Soldier: hide weapon",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "customization/viewmodels-soldier-hidden-960-final.png",
+          "title": "Soldier: hide all",
+          "viewport": "960 × 640"
+        }
+      ],
+      "limit": "Existing pinned previews are used. Hide weapon explains the result beside a stock reference; these captures do not qualify native compilation."
+    },
+    {
+      "id": "sounds",
+      "name": "Sounds",
+      "group": "Customize",
+      "description": "Hit and kill slots above a searchable library with advanced controls.",
+      "qa": ["customization/design-qa.md"],
+      "reference": {
+        "board": "customization",
+        "view": "br"
+      },
+      "captures": [
+        {
+          "file": "customization/sounds-default-1200-final.png",
+          "title": "Sound slots and library",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "customization/sounds-default-960-final.png",
+          "title": "Sounds at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "customization/sounds-filtered-assigned-1200.png",
+          "title": "Search and Kill assignment",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "customization/sounds-advanced-1200.png",
+          "title": "Pitch and repeat controls",
+          "viewport": "1200 × 800"
+        }
+      ],
+      "limit": "Browser fixtures cannot certify native audition, WAV conversion, or the OS file picker."
+    },
+    {
+      "id": "mods",
+      "name": "Mods",
+      "group": "Workspaces",
+      "description": "Browse, Installed, and Casual preserve distinct tasks and explicit destructive or heavy actions.",
+      "qa": ["mods/design-qa.md"],
+      "reference": {
+        "board": "workspaces",
+        "view": "tl"
+      },
+      "captures": [
+        {
+          "file": "mods/20-browse-dense-final-1280.png",
+          "title": "Browse catalog",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "mods/21-browse-rocket-final.png",
+          "title": "Rocket search",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "mods/22-browse-dense-minimum-960.png",
+          "title": "Browse at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "mods/19-casual-final-1280.png",
+          "title": "Casual setup and repair",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "workspaces",
+            "view": "tr"
+          }
+        },
+        {
+          "file": "mods/25-casual-sources-final-type.png",
+          "title": "Casual source choices",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "workspaces",
+            "view": "tr"
+          },
+          "note": "Scrolled to particle sources and the explicit apply action."
+        },
+        {
+          "file": "mods/23-remove-final.png",
+          "title": "Installed mod removal review",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "mods/26-import-cancel-focus-final.png",
+          "title": "Import mod review",
+          "viewport": "1280 × 720"
+        }
+      ],
+      "limit": "Fixture thumbnails and missing art are labeled honestly. These captures do not certify GameBanana downloads or in-game preload behavior."
+    },
+    {
+      "id": "files",
+      "name": "Files",
+      "group": "Workspaces",
+      "description": "A persistent file list, one source editor, explicit Save/Discard, and contextual diagnostics.",
+      "qa": ["shell-files/design-qa.md", "files-diagnostic/diagnostic.md"],
+      "reference": {
+        "board": "workspaces",
+        "view": "bl"
+      },
+      "captures": [
+        {
+          "file": "shell-files/01-files-default-1200.png",
+          "title": "File workbench",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "shell-files/02-files-problems-1200.png",
+          "title": "Real fixture warning",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "shell-files/03-files-guides-1200.png",
+          "title": "Expanded guide catalog",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "shell-files/05-dirty-files-install-guard-1200.png",
+          "title": "Dirty-file transition guard",
+          "viewport": "1200 × 800",
+          "reference": {
+            "board": "states",
+            "view": "bl"
+          }
+        },
+        {
+          "file": "files-diagnostic/01-find-chrome-960.png",
+          "title": "Corrected Find and Replace",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "files-diagnostic/02-helper-path-chrome-960.png",
+          "title": "Wrapped helper destination",
+          "viewport": "960 × 640"
+        }
+      ],
+      "limit": "The source font and bounded editor scroll are deliberate Files exceptions. Fresh Chrome captures verify the minimum-width corrections."
+    },
+    {
+      "id": "launch",
+      "name": "Launch",
+      "group": "Workspaces",
+      "description": "Editable launch options, safe token grouping, and an explicit last Steam-write result.",
+      "qa": ["launch/design-qa.md"],
+      "reference": {
+        "board": "workspaces",
+        "view": "br"
+      },
+      "captures": [
+        {
+          "file": "launch/launch-default-1200-final.png",
+          "title": "Options and launch string",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "launch/launch-add-1200-final.png",
+          "title": "Unsubmitted quoted option",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "launch/launch-saved-steam-open-1200-final.png",
+          "title": "Saved profile; Steam open",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "launch/launch-default-960-final.png",
+          "title": "Launch at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "launch/launch-long-token-960-final.png",
+          "title": "Long quoted path",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "launch/launch-raw-sequence-960-final.png",
+          "title": "Raw command sequence",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "launch/launch-game-running-960-final.png",
+          "title": "TF2-running draft",
+          "viewport": "960 × 640",
+          "reference": {
+            "board": "states",
+            "view": "tr"
+          }
+        }
+      ],
+      "limit": "Steam state is the backend fixture's last write result, not live telemetry. No real Steam file was written."
+    },
+    {
+      "id": "profiles",
+      "name": "Profiles",
+      "group": "Setup and app",
+      "description": "Contextual profile actions, deliberate deletion choices, and explicit multi-HUD import review.",
+      "qa": ["profile-management/verification.md"],
+      "reference": {
+        "board": "profiles",
+        "view": "tl"
+      },
+      "captures": [
+        {
+          "file": "profile-management/00-profile-actions.png",
+          "title": "Profile action menu",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "profile-management/01-active-delete.png",
+          "title": "Last active profile deletion",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "states",
+            "view": "br"
+          }
+        },
+        {
+          "file": "profile-management/02-inactive-delete.png",
+          "title": "Inactive profile deletion",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "states",
+            "view": "br"
+          }
+        },
+        {
+          "file": "profile-management/03-switch-first-delete.png",
+          "title": "Switch before deletion",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "states",
+            "view": "br"
+          }
+        },
+        {
+          "file": "profile-management/04-multi-hud-import.png",
+          "title": "Import needs a HUD choice",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "profiles",
+            "view": "tr"
+          }
+        },
+        {
+          "file": "profile-management/05-multi-hud-import-choice.png",
+          "title": "Explicit import choice",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "profiles",
+            "view": "tr"
+          }
+        },
+        {
+          "file": "profile-management/06-import-complete.png",
+          "title": "Import complete; Main stays active",
+          "viewport": "1280 × 720",
+          "reference": {
+            "board": "profiles",
+            "view": "tr"
+          }
+        }
+      ],
+      "limit": "These are disposable browser review states. Deletion and recovery byte guarantees are covered separately by native fixture tests."
+    },
+    {
+      "id": "onboarding",
+      "name": "Onboarding",
+      "group": "Setup and app",
+      "description": "Confirmed location and existing customization lead into a named profile with a clear action.",
+      "qa": ["onboarding/design-qa.md"],
+      "reference": {
+        "board": "profiles",
+        "view": "bl"
+      },
+      "captures": [
+        {
+          "file": "onboarding/01-existing-1200.png",
+          "title": "Keep the existing setup",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "onboarding/02-existing-960.png",
+          "title": "Existing setup at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "onboarding/03-unused-1200.png",
+          "title": "Unused install: core presets",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "onboarding/04-unused-960.png",
+          "title": "Unused install at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "onboarding/05-unused-expanded-1200.png",
+          "title": "All presets and a selected addon",
+          "viewport": "1200 × 800",
+          "note": "Scrolled after selecting Medium high and No tutorial."
+        },
+        {
+          "file": "onboarding/06-unused-details-1200.png",
+          "title": "Remaining addon details",
+          "viewport": "1200 × 800",
+          "note": "Scrolled to the remaining controls and source credit."
+        },
+        {
+          "file": "onboarding/07-create-current-1200.png",
+          "title": "New profile from Current setup",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "onboarding/08-create-fresh-960.png",
+          "title": "Fresh TF2 retains the entered name",
+          "viewport": "960 × 640",
+          "note": "Scrolled after choosing Fresh TF2."
+        },
+        {
+          "file": "onboarding/09-finder-many-1200.png",
+          "title": "Detected installs; no selection",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "onboarding/10-finder-many-960.png",
+          "title": "Selected folder remains unconfirmed",
+          "viewport": "960 × 640",
+          "note": "Scrolled after selecting the second detected installation."
+        },
+        {
+          "file": "onboarding/11-finder-empty-960.png",
+          "title": "Empty discovery and Browse recovery",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "onboarding/12-unused-locked-960.png",
+          "title": "Locked setup keeps choices live",
+          "viewport": "960 × 640",
+          "note": "Scrolled to the editable addon controls; application remains disabled.",
+          "reference": {
+            "board": "states",
+            "view": "tr"
+          }
+        }
+      ]
+    },
+    {
+      "id": "app-settings",
+      "name": "App settings",
+      "group": "Setup and app",
+      "description": "Global preferences, update checks, installation context, diagnostics, and support.",
+      "qa": ["app-settings/design-qa.md"],
+      "reference": {
+        "board": "profiles",
+        "view": "br"
+      },
+      "captures": [
+        {
+          "file": "app-settings/07-app-settings-final-1280.png",
+          "title": "Global preferences and support",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "app-settings/09-app-settings-minimum-960.png",
+          "title": "App settings at minimum size",
+          "viewport": "960 × 640"
+        }
+      ],
+      "limit": "Preferences are global, independent of profiles. No real settings were changed or update installed for these captures."
+    },
+    {
+      "id": "hud-ownership",
+      "name": "HUD ownership",
+      "group": "Setup and app",
+      "description": "An explicit choice of the exact HUD folder before changing the active setup.",
+      "qa": ["app-settings/design-qa.md", "hud/design-qa.md"],
+      "reference": {
+        "board": "profiles",
+        "view": "tr"
+      },
+      "captures": [
+        {
+          "file": "app-settings/10-hud-ownership-unselected-1280.png",
+          "title": "Unselected review",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "app-settings/11-hud-ownership-selected-1280.png",
+          "title": "Selected ToonHUD and recovery detail",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "app-settings/14-hud-ownership-option-reset-1280.png",
+          "title": "Managed option reset notice",
+          "viewport": "1280 × 720"
+        },
+        {
+          "file": "app-settings/17-hud-ownership-final-960.png",
+          "title": "Corrected review at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "app-settings/13-hud-ownership-applied-1280.png",
+          "title": "Selected HUD applied in the fixture",
+          "viewport": "1280 × 720"
+        }
+      ],
+      "referenceNote": "The import-review concept is the closest related reference. Exact HUD ownership and option-reset notices extend the real safety flow.",
+      "limit": "Browser states do not certify native archive or recovery behavior. The HUD qualification report records those boundaries."
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "group": "Development",
+      "description": "Account-owned, read-only browsing with retained selection and one page control.",
+      "qa": ["inventory/design-qa.md"],
+      "reference": {
+        "board": "states",
+        "view": "tl"
+      },
+      "captures": [
+        {
+          "file": "inventory/02-inventory-1200-revised.png",
+          "title": "Revised inventory density",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "inventory/03-selected-paint-1200.png",
+          "title": "Selected paint and account context",
+          "viewport": "1200 × 800"
+        },
+        {
+          "file": "inventory/04-selected-paint-960.png",
+          "title": "Selected item at minimum size",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "inventory/05-expanded-item-960.png",
+          "title": "Expanded item metadata",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "inventory/06-scrolled-grid-960.png",
+          "title": "Sticky controls and lower slots",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "inventory/07-page-change-960.png",
+          "title": "Page two begins at slot 51",
+          "viewport": "960 × 640"
+        },
+        {
+          "file": "inventory/08-empty-search-960.png",
+          "title": "Empty search retains item detail",
+          "viewport": "960 × 640"
+        }
+      ],
+      "developmentOnly": true,
+      "limit": "Development only. No equip, trade, rearrange, or edit operations. Browser fixtures do not certify Steam reads or installed item artwork."
+    }
+  ]
+}

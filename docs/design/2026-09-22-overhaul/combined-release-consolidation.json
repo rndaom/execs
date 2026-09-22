@@ -1,0 +1,681 @@
+{
+  "completedAt": "2026-09-22T08:55:58Z",
+  "project": {
+    "identifier": "P-RND-6",
+    "uuid": "cbb647a4-2e0b-43cc-bef6-ed71b4ba5eda",
+    "name": "execs",
+    "url": "https://linear.app/rndaom/project/execs-a89f9a30e95c"
+  },
+  "milestones": {
+    "source019": {
+      "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+      "name": "0.1.9",
+      "observedTargetDate": "2026-09-28"
+    },
+    "target020": {
+      "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "name": "0.2.0",
+      "observedTargetDate": "2026-10-01"
+    }
+  },
+  "verification": {
+    "verifiedAt": "2026-09-22",
+    "completeIssuePage": true,
+    "source019IssueCount": 0,
+    "target020IssueCount": 39,
+    "selectedIssueCount": 14,
+    "all14SelectedIn020": true,
+    "selectedMetadataPreserved": true,
+    "candidatesCount": 25,
+    "candidatePoolPreserved": true,
+    "published018Count": 9,
+    "published018Preserved": true,
+    "milestoneDates": [
+      {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9",
+        "targetDate": null
+      },
+      {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0",
+        "targetDate": null
+      }
+    ],
+    "allFixedDatesCleared": true,
+    "releaseGateStatus": "Todo",
+    "releaseGateExistingDependenciesPreserved": true,
+    "projectHasCurrentPlan": true,
+    "releaseGateHasDesignSelection": true,
+    "planDocument": {
+      "id": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+      "url": "https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6"
+    },
+    "newOverhaulIssueCreated": false,
+    "quotaFallback": "Full overhaul workstream + owner design-selection gate tracked in existing RND-208 and linked project document.",
+    "discrepancies": [],
+    "planningDocumentFinalized": true
+  },
+  "operations": [
+    {
+      "step": "create_overhaul_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": false,
+      "id": null,
+      "uuid": null,
+      "title": null,
+      "url": null,
+      "status": 400,
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false,
+      "error": {
+        "error": "invalid_request",
+        "message": "You've exceeded the free issue limit for this workspace. Please upgrade or contact sales@linear.app for a free trial.",
+        "status": 400,
+        "requestId": "a3f0117a0c901497"
+      },
+      "disposition": "No issue was created. Workspace free issue quota prevents new issues; retain the full workstream in RND-208, milestone/project and a planning document if available."
+    },
+    {
+      "step": "create_overhaul_document",
+      "tool": "mcp__codex_apps__linear_save_document",
+      "success": true,
+      "id": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+      "uuid": null,
+      "title": "0.2.0 combined release and whole-application overhaul",
+      "url": "https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6",
+      "status": null,
+      "targetMilestone": null,
+      "targetDateCleared": false
+    },
+    {
+      "step": "update_milestone_020",
+      "tool": "mcp__codex_apps__linear_save_milestone",
+      "success": true,
+      "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "uuid": null,
+      "title": "0.2.0",
+      "url": null,
+      "status": null,
+      "targetMilestone": null,
+      "targetDateCleared": true
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-246",
+      "uuid": "b3de698f-58a8-4dbf-920f-6afab295c96f",
+      "title": "Clear stale update offers when a later check reports no update",
+      "url": "https://linear.app/rndaom/issue/RND-246/clear-stale-update-offers-when-a-later-check-reports-no-update",
+      "status": "Backlog",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-290",
+      "uuid": "a512eeb9-45f1-4adc-aa96-1fbd26a75c1c",
+      "title": "Show an actionable startup error when durable maintenance preflight fails",
+      "url": "https://linear.app/rndaom/issue/RND-290/show-an-actionable-startup-error-when-durable-maintenance-preflight",
+      "status": "Backlog",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-291",
+      "uuid": "2410d645-584e-4c41-b369-6426e9377205",
+      "title": "Keep each settings pane at a predictable scroll position",
+      "url": "https://linear.app/rndaom/issue/RND-291/keep-each-settings-pane-at-a-predictable-scroll-position",
+      "status": "Backlog",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-292",
+      "uuid": "84d083bd-8fd7-4fab-95c5-504577a888cf",
+      "title": "Make meaningful helper and status text meet minimum contrast",
+      "url": "https://linear.app/rndaom/issue/RND-292/make-meaningful-helper-and-status-text-meet-minimum-contrast",
+      "status": "Backlog",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-294",
+      "uuid": "62e0501b-5246-48e1-960d-a304bcb8ccf4",
+      "title": "Correct installer, platform and Casual compatibility claims in player documentation",
+      "url": "https://linear.app/rndaom/issue/RND-294/correct-installer-platform-and-casual-compatibility-claims-in-player",
+      "status": "Backlog",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-325",
+      "uuid": "50decf46-e32e-499a-920a-28ed8fd32ab6",
+      "title": "Audit execs Windows polling for periodic TF2 frame stalls",
+      "url": "https://linear.app/rndaom/issue/RND-325/audit-execs-windows-polling-for-periodic-tf2-frame-stalls",
+      "status": "Todo",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "move_019_issue",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-251",
+      "uuid": "f577f8f5-365f-4d32-9962-74a1a9d8e542",
+      "title": "Run the cumulative Windows and Linux functional release matrix before 0.2.0",
+      "url": "https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before",
+      "status": "In Progress",
+      "targetMilestone": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "targetDateCleared": false
+    },
+    {
+      "step": "mark_019_absorbed",
+      "tool": "mcp__codex_apps__linear_save_milestone",
+      "success": true,
+      "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+      "uuid": null,
+      "title": "0.1.9",
+      "url": null,
+      "status": null,
+      "targetMilestone": null,
+      "targetDateCleared": true
+    },
+    {
+      "step": "update_project",
+      "tool": "mcp__codex_apps__linear_save_project",
+      "success": true,
+      "id": "P-RND-6",
+      "uuid": "cbb647a4-2e0b-43cc-bef6-ed71b4ba5eda",
+      "title": "execs",
+      "url": "https://linear.app/rndaom/project/execs-a89f9a30e95c",
+      "status": {
+        "id": "f0923746-2842-481a-9d59-38f7d5ccfb10",
+        "name": "In Progress",
+        "type": "started"
+      },
+      "targetMilestone": null,
+      "targetDateCleared": false
+    },
+    {
+      "step": "update_release_gate_208",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-208",
+      "uuid": "a1d54c31-0e84-4d81-b89d-0687b935c7b5",
+      "title": "Validate and publish the combined 0.2.0 overhaul and profile-management release",
+      "url": "https://linear.app/rndaom/issue/RND-208/validate-and-publish-the-combined-020-overhaul-and-profile-management",
+      "status": "Todo",
+      "targetMilestone": null,
+      "targetDateCleared": false
+    },
+    {
+      "step": "update_qualification_251",
+      "tool": "mcp__codex_apps__linear_save_issue",
+      "success": true,
+      "id": "RND-251",
+      "uuid": "f577f8f5-365f-4d32-9962-74a1a9d8e542",
+      "title": "Run the cumulative Windows and Linux functional release matrix before 0.2.0",
+      "url": "https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before",
+      "status": "In Progress",
+      "targetMilestone": null,
+      "targetDateCleared": false
+    },
+    {
+      "step": "finalize_planning_document",
+      "tool": "mcp__codex_apps__linear_save_document",
+      "success": true,
+      "id": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+      "uuid": null,
+      "title": "0.2.0 combined release and whole-application overhaul",
+      "url": "https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6",
+      "status": null,
+      "targetMilestone": null,
+      "targetDateCleared": false
+    }
+  ],
+  "beforeSelected": [
+    {
+      "id": "RND-246",
+      "uuid": "b3de698f-58a8-4dbf-920f-6afab295c96f",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Bug"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-246/clear-stale-update-offers-when-a-later-check-reports-no-update"
+    },
+    {
+      "id": "RND-290",
+      "uuid": "a512eeb9-45f1-4adc-aa96-1fbd26a75c1c",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Infra", "Bug"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-290/show-an-actionable-startup-error-when-durable-maintenance-preflight"
+    },
+    {
+      "id": "RND-291",
+      "uuid": "2410d645-584e-4c41-b369-6426e9377205",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["Desktop", "UX", "Bug"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-291/keep-each-settings-pane-at-a-predictable-scroll-position"
+    },
+    {
+      "id": "RND-292",
+      "uuid": "84d083bd-8fd7-4fab-95c5-504577a888cf",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["Desktop", "UX", "Bug"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-292/make-meaningful-helper-and-status-text-meet-minimum-contrast"
+    },
+    {
+      "id": "RND-294",
+      "uuid": "62e0501b-5246-48e1-960d-a304bcb8ccf4",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["Desktop", "Docs", "Bug"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-294/correct-installer-platform-and-casual-compatibility-claims-in-player"
+    },
+    {
+      "id": "RND-325",
+      "uuid": "50decf46-e32e-499a-920a-28ed8fd32ab6",
+      "status": "Todo",
+      "assigneeId": null,
+      "labels": ["Desktop", "Gameplay", "Infra", "Bug"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-325/audit-execs-windows-polling-for-periodic-tf2-frame-stalls"
+    },
+    {
+      "id": "RND-251",
+      "uuid": "f577f8f5-365f-4d32-9962-74a1a9d8e542",
+      "status": "In Progress",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Infra"],
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before"
+    },
+    {
+      "id": "RND-213",
+      "uuid": "8fcd4821-386b-49b9-a30f-6d3353a36516",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "UX", "Feature"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu"
+    },
+    {
+      "id": "RND-214",
+      "uuid": "4d7dcf10-f473-4977-89a1-315215a917a8",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "UX", "Feature"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support"
+    },
+    {
+      "id": "RND-202",
+      "uuid": "90ca1d9a-49b0-470e-b4d7-94ad053509b9",
+      "status": "Todo",
+      "assigneeId": "fed09bc5-58b5-41be-beb9-e766da6448b7",
+      "labels": ["compat", "Desktop", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during"
+    },
+    {
+      "id": "RND-274",
+      "uuid": "cf40160b-22b9-41f7-9448-b14b0a1da6f0",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod"
+    },
+    {
+      "id": "RND-215",
+      "uuid": "2d0dc29f-8fa7-40c6-a060-8c3cdaf72208",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "UX", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and"
+    },
+    {
+      "id": "RND-324",
+      "uuid": "b16f386a-2ba2-4b3a-bfde-f94a7091cd53",
+      "status": "Todo",
+      "assigneeId": null,
+      "labels": ["Desktop", "Launch", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-324/make-the-execs-tf2-preload-hook-startup-safe"
+    },
+    {
+      "id": "RND-208",
+      "uuid": "a1d54c31-0e84-4d81-b89d-0687b935c7b5",
+      "status": "Todo",
+      "assigneeId": "fed09bc5-58b5-41be-beb9-e766da6448b7",
+      "labels": ["compat", "Desktop", "Infra"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-208/validate-and-publish-020-after-the-functional-fixes-and-profile"
+    }
+  ],
+  "afterSelected": [
+    {
+      "id": "RND-246",
+      "uuid": "b3de698f-58a8-4dbf-920f-6afab295c96f",
+      "title": "Clear stale update offers when a later check reports no update",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-246/clear-stale-update-offers-when-a-later-check-reports-no-update"
+    },
+    {
+      "id": "RND-290",
+      "uuid": "a512eeb9-45f1-4adc-aa96-1fbd26a75c1c",
+      "title": "Show an actionable startup error when durable maintenance preflight fails",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Infra", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-290/show-an-actionable-startup-error-when-durable-maintenance-preflight"
+    },
+    {
+      "id": "RND-291",
+      "uuid": "2410d645-584e-4c41-b369-6426e9377205",
+      "title": "Keep each settings pane at a predictable scroll position",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["Desktop", "UX", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-291/keep-each-settings-pane-at-a-predictable-scroll-position"
+    },
+    {
+      "id": "RND-292",
+      "uuid": "84d083bd-8fd7-4fab-95c5-504577a888cf",
+      "title": "Make meaningful helper and status text meet minimum contrast",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["Desktop", "UX", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-292/make-meaningful-helper-and-status-text-meet-minimum-contrast"
+    },
+    {
+      "id": "RND-294",
+      "uuid": "62e0501b-5246-48e1-960d-a304bcb8ccf4",
+      "title": "Correct installer, platform and Casual compatibility claims in player documentation",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["Desktop", "Docs", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-294/correct-installer-platform-and-casual-compatibility-claims-in-player"
+    },
+    {
+      "id": "RND-325",
+      "uuid": "50decf46-e32e-499a-920a-28ed8fd32ab6",
+      "title": "Audit execs Windows polling for periodic TF2 frame stalls",
+      "status": "Todo",
+      "assigneeId": null,
+      "labels": ["Desktop", "Gameplay", "Infra", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-325/audit-execs-windows-polling-for-periodic-tf2-frame-stalls"
+    },
+    {
+      "id": "RND-251",
+      "uuid": "f577f8f5-365f-4d32-9962-74a1a9d8e542",
+      "title": "Run the cumulative Windows and Linux functional release matrix before 0.2.0",
+      "status": "In Progress",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Infra"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before"
+    },
+    {
+      "id": "RND-213",
+      "uuid": "8fcd4821-386b-49b9-a30f-6d3353a36516",
+      "title": "Delete profiles safely from the profile menu",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "UX", "Feature"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu"
+    },
+    {
+      "id": "RND-214",
+      "uuid": "4d7dcf10-f473-4977-89a1-315215a917a8",
+      "title": "Add app settings for updates, motion, install location and support",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "UX", "Feature"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support"
+    },
+    {
+      "id": "RND-202",
+      "uuid": "90ca1d9a-49b0-470e-b4d7-94ad053509b9",
+      "title": "Replace shared preloader selections with the target profile during switching",
+      "status": "Todo",
+      "assigneeId": "fed09bc5-58b5-41be-beb9-e766da6448b7",
+      "labels": ["compat", "Desktop", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during"
+    },
+    {
+      "id": "RND-274",
+      "uuid": "cf40160b-22b9-41f7-9448-b14b0a1da6f0",
+      "title": "Switch local-only particle profiles without requiring the default mod library",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod"
+    },
+    {
+      "id": "RND-215",
+      "uuid": "2d0dc29f-8fa7-40c6-a060-8c3cdaf72208",
+      "title": "Enforce one HUD per profile across replacement, import, switch and absorb",
+      "status": "Backlog",
+      "assigneeId": null,
+      "labels": ["compat", "Desktop", "UX", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and"
+    },
+    {
+      "id": "RND-324",
+      "uuid": "b16f386a-2ba2-4b3a-bfde-f94a7091cd53",
+      "title": "Make the execs TF2 preload hook startup-safe",
+      "status": "Todo",
+      "assigneeId": null,
+      "labels": ["Desktop", "Launch", "Bug"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-324/make-the-execs-tf2-preload-hook-startup-safe"
+    },
+    {
+      "id": "RND-208",
+      "uuid": "a1d54c31-0e84-4d81-b89d-0687b935c7b5",
+      "title": "Validate and publish the combined 0.2.0 overhaul and profile-management release",
+      "status": "Todo",
+      "assigneeId": "fed09bc5-58b5-41be-beb9-e766da6448b7",
+      "labels": ["compat", "Desktop", "Infra"],
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "url": "https://linear.app/rndaom/issue/RND-208/validate-and-publish-the-combined-020-overhaul-and-profile-management"
+    }
+  ],
+  "preservedCandidateIds": [
+    "RND-191",
+    "RND-204",
+    "RND-217",
+    "RND-218",
+    "RND-219",
+    "RND-220",
+    "RND-221",
+    "RND-222",
+    "RND-223",
+    "RND-225",
+    "RND-226",
+    "RND-227",
+    "RND-229",
+    "RND-230",
+    "RND-231",
+    "RND-232",
+    "RND-267",
+    "RND-295",
+    "RND-296",
+    "RND-297",
+    "RND-298",
+    "RND-299",
+    "RND-300",
+    "RND-301",
+    "RND-302"
+  ],
+  "preservedPublished018Ids": [
+    "RND-248",
+    "RND-286",
+    "RND-326",
+    "RND-327",
+    "RND-328",
+    "RND-329",
+    "RND-330",
+    "RND-331",
+    "RND-332"
+  ],
+  "releaseGate": {
+    "id": "RND-208",
+    "uuid": "a1d54c31-0e84-4d81-b89d-0687b935c7b5",
+    "url": "https://linear.app/rndaom/issue/RND-208/validate-and-publish-the-combined-020-overhaul-and-profile-management",
+    "status": "Todo",
+    "blockingIssueIds": [
+      "RND-202",
+      "RND-205",
+      "RND-206",
+      "RND-213",
+      "RND-214",
+      "RND-215",
+      "RND-247",
+      "RND-248",
+      "RND-251",
+      "RND-273",
+      "RND-274",
+      "RND-275",
+      "RND-277",
+      "RND-278",
+      "RND-279",
+      "RND-280",
+      "RND-281",
+      "RND-282",
+      "RND-288"
+    ]
+  },
+  "overhaul": {
+    "newIssueCreated": false,
+    "trackerId": "RND-208",
+    "trackerUuid": "a1d54c31-0e84-4d81-b89d-0687b935c7b5",
+    "trackerUrl": "https://linear.app/rndaom/issue/RND-208/validate-and-publish-the-combined-020-overhaul-and-profile-management",
+    "documentId": "c9339367-bae4-4aa5-b5c2-25fa1489abb0",
+    "documentUrl": "https://linear.app/rndaom/document/020-combined-release-and-whole-application-overhaul-1fe7c93751c6",
+    "reason": "Linear rejected new issue creation because the workspace free issue limit was exceeded. The complete workstream and owner design-selection gate are tracked in RND-208 and the project document."
+  },
+  "excludedActions": "No product implementation, AGENTS.md edit, version bump, commit, branch/tag/release, candidate selection, published issue state change, or messages/comments to people."
+}

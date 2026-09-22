@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Review the implemented Foundry redesign across execs, beside its selected concept references.">
+    <title>execs — Foundry implementation review</title>
+    <link rel="stylesheet" href="../gallery.css">
+    <link rel="stylesheet" href="review.css">
+    <script src="review.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#review-workspace">Skip to selected page</a>
+    <header class="review-masthead">
+      <a class="wordmark" href="review.html" aria-label="execs implementation review">execs<span aria-hidden="true">.</span></a>
+      <span class="review-phase">Foundry / Implementation review</span>
+      <nav aria-label="Review links">
+        <a href="../index.html">Concept history</a>
+        <a href="../design-qa.md" target="_blank" rel="noopener">Integrated QA</a>
+        <a href="http://127.0.0.1:1422/?preview=settings-comfig" target="_blank" rel="noopener">Interactive fixture</a>
+      </nav>
+    </header>
+    <section class="review-intro" aria-labelledby="review-title">
+      <div><p class="eyebrow">Selected direction · 22 September 2026</p><h1 id="review-title">Foundry, across the app.</h1></div>
+      <div class="review-intro-note"><p id="review-count">Loading accepted screenshots…</p><p class="meta">Production UI in browser fixtures. Native qualification is separate.</p></div>
+    </section>
+    <main class="review-layout">
+      <aside class="review-rail" aria-label="Page selection">
+        <label class="eyebrow" for="page-filter">Page or flow</label>
+        <input id="page-filter" type="search" placeholder="Find a page…" autocomplete="off">
+        <nav id="page-navigation" aria-label="Application pages and flows"></nav>
+        <p id="no-pages" class="meta" hidden>No matching pages.</p>
+      </aside>
+      <section id="review-workspace" class="review-workspace" aria-labelledby="page-title" aria-busy="true">
+        <div class="workspace-heading">
+          <div><p id="page-group" class="eyebrow">Implementation</p><h2 id="page-title">Loading the review</h2></div>
+          <span id="development-badge" class="development-badge" hidden>Development only</span>
+        </div>
+        <p id="page-description" class="review-description"></p>
+        <div class="capture-toolbar">
+          <div><span id="capture-count" class="meta"></span><h3 id="capture-title">Accepted screenshot</h3></div>
+          <div class="capture-actions"><button id="capture-previous" class="button subtle" type="button">Previous</button><button id="capture-next" class="button subtle" type="button">Next</button></div>
+        </div>
+        <div class="comparison-grid">
+          <figure class="implementation-figure">
+            <div class="figure-label"><span>Implemented UI</span><span id="capture-viewport" class="meta"></span></div>
+            <button id="open-current" class="capture-image-button" type="button" aria-label="Inspect implementation screenshot">
+              <img id="current-image" alt="" width="1200" height="800">
+              <span class="image-inspect-label">Inspect full size</span>
+            </button>
+            <figcaption><p id="capture-note" class="meta"></p><a id="current-original" class="text-link meta" href="core/01-comfig-1200.png" target="_blank" rel="noopener">Open original screenshot</a></figcaption>
+          </figure>
+          <figure class="reference-figure">
+            <div class="figure-label"><span>Selected Foundry concept</span></div>
+            <button id="open-reference" class="reference-crop" type="button" aria-label="Inspect the original Foundry concept board"><img id="reference-image" alt="" width="1672" height="941"></button>
+            <figcaption><h3 id="reference-title">Foundry reference</h3><p id="reference-view" class="meta"></p><p id="reference-note" class="meta"></p><button id="open-board" class="button subtle" type="button">View full board</button></figcaption>
+          </figure>
+        </div>
+        <div class="evidence-note"><p id="page-limit"></p><p class="meta">Reference imagery and labels are illustrative. The implemented controls, data and safety behavior are authoritative.</p><div id="qa-links" class="qa-links"></div></div>
+        <section class="state-section" aria-labelledby="states-title"><div class="state-heading"><h3 id="states-title">Accepted states</h3><span class="meta">Choose a capture to compare</span></div><ol id="capture-list" class="capture-list"></ol></section>
+        <p id="review-status" class="review-status-message" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+    <footer class="review-footer"><p>Local review artifact. Screenshots do not certify Steam, native media, installers, or the Windows/Linux packaged matrix.</p><div><a href="../combined-release-plan.md" target="_blank" rel="noopener">Release plan</a><a href="../research/rnd-290-startup-error.md" target="_blank" rel="noopener">Native startup diagnostics</a><a href="review-data.json" target="_blank" rel="noopener">Accepted capture manifest</a></div></footer>
+    <dialog class="image-dialog" id="review-lightbox" aria-labelledby="lightbox-title" aria-describedby="lightbox-caption">
+      <div class="image-dialog-header"><div><p class="eyebrow" id="lightbox-kind">Implementation screenshot</p><h2 id="lightbox-title">Full-size image</h2></div><button id="lightbox-close" class="button subtle" type="button" autofocus>Close</button></div>
+      <div class="image-dialog-tools"><fieldset class="zoom-controls" aria-label="Image zoom"><button id="zoom-out" class="button subtle" type="button" aria-label="Zoom out">−</button><output id="zoom-level" aria-live="polite">Fit</output><button id="zoom-in" class="button subtle" type="button" aria-label="Zoom in">+</button><button id="zoom-fit" class="button subtle" type="button">Fit</button><button id="zoom-original" class="button subtle" type="button">100%</button></fieldset><a id="lightbox-original" class="text-link" href="core/01-comfig-1200.png" target="_blank" rel="noopener">Open original image</a></div>
+      <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to focus the named scroll region to pan a full-size image. -->
+      <section id="lightbox-stage" class="image-stage" tabindex="0" aria-label="Image view. Scroll or use arrow keys to pan a zoomed image."><img id="lightbox-image" alt=""></section>
+      <p id="lightbox-caption" class="image-dialog-caption"></p>
+    </dialog>
+    <noscript><p class="noscript-note">JavaScript is needed for the page selector and image viewer. The integrated QA and original concept gallery remain available through the links above.</p></noscript>
+  </body>
+</html>

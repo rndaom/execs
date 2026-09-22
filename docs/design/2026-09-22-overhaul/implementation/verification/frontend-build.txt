@@ -1,0 +1,43 @@
+
+> execs@ build G:\Projects\execs
+> pnpm --filter @execs/desktop build
+
+
+> @execs/desktop@0.2.0 build G:\Projects\execs\apps\desktop
+> tsc && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 4751 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                        0.39 kB │ gzip:   0.26 kB
+dist/assets/inter-latin-400-normal-C38fXH4l.woff2     23.66 kB
+dist/assets/inter-latin-500-normal-Cerq10X2.woff2     24.27 kB
+dist/assets/inter-latin-700-normal-Yt3aPRUw.woff2     24.36 kB
+dist/assets/inter-latin-600-normal-LgqL8muc.woff2     24.45 kB
+dist/assets/inter-latin-400-normal-CyCys3Eg.woff      30.70 kB
+dist/assets/inter-latin-600-normal-CiBQ2DWP.woff      31.26 kB
+dist/assets/inter-latin-500-normal-BL9OpVg8.woff      31.28 kB
+dist/assets/inter-latin-700-normal-BLAVimhd.woff      31.32 kB
+dist/assets/very_low-uTYOSTdI.webp                    38.46 kB
+dist/assets/medium_low-BpJHFU3T.webp                  43.20 kB
+dist/assets/low-D68DeXjp.webp                         45.02 kB
+dist/assets/medium-CyWgjLdG.webp                      46.74 kB
+dist/assets/ultra-CpNpA4fP.webp                       46.94 kB
+dist/assets/high-zOr4FdbZ.webp                        48.10 kB
+dist/assets/medium_high-Bs1iKRhU.webp                 48.63 kB
+dist/assets/files-analysis.worker-DYiVjpKz.js        760.60 kB
+dist/assets/index-HQ_PPmYt.css                        57.82 kB │ gzip:  11.37 kB
+dist/assets/app-CQ9NjtTW.js                            0.25 kB │ gzip:   0.21 kB
+dist/assets/index-CSZUj96z.js                          0.33 kB │ gzip:   0.22 kB
+dist/assets/index-_oKsnQev.js                          1.08 kB │ gzip:   0.51 kB
+dist/assets/window-CVH1xDrb.js                        13.98 kB │ gzip:   3.45 kB
+dist/assets/FilesPane-P0bRxSGU.js                    413.71 kB │ gzip: 132.56 kB
+dist/assets/index-C7gtTEoy.js                      1,452.38 kB │ gzip: 312.93 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.02s

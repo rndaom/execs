@@ -1,0 +1,472 @@
+[
+  {
+    "id": 1,
+    "name": "release-notes-auto",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/001-release-notes-auto.png",
+    "note": "Automatic release notes obscure the first pane on initial preview entry. Audit of local development 0.2.0 fixtures, not native host.",
+    "url": "http://localhost:1420/?preview=settings-comfig"
+  },
+  {
+    "id": 2,
+    "name": "comfig-preset",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/002-comfig-preset.png",
+    "note": "Clear preset choice and authentic comparison screenshot; fixed 360px preview and centered narrow content leave a large empty region. Modules and addons begin below the fold at 1280×720.",
+    "url": "http://localhost:1420/?preview=settings-comfig"
+  },
+  {
+    "id": 3,
+    "name": "comfig-all-presets",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/003-comfig-all-presets.png",
+    "note": "Expanded preset list gives accurate descriptions but pushes modules farther down the page.",
+    "url": "http://localhost:1420/?preview=settings-comfig"
+  },
+  {
+    "id": 4,
+    "name": "comfig-modules-expanded",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/004-comfig-modules-expanded.png",
+    "note": "Modules expand inline into many long choice rows; source-based defaults and overrides are legible, but advanced control depth requires extensive scrolling.",
+    "url": "http://localhost:1420/?preview=settings-comfig"
+  },
+  {
+    "id": 5,
+    "name": "comfig-networking",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/005-comfig-networking.png",
+    "note": "Networking uses category tabs and segmented controls with compact descriptions. Active/default distinction is text plus a selected surface.",
+    "url": "http://localhost:1420/?preview=settings-comfig"
+  },
+  {
+    "id": 6,
+    "name": "binds-default",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/006-binds-default.png",
+    "note": "Action list is clear but a long two-column mapping grid has no visible overview of key conflicts or category navigation.",
+    "url": "http://localhost:1420/?preview=settings-binds"
+  },
+  {
+    "id": 7,
+    "name": "binds-recording",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/007-binds-recording.png",
+    "note": "Recording uses an inline banner and highlighted key cell. The banner changes vertical layout; Escape cancellation is explicit. No modal is present.",
+    "url": "http://localhost:1420/?preview=settings-binds"
+  },
+  {
+    "id": 8,
+    "name": "gameplay-default",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/008-gameplay-default.png",
+    "note": "World FOV and viewmodel FOV appear as bare controls with values. No direct contextual game preview here; opportunity to communicate what changes visually.",
+    "url": "http://localhost:1420/?preview=settings-gameplay"
+  },
+  {
+    "id": 9,
+    "name": "gameplay-advanced",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/009-gameplay-advanced.png",
+    "note": "Advanced reveals tracer and flipped-viewmodel switches plus transparent-viewmodels addon. The addon explanation correctly distinguishes a package from a cvar.",
+    "url": "http://localhost:1420/?preview=settings-gameplay"
+  },
+  {
+    "id": 10,
+    "name": "hud-catalog",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/010-hud-catalog.png",
+    "note": "HUD catalog exposes source, search and six-item pagination. Fixture preview is explicitly labeled; visual media and local install state should remain distinct.",
+    "url": "http://localhost:1420/?preview=settings-hud-browser"
+  },
+  {
+    "id": 11,
+    "name": "hud-ranking",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/011-hud-ranking.png",
+    "note": "Ranked HUD browsing discloses source and missing statistics; retains full catalog through A to Z.",
+    "url": "http://localhost:1420/?preview=settings-hud-browser"
+  },
+  {
+    "id": 12,
+    "name": "hud-import-menu",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/012-hud-import-menu.png",
+    "note": "Themed HUD import choice dialog separates an archive from an extracted folder.",
+    "url": "http://localhost:1420/?preview=settings-hud-browser"
+  },
+  {
+    "id": 13,
+    "name": "hud-installed",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/013-hud-installed.png",
+    "note": "Installed HUD has its own identity, update and stock-restore actions above option controls and catalog.",
+    "url": "http://localhost:1420/?preview=settings-hud-installed"
+  },
+  {
+    "id": 14,
+    "name": "hud-installed-catalog",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/014-hud-options.png",
+    "note": "Catalog under installed HUD repeats the active item and includes a truthful unavailable-image placeholder and author-page fallback.",
+    "url": "http://localhost:1420/?preview=settings-hud-installed"
+  },
+  {
+    "id": 15,
+    "name": "crosshair-custom",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/015-crosshair-in-game.png",
+    "note": "Fixture begins with Custom mode selected: a large color field and size slider beside a 1280×720 reference scene. Shape and weapon settings sit below the fold.",
+    "url": "http://localhost:1420/?preview=settings-crosshair"
+  },
+  {
+    "id": 16,
+    "name": "crosshair-stock",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/016-crosshair-stock.png",
+    "note": "In-game mode selection; native sprite decoding is not available in this browser fixture.",
+    "url": "http://localhost:1420/?preview=settings-crosshair"
+  },
+  {
+    "id": 17,
+    "name": "crosshair-designer",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/017-crosshair-designer.png",
+    "note": "Custom crosshair designer dialog and editable parameters.",
+    "url": "http://localhost:1420/?preview=settings-crosshair"
+  },
+  {
+    "id": 18,
+    "name": "crosshair-weapon-overrides",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/018-crosshair-weapon-overrides.png",
+    "note": "Per-weapon override list expands beneath the source picker; shares the Build pack action.",
+    "url": "http://localhost:1420/?preview=settings-crosshair"
+  },
+  {
+    "id": 19,
+    "name": "viewmodels-scout",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/019-viewmodels-scout.png",
+    "note": "Nine class tabs and grouped hide modes; this browser fixture cannot fetch native viewmodel imagery, so the preview is empty by design.",
+    "url": "http://localhost:1420/?preview=settings-viewmodels"
+  },
+  {
+    "id": 20,
+    "name": "viewmodels-soldier",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/020-viewmodels-soldier.png",
+    "note": "Soldier class selected with primary, secondary and melee visibility rows.",
+    "url": "http://localhost:1420/?preview=settings-viewmodels"
+  },
+  {
+    "id": 21,
+    "name": "sounds-default",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/021-sounds-default.png",
+    "note": "Adjacent hit and kill slots both show off switches and volume at 75%. The custom hit sound exposes Boost: Off, +6 dB and +12 dB. No pitch control is visible; native audition is unavailable in this browser fixture.",
+    "url": "http://localhost:1420/?preview=settings-sounds"
+  },
+  {
+    "id": 22,
+    "name": "sounds-library",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/022-sounds-library.png",
+    "note": "Sounds catalog choices and assignment controls; source browsing and installed slots occupy one vertically long pane.",
+    "url": "http://localhost:1420/?preview=settings-sounds"
+  },
+  {
+    "id": 23,
+    "name": "sounds-filtered",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/023-sounds-filtered.png",
+    "note": "Search reduces the sound list to a few rows; source and Hit/Kill assignment remain visible.",
+    "url": "http://localhost:1420/?preview=settings-sounds"
+  },
+  {
+    "id": 24,
+    "name": "files-editor",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/024-files-editor.png",
+    "note": "Files has a dedicated workbench with persistent file tree, editor toolbar and explicit Save, appropriately denser than settings panes.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 25,
+    "name": "files-actions-menu",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/025-files-actions-menu.png",
+    "note": "Secondary file actions are grouped in a menu rather than persistent cards.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 26,
+    "name": "files-problems",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/026-files-problems.png",
+    "note": "Problems integrates into the editor workbench and names file, severity and location.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 27,
+    "name": "files-help",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/027-files-help.png",
+    "note": "Command help stays attached to the editor with guides/snippets and search.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 28,
+    "name": "files-new-cfg",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/028-files-new-cfg.png",
+    "note": "New cfg opens within the file list and asks startup/class/helper purpose.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 29,
+    "name": "files-new-helper",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/029-files-new-helper.png",
+    "note": "Helper filename and location are separate; inline instructions reveal how it runs.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 30,
+    "name": "files-warning-source",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/030-files-blocked-config.png",
+    "note": "The danger.cfg fixture contains top-level unbindall, treated as a warning rather than a block under current self-trust rules. Save is disabled because the document is unchanged.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 31,
+    "name": "launch-options",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/031-launch-options.png",
+    "note": "Launch string, Copy action, never-stored flags and guidance to copy into Steam while it is open are visible. This capture does not demonstrate autosave, a detected Steam-running guard or a native Steam write.",
+    "url": "http://localhost:1420/?preview=settings-launch"
+  },
+  {
+    "id": 32,
+    "name": "inventory-development",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/032-inventory-development.png",
+    "note": "Development-only, account-owned read-only grid with clear fixture labeling; not assigned to combined release.",
+    "url": "http://localhost:1420/?preview=settings-launch"
+  },
+  {
+    "id": 33,
+    "name": "inventory-item-selected",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/033-inventory-item-selected.png",
+    "note": "Selected inventory item has a detail region separate from the grid; preview fixture does not supply real item artwork.",
+    "url": "http://localhost:1420/?preview=settings-launch"
+  },
+  {
+    "id": 34,
+    "name": "mods-shipped-browse",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/034-mods-shipped-browse.png",
+    "note": "Public 0.1.8 frontend fixture: separate Browse/Installed/Casual tasks, with recovery warning shown before catalog. Warning and task introduction push results below the first viewport.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 35,
+    "name": "mods-search-loading",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/035-mods-search.png",
+    "note": "Intentional in-flight search state: refresh disables, status says Searching, result area is replaced without a spinner.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 36,
+    "name": "mods-installed",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/036-mods-installed.png",
+    "note": "Installed pack rows show origin and explicit removal/import actions; Casual status and repair remain visible.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 37,
+    "name": "mods-import-dialog",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/037-mods-import-dialog.png",
+    "note": "Shipped mod import dialog exposes archive/VPK and folder paths with concise format restrictions.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 38,
+    "name": "mods-remove-confirmation",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/038-mods-remove-confirmation.png",
+    "note": "Removal dialog names the mod and download cost. Initial focus lands on Remove mod, not Keep mod; no removal performed.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 39,
+    "name": "mods-casual",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/039-mods-casual.png",
+    "note": "Casual setup holds explicit preload and material switches, with restore and repair state separate from discovery.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 40,
+    "name": "mods-particle-library",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/040-mods-particle-library.png",
+    "note": "Casual particle choices use grouped selection controls; attribution and stock restoration remain available.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 41,
+    "name": "mods-results",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/041-mods-results.png",
+    "note": "GameBanana result rows after the search has settled; preview contains no real thumbnails.",
+    "url": "http://localhost:1422/?preview=settings-mods"
+  },
+  {
+    "id": 42,
+    "name": "hud-options-expanded",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/042-hud-options-expanded.png",
+    "note": "Expanded HUD options: Buff color/opacity, Minmode switch, Scoreboard choice, Ubercharge flash numeric value. Current screenshot shows start of option region.",
+    "url": "http://localhost:1420/?preview=settings-hud-installed"
+  },
+  {
+    "id": 43,
+    "name": "hud-schema-controls",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/043-hud-schema-controls.png",
+    "note": "Rejected: scrolled past HUD controls into the catalog; duplicate catalog evidence, not HUD-options evidence.",
+    "url": "http://localhost:1420/?preview=settings-hud-installed",
+    "accepted": false
+  },
+  {
+    "id": 44,
+    "name": "profile-menu",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/044-profile-menu.png",
+    "note": "Profile menu groups current identity, alternate profiles, save/new/import/export and install change actions.",
+    "url": "http://localhost:1420/?preview=saved"
+  },
+  {
+    "id": 45,
+    "name": "profile-import-review",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/045-profile-import-review.png",
+    "note": "Profile import review presents exact fixture counts, skipped-file notes and trust decision before creating an inactive profile.",
+    "url": "http://localhost:1420/?preview=saved"
+  },
+  {
+    "id": 46,
+    "name": "profile-import-flags",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/046-profile-import-flags.png",
+    "note": "Expanded import review lists flagged cfg findings before trust; amounts and original bytes remain backend-owned.",
+    "url": "http://localhost:1420/?preview=saved"
+  },
+  {
+    "id": 47,
+    "name": "empty",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/047-empty.png",
+    "note": "Documented browser fixture: empty. Native discovery/file picker behavior is not certified by this capture.",
+    "url": "http://localhost:1420/?preview=empty"
+  },
+  {
+    "id": 48,
+    "name": "one",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/048-one.png",
+    "note": "Documented browser fixture: one. Native discovery/file picker behavior is not certified by this capture.",
+    "url": "http://localhost:1420/?preview=one"
+  },
+  {
+    "id": 49,
+    "name": "many",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/049-many.png",
+    "note": "Documented browser fixture: many. Native discovery/file picker behavior is not certified by this capture.",
+    "url": "http://localhost:1420/?preview=many"
+  },
+  {
+    "id": 50,
+    "name": "first-existing",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/050-first-existing.png",
+    "note": "Documented browser fixture: first-existing. Native discovery/file picker behavior is not certified by this capture.",
+    "url": "http://localhost:1420/?preview=first-existing"
+  },
+  {
+    "id": 51,
+    "name": "first-unused",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/051-first-unused.png",
+    "note": "Documented browser fixture: first-unused. Captured current visible UI; does not test native writes.",
+    "url": "http://localhost:1420/?preview=first-unused"
+  },
+  {
+    "id": 52,
+    "name": "first-unused-locked",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/052-first-unused-locked.png",
+    "note": "Documented browser fixture: first-unused-locked. Captured current visible UI; does not test native writes.",
+    "url": "http://localhost:1420/?preview=first-unused-locked"
+  },
+  {
+    "id": 53,
+    "name": "create",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/053-create.png",
+    "note": "Documented browser fixture: create. Captured current visible UI; does not test native writes.",
+    "url": "http://localhost:1420/?preview=create"
+  },
+  {
+    "id": 54,
+    "name": "settings-locked",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/054-settings-locked.png",
+    "note": "Documented browser fixture: settings-locked. Captured current visible UI; does not test native writes.",
+    "url": "http://localhost:1420/?preview=settings-locked"
+  },
+  {
+    "id": 55,
+    "name": "absorb",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/055-absorb.png",
+    "note": "Documented browser fixture: absorb; appearance only, recovery/integrity operations are simulated.",
+    "url": "http://localhost:1420/?preview=absorb"
+  },
+  {
+    "id": 56,
+    "name": "switch",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/056-switch.png",
+    "note": "Documented browser fixture: switch; appearance only, recovery/integrity operations are simulated.",
+    "url": "http://localhost:1420/?preview=switch"
+  },
+  {
+    "id": 57,
+    "name": "import",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/057-import.png",
+    "note": "The import fixture URL currently shows the ordinary Comfig pane with Medium selected. No import review, progress or result is visible; use captures 045 and 046 for import-review evidence.",
+    "url": "http://localhost:1420/?preview=import"
+  },
+  {
+    "id": 58,
+    "name": "folder-repair",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/058-folder-repair.png",
+    "note": "Documented browser fixture: folder-repair; appearance only, recovery/integrity operations are simulated.",
+    "url": "http://localhost:1420/?preview=folder-repair"
+  },
+  {
+    "id": 59,
+    "name": "folder-repair-review",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/059-folder-repair-review.png",
+    "note": "Folder repair confirmation. Preview data only; no repair was executed.",
+    "url": "http://localhost:1420/?preview=folder-repair"
+  },
+  {
+    "id": 60,
+    "name": "update-available",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/060-update-available.png",
+    "note": "Documented browser fixture update-available. Visual state only; no update or installer executed.",
+    "url": "http://localhost:1420/?preview=update-available"
+  },
+  {
+    "id": 61,
+    "name": "update-installing",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/061-update-installing.png",
+    "note": "Documented browser fixture update-installing. Visual state only; no update or installer executed.",
+    "url": "http://localhost:1420/?preview=update-installing"
+  },
+  {
+    "id": 62,
+    "name": "release-notes",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/062-release-notes.png",
+    "note": "Documented browser fixture release-notes. Visual state only; no update or installer executed.",
+    "url": "http://localhost:1420/?preview=release-notes"
+  },
+  {
+    "id": 63,
+    "name": "files-dirty",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/063-files-dirty.png",
+    "note": "An in-memory Files edit; explicit Save remains required. Draft was not written to disk.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 64,
+    "name": "files-transition-guard",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/064-files-transition-guard.png",
+    "note": "Creating a profile with a dirty Files document requests Save, Discard or Cancel. Cancelled during audit.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 65,
+    "name": "files-find",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/065-files-find.png",
+    "note": "Files find and replace controls over the bounded editor.",
+    "url": "http://localhost:1420/?preview=settings-files"
+  },
+  {
+    "id": 66,
+    "name": "hud-controls-visible",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/066-hud-controls-visible.png",
+    "note": "Installed rayshud schema: color and alpha, Minmode switch, Scoreboard variants and numeric Ubercharge control.",
+    "url": "http://localhost:1420/?preview=settings-hud-installed"
+  },
+  {
+    "id": 67,
+    "name": "hud-minmode-selected",
+    "path": "G:/Projects/execs/docs/design/2026-09-22-overhaul/audit/067-hud-minmode-selected.png",
+    "note": "Minmode enabled in browser fixture. Autosave behavior is simulated.",
+    "url": "http://localhost:1420/?preview=settings-hud-installed"
+  }
+]

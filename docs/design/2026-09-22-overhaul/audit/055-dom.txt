@@ -1,0 +1,259 @@
+- main:
+  - generic: execs
+  - generic "Profile Main Active":
+    - generic: Profile
+    - strong: Main
+    - generic: Active
+  - generic "/home/user/.local/share/Steam/steamapps/common/Team Fortress 2": Team Fortress 2
+  - button "Copy install path":
+  - button "Launch TF2":
+    - text: Launch TF2
+  - alertdialog "Custom files changed":
+    - paragraph: Custom files changed
+    - paragraph: Update the active profile?
+    - paragraph: "Added: toonhud"
+    - paragraph: "Removed: oldpack"
+    - button "Update profile" [active]
+    - button "Restore removed"
+    - button "Keep profile"
+    - paragraph: Escape defers; execs asks again later.
+  - complementary:
+    - navigation "Settings":
+      - paragraph: Setup
+      - button "Comfig":
+        - generic: Comfig
+      - button "Binds":
+        - generic: Binds
+      - button "Gameplay":
+        - generic: Gameplay
+      - paragraph: Look
+      - button "HUD":
+        - generic: HUD
+      - button "Crosshair":
+        - generic: Crosshair
+      - button "Viewmodels":
+        - generic: Viewmodels
+      - button "Sounds":
+        - generic: Sounds
+      - paragraph: More
+      - button "Mods":
+        - generic: Mods
+      - button "Files":
+        - generic: Files
+      - button "Launch":
+        - generic: Launch
+      - paragraph: Steam
+      - button "Inventory":
+        - generic: Inventory
+  - heading "Comfig" [level=1]
+  - paragraph:
+    - text: Performance, visuals and networking, powered by
+    - button "mastercomfig"
+    - text: .
+  - heading "Preset" [level=2]
+  - paragraph: Sets the default for every module.
+  - radio "Ultra Maximum fidelity with the highest system requirements."
+  - generic: Ultra
+  - generic: Maximum fidelity with the highest system requirements.
+  - radio "High High visual quality for modern systems."
+  - generic: High
+  - generic: High visual quality for modern systems.
+  - radio "Medium Selected A balanced mix of visual quality and performance." [checked]
+  - generic: Medium
+  - generic: Selected
+  - generic: A balanced mix of visual quality and performance.
+  - radio "Low Maximum performance with reduced visual effects."
+  - generic: Low
+  - generic: Maximum performance with reduced visual effects.
+  - button "Show all presets"
+  - button "Preset guide":
+    - text: Preset guide
+  - figure "Medium":
+    - img "In-game screenshot of the Medium preset on koth_sawmill"
+    - generic: Medium
+  - region "Fine-tune modules":
+    - generic "Fine-tune modules":
+      - generic: ›
+      - text: Fine-tune modules
+    - heading "Fine-tune modules" [level=2]
+    - tablist "Module categories":
+      - tab "Networking5"
+      - tab "Graphics31" [selected]
+      - tab "HUD2"
+      - tab "Sound2"
+    - generic: Search Graphics modules
+    - searchbox "Search Graphics modules"
+    - tabpanel "Graphics31":
+      - article:
+        - paragraph: Model quality
+        - paragraph: Preset default
+        - group "Model quality options":
+          - generic: Model quality options
+          - button "Default" [pressed]
+          - button "Low"
+          - button "Medium"
+          - button "High"
+          - button "Ultra"
+      - article:
+        - paragraph: Lighting
+        - paragraph: Preset default
+        - group "Lighting options":
+          - generic: Lighting options
+          - button "Default" [pressed]
+          - button "Very low"
+          - button "Low"
+          - button "Medium"
+          - button "High"
+          - button "Ultra"
+      - article:
+        - paragraph: Shading
+        - paragraph: Preset default
+        - group "Shading options":
+          - generic: Shading options
+          - button "Default" [pressed]
+          - button "Low"
+          - button "Medium"
+          - button "High"
+      - article:
+        - paragraph: Phong shading
+        - paragraph: Preset default
+        - group "Phong shading options":
+          - generic: Phong shading options
+          - button "Default" [pressed]
+          - button "Off"
+          - button "On"
+          - button "Rim"
+      - article:
+        - paragraph: Shadows
+        - paragraph: Preset default
+        - group "Shadows options":
+          - generic: Shadows options
+          - button "Default" [pressed]
+          - button "Off"
+          - button "Low"
+          - button "Medium"
+          - button "High"
+          - button "Ultra"
+      - article:
+        - paragraph: Flashlight
+        - paragraph: Preset default
+        - group "Flashlight options":
+          - generic: Flashlight options
+          - button "Default" [pressed]
+          - button "Off"
+          - button "On"
+      - article:
+        - paragraph: Effects
+        - paragraph: Preset default
+        - group "Effects options":
+          - generic: Effects options
+          - button "Default" [pressed]
+          - button "Very low"
+          - button "Low"
+          - button "Medium"
+          - button "High"
+          - button "Ultra"
+      - article:
+        - paragraph: Tracer effects
+        - paragraph: Preset default
+        - group "Tracer effects options":
+          - generic: Tracer effects options
+          - button "Default" [pressed]
+          - button "Low"
+          - button "Medium"
+          - button "High"
+      - article:
+        - paragraph: Water
+        - paragraph: Preset default
+        - group "Water options":
+          - generic: Water options
+          - button "Default" [pressed]
+          - button "Very low"
+          - button "Low"
+          - button "Medium"
+          - button "High"
+          - button "Ultra"
+      - article:
+        - paragraph: Post-processing
+        - paragraph: Preset default
+        - group "Post-processing options":
+          - generic: Post-processing options
+          - button "Default" [pressed]
+          - button "Off"
+          - button "Low"
+          - button "Default"
+          - button "Calm"
+          - button "Vivid"
+          - button "Washed"
+          - button "Dreamy"
+      - article:
+        - paragraph: Color filter
+        - paragraph: Preset default
+        - group "Color filter options":
+          - generic: Color filter options
+          - button "Default" [pressed]
+          - button "Off"
+          - button "Grayscale"
+          - button "Desaturated"
+          - button "Warm"
+          - button "Cool"
+      - article:
+        - paragraph: Pyrovision
+        - paragraph: Preset default
+        - group "Pyrovision options":
+          - generic: Pyrovision options
+          - button "Default" [pressed]
+          - button "Low"
+          - button "Medium"
+          - button "High"
+    - button "Show 19 more graphics modules"
+  - region "Official addons":
+    - heading "Official addons" [level=2]
+    - generic: 1 selected
+    - checkbox "No footsteps Remove player footstep sounds."
+    - generic: No footsteps
+    - generic: Remove player footstep sounds.
+    - checkbox "No Pyroland Disable Pyroland visual effects."
+    - generic: No Pyroland
+    - generic: Disable Pyroland visual effects.
+    - checkbox "No soundscapes Remove ambient map soundscapes."
+    - generic: No soundscapes
+    - generic: Remove ambient map soundscapes.
+    - checkbox "No tutorial Selected Skip tutorial hints and prompts." [checked]
+    - generic: No tutorial
+    - generic: Selected
+    - generic: Skip tutorial hints and prompts.
+    - checkbox "Low memory Reduce memory use on limited systems."
+    - generic: Low memory
+    - generic: Reduce memory use on limited systems.
+    - checkbox "Null-canceling movement Keep opposite movement keys responsive."
+    - generic: Null-canceling movement
+    - generic: Keep opposite movement keys responsive.
+    - checkbox "Flat mouse Use direct, unaccelerated mouse input."
+    - generic: Flat mouse
+    - generic: Use direct, unaccelerated mouse input.
+    - checkbox "Transparent viewmodels Make weapon viewmodels transparent."
+    - generic: Transparent viewmodels
+    - generic: Make weapon viewmodels transparent.
+  - region "Comfig packages":
+    - heading "Packages and extras" [level=2]
+    - paragraph: Changes save as you make them.
+    - button "Update packages"
+    - button "Import comfig-custom…"
+    - button "Open extras":
+      - text: Open extras
+  - paragraph:
+    - text: Uses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is not affiliated with mastercomfig or
+    - button "comfig.app"
+    - text: . Support the project through its
+    - button "donate page"
+    - text: .
+  - paragraph:
+    - text: v0.2.0 ·
+    - button "Check for updates"
+    - text: ·
+    - button "Report a bug"
+    - text: ·
+    - button "Copy diagnostics"
+  - paragraph: Fan project — not affiliated with Valve or Steam.
+- status

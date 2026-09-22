@@ -1,0 +1,11 @@
+# RND-290 — actionable startup preflight errors
+
+Implemented on the Foundry development branch on September 22, 2026. Windows fixture checks pass; the packaged Windows and Linux dialog matrix remains open. No player settings or TF2 files were used.
+
+The app now reports both an unresolved data directory and an invalid durable maintenance state through a native error dialog before creating Tauri's webview, registering commands or starting the lock poller. The diagnostic contains the full product/build version, the maintenance location when known, the original failure, copy instructions, the bug-report URL and a request to retain recovery files. It does not offer an unsafe automatic reset. The same text goes to stderr for a headless fallback.
+
+The implementation uses the existing RFD dependency directly (`rfd 0.16`, GTK3 on Linux). Its Windows implementation calls the system message box, which supports Ctrl+C; its GTK message text is selectable. This avoids relying on a webview that has not started. RFD's local pinned source and [upstream repository](https://github.com/PolyMeilex/rfd) were inspected. The panic boundary around dialog creation preserves stderr fallback when a headless GTK session cannot create a dialog; it does not establish that every packaging/display combination has been exercised.
+
+The existing read-only preflight still determines the safety boundary. New fixture regressions cover normal startup without creating maintenance data, corrupt/mismatched/multiple markers with exact bytes retained, and an unreadable Windows marker held by an exclusive file handle. Existing bounds, linked-directory, stale-token, delayed launch and verification recovery regressions remain in the same suite. Thirteen startup tests and two diagnostic-content tests pass on Windows; later integrated native results are recorded in `implementation/verification/`.
+
+Remaining qualification: launch the packaged app without a console against disposable data directories on Windows and Linux; verify readable/copyable text, dismissal and clean exit, unchanged markers and untouched TF2 files. Native UI automation is unavailable in this task, so these are not claimed as completed. Real user recovery markers must not be modified to obtain a screenshot.

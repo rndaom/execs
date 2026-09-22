@@ -1,0 +1,27 @@
+- main:
+  - paragraph: execs
+  - generic: Existing setup found
+  - heading "Keep what you already built" [level=1]
+  - paragraph: Save a snapshot before execs changes anything.
+  - generic: Profile name
+  - textbox "Profile name":
+    - /placeholder: My current setup
+  - region "What gets saved":
+    - heading "What gets saved" [level=2]
+    - paragraph: Your cfg layer, config.cfg, tf/custom and the launch string — copied, not moved.
+    - generic: Team Fortress 2
+    - list:
+      - listitem: Found autoexec.cfg
+      - listitem: Found packs in custom
+  - button "Change install":
+    - text: Change install
+  - button "Save this setup" [disabled]
+  - paragraph:
+    - text: v0.2.0 ·
+    - button "Check for updates"
+    - text: ·
+    - button "Report a bug"
+    - text: ·
+    - button "Copy diagnostics"
+  - paragraph: execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+- status

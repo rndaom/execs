@@ -1,0 +1,250 @@
+- status: TF2 is running — settings keep drafts until it closes. Files requires Save after closing TF2.
+- main:
+  - generic: execs
+  - generic "Profile Main Active":
+    - generic: Profile
+    - strong: Main
+    - generic: Active
+  - generic "/home/user/.local/share/Steam/steamapps/common/Team Fortress 2": Team Fortress 2
+  - button "Copy install path":
+  - generic: Game running
+  - complementary:
+    - navigation "Settings":
+      - paragraph: Setup
+      - button "Comfig":
+        - generic: Comfig
+      - button "Binds":
+        - generic: Binds
+      - button "Gameplay":
+        - generic: Gameplay
+      - paragraph: Look
+      - button "HUD":
+        - generic: HUD
+      - button "Crosshair":
+        - generic: Crosshair
+      - button "Viewmodels":
+        - generic: Viewmodels
+      - button "Sounds":
+        - generic: Sounds
+      - paragraph: More
+      - button "Mods":
+        - generic: Mods
+      - button "Files":
+        - generic: Files
+      - button "Launch":
+        - generic: Launch
+      - paragraph: Steam
+      - button "Inventory":
+        - generic: Inventory
+  - heading "Comfig" [level=1]
+  - paragraph:
+    - text: Performance, visuals and networking, powered by
+    - button "mastercomfig"
+    - text: .
+  - heading "Preset" [level=2]
+  - paragraph: Sets the default for every module.
+  - radio "Ultra Maximum fidelity with the highest system requirements." [disabled]
+  - generic: Ultra
+  - generic: Maximum fidelity with the highest system requirements.
+  - radio "High High visual quality for modern systems." [disabled]
+  - generic: High
+  - generic: High visual quality for modern systems.
+  - radio "Medium Selected A balanced mix of visual quality and performance." [checked] [disabled]
+  - generic: Medium
+  - generic: Selected
+  - generic: A balanced mix of visual quality and performance.
+  - radio "Low Maximum performance with reduced visual effects." [disabled]
+  - generic: Low
+  - generic: Maximum performance with reduced visual effects.
+  - button "Show all presets"
+  - button "Preset guide":
+    - text: Preset guide
+  - figure "Medium":
+    - img "In-game screenshot of the Medium preset on koth_sawmill"
+    - generic: Medium
+  - region "Fine-tune modules":
+    - generic "Fine-tune modules":
+      - generic: ›
+      - text: Fine-tune modules
+    - heading "Fine-tune modules" [level=2]
+    - tablist "Module categories":
+      - tab "Networking5"
+      - tab "Graphics31" [selected]
+      - tab "HUD2"
+      - tab "Sound2"
+    - generic: Search Graphics modules
+    - searchbox "Search Graphics modules"
+    - tabpanel "Graphics31":
+      - article:
+        - paragraph: Model quality
+        - paragraph: Preset default
+        - group "Model quality options":
+          - generic: Model quality options
+          - button "Default" [disabled] [pressed]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+          - button "Ultra" [disabled]
+      - article:
+        - paragraph: Lighting
+        - paragraph: Preset default
+        - group "Lighting options":
+          - generic: Lighting options
+          - button "Default" [disabled] [pressed]
+          - button "Very low" [disabled]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+          - button "Ultra" [disabled]
+      - article:
+        - paragraph: Shading
+        - paragraph: Preset default
+        - group "Shading options":
+          - generic: Shading options
+          - button "Default" [disabled] [pressed]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+      - article:
+        - paragraph: Phong shading
+        - paragraph: Preset default
+        - group "Phong shading options":
+          - generic: Phong shading options
+          - button "Default" [disabled] [pressed]
+          - button "Off" [disabled]
+          - button "On" [disabled]
+          - button "Rim" [disabled]
+      - article:
+        - paragraph: Shadows
+        - paragraph: Preset default
+        - group "Shadows options":
+          - generic: Shadows options
+          - button "Default" [disabled] [pressed]
+          - button "Off" [disabled]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+          - button "Ultra" [disabled]
+      - article:
+        - paragraph: Flashlight
+        - paragraph: Preset default
+        - group "Flashlight options":
+          - generic: Flashlight options
+          - button "Default" [disabled] [pressed]
+          - button "Off" [disabled]
+          - button "On" [disabled]
+      - article:
+        - paragraph: Effects
+        - paragraph: Preset default
+        - group "Effects options":
+          - generic: Effects options
+          - button "Default" [disabled] [pressed]
+          - button "Very low" [disabled]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+          - button "Ultra" [disabled]
+      - article:
+        - paragraph: Tracer effects
+        - paragraph: Preset default
+        - group "Tracer effects options":
+          - generic: Tracer effects options
+          - button "Default" [disabled] [pressed]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+      - article:
+        - paragraph: Water
+        - paragraph: Preset default
+        - group "Water options":
+          - generic: Water options
+          - button "Default" [disabled] [pressed]
+          - button "Very low" [disabled]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+          - button "Ultra" [disabled]
+      - article:
+        - paragraph: Post-processing
+        - paragraph: Preset default
+        - group "Post-processing options":
+          - generic: Post-processing options
+          - button "Default" [disabled] [pressed]
+          - button "Off" [disabled]
+          - button "Low" [disabled]
+          - button "Default" [disabled]
+          - button "Calm" [disabled]
+          - button "Vivid" [disabled]
+          - button "Washed" [disabled]
+          - button "Dreamy" [disabled]
+      - article:
+        - paragraph: Color filter
+        - paragraph: Preset default
+        - group "Color filter options":
+          - generic: Color filter options
+          - button "Default" [disabled] [pressed]
+          - button "Off" [disabled]
+          - button "Grayscale" [disabled]
+          - button "Desaturated" [disabled]
+          - button "Warm" [disabled]
+          - button "Cool" [disabled]
+      - article:
+        - paragraph: Pyrovision
+        - paragraph: Preset default
+        - group "Pyrovision options":
+          - generic: Pyrovision options
+          - button "Default" [disabled] [pressed]
+          - button "Low" [disabled]
+          - button "Medium" [disabled]
+          - button "High" [disabled]
+    - button "Show 19 more graphics modules"
+  - region "Official addons":
+    - heading "Official addons" [level=2]
+    - generic: 1 selected
+    - checkbox "No footsteps Remove player footstep sounds." [disabled]
+    - generic: No footsteps
+    - generic: Remove player footstep sounds.
+    - checkbox "No Pyroland Disable Pyroland visual effects." [disabled]
+    - generic: No Pyroland
+    - generic: Disable Pyroland visual effects.
+    - checkbox "No soundscapes Remove ambient map soundscapes." [disabled]
+    - generic: No soundscapes
+    - generic: Remove ambient map soundscapes.
+    - checkbox "No tutorial Selected Skip tutorial hints and prompts." [checked] [disabled]
+    - generic: No tutorial
+    - generic: Selected
+    - generic: Skip tutorial hints and prompts.
+    - checkbox "Low memory Reduce memory use on limited systems." [disabled]
+    - generic: Low memory
+    - generic: Reduce memory use on limited systems.
+    - checkbox "Null-canceling movement Keep opposite movement keys responsive." [disabled]
+    - generic: Null-canceling movement
+    - generic: Keep opposite movement keys responsive.
+    - checkbox "Flat mouse Use direct, unaccelerated mouse input." [disabled]
+    - generic: Flat mouse
+    - generic: Use direct, unaccelerated mouse input.
+    - checkbox "Transparent viewmodels Make weapon viewmodels transparent." [disabled]
+    - generic: Transparent viewmodels
+    - generic: Make weapon viewmodels transparent.
+  - region "Comfig packages":
+    - heading "Packages and extras" [level=2]
+    - paragraph: Changes save as you make them.
+    - button "Update packages" [disabled]
+    - button "Import comfig-custom…" [disabled]
+    - button "Open extras":
+      - text: Open extras
+  - paragraph:
+    - text: Uses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is not affiliated with mastercomfig or
+    - button "comfig.app"
+    - text: . Support the project through its
+    - button "donate page"
+    - text: .
+  - paragraph:
+    - text: v0.2.0 ·
+    - button "Check for updates"
+    - text: ·
+    - button "Report a bug"
+    - text: ·
+    - button "Copy diagnostics"
+  - paragraph: Fan project — not affiliated with Valve or Steam.
+- status

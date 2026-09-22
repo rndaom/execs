@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="A local visual review of three design directions for execs, with screenshot evidence and motion specimens.">
+    <title>execs — Visual direction review</title>
+    <link rel="stylesheet" href="gallery.css">
+    <script src="gallery.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#directions">Skip to design options</a>
+    <header class="masthead">
+      <a class="wordmark" href="#top" aria-label="execs design review home">execs<span aria-hidden="true">.</span></a>
+      <span class="masthead-label">Visual direction review</span>
+      <nav aria-label="Review sections">
+        <a href="implementation/review.html">Implemented Foundry</a>
+        <a href="#directions">Directions</a>
+        <a href="#evidence">Current app</a>
+        <a href="#motion">Motion</a>
+        <a href="#documents">Documents</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="intro page-width" aria-labelledby="review-title">
+        <p class="eyebrow">Design exploration <span aria-hidden="true">/</span> 22 September 2026</p>
+        <h1 id="review-title">Three directions for execs.</h1>
+        <div class="intro-bottom">
+          <p class="intro-copy">Compare three dark systems across every pane, then explore the details and transitions.</p>
+          <p class="review-status"><span class="status-dot" aria-hidden="true"></span> Image-generated concepts<br><span>Not implemented in the application</span></p>
+        </div>
+      </section>
+
+      <section class="directions-section" id="directions" aria-labelledby="directions-title">
+        <div class="page-width">
+          <div class="section-heading">
+            <div><p class="eyebrow">01 <span aria-hidden="true">/</span> The options</p><h2 id="directions-title">Three complete directions</h2></div>
+            <button class="button subtle" type="button" id="reload-options">Reload boards <span aria-hidden="true">↻</span></button>
+          </div>
+          <p class="section-copy">Open any board to inspect its details at full size.</p>
+          <div id="option-tabs" class="option-tabs" role="tablist" aria-label="Visual direction" aria-busy="true"></div>
+          <p id="option-status" class="load-status" role="status">Loading the direction manifest…</p>
+          <div id="option-panels"></div>
+          <div class="concept-note">
+            <span class="note-label">Reading the concepts</span>
+            <p>These boards explore appearance and composition. Generated text and imagery are illustrative. App settings and profile deletion are planned work; Inventory is development-only. The release plan records their actual scope.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="evidence-section page-width" id="evidence" aria-labelledby="evidence-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">02 <span aria-hidden="true">/</span> The starting point</p><h2 id="evidence-title">Current application evidence</h2></div>
+          <a class="text-link" href="audit-findings.md" target="_blank" rel="noopener">Read the audit <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="section-copy">Captured from local browser fixtures. The Mods audit uses the shipped 0.1.8 surface; most other captures use the development app. These images document visible states, not native disk, Steam or installer behavior.</p>
+        <div class="evidence-toolbar">
+          <p id="evidence-count" class="meta">Loading the capture ledger…</p>
+          <div class="toolbar-actions"><button class="button subtle" type="button" id="expand-evidence">Expand groups</button><a class="text-link meta" href="audit/captures.json" target="_blank" rel="noopener">Capture ledger ↗</a></div>
+        </div>
+        <p id="evidence-status" class="load-status" role="status"></p>
+        <div id="evidence-groups"></div>
+      </section>
+
+      <section class="motion-section" id="motion" aria-labelledby="motion-title">
+        <div class="page-width">
+          <div class="section-heading">
+            <div><p class="eyebrow">03 <span aria-hidden="true">/</span> How it should feel</p><h2 id="motion-title">Small movements. Clear responses.</h2></div>
+            <a class="text-link" href="research/motion-spec.md" target="_blank" rel="noopener">Motion specification <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="section-copy">An abstract demonstration of timing and focus. These are sample controls, not an execs prototype. Nothing here reads or changes your setup.</p>
+          <div class="motion-meta"><span class="timing"><strong>150 ms</strong> color and opacity</span><span class="timing"><strong>220 ms</strong> movement</span><button class="button subtle" type="button" id="reduce-demo-motion" aria-pressed="false">Reduce sample motion</button></div>
+          <p class="meta" id="sample-palette-label">Samples follow the selected direction.</p>
+          <p class="meta" id="motion-preference">Motion follows your system preference.</p>
+          <div class="specimen-grid">
+            <article class="specimen">
+              <div class="specimen-header"><span class="specimen-number">01</span><h3>Move between views</h3></div>
+              <div class="sample-navigation" role="tablist" aria-label="Sample navigation">
+                <span class="sample-nav-indicator" aria-hidden="true"></span>
+                <button type="button" role="tab" id="sample-overview-tab" aria-controls="sample-view" aria-selected="true">Overview</button>
+                <button type="button" role="tab" id="sample-details-tab" aria-controls="sample-view" aria-selected="false" tabindex="-1">Details</button>
+              </div>
+              <div id="sample-view" role="tabpanel" aria-labelledby="sample-overview-tab" class="sample-view"><span class="sample-view-label">Overview selected</span><div class="sample-lines" aria-hidden="true"><span></span><span></span><span></span></div></div>
+              <p class="specimen-caption">State changes immediately. The marker follows.</p>
+            </article>
+            <article class="specimen">
+              <div class="specimen-header"><span class="specimen-number">02</span><h3>Open a local menu</h3></div>
+              <div class="sample-menu-host">
+                <button class="button sample-trigger" type="button" id="sample-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="sample-menu">Sample actions <span aria-hidden="true">⌄</span></button>
+                <div class="sample-menu" id="sample-menu" role="menu" aria-labelledby="sample-menu-trigger" hidden><button type="button" role="menuitem" tabindex="-1">First sample action</button><button type="button" role="menuitem" tabindex="-1">Second sample action</button></div>
+              </div>
+              <p class="sample-local-status" id="sample-menu-status" role="status">Choose an action to try focus return.</p>
+              <p class="specimen-caption">A short entry stays close to its trigger.</p>
+            </article>
+            <article class="specimen">
+              <div class="specimen-header"><span class="specimen-number">03</span><h3>Focus a decision</h3></div>
+              <div class="sample-dialog-scene" aria-hidden="true"><div></div><span></span><span></span></div>
+              <button class="button" type="button" id="open-sample-dialog">Open sample dialog <span aria-hidden="true">↗</span></button>
+              <p class="specimen-caption">The background quiets. Keyboard focus moves in.</p>
+            </article>
+            <article class="specimen">
+              <div class="specimen-header"><span class="specimen-number">04</span><h3>Acknowledge an outcome</h3></div>
+              <div class="sample-feedback-slot"><p class="sample-feedback" id="sample-feedback" role="status">Sample ready</p></div>
+              <button class="button" type="button" id="play-feedback">Play sample feedback <span aria-hidden="true">→</span></button>
+              <p class="specimen-caption">Sample timing only. No files are saved.</p>
+            </article>
+          </div>
+          <p class="motion-footnote">No ambient loops, pulsing status or perpetual animation. Reduced motion removes the transitions and keeps every response.</p>
+        </div>
+      </section>
+
+      <section class="documents-section page-width" id="documents" aria-labelledby="documents-title">
+        <div class="section-heading"><div><p class="eyebrow">04 <span aria-hidden="true">/</span> Behind the decisions</p><h2 id="documents-title">The review documents</h2></div></div>
+        <div class="document-grid">
+          <a class="document-link" href="concept-review.md" target="_blank" rel="noopener"><span class="document-type">Concept interpretation</span><strong>Concept review</strong><span>Board-by-board caveats and details to reconcile before implementation.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="audit-findings.md" target="_blank" rel="noopener"><span class="document-type">Evidence</span><strong>Visual audit</strong><span>Observed strengths, friction and redesign priorities.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="audit-coverage.md" target="_blank" rel="noopener"><span class="document-type">Completed walkthrough</span><strong>Capture coverage</strong><span>66 accepted screenshots, baselines and remaining native checks.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="research/surface-inventory.md" target="_blank" rel="noopener"><span class="document-type">Coverage</span><strong>Surface inventory</strong><span>Pages, selections, menus and exceptional states.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="research/design-research.md" target="_blank" rel="noopener"><span class="document-type">Art direction</span><strong>Design research</strong><span>Valve, desktop design and accessibility sources.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="research/motion-spec.md" target="_blank" rel="noopener"><span class="document-type">Interaction</span><strong>Motion specification</strong><span>Timing, state choreography and reduced motion.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="combined-release-plan.md" target="_blank" rel="noopener"><span class="document-type">0.2.0 planning</span><strong>Combined release plan</strong><span>Selected scope, inherited behavior and release gates.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+          <a class="document-link" href="research/release-scope.md" target="_blank" rel="noopener"><span class="document-type">Backlog evidence</span><strong>Release-scope research</strong><span>The existing 0.1.9 and 0.2.0 work behind the plan.</span><span class="document-arrow" aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-width footer"><span class="wordmark">execs<span aria-hidden="true">.</span></span><p>Local design review. Choose a direction before implementation.</p><a class="text-link" href="#top">Back to top ↑</a></footer>
+
+    <dialog class="image-dialog" id="image-dialog" aria-labelledby="image-dialog-title">
+      <div class="image-dialog-header"><div><p class="eyebrow" id="image-dialog-kind">Concept board</p><h2 id="image-dialog-title">Image preview</h2></div><button class="button subtle" type="button" id="close-image-dialog" autofocus>Close <span aria-hidden="true">×</span></button></div>
+      <div class="image-dialog-tools"><fieldset class="zoom-controls" aria-label="Image zoom"><button class="button subtle" type="button" id="zoom-out" aria-label="Zoom out">−</button><output id="zoom-value" aria-live="polite">Fit</output><button class="button subtle" type="button" id="zoom-in" aria-label="Zoom in">+</button><button class="button subtle" type="button" id="zoom-fit">Fit</button><button class="button subtle" type="button" id="zoom-original">100%</button></fieldset><a class="text-link" id="image-original-link" href="options/01-foundry/01-core.png" target="_blank" rel="noopener">Open original ↗</a></div>
+      <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: The labeled scroll region must accept keyboard focus so zoomed images can be panned with arrow keys. -->
+      <section class="image-stage" id="image-stage" tabindex="0" aria-label="Image view. Zoomed images can be scrolled."><img id="lightbox-image" alt=""></section>
+      <p class="image-dialog-caption" id="image-dialog-caption"></p>
+    </dialog>
+
+    <dialog class="sample-dialog" id="sample-dialog" aria-labelledby="sample-dialog-title" aria-describedby="sample-dialog-description">
+      <p class="eyebrow">Motion specimen</p><h2 id="sample-dialog-title">A focused decision</h2><p id="sample-dialog-description">This sample demonstrates the scrim, a short entry and keyboard focus. It changes nothing in execs.</p><form method="dialog"><button class="button primary" type="submit" autofocus>Close demonstration</button></form>
+    </dialog>
+    <noscript><p class="noscript-note">Enable JavaScript to switch directions and load the image ledger. The review documents remain available above.</p></noscript>
+  </body>
+</html>
