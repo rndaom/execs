@@ -2,6 +2,7 @@ import {
   type CfgOrigin,
   cfgPathIsEditable,
   classifyCfgOrigin,
+  createCfgResolver,
   engineManagedLintOptions,
   lint,
   normalizeCfgPath,
@@ -9,6 +10,8 @@ import {
 
 export { type CfgOrigin, classifyCfgOrigin, normalizeCfgPath } from "@execs/cfglint";
 
+import { startupCfgEntryPoints } from "./cfg-state";
+import type { GameplayLayer } from "./gameplay-ui";
 import { canWrite } from "./write-gate";
 
 export type CfgFinding = {
@@ -140,10 +143,15 @@ export function findingTierClass(tier: "block" | "warn" | "info"): string {
 export function lintBundle(
   files: { path: string; text: string }[],
   hudId?: string | null,
+  layer: GameplayLayer = "vanilla",
 ): LintBundleResult {
   // The player's own cfg: connect/disconnect binds and unresolvable execs warn
   // instead of refusing the save (cfglint `trust: "self"`).
-  const result = lint(files, engineManagedLintOptions(files, hudId));
+  const search = createCfgResolver(files.map((file) => file.path));
+  const result = lint(files, {
+    ...engineManagedLintOptions(files, hudId),
+    entryPoints: startupCfgEntryPoints(search, layer),
+  });
   return {
     ok: result.ok,
     safetyComplete: result.safetyComplete,

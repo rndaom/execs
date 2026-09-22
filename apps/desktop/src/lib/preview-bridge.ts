@@ -470,6 +470,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async exportProfile() {
       return null;
     },
+    async inspectProfileExportCredentials() {
+      return ["tf/cfg/config.cfg:8"];
+    },
     async onProfileImportReading(handler) {
       importReadingHandler = handler;
       return () => {
@@ -489,7 +492,7 @@ export function createPreviewApi(state: PreviewState): Api {
         huds: state === "profile-import-huds" ? ["rayshud", "toonhud"] : [],
         selectedHud: state === "profile-import-huds" ? "rayshud" : null,
         warnings: [
-          "tf/cfg/config.cfg contains 'password', which may expose a server credential and cannot be shared.",
+          "tf/cfg/config.cfg:8 may contain a saved password or remote-console setting. Review it before sharing this profile.",
           "tf/custom/low.vpk/cfg/comfig/comfig.cfg contains 'alias kill'.",
           "tf/cfg/overrides/autoexec.cfg contains 'sv_cheats'.",
         ],

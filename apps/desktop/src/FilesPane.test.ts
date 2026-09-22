@@ -32,7 +32,12 @@ let setError: ReturnType<typeof vi.fn>;
 let files: { path: string; text: string }[];
 let running: boolean;
 
-async function render(profileId = "a", visible = true) {
+async function render(
+  profileId = "a",
+  visible = true,
+  layer: "vanilla" | "comfig" = "vanilla",
+  reviewTarget?: { id: number; path: string; line: number },
+) {
   await act(async () =>
     root.render(
       createElement(
@@ -44,8 +49,9 @@ async function render(profileId = "a", visible = true) {
           ? createElement(FilesPane, {
               profileId,
               files,
-              context: { profileId, root: "G:/TF2", layer: "vanilla" },
+              context: { profileId, root: "G:/TF2", layer },
               hudId: null,
+              reviewTarget,
               draftStore: store,
               onSave,
             })
@@ -140,6 +146,71 @@ afterEach(async () => {
 });
 
 describe("Files draft navigation", () => {
+  it("keeps catalog coverage internal to development builds", async () => {
+    vi.stubEnv("DEV", false);
+    try {
+      files = [{ path: first, text: "viewwmodel_fov 90" }];
+      await render();
+      await checked();
+      await button("Problems");
+      expect(container.textContent).not.toContain("Catalog gaps");
+      expect(container.querySelector('[data-testid="files-finding"]')).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("shows an unresolved startup command as an issue in production", async () => {
+    vi.stubEnv("DEV", false);
+    try {
+      files = [{ path: "tf/cfg/overrides/autoexec.cfg", text: "viewwmodel_fov 90" }];
+      await render("a", true, "comfig");
+      await checked();
+      await button("Problems 1");
+      expect(container.textContent).not.toContain("Catalog gaps");
+      expect(container.querySelector('[data-testid="files-finding"]')?.textContent).toContain(
+        "viewwmodel_fov",
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("opens a requested startup issue at its source line", async () => {
+    const path = "tf/cfg/overrides/autoexec.cfg";
+    files = [{ path, text: "echo okay\nviewwmodel_fov 90\n" }];
+    await render("a", true, "comfig", { id: 1, path, line: 2 });
+    await checked();
+    expect(container.querySelector('[aria-label="Problems"]')).not.toBeNull();
+    expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(2);
+    expect(container.querySelector('[data-testid="files-finding"]')?.textContent).toContain(
+      "viewwmodel_fov",
+    );
+  });
+
+  it("shows command details without guide or snippet panels", async () => {
+    await render();
+    await button("Help");
+    expect(container.querySelector('[aria-label="Guides"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Snippets"]')).toBeNull();
+    const search = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Search commands"]',
+    );
+    if (!search) throw Error("Missing command search");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        search,
+        "viewmodel_fov",
+      );
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click('[aria-label="Offline cfg reference"] button');
+    const details = container.querySelector('[aria-label="Command details"]');
+    expect(details?.textContent).toContain("viewmodel_fov");
+    expect(details?.textContent).toContain("Default");
+    expect(details?.textContent).toContain("Availability and restrictions");
+  });
+
   it("separates review issues from offline catalog gaps", async () => {
     files = [{ path: first, text: 'viewwmodel_fov 90\nbind p ""show_quest_log"' }];
     await render();

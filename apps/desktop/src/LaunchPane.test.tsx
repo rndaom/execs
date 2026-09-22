@@ -224,6 +224,7 @@ describe("Launch workspace", () => {
     await render();
     await click('[data-testid="launch-add-open"]');
     expect(element<HTMLButtonElement>('[data-testid="launch-preset-novid"]').disabled).toBe(true);
+    await click('nav[aria-label="Launch option pages"] button:last-child');
     await click('[data-testid="launch-preset-resolution"]');
     await input('[data-testid="launch-value-width"]', "1920");
     await input('[data-testid="launch-value-height"]', "1080");
@@ -232,6 +233,32 @@ describe("Launch workspace", () => {
     await click('[data-testid="launch-add-open"]');
     expect(element<HTMLButtonElement>('[data-testid="launch-preset-resolution"]').disabled).toBe(
       true,
+    );
+  });
+
+  it("pages the catalog, searches by documented purpose, and guards conflicting display modes", async () => {
+    await render();
+    await click('[data-testid="launch-add-open"]');
+    expect(element('nav[aria-label="Launch option pages"]').textContent).toContain("Page 1 of 3");
+    expect(box.querySelector('[data-testid="launch-preset-displayindex"]')).toBeNull();
+    await input("#launch-catalog-search", "display index");
+    expect(element('[data-testid="launch-preset-displayindex"]').textContent).toContain("Linux");
+    expect(box.querySelector('nav[aria-label="Launch option pages"]')).toBeNull();
+    await click('[data-testid="launch-preset-displayindex"]');
+    await input('[data-testid="launch-value-displayindex"]', "0");
+    await click('[data-testid="launch-add-submit"]');
+    expect(draft).toContain("-displayindex 0");
+
+    draft = `${draft} -windowed`;
+    saved = draft;
+    await render();
+    await click('[data-testid="launch-add-open"]');
+    await input("#launch-catalog-search", "fullscreen");
+    expect(element<HTMLButtonElement>('[data-testid="launch-preset-fullscreen"]').disabled).toBe(
+      true,
+    );
+    expect(element('[data-testid="launch-preset-fullscreen"]').textContent).toContain(
+      "Remove -windowed first",
     );
   });
 });

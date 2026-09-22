@@ -27,7 +27,7 @@ export function evaluateStartup(ctx: ExecutionContext): {
 } {
   const effective = new Map<string, CvarValue>();
   const binds = new Map<string, string>();
-  const aliases = new Map<string, { payload: string; site: Command }>();
+  const aliases = new Map<string, { payload: string; site: Command; malformed: boolean }>();
   let complete = true;
 
   function stop(rule: string, message: string, at: Command) {
@@ -48,6 +48,13 @@ export function evaluateStartup(ctx: ExecutionContext): {
         // parser recovery can still establish later, unrelated settings.
         // Keep the syntax finding from the safety pass for the user to fix.
         if (ctx.allowMalformedBinds && name === "bind") continue;
+        // Defining an alias does not run its payload. Keep it unresolved until
+        // invocation so a dormant alias with nested/unmatched quotes cannot
+        // erase reliable, unrelated startup settings.
+        if (name === "alias" && args[0]) {
+          aliases.set(args[0].toLowerCase(), { payload: "", site: cmd, malformed: true });
+          continue;
+        }
         stop(
           "execution-incomplete",
           "Startup contains an unclosed quote; settings are incomplete",
@@ -78,7 +85,11 @@ export function evaluateStartup(ctx: ExecutionContext): {
       }
       if (name === "alias") {
         if (args[0])
-          aliases.set(args[0].toLowerCase(), { payload: args.slice(1).join(" "), site: cmd });
+          aliases.set(args[0].toLowerCase(), {
+            payload: args.slice(1).join(" "),
+            site: cmd,
+            malformed: false,
+          });
         continue;
       }
       if (name === "bind") {
@@ -123,6 +134,14 @@ export function evaluateStartup(ctx: ExecutionContext): {
       }
       const alias = aliases.get(name);
       if (alias) {
+        if (alias.malformed) {
+          stop(
+            "execution-incomplete",
+            `Startup alias \`${name}\` has unmatched quotes; settings are incomplete`,
+            cmd,
+          );
+          continue;
+        }
         if (aliasStack.includes(name) || aliasStack.length >= MAX_ALIAS_DEPTH) {
           stop(
             "alias-depth",

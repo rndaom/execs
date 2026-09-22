@@ -67,6 +67,16 @@ fn mip_dimensions(width: u32, height: u32, mip: u32) -> (u32, u32) {
 /// Decode frame 0 of the largest mip. Fails on unsupported formats rather than
 /// guessing.
 pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
+    decode_vtf_frame0_with_max_dimension(bytes, u32::MAX)
+}
+
+/// Decode frame 0 from the smallest available mip that is still at least
+/// `max_dimension` pixels on its longest side. This avoids allocating a full
+/// 2048-pixel frame for a small inventory preview.
+pub fn decode_vtf_frame0_with_max_dimension(
+    bytes: &[u8],
+    max_dimension: u32,
+) -> Result<DecodedVtf, String> {
     if bytes.len() < 64 || &bytes[0..4] != b"VTF\0" {
         return Err("Not a VTF file.".into());
     }
@@ -108,6 +118,15 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
             "Invalid VTF mip count {mip_count} for {width}x{height}."
         ));
     }
+    let mut selected_mip = 0;
+    for mip in 1..mip_count {
+        let (mip_w, mip_h) = mip_dimensions(width, height, mip);
+        if mip_w.max(mip_h) < max_dimension.max(1) {
+            break;
+        }
+        selected_mip = mip;
+    }
+    let (selected_width, selected_height) = mip_dimensions(width, height, selected_mip);
 
     // Where the high-res image data starts.
     let data_start = if minor >= 3 {
@@ -153,9 +172,9 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
     };
 
     // Mips are stored smallest→largest; within a mip, frame-major. Skip every
-    // smaller mip (all frames), then land on frame 0 of mip 0.
+    // mip smaller than the selected one, then land on its frame 0.
     let mut offset = data_start;
-    for mip in (1..mip_count).rev() {
+    for mip in ((selected_mip + 1)..mip_count).rev() {
         let (mip_w, mip_h) = mip_dimensions(width, height, mip);
         let mip_size = format_data_size(format, mip_w, mip_h)
             .ok_or_else(|| format!("Unsupported VTF format {format}."))?;
@@ -167,7 +186,7 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
             )
             .ok_or("VTF image offset overflowed.")?;
     }
-    let frame_size = format_data_size(format, width, height)
+    let frame_size = format_data_size(format, selected_width, selected_height)
         .ok_or_else(|| format!("Unsupported VTF format {format}."))?;
     let data = bytes
         .get(
@@ -203,15 +222,15 @@ pub fn decode_vtf_frame0(bytes: &[u8]) -> Result<DecodedVtf, String> {
             .iter()
             .flat_map(|px| [px[0], px[0], px[0], px[1]])
             .collect(),
-        FORMAT_DXT1 => decode_dxt(data, width, height, DxtMode::Dxt1)?,
-        FORMAT_DXT3 => decode_dxt(data, width, height, DxtMode::Dxt3)?,
-        FORMAT_DXT5 => decode_dxt(data, width, height, DxtMode::Dxt5)?,
+        FORMAT_DXT1 => decode_dxt(data, selected_width, selected_height, DxtMode::Dxt1)?,
+        FORMAT_DXT3 => decode_dxt(data, selected_width, selected_height, DxtMode::Dxt3)?,
+        FORMAT_DXT5 => decode_dxt(data, selected_width, selected_height, DxtMode::Dxt5)?,
         other => return Err(format!("Unsupported VTF format {other}.")),
     };
 
     Ok(DecodedVtf {
-        width,
-        height,
+        width: selected_width,
+        height: selected_height,
         frames,
         rgba,
     })
@@ -388,6 +407,19 @@ mod tests {
         let decoded = decode_vtf_frame0(&bytes).unwrap();
         assert_eq!((decoded.width, decoded.height, decoded.frames), (8, 8, 2));
         assert_eq!(&decoded.rgba[0..4], &[30, 20, 10, 255]);
+    }
+
+    #[test]
+    fn inventory_preview_uses_a_bounded_mip_before_decoding() {
+        let mut bytes = header(2, 512, 512, 1, FORMAT_BGRA8888, 3, 80);
+        bytes.extend([4u8, 5, 6, 255].repeat(128 * 128));
+        bytes.extend([10u8, 20, 30, 255].repeat(256 * 256));
+        // The largest mip is present but should not be decoded for a 192px preview.
+        bytes.extend([40u8, 50, 60, 255].repeat(512 * 512));
+        let preview = decode_vtf_frame0_with_max_dimension(&bytes, 192).unwrap();
+        assert_eq!((preview.width, preview.height), (256, 256));
+        assert_eq!(&preview.rgba[..4], &[30, 20, 10, 255]);
+        assert_eq!((decode_vtf_frame0(&bytes).unwrap().width), 512);
     }
 
     #[test]

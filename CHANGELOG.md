@@ -7,6 +7,15 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Files keeps saved password and remote-console cfg commands through local saves, imports and
+  exports. Export review names possible credential locations before creating a ZIP, without
+  displaying their values. Help now focuses on searchable command details; production hides
+  offline catalog gaps, and startup warnings link to the affected cfg line.
+- Launch offers 21 documented TF2-relevant options through search and eight-item pages while
+  retaining direct editing of the full launch string.
+- Development Inventory shows TF2 quality borders, kit target artwork and illustrative
+  war-paint patterns with wear labels. Artwork loads progressively, and an oversized optional
+  texture no longer blocks other item images.
 - Refresh every pane with the overhaul: neutral dark surfaces, TF2 orange selection, clearer type,
   less redundant copy, compact navigation, consistent dialogs and restrained motion. Each pane
   keeps a layout suited to its task, and the app follows system reduced motion or your own Reduce
@@ -55,6 +64,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Files no longer warns about dormant quit, disconnect or retry aliases as though they run at
+  startup, or treats a dormant self-reloading alias as an active exec cycle. Uneven quotes remain
+  advisory, and startup diagnostics suggest a known command for a close spelling mistake.
 - Files separates actionable findings from offline command catalog gaps, expands searchable command
   help, and points startup-setting failures to the first cfg path and line. UTF-8 BOMs and malformed
   individual binds no longer create unrelated findings or hide later known settings.

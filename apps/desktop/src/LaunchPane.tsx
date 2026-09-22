@@ -14,13 +14,16 @@ import {
   buildLaunchPreset,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
+  LAUNCH_PRESET_PAGE_SIZE,
   LAUNCH_PRESETS,
   type LaunchPresetId,
   type LaunchPresetValues,
   launchOptionGroups,
+  launchPresetConflict,
   launchPresetPresent,
   removeLaunchOption,
   type SteamWriteStatus,
+  searchLaunchPresets,
   steamWriteCopy,
   strippedLaunchNotice,
   strippedLaunchTokens,
@@ -57,6 +60,15 @@ export function LaunchPane({
     draftRecordKey(profileId, "launch-option"),
   );
   const { open: adding, presetId, values } = composer;
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogPage, setCatalogPage] = useState(0);
+  const catalogMatches = searchLaunchPresets(catalogQuery);
+  const pageCount = Math.max(1, Math.ceil(catalogMatches.length / LAUNCH_PRESET_PAGE_SIZE));
+  const visiblePage = Math.min(catalogPage, pageCount - 1);
+  const visiblePresets = catalogMatches.slice(
+    visiblePage * LAUNCH_PRESET_PAGE_SIZE,
+    (visiblePage + 1) * LAUNCH_PRESET_PAGE_SIZE,
+  );
   const selectedPreset = LAUNCH_PRESETS.find((preset) => preset.id === presetId) ?? null;
   const composerPending = presetId !== null;
   useExplicitDraft(composerPending);
@@ -70,12 +82,13 @@ export function LaunchPane({
   const current = useRef({ profileId, value });
   current.current = { profileId, value };
   const firstPresetButton = useRef<HTMLButtonElement>(null);
+  const catalogSearch = useRef<HTMLInputElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const tokenContainer = useRef<HTMLDivElement>(null);
   const focusAfterRemove = useRef<number | null>(null);
   const wasAdding = useRef(false);
   useEffect(() => {
-    if (adding) firstPresetButton.current?.focus();
+    if (adding) (firstPresetButton.current ?? catalogSearch.current)?.focus();
     else if (wasAdding.current) addButton.current?.focus();
     wasAdding.current = adding;
   }, [adding]);
@@ -105,9 +118,20 @@ export function LaunchPane({
   const firstAvailablePresetId = LAUNCH_PRESETS.find(
     (preset) => !launchPresetPresent(value, preset),
   )?.id;
+  const firstVisibleAvailablePresetId = visiblePresets.find(
+    (preset) => !launchPresetPresent(value, preset) && !launchPresetConflict(value, preset),
+  )?.id;
   const closeComposer = () =>
-    setComposer({ open: false, presetId: null, values: { refresh: "", width: "", height: "" } });
-  const builtOption = selectedPreset ? buildLaunchPreset(selectedPreset, values) : null;
+    setComposer({
+      open: false,
+      presetId: null,
+      values: { refresh: "", width: "", height: "", displayIndex: "" },
+    });
+  const allowSmallResolution =
+    groups?.some((group) => group.text.toLowerCase() === "-small") ?? false;
+  const builtOption = selectedPreset
+    ? buildLaunchPreset(selectedPreset, values, allowSmallResolution)
+    : null;
   const updateValue = (key: keyof LaunchPresetValues, next: string) =>
     setComposer({ ...composer, values: { ...values, [key]: next } });
 
@@ -182,7 +206,7 @@ export function LaunchPane({
                 setComposer({
                   open: true,
                   presetId: null,
-                  values: { refresh: "", width: "", height: "" },
+                  values: { refresh: "", width: "", height: "", displayIndex: "" },
                 })
               }
               aria-expanded={adding}
@@ -201,7 +225,12 @@ export function LaunchPane({
               }}
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!builtOption || !selectedPreset || launchPresetPresent(value, selectedPreset))
+                if (
+                  !builtOption ||
+                  !selectedPreset ||
+                  launchPresetPresent(value, selectedPreset) ||
+                  launchPresetConflict(value, selectedPreset)
+                )
                   return;
                 onChange(appendLaunchOption(value, builtOption));
                 closeComposer();
@@ -209,17 +238,42 @@ export function LaunchPane({
             >
               <fieldset>
                 <legend className="t-row">Choose an option</legend>
+                <label className="t-meta mt-3 block" htmlFor="launch-catalog-search">
+                  Search documented TF2 options
+                </label>
+                <input
+                  ref={catalogSearch}
+                  id="launch-catalog-search"
+                  type="search"
+                  value={catalogQuery}
+                  onChange={(event) => {
+                    setCatalogQuery(event.target.value);
+                    setCatalogPage(0);
+                  }}
+                  className="field mt-1 w-full px-3 py-2"
+                  placeholder="Name, flag, or purpose"
+                />
+                <p className="t-meta mt-2">
+                  {catalogMatches.length === 0
+                    ? "No matching options. You can still edit the launch string directly."
+                    : `Showing ${visiblePage * LAUNCH_PRESET_PAGE_SIZE + 1}–${Math.min((visiblePage + 1) * LAUNCH_PRESET_PAGE_SIZE, catalogMatches.length)} of ${catalogMatches.length} options`}
+                </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {LAUNCH_PRESETS.map((preset) => {
+                  {visiblePresets.map((preset) => {
                     const present = launchPresetPresent(value, preset);
+                    const conflict = launchPresetConflict(value, preset);
                     return (
                       <button
                         key={preset.id}
                         type="button"
-                        ref={preset.id === firstAvailablePresetId ? firstPresetButton : undefined}
+                        ref={
+                          preset.id === firstVisibleAvailablePresetId
+                            ? firstPresetButton
+                            : undefined
+                        }
                         data-testid={`launch-preset-${preset.id}`}
                         aria-pressed={presetId === preset.id}
-                        disabled={present}
+                        disabled={present || conflict !== null}
                         onClick={() => setComposer({ ...composer, presetId: preset.id })}
                         className={`min-h-12 rounded border px-3 py-2 text-left text-sm ${
                           presetId === preset.id
@@ -233,17 +287,44 @@ export function LaunchPane({
                             <span aria-hidden="true" className="size-1.5 rounded-full bg-brand" />
                           ) : null}
                         </span>
-                        <span className="t-meta">
-                          {present
-                            ? "Already added"
-                            : preset.kind === "resolution"
-                              ? "-w / -h"
-                              : preset.token}
+                        <span className="t-meta block">
+                          {preset.kind === "resolution" ? "-w / -h" : preset.token}
                         </span>
+                        <span className="t-meta block">{preset.detail}</span>
+                        {present ? <span className="t-meta block">Already added</span> : null}
+                        {conflict ? (
+                          <span className="t-meta block">Remove {conflict} first</span>
+                        ) : null}
                       </button>
                     );
                   })}
                 </div>
+                {pageCount > 1 ? (
+                  <nav
+                    aria-label="Launch option pages"
+                    className="mt-3 flex items-center justify-between gap-3"
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={visiblePage === 0}
+                      onClick={() => setCatalogPage(visiblePage - 1)}
+                    >
+                      Previous
+                    </button>
+                    <span className="t-meta">
+                      Page {visiblePage + 1} of {pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={visiblePage >= pageCount - 1}
+                      onClick={() => setCatalogPage(visiblePage + 1)}
+                    >
+                      Next
+                    </button>
+                  </nav>
+                ) : null}
               </fieldset>
               {selectedPreset?.kind === "refresh" ? (
                 <label className="t-meta mt-4 block max-w-40">
@@ -277,17 +358,37 @@ export function LaunchPane({
                   </div>
                   <p className="t-meta mt-2">
                     Use TF2 Video settings for normal resolution changes. Launch flags can create an
-                    improper video mode.
+                    improper video mode.{" "}
+                    {allowSmallResolution
+                      ? "With -small, heights from 360 px are available."
+                      : "Add -small first for heights below 480 px."}
                   </p>
                 </div>
               ) : null}
+              {selectedPreset?.kind === "displayindex" ? (
+                <label className="t-meta mt-4 block max-w-40">
+                  Display index (0–16)
+                  <input
+                    data-testid="launch-value-displayindex"
+                    value={values.displayIndex ?? ""}
+                    onChange={(event) => updateValue("displayIndex", event.target.value)}
+                    inputMode="numeric"
+                    className="field mt-1 w-full px-3 py-2"
+                    autoComplete="off"
+                  />
+                </label>
+              ) : null}
+              {selectedPreset ? <p className="t-meta mt-3">{selectedPreset.detail}</p> : null}
               <div className="mt-4 flex gap-2">
                 <button
                   type="submit"
                   data-testid="launch-add-submit"
                   className="btn btn-primary"
                   disabled={
-                    !builtOption || !selectedPreset || launchPresetPresent(value, selectedPreset)
+                    !builtOption ||
+                    !selectedPreset ||
+                    launchPresetPresent(value, selectedPreset) ||
+                    launchPresetConflict(value, selectedPreset) !== null
                   }
                 >
                   Add option

@@ -159,19 +159,19 @@ where
     let mut payload = read_profile_zip(zip_path, profiles, &staging.path)?;
     seed_default_config(&mut payload, tf2_root, profiles, &staging.path)?;
     // Trust can waive command-policy findings, never paths, parser
-    // limits or corrupt archives. Native exports retain strict validation.
+    // limits or corrupt archives.
     if payload.creator {
         validate_payload_with_trust(&mut payload, true)?;
     } else {
         validate_payload(&mut payload)?;
     }
     let mut warnings = Vec::new();
-    if payload.creator {
-        for file in &payload.manifest.files {
-            let staged = match file.storage {
-                FileStorage::Exclusive => &payload.exclusive[&file.path],
-                FileStorage::Shared => &payload.blobs[&file.sha256],
-            };
+    for file in &payload.manifest.files {
+        let staged = match file.storage {
+            FileStorage::Exclusive => &payload.exclusive[&file.path],
+            FileStorage::Shared => &payload.blobs[&file.sha256],
+        };
+        if payload.creator {
             if let Err(err) =
                 validate_imported_profile_file(&file.path, staged, &file.sha256, false)
             {
@@ -186,6 +186,11 @@ where
                 );
             }
         }
+        warnings.extend(credential_warnings_for_file(
+            &file.path,
+            staged,
+            &file.sha256,
+        )?);
     }
     // Also catch replacement while inspection was in progress.
     if sha256_file(zip_path).map_err(io_err)? != sha256 {
@@ -224,6 +229,43 @@ where
         selected_hud,
         sha256,
     })
+}
+
+fn credential_warnings_for_file(
+    path: &str,
+    staged: &Path,
+    expected_hash: &str,
+) -> Result<Vec<String>, ProfileError> {
+    let mut warnings = Vec::new();
+    let mut add = |cfg_path: &str, bytes: &[u8]| {
+        for line in crate::archive::cfg_credential_lines(cfg_path, bytes) {
+            warnings.push(format!(
+                "{cfg_path}:{line} may contain a saved password or remote-console setting. Review it before sharing this profile."
+            ));
+        }
+    };
+    if has_extension(path, "cfg") {
+        add(path, &read_cfg_for_scan(staged, path)?);
+    } else if has_extension(path, "vpk") {
+        let mut source = fs::File::open(staged).map_err(io_err)?;
+        let mut signature = [0u8; 4];
+        if source.read_exact(&mut signature).is_ok() && signature == 0x55aa_1234u32.to_le_bytes() {
+            source.rewind().map_err(io_err)?;
+            let (cfgs, hash) = read_vpk_file_filtered_hashed(
+                &mut source,
+                &|entry| has_extension(entry, "cfg"),
+                MAX_IMPORTED_CFG_BYTES as u64,
+            )
+            .map_err(|err| invalid_zip(format!("invalid profile VPK {path}: {}", err.message())))?;
+            if !hash.eq_ignore_ascii_case(expected_hash) {
+                return Err(invalid_zip(format!("{path} changed during import review")));
+            }
+            for (entry, bytes) in cfgs.files {
+                add(&format!("{path}/{entry}"), &bytes);
+            }
+        }
+    }
+    Ok(warnings)
 }
 
 /// The caller shows the review and obtains explicit trust before calling this

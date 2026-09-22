@@ -35,7 +35,6 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
     capacity: 50,
     items: [{ id: "123", definition: 13, position: 1, quality: 6, level: 1, customName: null }],
     definitions: { "13": { name: "Scattergun", kind: "Weapon", classes: ["scout"], icon: null } },
-    qualityColors: { "6": "#FFD700" },
     warning: null,
   });
   const api = {
@@ -209,7 +208,14 @@ it("keeps available artwork when one pattern cannot be decoded", async () => {
     expect(getInventoryIcons).toHaveBeenCalledWith([icon]);
     expect(getInventoryIcons).toHaveBeenCalledWith([pattern]);
     expect(box.querySelector('img[src="data:image/png;base64,ok"]')).not.toBeNull();
-    expect(box.textContent).toContain("Pattern unavailable");
+    expect(box.textContent).toContain(
+      "Some item artwork is unavailable in the installed TF2 files.",
+    );
+    expect(box.textContent).not.toContain("BridgeError");
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[aria-label="Paint, Decorated, slot 2"]')?.click(),
+    );
+    expect(getInventoryIcons.mock.calls.filter(([paths]) => paths[0] === pattern)).toHaveLength(1);
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -274,6 +280,136 @@ it("reveals the first slot only when the displayed page changes", async () => {
     await act(async () => root.unmount());
     box.remove();
     vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("shows kit target art and labeled illustrative paint without claiming rendered wear", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    putImageData: vi.fn(),
+  } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,art");
+  const paths = {
+    kit: "materials/backpack/kit.vtf",
+    target: "materials/backpack/rocket.vtf",
+    paint: "materials/patterns/camo.vtf",
+    base: "materials/backpack/scattergun.vtf",
+  };
+  const api = {
+    getInventory: vi.fn().mockResolvedValue({
+      steamId: "test-account",
+      capacity: 50,
+      warning: null,
+      items: [
+        { id: "kit", definition: 1, position: 1, quality: 6, level: 1, customName: null },
+        { id: "paint", definition: 2, position: 2, quality: 15, level: 1, customName: null },
+      ],
+      definitions: {
+        "1": { name: "Kit", kind: "Tool", classes: [], icon: paths.kit },
+        "2": { name: "Paint", kind: "Weapon", classes: [], icon: paths.paint },
+      },
+      itemDescriptions: {
+        kit: {
+          name: "Killstreak Kit · Rocket Launcher",
+          kind: "Tool",
+          classes: [],
+          icon: paths.kit,
+          targetIcon: paths.target,
+          details: ["For Rocket Launcher"],
+        },
+        paint: {
+          name: "Painted Scattergun",
+          kind: "Weapon",
+          classes: [],
+          icon: paths.paint,
+          baseIcon: paths.base,
+          details: ["Well-Worn"],
+        },
+      },
+    }),
+    getInventoryIcons: vi.fn(async (requested: string[]) =>
+      Object.fromEntries(
+        requested.map((path) => [path, { width: 1, height: 1, rgba: [1, 2, 3, 255] }]),
+      ),
+    ),
+  } as unknown as Api;
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  try {
+    await act(async () =>
+      root.render(<InventoryPane api={api} active running={false} busy={false} />),
+    );
+    expect(box.querySelector(".inventory-kit-target")).not.toBeNull();
+    expect(box.querySelector(".inventory-paint-masked")).not.toBeNull();
+    expect(box.textContent).toContain("Well-Worn");
+    await act(async () =>
+      box
+        .querySelector<HTMLButtonElement>('[aria-label="Painted Scattergun, Decorated, slot 2"]')
+        ?.click(),
+    );
+    expect(box.querySelector(".inventory-paint-swatch")).not.toBeNull();
+    expect(box.querySelector('[aria-label="Item details"]')?.textContent).toContain(
+      "Actual weapon mapping, wear and effects are not rendered.",
+    );
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("retries an omitted path alone when an icon batch hits its native byte budget", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    putImageData: vi.fn(),
+  } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,art");
+  const first = "materials/backpack/first.vtf";
+  const second = "materials/backpack/second.vtf";
+  const icon = { width: 1, height: 1, rgba: [1, 2, 3, 255] };
+  const getInventoryIcons = vi.fn(async (paths: string[]) =>
+    paths.length === 2 ? { [first]: icon } : { [paths[0]]: icon },
+  );
+  const api = {
+    getInventory: vi.fn().mockResolvedValue({
+      steamId: "test-account",
+      capacity: 50,
+      warning: null,
+      items: [
+        { id: "first", definition: 1, position: 1, quality: 6, level: 1, customName: null },
+        { id: "second", definition: 2, position: 2, quality: 6, level: 1, customName: null },
+      ],
+      definitions: {
+        "1": { name: "First", kind: "Weapon", classes: [], icon: first },
+        "2": { name: "Second", kind: "Weapon", classes: [], icon: second },
+      },
+    }),
+    getInventoryIcons,
+  } as unknown as Api;
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  try {
+    await act(async () =>
+      root.render(<InventoryPane api={api} active running={false} busy={false} />),
+    );
+    expect(getInventoryIcons).toHaveBeenCalledWith([first, second]);
+    expect(getInventoryIcons).toHaveBeenCalledWith([second]);
+    expect(
+      box.querySelectorAll('.inventory-item img[src="data:image/png;base64,art"]'),
+    ).toHaveLength(2);
+    expect(box.textContent).not.toContain("Some item artwork is unavailable");
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   }

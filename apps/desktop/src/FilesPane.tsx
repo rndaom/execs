@@ -60,6 +60,7 @@ type FilesPaneProps = {
   recoveryAvailable?: boolean;
   limited?: boolean;
   hudId: string | null;
+  reviewTarget?: { id: number; path: string; line: number } | null;
   draftStore: FilesDraftStore;
   closeReady?: boolean;
   onSave: (path: string, text: string, submission?: DirtyFileDraft) => Promise<boolean>;
@@ -76,6 +77,7 @@ function ProfileFilesPane({
   recoveryAvailable,
   limited,
   hudId,
+  reviewTarget,
   draftStore,
   closeReady = true,
   onSave,
@@ -106,13 +108,12 @@ function ProfileFilesPane({
     to?: number;
     focusOnly?: boolean;
   }>();
-  const [insertion, setInsertion] = useState<{ id: number; text: string }>();
-  const [snippet, setSnippet] = useState<string | null>(null);
   const [reviewConflict, setReviewConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const identity = useRef(0);
   const actionId = useRef(0);
+  const reviewedTarget = useRef<number | null>(null);
   const newCfgName = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (panel !== "new" || newKind !== "helper" || !active) return;
@@ -145,10 +146,11 @@ function ProfileFilesPane({
     () => ({
       profile: profileId,
       hudId,
+      layer: context?.layer ?? "vanilla",
       files: draftStore.documents(profileId).map(({ path, text }) => ({ path, text })),
       identity: `${profileId}:${++identity.current}`,
     }),
-    [profileId, files, hudId, revision, draftStore],
+    [profileId, files, hudId, context?.layer, revision, draftStore],
   );
   const analysis = useFilesAnalysis(snapshot, active);
   const findings = [
@@ -171,7 +173,9 @@ function ProfileFilesPane({
     closeReady;
   const links = analysis.links;
   const typedFindings = findings.filter((finding) =>
-    findingType === "catalog" ? finding.tier === "info" : finding.tier !== "info",
+    import.meta.env.DEV && findingType === "catalog"
+      ? finding.tier === "info"
+      : finding.tier !== "info",
   );
   const shownFindings = typedFindings.filter((finding) =>
     scope === "all" ? true : finding.file === selected,
@@ -266,6 +270,21 @@ function ProfileFilesPane({
     setReviewConflict(false);
     setTarget({ id: ++actionId.current, line, from, to });
   }
+  useEffect(() => {
+    if (!active || !reviewTarget || reviewedTarget.current === reviewTarget.id) return;
+    const file = listed.find(
+      (candidate) => candidate.path.toLowerCase() === reviewTarget.path.toLowerCase(),
+    );
+    if (!file) return;
+    reviewedTarget.current = reviewTarget.id;
+    draftStore.select(profileId, file.path);
+    setPicked(file.path);
+    setReviewConflict(false);
+    setTarget({ id: ++actionId.current, line: reviewTarget.line });
+    setScope("current");
+    setFindingType("issues");
+    setPanel("problems");
+  }, [active, reviewTarget, listed, draftStore, profileId]);
   function openFileMenu(event: ReactMouseEvent<HTMLButtonElement>, path: string) {
     event.preventDefault();
     setFileMenu({ path, x: event.clientX, y: event.clientY });
@@ -861,7 +880,6 @@ function ProfileFilesPane({
               onShowHelp={() => setPanel("reference")}
               files={snapshot.files}
               target={target}
-              insertion={insertion}
               onCommandChange={setCommand}
               statusStart={
                 <div className="flex min-w-0 items-center gap-1">
@@ -882,10 +900,7 @@ function ProfileFilesPane({
                       panel === "reference" ? "bg-panel-raised text-ink" : "text-ink-muted"
                     }`}
                     aria-pressed={panel === "reference"}
-                    onClick={() => {
-                      if (panel === "reference") setSnippet(null);
-                      setPanel(panel === "reference" ? null : "reference");
-                    }}
+                    onClick={() => setPanel(panel === "reference" ? null : "reference")}
                   >
                     <BookOpenText size={14} aria-hidden="true" />
                     <span>Help</span>
@@ -992,10 +1007,7 @@ function ProfileFilesPane({
                   type="button"
                   className="rounded p-1 text-ink-muted hover:bg-panel-raised hover:text-ink focus-visible:outline"
                   aria-label={`Close ${panel === "problems" ? "Problems" : "Help"}`}
-                  onClick={() => {
-                    if (panel === "reference") setSnippet(null);
-                    setPanel(null);
-                  }}
+                  onClick={() => setPanel(null)}
                 >
                   <X size={15} aria-hidden="true" />
                 </button>
@@ -1036,21 +1048,25 @@ function ProfileFilesPane({
                         },
                       ]}
                     />
-                    <Segmented
-                      label="Finding type"
-                      size="sm"
-                      value={findingType}
-                      onChange={setFindingType}
-                      options={[
-                        { id: "issues", label: "Issues" },
-                        { id: "catalog", label: "Catalog gaps" },
-                      ]}
-                    />
-                    {findingType === "catalog" && (
-                      <p className="t-meta mt-2">
-                        These commands are absent from the offline reference. That does not mean the
-                        cfg is invalid.
-                      </p>
+                    {import.meta.env.DEV && (
+                      <>
+                        <Segmented
+                          label="Finding type"
+                          size="sm"
+                          value={findingType}
+                          onChange={setFindingType}
+                          options={[
+                            { id: "issues", label: "Issues" },
+                            { id: "catalog", label: "Catalog gaps" },
+                          ]}
+                        />
+                        {findingType === "catalog" && (
+                          <p className="t-meta mt-2">
+                            These commands are absent from the offline reference. That does not mean
+                            the cfg is invalid.
+                          </p>
+                        )}
+                      </>
                     )}
                     {!analysis.result ? (
                       <p className="t-meta mt-3">{analysis.error ?? "Checking…"}</p>
@@ -1075,45 +1091,7 @@ function ProfileFilesPane({
                   </>
                 )}
 
-                {panel === "reference" && (
-                  <>
-                    {snippet !== null && (
-                      <section
-                        className="mb-4 border-edge border-b pb-4"
-                        aria-label="Snippet preview"
-                      >
-                        <h4 className="t-row">Insert into {selected}</h4>
-                        <pre className="my-2 whitespace-pre-wrap text-sm">{snippet}</pre>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            disabled={!editable || !closeReady}
-                            className="btn btn-primary"
-                            onClick={() => {
-                              setInsertion({ id: ++actionId.current, text: snippet });
-                              setSnippet(null);
-                            }}
-                          >
-                            Insert
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            onClick={() => setSnippet(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </section>
-                    )}
-                    <FilesReference
-                      command={command}
-                      selectedPath={selected}
-                      editable={editable}
-                      onInsert={setSnippet}
-                    />
-                  </>
-                )}
+                {panel === "reference" && <FilesReference command={command} />}
               </div>
             </section>
           )}

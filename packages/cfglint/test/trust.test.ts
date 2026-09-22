@@ -27,27 +27,39 @@ describe("trust: self", () => {
     expect(lint(one('bind f "disconnect"'), { trust: "self" }).ok).toBe(true);
   });
 
+  it("does not nag about session commands in dormant personal aliases", () => {
+    const text = 'alias dc "disconnect"\nalias q "quit"\nalias rt "retry"';
+    expect(self(text).filter((id) => id === "warn:disruptive-bind")).toEqual([]);
+    expect(provided(text)).toContain("warn:disruptive-bind");
+    expect(self(`${text}\nq`)).toContain("warn:disruptive-bind");
+  });
+
   it("demotes an exec the app cannot resolve", () => {
     expect(provided("exec some_personal_cfg")).toContain("block:exec-external");
     expect(self("exec some_personal_cfg")).toContain("warn:exec-external");
     expect(lint(one("exec some_personal_cfg"), { trust: "self" }).ok).toBe(true);
   });
 
-  it("keeps the rules no personal config needs at block tier", () => {
-    for (const text of [
-      "rcon_password hunter2",
-      'password "letmein"',
-      // Even the engine's own unset form blocks outside config.cfg: nothing
-      // but the settings snapshot has a reason to carry a `password` line.
-      'password "0"',
-      "unbind escape",
-      "con_enable 0",
-      'alias exec "echo gotcha"',
-    ]) {
+  it("keeps menu and command identity restrictions at block tier", () => {
+    for (const text of ["unbind escape", "con_enable 0", 'alias exec "echo gotcha"']) {
       const result = lint(one(text), { trust: "self" });
       expect(result.findings.some((f) => f.tier === "block")).toBe(true);
       expect(result.ok).toBe(false);
     }
+  });
+
+  it("allows credentials while identifying their source line for sharing review", () => {
+    for (const text of ["rcon_password hunter2", 'password "letmein"']) {
+      const result = lint(one(text), { trust: "self" });
+      expect(result.ok).toBe(true);
+      expect(result.findings).toContainEqual(
+        expect.objectContaining({ tier: "warn", ruleId: "rcon-password", line: 1 }),
+      );
+      expect(JSON.stringify(result.findings)).not.toMatch(/hunter2|letmein/);
+    }
+    expect(self('password "0"')).not.toContain("warn:rcon-password");
+    expect(self("password 0 extra-value")).toContain("warn:rcon-password");
+    expect(self("rcon_address")).not.toContain("warn:rcon-password");
   });
 
   it("warns for a direct bind-table reset and for a user-authored dynamic reset", () => {
@@ -150,19 +162,18 @@ describe("engineManagedLintOptions", () => {
     expect(result.findings.some((f) => f.ruleId === "rcon-password")).toBe(false);
   });
 
-  it("still blocks a real password in config.cfg", () => {
+  it("warns about a real password in config.cfg without blocking Save", () => {
     const bundle: CfgFile[] = [{ path: "tf/cfg/config.cfg", text: 'password "hunter2"\n' }];
     const result = lint(bundle, engineManagedLintOptions(bundle));
-    expect(result.ok).toBe(false);
-    expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("block:rcon-password");
+    expect(result.ok).toBe(true);
+    expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("warn:rcon-password");
   });
 
-  it('blocks `password "0"` in a cfg the engine does not manage', () => {
+  it('does not warn about unset `password "0"` in a personal cfg', () => {
     const bundle: CfgFile[] = [{ path: "tf/cfg/overrides/autoexec.cfg", text: 'password "0"\n' }];
-    // engineManagedLintOptions finds no config.cfg here, so nothing is exempt.
     const result = lint(bundle, engineManagedLintOptions(bundle));
-    expect(result.ok).toBe(false);
-    expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).toContain("block:rcon-password");
+    expect(result.ok).toBe(true);
+    expect(result.findings.map((f) => `${f.tier}:${f.ruleId}`)).not.toContain("warn:rcon-password");
   });
 
   it("does not nag about the archived mouse cvars in config.cfg", () => {

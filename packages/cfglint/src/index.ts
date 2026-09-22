@@ -1,5 +1,5 @@
 export type { CatalogArgument, CatalogEntry, CatalogSource } from "./catalog.ts";
-export { enumerateCatalog, lookupCommand } from "./catalog.ts";
+export { enumerateCatalog, lookupCommand, suggestCvarByRemovingOneCharacter } from "./catalog.ts";
 export { lookupCvar } from "./corpus.ts";
 export { lint } from "./engine.ts";
 export {

@@ -11,7 +11,57 @@ import {
   itemDescription,
   itemName,
   QUALITY_NAMES,
+  qualityColor,
 } from "./lib/inventory-ui";
+
+const ICON_BATCH_SIZE = 8;
+
+function isPattern(path: string | null | undefined): boolean {
+  return Boolean(path?.startsWith("materials/patterns/"));
+}
+
+function WarPaintArtwork({
+  pattern,
+  base,
+  large = false,
+}: {
+  pattern: string;
+  base?: string;
+  large?: boolean;
+}) {
+  return (
+    <div
+      className={`inventory-paint-art ${large ? "inventory-paint-art-large" : ""}`}
+      aria-hidden="true"
+    >
+      <div
+        className={`inventory-paint-sample ${base ? "inventory-paint-masked" : "inventory-paint-generic"}`}
+        style={{
+          backgroundImage: `url(${pattern})`,
+          ...(base ? { maskImage: `url(${base})`, WebkitMaskImage: `url(${base})` } : {}),
+        }}
+      />
+      {large ? <img src={pattern} alt="" className="inventory-paint-swatch" /> : null}
+    </div>
+  );
+}
+
+function KitArtwork({
+  kit,
+  target,
+  large = false,
+}: {
+  kit: string;
+  target?: string;
+  large?: boolean;
+}) {
+  return (
+    <span className={`inventory-kit-art ${large ? "inventory-kit-art-large" : ""}`}>
+      <img src={kit} alt="" className="inventory-kit-icon" />
+      {target ? <img src={target} alt="" className="inventory-kit-target" /> : null}
+    </span>
+  );
+}
 
 export function InventoryPane({
   api,
@@ -38,6 +88,7 @@ export function InventoryPane({
   const [selected, setSelected] = useState<string | null>(null);
   const [icons, setIcons] = useState<Record<string, string>>({});
   const iconCache = useRef<Record<string, string>>({});
+  const unavailableIcons = useRef(new Set<string>());
   const account = snapshot?.steamId;
   const previousAccount = useRef(account);
   useEffect(() => {
@@ -48,6 +99,7 @@ export function InventoryPane({
     setSelected(null);
     setQuery("");
     iconCache.current = {};
+    unavailableIcons.current.clear();
     setIcons({});
     setIconError(null);
   }, [account]);
@@ -70,6 +122,9 @@ export function InventoryPane({
   }, [active, currentPage]);
   const item = snapshot?.items.find((entry) => entry.id === selected);
   const definition = item && snapshot ? itemDescription(snapshot, item) : undefined;
+  const specificDescription = item ? snapshot?.itemDescriptions?.[item.id] : undefined;
+  const detailBaseIcon = specificDescription?.baseIcon;
+  const detailTargetIcon = specificDescription?.targetIcon;
   const paths = useMemo(
     () => [
       ...new Set(
@@ -77,8 +132,11 @@ export function InventoryPane({
           ...(view?.slots.flatMap(({ item }) => (item ? [item] : [])) ?? []),
           ...(item ? [item] : []),
         ].flatMap((entry) => {
-          const path = snapshot && itemDescription(snapshot, entry)?.icon;
-          return path ? [path] : [];
+          const description = snapshot && itemDescription(snapshot, entry);
+          const specific = snapshot?.itemDescriptions?.[entry.id];
+          return [description?.icon, specific?.targetIcon, specific?.baseIcon].filter(
+            (path): path is string => Boolean(path),
+          );
         }),
       ),
     ],
@@ -88,53 +146,76 @@ export function InventoryPane({
   useEffect(() => {
     if (!active || paths.length === 0) return;
     let cancelled = false;
-    setIconError(null);
-    const missing = paths.filter((path) => !iconCache.current[path]);
+    const missing = paths.filter(
+      (path) => !iconCache.current[path] && !unavailableIcons.current.has(path),
+    );
     if (missing.length === 0) return;
-    async function readIcons() {
-      const images = [];
-      let error: string | null = null;
-      const artwork = missing.filter((path) => !path.startsWith("materials/patterns/"));
-      const patterns = missing.filter((path) => path.startsWith("materials/patterns/"));
-      // Pattern textures may each approach the native 16 MiB entry cap. Read
-      // them individually to stay within the 32 MiB aggregate cap.
-      for (const [paths, size] of [
-        [artwork, 50],
-        [patterns, 1],
-      ] as const) {
-        for (let start = 0; start < paths.length; start += size) {
-          if (cancelled) return { images, error };
-          try {
-            images.push(await api.getInventoryIcons(paths.slice(start, start + size)));
-          } catch (reason) {
-            error ??= String(reason);
-          }
-        }
-      }
-      return { images, error };
+    const artwork = missing.filter((path) => !isPattern(path));
+    const patterns = missing.filter(isPattern);
+    const batches: string[][] = [];
+    for (let start = 0; start < artwork.length; start += ICON_BATCH_SIZE) {
+      batches.push(artwork.slice(start, start + ICON_BATCH_SIZE));
     }
-    readIcons()
-      .then(({ images, error }) => {
-        if (cancelled) return;
-        const next: Record<string, string> = {};
-        for (const [path, image] of images.flatMap((batch) => Object.entries(batch))) {
+    for (const path of patterns) batches.push([path]);
+    let nextBatch = 0;
+    function publish(images: Record<string, { width: number; height: number; rgba: number[] }>) {
+      if (cancelled) return;
+      const next: Record<string, string> = {};
+      for (const [path, image] of Object.entries(images)) {
+        try {
           const canvas = document.createElement("canvas");
           canvas.width = image.width;
           canvas.height = image.height;
           const context = canvas.getContext("2d");
-          if (!context) continue;
+          if (!context) throw Error("Canvas unavailable");
           const pixels = context.createImageData(image.width, image.height);
           pixels.data.set(image.rgba);
           context.putImageData(pixels, 0, 0);
           next[path] = canvas.toDataURL();
+        } catch {
+          unavailableIcons.current.add(path);
         }
+      }
+      if (Object.keys(next).length) {
         iconCache.current = { ...iconCache.current, ...next };
         setIcons(iconCache.current);
-        setIconError(error);
-      })
-      .catch((reason) => {
-        if (!cancelled) setIconError(String(reason));
-      });
+      }
+      if (Object.keys(images).some((path) => unavailableIcons.current.has(path))) {
+        setIconError("Some item artwork is unavailable in the installed TF2 files.");
+      }
+    }
+    async function readBatch(batch: string[]): Promise<void> {
+      try {
+        const images = await api.getInventoryIcons(batch);
+        publish(images);
+        if (cancelled) return;
+        const omitted = batch.filter((path) => !images[path]);
+        if (omitted.length && batch.length > 1) {
+          const midpoint = Math.ceil(omitted.length / 2);
+          await readBatch(omitted.slice(0, midpoint));
+          if (midpoint < omitted.length) await readBatch(omitted.slice(midpoint));
+        } else if (omitted.length) {
+          unavailableIcons.current.add(omitted[0]);
+          setIconError("Some item artwork is unavailable in the installed TF2 files.");
+        }
+      } catch {
+        if (batch.length > 1) {
+          const midpoint = Math.ceil(batch.length / 2);
+          await readBatch(batch.slice(0, midpoint));
+          await readBatch(batch.slice(midpoint));
+        } else if (!cancelled) {
+          unavailableIcons.current.add(batch[0]);
+          setIconError("Some item artwork is unavailable in the installed TF2 files.");
+        }
+      }
+    }
+    async function worker() {
+      while (!cancelled && nextBatch < batches.length) {
+        const batch = batches[nextBatch++];
+        await readBatch(batch);
+      }
+    }
+    void Promise.all([worker(), worker()]);
     return () => {
       cancelled = true;
     };
@@ -143,8 +224,15 @@ export function InventoryPane({
   function card(entry: InventoryItem, position: number) {
     if (!snapshot) return null;
     const name = itemName(snapshot, entry);
-    const path = itemDescription(snapshot, entry)?.icon;
-    const qualityColor = snapshot.qualityColors?.[entry.quality];
+    const description = itemDescription(snapshot, entry);
+    const path = description?.icon;
+    const specific = snapshot.itemDescriptions?.[entry.id];
+    const wear = specific?.details.find((detail) =>
+      ["Factory New", "Minimal Wear", "Field-Tested", "Well-Worn", "Battle Scarred"].includes(
+        detail,
+      ),
+    );
+    const border = qualityColor(snapshot, entry.quality);
     return (
       <button
         type="button"
@@ -154,7 +242,7 @@ export function InventoryPane({
         title={name}
         onClick={() => setSelected(entry.id)}
         className={`inventory-item ${selected === entry.id ? "inventory-item-selected" : ""}`}
-        style={{ borderColor: qualityColor, borderWidth: qualityColor ? 2 : undefined }}
+        style={{ borderColor: border, borderWidth: border ? 2 : undefined }}
       >
         <span className="t-meta absolute top-1 left-1.5 text-ink-faint">{position || "New"}</span>
         {selected === entry.id ? (
@@ -163,11 +251,29 @@ export function InventoryPane({
             className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-brand"
           />
         ) : null}
-        {path && icons[path] ? (
+        {path && icons[path] && isPattern(path) ? (
+          <WarPaintArtwork
+            pattern={icons[path]}
+            base={
+              specific?.baseIcon && !/war paint/i.test(description?.kind ?? "")
+                ? icons[specific.baseIcon]
+                : undefined
+            }
+          />
+        ) : path && icons[path] && specific?.targetIcon ? (
+          <KitArtwork kit={icons[path]} target={icons[specific.targetIcon]} />
+        ) : path && icons[path] ? (
           <img src={icons[path]} alt="" className="h-14 w-full object-contain" />
         ) : (
-          <Cube aria-hidden="true" size={28} className="my-3 text-ink-faint" />
+          <span className="flex h-14 w-full items-center justify-center" aria-hidden="true">
+            <Cube size={28} className="text-ink-faint" />
+          </span>
         )}
+        {isPattern(path) && wear ? (
+          <span className="inventory-wear-label" title="Wear tier; texture wear is not rendered">
+            {wear}
+          </span>
+        ) : null}
         <span className="line-clamp-2 min-h-8 w-full break-words text-center text-xs leading-4">
           {name}
         </span>
@@ -291,7 +397,7 @@ export function InventoryPane({
           ) : null}
           {iconError ? (
             <p role="status" className="mb-4 text-warn">
-              Some artwork could not be loaded. {iconError}
+              {iconError}
             </p>
           ) : null}
           <div className="inventory-workspace">
@@ -411,15 +517,37 @@ export function InventoryPane({
               {item ? (
                 <>
                   {definition?.icon && icons[definition.icon] ? (
-                    <img
-                      src={icons[definition.icon]}
-                      alt={itemName(snapshot, item)}
-                      className="mb-4 h-40 w-full object-contain"
-                    />
+                    isPattern(definition.icon) ? (
+                      <WarPaintArtwork
+                        pattern={icons[definition.icon]}
+                        base={
+                          detailBaseIcon && !/war paint/i.test(definition.kind)
+                            ? icons[detailBaseIcon]
+                            : undefined
+                        }
+                        large
+                      />
+                    ) : detailTargetIcon ? (
+                      <KitArtwork
+                        kit={icons[definition.icon]}
+                        target={icons[detailTargetIcon]}
+                        large
+                      />
+                    ) : (
+                      <img
+                        src={icons[definition.icon]}
+                        alt={itemName(snapshot, item)}
+                        className="mb-4 h-40 w-full object-contain"
+                      />
+                    )
                   ) : (
                     <div className="mb-4 flex h-40 flex-col items-center justify-center gap-2 text-ink-faint">
                       <Cube size={40} aria-hidden="true" />
-                      <span className="t-meta">Artwork unavailable</span>
+                      <span className="t-meta">
+                        {definition?.icon && !unavailableIcons.current.has(definition.icon)
+                          ? "Loading artwork…"
+                          : "Artwork unavailable"}
+                      </span>
                     </div>
                   )}
                   <h2 className="t-section break-words">{itemName(snapshot, item)}</h2>
@@ -431,7 +559,8 @@ export function InventoryPane({
                   </p>
                   {definition?.icon?.startsWith("materials/patterns/") ? (
                     <p className="t-meta mt-3">
-                      Pattern swatch; weapon, wear and effects are not previewed.
+                      Illustrative pattern on a weapon silhouette with the source texture swatch.
+                      Actual weapon mapping, wear and effects are not rendered.
                     </p>
                   ) : null}
                   {snapshot.itemDescriptions?.[item.id]?.details.length ? (

@@ -211,6 +211,12 @@ export function SettingsHost({
     () => mapsFromFiles(files, layer, detail?.files),
     [files, layer, detail?.files],
   );
+  const [filesReviewTarget, setFilesReviewTarget] = useState<{
+    id: number;
+    path: string;
+    line: number;
+  } | null>(null);
+  const filesReviewSequence = useRef(0);
   const cfgComplete = useRef(maps.complete);
   cfgComplete.current = maps.complete;
   const cfgReason = useRef(maps.reason);
@@ -1233,6 +1239,7 @@ export function SettingsHost({
               filesInspection?.detail.files ?? detail?.files ?? [],
               filesInspection?.detail.hud ?? detail?.hud,
             )}
+            reviewTarget={filesReviewTarget}
             onSave={(path, text, submission) => {
               return saveFileDraft(submission ?? { profile: profileId, path, text });
             }}
@@ -1303,9 +1310,23 @@ export function SettingsHost({
       ) : null}
       {!profileId && loading ? <p>Loading settings…</p> : null}
       {!maps.complete && usesCfgState(tab) ? (
-        <p role="alert" className="mb-4 text-warn">
-          {maps.reason ?? CFG_INCOMPLETE_MESSAGE}
-        </p>
+        <div role="alert" className="mb-4 text-warn">
+          <p>{maps.reason ?? CFG_INCOMPLETE_MESSAGE}</p>
+          {onNavigate && (
+            <button
+              type="button"
+              data-testid="review-startup-cfg"
+              className="btn btn-ghost mt-2"
+              onClick={() => {
+                if (maps.issue)
+                  setFilesReviewTarget({ id: ++filesReviewSequence.current, ...maps.issue });
+                onNavigate("files");
+              }}
+            >
+              Review in Files
+            </button>
+          )}
+        </div>
       ) : null}
       {import.meta.env.DEV ? (
         <div hidden={!visible || tab !== "inventory"}>

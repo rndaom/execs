@@ -672,6 +672,7 @@ pub fn run() {
             commands::app_settings::set_app_preferences,
             commands::library::switch_profile,
             commands::library::export_profile,
+            commands::library::inspect_profile_export_credentials,
             commands::library::import_profile,
             commands::library::confirm_profile_import,
             commands::library::cancel_profile_import,

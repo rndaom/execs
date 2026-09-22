@@ -625,7 +625,6 @@ fn seven_z_dictionary_size(method: &[u8], properties: &[u8]) -> Result<Option<u6
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CfgScanMode {
     Imported,
-    SecretsOnly,
     TrustedImport,
 }
 
@@ -637,15 +636,50 @@ pub fn validate_imported_cfg(path: &str, bytes: &[u8]) -> Result<(), ProfileErro
 }
 
 /// Explicitly reviewed creator cfgs are kept verbatim. Parser budgets still
-/// apply; export continues to refuse credentials in these local imports.
+/// apply, including when those cfgs are exported again.
 pub(crate) fn validate_trusted_cfg(path: &str, bytes: &[u8]) -> Result<(), ProfileError> {
     scan_cfg(path, bytes, CfgScanMode::TrustedImport)
 }
 
-/// Export refuses credentials rather than silently sharing them. Other
-/// commands are the player's own data and remain exportable.
-pub fn validate_cfg_has_no_secrets(path: &str, bytes: &[u8]) -> Result<(), ProfileError> {
-    scan_cfg(path, bytes, CfgScanMode::SecretsOnly)
+/// Export keeps the player's cfg bytes unchanged, including credentials. The
+/// same structural limits used for reviewed imports protect the VPK scanner.
+pub fn validate_exported_cfg(path: &str, bytes: &[u8]) -> Result<(), ProfileError> {
+    scan_cfg(path, bytes, CfgScanMode::TrustedImport)
+}
+
+/// A disclosure hint for review UI. It never includes a command value. The
+/// import/export validators remain authoritative; this is intentionally a
+/// broad line-level hint so nested bind and alias payloads are also visible.
+pub(crate) fn cfg_credential_lines(path: &str, bytes: &[u8]) -> Vec<usize> {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return Vec::new();
+    };
+    text.lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let candidate = line.split("//").next().unwrap_or_default();
+            if path.eq_ignore_ascii_case("tf/cfg/config.cfg") {
+                let archived = candidate.trim().to_ascii_lowercase();
+                if matches!(archived.as_str(), "password 0" | "password \"0\"" | "password \"\"") {
+                    return None;
+                }
+            }
+            let words = candidate
+                .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+                .filter(|word| !word.is_empty());
+            words
+                .into_iter()
+                .any(|word| {
+                    matches!(
+                        word.to_ascii_lowercase().as_str(),
+                        "password" | "rcon" | "rcon_address" | "rcon_password" | "rcon_port"
+                            | "sv_password" | "tv_password" | "tv_relaypassword"
+                    )
+                })
+                .then_some(index + 1)
+        })
+        .take(8)
+        .collect()
 }
 
 fn scan_cfg(path: &str, bytes: &[u8], mode: CfgScanMode) -> Result<(), ProfileError> {
@@ -674,8 +708,8 @@ pub fn validate_imported_launch_options(raw: &str) -> Result<(), ProfileError> {
     scan_launch_options(raw, CfgScanMode::Imported)
 }
 
-pub fn validate_launch_has_no_secrets(raw: &str) -> Result<(), ProfileError> {
-    scan_launch_options(raw, CfgScanMode::SecretsOnly)
+pub fn validate_exported_launch_options(raw: &str) -> Result<(), ProfileError> {
+    scan_launch_options(raw, CfgScanMode::TrustedImport)
 }
 
 fn scan_launch_options(raw: &str, mode: CfgScanMode) -> Result<(), ProfileError> {
@@ -752,26 +786,6 @@ fn check_cfg_command(
     let value = command.get(1).map(|value| value.to_ascii_lowercase());
     let engine_top = engine_managed && top_level;
 
-    if mode != CfgScanMode::TrustedImport
-        && (name == "password"
-            || matches!(
-                name.as_str(),
-                "rcon" | "rcon_address" | "rcon_password" | "rcon_port"
-            ))
-    {
-        let archived_unset = name == "password"
-            && engine_top
-            && command.len() <= 2
-            && value
-                .as_deref()
-                .is_none_or(|value| value.is_empty() || value == "0");
-        if !archived_unset {
-            return Err(ProfileError::Io(format!(
-                "{path} contains `{name}`, which may expose a server credential and cannot be shared."
-            )));
-        }
-        return Ok(());
-    }
     if mode != CfgScanMode::Imported {
         if matches!(name.as_str(), "bind" | "alias") && command.len() > 2 {
             scan_cfg_payload(
@@ -1678,7 +1692,6 @@ mod tests {
         for hostile in [
             "connect bad.example",
             "bind mouse1 \"echo hi; connect bad.example\"",
-            "alias harmless \"password hunter2\"",
             "alias connect echo",
             "bind mouse2 \"unbindall\"",
             "unbind escape",
@@ -1704,12 +1717,14 @@ mod tests {
             b"unbindall\nbind ESCAPE cancelselect\ncon_enable 0\npassword 0\n",
         )
         .unwrap();
-        assert!(validate_imported_cfg("tf/cfg/config.cfg", b"password real-secret").is_err());
-        assert!(validate_cfg_has_no_secrets(
+        validate_imported_cfg("tf/cfg/config.cfg", b"password real-secret").unwrap();
+        validate_imported_cfg("tf/cfg/overrides/autoexec.cfg", b"alias harmless \"password hunter2\"")
+            .unwrap();
+        validate_exported_cfg(
             "tf/cfg/overrides/personal.cfg",
             b"bind f \"rcon_password secret\""
         )
-        .is_err());
+        .unwrap();
     }
 
     #[test]
@@ -1728,9 +1743,9 @@ mod tests {
     fn explicit_creator_trust_preserves_commands_but_not_parser_budget_exceptions() {
         let path = "tf/cfg/config.cfg";
         let bytes = b"password saved-server-password\nbind f \"rcon_password saved-admin-password\"\nsv_cheats 1\n";
-        assert!(validate_imported_cfg(path, bytes).is_err());
+        validate_imported_cfg(path, bytes).unwrap();
         validate_trusted_cfg(path, bytes).unwrap();
-        assert!(validate_cfg_has_no_secrets(path, bytes).is_err());
+        validate_exported_cfg(path, bytes).unwrap();
         assert!(validate_trusted_cfg(path, b"echo\0bad").is_err());
         assert!(validate_trusted_cfg(path, &[0xff]).is_err());
         assert!(validate_trusted_cfg(path, &vec![b';'; MAX_CFG_SEGMENTS + 1]).is_err());
@@ -1747,11 +1762,9 @@ mod tests {
             "+connect bad.example",
             "+retry",
             "+bind f \"connect bad.example\"",
-            "+password hunter2",
             "+quit;echo still-runs",
             "+echo before;+quit",
             "+echo before;+connect bad.example",
-            "+echo before;+password hunter2",
         ] {
             assert!(
                 validate_imported_launch_options(options).is_err(),
@@ -1759,7 +1772,9 @@ mod tests {
             );
         }
         validate_imported_launch_options(r#"+echo "quoted ; +quit is data" -novid"#).unwrap();
-        assert!(validate_launch_has_no_secrets("-novid +password hunter2").is_err());
-        assert!(validate_launch_has_no_secrets("+echo before;+rcon_password hunter2").is_err());
+        validate_imported_launch_options("+password hunter2").unwrap();
+        validate_imported_launch_options("+echo before;+password hunter2").unwrap();
+        validate_exported_launch_options("-novid +password hunter2").unwrap();
+        validate_exported_launch_options("+echo before;+rcon_password hunter2").unwrap();
     }
 }

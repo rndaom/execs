@@ -32,6 +32,10 @@ pub struct ItemDescription {
     #[serde(flatten)]
     pub definition: Definition,
     pub details: Vec<String>,
+    /// Installed artwork for the unpainted item, if a paint pattern replaces it.
+    pub base_icon: Option<String>,
+    /// Installed artwork for a kit or fabricator's target weapon.
+    pub target_icon: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -115,6 +119,8 @@ pub fn metadata(root: &Path, inputs: &[ItemInput<'_>]) -> Result<Metadata, Strin
         let mut description = ItemDescription {
             definition: base.clone(),
             details: Vec::new(),
+            base_icon: None,
+            target_icon: None,
         };
         let attributes: Vec<_> = attributes
             .iter()
@@ -299,6 +305,7 @@ fn enrich(
     tokens: &VdfMap,
 ) {
     if let Some(paint) = bits(attributes, 834) {
+        description.base_icon = description.definition.icon.clone();
         let name = paint_names.get(&paint).and_then(|paint| {
             string(
                 paint_tokens,
@@ -327,6 +334,7 @@ fn enrich(
     if let Some(target) = float_id(attributes, 2012).and_then(|id| definitions.get(&id)) {
         description.definition.name = format!("{} · {}", description.definition.name, target.name);
         description.details.push(format!("For {}", target.name));
+        description.target_icon = target.icon.clone();
     }
     if let Some(tier) = float_id(attributes, 2025) {
         let prefix = match tier {
@@ -512,7 +520,7 @@ pub fn icons(root: &Path, paths: &[String]) -> Result<BTreeMap<String, Icon>, St
         return Err("Invalid inventory icon request".into());
     }
     let wanted: BTreeSet<_> = paths.iter().map(String::as_str).collect();
-    let archive = vpk::read_vpk_dir_file_filtered_bounded(
+    let archive = vpk::read_vpk_dir_file_filtered_bounded_partial(
         &root.join("tf/tf2_textures_dir.vpk"),
         &|p| wanted.contains(p),
         16 * 1024 * 1024,
@@ -526,12 +534,12 @@ pub fn icons(root: &Path, paths: &[String]) -> Result<BTreeMap<String, Icon>, St
         }
         let width = u16::from_le_bytes([bytes[16], bytes[17]]);
         let height = u16::from_le_bytes([bytes[18], bytes[19]]);
-        // Pattern layers can be larger than backpack icons. Bound the decoded
-        // frame to 16 MiB before invoking the decoder; returned artwork is small.
+        // Pattern layers can be larger than backpack icons. Bound source bytes
+        // and dimensions, then decode only the mip needed for a 192px preview.
         if width == 0 || height == 0 || width > 2048 || height > 2048 {
             continue;
         }
-        let Ok(decoded) = vtf_read::decode_vtf_frame0(&bytes) else {
+        let Ok(decoded) = vtf_read::decode_vtf_frame0_with_max_dimension(&bytes, 192) else {
             continue;
         };
         let longest = decoded.width.max(decoded.height);
@@ -570,6 +578,8 @@ mod tests {
                 icon: Some("materials/backpack/base.vtf".into()),
             },
             details: vec![],
+            base_icon: None,
+            target_icon: None,
         }
     }
 
@@ -607,6 +617,7 @@ mod tests {
         );
         assert_eq!(painted.definition.name, "Woodland War Paint");
         assert!(painted.definition.icon.is_none());
+        assert_eq!(painted.base_icon.as_deref(), Some("materials/backpack/base.vtf"));
         assert!(painted.details.contains(&"Minimal Wear".into()));
         let mut kit = description("Kit");
         enrich(
@@ -622,6 +633,7 @@ mod tests {
             "Professional Killstreak Kit · Rocket Launcher"
         );
         assert!(kit.details.contains(&"Sheen: Hot Rod".into()));
+        assert_eq!(kit.target_icon.as_deref(), Some("materials/backpack/base.vtf"));
         assert!(float_id(&[(2012, &f32::NAN.to_le_bytes())], 2012).is_none());
         assert!(float_id(&[(2012, &18.5f32.to_le_bytes())], 2012).is_none());
         assert!(bits(&[(834, &paint), (834, &paint)], 834).is_none());
@@ -746,6 +758,38 @@ mod tests {
         let result = icons(&root, &[path.to_string()]).unwrap();
         assert_eq!((result[path].width, result[path].height), (192, 192));
         assert_eq!(result[path].rgba.len(), 192 * 192 * 4);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn oversized_optional_art_does_not_hide_other_inventory_icons() {
+        let root = crate::test_temp_dir();
+        std::fs::create_dir_all(root.join("tf")).unwrap();
+        let small = "materials/backpack/small.vtf";
+        let large = "materials/backpack/large.vtf";
+        let mut vtf = vec![0u8; 80];
+        vtf[0..4].copy_from_slice(b"VTF\0");
+        vtf[4..8].copy_from_slice(&7u32.to_le_bytes());
+        vtf[8..12].copy_from_slice(&2u32.to_le_bytes());
+        vtf[12..16].copy_from_slice(&80u32.to_le_bytes());
+        vtf[16..18].copy_from_slice(&1u16.to_le_bytes());
+        vtf[18..20].copy_from_slice(&1u16.to_le_bytes());
+        vtf[24..26].copy_from_slice(&1u16.to_le_bytes());
+        vtf[52..56].copy_from_slice(&12i32.to_le_bytes());
+        vtf[56] = 1;
+        vtf[57..61].copy_from_slice(&(-1i32).to_le_bytes());
+        vtf.extend([10, 20, 30, 255]);
+        let archive = vpk::write_vpk_v2(
+            &[
+                (large.to_string(), vec![0u8; 16 * 1024 * 1024 + 1]),
+                (small.to_string(), vtf),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        std::fs::write(root.join("tf/tf2_textures_dir.vpk"), archive).unwrap();
+        let result = icons(&root, &[large.into(), small.into()]).unwrap();
+        assert!(!result.contains_key(large));
+        assert_eq!(result[small].rgba, [30, 20, 10, 255]);
         std::fs::remove_dir_all(root).unwrap();
     }
     #[test]

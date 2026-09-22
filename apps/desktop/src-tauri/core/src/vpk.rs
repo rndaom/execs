@@ -57,11 +57,13 @@ const MAX_MATERIALIZED_VPK_BYTES: u64 = 512 * 1024 * 1024;
 struct MaterializationLimits {
     entry_bytes: u64,
     total_bytes: u64,
+    skip_oversize_entries: bool,
 }
 
 const DEFAULT_MATERIALIZATION_LIMITS: MaterializationLimits = MaterializationLimits {
     entry_bytes: MAX_VPK_ENTRY_BYTES,
     total_bytes: MAX_MATERIALIZED_VPK_BYTES,
+    skip_oversize_entries: false,
 };
 
 #[derive(Clone, Copy)]
@@ -134,6 +136,32 @@ pub fn read_vpk_dir_file_filtered_bounded(
         MaterializationLimits {
             entry_bytes: max_entry_bytes.min(MAX_VPK_ENTRY_BYTES),
             total_bytes: max_total_bytes.min(MAX_MATERIALIZED_VPK_BYTES),
+            skip_oversize_entries: false,
+        },
+    )
+}
+
+/// Read optional preview artwork without allowing one unusually large entry
+/// to reject all other selected entries. The same entry and aggregate bounds
+/// still apply; only entries exceeding those bounds are omitted.
+pub fn read_vpk_dir_file_filtered_bounded_partial(
+    path: &Path,
+    keep: &dyn Fn(&str) -> bool,
+    max_entry_bytes: u64,
+    max_total_bytes: u64,
+) -> Result<VpkArchive, VpkError> {
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    read_vpk(
+        &tree,
+        Some(path),
+        Some(keep),
+        on_disk_len,
+        limits,
+        MaterializationLimits {
+            entry_bytes: max_entry_bytes.min(MAX_VPK_ENTRY_BYTES),
+            total_bytes: max_total_bytes.min(MAX_MATERIALIZED_VPK_BYTES),
+            skip_oversize_entries: true,
         },
     )
 }
@@ -774,11 +802,19 @@ fn read_vpk(
             .checked_add(length)
             .ok_or_else(|| VpkError("VPK entry size overflows.".into()))?;
         if total_len as u64 > materialization_limits.entry_bytes {
+            if materialization_limits.skip_oversize_entries {
+                return Ok(());
+            }
             return Err(VpkError(format!(
                 "{} is larger than {} MiB.",
                 entry.rel,
                 materialization_limits.entry_bytes / (1024 * 1024)
             )));
+        }
+        if materialization_limits.skip_oversize_entries
+            && materialized.saturating_add(total_len as u64) > materialization_limits.total_bytes
+        {
+            return Ok(());
         }
         charge(
             &mut materialized,
@@ -1572,6 +1608,24 @@ mod tests {
             read_vpk_dir_file_filtered_bounded(&path, &|rel| rel.starts_with("particles/"), 5, 9)
                 .unwrap_err();
         assert!(err.0.contains("overlap"), "{}", err.0);
+
+        let partial = read_vpk_dir_file_filtered_bounded_partial(
+            &path,
+            &|rel| rel.starts_with("particles/"),
+            5,
+            9,
+        )
+        .unwrap();
+        assert_eq!(partial.files.len(), 1);
+        assert_eq!(partial.files["particles/one.pcf"], b"12345");
+        let partial = read_vpk_dir_file_filtered_bounded_partial(
+            &path,
+            &|rel| rel.starts_with("particles/"),
+            4,
+            9,
+        )
+        .unwrap();
+        assert!(partial.files.is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 

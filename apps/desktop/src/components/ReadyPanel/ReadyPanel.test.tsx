@@ -92,6 +92,8 @@ beforeEach(() => {
     onChangeInstall: vi.fn(),
     onLaunch: vi.fn(),
     onCancelLaunch: vi.fn(),
+    onReviewFiles: vi.fn(),
+    onInspectExport: vi.fn(async () => ["tf/cfg/config.cfg:8"]),
   };
 });
 
@@ -131,6 +133,71 @@ it("focuses a saved profile's repair action when that profile cannot be switched
   expect(props.profiles.switchProfile).not.toHaveBeenCalled();
   await act(async () => (document.activeElement as HTMLButtonElement).click());
   expect(props.profiles.reviewFolderRepair).toHaveBeenCalledExactlyOnceWith("preview-1");
+});
+
+it("discloses credential locations before export and offers Files review", async () => {
+  (props.profiles.library as ProfileLibrary).activeProfileId = "preview-1";
+  await render();
+  await act(async () =>
+    box.querySelector<HTMLDetailsElement>('[data-testid="profile-library"] summary')?.click(),
+  );
+  await act(async () =>
+    box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]')?.click(),
+  );
+  await act(async () => {
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Export profile")
+      ?.click();
+    await Promise.resolve();
+  });
+  expect(props.onInspectExport).toHaveBeenCalledWith("preview-1");
+  expect(box.textContent).toContain("tf/cfg/config.cfg:8");
+  expect(box.textContent).not.toContain("hunter2");
+  expect(props.profiles.exportProfile).not.toHaveBeenCalled();
+  await act(async () => {
+    [...box.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Review Files")
+      ?.click();
+  });
+  expect(props.onReviewFiles).toHaveBeenCalledOnce();
+  expect(props.profiles.exportProfile).not.toHaveBeenCalled();
+});
+
+it("closes deletion review before routing to Files from export review", async () => {
+  const library = props.profiles.library as ProfileLibrary;
+  library.activeProfileId = "preview-1";
+  props.profiles.deleteTarget = library.profiles[0];
+  props.profiles.cancelDelete = vi.fn(() => {
+    props.profiles.deleteTarget = null;
+  });
+  await render();
+  const deletion = box.querySelector<HTMLElement>('[data-testid="profile-delete-dialog"]');
+  expect(deletion).not.toBeNull();
+  await act(async () => {
+    [...box.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Export profile first")
+      ?.click();
+    await Promise.resolve();
+  });
+  const exportDialog = [...box.querySelectorAll<HTMLElement>('[role="dialog"]')].find((node) =>
+    node.textContent?.includes("Possible saved credentials"),
+  );
+  expect(exportDialog).toBeDefined();
+  expect(exportDialog?.getAttribute("aria-modal")).toBe("true");
+  expect(deletion?.hasAttribute("inert")).toBe(true);
+  expect(exportDialog?.contains(document.activeElement)).toBe(true);
+  await act(async () => {
+    [...box.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Review Files")
+      ?.click();
+  });
+  await render();
+  expect(props.profiles.cancelDelete).toHaveBeenCalledOnce();
+  expect(props.profiles.confirmDelete).not.toHaveBeenCalled();
+  expect(props.onReviewFiles).toHaveBeenCalledOnce();
+  expect(box.querySelector('[data-testid="profile-delete-dialog"]')).toBeNull();
+  expect(box.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement?.closest("[inert], [role=dialog], [role=alertdialog]")).toBeNull();
 });
 
 it("allows browsing while TF2 runs and focuses an available row action without switching", async () => {

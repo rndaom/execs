@@ -11,8 +11,8 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::archive::{
-    read_regular_file_bounded, validate_cfg_has_no_secrets, validate_imported_cfg,
-    validate_imported_launch_options, validate_launch_has_no_secrets, MAX_IMPORTED_CFG_BYTES,
+    read_regular_file_bounded, validate_exported_cfg, validate_exported_launch_options,
+    validate_imported_cfg, validate_imported_launch_options, MAX_IMPORTED_CFG_BYTES,
 };
 use crate::blob::blob_path;
 use crate::hash::{
@@ -156,6 +156,92 @@ pub fn export_profile(
     zip_path: &Path,
 ) -> Result<(), ProfileError> {
     export_profile_to(&profiles_dir(), tf2_root, profile_id, zip_path)
+}
+
+/// Read-only disclosure before the user chooses an export destination. Values
+/// never leave the core. Export revalidates every source when it writes the ZIP.
+pub fn inspect_profile_export_credentials(
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<Vec<String>, ProfileError> {
+    inspect_profile_export_credentials_from(&profiles_dir(), tf2_root, profile_id)
+}
+
+pub fn inspect_profile_export_credentials_from(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<Vec<String>, ProfileError> {
+    let library = require_usable_library(profiles_dir, tf2_root)?;
+    if !library.profiles.iter().any(|profile| profile.id == profile_id) {
+        return Err(ProfileError::UnknownProfile);
+    }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    validate_exported_launch_options(&manifest.launch_options)?;
+    let mut locations = Vec::new();
+    if manifest
+        .launch_options
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .any(|word| matches!(word.to_ascii_lowercase().as_str(), "password" | "rcon_password" | "sv_password"))
+    {
+        locations.push("Launch options may contain a saved password or remote-console setting.".into());
+    }
+    for entry in validated_export_files(&manifest)? {
+        if !has_extension(&entry.path, "cfg") && !has_extension(&entry.path, "vpk") {
+            continue;
+        }
+        let source_path = match entry.storage {
+            FileStorage::Exclusive => exclusive_file_path(profiles_dir, profile_id, &entry.path),
+            FileStorage::Shared => blob_path(profiles_dir, &entry.sha256),
+        };
+        let (mut source, len) = open_verified_source(
+            profiles_dir,
+            &source_path,
+            &entry.sha256,
+            &entry.path,
+        )?;
+        if let Some(bytes) = read_validated_export_cfg_source(
+            &entry.path,
+            &mut source,
+            len,
+            &entry.sha256,
+        )? {
+            for line in crate::archive::cfg_credential_lines(&entry.path, &bytes) {
+                locations.push(format!("{}:{line}", entry.path));
+            }
+        } else if has_extension(&entry.path, "vpk") {
+            source.rewind().map_err(io_err)?;
+            let mut signature = [0u8; 4];
+            if source.read_exact(&mut signature).is_ok()
+                && signature == 0x55aa_1234u32.to_le_bytes()
+            {
+                source.rewind().map_err(io_err)?;
+                let (cfgs, hash) = read_vpk_file_filtered_hashed(
+                    &mut source,
+                    &|path| has_extension(path, "cfg"),
+                    MAX_IMPORTED_CFG_BYTES as u64,
+                )
+                .map_err(|err| invalid_zip(format!("invalid profile VPK {}: {}", entry.path, err.message())))?;
+                if !hash.eq_ignore_ascii_case(&entry.sha256) {
+                    return Err(ProfileError::Io(format!(
+                        "{} changed during export review.", entry.path
+                    )));
+                }
+                for (cfg_path, bytes) in cfgs.files {
+                    let path = format!("{}/{cfg_path}", entry.path);
+                    for line in crate::archive::cfg_credential_lines(&path, &bytes) {
+                        locations.push(format!("{path}:{line}"));
+                    }
+                }
+            }
+        }
+        if locations.len() >= 50 {
+            locations.truncate(50);
+            locations.push("Additional locations were omitted from this review.".into());
+            break;
+        }
+    }
+    Ok(locations)
 }
 
 pub fn import_profile(tf2_root: &Path, zip_path: &Path) -> Result<ProfileLibrary, ProfileError> {
@@ -345,7 +431,7 @@ fn write_profile_zip(
         }
     }
     validate_export_destination(profiles_dir, zip_path)?;
-    validate_launch_has_no_secrets(&manifest.launch_options)?;
+    validate_exported_launch_options(&manifest.launch_options)?;
     let export_files = validated_export_files(manifest)?;
 
     let mut zip_manifest = ProfileZipManifest {
@@ -998,7 +1084,7 @@ fn validate_imported_metadata(
 /// file and must neither leak into an export nor be allowed to reference an
 /// unrelated stash file on the recipient's machine. GameBanana links are
 /// reconstructed from their numeric id so archive metadata cannot smuggle a
-/// credential-bearing or unsafe navigation URL into another library.
+/// unsafe navigation URL into another library.
 fn make_metadata_portable(manifest: &mut ProfileZipManifest) {
     if let Some(record) = &mut manifest.hitsound {
         for entry in [&mut record.hit, &mut record.kill].into_iter().flatten() {
@@ -1159,7 +1245,7 @@ fn read_validated_export_cfg_source(
     expected_hash: &str,
 ) -> Result<Option<Vec<u8>>, ProfileError> {
     if has_extension(path, "vpk") {
-        inspect_profile_vpk(path, source, expected_hash, validate_cfg_has_no_secrets)?;
+        inspect_profile_vpk(path, source, expected_hash, validate_exported_cfg)?;
         source.seek(SeekFrom::Start(0)).map_err(io_err)?;
         return Ok(None);
     }
@@ -1168,7 +1254,7 @@ fn read_validated_export_cfg_source(
     }
     if expected_len > MAX_IMPORTED_CFG_BYTES as u64 {
         return Err(ProfileError::Io(format!(
-            "{path} is too large to inspect for credentials before export."
+            "{path} is too large to inspect as cfg text before export."
         )));
     }
     let mut bytes = Vec::with_capacity(expected_len as usize);
@@ -1182,7 +1268,7 @@ fn read_validated_export_cfg_source(
             "{path} changed while it was being exported."
         )));
     }
-    validate_cfg_has_no_secrets(path, &bytes)?;
+    validate_exported_cfg(path, &bytes)?;
     Ok(Some(bytes))
 }
 
@@ -1692,14 +1778,14 @@ mod tests {
             &root.join("tf/cfg/config_default.cfg"),
             "unbindall\nbind w +forward\n",
         );
-        let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\n";
+        let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\nconnect bad.example\n";
         write_raw_zip(&path, &[("/", b""), ("cfg/overrides/autoexec.cfg", cfg)]);
         let refused = import_profile_from(&profiles, &root, &path, unlocked()).unwrap_err();
-        assert!(refused.message().contains("password"), "{refused:?}");
+        assert!(refused.message().contains("connect"), "{refused:?}");
         let review =
             creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
-        assert_eq!(review.warnings.len(), 1);
-        assert!(review.warnings[0].contains("password"));
+        assert_eq!(review.warnings.len(), 2);
+        assert!(review.warnings.iter().any(|warning| warning.contains("password")));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
         assert_eq!(
@@ -1711,13 +1797,21 @@ mod tests {
             .unwrap(),
             cfg
         );
-        assert!(export_profile_to(
+        export_profile_to(
             &profiles,
             &root,
             &imported.profiles[0].id,
             &dir.join("export.zip")
         )
-        .is_err());
+        .unwrap();
+        let mut exported = ZipArchive::new(fs::File::open(dir.join("export.zip")).unwrap()).unwrap();
+        let mut contents = Vec::new();
+        exported
+            .by_name("files/tf/cfg/overrides/autoexec.cfg")
+            .unwrap()
+            .read_to_end(&mut contents)
+            .unwrap();
+        assert_eq!(contents, cfg);
         let before = snapshot_tree(&profiles);
         write_raw_zip(&path, &[("cfg/autoexec.cfg", b"sensitivity 4\n")]);
         assert!(
@@ -2003,7 +2097,7 @@ mod tests {
     }
 
     #[test]
-    fn creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export() {
+    fn creator_vpk_review_preserves_approved_bytes_through_export() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");
         let root = dir.join("tf2");
@@ -2019,7 +2113,7 @@ mod tests {
         assert!(review
             .warnings
             .iter()
-            .any(|warning| warning.contains("creator.vpk/cfg/autoexec.cfg")
+            .any(|warning| warning.contains("creator.vpk/cfg/autoexec.cfg:1")
                 && warning.contains("password")));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
@@ -2030,11 +2124,15 @@ mod tests {
         );
         let destination = dir.join("export.zip");
         fs::write(&destination, b"keep existing export").unwrap();
-        assert!(export_profile_to(&profiles, &root, id, &destination)
-            .unwrap_err()
-            .message()
-            .contains("password"));
-        assert_eq!(fs::read(&destination).unwrap(), b"keep existing export");
+        export_profile_to(&profiles, &root, id, &destination).unwrap();
+        let mut exported = ZipArchive::new(fs::File::open(&destination).unwrap()).unwrap();
+        let mut contents = Vec::new();
+        exported
+            .by_name("files/tf/custom/creator.vpk")
+            .unwrap()
+            .read_to_end(&mut contents)
+            .unwrap();
+        assert_eq!(contents, pack);
 
         let before = snapshot_tree(&profiles);
         write_raw_zip(
@@ -2978,7 +3076,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_export_preserves_an_existing_destination_and_refuses_credentials() {
+    fn export_replaces_destination_and_preserves_credentials() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -2994,10 +3092,23 @@ mod tests {
         .unwrap();
         let destination = dir.join("existing.zip");
         fs::write(&destination, b"previous export").unwrap();
-        let err =
-            export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap_err();
-        assert!(err.message().contains("credential"), "{}", err.message());
-        assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+        let locations = inspect_profile_export_credentials_from(
+            &profiles,
+            &root,
+            &saved.profiles[0].id,
+        )
+        .unwrap();
+        assert_eq!(locations, ["tf/cfg/config.cfg:1"]);
+        assert!(!format!("{locations:?}").contains("hunter2"));
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
+        assert_ne!(fs::read(&destination).unwrap(), b"previous export");
+        let imported = import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
+        assert_eq!(imported.profiles.len(), 2);
+        let imported_id = &imported.profiles[1].id;
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, imported_id, "tf/cfg/config.cfg")).unwrap(),
+            b"password hunter2\n"
+        );
         assert!(!fs::read_dir(&dir).unwrap().flatten().any(|entry| {
             entry
                 .file_name()
@@ -3008,7 +3119,7 @@ mod tests {
     }
 
     #[test]
-    fn export_inspects_exclusive_and_shared_vpk_cfgs_before_replacing_destination() {
+    fn export_preserves_exclusive_and_shared_vpk_cfgs() {
         for pack in ["private-config.vpk", "mastercomfig-base.vpk"] {
             let dir = crate::test_temp_dir();
             let profiles = dir.join("profiles");
@@ -3030,17 +3141,21 @@ mod tests {
             let before = snapshot_tree(&profiles);
             let destination = dir.join("existing.zip");
             fs::write(&destination, b"previous export").unwrap();
-            let err = export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination)
-                .unwrap_err();
-            let message = err.message();
-            assert!(
-                message.contains(&format!("{pack}/cfg/private-server.cfg")),
-                "{message}"
-            );
-            assert!(message.contains("credential"), "{message}");
-            assert!(!message.contains("audit_dummy_never_a_real_secret"));
-            assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+            let locations = inspect_profile_export_credentials_from(
+                &profiles,
+                &root,
+                &saved.profiles[0].id,
+            )
+            .unwrap();
+            assert!(locations.iter().any(|location| {
+                location == &format!("tf/custom/{pack}/cfg/private-server.cfg:1")
+            }));
+            assert!(!format!("{locations:?}").contains("audit_dummy_never_a_real_secret"));
+            export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
+            assert_ne!(fs::read(&destination).unwrap(), b"previous export");
             assert_eq!(snapshot_tree(&profiles), before);
+            let imported = import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
+            assert_eq!(imported.profiles.len(), 2);
             assert!(!fs::read_dir(&dir)
                 .unwrap()
                 .flatten()

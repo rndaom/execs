@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
@@ -6,6 +6,7 @@ import { libraryStatusCopy } from "../../lib/library-ui";
 import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
 import { ProfileImportDialog } from "../ProfileImportDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
+import { Modal } from "../ui/Modal";
 import { OperationError } from "../ui/OperationError";
 import { FolderRepair } from "./FolderRepair";
 import { PackPrompt } from "./PackPrompt";
@@ -30,6 +31,8 @@ export function ReadyPanel({
   onChangeInstall,
   onLaunch,
   onCancelLaunch,
+  onReviewFiles,
+  onInspectExport,
 }: {
   path: string;
   profiles: ProfileLibraryState;
@@ -47,9 +50,36 @@ export function ReadyPanel({
   onChangeInstall: () => void;
   onLaunch: () => void;
   onCancelLaunch: () => void;
+  onReviewFiles: () => void;
+  onInspectExport: (id: string) => Promise<string[]>;
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
   const [profileMenuRequest, setProfileMenuRequest] = useState(0);
+  const [exportTargetId, setExportTargetId] = useState<string | null>(null);
+  const [exportLocations, setExportLocations] = useState<string[] | null>(null);
+  const [exportReviewError, setExportReviewError] = useState<string | null>(null);
+  const exportReviewVersion = useRef(0);
+  const closeExport = () => {
+    exportReviewVersion.current += 1;
+    setExportTargetId(null);
+  };
+  const reviewExport = (id: string) => {
+    const version = ++exportReviewVersion.current;
+    setExportTargetId(id);
+    setExportLocations(null);
+    setExportReviewError(null);
+    void onInspectExport(id)
+      .then((locations) => {
+        if (version === exportReviewVersion.current) setExportLocations(locations);
+      })
+      .catch((error: unknown) => {
+        if (version === exportReviewVersion.current) {
+          setExportReviewError(
+            error instanceof Error ? error.message : "Could not review this profile.",
+          );
+        }
+      });
+  };
   const controlsBusy = busy || progress.state.active;
   const { library } = profiles;
   const hasInactiveLibrary =
@@ -103,7 +133,7 @@ export function ReadyPanel({
             onDraftName={onDraftName}
             onSave={onSave}
             onSwitch={(id) => void profiles.switchProfile(id)}
-            onExport={(id) => void profiles.exportProfile(id)}
+            onExport={reviewExport}
             onDelete={profiles.reviewDelete}
             onImport={() => void profiles.importProfile()}
             onRepair={(id) => void profiles.reviewFolderRepair(id)}
@@ -166,7 +196,79 @@ export function ReadyPanel({
       ) : null}
 
       <ProfileImportDialog profiles={profiles} running={running} />
-      <ProfileDeleteDialog profiles={profiles} running={running} busy={controlsBusy} />
+      <ProfileDeleteDialog
+        profiles={{
+          ...profiles,
+          exportProfile: async (id) => reviewExport(id),
+        }}
+        running={running}
+        busy={controlsBusy}
+      />
+
+      <Modal
+        open={exportTargetId !== null}
+        title="Export profile"
+        description="Review this profile before choosing a ZIP destination."
+        onClose={closeExport}
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
+      >
+        <p className="t-body text-ink-muted">
+          The ZIP includes this profile’s cfg files and launch options exactly as saved. These may
+          contain server passwords or remote-console settings. Review them before sharing the ZIP.
+        </p>
+        {exportLocations === null && !exportReviewError ? (
+          <p className="t-meta mt-4" role="status">
+            Checking this profile’s cfg files…
+          </p>
+        ) : null}
+        {exportReviewError ? (
+          <p className="t-meta mt-4 text-error" role="alert">
+            {exportReviewError}
+          </p>
+        ) : null}
+        {exportLocations && exportLocations.length > 0 ? (
+          <div className="mt-4 rounded border border-warn/50 bg-warn/10 p-3">
+            <p className="t-meta text-ink">Possible saved credentials:</p>
+            <ul className="t-meta mt-2 list-disc space-y-1 pl-5 text-ink-muted">
+              {exportLocations.map((location) => (
+                <li key={location} className="break-all">
+                  {location}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn btn-ghost" onClick={closeExport}>
+            Cancel
+          </button>
+          {library?.activeProfileId === exportTargetId ? (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                closeExport();
+                if (profiles.deleteTarget) profiles.cancelDelete();
+                onReviewFiles();
+              }}
+            >
+              Review Files
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={exportLocations === null}
+            onClick={() => {
+              const id = exportTargetId;
+              closeExport();
+              if (id) void profiles.exportProfile(id);
+            }}
+          >
+            Export ZIP…
+          </button>
+        </div>
+      </Modal>
 
       <PackPrompt
         delta={

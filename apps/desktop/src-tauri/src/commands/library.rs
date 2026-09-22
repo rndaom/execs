@@ -181,6 +181,12 @@ mod tests {
     }
 }
 
+/// Read-only disclosure for the export review. The ZIP writer rechecks sources.
+#[tauri::command]
+pub async fn inspect_profile_export_credentials(id: String) -> Result<Vec<String>, CommandError> {
+    with_root(move |root| Ok(execs_core::inspect_profile_export_credentials(&root, &id)?)).await
+}
+
 /// Zip a profile to a path the user picks. The gate is taken once the save
 /// dialog returns, so the zip reads a library no write is changing under it;
 /// an open dialog must not block the absorb path behind it.

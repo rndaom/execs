@@ -141,7 +141,8 @@ export function ProfileImportDialog({
           {review.creator ? (
             <p className="t-body mt-4 text-ink-muted">
               Import only if you trust this creator. Their cfg commands run when TF2 loads them.
-              Saved server credentials are kept too; profiles containing them cannot be exported.
+              Saved passwords and remote-console settings are kept too. Review the listed files
+              before sharing an exported profile.
             </p>
           ) : null}
           {review.creator || review.notes.length > 0 || review.warnings.length > 0 ? (

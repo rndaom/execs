@@ -38,6 +38,7 @@ afterEach(async () => {
 });
 
 function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "vanilla") {
+  const onNavigate = vi.fn();
   const writeManagedCfg = vi.fn(async (path: string, text: string) => {
     files[path] = text;
   });
@@ -73,13 +74,14 @@ function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "v
               onBindSyncHandled={noop}
               onBusyChange={noop}
               onError={noop}
+              onNavigate={onNavigate}
             />
           </AppStatusProvider>
         </ToastProvider>,
       ),
     );
   };
-  return { writeManagedCfg, render };
+  return { writeManagedCfg, onNavigate, render };
 }
 
 function control<T extends HTMLElement>(selector: string): T {
@@ -240,12 +242,16 @@ describe("real Gameplay save preserves cfg settings", () => {
   );
 
   it("blocks derived settings after incomplete execution while keeping Files available", async () => {
-    const { render, writeManagedCfg } = fixture({
+    const { render, writeManagedCfg, onNavigate } = fixture({
       "tf/cfg/autoexec.cfg": "r_drawviewmodel 1\nexec missing\n",
     });
     await render();
     expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(true);
-    expect(node.textContent).toContain("Startup settings are unresolved at tf/cfg/autoexec.cfg:2");
+    expect(node.textContent).toContain(
+      "Cannot derive startup settings after tf/cfg/autoexec.cfg:2",
+    );
+    await act(async () => control<HTMLButtonElement>('[data-testid="review-startup-cfg"]').click());
+    expect(onNavigate).toHaveBeenCalledWith("files");
     // Even a dispatched event that bypasses native inert cannot write partial maps.
     await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
     await act(async () => vi.advanceTimersByTimeAsync(701));

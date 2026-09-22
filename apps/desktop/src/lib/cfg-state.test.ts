@@ -85,7 +85,7 @@ describe("profile startup settings", () => {
     });
   });
 
-  it("points to the unknown startup command without guessing plugin effects", () => {
+  it("points to a likely startup typo without guessing its effect", () => {
     const files = [
       { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
       { path: "tf/cfg/overrides/autoexec.cfg", text: "viewwmodel_fov 90" },
@@ -93,7 +93,10 @@ describe("profile startup settings", () => {
     expect(mapsFromFiles(files, "comfig")).toMatchObject({
       complete: false,
       effective: {},
-      reason: expect.stringContaining("tf/cfg/overrides/autoexec.cfg:1"),
+      reason: expect.stringContaining(
+        "Cannot derive startup settings after `viewwmodel_fov` at tf/cfg/overrides/autoexec.cfg:1. Did you mean `viewmodel_fov`?",
+      ),
+      issue: { path: "tf/cfg/overrides/autoexec.cfg", line: 1 },
     });
   });
 

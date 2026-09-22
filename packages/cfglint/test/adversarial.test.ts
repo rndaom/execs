@@ -43,7 +43,7 @@ describe("case and quoting evasion", () => {
       'alias stage1 "bind mouse5 stage2"',
       "bind mouse4 stage1",
     ].join("\n");
-    expect(ids(one(cfg))).toContain("block:rcon-password");
+    expect(ids(one(cfg))).toContain("warn:rcon-password");
   });
 });
 
@@ -106,11 +106,11 @@ describe("exec hidden inside a payload", () => {
     ];
     const found = ids(files);
     expect(found).toContain("warn:unbindall");
-    expect(found).toContain("block:rcon-password");
+    expect(found).toContain("warn:rcon-password");
     expect(found).not.toContain("block:exec-external");
   });
 
-  it("does not let a payload exec escape the exec depth budget", () => {
+  it("does not treat a dormant bind exec as part of the current exec depth", () => {
     const files: CfgFile[] = [
       { path: "tf/cfg/autoexec.cfg", text: "exec c1" },
       { path: "tf/cfg/c1.cfg", text: "exec c2" },
@@ -119,15 +119,15 @@ describe("exec hidden inside a payload", () => {
       { path: "tf/cfg/c4.cfg", text: 'bind f "exec c5"' },
       { path: "tf/cfg/c5.cfg", text: "volume 1" },
     ];
-    expect(ids(files)).toContain("warn:exec-depth");
+    expect(ids(files)).not.toContain("warn:exec-depth");
   });
 
-  it("reports a cycle rather than recursing when a payload execs its own file", () => {
+  it("does not call a deferred bind that reloads its defining file a cycle", () => {
     const files: CfgFile[] = [
       { path: "tf/cfg/autoexec.cfg", text: 'bind f "exec autoexec"' },
       { path: "tf/cfg/other.cfg", text: "volume 1" },
     ];
-    expect(ids(files)).toContain("warn:exec-cycle");
+    expect(ids(files)).not.toContain("warn:exec-cycle");
   });
 });
 

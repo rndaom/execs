@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InventorySnapshot } from "./bridge";
-import { inventoryPage, itemName } from "./inventory-ui";
+import { inventoryPage, itemName, qualityColor } from "./inventory-ui";
 
 const snapshot: InventorySnapshot = {
   steamId: "test",
@@ -20,6 +20,11 @@ const snapshot: InventorySnapshot = {
   definitions: { "13": { name: "Scattergun", kind: "Primary", classes: ["scout"], icon: null } },
 };
 describe("inventory browsing", () => {
+  it("uses installed quality colors and falls back to known TF2 colors", () => {
+    expect(qualityColor(snapshot, 6)).toBe("#FFD700");
+    expect(qualityColor({ ...snapshot, qualityColors: { "6": "#123456" } }, 6)).toBe("#123456");
+    expect(qualityColor(snapshot, 99)).toBeUndefined();
+  });
   it("preserves empty slots, partial last pages, and unplaced items", () => {
     const page = inventoryPage(snapshot, "", null, 2);
     expect(page.slots[0].item?.id).toBe("9007199254740993");

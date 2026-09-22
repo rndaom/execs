@@ -24,7 +24,14 @@ export type InventorySnapshot = {
   capacity: number;
   items: InventoryItem[];
   definitions: Record<string, InventoryDefinition>;
-  itemDescriptions?: Record<string, InventoryDefinition & { details: string[] }>;
+  itemDescriptions?: Record<
+    string,
+    InventoryDefinition & {
+      details: string[];
+      targetIcon?: string | null;
+      baseIcon?: string | null;
+    }
+  >;
   qualityColors?: Record<string, string>;
   warning: string | null;
 };
@@ -238,6 +245,10 @@ export async function onSwitchProgress(
 
 export async function exportProfile(id: string): Promise<string | null> {
   return call<string | null>("export_profile", { id });
+}
+
+export async function inspectProfileExportCredentials(id: string): Promise<string[]> {
+  return call<string[]>("inspect_profile_export_credentials", { id });
 }
 
 export type ProfileImportReview = {

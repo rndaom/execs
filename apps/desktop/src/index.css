@@ -486,14 +486,109 @@ a:focus-visible,
 
   .inventory-item:hover {
     background: var(--color-panel-raised);
-    border-color: var(--color-edge-strong);
   }
 
   .inventory-item-selected,
   .inventory-item-selected:hover {
-    border-color: var(--color-brand);
     background: color-mix(in srgb, var(--color-brand) 6%, var(--color-panel));
     box-shadow: inset 0 0 0 1px var(--color-brand);
+  }
+
+  .inventory-paint-art,
+  .inventory-kit-art {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .inventory-paint-sample {
+    width: 100%;
+    height: 100%;
+    background-position: center;
+    background-size: 96px;
+  }
+
+  .inventory-paint-masked {
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    -webkit-mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+  }
+
+  .inventory-paint-generic {
+    clip-path: polygon(
+      4% 36%,
+      48% 36%,
+      52% 24%,
+      70% 24%,
+      73% 36%,
+      98% 36%,
+      98% 53%,
+      72% 53%,
+      68% 64%,
+      54% 64%,
+      48% 53%,
+      38% 53%,
+      32% 80%,
+      21% 80%,
+      25% 53%,
+      4% 53%
+    );
+  }
+
+  .inventory-paint-art-large,
+  .inventory-kit-art-large {
+    height: 160px;
+    margin-bottom: 16px;
+  }
+
+  .inventory-paint-art-large .inventory-paint-sample {
+    background-size: 160px;
+  }
+
+  .inventory-paint-swatch {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--color-panel);
+  }
+
+  .inventory-kit-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .inventory-kit-target {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 48%;
+    height: 55%;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-sm);
+    object-fit: contain;
+    background: var(--color-panel);
+  }
+
+  .inventory-wear-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--color-ink-muted);
   }
 
   .inventory-detail {

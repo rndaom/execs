@@ -67,6 +67,8 @@ function Harness() {
           onChangeInstall={noop}
           onLaunch={noop}
           onCancelLaunch={noop}
+          onReviewFiles={noop}
+          onInspectExport={async () => []}
           settings={
             <SettingsHost
               api={api}
@@ -146,14 +148,16 @@ describe("retained settings feedback", () => {
     await render();
     expect(element("settings-surface-gameplay").hasAttribute("inert")).toBe(true);
     expect(box.textContent).toContain(
-      "Startup settings are unresolved at tf/cfg/overrides/autoexec.cfg:1",
+      "Cannot derive startup settings after tf/cfg/overrides/autoexec.cfg:1",
     );
     // Fault-inject a queued input despite the inert UI. The write path must
     // still reject an incomplete snapshot, including a retained-pane flush.
     await click("gameplay-draw-viewmodel");
     await advance(700);
     expect(save).not.toHaveBeenCalled();
-    expect(toast()).toContain("Startup settings are unresolved at tf/cfg/overrides/autoexec.cfg:1");
+    expect(toast()).toContain(
+      "Cannot derive startup settings after tf/cfg/overrides/autoexec.cfg:1",
+    );
     expect(pending).toBe(true);
   });
 

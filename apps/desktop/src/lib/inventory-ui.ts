@@ -16,6 +16,25 @@ export const QUALITY_NAMES: Record<number, string> = {
   14: "Collector’s",
   15: "Decorated",
 };
+// The installed schema is authoritative. These known TF2 quality colors keep
+// borders visible when an older/partial snapshot has no schema color table.
+export const QUALITY_COLORS: Record<number, string> = {
+  0: "#B2B2B2",
+  1: "#4D7455",
+  3: "#476291",
+  5: "#8650AC",
+  6: "#FFD700",
+  7: "#70B04A",
+  8: "#A50F79",
+  9: "#70B04A",
+  11: "#CF6A32",
+  13: "#38F3AB",
+  14: "#AA0000",
+  15: "#FAFAFA",
+};
+export function qualityColor(snapshot: InventorySnapshot, quality: number): string | undefined {
+  return snapshot.qualityColors?.[quality] ?? QUALITY_COLORS[quality];
+}
 export function itemName(snapshot: InventorySnapshot, item: InventoryItem): string {
   return item.customName || itemDescription(snapshot, item)?.name || `Item #${item.definition}`;
 }

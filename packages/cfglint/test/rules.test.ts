@@ -20,15 +20,15 @@ describe("block-tier rules", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("blocks connect/password server redirects", () => {
+  it("blocks imported redirects and warns about sharing passwords", () => {
     const { ids } = rules(one('connect 203.0.113.7:27015\npassword "letmein"'));
     expect(ids).toContain("block:connect-redirect");
-    expect(ids).toContain("block:rcon-password");
+    expect(ids).toContain("warn:rcon-password");
   });
 
-  it("blocks rcon configuration", () => {
+  it("warns about sharing rcon configuration", () => {
     const { ids } = rules(one("rcon_address 203.0.113.7\nrcon_password hunter2"));
-    expect(ids.filter((i) => i === "block:rcon-password")).toHaveLength(2);
+    expect(ids.filter((i) => i === "warn:rcon-password")).toHaveLength(2);
   });
 
   it("blocks connect hidden inside a quoted, semicolon-packed bind", () => {

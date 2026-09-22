@@ -121,7 +121,8 @@ pub use wizard::{
 };
 pub use zip::{
     export_profile, export_profile_to, import_profile, import_profile_from,
-    import_reviewed_profile, inspect_profile_import, safe_zip_file_name, ProfileImportReview,
+    import_reviewed_profile, inspect_profile_export_credentials, inspect_profile_import,
+    safe_zip_file_name, ProfileImportReview,
 };
 
 #[cfg(test)]

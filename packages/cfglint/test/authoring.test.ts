@@ -112,12 +112,14 @@ describe("personal authoring and imported policy remain separate", () => {
     expect(run("host_writeconfig").findings[0].message).toContain("config.cfg");
   });
 
-  it("never echoes credentials and keeps save/export restrictions", () => {
+  it("warns before sharing credentials without echoing or blocking their bytes", () => {
     for (const trust of ["self", "provided"] as const) {
       const result = run('password "private-value"', trust);
-      expect(result.ok).toBe(false);
+      expect(result.ok).toBe(true);
       expect(JSON.stringify(result.findings)).not.toContain("private-value");
-      expect(result.findings[0].category).toBe("restriction");
+      expect(result.findings[0].tier).toBe("warn");
+      expect(result.findings[0].category).toBe("advice");
+      expect(result.findings[0].message).toContain("sharing an exported profile");
     }
   });
 });

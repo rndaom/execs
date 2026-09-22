@@ -4,13 +4,16 @@ import {
   buildLaunchPreset,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
+  LAUNCH_PRESET_PAGE_SIZE,
   LAUNCH_PRESETS,
   type LaunchPreset,
   type LaunchPresetId,
   launchOptionGroups,
+  launchPresetConflict,
   launchPresetPresent,
   recommendedLaunchOptions,
   removeLaunchOption,
+  searchLaunchPresets,
   steamWriteCopy,
   strippedLaunchNotice,
   strippedLaunchTokens,
@@ -77,6 +80,15 @@ describe("forbidden launch flags", () => {
 });
 
 describe("launch option editing", () => {
+  it("searches the documented catalog by flag and purpose", () => {
+    expect(LAUNCH_PRESETS.length).toBeGreaterThan(LAUNCH_PRESET_PAGE_SIZE);
+    expect(searchLaunchPresets("texture streaming").map((option) => option.id)).toEqual([
+      "no_texture_stream",
+    ]);
+    expect(searchLaunchPresets("-displayindex").map((option) => option.id)).toEqual([
+      "displayindex",
+    ]);
+  });
   it("builds only catalog options with bounded numeric values", () => {
     const values = { refresh: "144", width: "1920", height: "1080" };
     expect(buildLaunchPreset(preset("console"), values)).toBe("-console");
@@ -84,12 +96,25 @@ describe("launch option editing", () => {
     expect(buildLaunchPreset(preset("resolution"), values)).toBe("-w 1920 -h 1080");
     expect(buildLaunchPreset(preset("freq"), { ...values, refresh: "144 +quit" })).toBeNull();
     expect(buildLaunchPreset(preset("resolution"), { ...values, height: "0" })).toBeNull();
+    expect(buildLaunchPreset(preset("resolution"), { ...values, height: "360" })).toBeNull();
+    expect(buildLaunchPreset(preset("resolution"), { ...values, height: "360" }, true)).toBe(
+      "-w 1920 -h 360",
+    );
+    expect(buildLaunchPreset(preset("displayindex"), { ...values, displayIndex: "0" })).toBe(
+      "-displayindex 0",
+    );
+    expect(buildLaunchPreset(preset("displayindex"), { ...values, displayIndex: "17" })).toBeNull();
   });
   it("detects options already present in a profile", () => {
     expect(launchPresetPresent("-novid -freq 144", preset("novid"))).toBe(true);
     expect(launchPresetPresent("-novid -freq 144", preset("freq"))).toBe(true);
     expect(launchPresetPresent("-w 1920", preset("resolution"))).toBe(true);
     expect(launchPresetPresent("-novid", preset("console"))).toBe(false);
+    expect(launchPresetPresent("-refresh 144", preset("freq"))).toBe(true);
+    expect(launchPresetPresent("-sw", preset("windowed"))).toBe(true);
+    expect(launchPresetPresent("-full", preset("fullscreen"))).toBe(true);
+    expect(launchPresetConflict("-fullscreen", preset("windowed"))).toBe("-fullscreen");
+    expect(launchPresetConflict("-windowed", preset("fullscreen"))).toBe("-windowed");
   });
   it("does not guess removal boundaries for quoted option-looking data or wrappers", () => {
     expect(launchOptionGroups('+echo "-not a flag" -novid')).toBeNull();

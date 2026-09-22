@@ -1,38 +1,220 @@
 export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
 
-/** Curated from Steam Support and https://docs.comfig.app/latest/customization/launch_options/. */
+/**
+ * TF2-relevant options documented by comfig, Steam Support, and the Valve
+ * Developer Community. Keep the guided list focused on options a player can
+ * reasonably choose; the launch string remains available for other flags.
+ * https://docs.comfig.app/latest/customization/launch_options/
+ * https://help.steampowered.com/en/faqs/view/7D01-D2DD-D75E-2955
+ * https://developer.valvesoftware.com/wiki/Command_line_options
+ */
 export const LAUNCH_PRESETS = [
-  { id: "novid", label: "Skip intro video", token: "-novid", kind: "flag" },
-  { id: "nojoy", label: "Disable joystick", token: "-nojoy", kind: "flag" },
+  {
+    id: "novid",
+    label: "Skip intro video",
+    token: "-novid",
+    kind: "flag",
+    detail: "Skip the Valve startup video.",
+  },
+  {
+    id: "nojoy",
+    label: "Disable joystick",
+    token: "-nojoy",
+    kind: "flag",
+    detail: "Do not initialize Source joystick support.",
+  },
   {
     id: "nosteamcontroller",
     label: "Disable Steam controller",
     token: "-nosteamcontroller",
     kind: "flag",
+    detail: "Skip Source's controller system; Steam Input remains available.",
   },
-  { id: "nohltv", label: "Disable SourceTV hosting", token: "-nohltv", kind: "flag" },
-  { id: "particles", label: "Reduce beam count", token: "-particles 1", kind: "flag" },
-  { id: "console", label: "Open developer console", token: "-console", kind: "flag" },
-  { id: "nostartupsound", label: "Mute menu music", token: "-nostartupsound", kind: "flag" },
-  { id: "freq", label: "Refresh rate", token: "-freq", kind: "refresh" },
-  { id: "resolution", label: "Resolution", token: "-w", kind: "resolution" },
+  {
+    id: "nohltv",
+    label: "Disable SourceTV hosting",
+    token: "-nohltv",
+    kind: "flag",
+    detail: "Do not host SourceTV locally.",
+  },
+  {
+    id: "particles",
+    label: "Reduce beam count",
+    token: "-particles 1",
+    kind: "flag",
+    detail: "Use the minimum beam allocation documented by comfig.",
+  },
+  {
+    id: "console",
+    label: "Open developer console",
+    token: "-console",
+    kind: "flag",
+    detail: "Show the console when TF2 starts.",
+  },
+  {
+    id: "nostartupsound",
+    label: "Mute menu music",
+    token: "-nostartupsound",
+    kind: "flag",
+    detail: "Skip main menu music at startup.",
+  },
+  {
+    id: "freq",
+    label: "Refresh rate",
+    token: "-freq",
+    kind: "refresh",
+    detail: "Force a refresh rate only if TF2 detects it incorrectly.",
+  },
+  {
+    id: "resolution",
+    label: "Resolution",
+    token: "-w",
+    kind: "resolution",
+    detail: "Force a width and height; prefer TF2 Video settings when they work.",
+  },
+  {
+    id: "windowed",
+    label: "Windowed mode",
+    token: "-windowed",
+    kind: "flag",
+    detail: "Start in a window. May override the video mode selected in TF2.",
+  },
+  {
+    id: "fullscreen",
+    label: "Fullscreen mode",
+    token: "-fullscreen",
+    kind: "flag",
+    detail: "Start fullscreen. May override the video mode selected in TF2.",
+  },
+  {
+    id: "noborder",
+    label: "Borderless window",
+    token: "-noborder",
+    kind: "flag",
+    detail: "Remove the window border; use with windowed mode.",
+  },
+  {
+    id: "no_texture_stream",
+    label: "Disable texture streaming",
+    token: "-no_texture_stream",
+    kind: "flag",
+    detail: "For systems with fast texture access and enough video memory.",
+  },
+  {
+    id: "audiolanguage",
+    label: "English voice lines",
+    token: "-audiolanguage english",
+    kind: "flag",
+    detail: "Use English voice audio while keeping another game language.",
+  },
+  {
+    id: "vulkan",
+    label: "Vulkan renderer",
+    token: "-vulkan",
+    kind: "flag",
+    detail: "Windows: run TF2 through DXVK. Performance depends on GPU and driver.",
+  },
+  {
+    id: "displayindex",
+    label: "Display index",
+    token: "-displayindex",
+    kind: "displayindex",
+    detail: "Linux/macOS: choose a monitor by index; 0 is the primary display.",
+  },
+  {
+    id: "nouserclip",
+    label: "Software clip planes",
+    token: "-nouserclip",
+    kind: "flag",
+    detail: "Use software clipping; performance varies by CPU and GPU.",
+  },
+  {
+    id: "small",
+    label: "Allow small resolutions",
+    token: "-small",
+    kind: "flag",
+    detail: "Permit compact video modes such as 640 × 360.",
+  },
+  {
+    id: "dev",
+    label: "Developer output",
+    token: "-dev",
+    kind: "flag",
+    detail: "Show extra console messages during debugging.",
+  },
+  {
+    id: "condebug",
+    label: "Log console output",
+    token: "-condebug",
+    kind: "flag",
+    detail: "Write console output to tf/console.log.",
+  },
+  {
+    id: "conclearlog",
+    label: "Clear console log on launch",
+    token: "-conclearlog",
+    kind: "flag",
+    detail: "Clear tf/console.log at startup; requires -condebug.",
+  },
 ] as const;
 
 export type LaunchPreset = (typeof LAUNCH_PRESETS)[number];
 export type LaunchPresetId = LaunchPreset["id"];
-export type LaunchPresetValues = { refresh: string; width: string; height: string };
+export type LaunchPresetValues = {
+  refresh: string;
+  width: string;
+  height: string;
+  displayIndex?: string;
+};
+
+export const LAUNCH_PRESET_PAGE_SIZE = 8;
+
+export function searchLaunchPresets(query: string): LaunchPreset[] {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return LAUNCH_PRESETS.filter((preset) => {
+    const haystack = `${preset.label} ${preset.token} ${preset.detail}`.toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  });
+}
 
 export function launchPresetPresent(raw: string, preset: LaunchPreset): boolean {
   const groups = launchOptionGroups(raw);
   if (!groups) return false;
   const tokens = groups.map((group) => group.text.split(/\s+/, 1)[0].toLowerCase());
-  return preset.kind === "resolution"
-    ? tokens.includes("-w") || tokens.includes("-h")
-    : tokens.includes(preset.token.split(" ", 1)[0].toLowerCase());
+  if (preset.kind === "resolution")
+    return ["-w", "-h", "-width", "-height"].some((token) => tokens.includes(token));
+  if (preset.kind === "refresh")
+    return ["-freq", "-refresh", "-refreshrate"].some((token) => tokens.includes(token));
+  if (preset.id === "windowed")
+    return ["-windowed", "-window", "-sw", "-startwindowed"].some((token) =>
+      tokens.includes(token),
+    );
+  if (preset.id === "fullscreen")
+    return ["-fullscreen", "-full"].some((token) => tokens.includes(token));
+  return tokens.includes(preset.token.split(" ", 1)[0].toLowerCase());
+}
+
+export function launchPresetConflict(raw: string, preset: LaunchPreset): string | null {
+  const tokens = launchOptionGroups(raw)?.map((group) =>
+    group.text.split(/\s+/, 1)[0].toLowerCase(),
+  );
+  if (!tokens) return null;
+  if (preset.id === "windowed" && ["-fullscreen", "-full"].some((token) => tokens.includes(token)))
+    return "-fullscreen";
+  if (
+    preset.id === "fullscreen" &&
+    ["-windowed", "-window", "-sw", "-startwindowed"].some((token) => tokens.includes(token))
+  )
+    return "-windowed";
+  return null;
 }
 
 /** Only known options and bounded decimal values can enter the guided composer. */
-export function buildLaunchPreset(preset: LaunchPreset, values: LaunchPresetValues): string | null {
+export function buildLaunchPreset(
+  preset: LaunchPreset,
+  values: LaunchPresetValues,
+  allowSmall = false,
+): string | null {
   if (preset.kind === "flag") return preset.token;
   const decimal = (raw: string, min: number, max: number) => {
     if (!/^[0-9]{1,5}$/.test(raw)) return null;
@@ -43,8 +225,12 @@ export function buildLaunchPreset(preset: LaunchPreset, values: LaunchPresetValu
     const refresh = decimal(values.refresh, 30, 1000);
     return refresh === null ? null : `-freq ${refresh}`;
   }
+  if (preset.kind === "displayindex") {
+    const index = decimal(values.displayIndex ?? "", 0, 16);
+    return index === null ? null : `-displayindex ${index}`;
+  }
   const width = decimal(values.width, 640, 16384);
-  const height = decimal(values.height, 480, 16384);
+  const height = decimal(values.height, allowSmall ? 360 : 480, 16384);
   return width === null || height === null ? null : `-w ${width} -h ${height}`;
 }
 
