@@ -3,6 +3,7 @@ import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
 import { libraryStatusCopy } from "../../lib/library-ui";
+import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
 import { ProfileImportDialog } from "../ProfileImportDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
 import { OperationError } from "../ui/OperationError";
@@ -62,7 +63,12 @@ export function ReadyPanel({
         path={path}
         running={running}
         launching={launching}
-        disabled={controlsBusy || recoveryTargetId !== null || unsafeActive !== undefined}
+        disabled={
+          controlsBusy ||
+          !!launchBlockReason ||
+          recoveryTargetId !== null ||
+          unsafeActive !== undefined
+        }
         blockedReason={
           launchBlockReason ??
           (controlsBusy
@@ -88,6 +94,7 @@ export function ReadyPanel({
             onSave={onSave}
             onSwitch={(id) => void profiles.switchProfile(id)}
             onExport={(id) => void profiles.exportProfile(id)}
+            onDelete={profiles.reviewDelete}
             onImport={() => void profiles.importProfile()}
             onRepair={(id) => void profiles.reviewFolderRepair(id)}
             onCreateNew={onCreateNew}
@@ -149,6 +156,7 @@ export function ReadyPanel({
       ) : null}
 
       <ProfileImportDialog profiles={profiles} running={running} />
+      <ProfileDeleteDialog profiles={profiles} running={running} busy={controlsBusy} />
 
       <PackPrompt
         delta={

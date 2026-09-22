@@ -8,6 +8,7 @@ mod hud_fetch;
 mod hud_stats;
 mod mods_fetch;
 mod net;
+mod startup_error;
 mod viewmodel_fetch;
 
 /// Isolated release verification; absent from ordinary application builds.
@@ -626,7 +627,7 @@ pub fn run() {
             // helper can reach the legacy infallible accessor. Keep it a clean
             // startup failure instead of a delayed panic on the first profile
             // operation.
-            eprintln!("{error}");
+            startup_error::show(&error, None);
             return;
         }
     };
@@ -635,7 +636,7 @@ pub fn run() {
         Err(error) => {
             // Failing closed is safer than accepting writes while Steam may
             // still be replacing official archives.
-            eprintln!("execs could not start: {error}");
+            startup_error::show(&error, Some(&data_dir.join(DURABLE_OPERATION_DIR)));
             return;
         }
     };
@@ -666,6 +667,9 @@ pub fn run() {
             commands::library::get_profile_library,
             commands::library::init_profile_library,
             commands::library::save_current_as,
+            commands::library::delete_profile,
+            commands::app_settings::get_app_settings,
+            commands::app_settings::set_app_preferences,
             commands::library::switch_profile,
             commands::library::export_profile,
             commands::library::import_profile,
@@ -698,6 +702,8 @@ pub fn run() {
             commands::lifecycle::install_app_update,
             commands::hud::get_hud_catalog,
             commands::hud::get_hud_state,
+            commands::hud::get_hud_ownership,
+            commands::hud::select_profile_hud,
             commands::hud::get_hud_album,
             commands::hud::get_hud_stats,
             commands::hud::install_hud,
@@ -838,6 +844,68 @@ mod startup_tests {
     fn missing_platform_data_directory_is_a_clear_startup_error() {
         let error = startup_data_dir_preflight(Err("APPDATA is unset".into())).unwrap_err();
         assert_eq!(error, "execs could not start: APPDATA is unset");
+    }
+
+    #[test]
+    fn normal_startup_does_not_create_maintenance_state() {
+        let dir = temp_dir("normal-preflight");
+        assert_eq!(startup_data_dir_preflight(Ok(dir.clone())).unwrap(), dir);
+        assert_eq!(restored_operation(&dir).unwrap(), None);
+        assert!(!dir.join("maintenance").exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn corrupt_mismatched_and_multiple_markers_are_preserved_on_failure() {
+        let dir = temp_dir("invalid-preflight");
+        let maintenance = dir.join("maintenance");
+        std::fs::create_dir_all(&maintenance).unwrap();
+        let launch = maintenance.join("launching-tf2");
+        for bytes in [
+            b"not a marker".to_vec(),
+            b"0\n".to_vec(),
+            (0x400 | ExclusiveOperation::SteamVerification as u64)
+                .to_string()
+                .into_bytes(),
+        ] {
+            std::fs::write(&launch, &bytes).unwrap();
+            assert!(restored_operation(&dir).is_err());
+            assert_eq!(std::fs::read(&launch).unwrap(), bytes);
+        }
+        let launch_bytes = (0x500 | ExclusiveOperation::LaunchingTf2 as u64).to_string();
+        let repair_bytes = (0x600 | ExclusiveOperation::SteamVerification as u64).to_string();
+        std::fs::write(&launch, &launch_bytes).unwrap();
+        let repair = maintenance.join("steam-verification");
+        std::fs::write(&repair, &repair_bytes).unwrap();
+        assert!(restored_operation(&dir)
+            .unwrap_err()
+            .contains("more than one"));
+        assert_eq!(std::fs::read_to_string(&launch).unwrap(), launch_bytes);
+        assert_eq!(std::fs::read_to_string(&repair).unwrap(), repair_bytes);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unreadable_marker_refuses_startup_without_replacing_it() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = temp_dir("unreadable-preflight");
+        let maintenance = dir.join("maintenance");
+        std::fs::create_dir_all(&maintenance).unwrap();
+        let marker = maintenance.join("launching-tf2");
+        let bytes = (0x500 | ExclusiveOperation::LaunchingTf2 as u64).to_string();
+        std::fs::write(&marker, &bytes).unwrap();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&marker)
+            .unwrap();
+        assert!(restored_operation(&dir)
+            .unwrap_err()
+            .contains("could not read"));
+        drop(held);
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), bytes);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

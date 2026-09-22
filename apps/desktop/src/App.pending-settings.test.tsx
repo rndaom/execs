@@ -21,6 +21,7 @@ let close: (event: { preventDefault: () => void }) => void;
 beforeEach(async () => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   native.destroy.mockReset().mockResolvedValue(undefined);
@@ -157,14 +158,11 @@ it("releases failed draft gating for a later profile change only after explicit 
   const target = [...box.querySelectorAll<HTMLButtonElement>('[data-testid="profile-name"]')].find(
     (item) => item.textContent?.includes("Second"),
   );
-  expect(target?.disabled).toBe(true);
-  await click("Review changes");
+  expect(target?.disabled).toBe(false);
+  await act(async () => target?.click());
+  expect(change).not.toHaveBeenCalled();
+  expect(box.querySelector('[data-testid="files-exit-guard"]')).not.toBeNull();
   await click("Discard and continue");
-  const enabledTarget = [
-    ...box.querySelectorAll<HTMLButtonElement>('[data-testid="profile-name"]'),
-  ].find((item) => item.textContent?.includes("Second"));
-  expect(enabledTarget?.disabled).toBe(false);
-  await act(async () => enabledTarget?.click());
   expect(change).toHaveBeenCalledWith("second");
 });
 
@@ -174,7 +172,7 @@ it("explains Steam verification separately and opens its recovery pane", async (
     installingUpdate: false,
     steamVerification: true,
   });
-  await act(async () => vi.advanceTimersByTimeAsync(1001));
+  await act(async () => vi.advanceTimersByTimeAsync(5001));
   expect(launch().disabled).toBe(true);
   expect(reason()).toContain("Steam verification in Mods");
   await click("Open Mods");

@@ -19,7 +19,7 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "ultra",
     label: "Ultra",
-    description: "Maximum fidelity with the highest system requirements.",
+    description: "Highest fidelity. Most demanding.",
     balance: "Fidelity",
     performance: "Lowest",
     fidelity: "Maximum",
@@ -27,7 +27,7 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "high",
     label: "High",
-    description: "High visual quality for modern systems.",
+    description: "High quality for modern systems.",
     balance: "Quality",
     performance: "Moderate",
     fidelity: "High",
@@ -43,7 +43,7 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "medium",
     label: "Medium",
-    description: "A balanced mix of visual quality and performance.",
+    description: "Balanced quality and performance.",
     balance: "Balanced",
     performance: "Great",
     fidelity: "Balanced",
@@ -59,7 +59,7 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "low",
     label: "Low",
-    description: "Maximum performance with reduced visual effects.",
+    description: "Fewer effects, higher performance.",
     balance: "Performance",
     performance: "Very high",
     fidelity: "Low",

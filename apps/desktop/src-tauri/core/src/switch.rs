@@ -15,7 +15,7 @@ use crate::hash::{
     remove_file_force_within, sha256_file, validate_dir_within, validate_file_within,
     MAX_CFG_FILE_BYTES,
 };
-use crate::hud::{inactive_hud_packs, live_hud_names, preserve_live_huds_for_switch};
+use crate::hud::{inactive_hud_packs, preserve_live_huds_for_switch};
 use crate::launch::LaunchWriteReason;
 use crate::process_lock::refuse_if_running_among;
 use crate::profile::profile_live_process_names as live_process_names;
@@ -179,6 +179,8 @@ where
         crate::preloader::capture_installed_selections(profiles_dir, tf2_root, &running)?;
     }
     let target = load_manifest(profiles_dir, profile_id)?;
+    crate::hud::require_resolved_hud(&target)?;
+    crate::hud::refuse_profile_hud_vpks(profiles_dir, &target)?;
     crate::custom_folders::validate_custom_mounts(&target.files)?;
     preflight_target(profiles_dir, profile_id, &target)?;
     let preloader =
@@ -215,7 +217,7 @@ where
         });
     }
 
-    let live_hud_folders: Vec<String> = live_hud_names(tf2_root)
+    let live_hud_folders: Vec<String> = crate::hud::live_hud_names_checked(tf2_root)?
         .into_iter()
         .map(|hud| hud.name)
         .collect();
@@ -429,7 +431,9 @@ pub fn validate_profile_switch_target(
         return Err(ProfileError::UnknownProfile);
     }
     let target = load_manifest(profiles_dir, profile_id)?;
-    preflight_target(profiles_dir, profile_id, &target)
+    crate::hud::require_resolved_hud(&target)?;
+    preflight_target(profiles_dir, profile_id, &target)?;
+    crate::hud::refuse_profile_hud_vpks(profiles_dir, &target)
 }
 
 /// Validate the entire target manifest before the live tree is touched: every
@@ -1157,18 +1161,21 @@ mod tests {
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
         write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
-        write_live(&root.join("tf/custom/ahud/info.vdf"), "a\n");
-        write_live(&root.join("tf/custom/zhud/info.vdf"), "z\n");
-        let both = save(&profiles, &root, "Both");
-        let plain = library_profile(
+        let plain = save(&profiles, &root, "Plain");
+        let info = b"\"HUD\" { \"ui_version\" \"3\" }\n";
+        let both = library_profile(
             &profiles,
             &root,
-            "Plain",
+            "Both",
             &[
                 ("tf/cfg/config.cfg", b"unbindall\n"),
-                ("tf/custom/plain/note.txt", b"plain\n"),
+                ("tf/custom/ahud/info.vdf", info),
+                ("tf/custom/zhud/info.vdf", info),
             ],
         );
+        let mut manifest = load_manifest(&profiles, &both).unwrap();
+        manifest.hud_selected_root = Some("ahud".into());
+        crate::profile::save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
         switch_profile_to(&profiles, &root, &plain, unlocked(), no_steam(), |_| {}).unwrap();
         switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
 
@@ -1183,7 +1190,7 @@ mod tests {
                 "tf/custom/zhud/info.vdf"
             ))
             .unwrap(),
-            b"z\n"
+            info
         );
         let result = absorb_owned_to(&profiles, &root, unlocked(), no_steam()).unwrap();
         assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);
@@ -1205,22 +1212,47 @@ mod tests {
     }
 
     #[test]
-    fn another_profiles_live_hud_cannot_change_the_targets_inferred_hud() {
+    fn legacy_target_requires_explicit_choice_independent_of_another_profiles_live_hud() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
         write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
-        write_live(&root.join("tf/custom/ahud/info.vdf"), "a\n");
-        write_live(&root.join("tf/custom/zhud/info.vdf"), "z\n");
-        let both = save(&profiles, &root, "Both");
-        let plain = library_profile(
+        let _plain = save(&profiles, &root, "Plain");
+        let info = b"\"HUD\" { \"ui_version\" \"3\" }\n";
+        let both = library_profile(
             &profiles,
             &root,
-            "Plain",
-            &[("tf/cfg/config.cfg", b"unbindall\n")],
+            "Both",
+            &[
+                ("tf/cfg/config.cfg", b"unbindall\n"),
+                ("tf/custom/ahud/info.vdf", info),
+                ("tf/custom/zhud/info.vdf", info),
+            ],
         );
-        switch_profile_to(&profiles, &root, &plain, unlocked(), no_steam(), |_| {}).unwrap();
-        write_live(&root.join("tf/custom/zhud/info.vdf"), "z\n");
+        write_live(
+            &root.join("tf/custom/zhud/info.vdf"),
+            std::str::from_utf8(info).unwrap(),
+        );
+        assert_eq!(
+            switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap_err(),
+            ProfileError::HudReviewRequired
+        );
+        assert!(root.join("tf/custom/zhud/info.vdf").is_file());
+        let review = crate::hud::get_hud_ownership_to(&profiles, &root, &both).unwrap();
+        assert!(review.selected_hud.is_none());
+        crate::hud::select_profile_hud_to(
+            &profiles,
+            &root,
+            &both,
+            "ahud",
+            &review.fingerprint,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(
+            root.join("tf/custom/zhud/info.vdf").is_file(),
+            "Choosing an inactive profile's HUD must not touch the live profile"
+        );
         switch_profile_to(&profiles, &root, &both, unlocked(), no_steam(), |_| {}).unwrap();
 
         let mounted = crate::hud::live_hud_names(&root);
@@ -1724,7 +1756,10 @@ mod tests {
         let profiles = dir.join("execs/profiles");
         let root = dir.join("Team Fortress 2");
         write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
-        write_live(&root.join("tf/custom/rayshud/info.vdf"), "current HUD\n");
+        write_live(
+            &root.join("tf/custom/rayshud/info.vdf"),
+            "\"HUD\" { \"ui_version\" \"3\" } // current HUD\n",
+        );
         let oxide = save(&profiles, &root, "Oxide");
         let colly = library_profile(
             &profiles,
@@ -1732,8 +1767,14 @@ mod tests {
             "Colly",
             &[
                 ("tf/cfg/config.cfg", b"unbindall\n"),
-                ("tf/custom/Colly-HUD/info.vdf", b"colly\n"),
-                ("tf/custom/grape-oxide/info.vdf", b"old profile copy\n"),
+                (
+                    "tf/custom/Colly-HUD/info.vdf",
+                    b"\"HUD\" { \"ui_version\" \"3\" } // colly\n",
+                ),
+                (
+                    "tf/custom/grape-oxide/info.vdf",
+                    b"\"HUD\" { \"ui_version\" \"3\" } // old profile copy\n",
+                ),
             ],
         );
         let mut manifest = load_manifest(&profiles, &colly).unwrap();
@@ -1746,11 +1787,26 @@ mod tests {
         crate::profile::save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
         write_live(
             &root.join("tf/custom/-grape-oxide/info.vdf"),
-            "manually edited oxide\n",
+            "\"HUD\" { \"ui_version\" \"3\" } // manually edited oxide\n",
         );
         let mut before = load_manifest(&profiles, &oxide).unwrap();
         before.ignored_packs.push("-grape-oxide".into());
         crate::profile::save_manifest(&profiles, &root, &before, unlocked()).unwrap();
+        assert_eq!(
+            switch_profile_to(&profiles, &root, &colly, unlocked(), no_steam(), |_| {})
+                .unwrap_err(),
+            ProfileError::HudLiveReviewRequired
+        );
+        let review = crate::hud::get_hud_ownership_to(&profiles, &root, &oxide).unwrap();
+        crate::hud::select_profile_hud_to(
+            &profiles,
+            &root,
+            &oxide,
+            "rayshud",
+            &review.fingerprint,
+            unlocked(),
+        )
+        .unwrap();
         switch_profile_to(&profiles, &root, &colly, unlocked(), no_steam(), |_| {}).unwrap();
         let mounted = crate::hud::live_hud_names(&root);
         assert_eq!(mounted.len(), 1, "{mounted:?}");
@@ -1764,7 +1820,10 @@ mod tests {
         .filter(|path| path.is_file())
         .collect();
         assert_eq!(backups.len(), 1);
-        assert_eq!(fs::read(&backups[0]).unwrap(), b"manually edited oxide\n");
+        assert_eq!(
+            fs::read(&backups[0]).unwrap(),
+            b"\"HUD\" { \"ui_version\" \"3\" } // manually edited oxide\n"
+        );
         assert_eq!(
             fs::read(exclusive_file_path(
                 &profiles,
@@ -1772,7 +1831,7 @@ mod tests {
                 "tf/custom/grape-oxide/info.vdf"
             ))
             .unwrap(),
-            b"old profile copy\n"
+            b"\"HUD\" { \"ui_version\" \"3\" } // old profile copy\n"
         );
         let result = absorb_owned_to(&profiles, &root, unlocked(), no_steam()).unwrap();
         assert!(!result.delta.has_pack_changes(), "{:?}", result.delta);

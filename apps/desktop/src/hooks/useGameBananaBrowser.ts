@@ -94,6 +94,7 @@ export function useGameBananaBrowser({
   const cache = useRef<GameBananaPageCache>(new Map());
   const requestSequence = useRef(0);
   const categorySequence = useRef(0);
+  const categoryPending = useRef<number | null>(null);
   const mounted = useRef(true);
   const categoriesRef = useRef(categories);
   const nowRef = useRef(now);
@@ -105,6 +106,7 @@ export function useGameBananaBrowser({
       mounted.current = false;
       requestSequence.current += 1;
       categorySequence.current += 1;
+      categoryPending.current = null;
     };
   }, []);
 
@@ -191,6 +193,7 @@ export function useGameBananaBrowser({
   const loadCategories = useCallback(
     async (refresh: boolean) => {
       const token = ++categorySequence.current;
+      categoryPending.current = token;
       publishCategories({ status: "loading", records: categoriesRef.current.records });
       try {
         const records = await api.gameBananaModCategories(refresh);
@@ -203,6 +206,8 @@ export function useGameBananaBrowser({
           records: categoriesRef.current.records,
           message: errorMessage(error),
         });
+      } finally {
+        if (categoryPending.current === token) categoryPending.current = null;
       }
     },
     [api, publishCategories],
@@ -214,7 +219,9 @@ export function useGameBananaBrowser({
   useEffect(() => {
     if (
       active &&
-      (categoriesRef.current.status === "idle" || categoriesRef.current.status === "error")
+      (categoriesRef.current.status === "idle" ||
+        categoriesRef.current.status === "error" ||
+        (categoriesRef.current.status === "loading" && categoryPending.current === null))
     ) {
       void loadCategories(categoriesRef.current.status === "error");
     }

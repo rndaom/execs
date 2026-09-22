@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendLaunchOption,
   forbiddenLaunchNotice,
   forbiddenLaunchTokens,
+  launchOptionGroups,
   recommendedLaunchOptions,
+  removeLaunchOption,
   steamWriteCopy,
   strippedLaunchNotice,
   strippedLaunchTokens,
@@ -41,7 +44,7 @@ describe("forbidden launch flags", () => {
   it("does not flag a clean or lookalike string", () => {
     expect(forbiddenLaunchTokens(RECOMMENDED)).toEqual([]);
     // A substring of another flag must not match.
-    expect(forbiddenLaunchTokens("-dxlevel90")).toEqual([]);
+    expect(forbiddenLaunchTokens("-dxlevel90")).toEqual(["-dxlevel"]);
     expect(forbiddenLaunchTokens("")).toEqual([]);
   });
 
@@ -59,6 +62,58 @@ describe("forbidden launch flags", () => {
     expect(forbiddenLaunchNotice(["-autoconfig"])).toContain("-autoconfig");
     expect(strippedLaunchNotice([])).toBe("");
     expect(strippedLaunchNotice(["+quit"])).toContain("+quit");
+  });
+});
+
+describe("launch option editing", () => {
+  it("does not guess removal boundaries for quoted option-looking data or wrappers", () => {
+    expect(launchOptionGroups('+echo "-not a flag" -novid')).toBeNull();
+    expect(launchOptionGroups('"-novid" -console')).toBeNull();
+    expect(launchOptionGroups("env X=1 %command% -novid")).toBeNull();
+  });
+  it("appends without rewriting the existing quoted source string", () => {
+    const raw = '  +exec "my config.cfg"\t';
+    expect(appendLaunchOption(raw, " -particles 1 ")).toBe(`${raw}-particles 1`);
+    expect(appendLaunchOption("-novid", '+exec "my config.cfg"')).toBe(
+      '-novid +exec "my config.cfg"',
+    );
+    expect(appendLaunchOption(raw, "  ")).toBe(raw);
+  });
+  it("keeps quoted values and negative numeric arguments with their option", () => {
+    const raw = '-novid +exec "my config.cfg" -particles 1 +volume -1';
+    const groups = launchOptionGroups(raw);
+    expect(groups?.map((group) => group.text)).toEqual([
+      "-novid",
+      '+exec "my config.cfg"',
+      "-particles 1",
+      "+volume -1",
+    ]);
+    expect(removeLaunchOption(raw, groups?.[1] as NonNullable<typeof groups>[number])).toBe(
+      "-novid -particles 1 +volume -1",
+    );
+  });
+  it("leaves command sequences and incomplete quotes to the exact-string editor", () => {
+    expect(launchOptionGroups("+echo done; -novid")).toBeNull();
+    expect(launchOptionGroups('+exec "unfinished')).toBeNull();
+    expect(launchOptionGroups('+exec "cfg;name.cfg" -novid')?.length).toBe(2);
+  });
+  it("does not remove a stale range and removes the last option cleanly", () => {
+    const group = launchOptionGroups("-novid")?.[0];
+    expect(group).toBeDefined();
+    if (!group) return;
+    expect(removeLaunchOption("-novid", group)).toBe("");
+    expect(removeLaunchOption("-nojoy", group)).toBe("-nojoy");
+  });
+  it("warns for the quoted, fragmented and semicolon forms stripped by native saves", () => {
+    expect(forbiddenLaunchTokens('-auto"config" +quit;echo ok -dxlevel95')).toEqual([
+      "-autoconfig",
+      "-dxlevel",
+      "+quit",
+    ]);
+    expect(forbiddenLaunchTokens(String.raw`-auto\"config\" %com"mand"%`)).toEqual([
+      "-autoconfig",
+      "%command%",
+    ]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowClockwise, MagnifyingGlass, Package, SlidersHorizontal } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameBananaBrowser } from "../hooks/useGameBananaBrowser";
 import type { Api } from "../lib/api";
@@ -11,7 +11,12 @@ import {
   gameBananaPageScopeNote,
   gameBananaTotalLabel,
 } from "../lib/gamebanana-browser-ui";
-import { foldCategories, isGameBananaInstalled } from "../lib/mods-ui";
+import {
+  foldCategories,
+  isGameBananaInstalled,
+  type ModInstallResult,
+  modMetaLine,
+} from "../lib/mods-ui";
 import { GameBananaCard, type GameBananaInstallState } from "./GameBananaCard";
 import { GameBananaPagination } from "./GameBananaPagination";
 import { Alert } from "./ui/Alert";
@@ -30,6 +35,7 @@ export function GameBananaBrowser({
   running,
   previewData = false,
   onInstall,
+  onManageInstalled,
 }: {
   api: Api;
   /** The Browse task and the parent Mods pane are both visible. */
@@ -40,10 +46,12 @@ export function GameBananaBrowser({
   running: boolean;
   previewData?: boolean;
   /** Resolves after both the install and profile reload complete. */
-  onInstall: (id: number) => Promise<boolean>;
+  onInstall: (id: number) => Promise<ModInstallResult>;
+  onManageInstalled?: () => void;
 }) {
   const browser = useGameBananaBrowser({ api, active });
   const [moreOpen, setMoreOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [install, setInstall] = useState<{
     id: number;
     state: GameBananaInstallState;
@@ -60,13 +68,16 @@ export function GameBananaBrowser({
   async function installMod(id: number, name: string) {
     setInstall({ id, state: "installing" });
     setAnnouncement(`Installing ${name}.`);
-    let installedSuccessfully = false;
+    let result: ModInstallResult = false;
     try {
-      installedSuccessfully = await onInstall(id);
+      result = await onInstall(id);
     } catch {
-      installedSuccessfully = false;
+      result = false;
     }
-    if (installedSuccessfully) {
+    if (result === "review-required" || result === "superseded") {
+      setInstall(null);
+      setAnnouncement(result === "review-required" ? `Review HUDs before installing ${name}.` : "");
+    } else if (result) {
       setInstall(null);
       setAnnouncement(`${name} installed.`);
     } else {
@@ -111,11 +122,11 @@ export function GameBananaBrowser({
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <label className="relative block min-w-56 flex-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="relative block min-w-48 flex-1">
           <span className="sr-only">Search GameBanana</span>
           <MagnifyingGlass
-            size={14}
+            size={16}
             className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
           />
           <input
@@ -129,43 +140,11 @@ export function GameBananaBrowser({
                 browser.submitSearch();
               }
             }}
-            placeholder="Search by name…"
-            className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+            placeholder="Search GameBanana…"
+            className="field w-full py-2 pr-3 pl-9 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
           />
         </label>
-        <Segmented
-          label="Sort mods"
-          size="sm"
-          testIdPrefix="mods-gb-sort"
-          options={GAMEBANANA_SORTS}
-          value={browser.sort}
-          onChange={browser.setSort}
-        />
-        <span className="flex items-center gap-2">
-          <span className="t-meta">Show mature content</span>
-          <Switch
-            checked={browser.includeMature}
-            label="Show mature content"
-            testId="mods-gb-mature"
-            onChange={browser.setIncludeMature}
-          />
-        </span>
-        <button type="button" className="btn btn-ghost" onClick={browser.reset}>
-          Reset
-        </button>
-        <button
-          type="button"
-          data-testid="mods-gb-refresh"
-          className="btn btn-ghost"
-          disabled={browser.loading}
-          onClick={browser.refresh}
-        >
-          {browser.loading ? "Refreshing…" : "Refresh"}
-        </button>
-      </div>
-
-      {categories.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+        {categories.length > 0 ? (
           <Segmented
             label="Category"
             size="sm"
@@ -181,17 +160,89 @@ export function GameBananaBrowser({
               browser.setCategory(next === ALL ? null : Number(next));
             }}
           />
-          {primary === MORE ? (
-            <Segmented
-              label="More categories"
-              size="sm"
-              testIdPrefix="mods-gb-more"
-              options={hidden.map((entry) => ({ id: String(entry.id), label: entry.name }))}
-              value={inHidden ? String(browser.category) : ""}
-              onChange={(next) => browser.setCategory(Number(next))}
-            />
-          ) : null}
+        ) : null}
+        <div
+          className="flex flex-wrap items-center gap-2"
+          title="Popular, Likes and Views use all-time totals"
+        >
+          <Segmented
+            label="Sort mods"
+            size="sm"
+            testIdPrefix="mods-gb-sort"
+            options={GAMEBANANA_SORTS}
+            value={browser.sort}
+            onChange={browser.setSort}
+          />
         </div>
+        <button
+          type="button"
+          data-testid="mods-gb-filters-toggle"
+          className={`btn btn-ghost px-2.5 ${filtersOpen || browser.includeMature ? "ring-1 ring-brand" : ""}`}
+          aria-label={
+            browser.includeMature ? "Content filters; mature content included" : "Content filters"
+          }
+          aria-expanded={filtersOpen}
+          aria-controls="mods-gb-content-filters"
+          title="Content filters"
+          onClick={() => setFiltersOpen(!filtersOpen)}
+        >
+          <SlidersHorizontal size={16} />
+        </button>
+        <button
+          type="button"
+          data-testid="mods-gb-refresh"
+          className="btn btn-ghost px-2.5"
+          aria-label="Refresh GameBanana results"
+          title="Refresh results"
+          disabled={browser.loading}
+          onClick={browser.refresh}
+        >
+          <ArrowClockwise size={16} />
+        </button>
+      </div>
+
+      {filtersOpen ? (
+        <div id="mods-gb-content-filters" className="mt-3 border-y border-edge py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-2">
+              <span className="t-meta">Mature content</span>
+              <Switch
+                checked={browser.includeMature}
+                label="Show mature content"
+                testId="mods-gb-mature"
+                onChange={browser.setIncludeMature}
+              />
+            </span>
+            <button
+              type="button"
+              className="btn btn-quiet"
+              onClick={() => {
+                setMoreOpen(false);
+                browser.reset();
+              }}
+            >
+              Reset filters
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {primary === MORE ? (
+        <div className="mt-3">
+          <Segmented
+            label="More categories"
+            size="sm"
+            testIdPrefix="mods-gb-more"
+            options={hidden.map((entry) => ({ id: String(entry.id), label: entry.name }))}
+            value={inHidden ? String(browser.category) : ""}
+            onChange={(next) => browser.setCategory(Number(next))}
+          />
+        </div>
+      ) : null}
+      {["downloads", "likes", "views"].includes(browser.sort) ? (
+        <p className="t-meta mt-2">
+          Ordered by GameBanana’s all-time{" "}
+          {browser.sort === "downloads" ? "downloads" : browser.sort}.
+        </p>
       ) : null}
 
       {browser.categories.status === "error" ? (
@@ -223,57 +274,129 @@ export function GameBananaBrowser({
           ref={resultsRef}
           tabIndex={-1}
           data-testid="mods-gb-results-heading"
-          className="mt-4 scroll-mt-4 outline-none"
+          className="mt-4 scroll-mt-4 border-t border-edge pt-3 outline-none"
         >
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h3 className="t-row">GameBanana results</h3>
-            <span className="t-meta tnum">{pager.label}</span>
-            {totalLabel ? <span className="t-meta tnum">· {totalLabel}</span> : null}
-            {previewData ? <span className="badge">Preview data</span> : null}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h3 className="t-row">GameBanana results</h3>
+              <span className="t-meta tnum">{pager.label}</span>
+              {totalLabel ? <span className="t-meta tnum">· {totalLabel}</span> : null}
+              {previewData ? <span className="badge">Preview data</span> : null}
+            </div>
+            {showPager ? (
+              <GameBananaPagination
+                compact
+                position="top"
+                page={browser.pageNumber}
+                pager={pager}
+                loading={browser.loading}
+                onPage={goToPage}
+              />
+            ) : null}
           </div>
-          {scopeNote ? <p className="t-meta mt-1">{scopeNote}</p> : null}
+          {scopeNote ? (
+            <details className="t-meta mt-2">
+              <summary className="w-fit cursor-pointer text-ink-muted">About these results</summary>
+              <p className="mt-1 max-w-[76ch]">{scopeNote}</p>
+            </details>
+          ) : null}
         </div>
       ) : null}
 
-      {showPager ? (
-        <GameBananaPagination
-          position="top"
-          page={browser.pageNumber}
-          pager={pager}
-          loading={browser.loading}
-          onPage={goToPage}
-        />
-      ) : null}
-
       {!browser.loading && shown.length === 0 && !browser.error ? (
-        <p className="t-meta mt-4">
-          {browser.page && browser.page.total.kind !== "exact"
-            ? "Nothing to show on this page. Try the next page or clear a filter."
-            : browser.page?.total.kind === "exact" && browser.page.total.value > 0
-              ? "Nothing to show on this page."
-              : "No mods match that search."}
-        </p>
+        <div className="mt-4 border-y border-edge py-8">
+          <h3 className="t-row">No matching mods</h3>
+          <p className="t-meta mt-2">
+            {browser.page && browser.page.total.kind !== "exact"
+              ? "Nothing to show on this page. Try the next page or clear a filter."
+              : browser.page?.total.kind === "exact" && browser.page.total.value > 0
+                ? "Nothing to show on this page."
+                : "No mods match that search."}
+          </p>
+          <button
+            type="button"
+            className="btn btn-ghost mt-4"
+            onClick={() => {
+              setMoreOpen(false);
+              browser.reset();
+            }}
+          >
+            Clear search and filters
+          </button>
+        </div>
       ) : null}
 
       {shown.length > 0 ? (
         <div
-          data-testid="mods-gb-grid"
-          aria-busy={browser.loading}
-          className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          className={
+            onManageInstalled
+              ? "mt-3 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_12rem]"
+              : "mt-3"
+          }
         >
-          {shown.map((mod) => (
-            <GameBananaCard
-              key={mod.id}
-              mod={mod}
-              meta={gameBananaMetaLine(mod, browser.sort)}
-              installed={isGameBananaInstalled(installed, mod.id)}
-              locked={locked || install?.state === "installing"}
-              running={running}
-              installState={install?.id === mod.id ? install.state : "idle"}
-              onView={() => void openExternal(mod.url)}
-              onInstall={() => void installMod(mod.id, mod.name)}
-            />
-          ))}
+          <div
+            data-testid="mods-gb-grid"
+            aria-busy={browser.loading}
+            className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            {shown.map((mod) => (
+              <GameBananaCard
+                key={mod.id}
+                mod={mod}
+                meta={gameBananaMetaLine(mod, browser.sort)}
+                installed={isGameBananaInstalled(installed, mod.id)}
+                locked={locked || install?.state === "installing"}
+                running={running}
+                installState={install?.id === mod.id ? install.state : "idle"}
+                onView={() => void openExternal(mod.url)}
+                onInstall={() => void installMod(mod.id, mod.name)}
+              />
+            ))}
+          </div>
+          {onManageInstalled ? (
+            <aside
+              className="surface hidden min-w-0 p-3 xl:block"
+              aria-label="Installed mods summary"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-edge pb-3">
+                <h3 className="t-row">
+                  Installed <span className="t-meta tnum ml-1">{installed.length}</span>
+                </h3>
+                <button type="button" className="btn btn-quiet px-2" onClick={onManageInstalled}>
+                  Manage
+                </button>
+              </div>
+              {installed.length > 0 ? (
+                <ul className="m-0 list-none p-0">
+                  {installed.slice(0, 3).map((mod) => (
+                    <li
+                      key={mod.id}
+                      className="flex items-start gap-2 border-b border-edge py-3 last:border-b-0"
+                    >
+                      <Package size={18} className="mt-0.5 shrink-0 text-ink-muted" />
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium leading-5 text-ink">
+                          {mod.name}
+                        </span>
+                        <span className="t-meta mt-1 block">{modMetaLine(mod)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="t-meta py-3">Your installed mods will appear here.</p>
+              )}
+              {installed.length > 3 ? (
+                <button
+                  type="button"
+                  className="btn btn-quiet mt-2 w-full"
+                  onClick={onManageInstalled}
+                >
+                  View all {installed.length} mods
+                </button>
+              ) : null}
+            </aside>
+          ) : null}
         </div>
       ) : null}
 

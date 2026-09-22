@@ -4,9 +4,9 @@ import { compactCount } from "./hud-ui";
 export const GAMEBANANA_SORTS: { id: GameBananaSort; label: string }[] = [
   { id: "new", label: "New" },
   { id: "updated", label: "Updated" },
-  { id: "downloads", label: "Downloads · all time" },
-  { id: "likes", label: "Likes · all time" },
-  { id: "views", label: "Views · all time" },
+  { id: "downloads", label: "Popular" },
+  { id: "likes", label: "Likes" },
+  { id: "views", label: "Views" },
 ];
 
 export const GAMEBANANA_DEFAULT_SORT: GameBananaSort = "new";
@@ -79,7 +79,7 @@ export function gameBananaTotalLabel(total: GameBananaTotal): string | null {
     case "exact":
       return `${total.value.toLocaleString()} ${total.value === 1 ? "result" : "results"}`;
     case "estimated":
-      return `About ${total.value.toLocaleString()} results`;
+      return `About ${total.value.toLocaleString()} ${total.value === 1 ? "result" : "results"}`;
     case "capped":
       return `${total.value.toLocaleString()}+ results`;
     case "unknown":

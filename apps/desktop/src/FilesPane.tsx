@@ -479,7 +479,10 @@ function ProfileFilesPane({
   return (
     <section data-testid="settings-files" className="flex min-h-0 min-w-0 flex-col gap-3 text-left">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-2">
-        <h2 className="t-section">Files</h2>
+        <div>
+          <h1 className="t-pane">Files</h1>
+          <p className="t-meta mt-1">Edit configuration files for this profile.</p>
+        </div>
         {dirtyDocuments.length > 1 && (
           <button
             type="button"
@@ -560,7 +563,7 @@ function ProfileFilesPane({
                   <button
                     key={kind}
                     type="button"
-                    className="btn btn-ghost px-2 py-1"
+                    className="btn btn-ghost min-w-0 flex-1 px-1 py-1 text-xs"
                     aria-pressed={newKind === kind}
                     onClick={() => {
                       setNewKind(kind as "startup" | "class" | "helper");
@@ -616,7 +619,7 @@ function ProfileFilesPane({
                 </div>
               )}
               <p
-                className={`t-meta mt-3 ${creation.error ? "text-danger" : ""}`}
+                className={`t-meta mt-3 break-all ${creation.error ? "text-danger" : ""}`}
                 title={creation.path ?? undefined}
               >
                 {!context
@@ -670,7 +673,7 @@ function ProfileFilesPane({
                 destinations={destinationOptions}
               />
               <p
-                className={`t-meta mt-3 ${saveAsTarget.error || saveAsCollision ? "text-danger" : ""}`}
+                className={`t-meta mt-3 break-all ${saveAsTarget.error || saveAsCollision ? "text-danger" : ""}`}
                 title={saveAsTarget.path ?? undefined}
               >
                 {!context

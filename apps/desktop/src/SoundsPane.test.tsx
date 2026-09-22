@@ -7,6 +7,67 @@ import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import { SoundsPane } from "./SoundsPane";
 
+it("retries failed sources while retaining the last usable catalog", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const stock = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Game archive unavailable"))
+    .mockResolvedValue(["hitsound"]);
+  const index = vi
+    .fn()
+    .mockResolvedValueOnce([{ hash: "A", name: "Kept sound", kind: "hit" }])
+    .mockRejectedValueOnce(new Error("Network unavailable"))
+    .mockResolvedValue([{ hash: "B", name: "Fresh sound", kind: "hit" }]);
+  const api = { listStockHitsounds: stock, comfigHitsoundIndex: index } as unknown as Api;
+  try {
+    await act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            effective={{}}
+            managedText=""
+            onSave={async () => {}}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    expect(box.querySelector('[data-testid="sounds-row-comfig:A"]')).not.toBeNull();
+    expect(box.textContent).toContain("Game archive unavailable");
+    const retry = () =>
+      [...box.querySelectorAll("button")].find((button) =>
+        button.textContent?.includes("Retry sources"),
+      );
+    await act(async () => retry()?.click());
+    expect(box.querySelector('[data-testid="sounds-stock-error"]')).toBeNull();
+    expect(box.textContent).toContain("Network unavailable");
+    expect(box.querySelector('[data-testid="sounds-row-comfig:A"]')).not.toBeNull();
+    await act(async () => retry()?.click());
+    expect(box.querySelector('[data-testid="sounds-comfig-error"]')).toBeNull();
+    expect(box.querySelector('[data-testid="sounds-row-comfig:A"]')).toBeNull();
+    expect(box.querySelector('[data-testid="sounds-row-comfig:B"]')).not.toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
 it("names clip actions, duplicate sources and slot volumes without changing row focus order", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(

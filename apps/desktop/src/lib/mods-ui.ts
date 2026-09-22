@@ -11,6 +11,9 @@ import type {
   PreloaderStatusPayload,
 } from "./bridge";
 
+/** Handled native review and obsolete profile results do not offer a card retry. */
+export type ModInstallResult = boolean | "review-required" | "superseded";
+
 /** Credit shown on the pane; the mechanism and default library come from
  * cueki's casual-pre-loader, rebuilt natively for execs. */
 export const PRELOADER_CREDIT =
@@ -123,13 +126,9 @@ export function visibleModSelection(
     : { ...selection, profileParticleMods: kept };
 }
 
-/** Order-insensitive identity of a selection, for drafts and comparisons. */
+/** Later sources win overlaps, so changing priority is a real unapplied draft. */
 export function serializeModSelection(selection: ModSelection): string {
-  return JSON.stringify([
-    [...selection.addons].sort(),
-    [...selection.particleMods].sort(),
-    [...selection.profileParticleMods].sort(),
-  ]);
+  return JSON.stringify([selection.addons, selection.particleMods, selection.profileParticleMods]);
 }
 
 /** Selection differs from what's installed → the Apply button lights up. */
@@ -225,13 +224,6 @@ export function summarizeReport(report: PreloaderReport): string {
 // ---------------------------------------------------------------------------
 // Your mods
 // ---------------------------------------------------------------------------
-
-/** Above this, removing a pack asks first — it is a long download to redo. */
-export const MOD_CONFIRM_BYTES = 50 * 1024 * 1024;
-
-export function modNeedsRemoveConfirm(mod: ModRecord): boolean {
-  return mod.bytes > MOD_CONFIRM_BYTES;
-}
 
 export function modSourceLabel(source: ModSource): string {
   return source.kind === "gamebanana" ? "GameBanana" : "Local";

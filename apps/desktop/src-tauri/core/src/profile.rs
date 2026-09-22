@@ -23,6 +23,10 @@ use crate::process_lock::{live_process_names, refuse_if_running_among, WriteLock
 use crate::settings::execs_data_dir;
 use crate::surface::{inventory_live_surface_with, is_global_custom_file, is_stock_custom_entry};
 
+#[path = "profile_delete.rs"]
+mod deletion;
+pub use deletion::delete_profile_to;
+
 pub const LIBRARY_SCHEMA: u32 = 1;
 pub const SHARED_VPK_NAME: &str = "mastercomfig-base.vpk";
 pub const MAX_PROFILE_REL_PATH_BYTES: usize = 4096;
@@ -105,6 +109,9 @@ pub enum ProfileError {
     InvalidName,
     NoConfirmedRoot,
     ParticleSourceSelected(String),
+    HudReviewRequired,
+    HudLiveReviewRequired,
+    HudImportRequired(String),
     Io(String),
 }
 
@@ -132,6 +139,9 @@ impl ProfileError {
             Self::InvalidName => "InvalidName",
             Self::NoConfirmedRoot => "NoConfirmedRoot",
             Self::ParticleSourceSelected(_) => "ParticleSourceSelected",
+            Self::HudReviewRequired => "HudReviewRequired",
+            Self::HudLiveReviewRequired => "HudLiveReviewRequired",
+            Self::HudImportRequired(_) => "HudImportRequired",
             Self::Io(_) => "Io",
         }
     }
@@ -174,6 +184,8 @@ impl ProfileError {
             Self::ParticleSourceSelected(name) => format!(
                 "{name} is still saved as a Casual particle source on this profile. Deselect it and choose Apply mods, or Restore stock files, before removing its source pack."
             ),
+            Self::HudReviewRequired | Self::HudLiveReviewRequired => "This setup contains more than one HUD. Review which HUD to keep before continuing. Original files will be preserved outside mounted HUD folders.".into(),
+            Self::HudImportRequired(message) => message.clone(),
             Self::Io(err) => format!("Could not update the profile library: {err}"),
         }
     }
@@ -341,6 +353,17 @@ pub struct ProfileManifest {
     pub files: Vec<ProfileFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hud: Option<HudRecord>,
+    /// Validated UI-version-3 roots. None is an older manifest awaiting local
+    /// inspection; an empty list means ordinary info.vdf files are not HUDs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hud_roots: Option<Vec<String>>,
+    /// Exact retained folder selected during a multi-HUD import or migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hud_selected_root: Option<String>,
+    /// Import preserves approved cfg bytes. A different HUD needs an explicit
+    /// option reset before activation, performed by the HUD replacement journal.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hud_review_pending: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -535,6 +558,13 @@ fn checked_mutation_journal_path(
     profiles_dir: &Path,
     profile_id: &str,
 ) -> Result<Option<PathBuf>, ProfileError> {
+    // A missing library directory has no mutation journal. Keep its indexed
+    // record readable so the owner can remove that broken entry explicitly.
+    match fs::symlink_metadata(profile_dir(profiles_dir, profile_id)) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(ProfileError::Io(error.to_string())),
+        Ok(_) => {}
+    }
     validated_profile_root(profiles_dir, profile_id)?;
     let path = mutation_journal_file(profiles_dir, profile_id);
     match fs::symlink_metadata(&path) {
@@ -1206,6 +1236,9 @@ where
             launch_sync_pending: false,
             files,
             hud: None,
+            hud_roots: None,
+            hud_selected_root: None,
+            hud_review_pending: false,
             crosshair: None,
             viewmodel: None,
             hitsound: None,
@@ -1227,6 +1260,13 @@ where
             ));
         }
         manifest.name = normalize_name(&manifest.name)?;
+        if manifest.hud_roots.is_none() {
+            manifest.hud_roots = Some(crate::hud::inspect_hud_roots_from_files_root(
+                profiles_dir,
+                &staged_profile.join("files"),
+                &manifest,
+            )?);
+        }
         validate_manifest_files(&manifest)?;
         let mut summary = summary;
         summary.name.clone_from(&manifest.name);
@@ -1621,6 +1661,38 @@ where
     S: AsRef<str>,
     F: FnOnce(&mut ProfileManifest) -> Result<(), ProfileError>,
 {
+    mutate_profile_files_with_live_renames_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        puts,
+        remove_paths,
+        live_renames,
+        running_names,
+        edit_manifest,
+        None,
+    )
+}
+
+/// A reviewed HUD replacement rechecks its exact source evidence after
+/// rollback snapshots are prepared and immediately before journal publication.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mutate_profile_files_with_live_renames_checked_to<I, S, F>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    puts: &[(String, FileSource<'_>)],
+    remove_paths: &[String],
+    live_renames: &[ProfileLiveRename],
+    running_names: I,
+    edit_manifest: F,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
+) -> Result<ProfileManifest, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    F: FnOnce(&mut ProfileManifest) -> Result<(), ProfileError>,
+{
     Ok(mutate_profile_files_impl(
         profiles_dir,
         tf2_root,
@@ -1632,7 +1704,7 @@ where
         false,
         running_names,
         edit_manifest,
-        None,
+        precommit,
     )?
     .manifest)
 }
@@ -1664,7 +1736,7 @@ where
     refuse_writes(running_names)?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
     let mut index = usable_index(profiles_dir, tf2_root)?;
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut manifest = load_manifest_raw(profiles_dir, profile_id)?;
     let old_manifest = manifest.clone();
     let old_index = index.clone();
     let transaction_id = crate::hash::random_token();
@@ -1782,6 +1854,20 @@ where
     if let Err(err) = edit_manifest(&mut manifest) {
         let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
         return Err(err);
+    }
+    let hud_roots = crate::hud::inspect_hud_roots_with_sources(profiles_dir, &manifest, |file| {
+        if portable_path_key(&file.path).is_ok_and(|key| requested.contains(&key)) {
+            mutation_file_path(profiles_dir, profile_id, &transaction_id, "new", &file.path)
+        } else {
+            exclusive_file_path(profiles_dir, profile_id, &file.path)
+        }
+    });
+    match hud_roots {
+        Ok(roots) => manifest.hud_roots = Some(roots),
+        Err(err) => {
+            let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
+            return Err(err);
+        }
     }
     if manifest.schema != old_manifest.schema
         || manifest.id != old_manifest.id
@@ -3305,7 +3391,14 @@ pub fn load_manifest(
             "An interrupted profile update must be recovered before this profile is read.".into(),
         ));
     }
-    load_manifest_raw(profiles_dir, profile_id)
+    let mut manifest = load_manifest_raw(profiles_dir, profile_id)?;
+    if manifest.hud_roots.is_none() {
+        manifest.hud_roots = Some(crate::hud::inspect_profile_hud_roots(
+            profiles_dir,
+            &manifest,
+        )?);
+    }
+    Ok(manifest)
 }
 
 fn load_manifest_raw(
@@ -3594,6 +3687,9 @@ pub fn profile_mutation_status_to(
     profiles_dir: &Path,
     tf2_root: &Path,
 ) -> Result<ProfileMutationRecoveryState, ProfileError> {
+    if let Some(state) = deletion::deletion_status_to(profiles_dir, tf2_root)? {
+        return Ok(state);
+    }
     let pending = scan_profile_mutations_to(profiles_dir, tf2_root)?;
     if pending.iter().any(|(_, committed)| !committed) {
         Ok(ProfileMutationRecoveryState::Prepared)
@@ -3614,6 +3710,15 @@ where
     S: AsRef<str>,
 {
     refuse_writes(running_names)?;
+    if deletion::deletion_status_to(profiles_dir, tf2_root)?.is_some() {
+        if !scan_profile_mutations_to(profiles_dir, tf2_root)?.is_empty() {
+            return Err(ProfileError::Io(
+                "Profile deletion and profile update recovery are both pending. No files were changed."
+                    .into(),
+            ));
+        }
+        deletion::recover_deletion_to(profiles_dir, tf2_root)?;
+    }
     // Validate every journal before the first recovery write. A corrupt or
     // linked later record therefore fails closed without partially recovering
     // an earlier profile and then allowing unrelated commands to proceed.
@@ -5585,6 +5690,61 @@ mod tests {
         assert_eq!(fs::read(&dest).unwrap(), b"old");
         assert_eq!(load_manifest(&profiles, &id).unwrap(), old_manifest);
         assert!(!mutation_journal_file(&profiles, &id).exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn legacy_hud_journal_recovers_before_any_hud_metadata_is_hydrated() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        let id = create_profile_record_to(&profiles, &root, "Legacy", unlocked())
+            .unwrap()
+            .profiles[0]
+            .id
+            .clone();
+        let rel = "tf/custom/legacy/info.vdf";
+        let old = b"\"HUD\" { \"ui_version\" \"3\" } // original\n";
+        let new = b"\"HUD\" { \"ui_version\" \"3\" } // update\n";
+        put_exclusive_file_to(&profiles, &root, &id, rel, old, unlocked()).unwrap();
+        let mut old_manifest = load_manifest(&profiles, &id).unwrap();
+        old_manifest.hud_roots = None;
+        old_manifest.hud_selected_root = None;
+        old_manifest.hud_review_pending = false;
+        write_json(&manifest_file(&profiles, &id), &old_manifest).unwrap();
+        let mut new_manifest = old_manifest.clone();
+        new_manifest.files[0].sha256 = sha256_hex(new);
+        let token = "0123456789abcdef0123456789abcdef";
+        let staged = mutation_file_path(&profiles, &id, token, "new", rel);
+        write_atomic_within(&profiles, &staged, new).unwrap();
+        let journal = ProfileMutationJournal {
+            transaction_id: token.into(),
+            profile_id: id.clone(),
+            old_manifest: old_manifest.clone(),
+            new_manifest,
+            file_changes: Vec::new(),
+            live_changes: Vec::new(),
+            live_renames: Vec::new(),
+            old_index: None,
+            new_index: None,
+            touched_paths: vec![rel.into()],
+            committed: false,
+        };
+        write_json(&mutation_journal_file(&profiles, &id), &journal).unwrap();
+        let destination = exclusive_file_path(&profiles, &id, rel);
+        let backup = mutation_file_path(&profiles, &id, token, "old", rel);
+        move_file_within(&profiles, &destination, &backup).unwrap();
+        assert!(
+            !destination.exists(),
+            "Restart begins with metadata temporarily absent"
+        );
+        recover_profile_mutation_to(&profiles, &root, &id).unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), old);
+        assert_eq!(load_manifest_raw(&profiles, &id).unwrap(), old_manifest);
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().hud_roots,
+            Some(vec!["legacy".into()])
+        );
         cleanup(&dir);
     }
 

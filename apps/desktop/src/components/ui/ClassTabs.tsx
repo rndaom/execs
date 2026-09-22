@@ -52,7 +52,7 @@ export function ClassTabs<Id extends string>({
   }
 
   return (
-    <div className="flex flex-wrap" role="tablist" aria-label={label}>
+    <div className="class-tabs" role="tablist" aria-label={label}>
       {tabs.map((tab, index) => {
         const active = tab.id === selected;
         return (
@@ -70,13 +70,11 @@ export function ClassTabs<Id extends string>({
                 event.preventDefault();
               }
             }}
-            className={`border-b-2 px-3 py-2 text-[13.5px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              active ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink"
-            }`}
+            className="class-tab"
           >
             {tab.label}
             {tab.meta !== undefined ? (
-              <span className="tnum ml-1.5 text-[11px] text-ink-faint">{tab.meta}</span>
+              <span className="tnum ml-1.5 text-[11px] text-ink-faint"> {tab.meta}</span>
             ) : null}
           </button>
         );

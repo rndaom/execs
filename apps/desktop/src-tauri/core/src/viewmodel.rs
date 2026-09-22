@@ -42,19 +42,22 @@ const MAX_VIEWMODEL_TRANSACTION_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 pub fn serialize_preload_cfg() -> String {
     [
         "// execs preload — managed, do not edit by hand",
+        "// Launch-only hook: opens the offline itemtest map, then disconnects to the menu.",
+        "// Do not exec this from autoexec, map/class cfgs, or an alias loop.",
+        "echo \"[execs preload] Starting offline itemtest preload. Engine errors stay in this console.\"",
         // -1 loads without any pure whitelist; the point_servercommand cvar
         // must be set before the map loads or Casual resets it.
         "sv_pure -1",
         "sv_allow_point_servercommand always",
         "map itemtest",
-        // wait counts frames; 10 gives heavier animation packs margin to finish caching.
+        // Keep the established bounded delay. It is a command-buffer delay,
+        // not evidence that the map initialized or every asset cached successfully.
         "wait 10; disconnect",
-        // A beat for the disconnect to settle, then clean the console and
-        // restart the menu music the map load cut off. TF2 has no
-        // `playmenumusic` command — it logs as unknown; the menu music is a
-        // VScript entry point.
-        "wait 1; clear",
-        "script_execute randommenumusic",
+        // Preserve engine failures and the user's console history. Server VScript
+        // terminates on level shutdown, so it cannot restart music after disconnect.
+        // This marks dispatch completion only; cfg commands cannot inspect success.
+        "wait 1",
+        "echo \"[execs preload] Hook finished. If loading failed, review the engine errors above.\"",
         "",
     ]
     .join("\n")
@@ -95,6 +98,14 @@ fn with_preload_launch_stem(options: &str, enabled: bool, stem: &str) -> String 
 }
 
 fn is_preload_stem(value: &str) -> bool {
+    // Source accepts an optional cfg suffix and quoted filenames. Recognize
+    // those spellings when replacing old launch tokens so one managed hook
+    // does not become two after a profile edit. Other execs stay untouched.
+    let value = value
+        .strip_prefix('"')
+        .and_then(|quoted| quoted.strip_suffix('"'))
+        .unwrap_or(value);
+    let value = value.strip_suffix(".cfg").unwrap_or(value);
     value == EXECS_PRELOAD_STEM || value == EXECS_PRELOAD_OVERRIDES_STEM
 }
 
@@ -1077,15 +1088,55 @@ mod tests {
     }
 
     #[test]
-    fn preload_cfg_is_itemtest_and_never_mentions_gameinfo() {
+    fn preload_cfg_preserves_caching_and_engine_failure_evidence() {
         let cfg = serialize_preload_cfg();
-        assert!(cfg.contains("sv_pure -1"));
-        assert!(cfg.contains("sv_allow_point_servercommand always"));
-        assert!(cfg.contains("map itemtest"));
-        assert!(cfg.contains("disconnect"));
-        assert!(cfg.contains("script_execute randommenumusic"));
+        let commands: Vec<_> = cfg.lines().filter(|line| !line.starts_with("//")).collect();
+        assert!(cfg.contains("opens the offline itemtest map"));
+        assert!(commands.contains(&"sv_pure -1"));
+        assert!(commands.contains(&"sv_allow_point_servercommand always"));
+        assert_eq!(
+            commands
+                .iter()
+                .filter(|line| **line == "map itemtest")
+                .count(),
+            1
+        );
+        assert!(commands.contains(&"wait 10; disconnect"));
+        assert!(cfg.contains("review the engine errors above"));
+        assert!(!commands.iter().any(|line| line.contains("clear")));
+        assert!(!commands
+            .iter()
+            .any(|line| line.starts_with("script_execute")));
+        assert!(!commands
+            .iter()
+            .any(|line| line.starts_with("exec ") || line.starts_with("alias ")));
         assert!(!cfg.contains("gameinfo"));
         assert!(!cfg.contains("+quit"));
+    }
+
+    #[test]
+    fn preload_launch_replaces_all_managed_spellings_without_repeating_the_hook() {
+        let existing = "-novid +exec \"execs_preload.cfg\" +exec overrides/execs_preload +exec overrides/execs_preload.cfg +exec overrides/autoexec";
+        let enabled = with_preload_launch_stem(existing, true, EXECS_PRELOAD_OVERRIDES_STEM);
+        assert_eq!(
+            enabled,
+            "-novid +exec overrides/autoexec +exec overrides/execs_preload"
+        );
+        assert_eq!(
+            with_preload_launch_stem(&enabled, true, EXECS_PRELOAD_OVERRIDES_STEM),
+            enabled
+        );
+        assert_eq!(
+            with_preload_launch(existing, false),
+            "-novid +exec overrides/autoexec"
+        );
+        assert!(has_preload_launch("+exec \"overrides/execs_preload.cfg\""));
+        assert!(!has_preload_launch("+exec overrides/not_execs_preload.cfg"));
+        assert!(!has_preload_launch("+exec my_execs_preload.cfg"));
+    }
+
+    #[test]
+    fn preload_launch_supports_both_cfg_layers() {
         let enabled = with_preload_launch("-novid -nojoy", true);
         assert!(has_preload_launch(&enabled));
         assert!(!with_preload_launch(&enabled, false).contains("execs_preload"));

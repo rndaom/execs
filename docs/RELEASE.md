@@ -3,7 +3,15 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
 
-Current public version: **0.1.7 Hotfix 2** (`0.1.7+2`), published September 20,
+Current public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
+02:26:18 UTC. [Release PR #59](https://github.com/rndaom/execs/pull/59) merged the
+Mods discovery and removal-integrity update into maintenance. Immutable
+`v0.1.8` points to `85aaf6bc0dd28f43351d4cb5cdb62502737688d5`. The published
+[release](https://github.com/rndaom/execs/releases/tag/v0.1.8) is the compatibility
+baseline for the combined 0.2.0 work; recheck the latest public release when
+qualifying its final candidate.
+
+Previous public version: **0.1.7 Hotfix 2** (`0.1.7+2`), published September 20,
 2026 at 19:44:49 UTC (3:44 PM America/New_York), after the owner's explicit
 hotfix authorization. PR #56 merged the Files usability rebuild into maintenance;
 PR #57 fixed the release-only WebView2 qualification URL race. Immutable
@@ -15,7 +23,7 @@ revision, four updater platforms and release provenance. The failed `v0.1.7+1`
 candidate remains an unpublished private draft and was never latest. See
 `docs/release-0.1.7+2.md` for evidence and qualification limits.
 
-Previous public version: **0.1.7** (`v0.1.7`, published September 20, 2026 at
+Earlier public version: **0.1.7** (`v0.1.7`, published September 20, 2026 at
 06:55:58 UTC). PR #54 merged into maintenance and PR #55 carried the fixes into
 main. Its tagged workflow passed both platform upgrades from 0.1.6 and packaged
 Files workers. See `docs/release-0.1.7.md` for its evidence and limits.
@@ -69,7 +77,7 @@ owner's `rndaom/` prefix:
 
 The older `release-0.1.3` name was reused for 0.1.4 and 0.1.5. It has now been
 consolidated into `rndaom/release-0.1` without losing commits. Completed version
-branches are not an archive: immutable `v0.1.0` through `v0.1.7+2` tags, including
+branches are not an archive: immutable `v0.1.0` through `v0.1.8` tags, including
 `v0.1.3+1`, retain the published versions. Missing version branches therefore do
 not mean missing releases. Do not recreate old branches merely to fill gaps.
 

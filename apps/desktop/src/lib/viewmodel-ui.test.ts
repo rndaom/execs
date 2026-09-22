@@ -5,6 +5,7 @@ import {
   previewViewmodelRecord,
   seedViewmodelDraft,
   serializeHiddenGroups,
+  setClassVisibility,
   toggleHiddenGroup,
 } from "./viewmodel-ui";
 
@@ -40,6 +41,22 @@ describe("viewmodel ui", () => {
     expect(hidden).toEqual(["scout/melee", "soldier/rockets"]);
     hidden = toggleHiddenGroup(hidden, "soldier/rockets");
     expect(hidden).toEqual(["scout/melee"]);
+  });
+
+  it("changes one class without losing other classes and keeps the pack-wide hide mode explicit", () => {
+    const initial = {
+      preload: true,
+      hidden: ["scout/scatterguns", "soldier/rockets"],
+      hideMode: "full" as const,
+    };
+    const weaponOnly = setClassVisibility(initial, "soldier", "weapon");
+    expect(weaponOnly.hidden).toContain("scout/scatterguns");
+    expect(weaponOnly.hidden).toContain("soldier/melee");
+    expect(weaponOnly.hideMode).toBe("weapon");
+    const shown = setClassVisibility(weaponOnly, "soldier", "shown");
+    expect(shown.hidden).toEqual(["scout/scatterguns"]);
+    expect(shown.hideMode).toBe("weapon");
+    expect(initial.hidden).toEqual(["scout/scatterguns", "soldier/rockets"]);
   });
 });
 

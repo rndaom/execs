@@ -1,5 +1,5 @@
 import { JSDOM } from "jsdom";
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Api } from "../lib/api";
@@ -93,6 +93,22 @@ async function render(api: Api) {
 }
 
 describe("useGameBananaBrowser", () => {
+  it("recovers category loading after React replays its mount effects", async () => {
+    const categories = vi.fn(async () => [{ id: 7951, name: "Skins" }]);
+    const api = apiWith(
+      vi.fn(async () => result(1)),
+      categories,
+    );
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <Harness api={api} />
+        </StrictMode>,
+      ),
+    );
+    await act(async () => Promise.resolve());
+    expect(latest.categories).toEqual({ status: "ready", records: [{ id: 7951, name: "Skins" }] });
+  });
   it("keeps a successful category response that finishes while hidden", async () => {
     const pending = deferred<{ id: number; name: string }[]>();
     const categories = vi.fn(() => pending.promise);

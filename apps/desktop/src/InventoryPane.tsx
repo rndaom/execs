@@ -1,5 +1,5 @@
 import { CaretLeft, CaretRight, Cube, MagnifyingGlass, User } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { useInventorySnapshot } from "./hooks/useInventorySnapshot";
@@ -55,6 +55,19 @@ export function InventoryPane({
     () => (snapshot ? inventoryPage(snapshot, query, quality, page, sort) : null),
     [snapshot, query, quality, page, sort],
   );
+  const grid = useRef<HTMLElement>(null);
+  const previousPage = useRef<number | null>(null);
+  const currentPage = view?.current ?? null;
+  useLayoutEffect(() => {
+    const changed =
+      previousPage.current !== null && currentPage !== null && previousPage.current !== currentPage;
+    previousPage.current = currentPage;
+    if (active && changed) {
+      // Keep the first new slot below the sticky pager without moving keyboard
+      // focus or animating. Reads, sorting and filtering on this page stay put.
+      grid.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    }
+  }, [active, currentPage]);
   const item = snapshot?.items.find((entry) => entry.id === selected);
   const definition = item && snapshot ? itemDescription(snapshot, item) : undefined;
   const paths = useMemo(
@@ -133,7 +146,7 @@ export function InventoryPane({
         aria-label={`${name}, ${QUALITY_NAMES[entry.quality] ?? "Unknown quality"}, ${position ? `slot ${position}` : "unplaced"}`}
         title={name}
         onClick={() => setSelected(entry.id)}
-        className={`relative flex min-h-24 min-w-0 flex-col items-center justify-center rounded-md p-1 pt-4 transition-colors ${selected === entry.id ? "ring-2 ring-brand bg-brand/6" : "bg-panel hover:bg-panel-raised"}`}
+        className={`inventory-item ${selected === entry.id ? "inventory-item-selected" : ""}`}
       >
         <span className="t-meta absolute top-1 left-1.5 text-ink-faint">{position || "New"}</span>
         {selected === entry.id ? (
@@ -147,7 +160,9 @@ export function InventoryPane({
         ) : (
           <Cube aria-hidden="true" size={28} className="my-3 text-ink-faint" />
         )}
-        <span className="w-full truncate text-center text-[10px]">{name}</span>
+        <span className="line-clamp-2 min-h-8 w-full break-words text-center text-xs leading-4">
+          {name}
+        </span>
       </button>
     );
   }
@@ -168,7 +183,7 @@ export function InventoryPane({
           Page{" "}
           <input
             aria-label="Backpack page"
-            className="w-14 rounded border border-edge bg-panel px-2 py-1 text-center text-ink"
+            className="input tnum w-14 text-center"
             type="number"
             min={1}
             max={view.pages}
@@ -191,20 +206,25 @@ export function InventoryPane({
   }
 
   return (
-    <div>
+    <div data-testid="settings-inventory" className="enter-fade">
       <PaneHeader
+        compact
         title="Inventory"
+        lede="View-only items from your Steam account."
         actions={
-          error ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={loading || running || busy}
-              onClick={() => void refresh()}
-            >
-              Retry connection
-            </button>
-          ) : undefined
+          <>
+            <span className="badge">Development preview</span>
+            {error ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={loading || running || busy}
+                onClick={() => void refresh()}
+              >
+                Retry connection
+              </button>
+            ) : null}
+          </>
         }
       />
       {running ? <p className="t-meta mb-4">Close TF2 to refresh your backpack.</p> : null}
@@ -219,31 +239,29 @@ export function InventoryPane({
       ) : null}
       {snapshot && view ? (
         <>
-          <div className="mb-6 grid items-start gap-6 border-b border-edge pb-6 lg:grid-cols-[1fr_360px]">
-            <div className="py-2">
-              <div className="flex items-center gap-3">
-                {snapshot.avatar ? (
-                  <img
-                    src={snapshot.avatar}
-                    alt="Steam avatar"
-                    className="h-14 w-14 rounded-lg object-cover"
-                  />
-                ) : (
-                  <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-panel">
-                    <User size={26} className="text-ink-muted" />
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <h2 className="t-section break-words">
-                    {snapshot.personaName || "Your backpack"}
-                  </h2>
-                  <p className="t-meta mt-1">
-                    {snapshot.items.length.toLocaleString()} items ·{" "}
-                    {snapshot.capacity.toLocaleString()} slots
-                  </p>
-                </div>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-4 border-b border-edge py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {snapshot.avatar ? (
+                <img
+                  src={snapshot.avatar}
+                  alt="Steam avatar"
+                  className="size-10 rounded-md object-cover"
+                />
+              ) : (
+                <span className="flex size-10 items-center justify-center rounded-md bg-panel">
+                  <User size={24} className="text-ink-muted" aria-hidden="true" />
+                </span>
+              )}
+              <div className="min-w-0">
+                <h2 className="t-row break-words">{snapshot.personaName || "Your backpack"}</h2>
+                <p className="t-meta">
+                  {snapshot.items.length.toLocaleString()} items ·{" "}
+                  {snapshot.capacity.toLocaleString()} slots
+                </p>
               </div>
-              <p className="t-meta mt-5" role="status">
+            </div>
+            <div className="max-w-lg">
+              <p className="t-meta" role="status">
                 {loading
                   ? "Updating…"
                   : `Updated ${updatedAt === null ? "" : new Date(updatedAt).toLocaleTimeString()}`}
@@ -258,56 +276,6 @@ export function InventoryPane({
                 <p className="mt-2">Browsing and sorting here do not move items in Steam.</p>
               </details>
             </div>
-            <section aria-label="Item details" className="min-h-40 rounded-lg bg-panel p-5">
-              {item ? (
-                <div className="grid grid-cols-[112px_1fr] items-start gap-4">
-                  {definition?.icon && icons[definition.icon] ? (
-                    <img
-                      src={icons[definition.icon]}
-                      alt={itemName(snapshot, item)}
-                      className="h-28 w-28 object-contain"
-                    />
-                  ) : (
-                    <div className="mb-3 flex h-28 flex-col items-center justify-center gap-2 text-ink-faint">
-                      <Cube size={36} />
-                      <span className="t-meta">Artwork unavailable</span>
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <h2 className="t-row break-words">{itemName(snapshot, item)}</h2>
-                    {item.customName && definition?.name ? (
-                      <p className="t-meta mt-1">{definition.name}</p>
-                    ) : null}
-                    <p className="t-meta mt-1">
-                      {QUALITY_NAMES[item.quality] ?? `Quality ${item.quality}`} · Level{" "}
-                      {item.level}
-                    </p>
-                    {snapshot.itemDescriptions?.[item.id]?.details.length ? (
-                      <ul className="mt-3 space-y-1 text-sm text-ink-muted">
-                        {snapshot.itemDescriptions[item.id].details.map((detail) => (
-                          <li key={detail}>{detail}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <details key={item.id} className="t-meta mt-3 border-t border-edge pt-3">
-                      <summary className="cursor-pointer hover:text-ink">Item details</summary>
-                      <p className="mt-2">{definition?.kind ?? "Unknown item type"}</p>
-                      {definition?.classes.length ? (
-                        <p className="mt-1 capitalize">{definition.classes.join(", ")}</p>
-                      ) : null}
-                      <p className="mt-1 break-all">
-                        Item {item.id} · {item.position ? `Slot ${item.position}` : "Not placed"}
-                      </p>
-                    </details>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex min-h-28 flex-col items-center justify-center gap-3 text-ink-faint">
-                  <Cube size={40} />
-                  <p className="t-meta">Select an item for a closer look.</p>
-                </div>
-              )}
-            </section>
           </div>
           {snapshot.warning ? (
             <p role="status" className="mb-4 text-warn">
@@ -319,111 +287,168 @@ export function InventoryPane({
               Some artwork could not be loaded. {iconError}
             </p>
           ) : null}
-          <label className="relative block">
-            <span className="sr-only">Search items</span>
-            <MagnifyingGlass
-              aria-hidden="true"
-              size={16}
-              className="absolute top-3 left-3 text-ink-muted"
-            />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search name, class, paint, or type…"
-              className="w-full rounded-md border border-edge bg-panel py-2 pr-3 pl-9"
-            />
-          </label>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <Segmented
-              label="View order"
-              size="sm"
-              options={[
-                { id: "position", label: "Backpack" },
-                { id: "name", label: "Name" },
-                { id: "quality", label: "Quality" },
-                { id: "type", label: "Type" },
-              ]}
-              value={sort}
-              onChange={(value) => {
-                setSort(value);
-                setPage(1);
-              }}
-            />
-            <details className="t-meta">
-              <summary className="cursor-pointer hover:text-ink">
-                {quality === null
-                  ? "Filter quality"
-                  : (QUALITY_NAMES[quality] ?? `Quality ${quality}`)}
-              </summary>
-              <fieldset aria-label="Filter by quality" className="mt-3 flex flex-wrap gap-2">
-                {[null, ...new Set(snapshot.items.map((entry) => entry.quality))].map((value) => (
-                  <button
-                    key={value ?? "all"}
-                    type="button"
-                    aria-pressed={quality === value}
-                    onClick={() => {
-                      setQuality(value);
-                      setPage(1);
-                    }}
-                    className={`rounded-full px-3 py-1 text-sm ${quality === value ? "ring-1 ring-brand bg-brand/6" : "bg-panel"}`}
-                  >
-                    {value === null
-                      ? "All qualities"
-                      : (QUALITY_NAMES[value] ?? `Quality ${value}`)}
-                  </button>
-                ))}
-              </fieldset>
-            </details>
-          </div>
-          <div className="my-4 flex flex-wrap items-center justify-between gap-3">
-            <p role="status" className="t-meta">
-              {view.filtered
-                ? `${view.matchCount} items · View only`
-                : `Slots ${(view.current - 1) * 50 + 1}–${Math.min(view.current * 50, snapshot.capacity)}`}
-            </p>
-            {navigation()}
-          </div>
-          <section className="grid grid-cols-5 gap-2 sm:grid-cols-10" aria-label="Backpack items">
-            {view.slots.map(({ position, item }) =>
-              item ? (
-                card(item, position)
-              ) : (
-                <div
-                  key={`empty-${position}`}
-                  className="min-h-24 rounded-md border border-edge p-1"
-                >
-                  <span className="t-meta">
-                    <span className="sr-only">Empty slot </span>
-                    {position}
-                  </span>
-                </div>
-              ),
-            )}
-          </section>
-          {view.filtered && view.matchCount === 0 ? (
-            <p className="t-meta py-8">No items match this search.</p>
-          ) : null}
-          {!view.filtered && view.unplaced.length ? (
-            <section className="mt-6 border-t border-edge pt-6">
-              <h2 className="t-section">Unplaced items</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {view.unplaced.map((entry) => (
-                  <button
-                    type="button"
-                    key={entry.id}
-                    className="btn btn-ghost"
-                    onClick={() => setSelected(entry.id)}
-                  >
-                    {itemName(snapshot, entry)}
-                  </button>
-                ))}
+          <div className="inventory-workspace">
+            <div className="min-w-0">
+              <label className="relative mb-3 block">
+                <span className="sr-only">Search items</span>
+                <MagnifyingGlass
+                  aria-hidden="true"
+                  size={16}
+                  className="absolute top-3 left-3 text-ink-muted"
+                />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search name, class, paint, or type…"
+                  className="input w-full pl-9"
+                />
+              </label>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Segmented
+                  label="View order"
+                  size="sm"
+                  options={[
+                    { id: "position", label: "Backpack" },
+                    { id: "name", label: "Name" },
+                    { id: "quality", label: "Quality" },
+                    { id: "type", label: "Type" },
+                  ]}
+                  value={sort}
+                  onChange={(value) => {
+                    setSort(value);
+                    setPage(1);
+                  }}
+                />
+                <details className="t-meta">
+                  <summary className="cursor-pointer hover:text-ink">
+                    {quality === null
+                      ? "Filter quality"
+                      : (QUALITY_NAMES[quality] ?? `Quality ${quality}`)}
+                  </summary>
+                  <fieldset aria-label="Filter by quality" className="mt-3 flex flex-wrap gap-2">
+                    {[null, ...new Set(snapshot.items.map((entry) => entry.quality))].map(
+                      (value) => (
+                        <button
+                          key={value ?? "all"}
+                          type="button"
+                          aria-pressed={quality === value}
+                          onClick={() => {
+                            setQuality(value);
+                            setPage(1);
+                          }}
+                          className={`btn btn-ghost ${quality === value ? "ring-1 ring-brand bg-brand/6" : ""}`}
+                        >
+                          {value === null
+                            ? "All qualities"
+                            : (QUALITY_NAMES[value] ?? `Quality ${value}`)}
+                        </button>
+                      ),
+                    )}
+                  </fieldset>
+                </details>
               </div>
+              <div className="inventory-paging">
+                <p role="status" className="t-meta">
+                  {view.filtered
+                    ? `${view.matchCount} items · View only`
+                    : `Slots ${(view.current - 1) * 50 + 1}–${Math.min(view.current * 50, snapshot.capacity)}`}
+                </p>
+                {navigation()}
+              </div>
+              <section ref={grid} className="inventory-grid" aria-label="Backpack items">
+                {view.slots.map(({ position, item }) =>
+                  item ? (
+                    card(item, position)
+                  ) : (
+                    <div key={`empty-${position}`} className="inventory-empty">
+                      <span className="t-meta">
+                        <span className="sr-only">Empty slot </span>
+                        {position}
+                      </span>
+                    </div>
+                  ),
+                )}
+              </section>
+              {view.filtered && view.matchCount === 0 ? (
+                <p className="t-meta py-8">No items match this search.</p>
+              ) : null}
+              {!view.filtered && view.unplaced.length ? (
+                <section className="mt-6 border-t border-edge pt-4">
+                  <h2 className="t-section">Unplaced items</h2>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {view.unplaced.map((entry) => (
+                      <button
+                        type="button"
+                        key={entry.id}
+                        aria-pressed={selected === entry.id}
+                        className="btn btn-ghost"
+                        onClick={() => setSelected(entry.id)}
+                      >
+                        {itemName(snapshot, entry)}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+            <section aria-label="Item details" className="inventory-detail surface p-4">
+              {item ? (
+                <>
+                  {definition?.icon && icons[definition.icon] ? (
+                    <img
+                      src={icons[definition.icon]}
+                      alt={itemName(snapshot, item)}
+                      className="mb-4 h-40 w-full object-contain"
+                    />
+                  ) : (
+                    <div className="mb-4 flex h-40 flex-col items-center justify-center gap-2 text-ink-faint">
+                      <Cube size={40} aria-hidden="true" />
+                      <span className="t-meta">Artwork unavailable</span>
+                    </div>
+                  )}
+                  <h2 className="t-section break-words">{itemName(snapshot, item)}</h2>
+                  {item.customName && definition?.name ? (
+                    <p className="t-meta mt-1">{definition.name}</p>
+                  ) : null}
+                  <p className="t-meta mt-1">
+                    {QUALITY_NAMES[item.quality] ?? `Quality ${item.quality}`} · Level {item.level}
+                  </p>
+                  {definition?.icon?.startsWith("materials/patterns/") ? (
+                    <p className="t-meta mt-3">
+                      Pattern swatch; weapon, wear and effects are not previewed.
+                    </p>
+                  ) : null}
+                  {snapshot.itemDescriptions?.[item.id]?.details.length ? (
+                    <ul className="mt-3 space-y-1 text-sm text-ink-muted">
+                      {snapshot.itemDescriptions[item.id].details.map((detail) => (
+                        <li key={detail}>{detail}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <details key={item.id} className="t-meta mt-4 border-t border-edge pt-3">
+                    <summary className="cursor-pointer hover:text-ink">Item details</summary>
+                    <p className="mt-2">{definition?.kind ?? "Unknown item type"}</p>
+                    {definition?.classes.length ? (
+                      <p className="mt-1 capitalize">{definition.classes.join(", ")}</p>
+                    ) : null}
+                    <p className="mt-1 break-all">
+                      Item {item.id} · {item.position ? `Slot ${item.position}` : "Not placed"}
+                    </p>
+                  </details>
+                </>
+              ) : (
+                <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-center text-ink-faint">
+                  <Cube size={40} aria-hidden="true" />
+                  <p className="t-meta">Select an item for a closer look.</p>
+                  <p className="t-meta">Browsing here does not move items in Steam.</p>
+                </div>
+              )}
             </section>
-          ) : null}
+          </div>
         </>
       ) : !loading ? (
         <p className="t-meta py-8">

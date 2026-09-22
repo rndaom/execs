@@ -14,19 +14,21 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-![execs in 28 seconds](docs/media/promo.gif)
+![An overview of execs](docs/media/promo.gif)
+
+The demo and screenshots show an earlier release with sample data. The current download has updated controls and layouts; these images do not preview unreleased features.
 
 ## What it does
 
-A profile is everything that makes your install yours: config, binds, HUD, crosshair, viewmodels, sounds, launch options. execs keeps profiles outside the game folder and writes the active one into `tf/custom/` and `tf/cfg/overrides/`. Never while TF2 is running. Changes made in-game flow back into the profile when the game closes.
+A profile is everything that makes your install yours: config, binds, HUD, crosshair, viewmodels, sounds, launch options. execs keeps profiles outside the game folder and writes the active one into `tf/custom/` and the player cfg layer: `tf/cfg/overrides/` with mastercomfig, or user files in `tf/cfg/` without it. Profiles also preserve `config.cfg` and its local Steam Cloud copy. These game files stay locked while TF2 runs. Changes made in-game flow back into the profile when the game closes.
 
 - **Comfig.** [mastercomfig](https://comfig.app) presets, modules, addons.
 - **Binds.** Click an action, press a key.
 - **HUD.** Install from the hud-db catalog, tune its options, or import your own.
 - **Crosshair.** Stock, 173 community crosshairs, or your own design per weapon.
-- **Viewmodels.** Hide weapons per class, compiled with the game's own tools.
+- **Viewmodels.** Hide weapons per class, compiled with the game's own tools on Windows. Linux supports importing prebuilt packs.
 - **Sounds.** Hit and kill sounds from a library, or your own WAV.
-- **Mods.** Bring your own packs, or browse GameBanana and install in a click. Casual preload keeps them alive on Valve servers, with one-click restore.
+- **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading supports selected customizations; server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
 - **Files.** Edit any cfg with a linter that knows the engine.
 
 <p align="center">
@@ -42,15 +44,13 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 
 Download from the [latest release](https://github.com/rndaom/execs/releases/latest). That published build is the only supported install; updates are offered in-app and install only when you click. What changed: [changelog](CHANGELOG.md).
 
-**Windows 10 or 11, 64-bit.** Run the `-setup.exe`. It installs per user, no admin needed. The installer is not code-signed yet, so Windows warns once:
+**Windows 10 or 11, 64-bit.** Run the `-setup.exe`. It installs per user, no admin needed. The installer does not have an Authenticode publisher signature yet. Windows or your browser may warn on each new version; [SmartScreen reputation is specific to the file and publisher](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation).
 
-![SmartScreen: More info, then Run anyway](docs/media/smartscreen.png)
+![Example Windows SmartScreen warning](docs/media/smartscreen.png)
 
-1. Click **More info**.
-2. Click **Run anyway**.
-3. Done. It will not ask again.
+Before proceeding, confirm that the download comes from the published `rndaom/execs` GitHub release, that its name and version match, and that its SHA-256 digest matches the release. PowerShell's `Get-FileHash -Algorithm SHA256 .\downloaded-setup.exe` can check the downloaded file. An unsigned installer has no verified publisher identity; a matching digest checks the release bytes, not publisher signing.
 
-If your browser asks whether to keep the download, keep it. Each release lists SHA-256 digests so you can verify the file.
+If you trust that verified source and your device policy allows it, SmartScreen may offer **More info** → **Run anyway**. Do not dismiss a browser warning without checking its reason and the source. Managed devices may prohibit unsigned apps; follow your organization's policy.
 
 **Linux, x86_64.** The AppImage needs glibc 2.35+ (Ubuntu 22.04, Debian 12, Fedora 36 or newer). Make it executable and keep it in a folder you own, such as `~/Applications`, so updates can replace it. The `.deb` works too but does not self-update.
 

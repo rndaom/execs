@@ -1,5 +1,13 @@
-import { ArrowSquareOut, MagnifyingGlass, Play, Stop, UploadSimple } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowClockwise,
+  ArrowSquareOut,
+  MagnifyingGlass,
+  Play,
+  Stop,
+  Trash,
+  UploadSimple,
+} from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
@@ -22,7 +30,6 @@ import { COMMUNITY_HITSOUND_CREDIT, COMMUNITY_HITSOUND_REPO } from "./lib/commun
 import {
   clampGameplay,
   type GameplayLayer,
-  gameplayPath,
   PITCH_MAX,
   PITCH_MIN,
   seedGameplay,
@@ -65,9 +72,10 @@ const SLOT_TITLES: Record<HitsoundKind, string> = {
 
 const SOURCE_FILTERS: { id: SoundSourceId | "all"; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "stock", label: "Built in" },
-  { id: "community", label: "Community" },
+  { id: "stock", label: "Stock" },
+  { id: "community", label: "TF2Hitsounds" },
   { id: "comfig", label: "comfig.app" },
+  { id: "own", label: "Yours" },
 ];
 
 /**
@@ -82,7 +90,6 @@ export function SoundsPane({
   api,
   profileId,
   record,
-  layer,
   effective,
   managedText,
   onSave,
@@ -133,22 +140,31 @@ export function SoundsPane({
   const [comfig, setComfig] = useState<ComfigHitsound[] | null>(null);
   const [comfigError, setComfigError] = useState<string | null>(null);
   const [stockStems, setStockStems] = useState<string[] | null>(null);
+  const [stockError, setStockError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    void reloadKey;
     let cancelled = false;
-    api
+    setLibraryLoading(true);
+    setStockError(null);
+    setComfigError(null);
+    const stockRead = api
       .listStockHitsounds()
       .then((stems) => {
         if (!cancelled) {
           setStockStems(stems);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
-          setStockStems([]);
+          setStockError(err instanceof Error ? err.message : "Built-in sounds are unavailable.");
+          setStockStems((current) => current ?? []);
         }
       });
-    api
+    const comfigRead = api
       .comfigHitsoundIndex()
       .then((index) => {
         if (!cancelled) {
@@ -157,14 +173,17 @@ export function SoundsPane({
       })
       .catch((err) => {
         if (!cancelled) {
-          setComfig([]);
+          setComfig((current) => current ?? []);
           setComfigError(err instanceof Error ? err.message : "comfig.app is unavailable.");
         }
       });
+    void Promise.all([stockRead, comfigRead]).then(() => {
+      if (!cancelled) setLibraryLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [api]);
+  }, [api, reloadKey]);
 
   // Leaving the pane must not leave a sound playing in the background.
   useEffect(() => () => player.stop(), [player.stop]);
@@ -252,12 +271,9 @@ export function SoundsPane({
 
   return (
     <section data-testid="settings-sounds" className="min-w-0 text-left">
-      <PaneHeader
-        title="Sounds"
-        actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
-      />
+      <PaneHeader title="Sounds" lede="Choose a sound for each hit and kill." />
 
-      <div className="grid gap-x-12 gap-y-10 lg:grid-cols-2">
+      <div className="pane-split gap-y-6">
         {(["hit", "kill"] as const).map((kind) => (
           <SoundSlot
             key={kind}
@@ -268,6 +284,10 @@ export function SoundsPane({
             playing={player.playing}
             onPlay={(choice) => toggle(kind, choice)}
             onChange={(update) => patchSlot(kind, update)}
+            onBrowse={() => {
+              searchRef.current?.focus();
+              searchRef.current?.scrollIntoView({ block: "center" });
+            }}
           />
         ))}
       </div>
@@ -278,135 +298,14 @@ export function SoundsPane({
         </p>
       ) : null}
 
-      <section id="sound-library" className="section scroll-mt-4" aria-label="Sound library">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <h2 className="t-section">Library</h2>
-            <p className="t-meta mt-1">
-              {comfig === null ? "Loading…" : `${library.length} sounds`}
-            </p>
-          </div>
-          <button
-            type="button"
-            data-testid="sounds-choose-file"
-            disabled={picking || !canAudition}
-            title={canAudition ? undefined : "Needs the desktop app."}
-            onClick={() => void chooseFile()}
-            className="btn btn-ghost"
-          >
-            <UploadSimple size={14} />
-            {picking ? "Reading…" : "Add a WAV…"}
-          </button>
-        </div>
-        {pickError ? (
-          <p data-testid="sounds-pick-error" className="t-meta mt-2 text-warn">
-            {pickError}
-          </p>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="relative block min-w-56 flex-1">
-            <span className="sr-only">Search sounds</span>
-            <MagnifyingGlass
-              size={14}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
-            />
-            <input
-              type="search"
-              data-testid="sounds-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name…"
-              className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
-            />
-          </label>
-          <Segmented
-            label="Source"
-            size="sm"
-            testIdPrefix="sounds-source"
-            options={SOURCE_FILTERS}
-            value={source}
-            onChange={setSource}
-          />
-          <Segmented
-            label="Sort"
-            size="sm"
-            testIdPrefix="sounds-sort"
-            options={SOUND_SORTS}
-            value={sort}
-            onChange={setSort}
-          />
-        </div>
-
-        <ul data-testid="sounds-library" className="mt-2 list-none p-0">
-          {rows.map((entry) => {
-            const hitChoice = entry.choiceFor("hit");
-            const killChoice = entry.choiceFor("kill");
-            const hitPick = entry.pickFor("hit");
-            const playable = canAudition && stockAvailable(entry, "hit");
-            const isHit = sameChoice(draft.hit.choice, hitChoice);
-            const isKill = sameChoice(draft.kill.choice, killChoice);
-            const clipName = accessibleNames.get(entry.id) ?? entry.label;
-            return (
-              <li
-                key={entry.id}
-                data-testid={`sounds-row-${entry.id}`}
-                className="row min-h-12 gap-3 border-b border-edge last:border-b-0"
-              >
-                <PlayButton
-                  clipName={clipName}
-                  playing={player.playing === soundKey(hitPick)}
-                  disabled={!playable}
-                  onClick={() => toggle("hit", hitChoice)}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] text-ink">{entry.label}</span>
-                  <span className="t-meta block truncate">
-                    {SOUND_SOURCE_LABELS[entry.source]}
-                    {entry.suggested
-                      ? ` · made for ${entry.suggested === "hit" ? "hits" : "kills"}`
-                      : ""}
-                    {entry.meta ? ` · ${entry.meta}` : ""}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  <AssignButton
-                    label="Hit"
-                    accessibleLabel={`Assign ${clipName} as hit sound`}
-                    active={isHit}
-                    disabled={locked}
-                    testId={`sounds-assign-hit-${entry.id}`}
-                    onClick={() => assign("hit", entry)}
-                  />
-                  <AssignButton
-                    label="Kill"
-                    accessibleLabel={`Assign ${clipName} as kill sound`}
-                    active={isKill}
-                    disabled={locked}
-                    testId={`sounds-assign-kill-${entry.id}`}
-                    onClick={() => assign("kill", entry)}
-                  />
-                </span>
-              </li>
-            );
-          })}
-          {rows.length === 0 ? <li className="t-meta py-8 text-center">No sounds match.</li> : null}
-        </ul>
-        {comfigError ? (
-          <p data-testid="sounds-comfig-error" className="t-meta mt-3 text-ink-faint">
-            comfig.app list unavailable: {comfigError}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="section">
+      <section className="mt-4">
         <Disclosure
           profileId={profileId}
           storageKey="sounds-advanced"
-          summary="Advanced"
+          summary="Pitch and repeat timing"
           testId="sounds-advanced"
         >
-          <div className="grid gap-x-12 gap-y-6 lg:grid-cols-2">
+          <div className="pane-split mt-3 gap-y-4">
             {(["hit", "kill"] as const).map((kind) => (
               <fieldset key={kind} className="min-w-0">
                 <legend className="eyebrow mb-3">{SLOT_TITLES[kind]} pitch</legend>
@@ -451,7 +350,178 @@ export function SoundsPane({
         </Disclosure>
       </section>
 
-      <p className="t-meta mt-12 text-ink-faint">
+      <section
+        id="sound-library"
+        className="mt-5 scroll-mt-4 border-t border-edge pt-3"
+        aria-label="Sound library"
+      >
+        <div className="pane-toolbar">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
+            <h2 className="t-section">Sound library</h2>
+            <p className="t-meta mt-1" aria-live="polite">
+              {libraryLoading ? "Loading sources…" : `${rows.length} of ${library.length} sounds`}
+            </p>
+          </div>
+          <div className="pane-actions">
+            <button
+              type="button"
+              data-testid="sounds-choose-file"
+              disabled={picking || !canAudition}
+              title={canAudition ? undefined : "Needs the desktop app."}
+              onClick={() => void chooseFile()}
+              className="btn btn-ghost"
+            >
+              <UploadSimple size={14} />
+              {picking ? "Reading…" : "Add a WAV…"}
+            </button>
+            {record ? (
+              <button
+                type="button"
+                data-testid="sounds-remove"
+                disabled={removeLocked}
+                onClick={onRemove}
+                className="btn btn-ghost"
+              >
+                <Trash size={14} /> Remove sound files
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {pickError ? (
+          <p data-testid="sounds-pick-error" className="t-meta mt-2 text-warn">
+            {pickError}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Segmented
+            label="Source"
+            size="sm"
+            testIdPrefix="sounds-source"
+            options={SOURCE_FILTERS}
+            value={source}
+            onChange={setSource}
+          />
+          <label className="relative block min-w-40 flex-1">
+            <span className="sr-only">Search sounds</span>
+            <MagnifyingGlass
+              size={14}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              ref={searchRef}
+              type="search"
+              data-testid="sounds-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by name…"
+              className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+            />
+          </label>
+          <Segmented
+            label="Sort"
+            size="sm"
+            testIdPrefix="sounds-sort"
+            options={SOUND_SORTS}
+            value={sort}
+            onChange={setSort}
+          />
+        </div>
+
+        <ul data-testid="sounds-library" className="mt-2 list-none p-0">
+          {rows.map((entry) => {
+            const hitChoice = entry.choiceFor("hit");
+            const killChoice = entry.choiceFor("kill");
+            const hitPick = entry.pickFor("hit");
+            const playable = canAudition && stockAvailable(entry, "hit");
+            const isHit = sameChoice(draft.hit.choice, hitChoice);
+            const isKill = sameChoice(draft.kill.choice, killChoice);
+            const clipName = accessibleNames.get(entry.id) ?? entry.label;
+            return (
+              <li
+                key={entry.id}
+                data-testid={`sounds-row-${entry.id}`}
+                className="row min-h-11 gap-3 border-b border-edge px-1 py-1.5 last:border-b-0"
+              >
+                <PlayButton
+                  clipName={clipName}
+                  playing={player.playing === soundKey(hitPick)}
+                  disabled={!playable}
+                  onClick={() => toggle("hit", hitChoice)}
+                />
+                <span className="flex min-w-0 flex-1 items-baseline gap-3">
+                  <span className="max-w-[60%] shrink-0 truncate text-[13px] font-medium text-ink">
+                    {entry.label}
+                  </span>
+                  <span className="t-meta truncate">
+                    {SOUND_SOURCE_LABELS[entry.source]}
+                    {entry.suggested
+                      ? ` · made for ${entry.suggested === "hit" ? "hits" : "kills"}`
+                      : ""}
+                    {entry.meta ? ` · ${entry.meta}` : ""}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <AssignButton
+                    label="Hit"
+                    accessibleLabel={`Assign ${clipName} as hit sound`}
+                    active={isHit}
+                    disabled={locked}
+                    testId={`sounds-assign-hit-${entry.id}`}
+                    onClick={() => assign("hit", entry)}
+                  />
+                  <AssignButton
+                    label="Kill"
+                    accessibleLabel={`Assign ${clipName} as kill sound`}
+                    active={isKill}
+                    disabled={locked}
+                    testId={`sounds-assign-kill-${entry.id}`}
+                    onClick={() => assign("kill", entry)}
+                  />
+                </span>
+              </li>
+            );
+          })}
+          {rows.length === 0 ? (
+            <li className="py-8 text-center">
+              <p className="t-row">
+                {source === "own" && !picked ? "Add a WAV to make it yours." : "No sounds match."}
+              </p>
+              <p className="t-meta mt-1">
+                {source === "own" && !picked
+                  ? "Choose Add a WAV, then assign it to Hit or Kill."
+                  : "Try another name or source."}
+              </p>
+            </li>
+          ) : null}
+        </ul>
+        {comfigError || stockError ? (
+          <div className="pane-toolbar mt-3 rounded-md border border-edge bg-panel p-3">
+            <div className="min-w-0">
+              {comfigError ? (
+                <p data-testid="sounds-comfig-error" className="t-meta">
+                  comfig.app list unavailable: {comfigError}
+                </p>
+              ) : null}
+              {stockError ? (
+                <p data-testid="sounds-stock-error" className="t-meta">
+                  Built-in sounds unavailable: {stockError}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={libraryLoading}
+              onClick={() => setReloadKey((current) => current + 1)}
+              className="btn btn-ghost"
+            >
+              <ArrowClockwise size={14} /> Retry sources
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <p className="pane-note mt-6">
         {HITSOUND_CASUAL_COPY} Built-in effects are previewed from your own copy of the game.{" "}
         {COMMUNITY_HITSOUND_CREDIT}{" "}
         <button
@@ -473,21 +543,6 @@ export function SoundsPane({
         </button>
         . execs is not affiliated with either.
       </p>
-
-      {record ? (
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4">
-          <p className="t-meta">Sound files are installed in this profile.</p>
-          <button
-            type="button"
-            data-testid="sounds-remove"
-            disabled={removeLocked}
-            onClick={onRemove}
-            className="btn btn-ghost"
-          >
-            Remove sound files
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -500,6 +555,7 @@ function SoundSlot({
   playing,
   onPlay,
   onChange,
+  onBrowse,
 }: {
   kind: HitsoundKind;
   slot: SlotDraft;
@@ -508,15 +564,16 @@ function SoundSlot({
   playing: string | null;
   onPlay: (choice: SoundChoice) => void;
   onChange: (update: Partial<SlotDraft>) => void;
+  onBrowse: () => void;
 }) {
   const title = SLOT_TITLES[kind];
   const key = soundKey(pickForChoice(kind, slot.choice));
   const isPlaying = playing === key;
   return (
     <section data-testid={`sounds-${kind}`} className="min-w-0">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="t-section">{title}</h2>
+          <h2 className="t-row">{title}</h2>
         </div>
         <Switch
           checked={slot.enabled}
@@ -527,11 +584,7 @@ function SoundSlot({
         />
       </div>
 
-      <div
-        className={`surface mt-5 flex items-center gap-3 p-3 transition-opacity duration-150 ${
-          slot.enabled ? "" : "opacity-50"
-        }`}
-      >
+      <div className="surface mt-3 flex items-center gap-3 p-2.5">
         <PlayButton
           clipName={`${choiceLabel(slot.choice)} (${title.toLowerCase()}, ${choiceSourceLabel(slot.choice)})`}
           playing={isPlaying}
@@ -543,14 +596,22 @@ function SoundSlot({
           <p data-testid={`sounds-${kind}-name`} className="t-row truncate">
             {choiceLabel(slot.choice)}
           </p>
-          <p className="t-meta truncate">{choiceSourceLabel(slot.choice)}</p>
+          <p className="t-meta truncate">
+            {slot.enabled ? "" : "Off · "}
+            {choiceSourceLabel(slot.choice)}
+          </p>
         </div>
-        <a href="#sound-library" className="btn btn-quiet shrink-0 text-[12.5px]">
+        <button
+          type="button"
+          onClick={onBrowse}
+          aria-label={`Browse ${title.toLowerCase()}s`}
+          className="btn btn-ghost shrink-0 text-[12.5px]"
+        >
           Browse
-        </a>
+        </button>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-3">
         <Slider
           id={`sounds-${kind}-volume`}
           label="Volume"
@@ -564,7 +625,7 @@ function SoundSlot({
         />
       </div>
       {slot.choice.kind !== "stock" ? (
-        <div className="mt-5 flex items-center justify-between gap-4">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="t-row">Boost</p>
             <p className="t-meta">Makes the file itself louder.</p>
@@ -676,28 +737,28 @@ function Slider({
 }) {
   return (
     <div className="min-w-0 py-2">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="grid min-h-8 grid-cols-[minmax(5rem,auto)_minmax(0,1fr)_3rem] items-center gap-3">
         <label htmlFor={id} className="t-row">
           {label}
         </label>
-        <output htmlFor={id} className="tnum text-[14px] text-ink-muted">
+        <input
+          id={id}
+          data-testid={id}
+          type="range"
+          aria-label={accessibleLabel}
+          min={min}
+          max={max}
+          step={1}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="range w-full"
+        />
+        <output htmlFor={id} className="tnum text-right text-[13px] text-ink-muted">
           {format ? format(value) : value}
         </output>
       </div>
-      {hint ? <p className="t-meta mt-0.5">{hint}</p> : null}
-      <input
-        id={id}
-        data-testid={id}
-        type="range"
-        aria-label={accessibleLabel}
-        min={min}
-        max={max}
-        step={1}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="range mt-3 w-full"
-      />
+      {hint ? <p className="t-meta mt-1">{hint}</p> : null}
     </div>
   );
 }

@@ -85,5 +85,5 @@ export function wizardApplyCopy(running: boolean, creating = false): string {
   if (running) {
     return "Close TF2 to apply";
   }
-  return creating ? "Create" : "Apply";
+  return creating ? "Create and switch" : "Create and apply";
 }

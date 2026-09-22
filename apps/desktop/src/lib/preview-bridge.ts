@@ -135,6 +135,7 @@ function notInPreview(what: string): BridgeError {
 }
 
 export function createPreviewApi(state: PreviewState): Api {
+  let appPreferences = { checkForUpdatesOnStartup: true, motion: "system" as "system" | "reduce" };
   const hudCatalog =
     state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
@@ -147,7 +148,10 @@ export function createPreviewApi(state: PreviewState): Api {
   };
   let launchOptions = recommendedLaunchOptions();
   let hudState: HudUiState =
-    state === "settings-hud-installed" ? previewInstalledState() : emptyHudState();
+    state === "settings-hud-installed" || state === "hud-ownership"
+      ? previewInstalledState()
+      : emptyHudState();
+  let hudOwnershipPending = state === "hud-ownership";
   let mods: ModRecord[] =
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
@@ -355,7 +359,84 @@ export function createPreviewApi(state: PreviewState): Api {
     async saveCurrentAs(name: string) {
       return addProfile(name, library?.activeProfileId === null);
     },
+    async deleteProfile(id, keepInstalled) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before deleting a profile.", "GameRunning");
+      if (!library?.profiles.some((profile) => profile.id === id)) {
+        throw new BridgeError("This profile is no longer in the library.", "ProfileMissing");
+      }
+      if (library.activeProfileId === id && !keepInstalled) {
+        throw new BridgeError(
+          "Switch to another profile or keep the installed setup before deleting this profile.",
+          "ActiveProfile",
+        );
+      }
+      library = {
+        ...library,
+        activeProfileId: library.activeProfileId === id ? null : library.activeProfileId,
+        profiles: library.profiles.filter((profile) => profile.id !== id),
+      };
+      return library;
+    },
+    async getAppSettings() {
+      return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
+    },
+    async getHudOwnership(profileId) {
+      const folder = hudState.installed?.id ?? null;
+      if (hudOwnershipPending)
+        return {
+          profileId,
+          selectedHud: "rayshud",
+          candidates: [
+            { folder: "rayshud", source: "profile" as const, files: 120 },
+            { folder: "toonhud", source: "live" as const, files: 184 },
+          ],
+          fingerprint: `preview:${profileId}:review`,
+          reviewRequired: true,
+          managedOptionFiles: ["tf/cfg/overrides/execs_hud_crosshair.cfg"],
+          resetOptions: false,
+        };
+      return {
+        profileId,
+        selectedHud: folder,
+        candidates: folder ? [{ folder, source: "profile" as const, files: 42 }] : [],
+        fingerprint: `preview:${profileId}:${folder ?? "none"}`,
+        reviewRequired: false,
+        managedOptionFiles: [],
+        resetOptions: false,
+      };
+    },
+    async selectProfileHud(profileId, hudFolder, expectedFingerprint) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before changing the selected HUD.", "GameRunning");
+      if (hudOwnershipPending) {
+        if (
+          expectedFingerprint !== `preview:${profileId}:review` ||
+          !["rayshud", "toonhud"].includes(hudFolder)
+        )
+          throw new BridgeError("The HUD files changed. Review them again.", "HudReviewStale");
+        hudOwnershipPending = false;
+        hudState = { ...hudState, installed: { id: hudFolder, source: "local", options: {} } };
+        return { ...requireDetail(), id: profileId };
+      }
+      const folder = hudState.installed?.id ?? null;
+      if (
+        expectedFingerprint !== `preview:${profileId}:${folder ?? "none"}` ||
+        hudFolder !== folder
+      )
+        throw new BridgeError("The HUD files changed. Review them again.", "HudReviewStale");
+      return { ...requireDetail(), id: profileId };
+    },
+    async setAppPreferences(preferences) {
+      appPreferences = { ...preferences };
+      return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
+    },
     async absorbOwned() {
+      if (hudOwnershipPending)
+        throw new BridgeError(
+          "More than one HUD needs review. Choose which HUD this profile should use.",
+          "HudLiveReviewRequired",
+        );
       const delta: AbsorbDelta = state === "absorb" ? previewPackDelta() : emptyAbsorbDelta();
       return {
         library: library ?? emptyLibrary(BROWSED.path, true),
@@ -397,6 +478,8 @@ export function createPreviewApi(state: PreviewState): Api {
         skippedFiles: 16,
         creator: true,
         notes: [],
+        huds: state === "profile-import-huds" ? ["rayshud", "toonhud"] : [],
+        selectedHud: state === "profile-import-huds" ? "rayshud" : null,
         warnings: [
           "tf/cfg/config.cfg contains 'password', which may expose a server credential and cannot be shared.",
           "tf/custom/low.vpk/cfg/comfig/comfig.cfg contains 'alias kill'.",

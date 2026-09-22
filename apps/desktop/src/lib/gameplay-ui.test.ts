@@ -10,6 +10,7 @@ import {
   gameplayPath,
   seedGameplay,
   serializeGameplay,
+  serializeGameplayScope,
 } from "./gameplay-ui";
 
 describe("gameplay clamp", () => {
@@ -119,6 +120,36 @@ describe("gameplay paths", () => {
 });
 
 describe("gameplay seed", () => {
+  it("seeds weapon controls from effective cfg and lets managed values win", () => {
+    const effective = { cl_autoreload: "0", hud_fastswitch: "2" };
+    expect(seedGameplay("", effective)).toMatchObject({ cl_autoreload: 0, hud_fastswitch: 2 });
+    expect(seedGameplay("cl_autoreload 1\nhud_fastswitch 1\n", effective)).toMatchObject({
+      cl_autoreload: 1,
+      hud_fastswitch: 1,
+    });
+  });
+
+  it.each([0, 1, 2, 3, 7])("preserves weapon selection mode %s through unrelated edits", (mode) => {
+    const original = seedGameplay(`hud_fastswitch ${mode}\ncl_autoreload 0\n`, {});
+    const changed = { ...original, fov_desired: 80, r_drawviewmodel: 0 as const };
+    expect(seedGameplay(serializeGameplay(changed), {})).toMatchObject({
+      hud_fastswitch: mode,
+      cl_autoreload: 0,
+      fov_desired: 80,
+    });
+  });
+
+  it("acknowledges weapon controls only within the gameplay draft scope", () => {
+    const original = defaultGameplay();
+    const changed = { ...original, cl_autoreload: 0 as const, hud_fastswitch: 2 };
+    expect(serializeGameplayScope(changed, "gameplay")).not.toBe(
+      serializeGameplayScope(original, "gameplay"),
+    );
+    for (const scope of ["crosshair", "sounds"] as const) {
+      expect(serializeGameplayScope(changed, scope)).toBe(serializeGameplayScope(original, scope));
+    }
+  });
+
   it.each([0.1, 45, 54.12345, 100, 179.9])(
     "preserves viewmodel FOV %s through unrelated edits",
     (value) => {

@@ -7,7 +7,7 @@ use std::{
     ffi::{c_char, c_void, CStr},
     time::{Duration, Instant},
 };
-use sysinfo::{ProcessesToUpdate, System};
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 type Interface = *mut c_void;
@@ -132,7 +132,7 @@ impl Drop for Shutdown {
 }
 
 fn refuse_game(system: &mut System) -> Result<()> {
-    system.refresh_processes(ProcessesToUpdate::All, true);
+    system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     if system.processes().values().any(|p| {
         matches!(
             p.name().to_string_lossy().to_ascii_lowercase().as_str(),

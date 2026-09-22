@@ -5,16 +5,13 @@
 @import "tailwindcss";
 
 /*
- * execs design system.
+ * Foundry: execs' warm, work-focused desktop design system.
  *
- * A calm dark product surface with a single warm accent. The TF2 identity lives
- * in the accent and the warm ink — never in a display face, card chrome or
- * shouty labels.
+ * The TF2 influence lives in graphite, warm ink and copper selection. Real
+ * game imagery stays source-owned. Flat rows, clear type and tailored corners
+ * leave room for the different jobs each pane performs.
  *
- * Accent is spent on exactly four things: the primary button, the selected
- * option ring, the active nav marker and the wordmark dot. Everything else is
- * ink / ink-muted / ink-faint. Semantic colour (ok / warn / error) is the only
- * other colour allowed, and only when it carries meaning.
+ * Accent names action and selection; semantic colours name actual state.
  *
  * Three surfaces (bg → panel → panel-raised), two hairlines (edge, edge-strong)
  * and one type scale. Boxes are reserved for real surfaces (`.surface`:
@@ -23,26 +20,28 @@
  */
 @theme {
   /* Three-step surface scale. */
-  --color-bg: #121212;
-  --color-panel: #181818;
-  --color-panel-raised: #1f1f1f;
+  --color-bg: #151310;
+  --color-panel: #211e19;
+  --color-panel-raised: #2c2821;
 
   /* Hairlines are ink at low alpha so they read the same on every surface. */
-  --color-edge: rgb(236 231 218 / 0.08);
-  --color-edge-strong: rgb(236 231 218 / 0.14);
+  --color-edge: rgb(240 233 219 / 0.1);
+  --color-edge-strong: rgb(240 233 219 / 0.2);
 
-  --color-ink: #ece7da;
-  --color-ink-muted: #a49c8e;
-  --color-ink-faint: #6f695c;
+  --color-ink: #f0e9db;
+  --color-ink-muted: #bcb3a3;
+  --color-ink-faint: #a79c8b;
 
-  --color-brand: #cf6a32;
-  --color-brand-hover: #e8823f;
-  --color-on-brand: #121212;
+  --color-brand: #d98449;
+  --color-brand-hover: #e69a61;
+  --color-on-brand: #151310;
 
   /* Semantic states — meaning only, never decoration. */
-  --color-ok: #729e42;
-  --color-warn: #cf6a32;
-  --color-error: #b8383b;
+  --color-ok: #9fbd7d;
+  --color-warn: #e3bb78;
+  --color-error: #ec9185;
+  --color-danger: #a9453c;
+  --color-danger-hover: #943f36;
 
   /* Team colours survive only where they name a TF2 team. */
   --color-team-red: #b8383b;
@@ -51,20 +50,26 @@
 
   --font-body: "Inter", ui-sans-serif, sans-serif;
 
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
   --radius-pill: 9999px;
 
   /* Layout constants (4px base). */
-  --content-max: 880px;
-  --content-pad: 40px;
-  --section-gap: 48px;
+  --content-max: 1160px;
+  --content-pad: 24px;
+  --section-gap: 28px;
   --hero-preview: 360px;
-  --sidebar-width: 224px;
+  --sidebar-width: 180px;
 
   --motion: 150ms;
   /* Anything that moves (a pane arriving, a sheet opening) uses this ease and
      this slightly longer beat; colour and ring changes keep --motion. */
   --motion-move: 220ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-reversible: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html,
@@ -84,6 +89,7 @@ body {
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
 }
 
 button,
@@ -105,7 +111,7 @@ select:focus-visible,
 summary:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-brand) 80%, transparent);
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
 
@@ -134,39 +140,57 @@ a:focus-visible,
   color: var(--color-ink);
 }
 
-/* Motion budget: colour, opacity and ring only, 150ms, and nothing at all for
-   people who asked for less. */
+/* Reduced motion is immediate, including when the setting changes mid-effect.
+   Keep this outside a layer so it also covers pane-local utility animations. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     /* biome-ignore-start lint/complexity/noImportantStyles: honouring the OS
        setting has to beat every utility class, including inline ones. */
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
     /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
   }
+}
+
+[data-motion="reduce"],
+[data-motion="reduce"]::before,
+[data-motion="reduce"]::after,
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  /* biome-ignore-start lint/complexity/noImportantStyles: app preference must override every motion utility. */
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+  /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
 }
 
 @keyframes enter-fade {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
 @keyframes overlay-in {
   from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
+    transform: translateY(6px);
   }
   to {
-    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes menu-in {
+  from {
+    transform: translateY(4px);
+  }
+  to {
     transform: none;
   }
 }
@@ -182,15 +206,23 @@ a:focus-visible,
 
 @layer components {
   /* ---- Motion -----------------------------------------------------------
-     A pane or a picture arriving fades up over one beat; overlays scale in
-     from just below. Both are cancelled by the reduced-motion rule above. */
+     Finite local transitions only. No entrance waits, looping progress,
+     background animation, permanent will-change or decorative GPU work. */
 
   .enter-fade {
-    animation: enter-fade var(--motion-move) var(--ease-out) both;
+    animation: enter-fade var(--motion) ease backwards;
   }
 
   .overlay-enter {
-    animation: overlay-in var(--motion-move) var(--ease-out) both;
+    animation:
+      enter-fade var(--motion) ease backwards,
+      overlay-in var(--motion-move) var(--ease-out) backwards;
+  }
+
+  .menu-enter {
+    animation:
+      enter-fade var(--motion) ease backwards,
+      menu-in var(--motion-move) var(--ease-out) backwards;
   }
 
   .scrim {
@@ -198,23 +230,22 @@ a:focus-visible,
     inset: 0;
     z-index: 40;
     background: rgb(0 0 0 / 0.55);
-    backdrop-filter: blur(2px);
-    animation: scrim-in var(--motion) ease both;
+    animation: scrim-in var(--motion) ease backwards;
   }
 
   /* ---- Type scale -------------------------------------------------------
      Six steps, Inter throughout. `.eyebrow` is the only uppercase voice. */
 
   .t-pane {
-    font-size: 28px;
-    font-weight: 600;
+    font-size: 30px;
+    font-weight: 700;
     line-height: 1.2;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.025em;
     color: var(--color-ink);
   }
 
   .t-section {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
     line-height: 1.35;
     letter-spacing: -0.005em;
@@ -222,8 +253,8 @@ a:focus-visible,
   }
 
   .t-row {
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     line-height: 1.4;
     color: var(--color-ink);
   }
@@ -235,7 +266,7 @@ a:focus-visible,
   }
 
   .t-meta {
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 400;
     line-height: 1.5;
     color: var(--color-ink-muted);
@@ -243,8 +274,8 @@ a:focus-visible,
 
   .eyebrow {
     font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--color-ink-faint);
   }
@@ -256,7 +287,7 @@ a:focus-visible,
 
   /* ---- Layout ----------------------------------------------------------- */
 
-  /* The single content column every pane and onboarding screen sits in. */
+  /* Shared shell; pane content stays free to use task-specific arrangements. */
   .content-col {
     width: 100%;
     max-width: var(--content-max);
@@ -264,11 +295,274 @@ a:focus-visible,
     padding-inline: var(--content-pad);
   }
 
+  .settings-shell {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border-top: 1px solid var(--color-edge);
+    background: var(--color-bg);
+  }
+
+  .settings-sidebar {
+    display: flex;
+    flex: 0 0 var(--sidebar-width);
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--color-edge);
+    background: var(--color-panel);
+  }
+
+  .settings-nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 8px;
+    scrollbar-gutter: stable;
+  }
+
+  .settings-nav-group + .settings-nav-group {
+    margin-top: 20px;
+  }
+
+  .settings-nav-heading {
+    margin-bottom: 6px;
+    padding-inline: 12px;
+    font-size: 10px;
+  }
+
+  .settings-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: left;
+    transition:
+      color var(--motion) ease,
+      background-color var(--motion) ease;
+  }
+
+  .settings-nav-item:hover {
+    color: var(--color-ink);
+    background: var(--color-panel-raised);
+  }
+
+  .settings-nav-item[data-active="true"] {
+    color: var(--color-ink);
+    font-weight: 600;
+    background: var(--color-panel-raised);
+  }
+
+  .settings-nav-marker {
+    position: absolute;
+    inset-block: 7px;
+    left: -8px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--color-brand);
+  }
+
+  .settings-utility {
+    flex-shrink: 0;
+    padding: 8px;
+    border-top: 1px solid var(--color-edge);
+  }
+
+  .settings-scroll {
+    flex: 1;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior-y: contain;
+  }
+
+  .settings-content {
+    width: 100%;
+    max-width: var(--content-max);
+    min-height: 100%;
+    margin-inline: auto;
+    padding: 24px var(--content-pad) 32px;
+  }
+
+  .settings-content[data-pane="files"] {
+    max-width: none;
+    padding: 16px;
+  }
+
+  .settings-pane {
+    min-width: 0;
+  }
+
+  .settings-pane > [data-testid^="settings-surface-"] {
+    animation: enter-fade var(--motion) ease backwards;
+  }
+
+  .pane-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px 24px;
+    margin-bottom: 24px;
+  }
+
+  .pane-header-compact {
+    margin-bottom: 12px;
+  }
+
+  .pane-toolbar,
+  .pane-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .pane-toolbar {
+    gap: 12px;
+    justify-content: space-between;
+    padding-block: 12px;
+  }
+
+  .pane-split,
+  .pane-workspace {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+  }
+
+  .pane-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  }
+
+  .inventory-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    align-items: start;
+    gap: 24px;
+  }
+
+  .inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    scroll-margin-block-start: 64px;
+  }
+
+  .inventory-item,
+  .inventory-empty {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 112px;
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-sm);
+    padding: 6px;
+  }
+
+  .inventory-item {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 20px;
+    background: var(--color-panel);
+    transition:
+      background-color var(--motion) ease,
+      border-color var(--motion) ease;
+  }
+
+  .inventory-item:hover {
+    background: var(--color-panel-raised);
+    border-color: var(--color-edge-strong);
+  }
+
+  .inventory-item-selected,
+  .inventory-item-selected:hover {
+    border-color: var(--color-brand);
+    background: color-mix(in srgb, var(--color-brand) 6%, var(--color-panel));
+    box-shadow: inset 0 0 0 1px var(--color-brand);
+  }
+
+  .inventory-detail {
+    position: sticky;
+    top: 12px;
+  }
+
+  .inventory-paging {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-block: 8px;
+    padding-block: 8px;
+    background: var(--color-bg);
+  }
+
+  @media (max-width: 1150px) {
+    .inventory-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+
+  .pane-split > *,
+  .pane-workspace > * {
+    min-width: 0;
+  }
+
+  .pane-note {
+    border-left: 1px solid var(--color-edge-strong);
+    padding-left: 16px;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .action-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-lg);
+    background: var(--color-panel);
+  }
+
+  .apply-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 28px;
+    border-top: 1px solid var(--color-edge-strong);
+    background: var(--color-bg);
+    padding-block: 12px;
+  }
+
   /* Flat content section separated by a hairline — the default page rhythm. */
   .section {
     border-top: 1px solid var(--color-edge);
     margin-top: var(--section-gap);
-    padding-top: 24px;
+    padding-top: 20px;
   }
 
   /* Lead with the decision: choice on the left, fixed-width preview on the
@@ -284,14 +578,61 @@ a:focus-visible,
     width: 100%;
   }
 
-  @media (min-width: 960px) {
-    .hero-row.crosshair-hero {
-      grid-template-columns: minmax(0, 1fr) var(--hero-preview);
+  /* Keep fixed dialogs viewport-relative: size containment on the scrolling
+     workspace would establish a containing block for its fixed descendants. */
+  @media (max-width: 900px) {
+    .hero-row,
+    .pane-split,
+    .pane-workspace,
+    .inventory-workspace {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hero-preview {
+      max-width: 480px;
+    }
+
+    .inventory-detail {
+      position: static;
     }
   }
 
-  @media (max-width: 1100px) {
-    .hero-row {
+  @media (max-width: 760px) {
+    .settings-sidebar {
+      flex-basis: 64px;
+    }
+
+    .settings-nav {
+      padding-inline: 6px;
+    }
+
+    .settings-nav-heading,
+    .settings-nav-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .settings-nav-item {
+      justify-content: center;
+      min-height: 40px;
+      padding-inline: 6px;
+    }
+
+    .settings-nav-marker {
+      left: -6px;
+    }
+
+    .settings-content {
+      padding: 20px 16px 24px;
+    }
+
+    .hero-row,
+    .pane-split,
+    .pane-workspace {
       grid-template-columns: minmax(0, 1fr);
     }
 
@@ -320,46 +661,58 @@ a:focus-visible,
   /* A real surface: previews, editors, media. Not a layout device. */
   .surface {
     border: 1px solid var(--color-edge);
-    border-radius: 0.75rem;
+    border-radius: var(--radius-lg);
     background: var(--color-panel);
     overflow: hidden;
   }
 
-  /* The viewmodel reference stage — a lit backdrop so a first-person render
-     reads as a scene rather than a floating cut-out. Lives here because no
-     hex belongs in a component (AGENTS.md, Design decisions). */
+  /* An honest neutral surface while an authorized reference image loads. */
   .vm-stage {
-    background: radial-gradient(
-      125% 120% at 50% 0%,
-      color-mix(in srgb, var(--color-ink) 22%, var(--color-bg)) 0%,
-      var(--color-panel-raised) 45%,
-      var(--color-bg) 100%
-    );
+    background: var(--color-panel);
   }
 
   /* Elevated overlay: popovers, progress, prompts, modals. */
   .overlay {
     border: 1px solid var(--color-edge-strong);
-    border-radius: 0.75rem;
+    border-radius: var(--radius-lg);
     background: var(--color-panel-raised);
-    box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+    box-shadow: 0 16px 48px rgb(0 0 0 / 0.45);
   }
 
-  .field {
+  .field,
+  .input {
     border: 1px solid var(--color-edge-strong);
-    border-radius: 0.5rem;
+    border-radius: var(--radius-sm);
     background: var(--color-bg);
     transition: border-color var(--motion) ease;
   }
 
   .field:focus,
-  .field:focus-within {
+  .field:focus-within,
+  .input:focus {
     border-color: color-mix(in srgb, var(--color-brand) 70%, transparent);
   }
 
+  .input {
+    min-width: 0;
+    min-height: 36px;
+    padding: 6px 10px;
+    color: var(--color-ink);
+  }
+
+  .input::placeholder,
+  .field::placeholder {
+    color: var(--color-ink-faint);
+    opacity: 1;
+  }
+
+  .input:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
   /* ---- Option tile ------------------------------------------------------
-     Flat, hairline-bordered. Selected = a 1.5px accent ring and a small check.
-     No fill, ever — the ring carries the state. */
+     Flat, hairline-bordered. Selected = ring, subtle wash and a small dot. */
 
   .tile {
     position: relative;
@@ -368,9 +721,9 @@ a:focus-visible,
     gap: 6px;
     min-width: 0;
     border: 1px solid var(--color-edge);
-    border-radius: 0.75rem;
+    border-radius: var(--radius-lg);
     background: transparent;
-    padding: 16px;
+    padding: 12px;
     text-align: left;
     transition:
       border-color var(--motion) ease,
@@ -391,7 +744,7 @@ a:focus-visible,
 
   .tile-selected:not(.tile-disabled):hover {
     border-color: transparent;
-    background: var(--color-panel);
+    background: color-mix(in srgb, var(--color-brand) 10%, var(--color-panel));
   }
 
   .tile-disabled {
@@ -418,7 +771,8 @@ a:focus-visible,
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    border-radius: 0.5rem;
+    min-height: 36px;
+    border-radius: var(--radius-sm);
     font-size: 13.5px;
     font-weight: 500;
     padding: 0.5rem 0.875rem;
@@ -426,11 +780,11 @@ a:focus-visible,
       background-color var(--motion) ease,
       border-color var(--motion) ease,
       color var(--motion) ease,
-      transform var(--motion) var(--ease-out);
+      transform var(--motion-move) var(--ease-reversible);
   }
 
   .btn:not(:disabled):active {
-    transform: translateY(0.5px) scale(0.985);
+    transform: translateY(1px);
   }
 
   .btn:disabled {
@@ -445,6 +799,15 @@ a:focus-visible,
 
   .btn-primary:not(:disabled):hover {
     background: var(--color-brand-hover);
+  }
+
+  .btn-danger {
+    background: var(--color-danger);
+    color: var(--color-ink);
+  }
+
+  .btn-danger:not(:disabled):hover {
+    background: var(--color-danger-hover);
   }
 
   .btn-ghost {
@@ -473,7 +836,7 @@ a:focus-visible,
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-sm);
     border: 1px solid var(--color-edge-strong);
     font-size: 12px;
     font-weight: 500;
@@ -498,15 +861,15 @@ a:focus-visible,
   }
 
   /* ---- Segmented control ------------------------------------------------
-     Two to five choices in one pill; the selected segment sits on the raised
-     surface in ink. The no-dropdown answer for "pick one". */
+     Native radio semantics with a quiet segmented surface and selected ring. */
 
   .segmented {
     display: inline-flex;
+    flex-wrap: wrap;
     gap: 2px;
-    padding: 3px;
+    padding: 2px;
     border: 1px solid var(--color-edge);
-    border-radius: 0.625rem;
+    border-radius: var(--radius-lg);
     background: var(--color-bg);
     margin: 0;
     min-width: 0;
@@ -524,7 +887,8 @@ a:focus-visible,
     justify-content: center;
     gap: 0.375rem;
     min-width: 0;
-    border-radius: 0.45rem;
+    min-height: 30px;
+    border-radius: var(--radius-sm);
     padding: 0.375rem 0.75rem;
     font-size: 13px;
     font-weight: 500;
@@ -545,7 +909,7 @@ a:focus-visible,
   .segmented-label[data-selected="true"] {
     background: var(--color-panel-raised);
     color: var(--color-ink);
-    box-shadow: inset 0 0 0 1px var(--color-edge-strong);
+    box-shadow: inset 0 0 0 1px var(--color-brand);
   }
 
   .segmented-sm .segmented-label {
@@ -554,6 +918,76 @@ a:focus-visible,
   }
 
   .segmented-disabled .segmented-label {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .class-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 4px;
+    border-bottom: 1px solid var(--color-edge);
+  }
+
+  .class-tab {
+    min-height: 36px;
+    padding: 8px 12px;
+    border-bottom: 2px solid transparent;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 500;
+    transition:
+      color var(--motion) ease,
+      border-color var(--motion) ease;
+  }
+
+  .class-tab:hover,
+  .class-tab[aria-selected="true"] {
+    color: var(--color-ink);
+  }
+
+  .class-tab[aria-selected="true"] {
+    border-bottom-color: var(--color-brand);
+    font-weight: 600;
+  }
+
+  .switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 40px;
+    height: 24px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-pill);
+    background: var(--color-bg);
+    transition:
+      background-color var(--motion) ease,
+      border-color var(--motion) ease;
+  }
+
+  .switch[aria-checked="true"] {
+    border-color: var(--color-brand);
+    background: var(--color-brand);
+  }
+
+  .switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-pill);
+    background: var(--color-ink-muted);
+    transition:
+      transform var(--motion-move) var(--ease-reversible),
+      background-color var(--motion) ease;
+  }
+
+  .switch[aria-checked="true"] .switch-thumb {
+    transform: translateX(16px);
+    background: var(--color-on-brand);
+  }
+
+  .switch:disabled {
     cursor: not-allowed;
     opacity: 0.4;
   }
@@ -575,7 +1009,7 @@ a:focus-visible,
       background-color var(--motion) ease,
       color var(--motion) ease,
       border-color var(--motion) ease,
-      transform var(--motion) var(--ease-out);
+      transform var(--motion-move) var(--ease-reversible);
   }
 
   .play-button:not(:disabled):hover {
@@ -583,7 +1017,7 @@ a:focus-visible,
   }
 
   .play-button:not(:disabled):active {
-    transform: scale(0.94);
+    transform: translateY(1px);
   }
 
   .play-button:disabled {
@@ -628,12 +1062,12 @@ a:focus-visible,
     border: 2px solid var(--color-bg);
     background: var(--color-ink);
     box-shadow: 0 0 0 1px var(--color-edge-strong);
-    transition: transform var(--motion) var(--ease-out);
+    transition: box-shadow var(--motion) ease;
   }
 
   .range:not(:disabled):hover::-webkit-slider-thumb,
   .range:focus-visible::-webkit-slider-thumb {
-    transform: scale(1.12);
+    box-shadow: 0 0 0 2px var(--color-brand);
   }
 
   .range-red::-webkit-slider-thumb {
@@ -674,7 +1108,7 @@ a:focus-visible,
     gap: 6px;
     min-width: 0;
     border: 1px solid var(--color-edge);
-    border-radius: 0.625rem;
+    border-radius: var(--radius-lg);
     background: transparent;
     padding: 8px 6px 7px;
     transition:
@@ -748,7 +1182,7 @@ a:focus-visible,
   .disclosure-caret {
     display: inline-block;
     color: var(--color-ink-faint);
-    transition: transform var(--motion) ease;
+    transition: transform var(--motion-move) var(--ease-reversible);
   }
 
   .disclosure[open] > summary .disclosure-caret {
@@ -756,6 +1190,6 @@ a:focus-visible,
   }
 
   .disclosure[open] > :not(summary) {
-    animation: enter-fade var(--motion-move) var(--ease-out) both;
+    animation: enter-fade var(--motion) ease backwards;
   }
 }

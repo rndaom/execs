@@ -1,5 +1,11 @@
-import { CaretDown, DownloadSimple, FolderOpen, Plus, UploadSimple } from "@phosphor-icons/react";
-import { useEffect, useRef } from "react";
+import {
+  CaretDown,
+  DotsThreeVertical,
+  FolderOpen,
+  Plus,
+  UploadSimple,
+} from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
 import type { ProfileLibrary } from "../../lib/bridge";
 import {
   canCreateNew,
@@ -8,6 +14,7 @@ import {
   canSaveCurrent,
   libraryStatusCopy,
 } from "../../lib/library-ui";
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
 /**
  * The profile popover: switch, save current, import and change install. Escape
  * and an outside click close it, and focus returns to the summary — a
@@ -23,6 +30,7 @@ export function ProfileMenu({
   onSave,
   onSwitch,
   onExport,
+  onDelete,
   onImport,
   onRepair,
   onCreateNew,
@@ -37,6 +45,7 @@ export function ProfileMenu({
   onSave: () => void;
   onSwitch: (id: string) => void;
   onExport: (id: string) => void;
+  onDelete: (id: string) => void;
   onImport: () => void;
   onRepair: (id: string) => void;
   onCreateNew: () => void;
@@ -44,6 +53,7 @@ export function ProfileMenu({
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const summaryRef = useRef<HTMLElement | null>(null);
+  const [actions, setActions] = useState<{ id: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
     function close(restoreFocus: boolean) {
@@ -185,14 +195,19 @@ export function ProfileMenu({
                   {showExport ? (
                     <button
                       type="button"
-                      data-testid="profile-export"
-                      title={`Export ${profile.name}`}
-                      aria-label={`Export ${profile.name}`}
-                      onClick={() => onExport(profile.id)}
+                      data-testid="profile-actions"
+                      title={`Actions for ${profile.name}`}
+                      aria-label={`Actions for ${profile.name}`}
+                      aria-haspopup="menu"
+                      aria-expanded={actions?.id === profile.id}
+                      onClick={(event) => {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setActions({ id: profile.id, x: bounds.right - 240, y: bounds.bottom + 4 });
+                      }}
                       disabled={controlsBusy || recoveryPending}
-                      className="rounded-md p-1.5 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
+                      className="rounded-md p-2 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
                     >
-                      <DownloadSimple size={16} />
+                      <DotsThreeVertical size={18} weight="bold" />
                     </button>
                   ) : null}
                 </li>
@@ -254,6 +269,33 @@ export function ProfileMenu({
           </button>
         </div>
       </div>
+      {actions ? (
+        <ContextMenu label="Profile actions" position={actions} onClose={() => setActions(null)}>
+          <ContextMenuItem
+            disabled={controlsBusy || recoveryPending}
+            onSelect={() => {
+              const id = actions.id;
+              setActions(null);
+              onExport(id);
+            }}
+          >
+            Export profile
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            disabled={running || controlsBusy || recoveryPending}
+            onSelect={() => {
+              const id = actions.id;
+              setActions(null);
+              if (detailsRef.current) detailsRef.current.open = false;
+              summaryRef.current?.focus();
+              onDelete(id);
+            }}
+          >
+            Delete profile…
+          </ContextMenuItem>
+        </ContextMenu>
+      ) : null}
     </details>
   );
 }

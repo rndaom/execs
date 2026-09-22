@@ -7,12 +7,33 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Refresh every pane with Foundry: warm dark surfaces, clearer type and selection, compact
+  navigation, consistent dialogs and restrained motion. Each pane keeps a layout suited to its
+  task, and the app follows system reduced motion or your own Reduce preference.
+- Keep separate scroll positions for visited panes and App settings. Profile changes reset
+  profile-specific positions while preserving account-owned Inventory browsing.
+- Crosshair: keep the designer beside its preview, retain unfinished designs, and distinguish
+  saving a design to the library from building the installed pack. Weapon pickers stay in view.
+- Viewmodels: organize all nine classes and 64 groups around an adjacent preview and build action.
+- Sounds: keep hit and kill slots together above the searchable library, with advanced controls
+  and clearer source retry feedback.
+- Files: keep Find controls, new-file choices and full destination paths readable at the minimum
+  window size. Launch options gain removable option groups while retaining direct text editing.
+- Reduce background lifecycle polling while execs is hidden or unfocused, refresh on return,
+  and back off failed reads while keeping launch and maintenance state guarded.
 - Inventory loads automatically and refreshes every two minutes while visible
   and focused, and after TF2 closes. Background refreshes retain your place and
   artwork; connection failures retry with backoff and offer a Retry button.
 
 ### Added
 
+- Delete profiles from their menu with an explicit review. Active profiles can switch first or
+  keep the installed setup and stop tracking it; deleting the last profile keeps TF2 files intact.
+- App settings for startup update checks, reduced motion, install location, data location,
+  diagnostics and support, available before creating a profile.
+- Gameplay controls for automatic reload and fast weapon switching, preserving existing
+  alternative fast-switch values until you choose to change them.
+- Binds: include primary attack, secondary attack and reload in a dedicated Combat group.
 - Development builds: browse a read-only Steam backpack snapshot with pages,
   search, quality filters, item details, and base artwork from the installed TF2.
   Inventory organization remains in development and is not enabled in release builds.
@@ -28,6 +49,22 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Clear an obsolete update offer after a successful newer check reports no update, and prevent
+  out-of-order checks or repeated install clicks from changing the intended update.
+- Show an actionable native error when startup recovery checks fail, including the app version,
+  state location and copyable report details, while preserving maintenance markers and TF2 files.
+- Protect unfinished pack/designer drafts during profile, install, update and close transitions;
+  direct you to the pane that needs an explicit apply action, with discard and cancel available.
+- Review competing HUDs before activation, preserve excluded originals, and require a visible
+  choice for profile ZIPs containing several HUDs. Generic mod imports route detected HUD content
+  to HUD review instead of installing a second active HUD.
+- Preserve imported cfg bytes during HUD choice; managed HUD-option cleanup receives a separate
+  review with original files retained for recovery.
+- Switch local-only particle profiles without downloading the default mod library, and keep
+  legacy preloader cleanup from undoing profile-owned selections.
+- Keep Casual preload console history, remove an invalid post-disconnect script call, and avoid
+  duplicate managed launch hooks. The supported offline preload step remains explicit.
+- Correct installer, platform and Casual compatibility descriptions in the README and promo.
 - Mods: preserve GameBanana's global search and ranking order, distinguish added and updated dates,
   report unavailable metrics without inventing zeroes, and recover from hidden or failed category
   loads without stale results taking over the current request.

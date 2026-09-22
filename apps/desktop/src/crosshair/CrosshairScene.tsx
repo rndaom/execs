@@ -2,14 +2,13 @@ import { useState } from "react";
 import { useViewmodelPreview } from "../hooks/useViewmodelPreview";
 import type { Api } from "../lib/api";
 import { isTauri } from "../lib/bridge";
+import { viewmodelPreviewUrl } from "../lib/viewmodel-previews";
 
 export function CrosshairScene({ api }: { api: Api }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const native = isTauri();
   const scene = useViewmodelPreview(api, native ? "scout_blank" : null);
-  const src = native
-    ? scene.src
-    : "https://raw.githubusercontent.com/Yttrium-tYcLief/CompVMInstaller/b215a5cdfcd809ec3c2d71529e7a1eb22a72a39e/Project/CompVMInstaller/Resources/scout_blank.jpg";
+  const src = native ? scene.src : viewmodelPreviewUrl("scout_blank");
   return src && src !== failedSrc ? (
     <img
       src={src}

@@ -78,7 +78,7 @@ export function CrosshairLibraryChips({
           ) : null}
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         {choices.map((shape) => {
           const isSelected = selected === shape;
           const isLibrary = !isBuiltinCrosshairShape(shape);
@@ -104,7 +104,7 @@ export function CrosshairLibraryChips({
                 customRgba={customRgba}
                 color={color}
                 preview={previewFor(shape)}
-                size={44}
+                size={36}
               />
               <span className={`thumb-label ${isLibrary ? "" : "capitalize"}`}>
                 {crosshairShapeLabel(shape)}
@@ -122,7 +122,7 @@ export function CrosshairLibraryChips({
                     event.preventDefault();
                     onRemove(shape);
                   }}
-                  className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-focus-within/chip:opacity-100 group-hover/chip:opacity-100"
+                  className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-focus-within/chip:opacity-100 group-hover/chip:opacity-100"
                 >
                   <X size={9} weight="bold" />
                 </button>

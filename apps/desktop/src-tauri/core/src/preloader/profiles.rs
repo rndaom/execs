@@ -1,7 +1,7 @@
 //! Profile-owned selections projected into the install's shared preloader files.
 use std::path::{Path, PathBuf};
 
-use crate::hash::{sha256_file, write_atomic_within};
+use crate::hash::sha256_file;
 use crate::process_lock::refuse_if_running_among;
 use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
@@ -25,6 +25,10 @@ pub struct ProfileContext {
 }
 
 impl PreloaderSelection {
+    pub fn needs_default_library(&self) -> bool {
+        !self.addons.is_empty() || !self.particle_mods.is_empty()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.addons.is_empty()
             && self.particle_mods.is_empty()
@@ -176,8 +180,8 @@ pub struct ProfilePreloaderPlan {
     selection: PreloaderSelection,
 }
 
-/// Validate the target while the old profile is still intact. Empty targets
-/// need no downloaded library, including after the user clears the cache.
+/// Validate the target while the old profile is still intact. Empty and
+/// profile-only targets need no downloaded default library.
 pub fn prepare_profile_preloader(
     profiles: &Path,
     root: &Path,
@@ -204,18 +208,7 @@ pub fn prepare_profile_preloader(
     {
         return Ok(None);
     }
-    let zip = if selection.is_empty() {
-        let folder = data.join("preloader");
-        app_dir_within(&data, &folder, true).map_err(ProfileError::Io)?;
-        let zip = folder.join("empty-mods.zip");
-        write_atomic_within(
-            &data,
-            &zip,
-            b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-        )
-        .map_err(|e| ProfileError::Io(e.to_string()))?;
-        zip
-    } else {
+    let zip = if selection.needs_default_library() {
         let zip = data
             .join("preloader")
             .join(format!("mods-{MODS_RELEASE}.zip"));
@@ -227,6 +220,10 @@ pub fn prepare_profile_preloader(
             ));
         }
         zip
+    } else {
+        // The selection reader creates an empty archive in memory. Target
+        // preflight therefore never creates a cache or mutates source state.
+        data.join("preloader/unused-mods.zip")
     };
     let profile = ProfileContext {
         profiles: profiles.to_path_buf(),

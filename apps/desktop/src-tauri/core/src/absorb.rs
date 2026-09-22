@@ -301,6 +301,7 @@ where
         return Ok(library);
     };
     if choice == PackChoice::Update {
+        crate::hud::require_resolved_live_huds(profiles_dir, tf2_root, &profile_id)?;
         // This read-only preflight precedes even interrupted-write repair.
         // Updating a missing selected source must not change profile, live, or
         // recovery bytes before telling the caller to clear the selection.
@@ -448,6 +449,7 @@ where
     let Some(profile_id) = active_profile_id(profiles_dir, tf2_root)? else {
         return Ok(());
     };
+    crate::hud::require_resolved_live_huds(profiles_dir, tf2_root, &profile_id)?;
     repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     let added: Vec<String> = classified
@@ -880,6 +882,36 @@ where
     }
     let before = load_manifest(profiles_dir, profile_id)?;
     let selected_hud = crate::hud::selected_hud_pack(&before);
+    let selected_was_validated = selected_hud.is_some();
+    // An older explicit record may outlive invalid/opaque HUD metadata. It
+    // still needs clearing when the user accepts removal of its whole pack;
+    // that does not make arbitrary info.vdf files into validated HUD roots.
+    let selected_hud_key = selected_hud
+        .as_deref()
+        .or_else(|| before.hud.as_ref().map(|record| record.id.as_str()))
+        .and_then(|pack| pack_key(&format!("tf/custom/{pack}")));
+    let mut hud_roots = crate::hud::manifest_hud_packs(&before);
+    for (path, source) in &batch {
+        let Some(rest) = path.strip_prefix("tf/custom/") else {
+            continue;
+        };
+        let Some((folder, rel)) = rest.split_once('/') else {
+            continue;
+        };
+        if !rel.eq_ignore_ascii_case("info.vdf") {
+            continue;
+        }
+        if let FileSource::PathExact { path: source, .. } = source {
+            let bytes = crate::archive::read_regular_file_bounded(source, 1024 * 1024)?
+                .ok_or_else(|| {
+                    ProfileError::Io("HUD info.vdf exceeds the inspection limit.".into())
+                })?;
+            hud_roots.retain(|root| !root.eq_ignore_ascii_case(folder));
+            if crate::hud::is_current_hud_info(&bytes) {
+                hud_roots.push(folder.to_string());
+            }
+        }
+    }
     let previous_files: HashMap<&str, &ProfileFile> = before
         .files
         .iter()
@@ -907,6 +939,12 @@ where
         ProfileLiveProjection::LibraryOnly,
         running,
         |manifest| {
+            hud_roots.retain(|root| {
+                manifest.files.iter().any(|file| {
+                    pack_key(&file.path).is_some_and(|pack| pack.eq_ignore_ascii_case(root))
+                })
+            });
+            manifest.hud_roots = Some(hud_roots.clone());
             // Reconcile only accepted changes, against the planned manifest, not
             // the live tree. Kept/Restored packs and inactive HUDs still belong
             // to the library even when absent from the live inventory.
@@ -941,10 +979,17 @@ where
                 records.push(record);
             }
             manifest.mods = records;
-            if selected_hud.as_ref().is_some_and(|pack| {
-                touched.contains(pack) && !crate::hud::hud_packs(&manifest.files).contains(pack)
+            if selected_hud_key.as_ref().is_some_and(|pack| {
+                touched.contains(pack)
+                    && (!groups.contains_key(pack)
+                        || (selected_was_validated
+                            && !crate::hud::manifest_hud_packs(manifest)
+                                .iter()
+                                .any(|root| root.eq_ignore_ascii_case(pack))))
             }) {
                 manifest.hud = None;
+                manifest.hud_selected_root = None;
+                manifest.hud_review_pending = !crate::hud::manifest_hud_packs(manifest).is_empty();
             }
             Ok(())
         },

@@ -51,18 +51,17 @@ fn selection_archive(
     zip_path: &Path,
     selection: &PreloaderSelection,
 ) -> Result<SelectionArchive, String> {
-    let reader: Box<dyn ModLibraryReader> =
-        if selection.addons.is_empty() && selection.particle_mods.is_empty() {
-            let cursor = zip::ZipWriter::new(Cursor::new(Vec::new()))
-                .finish()
-                .map_err(|err| format!("Could not prepare an empty mod selection: {err}"))?;
-            Box::new(cursor)
-        } else {
-            Box::new(
-                std::fs::File::open(zip_path)
-                    .map_err(|err| format!("Could not open the mod library: {err}"))?,
-            )
-        };
+    let reader: Box<dyn ModLibraryReader> = if !selection.needs_default_library() {
+        let cursor = zip::ZipWriter::new(Cursor::new(Vec::new()))
+            .finish()
+            .map_err(|err| format!("Could not prepare an empty mod selection: {err}"))?;
+        Box::new(cursor)
+    } else {
+        Box::new(
+            std::fs::File::open(zip_path)
+                .map_err(|err| format!("Could not open the mod library: {err}"))?,
+        )
+    };
     zip::ZipArchive::new(reader).map_err(|err| format!("Could not read the mod library: {err}"))
 }
 
@@ -70,7 +69,7 @@ fn selection_catalog(
     zip_path: &Path,
     selection: &PreloaderSelection,
 ) -> Result<super::ModsCatalog, String> {
-    if selection.addons.is_empty() && selection.particle_mods.is_empty() {
+    if !selection.needs_default_library() {
         Ok(super::ModsCatalog::default())
     } else {
         read_mods_catalog(zip_path)

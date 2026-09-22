@@ -27,6 +27,7 @@ import {
   type PreloaderReport,
   type PreloaderStatusPayload,
   type ProfileDetail,
+  parseInvokeError,
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
@@ -68,6 +69,7 @@ export function SettingsHost({
   filesCloseReady = true,
   settingsDraftStore: suppliedSettingsDraftStore,
   tab,
+  visible = true,
   running,
   externalBusy,
   refreshKey,
@@ -79,6 +81,7 @@ export function SettingsHost({
   onRecoveryChange,
   onError,
   onNavigate,
+  onHudReviewRequired,
 }: {
   api: Api;
   filesDraftStore?: FilesDraftStore;
@@ -86,6 +89,8 @@ export function SettingsHost({
   settingsDraftStore?: SettingsDraftStore;
   filesSaver?: { current: ((draft: DirtyFileDraft) => Promise<boolean>) | null };
   tab: SettingsTab;
+  /** Global pages retain drafts but release auditions, key capture and reads. */
+  visible?: boolean;
   running: boolean;
   externalBusy: boolean;
   refreshKey: string | number;
@@ -97,6 +102,7 @@ export function SettingsHost({
   onRecoveryChange?: (recovery: boolean) => void;
   onError: SetOperationError;
   onNavigate?: (tab: SettingsTab) => void;
+  onHudReviewRequired?: (profileId: string) => void;
 }) {
   const { error, dismissError } = useAppStatus();
   const toast = useToast();
@@ -136,6 +142,7 @@ export function SettingsHost({
   const [modsCatalog, setModsCatalog] = useState<ModsCatalog | null>(null);
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
+  const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   /** Rejects obsolete profile snapshots. */
   const loadRequest = useRef(0);
@@ -192,7 +199,14 @@ export function SettingsHost({
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
   const profileId = detail?.id ?? null;
-  const hud = useHudResources(api, profileId, tab === "hud" && !externalBusy, refreshKey);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Profile changes invalidate guidance from the previous import attempt.
+  useEffect(() => setModsHudImportRequired(null), [profileId]);
+  const hud = useHudResources(
+    api,
+    profileId,
+    visible && tab === "hud" && !externalBusy,
+    refreshKey,
+  );
   const maps = useMemo(
     () => mapsFromFiles(files, layer, detail?.files),
     [files, layer, detail?.files],
@@ -377,7 +391,7 @@ export function SettingsHost({
   // releases the one-shot so the next visit retries instead of leaving the
   // fallback geometry in place for the rest of the session.
   useEffect(() => {
-    if (tab !== "crosshair" || stockSpritesRequested.current) {
+    if (!visible || tab !== "crosshair" || stockSpritesRequested.current) {
       return;
     }
     stockSpritesRequested.current = true;
@@ -397,7 +411,7 @@ export function SettingsHost({
       cancelled = true;
       stockSpritesRequested.current = false;
     };
-  }, [api, tab]);
+  }, [api, tab, visible]);
 
   // Previews for library crosshairs stored in the installed pack. Keyed by the
   // profile too: two profiles can hold the same library name with different
@@ -411,7 +425,7 @@ export function SettingsHost({
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by profile + library content.
   useEffect(() => {
     setPackPreviews(null);
-    if (tab !== "crosshair" || !detail?.crosshair) {
+    if (!visible || tab !== "crosshair" || !detail?.crosshair) {
       return;
     }
     let cancelled = false;
@@ -428,7 +442,7 @@ export function SettingsHost({
     return () => {
       cancelled = true;
     };
-  }, [api, tab, crosshairLibraryKey]);
+  }, [api, tab, visible, crosshairLibraryKey]);
 
   /**
    * The one write path: every pane's save, automatic or explicit, runs through
@@ -442,7 +456,11 @@ export function SettingsHost({
     // biome-ignore lint/suspicious/noConfusingVoidType: Ordinary write callbacks return void; null explicitly means a cancelled picker.
     work: () => Promise<void | null>,
     copy?: { success?: string; failure?: string; source?: string },
-    options?: { picker?: boolean; filesRecovery?: string },
+    options?: {
+      picker?: boolean;
+      filesRecovery?: string;
+      onHandledFailure?: (reason: "review-required" | "superseded") => void;
+    },
   ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
     // because one is in flight silently dropped clicks the panes had already
@@ -483,6 +501,33 @@ export function SettingsHost({
     } catch (err) {
       // A failure before picker completion did not reserve a save counter.
       // Other queued sources still own their active-write feedback.
+      const failure = parseInvokeError(err);
+      if (
+        ["HudImportRequired", "HudReviewRequired", "HudLiveReviewRequired"].includes(
+          failure.code,
+        ) &&
+        detailRef.current?.id !== expectedProfileId
+      ) {
+        if (started) toast.cancelSave(copy?.source);
+        options?.onHandledFailure?.("superseded");
+        return false;
+      }
+      if (failure.code === "HudImportRequired") {
+        if (started) toast.cancelSave(copy?.source);
+        setModsHudImportRequired(failure.message);
+        options?.onHandledFailure?.("review-required");
+        return false;
+      }
+      if (
+        (failure.code === "HudReviewRequired" || failure.code === "HudLiveReviewRequired") &&
+        expectedProfileId &&
+        onHudReviewRequired
+      ) {
+        if (started) toast.cancelSave(copy?.source);
+        onHudReviewRequired(expectedProfileId);
+        options?.onHandledFailure?.("review-required");
+        return false;
+      }
       toast.failSave(err, copy?.failure, copy?.source, started);
       return false;
     }
@@ -580,7 +625,7 @@ export function SettingsHost({
   // profile detail, so the Mods tab loads it separately.
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-arms the load; onError is a stable callback.
   useEffect(() => {
-    if (tab !== "mods") {
+    if (!visible || tab !== "mods") {
       return;
     }
     let cancelled = false;
@@ -628,7 +673,7 @@ export function SettingsHost({
     return () => {
       cancelled = true;
     };
-  }, [api, tab, refreshKey]);
+  }, [api, tab, visible, refreshKey]);
 
   async function refreshModsStatus() {
     setModsPayload(await api.getPreloaderStatus());
@@ -653,7 +698,10 @@ export function SettingsHost({
       // biome-ignore lint/suspicious/noConfusingVoidType: null preserves native picker cancellation through the pane wrapper.
       work: () => Promise<void | null>,
       copy?: { success?: string; failure?: string },
-      options?: { picker?: boolean },
+      options?: {
+        picker?: boolean;
+        onHandledFailure?: (reason: "review-required" | "superseded") => void;
+      },
     ) {
       return runWrite(
         work,
@@ -774,7 +822,7 @@ export function SettingsHost({
           onRetryLocal={() => void hud.reloadLocal()}
           onRefresh={() => hud.reload(true)}
           onInstall={(id) => {
-            void write(
+            return write(
               async () => {
                 await api.installHud(id);
                 await hud.reloadLocal();
@@ -809,6 +857,7 @@ export function SettingsHost({
             });
           }}
           onImportArchive={() => {
+            setModsHudImportRequired(null);
             return write(
               async () => {
                 if ((await api.importHudArchive()) === null) return null;
@@ -819,6 +868,7 @@ export function SettingsHost({
             );
           }}
           onImportFolder={() => {
+            setModsHudImportRequired(null);
             return write(
               async () => {
                 if ((await api.importHudFolder()) === null) return null;
@@ -958,6 +1008,9 @@ export function SettingsHost({
           mods={detail?.mods ?? []}
           loading={modsLoading}
           report={modsReport}
+          hudImportRequired={modsHudImportRequired}
+          onReviewHudImport={() => onNavigate?.("hud")}
+          onDismissHudImport={() => setModsHudImportRequired(null)}
           onDownloadLibrary={() => {
             setModsLoading(true);
             api
@@ -1107,6 +1160,7 @@ export function SettingsHost({
             void api.openExternal(PRELOADER_REPO_URL);
           }}
           onImportArchive={() => {
+            setModsHudImportRequired(null);
             return write(
               async () => {
                 if ((await api.importModArchive()) === null) return null;
@@ -1117,6 +1171,7 @@ export function SettingsHost({
             );
           }}
           onImportFolder={() => {
+            setModsHudImportRequired(null);
             return write(
               async () => {
                 if ((await api.importModFolder()) === null) return null;
@@ -1138,14 +1193,22 @@ export function SettingsHost({
           }}
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
-          onInstallGameBananaMod={(id) => {
-            return write(
+          onInstallGameBananaMod={async (id) => {
+            setModsHudImportRequired(null);
+            let handled: "review-required" | "superseded" | null = null;
+            const applied = await write(
               async () => {
                 await api.installGameBananaMod(id);
                 await refreshModsStatus().catch(() => {});
               },
               { success: "Mod installed", failure: "Could not install" },
+              {
+                onHandledFailure: (reason) => {
+                  handled = reason;
+                },
+              },
             );
+            return handled ?? applied;
           }}
         />
       );
@@ -1178,6 +1241,7 @@ export function SettingsHost({
 
     return (
       <LaunchPane
+        profileId={profileId}
         value={launch}
         saved={launchSeed}
         steamWrite={steamWrite}
@@ -1209,8 +1273,8 @@ export function SettingsHost({
   if (visited.current.profile !== profileId) {
     visited.current = { profile: profileId, tabs: new Set() };
   }
-  if (profileId && tab !== "inventory") visited.current.tabs.add(tab);
-  if (tab === "files" && filesInspection) visited.current.tabs.add("files");
+  if (visible && profileId && tab !== "inventory") visited.current.tabs.add(tab);
+  if (visible && tab === "files" && filesInspection) visited.current.tabs.add("files");
 
   return (
     <AppStatusProvider
@@ -1242,10 +1306,10 @@ export function SettingsHost({
         </p>
       ) : null}
       {import.meta.env.DEV ? (
-        <div hidden={tab !== "inventory"}>
+        <div hidden={!visible || tab !== "inventory"}>
           <InventoryPane
             api={api}
-            active={tab === "inventory"}
+            active={visible && tab === "inventory"}
             running={running}
             busy={busy || externalBusy}
           />
@@ -1257,7 +1321,7 @@ export function SettingsHost({
           store={settingsDraftStore}
           profile={profileId}
           tab={paneTab}
-          active={tab === paneTab}
+          active={visible && tab === paneTab}
           blocked={
             paneTab === "files"
               ? !filesCloseReady || externalBusy
@@ -1273,7 +1337,7 @@ export function SettingsHost({
               : undefined
           }
         >
-          {pane(paneTab, tab === paneTab)}
+          {pane(paneTab, visible && tab === paneTab)}
         </SettingsDraftBoundary>
       ))}
     </AppStatusProvider>

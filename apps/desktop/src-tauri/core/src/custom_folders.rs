@@ -329,6 +329,20 @@ where
                 }
             }
             for rename in &plan {
+                if next
+                    .hud_selected_root
+                    .as_ref()
+                    .is_some_and(|root| root.eq_ignore_ascii_case(&rename.from))
+                {
+                    next.hud_selected_root = Some(rename.to.clone());
+                }
+                if let Some(roots) = &mut next.hud_roots {
+                    for root in roots {
+                        if root.eq_ignore_ascii_case(&rename.from) {
+                            *root = rename.to.clone();
+                        }
+                    }
+                }
                 if let Some(hud) = &mut next.hud {
                     if hud.id.eq_ignore_ascii_case(&rename.from) {
                         hud.id = rename.to.clone();

@@ -226,174 +226,6 @@ fn preloader_status_payload(
     })
 }
 
-/// Called with the write gate held, before a profile switch can remove the
-/// source packs. Keep the 0.1.3 global library selection, but remove every
-/// profile-sourced particle through the same recoverable Apply transaction.
-pub(super) fn clear_profile_particles_before_switch(root: &Path) -> Result<(), CommandError> {
-    reconcile_profile_particles(root, &[])
-}
-
-/// Repair stale 0.1.3 state after a previous switch or removed source pack.
-/// The caller holds the write gate; source-discovery failures must propagate
-/// instead of being treated as an empty profile and authorizing cleanup.
-pub(super) fn reconcile_active_profile_particles(root: &Path) -> Result<(), CommandError> {
-    reconcile_active_profile_particles_except(root, None)
-}
-
-fn particle_source_removal_plan(
-    saved: Option<execs_core::preloader::PreloaderSelection>,
-    installed: Option<execs_core::preloader::PreloaderSelection>,
-    id: &str,
-) -> Option<(execs_core::preloader::PreloaderSelection, bool)> {
-    let saved_has_source = saved.as_ref().is_some_and(|selection| {
-        selection
-            .profile_particle_mods
-            .iter()
-            .any(|selected| selected == id)
-    });
-    let installed_has_source = installed.as_ref().is_some_and(|selection| {
-        selection
-            .profile_particle_mods
-            .iter()
-            .any(|selected| selected == id)
-    });
-    if !saved_has_source && !installed_has_source {
-        return None;
-    }
-    let installed_is_authoritative = installed.is_some();
-    let mut selection = installed.or(saved).unwrap_or_default();
-    selection
-        .profile_particle_mods
-        .retain(|selected| selected != id);
-    let apply_cleanup = installed_has_source || !installed_is_authoritative;
-    Some((selection, apply_cleanup))
-}
-
-/// A removed source must be unpatched while its pack still exists, before
-/// removal projects the profile's new tree into the live game.
-pub(super) fn clear_profile_particles_before_mod_removal(
-    root: &Path,
-    id: &str,
-) -> Result<(), CommandError> {
-    let profile_id = active_profile_id(root)?;
-    let profiles = execs_core::profiles_dir();
-    let manifest = execs_core::load_manifest(&profiles, &profile_id)?;
-    if !manifest.mods.iter().any(|record| record.id == id) {
-        return Err(CommandError::unknown(
-            "That mod is not installed on this profile.",
-        ));
-    }
-
-    // New manifests own their selection directly. A legacy installed
-    // selection is considered only when its migration owner is this profile.
-    // Both branches are read-only until the recoverable Apply transaction.
-    let saved = manifest.preloader;
-    // Once a profile-aware Apply commits, the installed owner marker is newer
-    // than its manifest until capture succeeds. Prefer that installed
-    // selection, but still notice an ID left only in a stale manifest so the
-    // capture below can reconcile it before removal.
-    let installed = execs_core::preloader::selection_for_export(&profiles, &profile_id)?;
-    let Some((selection, apply_cleanup)) = particle_source_removal_plan(saved, installed, id)
-    else {
-        return Ok(());
-    };
-
-    if apply_cleanup
-        && (!selection.addons.is_empty() || !selection.particle_mods.is_empty())
-        && !crate::mods_fetch::is_cached()
-    {
-        return Err(CommandError::new(
-            "ModsCleanupRequired",
-            "Download the mod library or Restore stock files in Mods before removing this source; its particle patches must be removed first.",
-        ));
-    }
-    let initial_names = execs_core::process_lock::live_process_names();
-    if apply_cleanup {
-        let profile = execs_core::preloader::ProfileContext {
-            profiles: profiles.clone(),
-            id: profile_id.clone(),
-        };
-        execs_core::preloader::apply_profile_preloader(
-            root,
-            &execs_core::execs_data_dir(),
-            &crate::mods_fetch::cache_path(),
-            &selection,
-            &profile,
-            &initial_names,
-            &execs_core::process_lock::live_process_names,
-        )
-        .map_err(CommandError::preloader)?;
-    }
-    // The profile manifest is the durable owner. Only allow core removal after
-    // the cleaned installed selection has been captured there. A crash or
-    // write failure between these operations leaves the source pack intact,
-    // and the core guard below refuses any direct bypass.
-    let after_names = execs_core::process_lock::live_process_names();
-    execs_core::preloader::capture_installed_selections(&profiles, root, &after_names)?;
-    let persisted = execs_core::load_manifest(&profiles, &profile_id)?;
-    if persisted.preloader.as_ref().is_some_and(|saved| {
-        saved
-            .profile_particle_mods
-            .iter()
-            .any(|selected| selected == id)
-    }) {
-        return Err(CommandError::new(
-            "ParticleSourceSelected",
-            "The particle source is still saved on this profile, so its pack was not removed.",
-        ));
-    }
-    Ok(())
-}
-
-fn reconcile_active_profile_particles_except(
-    root: &Path,
-    removed: Option<&str>,
-) -> Result<(), CommandError> {
-    let active = execs_core::load_library(Some(root))?.active_profile_id;
-    let available = active
-        .as_deref()
-        .map(|id| execs_core::mods::profile_particle_sources_from(&execs_core::profiles_dir(), id))
-        .transpose()?
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|source| Some(source.mod_id.as_str()) != removed)
-        .map(|source| source.mod_id)
-        .collect::<Vec<_>>();
-    reconcile_profile_particles(root, &available)
-}
-
-fn reconcile_profile_particles(root: &Path, available: &[String]) -> Result<(), CommandError> {
-    let data_dir = execs_core::execs_data_dir();
-    let Some(selection) =
-        execs_core::preloader::profile_particle_cleanup_selection(&data_dir, available)
-            .map_err(CommandError::preloader)?
-    else {
-        return Ok(());
-    };
-    // The gate protects writes, so an 81 MB download cannot happen here.
-    // Missing/corrupt cache refuses the transition while the old particles
-    // and their source packs are still intact.
-    if (!selection.addons.is_empty() || !selection.particle_mods.is_empty())
-        && !crate::mods_fetch::is_cached()
-    {
-        return Err(CommandError::new(
-            "ModsCleanupRequired",
-            "Download the mod library or Restore stock files in Mods before changing profiles; the previous profile's particle patches must be removed first.",
-        ));
-    }
-    let initial_names = execs_core::process_lock::live_process_names();
-    execs_core::preloader::apply_preloader_selection_with_sampler(
-        root,
-        &data_dir,
-        &crate::mods_fetch::cache_path(),
-        &selection,
-        &initial_names,
-        &execs_core::process_lock::live_process_names,
-    )
-    .map_err(CommandError::preloader)?;
-    Ok(())
-}
-
 fn status_after_committed_change(root: &Path) -> Result<PreloaderStatusPayload, CommandError> {
     preloader_status_payload(root, false).map_err(|error| {
         CommandError::new(
@@ -525,7 +357,7 @@ pub async fn apply_preloader_mods(
         particle_mods,
         profile_particle_mods: profile_particle_mods.unwrap_or_default(),
     };
-    let needs_library = !selection.addons.is_empty() || !selection.particle_mods.is_empty();
+    let needs_library = selection.needs_default_library();
     let (context, zip) = with_root(move |root| {
         execs_core::refuse_if_running()?;
         Ok((
@@ -814,38 +646,9 @@ pub async fn revert_preloader(
 #[cfg(test)]
 mod tests {
     use super::{
-        particle_source_removal_plan, refuse_repair_cancel_unless_stably_closed,
-        refuse_repair_cancel_while_processes_run, repair_surface_paths,
-        MAX_REPAIR_DIRECTORY_ENTRIES, MAX_REPAIR_SNAPSHOT_PATH_BYTES,
+        refuse_repair_cancel_unless_stably_closed, refuse_repair_cancel_while_processes_run,
+        repair_surface_paths, MAX_REPAIR_DIRECTORY_ENTRIES, MAX_REPAIR_SNAPSHOT_PATH_BYTES,
     };
-
-    fn selection(ids: &[&str]) -> execs_core::preloader::PreloaderSelection {
-        execs_core::preloader::PreloaderSelection {
-            profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
-            ..execs_core::preloader::PreloaderSelection::default()
-        }
-    }
-
-    #[test]
-    fn removal_plan_prefers_installed_owner_when_manifest_capture_is_stale() {
-        let (plan, apply) = particle_source_removal_plan(
-            Some(selection(&[])),
-            Some(selection(&["removed", "retained"])),
-            "removed",
-        )
-        .unwrap();
-        assert_eq!(plan.profile_particle_mods, ["retained"]);
-        assert!(apply);
-
-        let (plan, apply) = particle_source_removal_plan(
-            Some(selection(&["removed", "stale-saved"])),
-            Some(selection(&["installed"])),
-            "removed",
-        )
-        .unwrap();
-        assert_eq!(plan.profile_particle_mods, ["installed"]);
-        assert!(!apply, "only the stale manifest needs recapturing");
-    }
 
     #[test]
     fn cancelled_repair_can_only_unlock_after_steam_and_tf2_exit() {

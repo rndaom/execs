@@ -1,6 +1,7 @@
 //! The IPC surface, split by the core module each group delegates to.
 
 pub mod absorb;
+pub mod app_settings;
 pub mod comfig;
 pub mod crosshair;
 pub mod diagnostics;

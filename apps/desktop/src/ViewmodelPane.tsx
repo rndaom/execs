@@ -1,11 +1,11 @@
 import { ArrowSquareOut, DownloadSimple, Eye, EyeSlash, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
-import { ApplyBar } from "./components/ui/ApplyBar";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
+import { useExplicitDraft } from "./hooks/useExplicitDraft";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import { prefetchViewmodelPreviews, useViewmodelPreview } from "./hooks/useViewmodelPreview";
 import type { Api } from "./lib/api";
@@ -18,13 +18,15 @@ import {
   type ViewmodelSlot,
   viewmodelBlankStem,
   viewmodelGroupPreview,
+  viewmodelPreviewUrl,
   viewmodelStemForGroup,
 } from "./lib/viewmodel-previews";
 import {
-  HIDE_MODE_LABELS,
+  type ClassVisibility,
   SOLDIER_ORIGINAL_NOTE,
   seedViewmodelDraft,
   serializeHiddenGroups,
+  setClassVisibility,
   toggleHiddenGroup,
   VIEWMODEL_CASUAL_COPY,
   VIEWMODEL_CLASSES,
@@ -40,12 +42,7 @@ function serializeViewmodelDraft(draft: ViewmodelDraft): string {
   return JSON.stringify([serializeHiddenGroups(draft.hidden), draft.hideMode, draft.preload]);
 }
 
-/**
- * The Viewmodels pane, laid out the way CompVMInstaller's "visual image guide"
- * works: one big first-person screenshot, and the option under the pointer
- * decides what it shows — the weapon while the group is visible, the empty
- * view once it is hidden. Toggling swaps the two on the spot.
- */
+/** The original 64 Yttrium groups, with the draft, preview and build kept together. */
 export function ViewmodelPane({
   api,
   profileId,
@@ -55,7 +52,6 @@ export function ViewmodelPane({
   onRemove,
 }: {
   api: Api;
-  /** The profile this draft belongs to; a switch discards it. */
   profileId: string | null;
   record: ViewmodelRecord | null;
   onBuild: (hidden: string[], preload: boolean, hideMode: ViewmodelHideMode) => void;
@@ -64,316 +60,291 @@ export function ViewmodelPane({
 }) {
   const { running } = useAppStatus();
   const locked = !useCanWrite();
-  const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
-  // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
-  const seeded = useMemo(() => seedViewmodelDraft(record), [recordKey]);
-  const [draft, setDraft] = useSeededDraft(seeded, serializeViewmodelDraft, recordKey);
+  const seeded = useMemo(() => seedViewmodelDraft(record), [record]);
+  // A completed build acknowledges its snapshot without replacing newer edits.
+  const [draft, setDraft] = useSeededDraft(
+    seeded,
+    serializeViewmodelDraft,
+    draftRecordKey(profileId, "viewmodels"),
+  );
   const [classId, setClassId] = useState<ViewmodelClass>("scout");
-  /** The group under the pointer (or last toggled); null shows the class blank. */
-  const [focusGroup, setFocusGroup] = useState<string | null>(null);
-  // Building needs TF2's own studiomdl, which only the Windows depot ships.
-  // Assume yes until the probe says otherwise, so the button never flickers
-  // disabled on a machine that can build.
+  const [focusGroup, setFocusGroup] = useState("scout/scatterguns");
   const [canBuild, setCanBuild] = useState(true);
-  const canFetchPreviews = isTauri();
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const native = isTauri();
 
   useEffect(() => {
-    if (!isTauri()) {
-      return;
-    }
+    if (!native) return;
     let cancelled = false;
     api
       .viewmodelBuildAvailable()
       .then((available) => {
-        if (!cancelled) {
-          setCanBuild(available);
-        }
+        if (!cancelled) setCanBuild(available);
       })
       .catch(() => {
-        // A failed probe is not evidence the machine cannot build.
+        // A failed probe is not evidence that the installed compiler is absent.
       });
     return () => {
       cancelled = true;
     };
-  }, [api]);
+  }, [api, native]);
 
   const groups = viewmodelGroupsForClass(classId);
   const hiddenSet = new Set(draft.hidden);
+  const focus = groups.find((group) => group.id === focusGroup) ?? groups[0];
+  const focusHidden = hiddenSet.has(focus.id);
+  // Upstream has stock and fully hidden screenshots, but no weapon-only image.
+  // Show the stock reference honestly instead of implying it previews kept hands.
+  const weaponOnlyReference = focusHidden && draft.hideMode === "weapon";
+  const stem = viewmodelStemForGroup(classId, focus.id, focusHidden && !weaponOnlyReference);
+  const preview = useViewmodelPreview(api, native ? stem : null);
+  const stageSrc = native ? preview.src : viewmodelPreviewUrl(stem);
+  const focusInfo = viewmodelGroupPreview(focus.id);
 
-  // Switching class resets the stage to that class's empty view (upstream
-  // behaviour) and warms every picture the class can show.
   useEffect(() => {
-    setFocusGroup(null);
-    if (!canFetchPreviews) {
-      return;
-    }
-    const stems = [
+    if (!native) return;
+    prefetchViewmodelPreviews(api, [
       viewmodelBlankStem(classId),
       ...viewmodelGroupsForClass(classId).map(
         (group) => viewmodelGroupPreview(group.id)?.image ?? viewmodelBlankStem(classId),
       ),
-    ];
-    prefetchViewmodelPreviews(api, stems);
-  }, [api, classId, canFetchPreviews]);
+    ]);
+  }, [api, classId, native]);
 
-  const focusHidden = focusGroup !== null && hiddenSet.has(focusGroup);
-  const stem =
-    focusGroup === null
-      ? viewmodelBlankStem(classId)
-      : viewmodelStemForGroup(classId, focusGroup, focusHidden);
-  const preview = useViewmodelPreview(api, canFetchPreviews ? stem : null);
-  const focusInfo = focusGroup ? viewmodelGroupPreview(focusGroup) : null;
-  const focusLabel = focusGroup ? groups.find((group) => group.id === focusGroup)?.label : null;
-  const stageSrc = preview.src;
+  const dirty = serializeViewmodelDraft(draft) !== serializeViewmodelDraft(seeded);
+  useExplicitDraft(dirty);
 
-  const dirty =
-    serializeHiddenGroups(draft.hidden) !== serializeHiddenGroups(seeded.hidden) ||
-    draft.hideMode !== seeded.hideMode;
   const builtPack = record?.source === "compiled";
-  const allClassHidden = groups.every((group) => hiddenSet.has(group.id));
-  const isSoldier = classId === "soldier";
+  const classHiddenCount = groups.filter((group) => hiddenSet.has(group.id)).length;
+  const visibility =
+    classHiddenCount === 0
+      ? "shown"
+      : classHiddenCount === groups.length
+        ? draft.hideMode
+        : "mixed";
 
   function hiddenCountFor(cls: ViewmodelClass): number {
     return viewmodelGroupsForClass(cls).filter((group) => hiddenSet.has(group.id)).length;
   }
 
-  function toggle(group: ViewmodelGroupInfo) {
-    setFocusGroup(group.id);
-    setDraft((current) => ({
-      ...current,
-      hidden: toggleHiddenGroup(current.hidden, group.id),
-    }));
+  function selectClass(next: ViewmodelClass) {
+    setClassId(next);
+    setFocusGroup(viewmodelGroupsForClass(next)[0].id);
   }
 
-  // Building compiles with studiomdl, so this pane keeps its button — and with
-  // it the one vocabulary the automatic panes now put in the toast.
-  const buildStatus = !canBuild
-    ? "Building needs TF2's studiomdl (Windows only)"
-    : running
-      ? "Draft kept until TF2 closes"
-      : draft.hidden.length === 0 && record
-        ? "Nothing hidden — use Remove pack to restore stock"
-        : draft.hidden.length === 0
-          ? "Nothing hidden yet"
-          : dirty || !builtPack
-            ? "Unsaved changes"
-            : "Up to date";
+  function toggle(group: ViewmodelGroupInfo) {
+    setFocusGroup(group.id);
+    setDraft((current) => ({ ...current, hidden: toggleHiddenGroup(current.hidden, group.id) }));
+  }
 
-  const stageCaption =
-    focusGroup === null
-      ? `${capitalize(classId)} · nothing out`
-      : `${capitalize(classId)} · ${focusLabel ?? focusGroup} — ${focusHidden ? "hidden" : "shown"}`;
+  const buildStatus = !canBuild
+    ? "Building requires TF2's compiler on Windows. Import a VPK on Linux."
+    : draft.hidden.length === 0 && record
+      ? "Remove the pack to restore every group."
+      : draft.hidden.length === 0
+        ? "Choose a group to hide, then build your pack."
+        : dirty || !builtPack
+          ? `${draft.hidden.length} ${draft.hidden.length === 1 ? "group" : "groups"} ready to build.`
+          : `${draft.hidden.length} ${draft.hidden.length === 1 ? "group" : "groups"} hidden in this profile.`;
+  const canApply = canBuild && !locked && draft.hidden.length > 0 && (dirty || !builtPack);
+  const stageCaption = `${capitalize(classId)} · ${focus.label}`;
 
   return (
     <section data-testid="settings-viewmodels" className="min-w-0 text-left">
       <PaneHeader
         title="Viewmodels"
-        lede="Hover a group to preview it; click to hide it."
+        lede="Choose what stays in view."
         actions={
-          <>
-            <span className="tnum t-meta text-ink-faint">
-              {draft.hidden.length} hidden {draft.hidden.length === 1 ? "group" : "groups"}
+          record ? (
+            <span data-testid="viewmodel-pack-status" className="badge">
+              {builtPack ? "Built pack" : "Imported pack"}
             </span>
-            <span
-              data-testid="viewmodel-pack-status"
-              className={`badge ${record ? "badge-ok" : ""}`}
-            >
-              {record ? (builtPack ? "Built pack" : "Imported pack") : "No pack installed"}
-            </span>
-          </>
+          ) : null
         }
       />
-
       <ClassTabs
-        tabs={VIEWMODEL_CLASSES.map((id) => {
-          const count = hiddenCountFor(id);
-          return {
-            id,
-            label: <span className="capitalize">{id}</span>,
-            meta: count > 0 ? count : undefined,
-          };
-        })}
+        tabs={VIEWMODEL_CLASSES.map((id) => ({
+          id,
+          label: <span className="capitalize">{id}</span>,
+          meta: hiddenCountFor(id) || undefined,
+        }))}
         selected={classId}
         label="TF2 class"
         idPrefix={CLASS_TAB_PREFIX}
         panelId={GROUPS_PANEL_ID}
-        onSelect={setClassId}
+        onSelect={selectClass}
       />
 
       <div
         id={GROUPS_PANEL_ID}
         role="tabpanel"
         aria-labelledby={`${CLASS_TAB_PREFIX}-${classId}`}
-        className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem]"
+        className="pane-split mt-5 items-start"
       >
-        <div className="lg:sticky lg:top-0 lg:self-start">
+        <div className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="t-row">Class visibility</h2>
+            <span className="t-meta tnum">
+              {classHiddenCount} of {groups.length} hidden
+            </span>
+          </div>
+          <Segmented<ClassVisibility | "mixed">
+            label={`${capitalize(classId)} visibility`}
+            testIdPrefix="viewmodel-visibility"
+            value={visibility}
+            options={[
+              { id: "shown", label: "Show" },
+              { id: "weapon", label: "Hide weapon" },
+              { id: "full", label: "Hide all" },
+            ]}
+            onChange={(next) => {
+              if (next !== "mixed")
+                setDraft((current) => setClassVisibility(current, classId, next));
+            }}
+          />
+          <p className="t-meta mt-2">Hide mode applies to every hidden group in the pack.</p>
+          <div className="mt-5 border-t border-edge">
+            {VIEWMODEL_SLOTS.map((slot) => {
+              const inSlot = groups.filter(
+                (group) => (viewmodelGroupPreview(group.id)?.slot ?? "primary") === slot,
+              );
+              return inSlot.length > 0 ? (
+                <SlotGroup
+                  key={`${classId}-${slot}`}
+                  profileId={profileId}
+                  classId={classId}
+                  slot={slot}
+                  groups={inSlot}
+                  hiddenSet={hiddenSet}
+                  focusGroup={focus.id}
+                  describedBy={classId === "soldier" ? SOLDIER_NOTE_ID : undefined}
+                  onFocus={setFocusGroup}
+                  onToggle={toggle}
+                />
+              ) : null;
+            })}
+          </div>
+          {classId === "soldier" ? (
+            <p id={SOLDIER_NOTE_ID} className="pane-note mt-3">
+              {SOLDIER_ORIGINAL_NOTE}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="min-w-0 self-start">
           <figure
             data-testid="viewmodel-stage"
             data-stem={stem}
             data-hidden={focusHidden ? "true" : "false"}
-            className="surface vm-stage relative m-0 aspect-video w-full"
+            className="surface vm-stage relative m-0 aspect-video w-full overflow-hidden"
           >
-            {stageSrc ? (
+            {stageSrc && stageSrc !== failedSrc ? (
               <img
                 key={stageSrc}
                 data-testid="viewmodel-preview-image"
                 src={stageSrc}
                 alt={stageCaption}
-                className="absolute inset-0 size-full rounded-[inherit] object-cover enter-fade"
+                onError={() => setFailedSrc(stageSrc)}
+                className="absolute inset-0 size-full object-cover enter-fade"
               />
             ) : (
-              <p className="t-meta absolute inset-0 grid place-items-center px-6 text-center">
-                {preview.loading
-                  ? "Loading preview…"
-                  : focusHidden || focusGroup === null
-                    ? "Nothing on screen."
-                    : "No preview yet."}
-              </p>
+              <div className="absolute inset-0 grid place-content-center gap-2 px-6 text-center">
+                <Eye size={24} className="mx-auto text-ink-muted" />
+                <p className="t-row">
+                  {preview.loading ? "Loading preview…" : "Preview unavailable"}
+                </p>
+                <p className="t-meta">Your visibility choices are still available.</p>
+              </div>
             )}
-            <figcaption className="absolute bottom-2.5 left-3 rounded-md bg-bg/80 px-2 py-0.5 text-[12px] text-ink-muted backdrop-blur-sm">
-              {stageCaption}
+            <figcaption className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-bg/90 px-3 py-2 text-[12px] text-ink">
+              <span>{preview.loading ? "Loading preview…" : stageCaption}</span>
+              <span className="text-ink-muted">
+                {weaponOnlyReference ? "Stock reference" : focusHidden ? "Hidden" : "Shown"}
+              </span>
             </figcaption>
           </figure>
-          {focusGroup && focusInfo ? (
-            <p className="mt-3 text-[12px] leading-5 text-ink-faint">{focusInfo.weapons}</p>
-          ) : null}
-        </div>
-
-        <div className="min-w-0">
-          <div className="flex items-center justify-between gap-3">
-            <p className="t-row capitalize">{classId}</p>
+          <p className="t-meta mt-3">
+            {weaponOnlyReference
+              ? "The pack hides the weapon and keeps hands. This reference shows the stock viewmodel."
+              : focusInfo?.weapons}
+          </p>
+          <div className="action-panel mt-4 block">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="viewmodel-build"
+                disabled={!canApply}
+                onClick={() => onBuild(draft.hidden, draft.preload, draft.hideMode)}
+                className="btn btn-primary"
+              >
+                {builtPack ? "Rebuild pack" : "Build pack"}
+              </button>
+              <button
+                type="button"
+                data-testid="viewmodel-import"
+                disabled={locked}
+                onClick={() => onImport(draft.preload)}
+                className="btn btn-ghost"
+              >
+                <DownloadSimple size={15} />
+                {record ? "Replace VPK…" : "Import VPK…"}
+              </button>
+              {dirty ? (
+                <button
+                  type="button"
+                  disabled={locked && !running}
+                  onClick={() => setDraft(seeded)}
+                  className="btn btn-quiet"
+                >
+                  Discard edits
+                </button>
+              ) : null}
+            </div>
+            <p className="t-meta mt-3" aria-live="polite">
+              {buildStatus}
+            </p>
+            <p className="pane-note mt-2">
+              Builds locally on Windows. Building or importing enables Casual preload in Mods.
+            </p>
+          </div>
+          {record ? (
             <button
               type="button"
-              data-testid="viewmodel-hide-all-class"
+              data-testid="viewmodel-remove"
               disabled={locked}
-              onClick={() => {
-                setDraft((current) => {
-                  let hidden = current.hidden;
-                  for (const group of groups) {
-                    const has = hidden.includes(group.id);
-                    if (allClassHidden ? has : !has) {
-                      hidden = toggleHiddenGroup(hidden, group.id);
-                    }
-                  }
-                  return { ...current, hidden };
-                });
-              }}
-              className="btn btn-quiet px-2 py-1 text-[12.5px]"
+              onClick={onRemove}
+              className="btn btn-quiet mt-3"
             >
-              {allClassHidden ? "Show all" : "Hide all"}
+              <Trash size={14} /> Remove pack
             </button>
-          </div>
-
-          {VIEWMODEL_SLOTS.map((slot) => {
-            const inSlot = groups.filter(
-              (group) => (viewmodelGroupPreview(group.id)?.slot ?? "primary") === slot,
-            );
-            if (inSlot.length === 0) {
-              return null;
-            }
-            return (
-              <SlotGroup
-                key={slot}
-                slot={slot}
-                groups={inSlot}
-                hiddenSet={hiddenSet}
-                locked={locked}
-                describedBy={isSoldier ? SOLDIER_NOTE_ID : undefined}
-                onFocus={setFocusGroup}
-                onToggle={toggle}
-              />
-            );
-          })}
-
-          {isSoldier ? (
-            <p id={SOLDIER_NOTE_ID} className="mt-3 text-[12px] leading-5 text-ink-faint">
-              {SOLDIER_ORIGINAL_NOTE}
-            </p>
           ) : null}
         </div>
       </div>
 
       <section className="section">
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <h3 className="t-row">Hide mode</h3>
-          </div>
-          <Segmented
-            label="Hide mode"
-            testIdPrefix="viewmodel-mode"
-            options={(["full", "weapon"] as const).map((mode) => ({
-              id: mode,
-              label: HIDE_MODE_LABELS[mode],
-            }))}
-            value={draft.hideMode}
-            disabled={locked}
-            onChange={(mode) => setDraft((current) => ({ ...current, hideMode: mode }))}
-          />
-        </div>
-      </section>
-
-      <section className="section">
         <Disclosure
           profileId={profileId}
           storageKey="viewmodel-pack"
-          summary="Pack and preload"
+          summary="About viewmodel packs"
           testId="viewmodel-pack-disclosure"
         >
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <p className="pane-note mt-3">{VIEWMODEL_CASUAL_COPY}</p>
+          <p className="pane-note mt-3">
+            Hidden-viewmodel animations from{" "}
             <button
               type="button"
-              data-testid="viewmodel-import"
-              disabled={locked}
-              onClick={() => onImport(draft.preload)}
-              className="btn btn-ghost"
+              onClick={() =>
+                void openExternal("https://github.com/Yttrium-tYcLief/CompVMInstaller")
+              }
+              className="inline-flex items-center gap-1 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
             >
-              <DownloadSimple size={15} />
-              {record ? "Replace VPK…" : "Import VPK…"}
-            </button>
-            {record ? (
-              <button
-                type="button"
-                data-testid="viewmodel-remove"
-                disabled={locked}
-                onClick={onRemove}
-                className="btn btn-ghost"
-              >
-                <Trash size={14} />
-                Remove pack
-              </button>
-            ) : null}
-          </div>
-
-          <p className="t-meta mt-4 max-w-[62ch]">
-            Building or importing turns Casual preload on; the switch lives on the Mods pane.
+              Yttrium's Competitive Viewmodels <ArrowSquareOut size={12} />
+            </button>{" "}
+            (©2018 yttrium), fetched from the original project and rebuilt locally.{" "}
+            {VIEWMODEL_PREVIEW_CREDIT}
           </p>
         </Disclosure>
       </section>
-
-      <p className="t-meta mt-12 text-ink-faint">
-        {VIEWMODEL_CASUAL_COPY} Hidden-viewmodel animations from{" "}
-        <button
-          type="button"
-          onClick={() => void openExternal("https://github.com/Yttrium-tYcLief/CompVMInstaller")}
-          className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-        >
-          Yttrium's Competitive Viewmodels
-          <ArrowSquareOut size={11} />
-        </button>{" "}
-        (©2018 yttrium), fetched from the original project and rebuilt locally.{" "}
-        {VIEWMODEL_PREVIEW_CREDIT}
-      </p>
-
-      <ApplyBar
-        status={buildStatus}
-        actionLabel={builtPack ? "Rebuild pack" : "Build pack"}
-        lockedLabel="Close TF2 to build"
-        running={running}
-        locked={!canBuild || locked}
-        dirty={draft.hidden.length > 0 && (dirty || !builtPack)}
-        testId="viewmodel-build"
-        onApply={() => onBuild(draft.hidden, draft.preload, draft.hideMode)}
-      />
     </section>
   );
 }
@@ -382,55 +353,67 @@ function capitalize(value: string): string {
   return value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
 
-/** One slot's groups as hover-to-preview, click-to-hide rows. */
 function SlotGroup({
+  profileId,
+  classId,
   slot,
   groups,
   hiddenSet,
-  locked,
+  focusGroup,
   describedBy,
   onFocus,
   onToggle,
 }: {
+  profileId: string | null;
+  classId: ViewmodelClass;
   slot: ViewmodelSlot;
   groups: ViewmodelGroupInfo[];
   hiddenSet: Set<string>;
-  locked: boolean;
+  focusGroup: string;
   describedBy?: string;
-  onFocus: (id: string | null) => void;
+  onFocus: (id: string) => void;
   onToggle: (group: ViewmodelGroupInfo) => void;
 }) {
+  const hiddenCount = groups.filter((group) => hiddenSet.has(group.id)).length;
   return (
-    <div className="mt-4">
-      <p className="eyebrow">{VIEWMODEL_SLOT_LABELS[slot]}</p>
-      <ul className="mt-1 list-none p-0">
+    <Disclosure
+      profileId={profileId}
+      storageKey={`viewmodel-${classId}-${slot}`}
+      defaultOpen={slot === "primary"}
+      className="border-b border-edge"
+      summary={
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span>{VIEWMODEL_SLOT_LABELS[slot]}</span>
+          <span className="t-meta tnum">{hiddenCount ? `${hiddenCount} hidden` : "Shown"}</span>
+        </span>
+      }
+    >
+      <ul className="mb-2 list-none p-0">
         {groups.map((group) => {
           const hidden = hiddenSet.has(group.id);
           return (
-            <li key={group.id} className="border-b border-edge last:border-b-0">
+            <li key={group.id}>
               <button
                 type="button"
                 role="switch"
+                aria-label={`Hide ${group.label}`}
                 aria-checked={hidden}
                 aria-describedby={describedBy}
                 data-testid={`viewmodel-group-${group.id}`}
                 data-hidden={hidden ? "true" : "false"}
-                disabled={locked}
                 onMouseEnter={() => onFocus(group.id)}
                 onFocus={() => onFocus(group.id)}
                 onClick={() => onToggle(group)}
-                className="row w-full min-w-0 justify-start gap-3 rounded-md text-left transition-colors duration-150 hover:bg-panel disabled:cursor-not-allowed disabled:opacity-50"
+                className={`row min-h-10 w-full min-w-0 justify-start gap-3 rounded-md px-2 text-left transition-colors duration-150 hover:bg-panel ${focusGroup === group.id ? "bg-panel" : ""}`}
               >
                 <span
                   aria-hidden="true"
-                  className={`flex size-6 shrink-0 items-center justify-center rounded-md ${
-                    hidden ? "bg-brand/15 text-brand" : "text-ink-faint"
-                  }`}
+                  className="flex size-6 shrink-0 items-center justify-center text-ink-muted"
                 >
-                  {hidden ? <EyeSlash size={15} weight="bold" /> : <Eye size={15} />}
+                  {hidden ? <EyeSlash size={16} /> : <Eye size={16} />}
                 </span>
-                <span className="min-w-0 flex-1 text-[14px] text-ink">{group.label}</span>
-                <span className="shrink-0 text-[11.5px] text-ink-faint">
+                <span className="min-w-0 flex-1 text-[13px] text-ink">{group.label}</span>
+                <span className="shrink-0 text-[12px] text-ink-muted">
                   {hidden ? "Hidden" : "Shown"}
                 </span>
               </button>
@@ -438,6 +421,6 @@ function SlotGroup({
           );
         })}
       </ul>
-    </div>
+    </Disclosure>
   );
 }

@@ -1,9 +1,7 @@
-import { ArrowLeft, ShieldCheck } from "@phosphor-icons/react";
+import { FolderOpen, ShieldCheck } from "@phosphor-icons/react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
 import { OperationError } from "./components/ui/OperationError";
-import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { formatInstallLabel } from "./lib/finder-ui";
 
 /**
  * First launch on an install that already has customization: Save current as…
@@ -32,75 +30,87 @@ export function FirstRunExisting({
     <OnboardingFrame
       eyebrow="Existing setup found"
       icon={<ShieldCheck aria-hidden="true" size={13} weight="bold" />}
-      title="Keep what you already built"
-      lede="Save a snapshot before execs changes anything."
+      title="Keep your current setup"
+      lede="Save your existing customization as a profile."
+      width="wide"
       testId="first-run-existing"
-      footer={
-        <div className="flex flex-col-reverse gap-3 border-t border-edge pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <button type="button" onClick={onChange} className="btn btn-ghost w-full sm:w-auto">
-            <ArrowLeft aria-hidden="true" size={15} weight="bold" />
-            Change install
-          </button>
-          {running ? null : (
-            <button
-              type="submit"
-              form="first-run-save-form"
-              disabled={!canSave}
-              className="btn btn-primary w-full sm:w-auto"
-            >
-              Save this setup
-            </button>
-          )}
-        </div>
-      }
+      steps={[
+        { label: "Find TF2", state: "complete" },
+        { label: "Confirm folder", state: "complete" },
+        { label: "Save current", state: "current" },
+      ]}
     >
       <form
         id="first-run-save-form"
+        className="surface px-5"
         onSubmit={(event) => {
           event.preventDefault();
-          onSave();
+          if (canSave) onSave();
         }}
       >
-        <label htmlFor="first-run-profile-name" className="t-row block">
-          Profile name
-        </label>
-        <input
-          id="first-run-profile-name"
-          value={draftName}
-          onChange={(event) => onDraftName(event.target.value)}
-          placeholder="My current setup"
-          disabled={busy || running}
-          autoComplete="off"
-          className="field mt-3 w-full px-4 py-3 text-ink placeholder:text-ink-faint focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-        />
+        <div className="grid items-center gap-3 border-b border-edge py-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+          <p className="t-row">Team Fortress 2 location</p>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <p className="t-meta min-w-0 flex-1 break-all">{path}</p>
+            <button
+              type="button"
+              onClick={onChange}
+              disabled={busy}
+              className="btn btn-ghost shrink-0"
+            >
+              <FolderOpen aria-hidden="true" size={15} />
+              Change install
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-b border-edge py-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+          <p className="t-row">Existing customization</p>
+          <div className="min-w-0">
+            {reasons.length > 0 ? (
+              <ul
+                data-testid="first-run-reasons"
+                className="t-meta grid gap-x-6 gap-y-1 sm:grid-cols-2"
+              >
+                {reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            ) : null}
+            <p className={`t-meta ${reasons.length > 0 ? "mt-2" : ""}`}>
+              Your cfg layer, config.cfg, custom content and launch options are copied, not moved.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid items-start gap-3 py-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+          <label htmlFor="first-run-profile-name" className="t-row sm:pt-2.5">
+            Profile name
+          </label>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                id="first-run-profile-name"
+                value={draftName}
+                onChange={(event) => onDraftName(event.target.value)}
+                placeholder="My current setup"
+                disabled={busy || running}
+                autoComplete="off"
+                className="input min-w-[160px] flex-1"
+              />
+              <button type="submit" disabled={!canSave} className="btn btn-primary">
+                Save current setup
+              </button>
+            </div>
+            <p className="t-meta mt-2">
+              {running
+                ? "Close TF2 to save your current setup."
+                : "The saved profile keeps these files as they are."}
+            </p>
+          </div>
+        </div>
       </form>
-
-      <PaneSection
-        id="first-run-detail"
-        title="What gets saved"
-        description={
-          running
-            ? "Close TF2 to save."
-            : "Your cfg layer, config.cfg, tf/custom and the launch string — copied, not moved."
-        }
-        meta={
-          <span className="font-mono" title={path}>
-            {formatInstallLabel(path)}
-          </span>
-        }
-      >
-        {reasons.length > 0 ? (
-          <ul data-testid="first-run-reasons" className="mt-4 grid gap-x-10 sm:grid-cols-2">
-            {reasons.map((reason) => (
-              <li key={reason} className="t-meta border-b border-edge py-2.5">
-                {reason}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </PaneSection>
-
-      <OperationError message={error} onDismiss={dismissError} className="mt-6" />
+      <OperationError message={error} onDismiss={dismissError} className="mt-4" />
     </OnboardingFrame>
   );
 }

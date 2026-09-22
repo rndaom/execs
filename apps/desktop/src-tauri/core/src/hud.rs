@@ -23,14 +23,25 @@ use crate::hash::{remove_dir_within, remove_file_force_within, validate_file_wit
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, is_file_safe_rel_path, load_library_from, load_manifest,
-    mutate_profile_files_to, mutate_profile_files_with_live_renames_to, normalize_rel_path,
-    profiles_dir, save_manifest, FileSource, HudRecord, HudSource, ProfileError, ProfileFile,
-    ProfileLiveProjection, ProfileLiveRename, ProfileManifest,
+    mutate_profile_files_to, mutate_profile_files_with_live_renames_checked_to,
+    mutate_profile_files_with_live_renames_to, normalize_rel_path, profiles_dir, save_manifest,
+    FileSource, HudRecord, HudSource, ProfileError, ProfileFile, ProfileLiveProjection,
+    ProfileLiveRename, ProfileManifest,
 };
 use crate::settings::execs_data_dir;
 use crate::surface::{is_stock_custom_pack, HUD_BACKUP_CONTAINER};
 use crate::switch::prune_empty_parents;
 use crate::vdf::parse_vdf;
+
+#[path = "hud_ownership.rs"]
+mod ownership;
+pub use ownership::{
+    get_hud_ownership_to, select_profile_hud_to, HudOwnershipCandidate, HudOwnershipReview,
+};
+pub(crate) use ownership::{
+    inspect_hud_roots_from_files_root, inspect_hud_roots_with_sources, inspect_profile_hud_roots,
+    refuse_hud_vpk, refuse_profile_hud_vpks, require_resolved_hud, require_resolved_live_huds,
+};
 
 pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
     "rayshud",
@@ -274,32 +285,43 @@ pub fn is_hud_marker(rel: &str) -> bool {
     after == "info.vdf" || after.starts_with("resource/ui/")
 }
 
-/// A folder is a HUD when it carries `info.vdf` or `resource/ui/`, spelled in
-/// any case: `Info.vdf` and `Resource/UI` are common, and on Linux a
-/// case-sensitive `join("info.vdf")` misses them.
+/// A complete compatible HUD declares UI version 3 in info.vdf, in any case.
 pub fn is_hud_dir(path: &Path) -> bool {
-    if dir_entry_ignore_case(path, "info.vdf").is_some_and(|file| file.is_file()) {
-        return true;
-    }
-    dir_entry_ignore_case(path, "resource")
-        .filter(|dir| dir.is_dir())
-        .and_then(|dir| dir_entry_ignore_case(&dir, "ui"))
-        .is_some_and(|dir| dir.is_dir())
+    is_hud_dir_checked(path).unwrap_or(false)
 }
 
-/// The path of `dir/<name>` with whatever ASCII case it has on disk.
-fn dir_entry_ignore_case(dir: &Path, name: &str) -> Option<PathBuf> {
-    let entries = fs::read_dir(dir).ok()?;
-    entries
-        .flatten()
-        .find(|entry| {
-            fs::symlink_metadata(entry.path()).is_ok_and(|meta| !metadata_is_link(&meta))
-                && entry
-                    .file_name()
-                    .to_string_lossy()
-                    .eq_ignore_ascii_case(name)
-        })
-        .map(|entry| entry.path())
+fn is_hud_dir_checked(path: &Path) -> Result<bool, ProfileError> {
+    let mut found = None;
+    for entry in fs::read_dir(path).map_err(|err| ProfileError::Io(err.to_string()))? {
+        let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("info.vdf")
+        {
+            continue;
+        }
+        if found.is_some() {
+            return Err(ProfileError::Io(
+                "HUD metadata has conflicting filename casing.".into(),
+            ));
+        }
+        let bytes = read_regular_file_bounded(&entry.path(), 1024 * 1024)?
+            .ok_or_else(|| ProfileError::Io("HUD info.vdf exceeds the inspection limit.".into()))?;
+        found = Some(is_current_hud_info(&bytes));
+    }
+    Ok(found.unwrap_or(false))
+}
+
+pub(crate) fn is_current_hud_info(bytes: &[u8]) -> bool {
+    std::str::from_utf8(bytes).ok().and_then(parse_ui_version) == Some(CURRENT_HUD_UI_VERSION)
+}
+
+pub(crate) fn manifest_hud_packs(manifest: &ProfileManifest) -> Vec<String> {
+    manifest
+        .hud_roots
+        .clone()
+        .unwrap_or_else(|| hud_packs(&manifest.files))
 }
 
 pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
@@ -320,10 +342,17 @@ pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
 
 /// A legacy profile may contain multiple HUD trees. Its selected record wins;
 /// a sole imported folder can still resolve an older catalog-only record.
-/// Without a matching record, use a stable choice independent of another
-/// profile's live HUD and of filesystem enumeration order.
+/// Multiple roots without a reviewed selection require an explicit choice.
 pub(crate) fn selected_hud_pack(manifest: &ProfileManifest) -> Option<String> {
-    let mut packs = hud_packs(&manifest.files);
+    let packs = manifest_hud_packs(manifest);
+    if let Some(selected) = &manifest.hud_selected_root {
+        if let Some(pack) = packs
+            .iter()
+            .find(|pack| pack.eq_ignore_ascii_case(selected))
+        {
+            return Some(pack.clone());
+        }
+    }
     if let Some(record) = &manifest.hud {
         if let Some(folder) = manifest_hud_folder_resolved(&manifest.files, &record.id) {
             let key = pack_key(&format!("tf/custom/{folder}"))?;
@@ -332,15 +361,14 @@ pub(crate) fn selected_hud_pack(manifest: &ProfileManifest) -> Option<String> {
             }
         }
     }
-    packs.sort_by_key(|pack| (pack.to_ascii_lowercase(), pack.clone()));
-    packs.into_iter().next()
+    (packs.len() == 1).then(|| packs[0].clone())
 }
 
 /// Extra legacy HUDs remain readable/exportable in the library, but are not
 /// projected to TF2 or classified as deleted merely because they are absent.
 pub(crate) fn inactive_hud_packs(manifest: &ProfileManifest) -> Vec<String> {
     let selected = selected_hud_pack(manifest);
-    hud_packs(&manifest.files)
+    manifest_hud_packs(manifest)
         .into_iter()
         .filter(|pack| {
             selected
@@ -366,34 +394,50 @@ pub struct LiveHud {
 /// A leading dash does not disable a Source search root: `foo` and `-foo`
 /// can both load. Preserve both entries so replacement handles every tree.
 pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
+    live_hud_names_checked(tf2_root).unwrap_or_default()
+}
+
+pub(crate) fn live_hud_names_checked(tf2_root: &Path) -> Result<Vec<LiveHud>, ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
-    let Ok(meta) = fs::symlink_metadata(&custom) else {
-        return Vec::new();
+    let meta = match fs::symlink_metadata(&custom) {
+        Ok(meta) => meta,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
     };
     if metadata_is_link(&meta) || !meta.is_dir() {
-        return Vec::new();
+        return Err(ProfileError::Io(
+            "The custom folder is linked or unreadable.".into(),
+        ));
     }
-    if validate_dir_within(tf2_root, &custom).is_err() {
-        return Vec::new();
-    }
-    let Ok(entries) = fs::read_dir(&custom) else {
-        return Vec::new();
-    };
+    validate_dir_within(tf2_root, &custom).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let entries = fs::read_dir(&custom).map_err(|err| ProfileError::Io(err.to_string()))?;
     let mut huds: Vec<LiveHud> = Vec::new();
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
         let path = entry.path();
-        let Ok(meta) = fs::symlink_metadata(&path) else {
-            continue;
-        };
-        if metadata_is_link(&meta)
-            || !meta.is_dir()
-            || validate_dir_within(tf2_root, &path).is_err()
-            || !is_hud_dir(&path)
-        {
-            continue;
-        }
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') || is_stock_custom_pack(&name) {
+            continue;
+        }
+        let meta = fs::symlink_metadata(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if metadata_is_link(&meta) {
+            return Err(ProfileError::Io(format!(
+                "Cannot inspect linked custom pack {name}."
+            )));
+        }
+        if !meta.is_dir() {
+            if !meta.is_file() {
+                return Err(ProfileError::Io(format!(
+                    "Cannot inspect non-regular custom pack {name}."
+                )));
+            }
+            if name.to_ascii_lowercase().ends_with(".vpk") {
+                refuse_hud_vpk(&path, None)?;
+            }
+            continue;
+        }
+        validate_dir_within(tf2_root, &path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if !is_hud_dir_checked(&path)? {
             continue;
         }
         let key = name.to_ascii_lowercase();
@@ -404,7 +448,7 @@ pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
     }
     // Stable presentation order; both names retain distinct identities.
     huds.sort_by_key(|hud| hud.name.starts_with('-'));
-    huds
+    Ok(huds)
 }
 
 /// Just the identities, deduped, for callers comparing against a manifest.
@@ -812,6 +856,33 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    install_hud_pack_with_cfgs_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        tree,
+        record,
+        cfg_writes,
+        running_names,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn install_hud_pack_with_cfgs_checked_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    tree: &HudTree,
+    record: HudRecord,
+    cfg_writes: &[(String, Vec<u8>)],
+    running_names: I,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
@@ -831,6 +902,7 @@ where
     }
 
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    refuse_profile_hud_vpks(profiles_dir, &manifest)?;
     let mut exec_stems = Vec::with_capacity(cfg_writes.len());
     for (rel, bytes) in cfg_writes {
         let path = normalize_rel_path(rel)?;
@@ -852,12 +924,13 @@ where
     if let Some((path, bytes)) = &autoexec {
         batch.push((path.clone(), FileSource::Bytes(bytes)));
     }
-    let previous = hud_packs(&manifest.files);
+    let previous = manifest_hud_packs(&manifest);
     let mut remove: Vec<String> = manifest
         .files
         .iter()
         .filter(|file| {
-            pack_key(&file.path).is_some_and(|pack| previous.iter().any(|hud| hud == &pack))
+            pack_key(&file.path)
+                .is_some_and(|pack| previous.iter().any(|hud| hud.eq_ignore_ascii_case(&pack)))
         })
         .map(|file| file.path.clone())
         .collect();
@@ -888,9 +961,24 @@ where
         Vec::new()
     };
 
+    let cfg_paths: Vec<String> = batch
+        .iter()
+        .map(|(path, _)| path.clone())
+        .chain(remove.iter().cloned())
+        .collect();
+    ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
+    ownership::preserve_library_hud_originals(profiles_dir, &manifest, &previous)?;
+    let recheck = || {
+        ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
+        if let Some(precommit) = precommit {
+            precommit()?;
+        }
+        Ok(())
+    };
+
     let mut stored = record;
     stored.id = id.clone();
-    let manifest = mutate_profile_files_with_live_renames_to(
+    let manifest = mutate_profile_files_with_live_renames_checked_to(
         profiles_dir,
         tf2_root,
         profile_id,
@@ -900,8 +988,17 @@ where
         &running,
         move |manifest| {
             manifest.hud = Some(stored);
+            manifest.hud_roots = Some(vec![id.clone()]);
+            manifest.hud_selected_root = Some(id.clone());
+            manifest.hud_review_pending = false;
+            manifest.mods.retain(|record| {
+                !previous
+                    .iter()
+                    .any(|pack| pack.eq_ignore_ascii_case(&record.pack))
+            });
             Ok(())
         },
+        Some(&recheck),
     )?;
 
     if active {
@@ -1031,6 +1128,14 @@ where
         &running,
         move |manifest| {
             manifest.hud = Some(stored);
+            if let Some(roots) = &mut manifest.hud_roots {
+                for root in roots {
+                    if root.eq_ignore_ascii_case(&folder) {
+                        *root = id.clone();
+                    }
+                }
+            }
+            manifest.hud_selected_root = Some(id.clone());
             Ok(())
         },
     )?;
@@ -1059,6 +1164,22 @@ fn load_hud_tree_from_manifest(
     manifest: &ProfileManifest,
     folder: &str,
 ) -> Result<HudTree, ProfileError> {
+    load_hud_tree_from_manifest_with_limit(
+        profiles_dir,
+        profile_id,
+        manifest,
+        folder,
+        MAX_HUD_TOTAL_BYTES,
+    )
+}
+
+fn load_hud_tree_from_manifest_with_limit(
+    profiles_dir: &Path,
+    profile_id: &str,
+    manifest: &ProfileManifest,
+    folder: &str,
+    byte_limit: u64,
+) -> Result<HudTree, ProfileError> {
     let mut tree = HudTree::default();
     let mut total = 0u64;
     for file in &manifest.files {
@@ -1071,7 +1192,7 @@ fn load_hud_tree_from_manifest(
             )));
         }
         let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
-        let remaining = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
+        let remaining = byte_limit.saturating_sub(total);
         let read_cap = remaining.min(MAX_HUD_ENTRY_BYTES);
         let Some(bytes) = read_regular_file_bounded_within(profiles_dir, &source, read_cap)? else {
             if remaining < MAX_HUD_ENTRY_BYTES {
@@ -1089,7 +1210,7 @@ fn load_hud_tree_from_manifest(
         total = total
             .checked_add(bytes.len() as u64)
             .ok_or_else(|| ProfileError::Io("That profile's HUD is too large to edit.".into()))?;
-        if total > MAX_HUD_TOTAL_BYTES {
+        if total > byte_limit {
             return Err(ProfileError::Io(
                 "That profile's HUD is too large to edit.".into(),
             ));
@@ -1442,7 +1563,7 @@ fn profile_detail_fallback(
     detail_from_manifest(profiles_dir, &manifest)
 }
 
-fn is_managed_hud_cfg(path: &str) -> bool {
+pub(crate) fn is_managed_hud_cfg(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     if !lower.ends_with(".cfg") {
         return false;
@@ -1535,10 +1656,16 @@ fn plan_live_hud_renames(
                     path.display()
                 )));
             }
+            if !metadata_is_link(&meta)
+                && meta.is_file()
+                && name.to_ascii_lowercase().ends_with(".vpk")
+            {
+                refuse_hud_vpk(&path, None)?;
+            }
             continue;
         }
         validate_dir_within(tf2_root, &path).map_err(|err| ProfileError::Io(err.to_string()))?;
-        if is_target || is_hud_dir(&path) {
+        if is_target || is_hud_dir_checked(&path)? {
             huds.push(LiveHud {
                 key: name.to_ascii_lowercase(),
                 name,
@@ -2602,7 +2729,7 @@ mod tests {
             &root,
             &id,
             "tf/custom/oldhud/info.vdf",
-            b"old\n",
+            info_vdf(),
             unlocked(),
         )
         .unwrap();
@@ -2611,12 +2738,13 @@ mod tests {
             &root,
             &id,
             "tf/custom/oldhud/info.vdf",
-            b"old\n",
+            info_vdf(),
             unlocked(),
             WriteOwnedOptions::default(),
         )
         .unwrap();
         fs::create_dir_all(root.join("tf/custom/stray/resource/ui")).unwrap();
+        fs::write(root.join("tf/custom/stray/info.vdf"), info_vdf()).unwrap();
         fs::write(
             root.join("tf/custom/stray/resource/ui/hudlayout.res"),
             b"x\n",
@@ -3262,21 +3390,25 @@ mod tests {
                 &root,
                 &id,
                 "tf/custom/grape-oxide/info.vdf",
-                b"older recorded HUD\n",
+                b"\"HUD\" { \"ui_version\" \"3\" } // older recorded HUD\n",
                 unlocked(),
             )
             .unwrap();
             let legacy = root.join("tf/custom/-grape-oxide");
             fs::create_dir_all(&legacy).unwrap();
-            fs::write(legacy.join("info.vdf"), b"legacy oxide bytes\n").unwrap();
+            fs::write(
+                legacy.join("info.vdf"),
+                b"\"HUD\" { \"ui_version\" \"3\" } // legacy oxide bytes\n",
+            )
+            .unwrap();
             fs::create_dir_all(root.join("tf/custom/-colly-hud")).unwrap();
             fs::write(
                 root.join("tf/custom/-colly-hud/info.vdf"),
-                b"older Colly update\n",
+                b"\"HUD\" { \"ui_version\" \"3\" } // older Colly update\n",
             )
             .unwrap();
             fs::create_dir_all(root.join("tf/custom/external")).unwrap();
-            fs::write(root.join("tf/custom/external/info.vdf"), b"external HUD\n").unwrap();
+            fs::write(root.join("tf/custom/external/info.vdf"), info_vdf()).unwrap();
             if ignored {
                 let mut manifest = load_manifest(&profiles, &id).unwrap();
                 manifest.ignored_packs.push("grape-oxide".into());
@@ -3299,11 +3431,11 @@ mod tests {
             assert!(root.join("tf/custom/-colly-hud").exists());
             assert_eq!(
                 fs::read(root.join("tf/custom/-colly-hud/info.vdf")).unwrap(),
-                b"older Colly update\n"
+                b"\"HUD\" { \"ui_version\" \"3\" } // older Colly update\n"
             );
             assert_eq!(
                 fs::read(preserved_hud(&root, "-grape-oxide").join("info.vdf")).unwrap(),
-                b"legacy oxide bytes\n"
+                b"\"HUD\" { \"ui_version\" \"3\" } // legacy oxide bytes\n"
             );
             assert!(root.join("tf/custom/external/info.vdf").is_file());
             assert!(root.join("tf/custom/colly-hud/info.vdf").is_file());
@@ -3325,10 +3457,21 @@ mod tests {
         )
         .unwrap();
         let old_rel = "tf/custom/-execs-oldhud/info.vdf";
-        put_exclusive_file_to(&profiles, &root, &id, old_rel, b"library HUD\n", unlocked())
-            .unwrap();
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &id,
+            old_rel,
+            b"\"HUD\" { \"ui_version\" \"3\" } // library HUD\n",
+            unlocked(),
+        )
+        .unwrap();
         fs::create_dir_all(root.join("tf/custom/-execs-oldhud")).unwrap();
-        fs::write(root.join(old_rel), b"edited old HUD\n").unwrap();
+        fs::write(
+            root.join(old_rel),
+            b"\"HUD\" { \"ui_version\" \"3\" } // edited old HUD\n",
+        )
+        .unwrap();
         let result = crate::absorb::absorb_owned_to(
             &profiles,
             &root,
@@ -3343,9 +3486,12 @@ mod tests {
         assert_eq!(live_hud_names(&root).len(), 2);
         assert_eq!(
             fs::read(exclusive_file_path(&profiles, &id, old_rel)).unwrap(),
-            b"edited old HUD\n"
+            b"\"HUD\" { \"ui_version\" \"3\" } // edited old HUD\n"
         );
-        assert_eq!(fs::read(root.join(old_rel)).unwrap(), b"edited old HUD\n");
+        assert_eq!(
+            fs::read(root.join(old_rel)).unwrap(),
+            b"\"HUD\" { \"ui_version\" \"3\" } // edited old HUD\n"
+        );
         assert!(load_manifest(&profiles, &id)
             .unwrap()
             .files
@@ -3847,7 +3993,10 @@ mod tests {
         assert!(is_hud_dir(&by_info));
         let by_ui = dir.join("ByUi");
         fs::create_dir_all(by_ui.join("Resource").join("UI")).unwrap();
-        assert!(is_hud_dir(&by_ui));
+        assert!(
+            !is_hud_dir(&by_ui),
+            "UI fragments alone are not a complete HUD"
+        );
         let neither = dir.join("Neither");
         fs::create_dir_all(neither.join("materials")).unwrap();
         assert!(!is_hud_dir(&neither));

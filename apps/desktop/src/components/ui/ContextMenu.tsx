@@ -79,7 +79,7 @@ export function ContextMenu({
       ref={menu}
       role="menu"
       aria-label={label}
-      className="fixed z-[100] w-64 max-w-[calc(100vw-16px)] rounded-lg border border-edge-strong bg-panel-raised p-1 text-sm text-ink shadow-2xl"
+      className="overlay menu-enter fixed z-[100] w-64 max-w-[calc(100vw-16px)] p-1 text-sm text-ink"
       style={{ left: position.x, top: position.y }}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={moveFocus}

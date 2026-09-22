@@ -57,6 +57,9 @@ export type GameplaySettings = {
   r_drawtracers_firstperson: GameplayToggle;
   r_drawtracers: GameplayToggle;
   cl_flipviewmodels: GameplayToggle;
+  cl_autoreload: GameplayToggle;
+  /** Preserve controller/custom modes until the player explicitly changes this control. */
+  hud_fastswitch: number;
   cl_crosshair_file: CrosshairFile;
   cl_crosshair_scale: number;
   cl_crosshair_red: number;
@@ -115,6 +118,8 @@ export function defaultGameplay(): GameplaySettings {
     r_drawtracers_firstperson: corpusToggle("r_drawtracers_firstperson", 1),
     r_drawtracers: corpusToggle("r_drawtracers", 1),
     cl_flipviewmodels: corpusToggle("cl_flipviewmodels", 0),
+    cl_autoreload: corpusToggle("cl_autoreload", 1),
+    hud_fastswitch: corpusNumber("hud_fastswitch", 0),
     cl_crosshair_file: "",
     cl_crosshair_scale: corpusNumber("cl_crosshair_scale", 32),
     cl_crosshair_red: corpusNumber("cl_crosshair_red", 200),
@@ -162,6 +167,8 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
     r_drawtracers_firstperson: settings.r_drawtracers_firstperson ? 1 : 0,
     r_drawtracers: settings.r_drawtracers ? 1 : 0,
     cl_flipviewmodels: settings.cl_flipviewmodels ? 1 : 0,
+    cl_autoreload: settings.cl_autoreload ? 1 : 0,
+    hud_fastswitch: Number.isFinite(settings.hud_fastswitch) ? settings.hud_fastswitch : 0,
     cl_crosshair_file: parseCrosshairFile(settings.cl_crosshair_file),
     cl_crosshair_scale: clampInt(
       settings.cl_crosshair_scale,
@@ -236,6 +243,8 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `r_drawtracers_firstperson ${next.r_drawtracers_firstperson}`,
     `r_drawtracers ${next.r_drawtracers}`,
     `cl_flipviewmodels ${next.cl_flipviewmodels}`,
+    `cl_autoreload ${next.cl_autoreload}`,
+    `hud_fastswitch ${next.hud_fastswitch}`,
     `cl_crosshair_file ${file}`,
     `cl_crosshair_scale ${next.cl_crosshair_scale}`,
     `cl_crosshair_red ${next.cl_crosshair_red}`,
@@ -281,6 +290,8 @@ export function serializeGameplayScope(
         "r_drawtracers_firstperson",
         "r_drawtracers",
         "cl_flipviewmodels",
+        "cl_autoreload",
+        "hud_fastswitch",
       ].includes(name);
     }),
   );
@@ -322,6 +333,15 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   const flip = read("cl_flipviewmodels");
   if (flip !== undefined) {
     next.cl_flipviewmodels = parseToggle(flip, next.cl_flipviewmodels);
+  }
+  const autoreload = read("cl_autoreload");
+  if (autoreload !== undefined) {
+    next.cl_autoreload = parseToggle(autoreload, next.cl_autoreload);
+  }
+  const fastswitch = read("hud_fastswitch");
+  if (fastswitch !== undefined) {
+    const value = Number(fastswitch.trim());
+    if (Number.isFinite(value)) next.hud_fastswitch = value;
   }
   const file = read("cl_crosshair_file");
   if (file !== undefined) {

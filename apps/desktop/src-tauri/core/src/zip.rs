@@ -76,6 +76,10 @@ struct ProfileZipManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     hud: Option<HudRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    hud_selected_root: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    hud_review_pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     viewmodel: Option<ViewmodelRecord>,
@@ -241,6 +245,41 @@ where
     creator::seed_default_config(&mut payload, tf2_root, profiles_dir, &staging.path)?;
     let trust_creator = payload.creator && review.is_some_and(|review| review.creator);
     validate_payload_with_trust(&mut payload, trust_creator)?;
+    let hud_roots = creator::payload_huds(&payload)?;
+    let selected_hud = if hud_roots.len() > 1 {
+        review
+            .and_then(|review| review.selected_hud.clone())
+            .ok_or(ProfileError::HudReviewRequired)
+            .map(Some)?
+    } else {
+        hud_roots.first().cloned()
+    };
+    if selected_hud
+        .as_ref()
+        .is_some_and(|selected| !hud_roots.contains(selected))
+    {
+        return Err(invalid_zip(
+            "The selected HUD is not part of the reviewed archive.",
+        ));
+    }
+    let hud_review_pending =
+        creator::hud_options_need_review(&payload, &hud_roots, selected_hud.as_deref())?;
+    if let Some(folder) = &selected_hud {
+        let keep_record = payload.manifest.hud_selected_root.as_deref() == Some(folder)
+            || payload
+                .manifest
+                .hud
+                .as_ref()
+                .is_some_and(|record| record.id.eq_ignore_ascii_case(folder));
+        if !keep_record && !hud_review_pending {
+            payload.manifest.hud = Some(HudRecord {
+                id: crate::hud::hud_id_from_name(folder),
+                hash: None,
+                source: crate::profile::HudSource::Local,
+                options: std::collections::BTreeMap::new(),
+            });
+        }
+    }
 
     let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(payload.manifest.files.len());
     for file in &payload.manifest.files {
@@ -280,6 +319,9 @@ where
             // machine's Steam config, regardless of any sender-side state.
             manifest.launch_sync_pending = true;
             manifest.hud = hud;
+            manifest.hud_roots = Some(hud_roots);
+            manifest.hud_selected_root = selected_hud;
+            manifest.hud_review_pending = hud_review_pending;
             manifest.crosshair = crosshair;
             manifest.viewmodel = viewmodel;
             manifest.hitsound = hitsound;
@@ -314,6 +356,8 @@ fn write_profile_zip(
         id: None,
         tf2_root: None,
         hud: manifest.hud.clone(),
+        hud_selected_root: manifest.hud_selected_root.clone(),
+        hud_review_pending: manifest.hud_review_pending,
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
         hitsound: manifest.hitsound.clone(),
@@ -1728,6 +1772,237 @@ mod tests {
     }
 
     #[test]
+    fn creator_and_native_multiple_huds_require_choice_and_preserve_inactive_originals() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let path = dir.join("two-huds.zip");
+        let first = b"\"HUD\" { \"ui_version\" \"3\" } // first\n";
+        let second = b"\"HUD\" { \"ui_version\" \"3\" } // second\n";
+        write_raw_zip(
+            &path,
+            &[
+                ("custom/Alpha/info.vdf", first),
+                ("custom/Zeta/info.vdf", second),
+            ],
+        );
+        let before = snapshot_tree(&root);
+        let mut review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        assert_eq!(review.huds, ["Alpha", "Zeta"]);
+        assert!(review.selected_hud.is_none());
+        assert_eq!(
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review))
+                .unwrap_err(),
+            ProfileError::HudReviewRequired
+        );
+        assert!(review.select_hud(Some("forged".into())).is_err());
+        review.select_hud(Some("Zeta".into())).unwrap();
+        let library =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        assert!(library.active_profile_id.is_none());
+        assert_eq!(snapshot_tree(&root), before);
+        let id = library.profiles[0].id.clone();
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(manifest.hud_selected_root.as_deref(), Some("Zeta"));
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/Alpha/info.vdf"
+            ))
+            .unwrap(),
+            first
+        );
+        let opts = || crate::absorb::AbsorbOptions {
+            cloud_config: None,
+            steam_roots: Some(&[]),
+        };
+        crate::switch::switch_profile_to(&profiles, &root, &id, unlocked(), opts(), |_| {})
+            .unwrap();
+        assert_eq!(
+            crate::hud::live_hud_names(&root)
+                .iter()
+                .map(|hud| hud.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Zeta"]
+        );
+        let native = dir.join("native.zip");
+        export_profile_to(&profiles, &root, &id, &native).unwrap();
+        let mut native_review =
+            creator::inspect_profile_import_from(&profiles, &root, &native, unlocked()).unwrap();
+        assert_eq!(native_review.huds, ["Alpha", "Zeta"]);
+        native_review.select_hud(Some("Alpha".into())).unwrap();
+        let imported =
+            import_profile_with_review(&profiles, &root, &native, unlocked(), Some(&native_review))
+                .unwrap();
+        let second_id = &imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap()
+            .id;
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                second_id,
+                "tf/custom/Zeta/info.vdf"
+            ))
+            .unwrap(),
+            second
+        );
+        crate::switch::switch_profile_to(&profiles, &root, second_id, unlocked(), opts(), |_| {})
+            .unwrap();
+        assert_eq!(
+            crate::hud::live_hud_names(&root)
+                .iter()
+                .map(|hud| hud.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Alpha"]
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn profile_import_refuses_real_hud_vpks_but_keeps_ordinary_and_opaque_vpks() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let path = dir.join("vpk.zip");
+        let hud = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "info.vdf".into(),
+            b"\"HUD\" { \"ui_version\" \"3\" }".to_vec(),
+        )]));
+        write_raw_zip(&path, &[("custom/hud.vpk", &hud)]);
+        let before = snapshot_tree(&root);
+        let original = sha256_file(&path).unwrap();
+        assert_eq!(
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked())
+                .unwrap_err()
+                .code(),
+            "HudImportRequired"
+        );
+        assert_eq!(snapshot_tree(&root), before);
+        assert_eq!(sha256_file(&path).unwrap(), original);
+        let ordinary = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "info.vdf".into(),
+            b"\"Addon\" { \"version\" \"3\" }".to_vec(),
+        )]));
+        write_raw_zip(
+            &path,
+            &[
+                ("custom/ordinary.vpk", &ordinary),
+                ("custom/opaque.vpk", b"legacy opaque bytes"),
+            ],
+        );
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        let imported =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        let id = &imported.profiles[0].id;
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/custom/ordinary.vpk")).unwrap(),
+            ordinary
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/custom/opaque.vpk")).unwrap(),
+            b"legacy opaque bytes"
+        );
+        assert_eq!(snapshot_tree(&root), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn changing_imported_hud_preserves_approved_cfg_until_separate_option_reset_review() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let path = dir.join("options.zip");
+        let info = b"\"HUD\" { \"ui_version\" \"3\" }\n";
+        let autoexec = b"echo retained\nexec execs_hud_minmode // execs:managed\n";
+        let options = b"cl_hud_minmode 1\n";
+        write_raw_zip(
+            &path,
+            &[
+                ("custom/Alpha/info.vdf", info),
+                ("custom/Beta/info.vdf", info),
+                ("cfg/autoexec.cfg", autoexec),
+                ("cfg/execs_hud_minmode.cfg", options),
+            ],
+        );
+        let original_zip = sha256_file(&path).unwrap();
+        let mut review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        review.select_hud(Some("Beta".into())).unwrap();
+        let library =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        let id = &library.profiles[0].id;
+        assert!(load_manifest(&profiles, id).unwrap().hud_review_pending);
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/cfg/autoexec.cfg")).unwrap(),
+            autoexec
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                id,
+                "tf/cfg/execs_hud_minmode.cfg"
+            ))
+            .unwrap(),
+            options
+        );
+        assert_eq!(
+            crate::switch::validate_profile_switch_target(&profiles, &root, id).unwrap_err(),
+            ProfileError::HudReviewRequired
+        );
+        let ownership = crate::hud::get_hud_ownership_to(&profiles, &root, id).unwrap();
+        assert!(ownership.reset_options);
+        assert_eq!(
+            ownership.managed_option_files,
+            ["tf/cfg/execs_hud_minmode.cfg"]
+        );
+        crate::hud::select_profile_hud_to(
+            &profiles,
+            &root,
+            id,
+            "Beta",
+            &ownership.fingerprint,
+            unlocked(),
+        )
+        .unwrap();
+        let after = load_manifest(&profiles, id).unwrap();
+        assert!(!after.hud_review_pending);
+        assert!(!after
+            .files
+            .iter()
+            .any(|file| file.path == "tf/cfg/execs_hud_minmode.cfg"));
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/cfg/autoexec.cfg")).unwrap(),
+            b"echo retained\n"
+        );
+        let backup = fs::read_dir(profiles.join(id).join("hud-backups"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(
+            fs::read(backup.join("files/tf/cfg/autoexec.cfg")).unwrap(),
+            autoexec
+        );
+        assert_eq!(
+            fs::read(backup.join("files/tf/cfg/execs_hud_minmode.cfg")).unwrap(),
+            options
+        );
+        assert_eq!(sha256_file(&path).unwrap(), original_zip);
+        crate::switch::validate_profile_switch_target(&profiles, &root, id).unwrap();
+        cleanup(&dir);
+    }
+
+    #[test]
     fn creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");
@@ -2190,6 +2465,8 @@ mod tests {
             id: None,
             tf2_root: None,
             hud: None,
+            hud_selected_root: None,
+            hud_review_pending: false,
             crosshair: None,
             viewmodel: None,
             hitsound: None,
@@ -3098,6 +3375,8 @@ mod tests {
                 id: None,
                 tf2_root: None,
                 hud: None,
+                hud_selected_root: None,
+                hud_review_pending: false,
                 crosshair: None,
                 viewmodel: None,
                 hitsound: None,

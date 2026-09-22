@@ -1,12 +1,17 @@
 //! The profile library: init, save-current-as, switch, export, import.
 
 use execs_core::{ProfileError, ProfileLibrary, SwitchProgress};
+use std::path::Path;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{blocking, with_root, RootContext};
 use crate::error::CommandError;
 use crate::WriteGate;
+
+#[cfg(test)]
+#[path = "library_tests.rs"]
+mod orchestration_tests;
 
 fn refuse_different_pending_target(
     pending: Option<&str>,
@@ -48,6 +53,36 @@ pub async fn save_current_as(
 ) -> Result<ProfileLibrary, CommandError> {
     let _guard = gate.lock_for_write().await?;
     with_root(move |root| Ok(execs_core::save_current_as(&root, &name)?)).await
+}
+
+#[tauri::command]
+pub async fn delete_profile(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    keep_installed: bool,
+) -> Result<ProfileLibrary, CommandError> {
+    // Deletion must not double as approval to recover a different operation.
+    // The serializer still rejects launch, update and Steam-repair leases.
+    let _guard = gate.lock_for_interrupted_recovery().await?;
+    with_root(move |root| {
+        execs_core::refuse_if_running()?;
+        super::shared::refuse_pending_switch(&root)?;
+        super::shared::refuse_pending_preloader(&root)?;
+        if super::shared::profile_recovery_required(&root)? {
+            return Err(CommandError::new(
+                "RecoveryRequired",
+                "Finish the interrupted profile operation before deleting a profile.",
+            ));
+        }
+        Ok(execs_core::profile::delete_profile_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            keep_installed,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -95,29 +130,42 @@ pub async fn switch_profile(
     // re-applying its recorded target is what completes recovery.
     let _guard = gate.lock_for_switch().await?;
     with_root(move |root| {
-        let library = execs_core::load_library(Some(&root))?;
-        refuse_different_pending_target(library.pending_switch_profile_id.as_deref(), &id)?;
-        // Validate all target paths and hashes before changing the current
-        // particle set. A corrupt target must leave the old install intact.
-        execs_core::switch::validate_profile_switch_target(
+        let cloud = execs_core::launch::find_cloud_config();
+        switch_profile_command_to(
             &execs_core::profiles_dir(),
             &root,
             &id,
-        )?;
-        if library.active_profile_id.as_deref() != Some(id.as_str()) {
-            super::preloader::clear_profile_particles_before_switch(&root)?;
-        } else {
-            super::preloader::reconcile_active_profile_particles(&root)?;
-        }
-        Ok(execs_core::switch_profile_with_progress(
-            &root,
-            &id,
+            execs_core::process_lock::live_process_names(),
+            execs_core::absorb::AbsorbOptions {
+                cloud_config: cloud.as_deref(),
+                ..Default::default()
+            },
             |progress: SwitchProgress| {
                 let _ = app.emit("profile-switch-progress", progress);
             },
-        )?)
+        )
     })
     .await
+}
+
+/// Command orchestration stays profile-aware from the first preflight through
+/// the final owner marker. No global particle cleanup may run before it.
+fn switch_profile_command_to<F>(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    running: Vec<String>,
+    options: execs_core::absorb::AbsorbOptions<'_>,
+    progress: F,
+) -> Result<ProfileLibrary, CommandError>
+where
+    F: FnMut(SwitchProgress),
+{
+    let library = execs_core::profile::load_library_from(profiles, Some(root))?;
+    refuse_different_pending_target(library.pending_switch_profile_id.as_deref(), id)?;
+    Ok(execs_core::switch::switch_profile_to(
+        profiles, root, id, running, options, progress,
+    )?)
 }
 
 #[cfg(test)]
@@ -208,6 +256,8 @@ pub struct ImportReview {
     creator: bool,
     warnings: Vec<String>,
     notes: Vec<String>,
+    huds: Vec<String>,
+    selected_hud: Option<String>,
 }
 
 #[tauri::command]
@@ -255,6 +305,8 @@ pub async fn import_profile(
         creator: review.creator,
         warnings: review.warnings.clone(),
         notes: review.notes.clone(),
+        huds: review.huds.clone(),
+        selected_hud: review.selected_hud.clone(),
     };
     *slot = Some((
         token,
@@ -290,8 +342,10 @@ pub async fn confirm_profile_import(
     gate: tauri::State<'_, WriteGate>,
     pending: tauri::State<'_, PendingProfileImport>,
     token: String,
+    selected_hud: Option<String>,
 ) -> Result<ProfileLibrary, CommandError> {
-    let review = take_review(&mut *pending.0.lock().await, &token)?;
+    let mut review = take_review(&mut *pending.0.lock().await, &token)?;
+    review.review.select_hud(selected_hud)?;
     let _guard = gate.lock_for_write().await?;
     with_root(move |root| {
         review.context.ensure_current(&root)?;

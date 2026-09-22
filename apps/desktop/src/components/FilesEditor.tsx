@@ -193,6 +193,26 @@ const theme = EditorView.theme(
       height: "1px",
       opacity: "0",
     },
+    ".cm-panel.cm-search label:has(input:focus-visible)": {
+      outline: "2px solid var(--color-brand)",
+      outlineOffset: "2px",
+    },
+    "@media (max-width: 1100px)": {
+      ".cm-panel.cm-search": {
+        gridTemplateColumns: "minmax(120px, 1fr) repeat(3, auto) 24px",
+      },
+      ".cm-panel.cm-search label:nth-of-type(1)": {
+        gridColumn: "1",
+        gridRow: "2",
+        justifySelf: "start",
+      },
+      ".cm-panel.cm-search label:nth-of-type(2)": { gridColumn: "2", gridRow: "2" },
+      ".cm-panel.cm-search label:nth-of-type(3)": { gridColumn: "3 / span 2", gridRow: "2" },
+      ".cm-panel.cm-search [name=replace].cm-textfield": { gridRow: "3" },
+      ".cm-panel.cm-search button[name=replace]": { gridRow: "3" },
+      ".cm-panel.cm-search [name=replaceAll]": { gridRow: "3" },
+      ".cm-panel.cm-search [name=close]": { gridColumn: "5" },
+    },
     ".cm-textfield, .cm-button": {
       minHeight: "28px",
       margin: "0",
@@ -398,6 +418,9 @@ export function FilesEditor(props: FilesEditorProps) {
       EditorView.updateListener.of((update) => {
         if (update.docChanged) latest.current.onChange(update.state.doc.toString());
         if (update.docChanged || update.selectionSet) updatePosition(update.state);
+        else if (searchPanelOpen(update.startState) !== searchPanelOpen(update.state)) {
+          setFindOpen(searchPanelOpen(update.state));
+        }
       }),
     ];
     configuration.current = extensions;

@@ -25,12 +25,14 @@ export function GameBananaPagination({
   pager,
   loading,
   onPage,
+  compact = false,
 }: {
   position: "top" | "bottom";
   page: number;
   pager: GameBananaPager;
   loading: boolean;
   onPage: (page: number) => void;
+  compact?: boolean;
 }) {
   const links = pager.pageCount ? gameBananaPageLinks(page, pager.pageCount) : [];
   const legacy = position === "bottom";
@@ -38,12 +40,16 @@ export function GameBananaPagination({
     <nav
       aria-label={`GameBanana pages, ${position}`}
       className={`flex flex-wrap items-center justify-between gap-3 ${
-        position === "top" ? "mt-3 border-y border-edge py-3" : "mt-4 border-t border-edge pt-4"
+        compact
+          ? ""
+          : position === "top"
+            ? "mt-3 border-y border-edge py-3"
+            : "mt-4 border-t border-edge pt-4"
       }`}
     >
       <p
         data-testid={legacy ? "mods-gb-page-label" : "mods-gb-page-label-top"}
-        className="t-meta tnum"
+        className={compact ? "sr-only" : "t-meta tnum"}
         aria-live={position === "top" ? "polite" : undefined}
         aria-atomic={position === "top" ? "true" : undefined}
       >

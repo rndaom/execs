@@ -1,4 +1,5 @@
 import type { ViewmodelHideMode, ViewmodelRecord, ViewmodelSource } from "./bridge";
+import { viewmodelGroupsForClass } from "./viewmodel-groups";
 
 export const EXECS_VIEWMODELS_PACK = "execs-viewmodels";
 
@@ -71,6 +72,24 @@ export function seedViewmodelDraft(record: ViewmodelRecord | null | undefined): 
 
 export function toggleHiddenGroup(hidden: string[], id: string): string[] {
   return hidden.includes(id) ? hidden.filter((entry) => entry !== id) : [...hidden, id].sort();
+}
+
+export type ClassVisibility = "shown" | ViewmodelHideMode;
+
+/** A class choice changes only that class's membership. Hide mode is pack-wide. */
+export function setClassVisibility(
+  draft: ViewmodelDraft,
+  classId: ViewmodelClass,
+  visibility: ClassVisibility,
+): ViewmodelDraft {
+  const groups = new Set(viewmodelGroupsForClass(classId).map((group) => group.id));
+  const hidden = draft.hidden.filter((id) => !groups.has(id));
+  if (visibility !== "shown") hidden.push(...groups);
+  return {
+    ...draft,
+    hidden: [...new Set(hidden)].sort(),
+    hideMode: visibility === "shown" ? draft.hideMode : visibility,
+  };
 }
 
 export function previewViewmodelRecord(source: ViewmodelSource = "compiled"): ViewmodelRecord {

@@ -5,11 +5,9 @@ import {
   gameBananaIdOf,
   isGameBananaInstalled,
   MATURE_STORAGE_KEY,
-  MOD_CONFIRM_BYTES,
   type ModSelection,
   modDomId,
   modMetaLine,
-  modNeedsRemoveConfirm,
   modSourceLabel,
   modSourceUrl,
   modsApplyEnabled,
@@ -73,7 +71,6 @@ describe("mods ui", () => {
   it("marks the selection dirty only when it differs from installed", () => {
     const status = PREVIEW_MODS_STATUS;
     expect(selectionDirty(status, INSTALLED)).toBe(false);
-    // Order does not matter.
     expect(selectionDirty(status, selection({ particleMods: ["Square_Series"] }))).toBe(true);
     expect(selectionDirty(status, selection({ addons: ["No Burning Overlay"] }))).toBe(true);
     expect(selectionDirty(null, selection())).toBe(false);
@@ -132,7 +129,7 @@ describe("mods apply gating", () => {
     status: { ...status.status, stale: true },
   };
 
-  it("sees a reordered selection as unchanged", () => {
+  it("sees unchanged source order as unchanged", () => {
     expect(selectionDirty(status, INSTALLED)).toBe(false);
     expect(selectionDirty(status, { ...INSTALLED, addons: [...INSTALLED.addons].reverse() })).toBe(
       false,
@@ -141,6 +138,18 @@ describe("mods apply gating", () => {
     expect(selectionDirty(status, { ...INSTALLED, particleMods: ["Other"] })).toBe(true);
     expect(selectionDirty(null, selection())).toBe(false);
   });
+
+  it.each(["addons", "particleMods", "profileParticleMods"] as const)(
+    "keeps a change to %s precedence unapplied until explicitly saved",
+    (field) => {
+      const ordered = { ...INSTALLED, [field]: ["first", "second"] };
+      const payload = { ...status, status: { ...status.status, ...ordered } };
+      const reordered = { ...ordered, [field]: ["second", "first"] };
+      expect(selectionDirty(payload, ordered)).toBe(false);
+      expect(selectionDirty(payload, reordered)).toBe(true);
+      expect(modsApplyEnabled(payload, reordered)).toBe(true);
+    },
+  );
 
   it("counts the profile's own particle sources as part of the selection", () => {
     // Nothing from your mods is patched in the fixture, so picking one is dirty.
@@ -237,13 +246,6 @@ describe("your mods", () => {
     expect(modSourceUrl({ kind: "gamebanana", id: 7, url: "https://evil.example/fake" })).toBe(
       "https://gamebanana.com/mods/7",
     );
-  });
-
-  it("asks before removing a big pack only", () => {
-    expect(modNeedsRemoveConfirm(local)).toBe(false);
-    expect(modNeedsRemoveConfirm(gb)).toBe(true);
-    expect(modNeedsRemoveConfirm({ ...local, bytes: MOD_CONFIRM_BYTES })).toBe(false);
-    expect(modNeedsRemoveConfirm({ ...local, bytes: MOD_CONFIRM_BYTES + 1 })).toBe(true);
   });
 
   it("looks up what came from GameBanana", () => {

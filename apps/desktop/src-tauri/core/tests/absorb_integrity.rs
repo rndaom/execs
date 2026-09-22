@@ -301,25 +301,30 @@ fn selected_particle_source_external_removal_is_refused_before_update_mutates_st
 #[test]
 fn accepted_hud_removal_clears_its_record_but_keep_and_restore_preserve_it() {
     use execs_core::profile::{HudRecord, HudSource};
-    for choice in [PackChoice::Update, PackChoice::Keep, PackChoice::Restore] {
-        let f = Fixture::new();
-        fs::write(f.root.join("tf/custom/mypack/info.vdf"), b"hud").unwrap();
-        let id = f.save();
-        let mut manifest = load_manifest(&f.profiles, &id).unwrap();
-        manifest.hud = Some(HudRecord {
-            id: "mypack".into(),
-            hash: None,
-            source: HudSource::Local,
-            options: Default::default(),
-        });
-        f.save_metadata(&manifest);
-        fs::remove_dir_all(f.root.join("tf/custom/mypack")).unwrap();
-        f.choose(choice);
-        assert_eq!(
-            load_manifest(&f.profiles, &id).unwrap().hud.is_none(),
-            choice == PackChoice::Update
-        );
-        f.round_trip(&id);
+    for info in [
+        b"hud".as_slice(),
+        b"\"HUD\" { \"ui_version\" \"3\" }\n".as_slice(),
+    ] {
+        for choice in [PackChoice::Update, PackChoice::Keep, PackChoice::Restore] {
+            let f = Fixture::new();
+            fs::write(f.root.join("tf/custom/mypack/info.vdf"), info).unwrap();
+            let id = f.save();
+            let mut manifest = load_manifest(&f.profiles, &id).unwrap();
+            manifest.hud = Some(HudRecord {
+                id: "mypack".into(),
+                hash: None,
+                source: HudSource::Local,
+                options: Default::default(),
+            });
+            f.save_metadata(&manifest);
+            fs::remove_dir_all(f.root.join("tf/custom/mypack")).unwrap();
+            f.choose(choice);
+            assert_eq!(
+                load_manifest(&f.profiles, &id).unwrap().hud.is_none(),
+                choice == PackChoice::Update
+            );
+            f.round_trip(&id);
+        }
     }
 }
 

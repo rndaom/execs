@@ -207,6 +207,11 @@ describe("Files editor model isolation", () => {
     expect(searchPanelOpen(editor().state)).toBe(false);
     expect(find?.getAttribute("aria-pressed")).toBe("false");
 
+    act(() => find?.click());
+    act(() => box.querySelector<HTMLButtonElement>('.cm-panel.cm-search [name="close"]')?.click());
+    expect(searchPanelOpen(editor().state)).toBe(false);
+    expect(find?.getAttribute("aria-pressed")).toBe("false");
+
     act(() => {
       editor().contentDOM.dispatchEvent(
         new MouseEvent("contextmenu", {

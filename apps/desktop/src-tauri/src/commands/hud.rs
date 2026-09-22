@@ -9,11 +9,47 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{
-    active_manifest, archive_too_large, blocking, read_bounded_file, with_profile, ActiveContext,
+    active_manifest, archive_too_large, blocking, read_bounded_file, with_profile, with_root,
+    ActiveContext,
 };
 use crate::error::CommandError;
 use crate::hud_fetch::HUD_ZIP_MAX_BYTES;
 use crate::WriteGate;
+
+#[tauri::command]
+pub async fn get_hud_ownership(
+    profile_id: String,
+) -> Result<execs_core::hud::HudOwnershipReview, CommandError> {
+    with_root(move |root| {
+        Ok(execs_core::hud::get_hud_ownership_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn select_profile_hud(
+    gate: tauri::State<'_, WriteGate>,
+    profile_id: String,
+    hud_folder: String,
+    expected_fingerprint: String,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        Ok(execs_core::hud::select_profile_hud_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+            &hud_folder,
+            &expected_fingerprint,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
 
 #[tauri::command]
 pub async fn get_hud_catalog(

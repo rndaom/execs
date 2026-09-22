@@ -19,6 +19,7 @@ export const PREVIEW_STATES = [
   "absorb",
   "switch",
   "import",
+  "profile-import-huds",
   "folder-repair",
   "first-existing",
   "first-unused",
@@ -30,6 +31,7 @@ export const PREVIEW_STATES = [
   "settings-hud",
   "settings-hud-browser",
   "settings-hud-installed",
+  "hud-ownership",
   "settings-crosshair",
   "settings-viewmodels",
   "settings-sounds",
@@ -62,6 +64,7 @@ const READY: PreviewState[] = [
   "absorb",
   "switch",
   "import",
+  "profile-import-huds",
   "first-existing",
   "first-unused",
   "first-unused-locked",
@@ -72,6 +75,7 @@ const READY: PreviewState[] = [
   "settings-hud",
   "settings-hud-browser",
   "settings-hud-installed",
+  "hud-ownership",
   "settings-crosshair",
   "settings-viewmodels",
   "settings-sounds",
@@ -149,6 +153,7 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   }
   if (
     state === "saved" ||
+    state === "profile-import-huds" ||
     state === "absorb" ||
     state === "create" ||
     previewSettingsTab(state) !== null
@@ -177,6 +182,7 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
   switch (state) {
     case "settings-comfig":
     case "folder-repair":
+    case "profile-import-huds":
     case "settings-locked":
       return "comfig";
     case "settings-binds":
@@ -186,6 +192,7 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
     case "settings-hud":
     case "settings-hud-browser":
     case "settings-hud-installed":
+    case "hud-ownership":
       return "hud";
     case "settings-crosshair":
       return "crosshair";

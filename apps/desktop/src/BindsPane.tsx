@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
+import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
-import { PaneSection } from "./components/ui/PaneSection";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
@@ -30,18 +30,27 @@ export type BindsPaneProps = {
 };
 
 const BIND_GROUPS: Array<{
+  id: string;
   title: string;
   ids: BindActionId[];
 }> = [
   {
+    id: "movement",
     title: "Movement",
     ids: ["forward", "back", "moveleft", "moveright", "jump", "duck"],
   },
   {
+    id: "combat",
+    title: "Combat",
+    ids: ["attack", "attack2", "reload"],
+  },
+  {
+    id: "teamplay",
     title: "Teamplay",
     ids: ["medic", "use", "voice"],
   },
   {
+    id: "loadouts",
     title: "Loadouts",
     ids: ["loadout0", "loadout1", "loadout2", "loadout3"],
   },
@@ -58,6 +67,7 @@ export function BindsPane({
   const { running, busy } = useAppStatus();
   const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState("movement");
   const path = bindsFilePath(layer);
   const [draft, setDraft] = useSeededDraft(
     managedText,
@@ -114,6 +124,12 @@ export function BindsPane({
       if (!armed) {
         return;
       }
+      // Category navigation ends capture; its click must not become mouse1.
+      if (event.target instanceof HTMLElement && event.target.closest("[data-bind-navigation]")) {
+        setRecordingId(null);
+        setRecorderNotice(null);
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       finish(sourceKeyFromMouseButton(event.button));
@@ -163,91 +179,92 @@ export function BindsPane({
     setRecordingId((current) => (current === actionId ? null : actionId));
   }
 
-  const recordingAction = recordingId
-    ? BIND_ACTIONS.find((action) => action.id === recordingId)
-    : null;
+  const activeGroup = BIND_GROUPS.find((group) => group.id === activeGroupId) ?? BIND_GROUPS[0];
 
   return (
     <section data-testid="settings-binds" className="min-w-0 text-left">
-      <PaneHeader
-        title="Binds"
-        lede="Click an action, then press a key, button or scroll."
-        actions={<p className="t-meta font-mono text-ink-faint">{path}</p>}
-      />
+      <PaneHeader title="Binds" lede="Your keys, mouse buttons and scroll wheel." />
 
-      <div
-        aria-live="polite"
-        className={`overflow-hidden rounded-lg border transition-colors duration-150 ${
-          recordingAction ? "border-brand px-4 py-3" : "h-0 border-transparent px-4 py-0"
-        }`}
-      >
-        {recordingAction ? (
-          <>
-            <p className="t-body text-ink">
-              Recording <span className="font-medium">{recordingAction.label}</span> — press a key.
-              Escape cancels.
-            </p>
-            {recorderNotice ? (
-              <p data-testid="bind-recorder-notice" className="t-meta mt-1">
-                {recorderNotice}
-              </p>
-            ) : null}
-          </>
-        ) : null}
+      <div data-bind-navigation>
+        <ClassTabs
+          tabs={BIND_GROUPS.map((group) => ({ id: group.id, label: group.title }))}
+          selected={activeGroupId}
+          label="Bind categories"
+          idPrefix="bind-category"
+          panelId="bind-category-panel"
+          onSelect={(id) => {
+            setRecordingId(null);
+            setRecorderNotice(null);
+            setActiveGroupId(id);
+          }}
+        />
       </div>
 
-      {BIND_GROUPS.map((group) => (
-        <PaneSection
-          key={group.title}
-          id={`binds-${group.title.toLowerCase()}`}
-          title={group.title}
-        >
-          <ul className="mt-2 grid sm:grid-cols-2 sm:gap-x-10">
-            {group.ids.map((actionId) => {
-              const action = BIND_ACTIONS.find((item) => item.id === actionId);
-              if (!action) {
-                return null;
-              }
-              const listening = recordingId === action.id;
-              const bound = displayedKeyForAction(effectiveBinds, managedKeys, action.id);
-              return (
-                <li
-                  key={action.id}
-                  data-testid={`bind-row-${action.id}`}
-                  data-recording={listening ? "true" : "false"}
-                  className="group border-b border-edge"
+      <div
+        id="bind-category-panel"
+        role="tabpanel"
+        aria-labelledby={`bind-category-${activeGroup.id}`}
+        className="mt-5"
+      >
+        <div className="pane-toolbar mb-2">
+          <h2 className="t-section">{activeGroup.title}</h2>
+          <p className="t-meta">Select an action to record a binding.</p>
+        </div>
+        <ul className="pane-split gap-y-0">
+          {activeGroup.ids.map((actionId) => {
+            const action = BIND_ACTIONS.find((item) => item.id === actionId);
+            if (!action) {
+              return null;
+            }
+            const listening = recordingId === action.id;
+            const bound = displayedKeyForAction(effectiveBinds, managedKeys, action.id);
+            return (
+              <li
+                key={action.id}
+                data-testid={`bind-row-${action.id}`}
+                data-recording={listening ? "true" : "false"}
+                className="group border-b border-edge"
+              >
+                <button
+                  type="button"
+                  data-testid={`bind-record-${action.id}`}
+                  disabled={!canRecord}
+                  aria-label={`Record a key for ${action.label}. Current binding ${bound ?? "unbound"}`}
+                  aria-pressed={listening}
+                  aria-describedby={`bind-hint-${action.id}`}
+                  onClick={() => onRow(action.id)}
+                  className="flex min-h-16 w-full min-w-0 items-center gap-3 rounded-md py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
                 >
-                  <button
-                    type="button"
-                    data-testid={`bind-record-${action.id}`}
-                    disabled={!canRecord}
-                    aria-label={`Record a key for ${action.label}. Current binding ${bound ?? "unbound"}`}
-                    aria-pressed={listening}
-                    onClick={() => onRow(action.id)}
-                    className="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="t-row block">{action.label}</span>
-                    </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="t-row block">{action.label}</span>
                     <span
-                      data-testid={`bind-key-${action.id}`}
-                      className={`min-w-14 shrink-0 rounded-md border px-2.5 py-1.5 text-center font-mono text-[12.5px] uppercase tracking-wide transition-colors duration-150 ${
-                        listening
-                          ? "border-brand text-ink"
-                          : "border-edge-strong bg-bg text-ink group-hover:border-ink-faint"
-                      }`}
+                      id={`bind-hint-${action.id}`}
+                      data-testid={listening && recorderNotice ? "bind-recorder-notice" : undefined}
+                      aria-live="polite"
+                      className="t-meta block min-h-5 text-ink-faint"
                     >
-                      {listening ? "…" : (bound ?? "—")}
+                      {listening ? (recorderNotice ?? "Esc cancels") : "\u00a0"}
                     </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </PaneSection>
-      ))}
+                  </span>
+                  <span
+                    data-testid={`bind-key-${action.id}`}
+                    className={`min-w-20 shrink-0 rounded-md border px-3 py-2 text-center text-[13px] font-medium uppercase tracking-wide transition-colors duration-150 ${
+                      listening
+                        ? "border-brand bg-brand/5 text-ink ring-1 ring-brand"
+                        : "border-edge-strong bg-bg text-ink group-hover:border-ink-faint"
+                    }`}
+                  >
+                    {listening ? "Press a key" : (bound ?? "—")}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       {!canRecord ? <p className="t-meta mt-8">Finish the current task first.</p> : null}
+      <p className="pane-note mt-6">Saved to {path}.</p>
     </section>
   );
 }

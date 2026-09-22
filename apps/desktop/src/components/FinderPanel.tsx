@@ -35,60 +35,74 @@ export function FinderPanel({
     <OnboardingFrame
       eyebrow="Find TF2"
       icon={<MagnifyingGlass aria-hidden="true" size={13} weight="bold" />}
-      title="Confirm your Team Fortress 2 install"
-      lede="Profiles are tied to this folder; nothing is written until you confirm."
-      footer={
-        <div className="flex items-center justify-end gap-3 border-t border-edge pt-6">
+      title="Find your Team Fortress 2 install"
+      lede="Choose the folder your profiles will use."
+      width="wide"
+      steps={[
+        { label: "Find TF2", state: selected ? "complete" : "current" },
+        { label: "Confirm folder", state: selected ? "current" : "upcoming" },
+        { label: "Set up profile", state: "upcoming" },
+      ]}
+    >
+      <div className="surface px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge py-4">
+          <h2 className="t-section">TF2 location</h2>
+          <p className="t-meta">Nothing is written until you confirm.</p>
+        </div>
+        {scanning ? (
+          <p role="status" className="t-meta py-5">
+            Scanning Steam libraries…
+          </p>
+        ) : installs.length === 0 ? (
+          <p className="t-meta py-5">No install found. Use Browse to choose the TF2 folder.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {installs.map((install) => {
+              const active = install.path === selected;
+              return (
+                <li key={install.path} className="border-b border-edge last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(install.path)}
+                    disabled={busy}
+                    aria-pressed={active}
+                    data-selected={active ? "true" : "false"}
+                    className="flex min-h-11 w-full items-start gap-3 py-4 text-left transition-colors duration-150 hover:bg-panel-raised disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                        active ? "bg-brand" : "bg-edge-strong"
+                      }`}
+                    />
+                    <span className="min-w-0">
+                      <span className="t-row block">{formatInstallLabel(install.path)}</span>
+                      <span className="mt-0.5 block break-all text-[12.5px] text-ink-faint">
+                        {install.path}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-edge py-4">
           <button type="button" onClick={onBrowse} disabled={busy} className="btn btn-ghost">
             Browse…
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            disabled={!canConfirm}
+            disabled={!canConfirm || busy || scanning}
             className="btn btn-primary"
           >
             Confirm install
           </button>
         </div>
-      }
-    >
-      {scanning ? (
-        <p className="t-meta">Scanning Steam libraries…</p>
-      ) : installs.length === 0 ? (
-        <p className="t-meta">No install found — use Browse to pick the TF2 folder.</p>
-      ) : (
-        <ul className="flex flex-col">
-          {installs.map((install) => {
-            const active = install.path === selected;
-            return (
-              <li key={install.path} className="border-b border-edge last:border-b-0">
-                <button
-                  type="button"
-                  onClick={() => onSelect(install.path)}
-                  data-selected={active ? "true" : "false"}
-                  className="flex min-h-11 w-full items-start gap-3 py-3 text-left transition-colors duration-150 hover:bg-panel"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`mt-1.5 size-2 shrink-0 rounded-full ${
-                      active ? "bg-brand" : "bg-edge-strong"
-                    }`}
-                  />
-                  <span className="min-w-0">
-                    <span className="t-row block">{formatInstallLabel(install.path)}</span>
-                    <span className="mt-0.5 block break-all text-[12.5px] text-ink-faint">
-                      {install.path}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      </div>
 
-      <OperationError message={error} onDismiss={onDismissError} className="mt-6" />
+      <OperationError message={error} onDismiss={onDismissError} className="mt-4" />
     </OnboardingFrame>
   );
 }

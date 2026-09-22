@@ -13,6 +13,11 @@ import type { ViewmodelClass } from "./viewmodel-ui";
 export const VIEWMODEL_PREVIEW_CREDIT =
   "Preview screenshots by yttrium and Oblique (CompVMInstaller), fetched from the original project. Team Fortress 2 © Valve Corporation.";
 
+/** Browser review uses the same immutable, credited images as the desktop cache. */
+export function viewmodelPreviewUrl(stem: string): string {
+  return `https://raw.githubusercontent.com/Yttrium-tYcLief/CompVMInstaller/b215a5cdfcd809ec3c2d71529e7a1eb22a72a39e/Project/CompVMInstaller/Resources/${encodeURIComponent(stem)}.jpg`;
+}
+
 export type ViewmodelSlot = "primary" | "secondary" | "melee" | "pda";
 
 export const VIEWMODEL_SLOT_LABELS: Record<ViewmodelSlot, string> = {

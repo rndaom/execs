@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import gameplayReference from "./assets/presets/medium.webp";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
+import { PaneSection } from "./components/ui/PaneSection";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
@@ -69,107 +71,143 @@ export function GameplayPane({
 
   return (
     <section data-testid="settings-gameplay" className="min-w-0 text-left">
-      <PaneHeader
-        title="Gameplay"
-        lede="Field of view and viewmodels."
-        actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
-      />
-
-      {/* The four things people actually came here to change. */}
-      <div className="grid gap-x-10 gap-y-6 md:grid-cols-2">
-        <SliderRow
-          id="gameplay-fov"
-          testId="gameplay-fov"
-          label="World FOV"
-          value={draft.fov_desired}
-          min={FOV_MIN}
-          max={FOV_MAX}
-          suffix="°"
-          onChange={(fov_desired) => patch({ fov_desired })}
-        />
-        <SliderRow
-          id="gameplay-viewmodel-fov"
-          testId="gameplay-viewmodel-fov"
-          label="Viewmodel FOV"
-          value={draft.viewmodel_fov}
-          min={VIEWMODEL_FOV_MIN}
-          max={VIEWMODEL_FOV_MAX}
-          step={0.1}
-          suffix="°"
-          onChange={(viewmodel_fov) => patch({ viewmodel_fov })}
-        />
+      <div className="hero-row gameplay-workspace">
+        <div>
+          <PaneHeader title="Gameplay" lede="Field of view and viewmodels." />
+          <div className="grid gap-6">
+            <SliderRow
+              id="gameplay-fov"
+              testId="gameplay-fov"
+              label="World FOV"
+              description="How much of the world you can see."
+              value={draft.fov_desired}
+              min={FOV_MIN}
+              max={FOV_MAX}
+              suffix="°"
+              onChange={(fov_desired) => patch({ fov_desired })}
+            />
+            <SliderRow
+              id="gameplay-viewmodel-fov"
+              testId="gameplay-viewmodel-fov"
+              label="Viewmodel FOV"
+              description="Weapon perspective, independent of your world view."
+              value={draft.viewmodel_fov}
+              min={VIEWMODEL_FOV_MIN}
+              max={VIEWMODEL_FOV_MAX}
+              step={0.1}
+              suffix="°"
+              onChange={(viewmodel_fov) => patch({ viewmodel_fov })}
+            />
+          </div>
+        </div>
+        <figure className="surface hero-preview m-0 mt-8 self-start">
+          <img
+            src={gameplayReference}
+            alt="TF2 reference scene on koth_sawmill, showing a first-person weapon and the surrounding world"
+            className="aspect-video w-full object-cover"
+          />
+          <figcaption className="px-4 py-3">
+            <p className="t-meta">Reference image, not a live FOV preview.</p>
+          </figcaption>
+        </figure>
       </div>
 
-      <fieldset className="mt-8 min-w-0 border-t border-edge">
-        <legend className="sr-only">Viewmodel visibility</legend>
-        <SwitchRow
-          id="gameplay-draw-viewmodel"
-          testId="gameplay-draw-viewmodel"
-          label="Draw viewmodel"
-          checked={draft.r_drawviewmodel === 1}
-          onChange={(next) => patch({ r_drawviewmodel: next ? 1 : 0 })}
-        />
-        <SwitchRow
-          id="gameplay-min-viewmodels"
-          testId="gameplay-min-viewmodels"
-          label="Min viewmodels"
-          description="Compact weapon placement."
-          checked={draft.tf_use_min_viewmodels === 1}
-          onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
-        />
-      </fieldset>
+      <div className="section pane-split">
+        <PaneSection id="gameplay-viewmodels" title="Viewmodels and weapons" as="fieldset" first>
+          <SwitchRow
+            id="gameplay-draw-viewmodel"
+            testId="gameplay-draw-viewmodel"
+            label="Draw viewmodel"
+            checked={draft.r_drawviewmodel === 1}
+            onChange={(next) => patch({ r_drawviewmodel: next ? 1 : 0 })}
+          />
+          <SwitchRow
+            id="gameplay-min-viewmodels"
+            testId="gameplay-min-viewmodels"
+            label="Min viewmodels"
+            description="Compact weapon placement."
+            checked={draft.tf_use_min_viewmodels === 1}
+            onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
+          />
+          <SwitchRow
+            id="gameplay-autoreload"
+            testId="gameplay-autoreload"
+            label="Auto reload"
+            description="Reload clip weapons when you stop firing."
+            checked={draft.cl_autoreload === 1}
+            onChange={(next) => patch({ cl_autoreload: next ? 1 : 0 })}
+          />
+          <SwitchRow
+            id="gameplay-fastswitch"
+            testId="gameplay-fastswitch"
+            label="Fast weapon switch"
+            description="Select a weapon without a confirmation click."
+            checked={draft.hud_fastswitch !== 0}
+            note={
+              draft.hud_fastswitch !== 0 && draft.hud_fastswitch !== 1
+                ? `Your cfg uses weapon selection mode ${draft.hud_fastswitch}. It is kept until you change this switch; enabling it selects the standard fast-switch mode.`
+                : undefined
+            }
+            onChange={(next) => patch({ hud_fastswitch: next ? 1 : 0 })}
+          />
+        </PaneSection>
 
-      <section className="section">
-        {/* The engine refuses r_drawtracers on any live server, so it is not an
+        <section className="min-w-0">
+          {/* The engine refuses r_drawtracers on any live server, so it is not an
             "obvious toggle" — it and its neighbours live behind a disclosure. */}
-        <Disclosure
-          profileId={profileId}
-          storageKey="gameplay-advanced"
-          summary="Advanced"
-          testId="gameplay-advanced"
-        >
-          <fieldset className="min-w-0 md:max-w-xl">
-            <legend className="sr-only">Advanced gameplay options</legend>
-            <SwitchRow
-              id="gameplay-flip"
-              testId="gameplay-flip"
-              label="Left-handed viewmodels"
-              checked={draft.cl_flipviewmodels === 1}
-              note={FLIP_VIEWMODELS_NOTE}
-              onChange={(next) => patch({ cl_flipviewmodels: next ? 1 : 0 })}
-            />
-            <SwitchRow
-              id="gameplay-transparent-viewmodels"
-              testId="gameplay-transparent-viewmodels"
-              label="Transparent viewmodels"
-              description="Applies immediately."
-              checked={transparentViewmodels}
-              disabled={addonLocked || !canUseComfigAddons}
-              note={
-                canUseComfigAddons
-                  ? "Needs DirectX 9 and a HUD that supports it; turns off post-processing and anti-aliasing."
-                  : "Needs mastercomfig packages from the Comfig pane."
-              }
-              onChange={() => onToggleTransparentViewmodels()}
-            />
-            <SwitchRow
-              id="gameplay-tracers-fp"
-              testId="gameplay-tracers-fp"
-              label="First-person tracers"
-              checked={draft.r_drawtracers_firstperson === 1}
-              onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
-            />
-            <SwitchRow
-              id="gameplay-tracers"
-              testId="gameplay-tracers"
-              label="All tracers"
-              checked={draft.r_drawtracers === 1}
-              note={ALL_TRACERS_NOTE}
-              onChange={(next) => patch({ r_drawtracers: next ? 1 : 0 })}
-            />
-          </fieldset>
-        </Disclosure>
-      </section>
+          <Disclosure
+            profileId={profileId}
+            storageKey="gameplay-advanced"
+            summary="Advanced"
+            testId="gameplay-advanced"
+            defaultOpen
+          >
+            <fieldset className="min-w-0">
+              <legend className="sr-only">Advanced gameplay options</legend>
+              <SwitchRow
+                id="gameplay-flip"
+                testId="gameplay-flip"
+                label="Left-handed viewmodels"
+                checked={draft.cl_flipviewmodels === 1}
+                note={FLIP_VIEWMODELS_NOTE}
+                onChange={(next) => patch({ cl_flipviewmodels: next ? 1 : 0 })}
+              />
+              <SwitchRow
+                id="gameplay-transparent-viewmodels"
+                testId="gameplay-transparent-viewmodels"
+                label="Transparent viewmodels"
+                description="Applies immediately."
+                checked={transparentViewmodels}
+                disabled={addonLocked || !canUseComfigAddons}
+                note={
+                  canUseComfigAddons
+                    ? "Needs DirectX 9 and a HUD that supports it; turns off post-processing and anti-aliasing."
+                    : "Needs mastercomfig packages from the Comfig pane."
+                }
+                onChange={() => onToggleTransparentViewmodels()}
+              />
+              <SwitchRow
+                id="gameplay-tracers-fp"
+                testId="gameplay-tracers-fp"
+                label="First-person tracers"
+                checked={draft.r_drawtracers_firstperson === 1}
+                onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
+              />
+              <SwitchRow
+                id="gameplay-tracers"
+                testId="gameplay-tracers"
+                label="All tracers"
+                checked={draft.r_drawtracers === 1}
+                note={ALL_TRACERS_NOTE}
+                onChange={(next) => patch({ r_drawtracers: next ? 1 : 0 })}
+              />
+            </fieldset>
+          </Disclosure>
+        </section>
+      </div>
+      <p className="pane-note mt-6">
+        Saved to {gameplayPath(layer)}. Reference screenshot from mastercomfig (MIT).
+      </p>
     </section>
   );
 }
@@ -178,6 +216,7 @@ function SliderRow({
   id,
   testId,
   label,
+  description,
   value,
   min,
   max,
@@ -188,6 +227,7 @@ function SliderRow({
   id: string;
   testId: string;
   label: string;
+  description: string;
   value: number;
   min: number;
   max: number;
@@ -197,11 +237,19 @@ function SliderRow({
 }) {
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="t-row">
-          {label}
-        </label>
-        <output htmlFor={id} className="tnum text-[15px] font-medium text-ink">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <label htmlFor={id} className="t-row">
+            {label}
+          </label>
+          <p id={`${id}-description`} className="t-meta mt-1">
+            {description}
+          </p>
+        </div>
+        <output
+          htmlFor={id}
+          className="tnum min-w-16 rounded-md border border-edge-strong bg-panel px-3 py-1.5 text-center text-[18px] font-medium text-ink"
+        >
           {value}
           {suffix}
         </output>
@@ -214,8 +262,9 @@ function SliderRow({
         max={max}
         step={step}
         value={value}
+        aria-describedby={`${id}-description`}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="range mt-4 w-full"
+        className="range mt-3 block w-full"
       />
       <div className="tnum mt-1 flex justify-between text-[11px] text-ink-faint">
         <span>{min}</span>

@@ -69,7 +69,7 @@ pub(crate) fn user_path(path: &Path) -> PathBuf {
     without_windows_verbatim_prefix(path.to_path_buf())
 }
 
-pub(crate) fn user_path_string(path: &Path) -> String {
+pub fn user_path_string(path: &Path) -> String {
     user_path(path).to_string_lossy().into_owned()
 }
 

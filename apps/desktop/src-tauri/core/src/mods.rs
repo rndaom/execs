@@ -653,6 +653,7 @@ where
 
     for (name, content) in packs {
         selection_budget.add(&content)?;
+        refuse_hud_mod(&content)?;
 
         let display = display_name(&name);
         let mut base = mod_id_from_name(&display);
@@ -751,6 +752,38 @@ where
     detail_from_manifest(profiles_dir, &manifest)
 }
 
+/// HUDs need the one-HUD replacement review, including when a mod picker or
+/// GameBanana supplied their bytes. Detection requires real compatibility data.
+fn refuse_hud_mod(content: &ModContent) -> Result<(), ProfileError> {
+    let hud = match content {
+        ModContent::Tree(entries) => entries.iter().any(|(path, bytes)| {
+            path.rsplit('/')
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("info.vdf"))
+                && crate::hud::is_current_hud_info(bytes)
+        }),
+        ModContent::Vpk(bytes) => {
+            let info =
+                read_vpk_dir_bytes_filtered(bytes, &|path| path.eq_ignore_ascii_case("info.vdf"))
+                    .map_err(|err| ProfileError::Io(err.message()))?;
+            info.files
+                .values()
+                .any(|bytes| crate::hud::is_current_hud_info(bytes))
+        }
+    };
+    if !hud {
+        return Ok(());
+    }
+    let instruction = if matches!(content, ModContent::Vpk(_)) {
+        "Extract this HUD VPK, then choose its extracted folder in HUD → Import HUD. The HUD importer accepts ZIP, 7z, and folders; it cannot import a VPK directly."
+    } else {
+        "Choose this archive or folder again in HUD → Import HUD to review replacing the current HUD."
+    };
+    Err(ProfileError::HudImportRequired(format!(
+        "This selection contains a HUD. No selected files were installed. {instruction}"
+    )))
+}
+
 pub fn remove_mod(
     tf2_root: &Path,
     profile_id: &str,
@@ -799,6 +832,12 @@ where
         .into_iter()
         .map(|file| file.path)
         .collect();
+    let removes_selected_hud = crate::hud::selected_hud_pack(&manifest)
+        .is_some_and(|pack| pack.eq_ignore_ascii_case(&record.pack));
+    let needs_hud_review = removes_selected_hud
+        && crate::hud::manifest_hud_packs(&manifest)
+            .iter()
+            .any(|pack| !pack.eq_ignore_ascii_case(&record.pack));
     let id = id.to_string();
     let manifest = mutate_profile_files_to(
         profiles_dir,
@@ -810,6 +849,13 @@ where
         &running,
         move |manifest| {
             manifest.mods.retain(|entry| entry.id != id);
+            if removes_selected_hud {
+                manifest.hud = None;
+                manifest.hud_selected_root = None;
+                // A retained original must not become the sole-root fallback
+                // and silently mount after the selected HUD is removed.
+                manifest.hud_review_pending = needs_hud_review;
+            }
             Ok(())
         },
     )?;
@@ -1449,6 +1495,95 @@ mod tests {
             .all(|file| !file.path.starts_with("tf/custom/cool-effects")));
         assert!(!tf2.join("tf/custom/cool-effects").exists());
         cleanup(&root);
+    }
+
+    #[test]
+    fn legacy_hud_mod_removal_clears_its_record_without_promoting_an_inactive_original() {
+        const INFO: &[u8] = b"\"HUD\" { \"ui_version\" \"3\" }\n";
+        for keep_original in [false, true] {
+            let (root, profiles, tf2, id) = setup();
+            let hud_record = crate::profile::HudRecord {
+                id: "legacy-hud".into(),
+                hash: None,
+                source: crate::profile::HudSource::Local,
+                options: BTreeMap::new(),
+            };
+            mutate_profile_files_to(
+                &profiles,
+                &tf2,
+                &id,
+                &[(
+                    "tf/custom/legacy-hud/info.vdf".into(),
+                    FileSource::Bytes(INFO),
+                )],
+                &[],
+                ProfileLiveProjection::MirrorIfActive,
+                unlocked(),
+                |manifest| {
+                    manifest.hud = Some(hud_record);
+                    manifest.hud_selected_root = Some("legacy-hud".into());
+                    manifest.mods.push(ModRecord {
+                        id: "legacy-hud".into(),
+                        name: "Legacy HUD".into(),
+                        source: ModSource::Local,
+                        pack: "legacy-hud".into(),
+                        files: 1,
+                        bytes: INFO.len() as u64,
+                        installed_at: String::new(),
+                    });
+                    Ok(())
+                },
+            )
+            .unwrap();
+            if keep_original {
+                mutate_profile_files_to(
+                    &profiles,
+                    &tf2,
+                    &id,
+                    &[(
+                        "tf/custom/original-hud/info.vdf".into(),
+                        FileSource::Bytes(INFO),
+                    )],
+                    &[],
+                    ProfileLiveProjection::LibraryOnly,
+                    unlocked(),
+                    |_| Ok(()),
+                )
+                .unwrap();
+            }
+            let before = load_manifest(&profiles, &id).unwrap();
+            assert_eq!(
+                remove_mod_to(&profiles, &tf2, &id, "legacy-hud", ["tf_win64.exe"]).unwrap_err(),
+                ProfileError::GameRunning
+            );
+            assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+            remove_mod_to(&profiles, &tf2, &id, "legacy-hud", unlocked()).unwrap();
+            let after = load_manifest(&profiles, &id).unwrap();
+            assert!(after.hud.is_none());
+            assert!(after.hud_selected_root.is_none());
+            assert!(after.mods.is_empty());
+            assert_eq!(after.hud_review_pending, keep_original);
+            assert!(!tf2.join("tf/custom/legacy-hud/info.vdf").exists());
+            assert!(!tf2.join("tf/custom/original-hud/info.vdf").exists());
+            if keep_original {
+                assert_eq!(
+                    fs::read(exclusive_file_path(
+                        &profiles,
+                        &id,
+                        "tf/custom/original-hud/info.vdf"
+                    ))
+                    .unwrap(),
+                    INFO
+                );
+                assert_eq!(
+                    crate::hud::require_resolved_hud(&after).unwrap_err(),
+                    ProfileError::HudReviewRequired
+                );
+            } else {
+                crate::hud::require_resolved_hud(&after).unwrap();
+            }
+            cleanup(&root);
+        }
     }
 
     #[test]

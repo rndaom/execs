@@ -1,3 +1,4 @@
+import { ArrowClockwise, ArrowSquareOut, Image, Plus } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GameBananaMod } from "../lib/bridge";
 
@@ -40,17 +41,62 @@ export function GameBananaCard({
     <article
       data-testid={`mods-gb-card-${mod.id}`}
       aria-labelledby={titleId}
-      className="surface flex min-w-0 flex-col overflow-hidden text-left"
+      className="surface group flex min-w-0 flex-col overflow-hidden text-left transition-colors duration-150 hover:border-edge-strong"
     >
-      <GameBananaThumbnail mod={mod} />
-      <div className="flex min-h-40 flex-1 flex-col gap-2 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="badge">{mod.category}</span>
-          {mod.mature ? <span className="badge">Mature</span> : null}
-        </div>
+      <div className="relative">
+        <button
+          type="button"
+          className="block w-full cursor-pointer text-left"
+          aria-label={`View preview and details for ${mod.name} on GameBanana`}
+          onClick={onView}
+        >
+          <GameBananaThumbnail mod={mod} />
+        </button>
+        <span className="badge pointer-events-none absolute bottom-2 left-2 bg-panel">
+          {mod.category}
+        </span>
+        {installed ? (
+          <span className="badge pointer-events-none absolute top-2 right-2 bg-panel">
+            Installed
+          </span>
+        ) : (
+          <button
+            type="button"
+            data-testid={`mods-gb-install-${mod.id}`}
+            className={`btn ${failed ? "btn-primary" : "btn-ghost bg-panel"} absolute top-2 right-2 min-h-8 gap-1.5 p-1.5`}
+            aria-label={`${installLabel} ${mod.name}`}
+            title={`${installLabel} ${mod.name}`}
+            aria-describedby={failed ? failureId : undefined}
+            disabled={installing || locked}
+            onClick={onInstall}
+          >
+            {installing ? (
+              "Installing…"
+            ) : failed ? (
+              <>
+                <ArrowClockwise size={16} /> Retry
+              </>
+            ) : (
+              <Plus size={18} />
+            )}
+          </button>
+        )}
+        {mod.mature ? (
+          <span className="badge pointer-events-none absolute top-2 left-2 bg-panel">Mature</span>
+        ) : null}
+      </div>
+      <div className="flex flex-1 flex-col gap-2 p-3">
         <div className="min-w-0">
-          <h3 id={titleId} className="t-row break-words">
-            {mod.name}
+          <h3 id={titleId} className="t-row break-words leading-5">
+            <button
+              type="button"
+              className="inline cursor-pointer text-left hover:underline"
+              aria-label={`View ${mod.name} on GameBanana`}
+              onClick={onView}
+            >
+              {mod.name}
+              <ArrowSquareOut size={12} className="ml-1.5 inline text-ink-muted" />
+            </button>
           </h3>
           <p className="t-meta mt-0.5 break-words">by {mod.author} · GameBanana</p>
         </div>
@@ -60,27 +106,6 @@ export function GameBananaCard({
             Install failed. Retry this mod.
           </p>
         ) : null}
-        <div className="mt-auto flex flex-wrap gap-2 pt-1">
-          <button
-            type="button"
-            className="btn btn-ghost flex-1"
-            aria-label={`View ${mod.name} on GameBanana`}
-            onClick={onView}
-          >
-            View
-          </button>
-          <button
-            type="button"
-            data-testid={`mods-gb-install-${mod.id}`}
-            className="btn btn-ghost flex-1"
-            aria-label={`${installLabel} ${mod.name}`}
-            aria-describedby={failed ? failureId : undefined}
-            disabled={installed || installing || locked}
-            onClick={onInstall}
-          >
-            {installLabel}
-          </button>
-        </div>
       </div>
     </article>
   );
@@ -88,26 +113,26 @@ export function GameBananaCard({
 
 function GameBananaThumbnail({ mod }: { mod: GameBananaMod }) {
   // A failed image should not leave a browser icon or collapse the card.
-  const [broken, setBroken] = useState(false);
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const broken = mod.thumb !== null && brokenUrl === mod.thumb;
   const image =
     mod.thumb && !broken ? (
       <img
         src={mod.thumb}
         alt=""
         loading="lazy"
-        className="h-24 w-full bg-bg object-cover"
-        onError={() => setBroken(true)}
+        className="h-full w-full bg-bg object-cover"
+        onError={() => setBrokenUrl(mod.thumb)}
       />
     ) : null;
   return (
-    <div className="relative h-24 shrink-0 overflow-hidden border-b border-edge bg-bg">
-      {image}
-      <span
-        hidden={mod.thumb !== null && !broken}
-        className="absolute inset-0 grid place-items-center text-[11px] text-ink-faint"
-      >
-        No preview
-      </span>
-    </div>
+    <span className="relative block aspect-[2/1] shrink-0 overflow-hidden border-b border-edge bg-bg">
+      {image ?? (
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[12px] text-ink-muted">
+          <Image size={25} aria-hidden="true" />
+          No preview
+        </span>
+      )}
+    </span>
   );
 }

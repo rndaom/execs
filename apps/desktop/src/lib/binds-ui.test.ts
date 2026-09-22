@@ -175,8 +175,7 @@ describe("syncTrackedBindsFromConfig", () => {
       mouse1: "+attack",
     });
 
-    expect(parseManagedBinds(next)).toEqual({ forward: "w", use: "e" });
-    expect(next).not.toContain("+attack");
+    expect(parseManagedBinds(next)).toEqual({ forward: "w", use: "e", attack: "mouse1" });
   });
 
   it("clears every tracked assignment when the complete config map is empty", () => {
@@ -211,11 +210,12 @@ describe("syncTrackedBindsFromConfig", () => {
       duck: "ctrl",
       medic: "j",
       use: "e",
+      attack: "mouse1",
     });
   });
 
   it("leaves an already-synced managed file byte-for-byte unchanged", () => {
-    const current = `${serializeManagedBinds({ forward: "w", medic: "e" })}\n`;
+    const current = `${serializeManagedBinds({ forward: "w", medic: "e", attack: "mouse1" })}\n`;
 
     expect(
       syncTrackedBindsFromConfig(current, {
@@ -260,6 +260,23 @@ describe("canRecordBinds", () => {
 });
 
 describe("display and paths", () => {
+  it("records combat actions while retaining other managed bindings", () => {
+    let text = serializeManagedBinds({ forward: "w", medic: "e", loadout2: "f3" });
+    text = applyRecordedBind(text, "attack", "mouse1");
+    text = applyRecordedBind(text, "attack2", "mouse2");
+    text = applyRecordedBind(text, "reload", "r");
+    expect(parseManagedBinds(text)).toEqual({
+      forward: "w",
+      medic: "e",
+      loadout2: "f3",
+      attack: "mouse1",
+      attack2: "mouse2",
+      reload: "r",
+    });
+    expect(text).not.toContain("unbind");
+    expect(keyForAction({ mouse1: "+attack; say_team pushing" }, "attack")).toBeNull();
+  });
+
   it("maps command to the last matching key", () => {
     const binds = {
       e: "voicemenu 0 0",

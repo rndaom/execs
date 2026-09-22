@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createFilesDraftStore } from "../lib/files-drafts";
+import { createSettingsDraftStore, type SettingsDraft } from "../lib/settings-drafts";
 import { useFilesExitGuard } from "./useFilesExitGuard";
 
 const native = vi.hoisted(() => ({ listen: vi.fn(), destroy: vi.fn() }));
@@ -13,11 +14,13 @@ vi.mock("@tauri-apps/api/window", () => ({
 let root: Root;
 let box: HTMLDivElement;
 let store: ReturnType<typeof createFilesDraftStore>;
+let settings: ReturnType<typeof createSettingsDraftStore>;
 let close: (event: { preventDefault: () => void }) => void;
 let busy = false;
 const save = vi.fn();
+const onOpenPane = vi.fn();
 function Harness() {
-  const guard = useFilesExitGuard(store, false, busy);
+  const guard = useFilesExitGuard(store, false, busy, settings, onOpenPane);
   guard.saver.current = save;
   return guard.modal;
 }
@@ -28,6 +31,8 @@ beforeEach(async () => {
   root = createRoot(box);
   busy = false;
   store = createFilesDraftStore();
+  settings = createSettingsDraftStore();
+  onOpenPane.mockReset();
   store.read("a", "tf/cfg/config.cfg", "old");
   store.edit("a", "tf/cfg/config.cfg", "new");
   save.mockReset().mockResolvedValue(true);
@@ -114,4 +119,140 @@ it("waits for a settings write without inventing Files drafts or requiring a sav
   await act(async () => button("Continue").click());
   expect(save).not.toHaveBeenCalled();
   expect(native.destroy).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ["mods", "Mods"],
+  ["crosshair", "Crosshair"],
+] as const)(
+  "keeps explicit %s drafts reviewable without offering an impossible save",
+  async (tab, label) => {
+    const entry: SettingsDraft = { id: `draft-${tab}`, owner: `owner-${tab}`, profile: "a", tab };
+    const discard = vi.fn(() => settings.removeOwner(entry.owner));
+    settings.register(entry.owner, discard);
+    await act(async () => {
+      store.discardAll();
+      settings.report(entry, true);
+    });
+    await requestClose();
+    expect(box.textContent).toContain(`${label}: Apply from this pane`);
+    expect(box.textContent).toContain("Apply changes from their panes");
+    expect(box.textContent).not.toContain("Save and continue");
+    expect(document.activeElement).toBe(button("Cancel"));
+    await act(async () => button(`Open ${label}`).click());
+    expect(onOpenPane).toHaveBeenCalledExactlyOnceWith(tab);
+    expect(box.querySelector('[data-testid="files-exit-guard"]')).toBeNull();
+    expect(settings.getSnapshot()).toEqual([entry]);
+    expect(save).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+    expect(native.destroy).not.toHaveBeenCalled();
+
+    await requestClose();
+    await act(async () => button("Cancel").click());
+    expect(settings.getSnapshot()).toEqual([entry]);
+    expect(discard).not.toHaveBeenCalled();
+    await requestClose();
+    await act(async () => button("Discard and continue").click());
+    expect(discard).toHaveBeenCalledOnce();
+    expect(settings.getSnapshot()).toEqual([]);
+    expect(save).not.toHaveBeenCalled();
+    expect(native.destroy).toHaveBeenCalledOnce();
+  },
+);
+
+it("does not partially flush mixed Files, autosave, and explicit drafts before review", async () => {
+  const explicit: SettingsDraft = { id: "mods", owner: "mods-owner", profile: "a", tab: "mods" };
+  const flush = vi.fn(async () => {
+    settings.report(automatic, false);
+    return true;
+  });
+  const automatic: SettingsDraft = {
+    id: "gameplay",
+    owner: "gameplay-owner",
+    profile: "a",
+    tab: "gameplay",
+    save: { flush, saving: false, failed: false, locked: false },
+  };
+  settings.register(explicit.owner, () => settings.report(explicit, false));
+  settings.register(automatic.owner, () => settings.report(automatic, false));
+  await act(async () => {
+    settings.report(explicit, true);
+    settings.report(automatic, true);
+  });
+  await requestClose();
+  expect(box.textContent).not.toContain("Save and continue");
+  expect(box.textContent).toContain("tf/cfg/config.cfg");
+  expect(box.textContent).toContain("Mods: Apply from this pane");
+  expect(box.textContent).toContain("Gameplay: Unsaved changes");
+  expect(flush).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+  await act(async () => button("Cancel").click());
+  expect(store.dirty()[0].text).toBe("new");
+  expect(settings.getSnapshot()).toHaveLength(2);
+
+  // The player explicitly resolves the heavy draft from its pane. Ordinary
+  // saves become available again, and all must finish before native close.
+  await act(async () => settings.report(explicit, false));
+  await requestClose();
+  await act(async () => button("Save and continue").click());
+  expect(flush).toHaveBeenCalledOnce();
+  expect(save).toHaveBeenCalledOnce();
+  expect(flush.mock.invocationCallOrder[0]).toBeLessThan(save.mock.invocationCallOrder[0]);
+  expect(settings.getSnapshot()).toEqual([]);
+  expect(store.dirty()).toEqual([]);
+  expect(native.destroy).toHaveBeenCalledOnce();
+});
+
+it("keeps explicit drafts intact while a registered native write prevents discard", async () => {
+  const entry: SettingsDraft = { id: "mods", owner: "mods-owner", profile: "a", tab: "mods" };
+  const discard = vi.fn(() => settings.report(entry, false));
+  let writing = true;
+  settings.register(entry.owner, discard);
+  settings.registerWriteGuard(() => writing);
+  await act(async () => {
+    store.discardAll();
+    settings.report(entry, true);
+  });
+  await requestClose();
+  expect(button("Discard and continue").disabled).toBe(true);
+  await act(async () => button("Discard and continue").click());
+  expect(discard).not.toHaveBeenCalled();
+  expect(settings.getSnapshot()).toEqual([entry]);
+  expect(native.destroy).not.toHaveBeenCalled();
+  writing = false;
+  await act(async () => root.render(createElement(Harness)));
+  await act(async () => button("Discard and continue").click());
+  expect(discard).toHaveBeenCalledOnce();
+  expect(native.destroy).toHaveBeenCalledOnce();
+});
+
+it("does not auto-flush an unlocked setting while an explicit build still requires review", async () => {
+  const explicit: SettingsDraft = {
+    id: "crosshair",
+    owner: "crosshair-owner",
+    profile: "a",
+    tab: "crosshair",
+  };
+  const flush = vi.fn(async () => true);
+  const automatic: SettingsDraft = {
+    id: "gameplay",
+    owner: "gameplay-owner",
+    profile: "a",
+    tab: "gameplay",
+    save: { flush, saving: false, failed: false, locked: false },
+  };
+  settings.register(explicit.owner, () => settings.report(explicit, false));
+  settings.register(automatic.owner, () => settings.report(automatic, false));
+  await act(async () => {
+    store.discardAll();
+    settings.report(automatic, true);
+    settings.report(explicit, true);
+  });
+  await requestClose();
+  expect(box.textContent).not.toContain("Save and continue");
+  expect(flush).not.toHaveBeenCalled();
+  expect(native.destroy).not.toHaveBeenCalled();
+  await act(async () => button("Cancel").click());
+  expect(settings.getSnapshot()).toHaveLength(2);
+  expect(flush).not.toHaveBeenCalled();
 });

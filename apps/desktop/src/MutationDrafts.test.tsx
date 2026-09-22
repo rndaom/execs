@@ -340,7 +340,6 @@ describe("Comfig saved selections", () => {
     api.setComfigModules.mockRejectedValueOnce(new Error("cfg write failed"));
     api.setComfigAddons.mockRejectedValueOnce(new Error("addon failed"));
     await render({ tab: "comfig" });
-    await click('[data-testid="comfig-modules"] summary');
     const modules = [...document.querySelectorAll<HTMLElement>('[data-testid^="comfig-module-"]')];
     const first = modules[0];
     const second = modules[1];

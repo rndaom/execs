@@ -2,19 +2,23 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AutosavePending } from "./hooks/useAutosave";
 import type { Api } from "./lib/api";
 import { PREVIEW_MODS_CATALOG, PREVIEW_MODS_STATUS, PREVIEW_PROFILE_MODS } from "./lib/mods-ui";
 import { ModsPane, type ModsPaneProps } from "./ModsPane";
 
+const appState = vi.hoisted(() => ({ running: false, busy: false }));
 vi.mock("./hooks/useAppStatus", () => ({
-  useAppStatus: () => ({ running: false, busy: false }),
-  useCanWrite: () => true,
+  useAppStatus: () => appState,
+  useCanWrite: () => !appState.running && !appState.busy,
 }));
 
 let dom: JSDOM;
 let root: Root;
 
 beforeEach(() => {
+  appState.running = false;
+  appState.busy = false;
   dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "http://localhost" });
   vi.stubGlobal("window", dom.window);
   vi.stubGlobal("document", dom.window.document);
@@ -66,6 +70,50 @@ function button(id: string): HTMLButtonElement {
 }
 
 describe("ModsPane profile particle containment", () => {
+  it("routes a refused HUD payload to explicit HUD review without retrying an install", async () => {
+    const onReviewHudImport = vi.fn();
+    const onDismissHudImport = vi.fn();
+    const initial = props({
+      hudImportRequired: "Nothing was installed. Extract this HUD VPK and import its folder.",
+      onReviewHudImport,
+      onDismissHudImport,
+    });
+    await act(async () => root.render(createElement(ModsPane, initial)));
+    const alert = document.querySelector('[data-testid="mods-hud-import-required"]');
+    expect(alert?.textContent).toContain("Extract this HUD VPK and import its folder.");
+    expect(alert?.textContent).toContain("select the intended source again");
+    const buttons = [...(alert?.querySelectorAll("button") ?? [])];
+    await act(async () => buttons.find((item) => item.textContent === "Review in HUD")?.click());
+    expect(onReviewHudImport).toHaveBeenCalledOnce();
+    expect(initial.onImportArchive).not.toHaveBeenCalled();
+    expect(initial.onImportFolder).not.toHaveBeenCalled();
+    expect(initial.onInstallGameBananaMod).not.toHaveBeenCalled();
+    await act(async () => buttons.find((item) => item.textContent === "Dismiss")?.click());
+    expect(onDismissHudImport).toHaveBeenCalledOnce();
+  });
+
+  it("registers unapplied selection without an implicit heavy save and clears it after Apply", async () => {
+    const reportPending = vi.fn();
+    const initial = props();
+    const render = (next: ModsPaneProps) =>
+      createElement(
+        AutosavePending.Provider,
+        { value: reportPending },
+        createElement(ModsPane, next),
+      );
+    await act(async () => root.render(render(initial)));
+    await act(async () => button("mods-particle-tf2-classic").click());
+    expect(reportPending).toHaveBeenLastCalledWith(expect.any(String), true);
+    expect(initial.onApply).not.toHaveBeenCalled();
+
+    const payload = {
+      ...PREVIEW_MODS_STATUS,
+      status: { ...PREVIEW_MODS_STATUS.status, particleMods: ["Square_Series", "TF2_Classic"] },
+    };
+    await act(async () => root.render(render({ ...initial, payload })));
+    expect(reportPending).toHaveBeenLastCalledWith(expect.any(String), false);
+  });
+
   it("defaults to Browse, keeps task state mounted, and routes stale work to Casual setup", async () => {
     const payload = {
       ...PREVIEW_MODS_STATUS,
@@ -138,6 +186,7 @@ describe("ModsPane profile particle containment", () => {
     await act(async () =>
       root.render(createElement(ModsPane, props({ payload, mods: [], onCompleteRepair }))),
     );
+    await act(async () => document.getElementById("mods-task-casual")?.click());
     const confirm = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
       item.textContent?.includes("Steam says it’s finished"),
     );
@@ -148,5 +197,49 @@ describe("ModsPane profile particle containment", () => {
       particleMods: ["Square_Series"],
       profileParticleMods: [],
     });
+  });
+
+  it("keeps the launch-hook retry available even when no selection is dirty", async () => {
+    const onTogglePreload = vi.fn();
+    const payload = { ...PREVIEW_MODS_STATUS, preloadLaunchInSteam: false };
+    await act(async () =>
+      root.render(createElement(ModsPane, props({ payload, onTogglePreload }))),
+    );
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+    expect(document.querySelector('[data-testid="mods-apply"]')).toBeNull();
+    const retry = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "Retry launch setup",
+    );
+    expect(retry).toBeDefined();
+    await act(async () => retry?.click());
+    expect(onTogglePreload).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("keeps a Casual selection editable while TF2 runs but refuses Apply", async () => {
+    appState.running = true;
+    const onApply = vi.fn();
+    await act(async () => root.render(createElement(ModsPane, props({ onApply }))));
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+    const choice = button("mods-particle-tf2-classic");
+    expect(choice.disabled).toBe(false);
+    await act(async () => choice.click());
+    expect(choice.getAttribute("aria-checked")).toBe("true");
+    expect(button("mods-apply").disabled).toBe(true);
+    await act(async () => button("mods-apply").click());
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it("reviews restoration with Cancel focused and rechecks the write lock", async () => {
+    const onRevert = vi.fn();
+    const initial = props({ onRevert, active: true });
+    await act(async () => root.render(createElement(ModsPane, initial)));
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+    await act(async () => button("mods-revert").click());
+    expect(document.activeElement?.textContent).toBe("Cancel");
+    appState.running = true;
+    await act(async () => root.render(createElement(ModsPane, { ...initial })));
+    expect(button("mods-restore-confirm-yes").disabled).toBe(true);
+    await act(async () => button("mods-restore-confirm-yes").click());
+    expect(onRevert).not.toHaveBeenCalled();
   });
 });

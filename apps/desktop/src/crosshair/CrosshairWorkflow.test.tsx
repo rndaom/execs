@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrosshairPane } from "../CrosshairPane";
 import { AppStatusProvider } from "../hooks/useAppStatus";
-import { AutosavePending } from "../hooks/useAutosave";
+import { AutosaveActivity, AutosavePending } from "../hooks/useAutosave";
 import type { CrosshairRecord } from "../lib/bridge";
 import { defaultCrosshairDesign, renderCrosshairDesign } from "../lib/crosshair-designer";
 import { ColorPicker } from "./ColorPicker";
@@ -17,6 +17,7 @@ let box: HTMLDivElement;
 let record: CrosshairRecord | null;
 let running: boolean;
 let managed: string;
+let active: boolean;
 const save = vi.fn(async (_text: string) => undefined);
 const build = vi.fn(async (..._args: unknown[]) => true);
 const deactivate = vi.fn(async () => undefined);
@@ -37,6 +38,7 @@ beforeEach(() => {
     stock: { file: "crosshair3", scale: 24 },
   };
   running = false;
+  active = true;
   managed =
     'cl_crosshair_file ""\ncl_crosshair_scale 32\ncl_crosshair_red 17\ncl_crosshair_green 123\ncl_crosshair_blue 241\n';
   save.mockReset();
@@ -55,17 +57,19 @@ async function render() {
     root.render(
       <AppStatusProvider value={{ running, busy: false, error: null, setError: () => {} }}>
         <AutosavePending.Provider value={pending}>
-          <CrosshairPane
-            profileId="A"
-            layer="vanilla"
-            effective={{}}
-            managedText={managed}
-            record={record}
-            onSaveStock={save}
-            onApply={build}
-            onDeactivate={deactivate}
-            onRemove={() => {}}
-          />
+          <AutosaveActivity.Provider value={active}>
+            <CrosshairPane
+              profileId="A"
+              layer="vanilla"
+              effective={{}}
+              managedText={managed}
+              record={record}
+              onSaveStock={save}
+              onApply={build}
+              onDeactivate={deactivate}
+              onRemove={() => {}}
+            />
+          </AutosaveActivity.Provider>
         </AutosavePending.Provider>
       </AppStatusProvider>,
     ),
@@ -91,6 +95,39 @@ async function elapsed() {
 }
 
 describe("0.1.4 crosshair workflow", () => {
+  it("retains an embedded design across pane visits and separates library save from pack build", async () => {
+    await render();
+    await click('input[value="designs"]');
+    await click('[data-testid="crosshair-open-designer"]');
+    await input('input[aria-label="Design name"]', "Retained design");
+    await input("#designer-size", "19");
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
+    expect(box.querySelector('[data-testid="crosshair-build"]')).toBeNull();
+    active = false;
+    await render();
+    expect(box.querySelector('[data-testid="crosshair-designer"]')).toBeNull();
+    active = true;
+    await render();
+    await click('[data-testid="crosshair-open-designer"]');
+    expect(element<HTMLInputElement>('input[aria-label="Design name"]').value).toBe(
+      "Retained design",
+    );
+    expect(element<HTMLInputElement>("#designer-size").value).toBe("19");
+    await click('[data-testid="crosshair-designer-save"]');
+    await elapsed();
+    expect(save).not.toHaveBeenCalled();
+    expect(build).not.toHaveBeenCalled();
+    await click('[data-testid="crosshair-build"]');
+    expect(build).toHaveBeenCalledWith(
+      "design-retained-design",
+      {},
+      undefined,
+      [17, 123, 241],
+      expect.objectContaining({ "design-retained-design": expect.any(Object) }),
+      expect.any(String),
+      expect.any(Object),
+    );
+  });
   it("retains an unbuilt shape through a color autosave and forces an explicit build", async () => {
     await render();
     await click('[data-testid="crosshair-shape-dot"]');

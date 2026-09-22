@@ -19,10 +19,12 @@ export function AppFooter({
   api,
   update,
   pinned,
+  onSettings,
 }: {
   api: Api;
   update: AppUpdateState;
   pinned: boolean;
+  onSettings?: () => void;
 }) {
   const diagnostics = useCopyFeedback();
 
@@ -42,13 +44,17 @@ export function AppFooter({
         pinned
           ? // Pinned, not min-height: this bar sits next to a flex-1 sibling
             // and must never take height from the pane above it.
-            "flex h-7 shrink-0 grow-0 items-center justify-between gap-4 overflow-hidden border-t border-edge bg-panel px-4 py-1 text-[10px] text-ink-muted"
+            "flex min-h-8 shrink-0 grow-0 items-center justify-between gap-4 border-t border-edge bg-panel px-4 py-1 text-[11px] text-ink-muted"
           : "mt-12 flex max-w-md flex-col items-center gap-2 text-center"
       }
     >
       {/* A failed get_app_version must not cost the user their only way to
           check for updates — only the version string is optional. */}
-      <p className={pinned ? "shrink-0 text-[10px] text-ink-faint" : "t-meta"}>
+      <p
+        className={
+          pinned ? "flex shrink-0 items-center gap-1 text-[11px] text-ink-muted" : "t-meta"
+        }
+      >
         {update.version ? (
           <>
             <span data-testid="app-version" title={`execs ${releaseVersionCopy(update.version)}`}>
@@ -61,10 +67,10 @@ export function AppFooter({
           type="button"
           data-testid="app-update-check"
           onClick={() => void update.check()}
-          disabled={update.progress !== null}
+          disabled={update.checking || update.progress !== null}
           className={`${LINK_CLASS} disabled:opacity-40`}
         >
-          {updateCheckButtonLabel(update.checkMessage)}
+          {update.checking ? "Checking…" : updateCheckButtonLabel(update.checkMessage)}
         </button>
         {" · "}
         <button
@@ -84,8 +90,20 @@ export function AppFooter({
         >
           {copyButtonLabel(diagnostics.feedback, "Copy diagnostics")}
         </button>
+        {onSettings ? (
+          <>
+            {" · "}
+            <button type="button" className={LINK_CLASS} onClick={onSettings}>
+              App settings
+            </button>
+          </>
+        ) : null}
       </p>
-      <p className={pinned ? "min-w-0 truncate text-[10px] text-ink-faint" : "t-meta"}>
+      <p
+        className={
+          pinned ? "hidden min-w-0 truncate text-[11px] text-ink-muted md:block" : "t-meta"
+        }
+      >
         {pinned ? SHORT_DISCLAIMER : LONG_DISCLAIMER}
       </p>
     </div>

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { AppPreferences, AppSettingsPayload } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 
 export type InventoryItem = {
@@ -175,6 +176,18 @@ export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("save_current_as", { name });
 }
 
+export function deleteProfile(id: string, keepInstalled: boolean): Promise<ProfileLibrary> {
+  return call("delete_profile", { id, keepInstalled });
+}
+
+export function getAppSettings(): Promise<AppSettingsPayload> {
+  return call("get_app_settings");
+}
+
+export function setAppPreferences(preferences: AppPreferences): Promise<AppSettingsPayload> {
+  return call("set_app_preferences", { preferences });
+}
+
 export type AbsorbDelta = {
   ownedChanged: string[];
   ownedMissing: string[];
@@ -234,14 +247,20 @@ export type ProfileImportReview = {
   creator: boolean;
   warnings: string[];
   notes: string[];
+  /** Present on current native reviews; omitted by earlier saved fixtures. */
+  huds?: string[];
+  selectedHud?: string | null;
 };
 
 export async function importProfile(): Promise<ProfileImportReview | null> {
   return call<ProfileImportReview | null>("import_profile");
 }
 
-export async function confirmProfileImport(token: string): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("confirm_profile_import", { token });
+export async function confirmProfileImport(
+  token: string,
+  selectedHud?: string,
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("confirm_profile_import", { token, selectedHud });
 }
 
 export async function cancelProfileImport(token: string): Promise<void> {
@@ -411,6 +430,28 @@ export type HudUiState = {
   /** The backend could not verify catalog-backed update state. */
   catalogUnavailable?: boolean;
 };
+
+export type HudOwnershipReview = {
+  profileId: string;
+  selectedHud: string | null;
+  candidates: { folder: string; source: "profile" | "live"; files: number }[];
+  fingerprint: string;
+  reviewRequired: boolean;
+  managedOptionFiles: string[];
+  resetOptions: boolean;
+};
+
+export function getHudOwnership(profileId: string): Promise<HudOwnershipReview> {
+  return call("get_hud_ownership", { profileId });
+}
+
+export function selectProfileHud(
+  profileId: string,
+  hudFolder: string,
+  expectedFingerprint: string,
+): Promise<ProfileDetail> {
+  return call("select_profile_hud", { profileId, hudFolder, expectedFingerprint });
+}
 
 export type HudSchemaChoice = {
   label: string;
@@ -1177,6 +1218,7 @@ export type AppUpdateStep = "downloading" | "installing" | "restarting";
 
 /** Exact version the latest successful read-only check advertised. */
 let pendingUpdateVersion: string | null = null;
+let updateCheckGeneration = 0;
 
 export async function getAppVersion(): Promise<string> {
   const { getVersion } = await import("@tauri-apps/api/app");
@@ -1193,17 +1235,18 @@ export function getDiagnostics(): Promise<string> {
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 
 export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {
+  const generation = ++updateCheckGeneration;
   const { check } = await import("@tauri-apps/plugin-updater");
   const update = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
   if (!update) {
-    pendingUpdateVersion = null;
+    if (generation === updateCheckGeneration) pendingUpdateVersion = null;
     return null;
   }
-  pendingUpdateVersion = update.version;
   const info = { version: update.version, notes: update.body ?? null };
   // The install command re-checks in Rust. Do not retain a renderer-owned
   // resource handle whose mutating methods are intentionally denied by ACL.
   await update.close().catch(() => {});
+  if (generation === updateCheckGeneration) pendingUpdateVersion = update.version;
   return info;
 }
 

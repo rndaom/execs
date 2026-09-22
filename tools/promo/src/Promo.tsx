@@ -35,7 +35,7 @@ const BEATS = [
   {
     shot: "settings-mods",
     title: "Mods",
-    line: "A casual preload that keeps custom particles alive on Valve servers.",
+    line: "Optional preloading for supported content, with Restore stock files.",
   },
   {
     shot: "settings-sounds",
@@ -177,7 +177,7 @@ function Hook() {
           transform: `translateY(${(1 - answer) * 14}px)`,
         }}
       >
-        One app. Named profiles. Nothing touched while the game runs.
+        One app. Named profiles. Game files stay locked while TF2 runs.
       </div>
     </AbsoluteFill>
   );
@@ -249,6 +249,18 @@ function Beat({ shot, title, line }: (typeof BEATS)[number]) {
       >
         <Img src={staticFile(`shots/${shot}.png`)} style={{ width: "100%", display: "block" }} />
       </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 100,
+          bottom: 72,
+          fontFamily: theme.font,
+          fontSize: 22,
+          color: theme.inkMuted,
+        }}
+      >
+        Earlier-release interface · sample data
+      </div>
     </AbsoluteFill>
   );
 }
@@ -257,7 +269,7 @@ function Outro() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const mark = spring({ frame, fps, config: { damping: 200 } });
-  const lines = ["Free and open source.", "Windows and Linux.", "Updates itself."];
+  const lines = ["Free and open source.", "Windows and Linux.", "Updates when you choose."];
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", gap: 40 }}>
       <div style={{ opacity: mark, transform: `translateY(${(1 - mark) * 16}px)` }}>

@@ -3,7 +3,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AbsorbOwnedResult, Tf2Install } from "../lib/bridge";
-import { emptyAbsorbDelta, previewPackDelta } from "../lib/library-ui";
+import { BridgeError } from "../lib/bridge";
+import { emptyAbsorbDelta, previewPackDelta, previewSavedProfile } from "../lib/library-ui";
 import { createPreviewApi } from "../lib/preview-bridge";
 import { idleSwitchProgress } from "../lib/switch-progress-ui";
 import { type ProfileLibraryState, useProfileLibrary } from "./useProfileLibrary";
@@ -18,6 +19,7 @@ let quitNonce: number;
 const confirmed = { path: "C:/TF2" } as Tf2Install;
 const setError = vi.fn();
 const setBusy = vi.fn();
+const onHudReviewRequired = vi.fn();
 const progress = {
   state: idleSwitchProgress(),
   degraded: null,
@@ -34,9 +36,15 @@ function Harness() {
     progress,
     setError,
     setBusy,
+    onHudReviewRequired,
   });
   return null;
 }
+function must<T>(value: T | null | undefined): T {
+  if (value == null) throw new Error("Required test fixture is missing");
+  return value;
+}
+
 async function render() {
   await act(async () => root.render(createElement(Harness)));
 }
@@ -55,6 +63,168 @@ afterEach(async () => {
   await act(async () => root.unmount());
   box.remove();
   vi.unstubAllGlobals();
+});
+
+it("cancelled profile deletion never calls the native delete or switch", async () => {
+  const remove = vi.spyOn(api, "deleteProfile");
+  const change = vi.spyOn(api, "switchProfile");
+  await render();
+  await act(async () => state.reviewDelete(must(must(state.library).activeProfileId)));
+  expect(state.deleteTarget).not.toBeNull();
+  await act(async () => state.cancelDelete());
+  expect(state.deleteTarget).toBeNull();
+  expect(remove).not.toHaveBeenCalled();
+  expect(change).not.toHaveBeenCalled();
+});
+
+it("active and last profile deletion requires the explicit keep-installed choice", async () => {
+  const remove = vi.spyOn(api, "deleteProfile");
+  await render();
+  const id = must(must(state.library).activeProfileId);
+  await act(async () => state.reviewDelete(id));
+  await act(async () => state.confirmDelete(false));
+  expect(remove).not.toHaveBeenCalled();
+  expect(state.deleteError).toContain("Choose another profile");
+  await act(async () => state.confirmDelete(true));
+  expect(remove).toHaveBeenCalledWith(id, true);
+  expect(must(state.library).activeProfileId).toBeNull();
+  expect(must(state.library).profiles).toHaveLength(0);
+  expect(state.deleteTarget).toBeNull();
+});
+
+it("switch-first deletion waits for a verified replacement and keeps the target on failure", async () => {
+  await render();
+  const before = must(state.library);
+  const replacement = previewSavedProfile("Other", 9);
+  await act(async () =>
+    state.setLibrary({ ...before, profiles: [...before.profiles, replacement] }),
+  );
+  const change = vi
+    .spyOn(api, "switchProfile")
+    .mockRejectedValueOnce(new Error("Switch failed; re-apply"));
+  const remove = vi.spyOn(api, "deleteProfile");
+  await act(async () => state.reviewDelete(must(before.activeProfileId)));
+  await act(async () => state.confirmDelete(false, replacement.id));
+  expect(change).toHaveBeenCalledWith(replacement.id);
+  expect(remove).not.toHaveBeenCalled();
+  expect(state.deleteTarget?.id).toBe(before.activeProfileId);
+  expect(state.deleteError).toContain("Switch failed");
+  expect(progress.cancel).toHaveBeenCalled();
+});
+
+it("switch-first deletion publishes the replacement before deleting the outgoing library", async () => {
+  await render();
+  const before = must(state.library);
+  const replacement = previewSavedProfile("Other", 9);
+  const library = { ...before, profiles: [...before.profiles, replacement] };
+  await act(async () => state.setLibrary(library));
+  vi.spyOn(api, "absorbOwned").mockResolvedValue({
+    library: { ...library, activeProfileId: replacement.id, profiles: [replacement] },
+    delta: emptyAbsorbDelta(),
+    configCfgAbsorbed: false,
+  });
+  const calls: string[] = [];
+  vi.spyOn(api, "switchProfile").mockImplementation(async (id) => {
+    calls.push(`switch:${id}`);
+    return { ...library, activeProfileId: id };
+  });
+  const remove = vi.spyOn(api, "deleteProfile").mockImplementation(async (id) => {
+    calls.push(`delete:${id}`);
+    return { ...library, activeProfileId: replacement.id, profiles: [replacement] };
+  });
+  await act(async () => state.reviewDelete(must(before.activeProfileId)));
+  await act(async () => state.confirmDelete(false, replacement.id));
+  expect(calls).toEqual([`switch:${replacement.id}`, `delete:${before.activeProfileId}`]);
+  expect(remove).toHaveBeenCalledWith(before.activeProfileId, false);
+  expect(must(state.library).activeProfileId).toBe(replacement.id);
+  expect(state.deleteTarget).toBeNull();
+});
+
+it("keeps a reviewed deletion harmless when TF2 starts before confirmation", async () => {
+  const remove = vi.spyOn(api, "deleteProfile");
+  await render();
+  await act(async () => state.reviewDelete(must(must(state.library).activeProfileId)));
+  running = true;
+  await render();
+  await act(async () => state.confirmDelete(true));
+  expect(remove).not.toHaveBeenCalled();
+  expect(state.deleteTarget).not.toBeNull();
+});
+
+it("keeps multi-HUD import review unconfirmed until a valid explicit choice", async () => {
+  vi.spyOn(api, "importProfile").mockResolvedValue({
+    token: "hud-review",
+    name: "Two HUDs",
+    files: 32,
+    skippedFiles: 0,
+    creator: false,
+    warnings: [],
+    notes: [],
+    huds: ["toonhud", "rayshud"],
+    selectedHud: "toonhud",
+  });
+  await render();
+  const confirm = vi.spyOn(api, "confirmProfileImport").mockResolvedValue(must(state.library));
+  await act(async () => state.importProfile());
+  expect(state.importReview?.selectedHud).toBeNull();
+  await act(async () => state.confirmImport());
+  expect(confirm).not.toHaveBeenCalled();
+  await act(async () => state.selectImportHud("unknown"));
+  expect(state.importReview?.selectedHud).toBeNull();
+  await act(async () => state.selectImportHud("rayshud"));
+  expect(state.importReview?.selectedHud).toBe("rayshud");
+  await act(async () => state.confirmImport());
+  expect(confirm).toHaveBeenCalledWith("hud-review", "rayshud");
+});
+
+it.each([
+  ["HudReviewRequired", "target"],
+  ["HudLiveReviewRequired", "active"],
+])(
+  "routes %s from switching to the correct profile after clearing the write gate",
+  async (code, owner) => {
+    await render();
+    const active = must(state.library).activeProfileId;
+    vi.spyOn(api, "switchProfile").mockRejectedValue(new BridgeError("Choose one HUD", code));
+    await act(async () => state.switchProfile("target"));
+    expect(onHudReviewRequired).toHaveBeenCalledWith(owner === "target" ? "target" : active);
+    expect(setBusy).toHaveBeenLastCalledWith(false);
+    expect(setBusy.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      must(onHudReviewRequired.mock.invocationCallOrder.at(-1)),
+    );
+    expect(progress.cancel).toHaveBeenCalled();
+  },
+);
+
+it("routes active HUD conflicts from absorb without turning them into a generic failure", async () => {
+  const library = await api.getProfileLibrary();
+  vi.spyOn(api, "absorbOwned").mockRejectedValue(
+    new BridgeError("Choose one HUD", "HudLiveReviewRequired"),
+  );
+  await render();
+  expect(onHudReviewRequired).toHaveBeenCalledWith(library.activeProfileId);
+  expect(setError).toHaveBeenLastCalledWith(null, "profiles:absorb");
+});
+
+it("preserves a profile when switch-first deletion needs a HUD review", async () => {
+  await render();
+  const before = must(state.library);
+  const replacement = previewSavedProfile("Two HUDs", 9);
+  await act(async () =>
+    state.setLibrary({ ...before, profiles: [...before.profiles, replacement] }),
+  );
+  vi.spyOn(api, "switchProfile").mockRejectedValue(
+    new BridgeError("Choose one HUD", "HudReviewRequired"),
+  );
+  const remove = vi.spyOn(api, "deleteProfile");
+  await act(async () => state.reviewDelete(must(before.activeProfileId)));
+  await act(async () => state.confirmDelete(false, replacement.id));
+  expect(remove).not.toHaveBeenCalled();
+  expect(state.deleteTarget).toBeNull();
+  expect(onHudReviewRequired).toHaveBeenCalledWith(replacement.id);
+  expect(
+    must(state.library).profiles.some((profile) => profile.id === before.activeProfileId),
+  ).toBe(true);
 });
 
 it("absorbs once at boot without reloading panes after ordinary settings saves", async () => {

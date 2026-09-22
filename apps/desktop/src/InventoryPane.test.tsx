@@ -1,9 +1,29 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { InventoryPane } from "./InventoryPane";
 import type { Api } from "./lib/api";
+
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollIntoView",
+);
+const scrollIntoView = vi.fn();
+beforeEach(() => {
+  scrollIntoView.mockClear();
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+  });
+});
+afterEach(() => {
+  if (originalScrollIntoView) {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  }
+});
 
 it("loads automatically and retains a clearly stale snapshot on a failed refresh", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -134,6 +154,67 @@ it("loads an unplaced item's own artwork and keeps the preview while paging", as
     await act(async () => root.unmount());
     box.remove();
     vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("reveals the first slot only when the displayed page changes", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  const getInventory = vi.fn().mockResolvedValue({
+    steamId: "test-account",
+    capacity: 100,
+    warning: null,
+    items: [{ id: "123", definition: 13, position: 51, quality: 6, level: 1, customName: null }],
+    definitions: { "13": { name: "Scattergun", kind: "Weapon", classes: ["scout"], icon: null } },
+  });
+  const api = {
+    getInventory,
+    getInventoryIcons: vi.fn().mockResolvedValue({}),
+    openExternal: vi.fn(),
+  } as unknown as Api;
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  async function render(active = true, running = false) {
+    await act(async () =>
+      root.render(<InventoryPane api={api} active={active} running={running} busy={false} />),
+    );
+  }
+  async function click(selector: string) {
+    await act(async () =>
+      box.querySelector<HTMLInputElement | HTMLButtonElement>(selector)?.click(),
+    );
+  }
+  try {
+    await render();
+    await click('input[value="name"]');
+    await click('input[value="position"]');
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    await click('[aria-label="Next page"]');
+    expect(box.querySelector<HTMLInputElement>('[aria-label="Backpack page"]')?.value).toBe("2");
+    expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: "start", behavior: "instant" });
+    expect(scrollIntoView.mock.contexts[0]).toBe(
+      box.querySelector('[aria-label="Backpack items"]'),
+    );
+    await render(false);
+    await render();
+    vi.useFakeTimers();
+    await render(true, true);
+    await render();
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(getInventory.mock.calls.length).toBeGreaterThan(1);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    await click('input[value="name"]');
+    expect(box.querySelector<HTMLInputElement>('[aria-label="Backpack page"]')?.value).toBe("1");
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    await click('input[value="quality"]');
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
