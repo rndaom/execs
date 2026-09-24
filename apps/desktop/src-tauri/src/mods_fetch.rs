@@ -112,7 +112,9 @@ pub fn catalog_with_flat(cueki_zip: Option<&Path>) -> Result<ModsCatalog, String
 mod tests {
     use super::{catalog_with_flat, pinned_flat_file_listed};
     use crate::gamebanana::GameBananaDownloadVariant;
+    use crate::net::{self, RemoteSource};
     use execs_core::preloader::flat_textures;
+    use std::time::Duration;
 
     #[test]
     fn flat_choice_is_available_before_cueki_library_download() {
@@ -146,5 +148,22 @@ mod tests {
         let mut changed = exact;
         changed.supported = false;
         assert!(!pinned_flat_file_listed(&[changed]));
+    }
+
+    /// Exercises the current author listing and approved live /dl/ redirect
+    /// chain without writing to the user's cache or TF2 installation.
+    #[test]
+    #[ignore = "live GameBanana author-file regression"]
+    fn live_flat_textures_author_file_matches_the_pinned_payload() {
+        let files = crate::gamebanana::download_variants(flat_textures::MOD_ID).unwrap();
+        assert!(pinned_flat_file_listed(&files));
+        let bytes = net::download_bytes_for_timeout(
+            &format!("https://gamebanana.com/dl/{}", flat_textures::FILE_ID),
+            flat_textures::ZIP_BYTES,
+            RemoteSource::GameBananaDownload,
+            Some(Duration::from_secs(45)),
+        )
+        .unwrap();
+        flat_textures::validate_bytes(&bytes).unwrap();
     }
 }
