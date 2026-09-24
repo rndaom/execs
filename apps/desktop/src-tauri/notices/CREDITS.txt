@@ -1,14 +1,15 @@
 # Third-party content and credits
 
-execs is a first-party app, but most of what it installs comes from the TF2
-community. This file lists every outside project the app depends on, how it is
-used, and its license. Nothing below is redistributed from this repository
-unless the row says so; everything else is downloaded from the original source
-on the user's machine, pinned to a specific release or commit.
+execs installs and displays content from the TF2 community. This file records
+the outside projects it uses, how it uses them, and the license or permission
+evidence identified for each. A row identifies content shipped in this
+repository; other content is fetched on the player's machine under the
+source-specific revision and validation rules. A source pin is not a rights
+grant.
 
 ## Content the app installs or shows
 
-| Project | How execs uses it | License |
+| Project | How execs uses it | License or permission evidence |
 |---|---|---|
 | [mastercomfig](https://github.com/mastercomfig/mastercomfig) by mastercoms · [comfig.app](https://comfig.app) | Official release VPKs are downloaded at install time. Preset and module semantics come from its documentation. The Comfig pane opens comfig.app pages in an in-app window. | MIT |
 | [comfig-app](https://github.com/mastercomfig/comfig-app) | The seven preset preview screenshots in `apps/desktop/src/assets/presets/` are its koth_sawmill captures, re-encoded. The hit sound index (`src/ssg/hitsounds.json`) is fetched pinned; sounds are streamed from `hits.comfig.app` and belong to their uploaders. | MIT for the repository; per-upload sound rights are not documented in the pinned index. See the D7 register below. |
@@ -62,9 +63,14 @@ crates). Linux builds use GTK and WebKitGTK under their upstream terms; AppImage
 ## Valve
 
 Team Fortress 2, Steam and their file formats belong to Valve Corporation.
-execs reads sprites, sounds and weapon scripts from the user's own install and
-never redistributes them. execs is a fan project and is not affiliated with
-Valve.
+The repository and installers do not package Valve's game archive files.
+execs reads sprites, sounds and weapon scripts from the player's own install to
+build profile content. A user-initiated profile ZIP export copies the profile's
+packs, which may contain game-derived bytes or third-party content. The player
+controls whether to share that ZIP. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)
+tracks unresolved rights questions, including the proposed use of stock models
+in a replacement Viewmodels builder. execs is a fan project and is not
+affiliated with Valve.
 
 ## Packaged notices
 
