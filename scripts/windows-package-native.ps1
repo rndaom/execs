@@ -71,7 +71,7 @@ function Owned-Process($Expected) {
     $process = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$Expected.pid)"
     if (-not $process) { throw 'Owned process already exited.' }
     $record = Process-Record $process
-    if ($record.executable -ine $Expected.executable -or ($Expected.PSObject.Properties.Name -contains 'created' -and $record.created -ne $Expected.created)) { throw 'Process identity changed.' }
+    if ($record.executable -ine $Expected.executable -or ($Expected.PSObject.Properties['created'] -and $record.created -ne $Expected.created)) { throw 'Process identity changed.' }
     $null = Assert-Contained $r.root $record.executable
     if ([WindowsPackageNative]::PackageCode($record.pid) -ne 15700) { throw 'Packaged app context refused.' }
     return $record
@@ -101,7 +101,8 @@ if ($Action -eq 'Host') {
         if (Test-Path -LiteralPath $key) {
             foreach ($child in Get-ChildItem -LiteralPath $key) {
                 $value = Get-ItemProperty -LiteralPath $child.PSPath
-                if ($value.PSObject.Properties.Name -contains 'DisplayName' -and $value.DisplayName -imatch '^execs(?:\s|$)') { $locations += $child.Name }
+                $displayName = $value.PSObject.Properties['DisplayName']
+                if ($displayName -and [string]$displayName.Value -imatch '^execs(?:\s|$)') { $locations += $child.Name }
             }
         }
     }
