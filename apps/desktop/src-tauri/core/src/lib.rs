@@ -35,6 +35,7 @@ pub mod switch;
 pub mod vdf;
 pub mod viewmodel;
 pub mod viewmodel_activity;
+pub mod viewmodel_full_mdl;
 pub mod viewmodel_graph;
 pub mod viewmodel_groups;
 pub mod viewmodel_inspect;
