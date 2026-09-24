@@ -45,6 +45,9 @@ pub enum ItemRoleSource {
     UnsupportedItemOverride,
     WeaponScript,
     WeaponScriptDefault,
+    /// The installed item uses the generic shotgun class; a class-specific
+    /// script is a candidate, pending confirmation of the retail equip path.
+    ShotgunClassCandidate,
     Unresolved,
 }
 
@@ -272,6 +275,55 @@ pub fn resolve_item_role(item: &StockItem, scripts: &StockWeaponScriptIndex) -> 
     }
 }
 
+/// Keep generic shotgun items class-specific. The installed schema has
+/// single-class shotguns and multi-class descendants, while Valve's weapon
+/// registration gives the four classes distinct script names. This narrows
+/// the candidate for each class; it does not prove the runtime equip alias.
+pub fn resolve_item_role_for_class(
+    item: &StockItem,
+    class: &str,
+    scripts: &StockWeaponScriptIndex,
+) -> ItemRole {
+    if !item.classes.iter().any(|eligible| eligible == class) {
+        return ItemRole {
+            role: None,
+            source: ItemRoleSource::Unresolved,
+            script_path: None,
+        };
+    }
+    let exact = resolve_item_role(item, scripts);
+    if !item.item_class.eq_ignore_ascii_case("tf_weapon_shotgun")
+        || exact.source != ItemRoleSource::Unresolved
+        || exact.script_path.is_some()
+    {
+        return exact;
+    }
+    let stem = match class {
+        "engineer" => "tf_weapon_shotgun_primary",
+        "soldier" => "tf_weapon_shotgun_soldier",
+        "heavy" => "tf_weapon_shotgun_hwg",
+        "pyro" => "tf_weapon_shotgun_pyro",
+        _ => return exact,
+    };
+    let Some(script) = scripts.scripts.get(stem) else {
+        return exact;
+    };
+    let role = match script.weapon_type.as_deref() {
+        Some(value) if known_weapon_type(value) => Some(value.to_string()),
+        None => Some("PRIMARY".to_string()),
+        Some(_) => None,
+    };
+    ItemRole {
+        source: if role.is_some() {
+            ItemRoleSource::ShotgunClassCandidate
+        } else {
+            ItemRoleSource::Unresolved
+        },
+        role,
+        script_path: Some(script.path.clone()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -423,5 +475,52 @@ mod tests {
             .0
             .contains("VPK CRC"));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn generic_shotgun_candidates_follow_class_and_preserve_override_priority() {
+        let scripts = StockWeaponScriptIndex {
+            patch_version: "fixture".into(),
+            scripts: BTreeMap::from([
+                (
+                    "tf_weapon_shotgun_primary".into(),
+                    StockWeaponScript {
+                        path: "scripts/tf_weapon_shotgun_primary.ctx".into(),
+                        sha256: "primary".into(),
+                        weapon_type: Some("PRIMARY".into()),
+                    },
+                ),
+                (
+                    "tf_weapon_shotgun_soldier".into(),
+                    StockWeaponScript {
+                        path: "scripts/tf_weapon_shotgun_soldier.ctx".into(),
+                        sha256: "soldier".into(),
+                        weapon_type: Some("SECONDARY".into()),
+                    },
+                ),
+            ]),
+        };
+        let mut shotgun = item();
+        shotgun.item_class = "tf_weapon_shotgun".into();
+        shotgun.classes = vec!["engineer".into(), "soldier".into()];
+        let engineer = resolve_item_role_for_class(&shotgun, "engineer", &scripts);
+        assert_eq!(engineer.role.as_deref(), Some("PRIMARY"));
+        assert_eq!(engineer.source, ItemRoleSource::ShotgunClassCandidate);
+        let soldier = resolve_item_role_for_class(&shotgun, "soldier", &scripts);
+        assert_eq!(soldier.role.as_deref(), Some("SECONDARY"));
+        assert_eq!(soldier.source, ItemRoleSource::ShotgunClassCandidate);
+        assert_eq!(
+            resolve_item_role_for_class(&shotgun, "pyro", &scripts).source,
+            ItemRoleSource::Unresolved
+        );
+        shotgun.animation_slot = Some("ITEM1".into());
+        assert_eq!(
+            resolve_item_role_for_class(&shotgun, "soldier", &scripts).source,
+            ItemRoleSource::ItemOverride
+        );
+        assert_eq!(
+            resolve_item_role_for_class(&shotgun, "scout", &scripts).source,
+            ItemRoleSource::Unresolved
+        );
     }
 }

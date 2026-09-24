@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use execs_core::viewmodel_items::read_stock_item_catalog;
-use execs_core::viewmodel_scripts::{read_stock_weapon_scripts, resolve_item_role, ItemRoleSource};
+use execs_core::viewmodel_scripts::{
+    read_stock_weapon_scripts, resolve_item_role, resolve_item_role_for_class, ItemRoleSource,
+};
 
 fn main() {
     let root = std::env::args()
@@ -48,6 +50,7 @@ fn main() {
             }
             ItemRoleSource::WeaponScript => script_role += 1,
             ItemRoleSource::WeaponScriptDefault => default_role += 1,
+            ItemRoleSource::ShotgunClassCandidate => unreachable!("classless resolver"),
             ItemRoleSource::Unresolved if resolved.script_path.is_some() => unsupported_type += 1,
             ItemRoleSource::Unresolved => {
                 unresolved += 1;
@@ -76,4 +79,24 @@ fn main() {
         .filter(|stem| stem.starts_with("tf_weapon_shotgun"))
         .collect();
     println!("installed shotgun script stems: {shotgun_scripts:?}");
+    let mut class_candidates = BTreeMap::new();
+    let mut class_unresolved = BTreeMap::new();
+    for item in &weapon_items {
+        for class in &item.classes {
+            let role = resolve_item_role_for_class(item, class, &scripts);
+            match role.source {
+                ItemRoleSource::ShotgunClassCandidate => {
+                    *class_candidates.entry(class.as_str()).or_insert(0usize) += 1;
+                }
+                ItemRoleSource::Unresolved => {
+                    class_unresolved
+                        .entry((item.id, class.as_str()))
+                        .or_insert(role.script_path);
+                }
+                _ => {}
+            }
+        }
+    }
+    println!("class-specific shotgun candidates: {class_candidates:?}");
+    println!("unresolved item/class roles: {class_unresolved:?}");
 }
