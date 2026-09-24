@@ -7,14 +7,8 @@ import { OptionTile } from "./ui/OptionTile";
 type Props = {
   profiles: Pick<
     ProfileLibraryState,
-    | "library"
-    | "deleteTarget"
-    | "deleting"
-    | "deleteError"
-    | "confirmDelete"
-    | "cancelDelete"
-    | "exportProfile"
-  >;
+    "library" | "deleteTarget" | "deleting" | "deleteError" | "confirmDelete" | "cancelDelete"
+  > & { exportProfile: (id: string) => Promise<void> };
   running: boolean;
   busy: boolean;
 };

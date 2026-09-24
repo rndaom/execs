@@ -358,7 +358,7 @@ describe("Comfig saved selections", () => {
     await render({ tab: "comfig" });
     await click("#comfig-preset-high");
     expect(element<HTMLInputElement>("#comfig-preset-medium").checked).toBe(true);
-    expect(element('img[alt*="preset"]').getAttribute("alt")).toContain("Medium preset");
+    expect(element('[aria-label="Selected preset details"] h3').textContent).toBe("Medium");
     await render({ refreshKey: 2, tab: "gameplay" });
     await render({ tab: "comfig" });
     expect(element<HTMLInputElement>("#comfig-preset-medium").checked).toBe(true);

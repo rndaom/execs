@@ -2,11 +2,9 @@ import { useEffect } from "react";
 import {
   AbsoluteFill,
   Easing,
-  Img,
   interpolate,
   Sequence,
   spring,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -15,37 +13,37 @@ import { theme } from "./theme";
 
 export const PROMO_FPS = 30;
 
-/** One pane per beat: screenshot from the app plus a short caption. */
+/** Product overview without third-party gameplay or HUD images. */
 const BEATS = [
   {
-    shot: "settings-comfig",
-    title: "Comfig",
-    line: "mastercomfig presets and modules, with the official packages.",
-  },
-  {
-    shot: "settings-hud-installed",
-    title: "HUD",
-    line: "Browse the catalog and install one in a click.",
-  },
-  {
-    shot: "settings-crosshair",
-    title: "Crosshair",
-    line: "Stock crosshairs, community packs, or design your own.",
-  },
-  {
-    shot: "settings-mods",
-    title: "Mods",
-    line: "Optional preloading for supported content, with Restore stock files.",
-  },
-  {
-    shot: "settings-sounds",
-    title: "Sounds",
-    line: "Hit and kill sounds from a searchable library.",
-  },
-  {
-    shot: "switch",
     title: "Profiles",
-    line: "Every setup is a named profile. Switch while the game is closed.",
+    line: "Keep each setup together.",
+    detail: "Switch while Team Fortress 2 is closed.",
+  },
+  {
+    title: "Comfig",
+    line: "Choose a preset. Tune its modules.",
+    detail: "Official mastercomfig packages.",
+  },
+  {
+    title: "HUD",
+    line: "Find a HUD or bring your own.",
+    detail: "One HUD choice per profile.",
+  },
+  {
+    title: "Mods",
+    line: "Manage your custom packs.",
+    detail: "Optional Casual setup includes Restore stock files.",
+  },
+  {
+    title: "Sounds",
+    line: "Use installed effects or your own WAV.",
+    detail: "Hit and kill choices stay with your profile.",
+  },
+  {
+    title: "Files",
+    line: "Edit your cfg with source-aware help.",
+    detail: "Your drafts wait for an explicit Save.",
   },
 ] as const;
 
@@ -183,7 +181,7 @@ function Hook() {
   );
 }
 
-function Beat({ shot, title, line }: (typeof BEATS)[number]) {
+function Beat({ title, line, detail, number }: (typeof BEATS)[number] & { number: number }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 22, stiffness: 120 } });
@@ -192,74 +190,70 @@ function Beat({ shot, title, line }: (typeof BEATS)[number]) {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const drift = interpolate(frame, [0, BEAT], [0, -14], { easing: Easing.linear });
+  const drift = interpolate(frame, [0, BEAT], [12, -12], { easing: Easing.linear });
   const caption = spring({ frame: frame - 8, fps, config: { damping: 200 } });
   return (
-    <AbsoluteFill style={{ opacity: leave }}>
+    <AbsoluteFill
+      style={{ opacity: leave, alignItems: "center", justifyContent: "center", gap: 28 }}
+    >
       <div
         style={{
-          position: "absolute",
-          left: 100,
-          top: 150,
-          width: 480,
+          width: 1520,
+          minHeight: 590,
+          boxSizing: "border-box",
+          padding: "76px 90px",
+          border: `1px solid ${theme.edgeStrong}`,
+          borderRadius: 24,
+          background: theme.panel,
+          boxShadow: "0 32px 100px rgba(0,0,0,0.28)",
           opacity: caption,
-          transform: `translateY(${(1 - caption) * 16}px)`,
+          transform: `translateY(${(1 - enter) * 36 + drift}px)`,
         }}
       >
         <div
           style={{
             fontFamily: theme.font,
-            fontSize: 22,
+            fontSize: 28,
             fontWeight: 500,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: theme.brand,
-            marginBottom: 20,
+            marginBottom: 46,
           }}
         >
-          {title}
+          {String(number).padStart(2, "0")} / {String(BEATS.length).padStart(2, "0")} · {title}
         </div>
         <div
           style={{
             fontFamily: theme.font,
-            fontSize: 46,
+            fontSize: 74,
             fontWeight: 600,
             letterSpacing: "-0.02em",
-            lineHeight: 1.18,
+            lineHeight: 1.12,
             color: theme.ink,
           }}
         >
           {line}
         </div>
+        <div
+          style={{
+            fontFamily: theme.font,
+            fontSize: 37,
+            color: theme.inkMuted,
+            marginTop: 38,
+          }}
+        >
+          {detail}
+        </div>
       </div>
       <div
         style={{
-          position: "absolute",
-          left: 640,
-          top: 126,
-          width: 1240,
-          transform: `translateX(${(1 - enter) * 80 + drift}px) scale(${0.96 + enter * 0.04})`,
-          transformOrigin: "left center",
-          opacity: enter,
-          borderRadius: 18,
-          overflow: "hidden",
-          boxShadow: `0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px ${theme.edgeStrong}`,
-          background: theme.panel,
-        }}
-      >
-        <Img src={staticFile(`shots/${shot}.png`)} style={{ width: "100%", display: "block" }} />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          bottom: 72,
           fontFamily: theme.font,
-          fontSize: 22,
+          fontSize: 24,
           color: theme.inkMuted,
         }}
       >
-        Earlier-release interface · sample data
+        Development overview · 0.2.0
       </div>
     </AbsoluteFill>
   );
@@ -342,8 +336,8 @@ export function Promo() {
         <Hook />
       </Sequence>
       {BEATS.map((beat, index) => (
-        <Sequence key={beat.shot} from={INTRO + HOOK + index * BEAT} durationInFrames={BEAT}>
-          <Beat {...beat} />
+        <Sequence key={beat.title} from={INTRO + HOOK + index * BEAT} durationInFrames={BEAT}>
+          <Beat {...beat} number={index + 1} />
         </Sequence>
       ))}
       <Sequence from={INTRO + HOOK + BEATS.length * BEAT} durationInFrames={OUTRO}>

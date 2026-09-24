@@ -40,10 +40,6 @@ name = "pack_probe"
 required-features = ["probes"]
 
 [[example]]
-name = "viewmodel_build_probe"
-required-features = ["probes"]
-
-[[example]]
 name = "vtf_probe"
 required-features = ["probes"]
 

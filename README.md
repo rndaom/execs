@@ -14,9 +14,9 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-![An overview of execs](docs/media/promo.gif)
+This README describes the in-development 0.2.0 branch. The Download link installs the latest public release, v0.1.8; its controls and available catalogs differ from this branch. The animation and screenshots below show unreleased development behavior. The screenshots use browser preview data, not a packaged native session.
 
-This README describes the in-development 0.2.0 branch. The Download link installs the latest public release, v0.1.8; its controls and available catalogs differ from this branch. The demo and screenshots are older sample captures and do not preview the unreleased work.
+![Text overview of execs development features](docs/media/promo.gif)
 
 ## What it does
 
@@ -26,17 +26,16 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Binds.** Click an action, press a key.
 - **HUD.** Install from the hud-db catalog, tune its options, or import your own.
 - **Crosshair.** Stock crosshairs, your own designs or PNGs per weapon, and crosshairs already saved in your profile.
-- **Viewmodels.** Hide weapons per class, compiled with the game's own tools on Windows. Linux supports importing prebuilt packs.
+- **Viewmodels.** Import a user-provided model VPK. Packs saved by earlier development builds remain switchable and exportable, but their recorded class choices cannot be rebuilt.
 - **Sounds.** Use stock hit and kill effects from your TF2 install or your own WAV.
-- **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading supports selected customizations; server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
+- **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading offers four direct-author addon choices and particle sources from your installed mods. Older saved cueki library choices need their original verified local cache; new library downloads are paused. Server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
 - **Files.** Edit your own UTF-8 cfgs with a Source-aware linter; inspect provided cfgs read-only.
 
+### Development preview
+
 <p align="center">
-  <img src="docs/media/hud.png" width="49%" alt="HUD pane">
-  <img src="docs/media/crosshair.png" width="49%" alt="Crosshair pane">
-</p>
-<p align="center">
-  <img src="docs/media/mods.png" width="75%" alt="Mods pane">
+  <img src="docs/media/development-comfig.png" width="49%" alt="Comfig pane with a selected preset and module controls in browser preview data">
+  <img src="docs/media/development-gameplay.png" width="49%" alt="Gameplay pane with FOV values and viewmodel controls in browser preview data">
 </p>
 
 ## Install
@@ -44,8 +43,6 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 Download from the [latest release](https://github.com/rndaom/execs/releases/latest). That published build is the only supported install; updates are offered in-app and install only when you click. What changed: [changelog](CHANGELOG.md).
 
 **Windows 10 or 11, 64-bit.** Run the `-setup.exe`. It installs per user, no admin needed. The installer does not have an Authenticode publisher signature yet. Windows or your browser may warn on each new version; [SmartScreen reputation is specific to the file and publisher](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation).
-
-![Example Windows SmartScreen warning](docs/media/smartscreen.png)
 
 Before proceeding, confirm that the download comes from the published `rndaom/execs` GitHub release, that its name and version match, and that its SHA-256 digest matches the release. PowerShell's `Get-FileHash -Algorithm SHA256 .\downloaded-setup.exe` can check the downloaded file. An unsigned installer has no verified publisher identity; a matching digest checks the release bytes, not publisher signing.
 
@@ -87,7 +84,7 @@ execs installs work by the TF2 community:
 
 - [mastercomfig](https://github.com/mastercomfig/mastercomfig) and [hud-db](https://github.com/mastercomfig/hud-db) by [mastercoms](https://github.com/mastercoms)
 - [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) by [CriticalFlaw](https://github.com/CriticalFlaw)
-- [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), previews by Oblique
+- Previously built viewmodel packs used [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), with previews by Oblique; new source and preview downloads are retired
 - [casual-pre-loader](https://github.com/cueki/casual-pre-loader) by [cueki](https://github.com/cueki)
 - [Flat Textures (2021)](https://gamebanana.com/mods/295065) by [flewvar](https://gamebanana.com/members/1764119), with textures credited to [JarateKing](https://github.com/JarateKing)
 - [Developer Textures Overhaul v2](https://gamebanana.com/mods/336110), a rework by FPS_Engineer; earlier material was reuploaded and continued by ayrtonSilna, who did not identify its original creator

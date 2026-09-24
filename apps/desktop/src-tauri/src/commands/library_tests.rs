@@ -313,6 +313,7 @@ fn command_default_library_preflight_refusal_preserves_source_bytes_owner_and_ch
     let f = Fixture::new();
     let before = fs::read(f.root.join("tf/tf2_misc_000.vpk")).unwrap();
     let state = fs::read(f.data.join("preloader/state.json")).unwrap();
+    let saved_before = f.selected(&f.a);
     execs_core::profile::mutate_profile_files_to(
         &f.profiles,
         &f.root,
@@ -331,7 +332,8 @@ fn command_default_library_preflight_refusal_preserves_source_bytes_owner_and_ch
     )
     .unwrap();
     let error = f.switch(&f.b).unwrap_err();
-    assert!(error.message.contains("Download the default mod library"));
+    assert_eq!(error.code, "LegacyCasualSourceMissing");
+    assert!(error.message.contains("saved Casual library choices"));
     assert_eq!(
         fs::read(f.root.join("tf/tf2_misc_000.vpk")).unwrap(),
         before
@@ -347,8 +349,12 @@ fn command_default_library_preflight_refusal_preserves_source_bytes_owner_and_ch
             .as_deref(),
         Some(f.a.as_str())
     );
+    assert_eq!(f.selected(&f.a), saved_before);
     assert_eq!(
-        f.selected(&f.a).profile_particle_mods,
+        execs_core::preloader::selection_for_export(&f.profiles, &f.a)
+            .unwrap()
+            .unwrap()
+            .profile_particle_mods,
         std::slice::from_ref(&f.local_mod)
     );
 }

@@ -1097,6 +1097,243 @@ fn profile_projection_replaces_addons_and_particles_then_restores_the_previous_p
 }
 
 #[test]
+fn inactive_legacy_review_clears_only_retired_choices_after_exact_revision() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let active = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Active",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .active_profile_id
+        .unwrap();
+        let target = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Imported legacy",
+            Vec::<String>::new(),
+        )
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|record| record.name == "Imported legacy")
+        .unwrap()
+        .id;
+        let saved = PreloaderSelection {
+            addons: vec![flat_textures::ID.into(), "factory new".into()],
+            particle_mods: vec!["Square_Series".into()],
+            profile_particle_mods: vec!["installed-particle-pack".into()],
+        };
+        crate::profile::mutate_profile_files_to(
+            &profiles,
+            &root,
+            &target,
+            &[],
+            &[],
+            crate::profile::ProfileLiveProjection::LibraryOnly,
+            Vec::<String>::new(),
+            |manifest| {
+                manifest.preloader = Some(saved.clone());
+                Ok(())
+            },
+        )
+        .unwrap();
+        let review = retired_library_review(&profiles, &target).unwrap().unwrap();
+        assert_eq!(review.addons_to_remove, ["factory new"]);
+        assert_eq!(review.particle_mods_to_remove, ["Square_Series"]);
+        assert_eq!(review.direct_addons_kept, [flat_textures::ID]);
+        assert_eq!(
+            review.profile_particle_mods_kept,
+            ["installed-particle-pack"]
+        );
+        let manifest_before = crate::profile::load_manifest(&profiles, &target).unwrap();
+        let gameinfo_before = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+        let misc_before = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+
+        assert!(
+            clear_retired_library_choices(&profiles, &root, &target, "stale-review", &[],)
+                .unwrap_err()
+                .message()
+                .contains("Review it again")
+        );
+        assert_eq!(
+            crate::profile::load_manifest(&profiles, &target).unwrap(),
+            manifest_before
+        );
+
+        clear_retired_library_choices(&profiles, &root, &target, &review.revision, &[]).unwrap();
+        let updated = crate::profile::load_manifest(&profiles, &target).unwrap();
+        let remaining = updated.preloader.unwrap();
+        assert_eq!(remaining.addons, [flat_textures::ID]);
+        assert!(remaining.particle_mods.is_empty());
+        assert_eq!(remaining.profile_particle_mods, ["installed-particle-pack"]);
+        assert!(!remaining.needs_cueki_library());
+        assert!(retired_library_review(&profiles, &target)
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+            gameinfo_before
+        );
+        assert_eq!(
+            std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+            misc_before
+        );
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id,
+            Some(active)
+        );
+    });
+}
+
+/// Run with the pinned cueki release already available outside the repo. The
+/// archive is copied into the app cache as a preexisting legacy source; this
+/// test never downloads it or writes into the user's actual TF2 install.
+#[test]
+#[ignore = "requires EXECS_D7_CUEKI_ZIP"]
+fn saved_legacy_selection_switches_only_with_exact_cached_archive_and_restores_stock() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let source_zip = std::path::PathBuf::from(std::env::var("EXECS_D7_CUEKI_ZIP").unwrap());
+        assert_eq!(crate::hash::sha256_file(&source_zip).unwrap(), MODS_SHA256);
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let source = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Saved legacy",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .active_profile_id
+        .unwrap();
+        let target = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Direct choices",
+            Vec::<String>::new(),
+        )
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|record| record.name == "Direct choices")
+        .unwrap()
+        .id;
+        let cache = data
+            .join("preloader")
+            .join(format!("mods-{MODS_RELEASE}.zip"));
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::copy(&source_zip, &cache).unwrap();
+        let stock_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+        let stock_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+        let selection = PreloaderSelection {
+            addons: vec!["factory new".into()],
+            ..Default::default()
+        };
+        apply_preloader_selection_with_sampler(&root, &data, &cache, &selection, &[], &Vec::new)
+            .unwrap();
+        record_preload_profile(&data, &source).unwrap();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &target,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(
+            crate::profile::load_manifest(&profiles, &source)
+                .unwrap()
+                .preloader,
+            Some(selection.clone())
+        );
+        let before_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+        let before_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+
+        // Missing and same-sized corrupt caches both fail during target
+        // preflight, before the active profile or installed bytes change.
+        std::fs::remove_file(&cache).unwrap();
+        for corrupt in [false, true] {
+            if corrupt {
+                std::fs::write(&cache, vec![0; 81_529_475]).unwrap();
+            }
+            let err = crate::switch::switch_profile_to(
+                &profiles,
+                &root,
+                &source,
+                Vec::<String>::new(),
+                crate::absorb::AbsorbOptions::default(),
+                |_| {},
+            )
+            .unwrap_err();
+            assert!(err
+                .message()
+                .contains("previously verified mod library cache"));
+            assert_eq!(
+                crate::profile::load_library_from(&profiles, Some(&root))
+                    .unwrap()
+                    .active_profile_id
+                    .as_deref(),
+                Some(target.as_str())
+            );
+            assert_eq!(
+                std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+                before_gameinfo
+            );
+            assert_eq!(
+                std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+                before_misc
+            );
+            assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+        }
+
+        std::fs::copy(&source_zip, &cache).unwrap();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &source,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(
+            preloader_status(&root, &data).unwrap().addons,
+            selection.addons
+        );
+        assert!(root.join("tf/custom").join(PRELOADER_VPK).exists());
+        revert_preloader(&root, &data, &[]).unwrap();
+        assert_eq!(
+            std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+            stock_gameinfo
+        );
+        assert_eq!(
+            std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+            stock_misc
+        );
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    });
+}
+
+#[test]
 fn failed_profile_projection_restores_the_previous_owner_and_bytes() {
     let (root, data) = fake_root();
     let zip = fake_mods_zip(&root);
@@ -1213,7 +1450,9 @@ fn switching_to_imported_profile_clears_global_mods_and_preserves_the_legacy_sel
             |_| {},
         )
         .unwrap_err();
-        assert!(err.message().contains("Download the default mod library"));
+        assert!(err
+            .message()
+            .contains("previously verified mod library cache"));
         assert_eq!(
             crate::profile::load_library_from(&profiles, Some(&root))
                 .unwrap()

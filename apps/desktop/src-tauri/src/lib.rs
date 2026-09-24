@@ -8,7 +8,6 @@ mod hud_stats;
 mod mods_fetch;
 mod net;
 mod startup_error;
-mod viewmodel_fetch;
 
 /// Isolated release verification; absent from ordinary application builds.
 #[cfg(feature = "release-probes")]
@@ -670,8 +669,10 @@ pub fn run() {
             commands::app_settings::get_app_settings,
             commands::app_settings::set_app_preferences,
             commands::library::switch_profile,
+            commands::library::review_retired_casual_profile,
+            commands::library::clear_retired_casual_profile,
             commands::library::export_profile,
-            commands::library::inspect_profile_export_credentials,
+            commands::library::inspect_profile_export,
             commands::library::import_profile,
             commands::library::confirm_profile_import,
             commands::library::cancel_profile_import,
@@ -735,7 +736,6 @@ pub fn run() {
             commands::preloader::get_preloader_status,
             commands::preloader::recover_preloader,
             commands::preloader::get_default_mods,
-            commands::preloader::download_default_mods,
             commands::preloader::apply_preloader_mods,
             commands::preloader::set_gameinfo_bypass,
             commands::preloader::revert_preloader,

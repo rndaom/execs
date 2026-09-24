@@ -2,7 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { AbsorbOwnedResult, Tf2Install } from "../lib/bridge";
+import type { AbsorbOwnedResult, ProfileLibrary, Tf2Install } from "../lib/bridge";
 import { BridgeError } from "../lib/bridge";
 import { emptyAbsorbDelta, previewPackDelta, previewSavedProfile } from "../lib/library-ui";
 import { createPreviewApi } from "../lib/preview-bridge";
@@ -220,6 +220,128 @@ it("offers an explicit capture after a kept-pack switch refusal", async () => {
   expect(capture).toHaveBeenCalledWith("captureKept");
   expect(switchCall).toHaveBeenCalledTimes(1);
   expect(state.switchHandoff).toBeNull();
+});
+
+it("keeps an inactive legacy profile unchanged when its unavailable-source review is cancelled", async () => {
+  await render();
+  const target = previewSavedProfile("Legacy", 9);
+  await act(async () =>
+    state.setLibrary({
+      ...must(state.library),
+      profiles: [...must(state.library).profiles, target],
+    }),
+  );
+  const switchCall = vi
+    .spyOn(api, "switchProfile")
+    .mockRejectedValue(new BridgeError("Original source unavailable", "LegacyCasualSourceMissing"));
+  vi.spyOn(api, "reviewRetiredCasualProfile").mockResolvedValue({
+    profileId: target.id,
+    revision: "exact-saved-selection",
+    addonsToRemove: ["factory new"],
+    particleModsToRemove: ["Square_Series"],
+    directAddonsKept: ["Flat Textures v1"],
+    profileParticleModsKept: [],
+  });
+  const clear = vi.spyOn(api, "clearRetiredCasualProfile");
+  await act(async () => state.switchProfile(target.id));
+  expect(state.retiredCasualReview).toMatchObject({
+    profileId: target.id,
+    name: "Legacy",
+    addonsToRemove: ["factory new"],
+  });
+  expect(clear).not.toHaveBeenCalled();
+  await act(async () => state.cancelRetiredCasualReview());
+  expect(state.retiredCasualReview).toBeNull();
+  expect(clear).not.toHaveBeenCalled();
+  expect(switchCall).toHaveBeenCalledTimes(1);
+});
+
+it("passes the reviewed revision to a library-only clear before retrying switch", async () => {
+  await render();
+  const target = previewSavedProfile("Legacy", 9);
+  const previous = must(state.library);
+  await act(async () =>
+    state.setLibrary({ ...previous, profiles: [...previous.profiles, target] }),
+  );
+  const originalSwitch = api.switchProfile.bind(api);
+  const switchCall = vi
+    .spyOn(api, "switchProfile")
+    .mockRejectedValueOnce(
+      new BridgeError("Original source unavailable", "LegacyCasualSourceMissing"),
+    )
+    .mockImplementationOnce(originalSwitch);
+  vi.spyOn(api, "reviewRetiredCasualProfile").mockResolvedValue({
+    profileId: target.id,
+    revision: "exact-saved-selection",
+    addonsToRemove: ["factory new"],
+    particleModsToRemove: [],
+    directAddonsKept: ["Flat Textures v1"],
+    profileParticleModsKept: [],
+  });
+  const clear = vi
+    .spyOn(api, "clearRetiredCasualProfile")
+    .mockResolvedValue({ ...previous, profiles: [...previous.profiles, target] });
+  await act(async () => state.switchProfile(target.id));
+  expect(clear).not.toHaveBeenCalled();
+  await act(async () => state.confirmRetiredCasualReview());
+  expect(clear).toHaveBeenCalledExactlyOnceWith(target.id, "exact-saved-selection");
+  expect(switchCall).toHaveBeenCalledTimes(2);
+  expect(state.retiredCasualReview).toBeNull();
+  expect(state.library?.activeProfileId).toBe(target.id);
+});
+
+it("refuses Cancel and duplicate Confirm until a deferred Casual clear and retry finish", async () => {
+  await render();
+  const target = previewSavedProfile("Legacy", 9);
+  const previous = must(state.library);
+  await act(async () =>
+    state.setLibrary({ ...previous, profiles: [...previous.profiles, target] }),
+  );
+  const originalSwitch = api.switchProfile.bind(api);
+  const switchCall = vi
+    .spyOn(api, "switchProfile")
+    .mockRejectedValueOnce(
+      new BridgeError("Original source unavailable", "LegacyCasualSourceMissing"),
+    )
+    .mockImplementationOnce(originalSwitch);
+  vi.spyOn(api, "reviewRetiredCasualProfile").mockResolvedValue({
+    profileId: target.id,
+    revision: "exact-saved-selection",
+    addonsToRemove: ["factory new"],
+    particleModsToRemove: [],
+    directAddonsKept: [],
+    profileParticleModsKept: [],
+  });
+  let finishClear: ((value: ProfileLibrary) => void) | undefined;
+  const clear = vi.spyOn(api, "clearRetiredCasualProfile").mockImplementation(
+    () =>
+      new Promise<ProfileLibrary>((resolve) => {
+        finishClear = resolve;
+      }),
+  );
+  await act(async () => state.switchProfile(target.id));
+  let pending: Promise<void> | undefined;
+  await act(async () => {
+    pending = state.confirmRetiredCasualReview();
+    await Promise.resolve();
+  });
+  expect(clear).toHaveBeenCalledExactlyOnceWith(target.id, "exact-saved-selection");
+  expect(state.retiredCasualInFlight).toBe(true);
+  expect(state.retiredCasualReview?.profileId).toBe(target.id);
+  await act(async () => {
+    state.cancelRetiredCasualReview();
+    await state.confirmRetiredCasualReview();
+  });
+  expect(state.retiredCasualReview?.profileId).toBe(target.id);
+  expect(clear).toHaveBeenCalledTimes(1);
+  expect(switchCall).toHaveBeenCalledTimes(1);
+
+  await act(async () => finishClear?.({ ...previous, profiles: [...previous.profiles, target] }));
+  await act(async () => pending);
+  expect(state.retiredCasualInFlight).toBe(false);
+  expect(state.retiredCasualReview).toBeNull();
+  expect(switchCall).toHaveBeenCalledTimes(2);
+  expect(state.library?.activeProfileId).toBe(target.id);
 });
 
 it("routes retained live files to Save current as without mutating them", async () => {

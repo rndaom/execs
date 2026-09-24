@@ -67,6 +67,7 @@ const RESERVE_MAX: usize = 16 * MIB as usize;
 #[derive(Debug, Clone, Copy)]
 pub enum Verify<'a> {
     Sha256(&'a str),
+    #[cfg(test)]
     Magic(&'a [u8]),
 }
 
@@ -74,6 +75,7 @@ impl Verify<'_> {
     pub fn accepts(&self, bytes: &[u8]) -> bool {
         match self {
             Self::Sha256(expected) => execs_core::hash::sha256_hex(bytes) == *expected,
+            #[cfg(test)]
             Self::Magic(magic) => bytes.starts_with(magic),
         }
     }
@@ -1016,18 +1018,6 @@ pub fn download_bytes_for_timeout(
     Ok(response.body)
 }
 
-/// A pinned asset, from the cache when it still verifies and from the network
-/// otherwise. The cache file is only written once the bytes pass `verify`.
-pub fn download_pinned_for(
-    url: &str,
-    cache_path: &Path,
-    verify: Verify<'_>,
-    max_bytes: u64,
-    source: RemoteSource,
-) -> Result<Vec<u8>, String> {
-    download_pinned_validated_for(url, cache_path, verify, max_bytes, source, |_| Ok(()))
-}
-
 pub fn download_pinned_validated_for(
     url: &str,
     cache_path: &Path,
@@ -1166,6 +1156,7 @@ fn cached_file_accepts_within(
         Verify::Sha256(expected) => {
             execs_core::hash::sha256_file(path).is_ok_and(|actual| actual == expected)
         }
+        #[cfg(test)]
         Verify::Magic(_) => read_cache_file_capped(cache_root, path, max_bytes)
             .is_ok_and(|bytes| verify.accepts(&bytes)),
     }

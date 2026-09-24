@@ -252,7 +252,7 @@ describe("mods apply gating", () => {
     ).toBe(false);
     expect(modsApplyEnabled(uncached, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(null, selection())).toBe(false);
-    expect(modsStatusLine(uncached, INSTALLED, false)).toContain("Download the mod library");
+    expect(modsStatusLine(uncached, INSTALLED, false)).toContain("restore the verified cache");
     expect(modsStatusLine(uncached, selection(), false)).toBe("Unsaved changes");
   });
 

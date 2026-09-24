@@ -1,13 +1,14 @@
 //! Profile-owned selections projected into the install's shared preloader files.
 use std::path::{Path, PathBuf};
 
-use crate::hash::sha256_file;
+use crate::hash::{sha256_file, sha256_hex};
 use crate::process_lock::refuse_if_running_among;
 use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
     load_library_from, load_manifest, mutate_profile_files_to, ProfileError, ProfileLiveProjection,
 };
 use crate::vpk::map_vpk_entries;
+use serde::Serialize;
 
 use super::apply::{
     apply_preloader_selection_transactional, prepare_preloader_selection, PreloaderReport,
@@ -45,11 +46,10 @@ impl PreloaderSelection {
 
     pub fn needs_cueki_library(&self) -> bool {
         !self.particle_mods.is_empty()
-            || self.addons.iter().any(|addon| {
-                addon != super::flat_textures::ID
-                    && addon != super::developer_textures::ID
-                    && !super::square_overlays::is_overlay(addon)
-            })
+            || self
+                .addons
+                .iter()
+                .any(|addon| !is_direct_author_addon(addon))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -76,6 +76,114 @@ impl PreloaderSelection {
         }
         Ok(())
     }
+}
+
+fn is_direct_author_addon(addon: &str) -> bool {
+    addon == super::flat_textures::ID
+        || addon == super::developer_textures::ID
+        || super::square_overlays::is_overlay(addon)
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RetiredLibraryReview {
+    pub profile_id: String,
+    pub revision: String,
+    pub addons_to_remove: Vec<String>,
+    pub particle_mods_to_remove: Vec<String>,
+    pub direct_addons_kept: Vec<String>,
+    pub profile_particle_mods_kept: Vec<String>,
+}
+
+fn selection_revision(selection: &PreloaderSelection) -> Result<String, ProfileError> {
+    let bytes =
+        serde_json::to_vec(selection).map_err(|error| ProfileError::Io(error.to_string()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+/// Read a bounded, exact list of saved library choices before a user reviews
+/// clearing them. No profile or installed file is changed by this read.
+pub fn retired_library_review(
+    profiles: &Path,
+    id: &str,
+) -> Result<Option<RetiredLibraryReview>, ProfileError> {
+    let selection = load_manifest(profiles, id)?.preloader.unwrap_or_default();
+    selection.validate()?;
+    let addons_to_remove = selection
+        .addons
+        .iter()
+        .filter(|addon| !is_direct_author_addon(addon))
+        .cloned()
+        .collect::<Vec<_>>();
+    if addons_to_remove.is_empty() && selection.particle_mods.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(RetiredLibraryReview {
+        profile_id: id.to_string(),
+        revision: selection_revision(&selection)?,
+        addons_to_remove,
+        particle_mods_to_remove: selection.particle_mods,
+        direct_addons_kept: selection
+            .addons
+            .into_iter()
+            .filter(|addon| is_direct_author_addon(addon))
+            .collect(),
+        profile_particle_mods_kept: selection.profile_particle_mods,
+    }))
+}
+
+/// Review-bound library-only change for an inactive profile whose original
+/// cueki cache is unavailable. Direct author and profile-owned sources stay
+/// saved. The installed projection and other profiles are left untouched.
+pub fn clear_retired_library_choices(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    expected_revision: &str,
+    running: &[String],
+) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles, Some(root))?;
+    if library.active_profile_id.as_deref() == Some(id)
+        || library.pending_switch_profile_id.is_some()
+        || selection_for_export(profiles, id)?.is_some()
+    {
+        return Err(ProfileError::Io(
+            "This profile owns an installed or pending Casual selection. Finish recovery or switch away before reviewing its saved choices.".into(),
+        ));
+    }
+    let review = retired_library_review(profiles, id)?.ok_or_else(|| {
+        ProfileError::Io("This profile no longer has saved library choices to clear.".into())
+    })?;
+    if review.revision != expected_revision {
+        return Err(ProfileError::Io(
+            "The saved Casual selection changed. Review it again before clearing choices.".into(),
+        ));
+    }
+    mutate_profile_files_to(
+        profiles,
+        root,
+        id,
+        &[],
+        &[],
+        ProfileLiveProjection::LibraryOnly,
+        running,
+        |manifest| {
+            let mut selection = manifest.preloader.clone().unwrap_or_default();
+            if selection_revision(&selection)? != expected_revision {
+                return Err(ProfileError::Io(
+                    "The saved Casual selection changed. Review it again before clearing choices."
+                        .into(),
+                ));
+            }
+            selection
+                .addons
+                .retain(|addon| is_direct_author_addon(addon));
+            selection.particle_mods.clear();
+            manifest.preloader = Some(selection);
+            Ok(())
+        },
+    )?;
+    Ok(())
 }
 
 fn selection(state: &PreloaderState) -> PreloaderSelection {
@@ -248,7 +356,7 @@ pub fn prepare_profile_preloader(
             || sha256_file(&zip).ok().as_deref() != Some(MODS_SHA256)
         {
             return Err(ProfileError::Io(
-                "Download the default mod library in Mods before switching to this profile.".into(),
+                "This saved Casual choice needs its previously verified mod library cache before switching. New library downloads are paused while source-asset rights are unresolved.".into(),
             ));
         }
         zip

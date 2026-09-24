@@ -1,6 +1,6 @@
 //! Versioned profile zip export/import. Library only — never writes live TF2.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -35,6 +35,30 @@ pub use creator::{import_reviewed_profile, inspect_profile_import, ProfileImport
 
 pub const ZIP_SCHEMA: u32 = 1;
 pub const ZIP_MANIFEST_NAME: &str = "execs-profile.json";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileExportReview {
+    pub revision: String,
+    pub credential_locations: Vec<String>,
+    pub custom_packs: Vec<ProfileExportPack>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileExportPack {
+    pub path: String,
+    pub file_count: usize,
+    pub kind: ProfileExportPackKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProfileExportPackKind {
+    Other,
+    CrosshairScripts,
+    Viewmodels,
+}
 
 /// Import ceilings. A profile zip is a mastercomfig layer plus a HUD plus
 /// skins; anything past these is a deflate bomb or a mistake, and reading one
@@ -160,18 +184,18 @@ pub fn export_profile(
 
 /// Read-only disclosure before the user chooses an export destination. Values
 /// never leave the core. Export revalidates every source when it writes the ZIP.
-pub fn inspect_profile_export_credentials(
+pub fn inspect_profile_export(
     tf2_root: &Path,
     profile_id: &str,
-) -> Result<Vec<String>, ProfileError> {
-    inspect_profile_export_credentials_from(&profiles_dir(), tf2_root, profile_id)
+) -> Result<ProfileExportReview, ProfileError> {
+    inspect_profile_export_from(&profiles_dir(), tf2_root, profile_id)
 }
 
-pub fn inspect_profile_export_credentials_from(
+pub fn inspect_profile_export_from(
     profiles_dir: &Path,
     tf2_root: &Path,
     profile_id: &str,
-) -> Result<Vec<String>, ProfileError> {
+) -> Result<ProfileExportReview, ProfileError> {
     let library = require_usable_library(profiles_dir, tf2_root)?;
     if !library
         .profiles
@@ -180,8 +204,14 @@ pub fn inspect_profile_export_credentials_from(
     {
         return Err(ProfileError::UnknownProfile);
     }
-    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    if let Some(selection) = crate::preloader::selection_for_export(profiles_dir, profile_id)? {
+        manifest.preloader = Some(selection);
+    }
+    let revision = profile_export_revision(&manifest)?;
     validate_exported_launch_options(&manifest.launch_options)?;
+    let export_files = validated_export_files(&manifest)?;
+    let custom_packs = profile_export_custom_packs(&export_files);
     let mut locations = Vec::new();
     if manifest
         .launch_options
@@ -196,7 +226,7 @@ pub fn inspect_profile_export_credentials_from(
         locations
             .push("Launch options may contain a saved password or remote-console setting.".into());
     }
-    for entry in validated_export_files(&manifest)? {
+    for entry in export_files {
         if !has_extension(&entry.path, "cfg") && !has_extension(&entry.path, "vpk") {
             continue;
         }
@@ -251,7 +281,51 @@ pub fn inspect_profile_export_credentials_from(
             break;
         }
     }
-    Ok(locations)
+    Ok(ProfileExportReview {
+        revision,
+        credential_locations: locations,
+        custom_packs,
+    })
+}
+
+fn profile_export_revision(manifest: &ProfileManifest) -> Result<String, ProfileError> {
+    let bytes = serde_json::to_vec(manifest).map_err(|err| ProfileError::Io(err.to_string()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+/// Group only paths that the ZIP writer will copy. Feature metadata can be
+/// absent or stale, so the disclosure derives from the validated file list.
+fn profile_export_custom_packs(files: &[ProfileFile]) -> Vec<ProfileExportPack> {
+    let mut packs = BTreeMap::<String, ProfileExportPack>::new();
+    for file in files {
+        let lower = file.path.to_ascii_lowercase();
+        if !lower.starts_with("tf/custom/") {
+            continue;
+        }
+        // Validated profile paths retain source casing even though ownership
+        // and portable identity checks compare their components without it.
+        let custom_path = &file.path["tf/custom/".len()..];
+        let (root, folder) = match custom_path.split_once('/') {
+            Some((root, _)) => (root, true),
+            None => (custom_path, false),
+        };
+        let path = format!("tf/custom/{root}{}", if folder { "/" } else { "" });
+        let pack = packs.entry(path.to_lowercase()).or_insert_with(|| ProfileExportPack {
+            path,
+            file_count: 0,
+            kind: ProfileExportPackKind::Other,
+        });
+        pack.file_count += 1;
+        if lower == "tf/custom/execs-viewmodels.vpk" {
+            pack.kind = ProfileExportPackKind::Viewmodels;
+        } else if lower.starts_with("tf/custom/execs-crosshairs/")
+            && lower.contains("/scripts/tf_weapon_")
+            && lower.ends_with(".txt")
+        {
+            pack.kind = ProfileExportPackKind::CrosshairScripts;
+        }
+    }
+    packs.into_values().collect()
 }
 
 pub fn import_profile(tf2_root: &Path, zip_path: &Path) -> Result<ProfileLibrary, ProfileError> {
@@ -284,6 +358,34 @@ pub fn export_profile_to(
     profile_id: &str,
     zip_path: &Path,
 ) -> Result<(), ProfileError> {
+    export_profile_to_with_review(profiles_dir, tf2_root, profile_id, zip_path, None)
+}
+
+/// The normal UI path binds the chosen ZIP destination to the review that
+/// listed its files. Background profile edits require the player to review it
+/// again; this token says nothing about redistribution rights.
+pub fn export_profile_reviewed(
+    tf2_root: &Path,
+    profile_id: &str,
+    zip_path: &Path,
+    expected_revision: &str,
+) -> Result<(), ProfileError> {
+    export_profile_to_with_review(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        zip_path,
+        Some(expected_revision),
+    )
+}
+
+fn export_profile_to_with_review(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    zip_path: &Path,
+    expected_revision: Option<&str>,
+) -> Result<(), ProfileError> {
     let library = require_usable_library(profiles_dir, tf2_root)?;
     if !library
         .profiles
@@ -295,6 +397,14 @@ pub fn export_profile_to(
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     if let Some(selection) = crate::preloader::selection_for_export(profiles_dir, profile_id)? {
         manifest.preloader = Some(selection);
+    }
+    if let Some(expected) = expected_revision {
+        if profile_export_revision(&manifest)? != expected {
+            return Err(ProfileError::Io(
+                "This profile changed since export review. Review it again before exporting."
+                    .into(),
+            ));
+        }
     }
     write_profile_zip(profiles_dir, profile_id, &manifest, zip_path)
 }
@@ -3207,11 +3317,17 @@ mod tests {
         .unwrap();
         let destination = dir.join("existing.zip");
         fs::write(&destination, b"previous export").unwrap();
-        let locations =
-            inspect_profile_export_credentials_from(&profiles, &root, &saved.profiles[0].id)
-                .unwrap();
-        assert_eq!(locations, ["tf/cfg/config.cfg:1"]);
-        assert!(!format!("{locations:?}").contains("hunter2"));
+        let review = inspect_profile_export_from(&profiles, &root, &saved.profiles[0].id).unwrap();
+        assert_eq!(review.credential_locations, ["tf/cfg/config.cfg:1"]);
+        assert_eq!(
+            review.custom_packs,
+            [ProfileExportPack {
+                path: "tf/custom/mastercomfig-base.vpk".into(),
+                file_count: 1,
+                kind: ProfileExportPackKind::Other,
+            }]
+        );
+        assert!(!format!("{review:?}").contains("hunter2"));
         export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
         assert_ne!(fs::read(&destination).unwrap(), b"previous export");
         let imported = import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
@@ -3232,6 +3348,84 @@ mod tests {
                 .to_string_lossy()
                 .starts_with(".existing.zip.")
         }));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn export_review_lists_saved_custom_roots_and_flags_managed_derived_packs() {
+        let files = [
+            "tf/cfg/config.cfg",
+            "TF/CUSTOM/alpha.vpk",
+            "tf/custom/other-pack/materials/a.vtf",
+            "TF/CUSTOM/OTHER-PACK/sound/a.wav",
+            "tf/custom/execs-crosshairs/inactive/materials/a.vtf",
+            "TF/CUSTOM/EXECS-CROSSHAIRS/INACTIVE/SCRIPTS/TF_WEAPON_SCATTERGUN.TXT",
+            "TF/CUSTOM/EXECS-VIEWMODELS.VPK",
+        ]
+        .into_iter()
+        .map(|path| ProfileFile {
+            path: path.into(),
+            sha256: "0".repeat(64),
+            storage: FileStorage::Exclusive,
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(
+            profile_export_custom_packs(&files),
+            [
+                ProfileExportPack {
+                    path: "tf/custom/alpha.vpk".into(),
+                    file_count: 1,
+                    kind: ProfileExportPackKind::Other,
+                },
+                ProfileExportPack {
+                    path: "tf/custom/execs-crosshairs/".into(),
+                    file_count: 2,
+                    kind: ProfileExportPackKind::CrosshairScripts,
+                },
+                ProfileExportPack {
+                    path: "tf/custom/EXECS-VIEWMODELS.VPK".into(),
+                    file_count: 1,
+                    kind: ProfileExportPackKind::Viewmodels,
+                },
+                ProfileExportPack {
+                    path: "tf/custom/other-pack/".into(),
+                    file_count: 2,
+                    kind: ProfileExportPackKind::Other,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn reviewed_export_refuses_a_profile_changed_after_disclosure() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let id = &saved.profiles[0].id;
+        let review = inspect_profile_export_from(&profiles, &root, id).unwrap();
+        assert_eq!(review.revision.len(), 64);
+        let destination = dir.join("profile.zip");
+        export_profile_to_with_review(&profiles, &root, id, &destination, Some(&review.revision))
+            .unwrap();
+
+        let mut manifest = load_manifest(&profiles, id).unwrap();
+        manifest.launch_options = "-novid".into();
+        save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
+        fs::write(&destination, b"previous export").unwrap();
+        let error =
+            export_profile_to_with_review(&profiles, &root, id, &destination, Some(&review.revision))
+                .unwrap_err();
+        assert!(error.message().contains("changed since export review"));
+        assert_eq!(fs::read(&destination).unwrap(), b"previous export");
         cleanup(&dir);
     }
 
@@ -3258,13 +3452,16 @@ mod tests {
             let before = snapshot_tree(&profiles);
             let destination = dir.join("existing.zip");
             fs::write(&destination, b"previous export").unwrap();
-            let locations =
-                inspect_profile_export_credentials_from(&profiles, &root, &saved.profiles[0].id)
-                    .unwrap();
-            assert!(locations.iter().any(|location| {
+            let review =
+                inspect_profile_export_from(&profiles, &root, &saved.profiles[0].id).unwrap();
+            assert!(review.credential_locations.iter().any(|location| {
                 location == &format!("tf/custom/{pack}/cfg/private-server.cfg:1")
             }));
-            assert!(!format!("{locations:?}").contains("audit_dummy_never_a_real_secret"));
+            assert!(review
+                .custom_packs
+                .iter()
+                .any(|item| item.path == format!("tf/custom/{pack}")));
+            assert!(!format!("{review:?}").contains("audit_dummy_never_a_real_secret"));
             export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
             assert_ne!(fs::read(&destination).unwrap(), b"previous export");
             assert_eq!(snapshot_tree(&profiles), before);

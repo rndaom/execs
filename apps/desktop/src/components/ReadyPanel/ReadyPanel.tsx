@@ -2,6 +2,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
+import type { ProfileExportReview } from "../../lib/bridge";
 import { libraryStatusCopy } from "../../lib/library-ui";
 import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
 import { ProfileImportDialog } from "../ProfileImportDialog";
@@ -51,12 +52,12 @@ export function ReadyPanel({
   onLaunch: () => void;
   onCancelLaunch: () => void;
   onReviewFiles: () => void;
-  onInspectExport: (id: string) => Promise<string[]>;
+  onInspectExport: (id: string) => Promise<ProfileExportReview>;
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
   const [profileMenuRequest, setProfileMenuRequest] = useState(0);
   const [exportTargetId, setExportTargetId] = useState<string | null>(null);
-  const [exportLocations, setExportLocations] = useState<string[] | null>(null);
+  const [exportReview, setExportReview] = useState<ProfileExportReview | null>(null);
   const [exportReviewError, setExportReviewError] = useState<string | null>(null);
   const exportReviewVersion = useRef(0);
   const closeExport = () => {
@@ -66,11 +67,11 @@ export function ReadyPanel({
   const reviewExport = (id: string) => {
     const version = ++exportReviewVersion.current;
     setExportTargetId(id);
-    setExportLocations(null);
+    setExportReview(null);
     setExportReviewError(null);
     void onInspectExport(id)
-      .then((locations) => {
-        if (version === exportReviewVersion.current) setExportLocations(locations);
+      .then((review) => {
+        if (version === exportReviewVersion.current) setExportReview(review);
       })
       .catch((error: unknown) => {
         if (version === exportReviewVersion.current) {
@@ -81,6 +82,7 @@ export function ReadyPanel({
       });
   };
   const controlsBusy = busy || progress.state.active;
+  const visibleExportPacks = exportReview?.customPacks.slice(0, 50) ?? [];
   const { library } = profiles;
   const hasInactiveLibrary =
     library?.initialized &&
@@ -217,12 +219,13 @@ export function ReadyPanel({
           contain server passwords or remote-console settings. Review them before sharing the ZIP.
         </p>
         <p className="t-body mt-3 text-ink-muted">
-          The ZIP also includes the profile’s custom packs. Some may contain TF2-derived files or
-          other creators’ work. Check their sharing terms before sending the ZIP to someone else.
+          The ZIP also copies the custom packs listed below. Export does not verify permission to
+          share their contents. Check the creators’ terms and Valve’s TF2 mod guidance before
+          sending the ZIP to someone else.
         </p>
-        {exportLocations === null && !exportReviewError ? (
+        {exportReview === null && !exportReviewError ? (
           <p className="t-meta mt-4" role="status">
-            Checking this profile’s cfg files…
+            Checking this profile’s files…
           </p>
         ) : null}
         {exportReviewError ? (
@@ -230,16 +233,51 @@ export function ReadyPanel({
             {exportReviewError}
           </p>
         ) : null}
-        {exportLocations && exportLocations.length > 0 ? (
+        {exportReview && exportReview.credentialLocations.length > 0 ? (
           <div className="mt-4 rounded border border-warn/50 bg-warn/10 p-3">
             <p className="t-meta text-ink">Possible saved credentials:</p>
             <ul className="t-meta mt-2 list-disc space-y-1 pl-5 text-ink-muted">
-              {exportLocations.map((location) => (
+              {exportReview.credentialLocations.map((location) => (
                 <li key={location} className="break-all">
                   {location}
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+        {exportReview ? (
+          <div className="mt-4 rounded border border-edge p-3">
+            <p className="t-meta text-ink">
+              Custom packs in this ZIP: {exportReview.customPacks.length}
+            </p>
+            {visibleExportPacks.length > 0 ? (
+              <ul className="t-meta mt-2 list-disc space-y-2 pl-5 text-ink-muted">
+                {visibleExportPacks.map((pack) => (
+                  <li key={pack.path}>
+                    <span className="break-all text-ink">{pack.path}</span> ({pack.fileCount}{" "}
+                    {pack.fileCount === 1 ? "file" : "files"})
+                    {pack.kind === "crosshairScripts" ? (
+                      <span className="block">
+                        Weapon scripts in this pack may be modified copies of installed TF2 files.
+                      </span>
+                    ) : null}
+                    {pack.kind === "viewmodels" ? (
+                      <span className="block">
+                        This pack may contain TF2-derived models and another creator’s animations.
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="t-meta mt-2 text-ink-muted">No custom packs are included.</p>
+            )}
+            {exportReview.customPacks.length > visibleExportPacks.length ? (
+              <p className="t-meta mt-2 text-ink-muted">
+                {exportReview.customPacks.length - visibleExportPacks.length} more packs are
+                included but omitted from this list. Review the full ZIP before sharing it.
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -262,11 +300,11 @@ export function ReadyPanel({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={exportLocations === null}
+            disabled={exportReview === null}
             onClick={() => {
               const id = exportTargetId;
               closeExport();
-              if (id) void profiles.exportProfile(id);
+              if (id && exportReview) void profiles.exportProfile(id, exportReview.revision);
             }}
           >
             Export ZIP…
@@ -330,6 +368,82 @@ export function ReadyPanel({
           )}
           <button type="button" className="btn btn-ghost" onClick={profiles.dismissSwitchHandoff}>
             Cancel
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={profiles.retiredCasualReview !== null}
+        role="alertdialog"
+        testId="retired-casual-review"
+        title="Review saved Casual choices"
+        description={`${profiles.retiredCasualReview?.name ?? "This profile"} uses a mod library that is no longer downloaded because its asset rights are unresolved.`}
+        onClose={() => {
+          if (!profiles.retiredCasualInFlight) profiles.cancelRetiredCasualReview();
+        }}
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
+      >
+        {profiles.retiredCasualInFlight ? (
+          <p className="t-body text-ink-muted" role="status">
+            Removing the reviewed choices from this profile. Please wait for the switch result.
+          </p>
+        ) : (
+          <p className="t-body text-ink-muted">
+            The verified library cache is unavailable on this device. Removing the choices below
+            changes this profile’s saved selection; Cancel keeps it exactly as it is. You can also
+            restore the original cache and choose the profile again.
+          </p>
+        )}
+        {profiles.retiredCasualReview?.addonsToRemove.length ? (
+          <div className="mt-4">
+            <p className="t-row">Addons to remove</p>
+            <ul className="t-meta mt-2 list-disc pl-5">
+              {profiles.retiredCasualReview.addonsToRemove.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {profiles.retiredCasualReview?.particleModsToRemove.length ? (
+          <div className="mt-4">
+            <p className="t-row">Particle collections to remove</p>
+            <ul className="t-meta mt-2 list-disc pl-5">
+              {profiles.retiredCasualReview.particleModsToRemove.map((name) => (
+                <li key={name}>{name.replace(/_/g, " ")}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <p className="t-meta mt-4">
+          Direct-author addons ({profiles.retiredCasualReview?.directAddonsKept.length ?? 0}),
+          particles from this profile’s installed mods (
+          {profiles.retiredCasualReview?.profileParticleModsKept.length ?? 0}), and the profile’s
+          other files stay saved. After this library-only change, execs will try switching to the
+          profile again.
+        </p>
+        {profiles.retiredCasualReview?.error ? (
+          <p className="t-meta mt-3 text-error" role="alert">
+            {profiles.retiredCasualReview.error}
+          </p>
+        ) : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={profiles.retiredCasualInFlight}
+            onClick={profiles.cancelRetiredCasualReview}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={controlsBusy || running || profiles.retiredCasualInFlight}
+            onClick={() => void profiles.confirmRetiredCasualReview()}
+          >
+            {profiles.retiredCasualInFlight
+              ? "Removing saved choices…"
+              : "Remove saved choices and switch"}
           </button>
         </div>
       </Modal>

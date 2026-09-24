@@ -34,8 +34,6 @@ pub mod surface;
 pub mod switch;
 pub mod vdf;
 pub mod viewmodel;
-pub mod viewmodel_build;
-pub mod viewmodel_groups;
 pub mod vpk;
 pub mod vtf_read;
 pub mod wizard;
@@ -110,20 +108,18 @@ pub use settings::{
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
 pub use viewmodel::{
-    ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
+    ensure_profile_preload, import_viewmodel_vpk,
     profile_has_preload, remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
     set_viewmodel_preload,
 };
-pub use viewmodel_build::{build_viewmodel_pack_vpk, ViewmodelHideMode, STUDIOMDL_FILE_NAME};
-pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use wizard::{
     download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, ComfigPreset,
     GitHubAsset, GitHubRelease, OfficialAddon, StartFrom, WizardAsset, WizardResult, WizardSpec,
 };
 pub use zip::{
-    export_profile, export_profile_to, import_profile, import_profile_from,
-    import_reviewed_profile, inspect_profile_export_credentials, inspect_profile_import,
-    safe_zip_file_name, ProfileImportReview,
+    export_profile, export_profile_reviewed, export_profile_to, import_profile, import_profile_from,
+    import_reviewed_profile, inspect_profile_export, inspect_profile_import, safe_zip_file_name,
+    ProfileExportReview, ProfileImportReview,
 };
 
 #[cfg(test)]

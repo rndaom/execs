@@ -412,7 +412,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           setCancelLaunchOpen(true);
         }}
         onReviewFiles={() => navigateSettings("files")}
-        onInspectExport={(id) => api.inspectProfileExportCredentials(id)}
+        onInspectExport={(id) => api.inspectProfileExport(id)}
         settings={
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout

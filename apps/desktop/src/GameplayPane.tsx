@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import gameplayReference from "./assets/presets/medium.webp";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -105,16 +104,26 @@ export function GameplayPane({
             />
           </div>
         </div>
-        <figure className="surface hero-preview m-0 mt-8 self-start">
-          <img
-            src={gameplayReference}
-            alt="TF2 reference scene on koth_sawmill, showing a first-person weapon and the surrounding world"
-            className="aspect-video w-full object-cover"
-          />
-          <figcaption className="px-4 py-3">
-            <p className="t-meta">Reference image, not a live FOV preview.</p>
-          </figcaption>
-        </figure>
+        <aside
+          className="surface hero-preview mt-8 self-start p-5"
+          aria-label="Field of view values"
+        >
+          <h2 className="t-section">Field of view</h2>
+          <dl className="mt-4 grid gap-3">
+            <div className="flex items-baseline justify-between gap-3 border-b border-edge pb-3">
+              <dt className="t-meta">World</dt>
+              <dd className="tnum t-row">{draft.fov_desired}°</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="t-meta">Weapon</dt>
+              <dd className="tnum t-row">{draft.viewmodel_fov}°</dd>
+            </div>
+          </dl>
+          <p className="t-meta mt-5 border-t border-edge pt-4">
+            These values describe the cfg settings. Open TF2 to see the result with your HUD and
+            viewmodel.
+          </p>
+        </aside>
       </div>
 
       <div className="section pane-split">
@@ -218,9 +227,7 @@ export function GameplayPane({
           </Disclosure>
         </section>
       </div>
-      <p className="pane-note mt-6">
-        Saved to {gameplayPath(layer)}. Reference screenshot from mastercomfig (MIT).
-      </p>
+      <p className="pane-note mt-6">Saved to {gameplayPath(layer)}.</p>
     </section>
   );
 }

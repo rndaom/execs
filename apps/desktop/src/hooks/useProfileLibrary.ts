@@ -7,6 +7,7 @@ import type {
   ProfileImportReview,
   ProfileLibrary,
   ProfileSummary,
+  RetiredCasualReview,
   Tf2Install,
 } from "../lib/bridge";
 import { parseInvokeError } from "../lib/bridge";
@@ -49,8 +50,12 @@ export type ProfileLibraryState = {
   importError: string | null;
   importedProfile: ProfileSummary | null;
   dismissImport: () => void;
-  exportProfile: (id: string) => Promise<void>;
+  exportProfile: (id: string, expectedReviewRevision: string) => Promise<void>;
   switchProfile: (id: string) => Promise<void>;
+  retiredCasualReview: (RetiredCasualReview & { name: string; error?: string }) | null;
+  retiredCasualInFlight: boolean;
+  confirmRetiredCasualReview: () => Promise<void>;
+  cancelRetiredCasualReview: () => void;
   switchHandoff: { kind: "kept" | "retained"; message: string; ownerId: string | null } | null;
   captureKeptPacks: () => Promise<void>;
   dismissSwitchHandoff: () => void;
@@ -94,6 +99,10 @@ export function useProfileLibrary(
   const [library, setLibrary] = useState<ProfileLibrary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProfileSummary | null>(null);
   const [switchHandoff, setSwitchHandoff] = useState<ProfileLibraryState["switchHandoff"]>(null);
+  const [retiredCasualReview, setRetiredCasualReview] =
+    useState<ProfileLibraryState["retiredCasualReview"]>(null);
+  const [retiredCasualInFlight, setRetiredCasualInFlight] = useState(false);
+  const retiredCasualInFlightRef = useRef(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const deleteInFlight = useRef(false);
@@ -277,6 +286,7 @@ export function useProfileLibrary(
       try {
         setLibrary(await api.saveCurrentAs(name));
         setSwitchHandoff(null);
+        setRetiredCasualReview(null);
         setError(null, "profiles:save-current");
         return true;
       } catch (err) {
@@ -376,13 +386,13 @@ export function useProfileLibrary(
   }, [api, importReview, setBusy]);
 
   const exportProfile = useCallback(
-    async (id: string) => {
+    async (id: string, expectedReviewRevision: string) => {
       if (!library || !canExportProfile(library, running)) {
         return;
       }
       setBusy(true);
       try {
-        const exported = await api.exportProfile(id);
+        const exported = await api.exportProfile(id, expectedReviewRevision);
         if (exported !== null) setError(null, `profiles:export:${id}`);
       } catch (err) {
         setError(
@@ -426,6 +436,22 @@ export function useProfileLibrary(
             ownerId: library.activeProfileId,
           });
           setError(null, "profiles:switch");
+        } else if (code === "LegacyCasualSourceMissing") {
+          try {
+            const review = await api.reviewRetiredCasualProfile(id);
+            setRetiredCasualReview({
+              ...review,
+              name: library.profiles.find((profile) => profile.id === id)?.name ?? "this profile",
+            });
+            setError(null, "profiles:switch");
+          } catch (reviewError) {
+            setError(
+              reviewError instanceof Error
+                ? reviewError.message
+                : "Could not review saved Casual choices.",
+              "profiles:switch",
+            );
+          }
         } else if (reviewId && onHudReviewRequired) setError(null, "profiles:switch");
         else
           setError(
@@ -448,6 +474,46 @@ export function useProfileLibrary(
     },
     [api, library, running, busy, progress, setError, setBusy, onHudReviewRequired],
   );
+
+  const confirmRetiredCasualReview = useCallback(async () => {
+    if (
+      !retiredCasualReview ||
+      retiredCasualInFlightRef.current ||
+      running ||
+      busy ||
+      progress.state.active
+    ) {
+      return;
+    }
+    const { profileId, revision } = retiredCasualReview;
+    retiredCasualInFlightRef.current = true;
+    setRetiredCasualInFlight(true);
+    setBusy(true);
+    let cleared = false;
+    try {
+      setLibrary(await api.clearRetiredCasualProfile(profileId, revision));
+      setRetiredCasualReview(null);
+      setError(null, "profiles:switch");
+      cleared = true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update the saved profile.";
+      setRetiredCasualReview((current) =>
+        current?.profileId === profileId ? { ...current, error: message } : current,
+      );
+    } finally {
+      setBusy(false);
+    }
+    try {
+      if (cleared) await switchProfile(profileId);
+    } finally {
+      retiredCasualInFlightRef.current = false;
+      setRetiredCasualInFlight(false);
+    }
+  }, [api, retiredCasualReview, running, busy, progress, setBusy, setError, switchProfile]);
+
+  const cancelRetiredCasualReview = useCallback(() => {
+    if (!retiredCasualInFlightRef.current) setRetiredCasualReview(null);
+  }, []);
 
   const captureKeptPacks = useCallback(async () => {
     if (switchHandoff?.kind !== "kept" || running || busy) return;
@@ -660,6 +726,7 @@ export function useProfileLibrary(
   const reset = useCallback(() => {
     setLibrary(null);
     setSwitchHandoff(null);
+    setRetiredCasualReview(null);
     setDeleteTarget(null);
     setDeleteError(null);
     setFolderRepair(null);
@@ -705,6 +772,10 @@ export function useProfileLibrary(
     },
     exportProfile,
     switchProfile,
+    retiredCasualReview,
+    retiredCasualInFlight,
+    confirmRetiredCasualReview,
+    cancelRetiredCasualReview,
     switchHandoff,
     captureKeptPacks,
     dismissSwitchHandoff: () => setSwitchHandoff(null),

@@ -1,4 +1,4 @@
-//! Viewmodel pack install (imported or built) + Casual itemtest preload.
+//! Viewmodel pack import and saved-pack management + Casual itemtest preload.
 //! This module never edits gameinfo.txt or official VPKs — the preloader
 //! module owns those (snapshot-first, revertible; see AGENTS.md).
 
@@ -126,41 +126,6 @@ pub fn import_viewmodel_vpk(
         preload,
         ViewmodelSource::Imported,
         BTreeMap::new(),
-        process_names.clone(),
-        process_names,
-        &steam_roots,
-        true,
-    )
-}
-
-/// Install a pack built from Yttrium-style hidden groups. Same machinery as
-/// import; the record remembers the hidden set for re-editing.
-pub fn install_built_viewmodel_pack(
-    tf2_root: &Path,
-    profile_id: &str,
-    vpk_bytes: &[u8],
-    hidden_groups: &std::collections::BTreeSet<String>,
-    mode: crate::viewmodel_build::ViewmodelHideMode,
-    preload: bool,
-) -> Result<ProfileDetail, ProfileError> {
-    let mut options = BTreeMap::new();
-    options.insert(
-        "hidden".into(),
-        hidden_groups.iter().cloned().collect::<Vec<_>>().join(","),
-    );
-    options.insert("mode".into(), mode.as_str().into());
-    options.insert("schema".into(), "yttrium-1".into());
-    let process_names = live_process_names();
-    let steam_roots = discover_steam_roots();
-    import_viewmodel_vpk_to_with_launch(
-        &profiles_dir(),
-        &crate::settings::execs_data_dir(),
-        tf2_root,
-        profile_id,
-        vpk_bytes,
-        preload,
-        ViewmodelSource::Compiled,
-        options,
         process_names.clone(),
         process_names,
         &steam_roots,
@@ -609,7 +574,7 @@ where
     let manifest = load_manifest(profiles_dir, profile_id)?;
     if enabled && manifest.viewmodel.is_none() {
         return Err(ProfileError::Io(
-            "Import or build a viewmodel pack before enabling preload.".into(),
+            "Import a viewmodel pack before enabling preload.".into(),
         ));
     }
     // Turning the viewmodel pack's preload off must not strip the shared cfg
@@ -1231,6 +1196,93 @@ mod tests {
     }
 
     #[test]
+    fn legacy_compiled_pack_survives_export_import_switch_and_remove() {
+        let (root, profiles, tf2, id) = setup();
+        let vpk = write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"saved legacy model bytes".to_vec(),
+        )]));
+        let legacy_options = BTreeMap::from([
+            ("hidden".into(), "scout/scatterguns,scout/melee".into()),
+            ("mode".into(), "weapon".into()),
+            ("schema".into(), "yttrium-1".into()),
+        ]);
+        import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &vpk,
+            false,
+            ViewmodelSource::Compiled,
+            legacy_options.clone(),
+            unlocked(),
+        )
+        .unwrap();
+        let saved = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(saved.viewmodel.as_ref().unwrap().source, ViewmodelSource::Compiled);
+        assert_eq!(saved.viewmodel.as_ref().unwrap().options, legacy_options);
+        assert_eq!(std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(), vpk);
+
+        let archive = root.join("legacy-viewmodels.zip");
+        crate::zip::export_profile_to(&profiles, &tf2, &id, &archive).unwrap();
+        let imported = crate::zip::import_profile_from(&profiles, &tf2, &archive, unlocked())
+            .unwrap();
+        let imported_id = imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap()
+            .id
+            .clone();
+        let imported_manifest = load_manifest(&profiles, &imported_id).unwrap();
+        assert_eq!(imported_manifest.viewmodel, saved.viewmodel);
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&profiles, &imported_id, EXECS_VIEWMODELS_VPK))
+                .unwrap(),
+            vpk
+        );
+
+        let empty = create_profile_record_to(&profiles, &tf2, "Empty", unlocked()).unwrap();
+        let empty_id = empty
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id && profile.id != imported_id)
+            .unwrap()
+            .id
+            .clone();
+        let options = || crate::absorb::AbsorbOptions {
+            cloud_config: None,
+            steam_roots: Some(&[]),
+        };
+        crate::switch::switch_profile_to(&profiles, &tf2, &empty_id, unlocked(), options(), |_| {})
+            .unwrap();
+        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists());
+        crate::switch::switch_profile_to(
+            &profiles,
+            &tf2,
+            &imported_id,
+            unlocked(),
+            options(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(), vpk);
+        assert_eq!(load_manifest(&profiles, &imported_id).unwrap().viewmodel, saved.viewmodel);
+
+        remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &imported_id, unlocked())
+            .unwrap();
+        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists());
+        assert!(load_manifest(&profiles, &imported_id).unwrap().viewmodel.is_none());
+        assert_eq!(load_manifest(&profiles, &id).unwrap().viewmodel, saved.viewmodel);
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK)).unwrap(),
+            vpk
+        );
+        cleanup(&root);
+    }
+
+    #[test]
     fn viewmodel_vpk_members_are_limited_to_compiled_weapon_models() {
         for path in [
             "models/weapons/c_models/c_scout_animations.mdl",
@@ -1313,7 +1365,7 @@ mod tests {
         let before = load_manifest(&profiles, &id).unwrap();
         let err = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, true, unlocked())
             .unwrap_err();
-        assert!(err.message().contains("Import or build"));
+        assert!(err.message().contains("Import a viewmodel pack"));
         let after = load_manifest(&profiles, &id).unwrap();
         assert_eq!(after.launch_options, before.launch_options);
         assert_eq!(after.files, before.files);

@@ -24,6 +24,10 @@ import type {
 } from "./lib/bridge";
 import { openExternal } from "./lib/bridge";
 import {
+  DIRECT_BURNING_OVERLAY_ID,
+  DIRECT_DEVELOPER_TEXTURES_ID,
+  DIRECT_FLAT_TEXTURES_ID,
+  DIRECT_SENTRY_OVERLAY_ID,
   formatModBytes,
   installedModSelection,
   type ModInstallResult,
@@ -58,7 +62,6 @@ export type ModsPaneProps = {
   mods: ModRecord[];
   loading: boolean;
   report: PreloaderReport | null;
-  onDownloadLibrary: () => void;
   onApply: (addons: string[], particleMods: string[], profileParticleMods: string[]) => void;
   onToggleBypass: (enabled: boolean) => void;
   onTogglePreload: (enabled: boolean) => void;
@@ -98,7 +101,6 @@ export function ModsPane({
   mods,
   loading,
   report,
-  onDownloadLibrary,
   onApply,
   onToggleBypass,
   onTogglePreload,
@@ -143,6 +145,36 @@ export function ModsPane({
   // lit over something nothing on screen can switch off.
   const selection = visibleModSelection(draft, particleSources);
   const { addons, particleMods, profileParticleMods } = selection;
+  const directIds = [
+    DIRECT_FLAT_TEXTURES_ID,
+    DIRECT_DEVELOPER_TEXTURES_ID,
+    DIRECT_BURNING_OVERLAY_ID,
+    DIRECT_SENTRY_OVERLAY_ID,
+  ];
+  const directAddons = catalog?.addons.filter((addon) => directIds.includes(addon.id)) ?? [];
+  const savedLibraryAddons = installed.addons
+    .filter((id) => !directIds.includes(id))
+    .map(
+      (id) =>
+        catalog?.addons.find((addon) => addon.id === id) ?? {
+          id,
+          name: id,
+          kind: "Saved choice",
+          description: "Previously saved library choice; new selection is paused.",
+          fileCount: 0,
+          bytes: 0,
+          hasSound: false,
+        },
+    );
+  const savedLibraryParticles = installed.particleMods.map(
+    (name) =>
+      catalog?.particleMods.find((mod) => mod.name === name) ?? {
+        name,
+        pcfFiles: [],
+        fileCount: 0,
+        bytes: 0,
+      },
+  );
   const [task, setTask] = useState<ModsTask>("browse");
   useEffect(() => {
     if (casualOpenRequest) setTask("casual");
@@ -522,32 +554,20 @@ export function ModsPane({
             </div>
           </section>
 
-          <PaneSection
-            title="Casual selection"
-            description="Choose sources, then Apply mods."
-            meta={
-              payload && !payload.modsCached ? (
-                <button
-                  type="button"
-                  data-testid="mods-download"
-                  className="btn btn-primary"
-                  disabled={busy || loading}
-                  onClick={onDownloadLibrary}
-                >
-                  {loading
-                    ? "Downloading…"
-                    : `Download other choices (${formatModBytes(payload.modsSizeBytes)})`}
-                </button>
-              ) : null
-            }
-          >
-            {payload && !payload.modsCached && !loading ? (
+          <PaneSection title="Casual selection" description="Choose sources, then Apply mods.">
+            {savedLibraryAddons.length + savedLibraryParticles.length > 0 ? (
               <p className="t-meta mt-4">
-                Flat Textures, Developer Textures, and the two overlay choices are available now;
-                their author files download on Apply. The other choices need a one-time, verified
-                library download.
+                Saved cueki library choices remain visible and can be removed. They can be reapplied
+                only while their original verified library cache is on this device. New library
+                choices and downloads are paused while the source-asset rights are unresolved.
               </p>
-            ) : null}
+            ) : (
+              <p className="t-meta mt-4">
+                Flat Textures, Developer Textures, and the two overlay choices download their
+                verified author files on Apply. Particle sources from your installed mods remain
+                available.
+              </p>
+            )}
             {loading && !catalog ? (
               <p className="t-meta mt-4" role="status">
                 Loading library…
@@ -556,7 +576,7 @@ export function ModsPane({
 
             <div className="mt-4 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_14rem]">
               <div className="min-w-0">
-                {catalog ? (
+                {catalog || savedLibraryAddons.length + savedLibraryParticles.length > 0 ? (
                   <div className="grid gap-5">
                     <Disclosure
                       profileId={profileId}
@@ -596,14 +616,15 @@ export function ModsPane({
                           >
                             original Square Series GameBanana file
                           </button>{" "}
-                          submitted by ghytd. Other choices come from cueki’s default library.
-                          Selected files are packed into your local preload addon.
+                          submitted by ghytd. Previously saved cueki choices use only the verified
+                          local cache. Selected files are packed into your local preload addon.
                         </p>
                         <ul className="mt-3 list-none p-0">
-                          {catalog.addons.map((addon) => (
+                          {[...directAddons, ...savedLibraryAddons].map((addon) => (
                             <AddonRow
                               key={addon.id}
                               addon={addon}
+                              legacy={!directIds.includes(addon.id)}
                               checked={addons.includes(addon.id)}
                               disabled={
                                 !payload ||
@@ -639,10 +660,11 @@ export function ModsPane({
                           files.
                         </p>
                         <ul className="mt-3 list-none p-0">
-                          {catalog.particleMods.map((mod) => (
+                          {savedLibraryParticles.map((mod) => (
                             <ParticleRow
                               key={mod.name}
                               mod={mod}
+                              legacy
                               checked={particleMods.includes(mod.name)}
                               disabled={
                                 !payload ||
@@ -856,11 +878,13 @@ export function ModsPane({
 
 function AddonRow({
   addon,
+  legacy = false,
   checked,
   disabled,
   onToggle,
 }: {
   addon: CatalogAddon;
+  legacy?: boolean;
   checked: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -873,7 +897,9 @@ function AddonRow({
           <span className="flex flex-wrap items-baseline gap-2">
             <span className="t-row">{addon.name}</span>
             <span className="badge">{addon.kind}</span>
-            <span className="tnum text-[12px] text-ink-faint">{formatModBytes(addon.bytes)}</span>
+            {!legacy ? (
+              <span className="tnum text-[12px] text-ink-faint">{formatModBytes(addon.bytes)}</span>
+            ) : null}
           </span>
           {addon.description ? (
             <span className="t-meta mt-0.5 block">{addon.description}</span>
@@ -898,11 +924,13 @@ function AddonRow({
 
 function ParticleRow({
   mod,
+  legacy = false,
   checked,
   disabled,
   onToggle,
 }: {
   mod: CatalogParticleMod;
+  legacy?: boolean;
   checked: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -916,14 +944,17 @@ function ParticleRow({
         <span className="min-w-0">
           <span className="flex flex-wrap items-baseline gap-2">
             <span className="t-row">{mod.name.replace(/_/g, " ")}</span>
-            <span className="tnum text-[12px] text-ink-faint">
-              {mod.pcfFiles.length} particle {mod.pcfFiles.length === 1 ? "file" : "files"} ·{" "}
-              {formatModBytes(mod.bytes)}
-            </span>
+            {!legacy ? (
+              <span className="tnum text-[12px] text-ink-faint">
+                {mod.pcfFiles.length} particle {mod.pcfFiles.length === 1 ? "file" : "files"} ·{" "}
+                {formatModBytes(mod.bytes)}
+              </span>
+            ) : null}
           </span>
           <span className="t-meta mt-0.5 block">
-            {preview.join(", ")}
-            {more > 0 ? ` and ${more} more` : ""}
+            {legacy
+              ? "Previously saved library particles; new selection is paused."
+              : `${preview.join(", ")}${more > 0 ? ` and ${more} more` : ""}`}
           </span>
         </span>
         <Switch

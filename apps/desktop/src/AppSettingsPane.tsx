@@ -308,9 +308,9 @@ export function AppSettingsPane({
           >
             <div className="mt-3 space-y-3">
               <p className="t-meta">
-                Built with the TF2 community: mastercomfig, hud-db, TF2HUD.Editor, CompVMInstaller,
-                casual-pre-loader, GameBanana, and previously installed Venom Crosshairs,
-                TF2Hitsounds and comfig.app sounds.
+                Built with the TF2 community: mastercomfig, hud-db, TF2HUD.Editor, casual-pre-loader
+                and GameBanana. Previously built viewmodel packs used CompVMInstaller; previously
+                installed Venom Crosshairs, TF2Hitsounds and comfig.app sounds remain credited.
               </p>
               <p className="t-meta">
                 Inter by Rasmus Andersson. Icons by Phosphor. execs is a fan project and is not

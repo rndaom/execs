@@ -1,22 +1,23 @@
-//! Fetch Casual selection sources on demand. cueki's default library and the
-//! original Flat and Developer Textures author files are pinned and verified under
-//! the execs data dir, so installs work offline after each first download.
+//! Fetch the verified direct-author Casual sources on demand. Existing cueki
+//! selections may use a previously cached, hash-verified library; new library
+//! downloads are retired while its source-asset rights remain unresolved.
 
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::net::{self, RemoteSource, Verify};
 
 use execs_core::preloader::ModsCatalog;
 use execs_core::preloader::{developer_textures, flat_textures, square_overlays};
 use execs_core::preloader::{MODS_RELEASE, MODS_SHA256};
-const MODS_URL: &str =
-    "https://github.com/cueki/casual-pre-loader/releases/download/v1.7.1/mods.zip";
-/// ~81.5 MB — the UI warns before the first download.
+/// Exact size of the formerly downloaded library, retained for cache checks.
 pub const MODS_SIZE_BYTES: u64 = 81_529_475;
 
 pub fn cache_path() -> PathBuf {
-    execs_core::execs_data_dir()
+    cache_path_for(&execs_core::execs_data_dir())
+}
+
+pub fn cache_path_for(data_dir: &Path) -> PathBuf {
+    data_dir
         .join("preloader")
         .join(format!("mods-{MODS_RELEASE}.zip"))
 }
@@ -25,31 +26,25 @@ pub fn cache_path() -> PathBuf {
 /// This is intentionally not just a length probe: a same-sized corrupt file
 /// must not make the UI promise an offline install that will later fail.
 pub fn is_cached() -> bool {
-    net::cached_file_accepts(&cache_path(), Verify::Sha256(MODS_SHA256), MODS_SIZE_BYTES)
+    is_cached_at(&execs_core::execs_data_dir())
 }
 
-/// The library zip path, downloading and verifying it first if needed. The
-/// hash is checked on a cache hit too: a truncated or tampered cache file is
-/// re-downloaded rather than unzipped into the user's game.
-pub fn ensure_mods_zip() -> Result<PathBuf, String> {
+pub fn is_cached_at(data_dir: &Path) -> bool {
+    let path = cache_path_for(data_dir);
+    if execs_core::hash::validate_file_within(data_dir, &path).is_err() {
+        return false;
+    }
+    std::fs::symlink_metadata(&path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() == MODS_SIZE_BYTES)
+        && execs_core::hash::sha256_file(&path).ok().as_deref() == Some(MODS_SHA256)
+}
+
+/// Reuse only an existing, exact library cache for a saved legacy selection.
+/// A missing or modified archive never triggers a fresh download.
+pub fn verified_legacy_mods_zip() -> Result<PathBuf, String> {
     let cached = cache_path();
-    net::download_pinned_for(
-        MODS_URL,
-        &cached,
-        Verify::Sha256(MODS_SHA256),
-        MODS_SIZE_BYTES,
-        RemoteSource::GitHubRelease,
-    )
-    .map_err(|err| {
-        err.replace(
-            "The download failed verification.",
-            "The downloaded mod library failed verification.",
-        )
-    })?;
-    // Do not return a stale/unverified path if the cache was replaced between
-    // the download and this hand-off.
     if !net::cached_file_accepts(&cached, Verify::Sha256(MODS_SHA256), MODS_SIZE_BYTES) {
-        return Err("The cached mod library failed verification.".into());
+        return Err("This saved Casual choice needs the previously verified mod library cache. New downloads of that library are paused while its asset rights are unresolved. Remove the saved library choices in Casual setup or restore the original cache on this device.".into());
     }
     Ok(cached)
 }
@@ -162,30 +157,21 @@ fn pinned_square_file_listed(files: &[crate::gamebanana::GameBananaDownloadVaria
     })
 }
 
-/// The direct author choices are visible before the larger cueki download.
-/// Once that archive is cached, merge its other choices without ever offering
-/// cueki's bundled copies as second sources.
-pub fn catalog_with_direct(cueki_zip: Option<&Path>) -> Result<ModsCatalog, String> {
-    let mut catalog = match cueki_zip {
-        Some(path) => execs_core::preloader::read_mods_catalog(path)?,
-        None => ModsCatalog::default(),
-    };
-    catalog.addons.retain(|addon| {
-        addon.id != flat_textures::ID
-            && addon.id != developer_textures::ID
-            && !square_overlays::is_overlay(&addon.id)
-    });
+/// New Casual choices are limited to the four pinned direct-author files.
+/// Saved cueki choices are surfaced separately from the profile's selection.
+pub fn direct_catalog() -> ModsCatalog {
+    let mut catalog = ModsCatalog::default();
     catalog.addons.push(flat_textures::catalog_addon());
     catalog.addons.push(developer_textures::catalog_addon());
     catalog.addons.extend(square_overlays::catalog_addons());
     catalog.addons.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(catalog)
+    catalog
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        catalog_with_direct, pinned_developer_file_listed, pinned_flat_file_listed,
+        direct_catalog, pinned_developer_file_listed, pinned_flat_file_listed,
         pinned_square_file_listed,
     };
     use crate::gamebanana::GameBananaDownloadVariant;
@@ -194,8 +180,8 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn direct_choices_are_available_before_cueki_library_download() {
-        let catalog = catalog_with_direct(None).unwrap();
+    fn direct_choices_are_the_only_new_casual_choices() {
+        let catalog = direct_catalog();
         assert_eq!(catalog.addons.len(), 4);
         assert_eq!(catalog.addons[0].id, developer_textures::ID);
         assert_eq!(

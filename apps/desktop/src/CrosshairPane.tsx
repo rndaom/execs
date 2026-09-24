@@ -645,9 +645,9 @@ export function CrosshairPane({
           ) : null}
           <p className="pane-note mt-3">
             Previously installed Venom Crosshairs are credited to HbiVnm and their respective
-            creators. Scene screenshots by yttrium and Oblique (CompVMInstaller). Stock crosshair
-            previews are decoded from your own copy of the game. execs is not affiliated with Valve
-            or Steam; Team Fortress 2 and its sprites are © Valve Corporation.
+            creators. The neutral scene is a size and contrast reference, not an in-game capture.
+            Stock crosshair previews are decoded from your own copy of the game. execs is not
+            affiliated with Valve or Steam; Team Fortress 2 and its sprites are © Valve Corporation.
           </p>
         </Disclosure>
       </section>

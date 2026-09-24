@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -28,6 +29,9 @@ CLASSES = ("scout", "soldier", "pyro", "demo", "heavy", "engineer", "medic", "sn
 MODEL_PREFIX = "models/weapons/c_models/c_"
 EXPECTED_GROUPS = 64
 EXPECTED_STEMS = 405
+LEGACY_TABLE_REVISION = "e8f759b8297c5946212d91839ea5ce45beb96510"
+LEGACY_TABLE_PATH = "apps/desktop/src-tauri/core/src/viewmodel_groups.rs"
+LEGACY_TABLE_SHA256 = "69a4e46532cba89e0b3bc3af8957ac7021ee0483e15345ced0618cd6e11da4f9"
 
 
 def _quoted_field(block: str, name: str) -> str:
@@ -109,6 +113,25 @@ def compare(groups: list[tuple[str, str, tuple[str, ...]]], forced: tuple[str, .
     }
 
 
+def historical_legacy_table() -> bytes:
+    """Read the retired table from the pinned repository commit, not the product tree."""
+    repo = Path(__file__).resolve().parents[3]
+    try:
+        result = subprocess.run(
+            ["git", "show", f"{LEGACY_TABLE_REVISION}:{LEGACY_TABLE_PATH}"],
+            cwd=repo,
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise ProbeError("pinned legacy table is unavailable; use a checkout with the e8f759b commit") from error
+    source = result.stdout
+    if hashlib.sha256(source).hexdigest() != LEGACY_TABLE_SHA256:
+        raise ProbeError("pinned legacy table hash differs from the recorded audit input")
+    return source
+
+
 def run(tf2_root: Path, expected_vpk_sha256: str, expected_patch: str) -> dict[str, object]:
     root = tf2_root.resolve(strict=True)
     steam_inf = (root / "tf/steam.inf").read_text(encoding="ascii").splitlines()
@@ -126,12 +149,12 @@ def run(tf2_root: Path, expected_vpk_sha256: str, expected_patch: str) -> dict[s
         class_id: parse_mdl(read_vpk_entry(vpk, entries[f"{MODEL_PREFIX}{class_id}_animations.mdl"]))
         for class_id in CLASSES
     }
-    table = Path(__file__).resolve().parents[3] / "apps/desktop/src-tauri/core/src/viewmodel_groups.rs"
-    source = table.read_text(encoding="utf-8")
+    table = historical_legacy_table()
+    source = table.decode("utf-8")
     result = compare(legacy_groups(source), forced_soldier_stems(source), models)
     result["tf2_patch"] = expected_patch
     result["vpk_dir_sha256"] = digest
-    result["legacy_table_sha256"] = hashlib.sha256(table.read_bytes()).hexdigest()
+    result["legacy_table_sha256"] = hashlib.sha256(table).hexdigest()
     return result
 
 

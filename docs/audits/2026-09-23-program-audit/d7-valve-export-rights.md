@@ -1,6 +1,6 @@
 # D7 — Valve asset transformation and profile export
 
-Status: **open**. This is a source and product-path review, not a legal conclusion or a permission grant. It covers a proposed Viewmodels builder that derives models from the player's installed TF2 files. The current builder still uses the pinned CompVMInstaller animation ZIP.
+Status: **open**. This is a source and product-path review, not a legal conclusion or a permission grant. It covers a possible future Viewmodels builder that derives models from the player's installed TF2 files. The earlier CompVMInstaller builder is retired in the current development branch.
 
 ## Primary-source boundary
 
@@ -10,9 +10,9 @@ Status: **open**. This is a source and product-path review, not a legal conclusi
 
 ## Current execs path
 
-1. [Viewmodel build](../../../apps/desktop/src-tauri/core/src/viewmodel_build.rs) compiles class animation MDLs and packs their bytes into a VPK. A proposed stock-MDL builder would instead start from installed Valve model bytes. Building and installing that output locally would keep those bytes out of this repository and the execs application download, but would not itself settle later copying or sharing.
-2. [Viewmodel install](../../../apps/desktop/src-tauri/core/src/viewmodel.rs) stores `tf/custom/execs-viewmodels.vpk` as a profile file. [The record](../../../apps/desktop/src-tauri/core/src/profile.rs) has `source: compiled | imported`, `sourceChanged`, and an options map; it does not identify a future stock source and exact TF2 revision. `compiled` currently means the CompVMInstaller path, so it cannot be treated as stock provenance.
-3. [Profile export](../../../apps/desktop/src-tauri/core/src/zip.rs) includes every validated manifest file and copies each verified exclusive file into `files/<path>` in the ZIP. That includes `tf/custom/execs-viewmodels.vpk`. The current import validator requires the VPK whenever a viewmodel record exists, and import retains the payload bytes. Export is user initiated, but the same ZIP serves backup and sharing; there is no separate share-safe path.
+1. The [earlier builder at `e8f759b`](https://github.com/rndaom/execs/blob/e8f759b8297c5946212d91839ea5ce45beb96510/apps/desktop/src-tauri/core/src/viewmodel_build.rs) compiled CompVMInstaller class animation MDLs into a VPK. Fresh builds and source downloads are retired. A possible stock-MDL builder would instead start from installed Valve model bytes. Building and installing that output locally would keep those bytes out of this repository and the execs application download, but would not itself settle later copying or sharing.
+2. [Viewmodel install](../../../apps/desktop/src-tauri/core/src/viewmodel.rs) stores `tf/custom/execs-viewmodels.vpk` as a profile file. [The record](../../../apps/desktop/src-tauri/core/src/profile.rs) has `source: compiled | imported`, `sourceChanged`, and an options map; it does not identify a future stock source and exact TF2 revision. Older `compiled` records refer to the retired CompVMInstaller path, not stock provenance; their VPKs remain usable.
+3. [Profile export](../../../apps/desktop/src-tauri/core/src/zip.rs) includes every validated manifest file and copies each verified exclusive file into `files/<path>` in the ZIP. That includes `tf/custom/execs-viewmodels.vpk`. The revision-bound export review names included custom packs and flags Viewmodels VPKs and Crosshair scripts before copying. The current import validator requires the VPK whenever a viewmodel record exists, and import retains the payload bytes. Export is user initiated, but the same ZIP serves backup and sharing; the review does not create a separate share-safe path.
 
 The generic export path also matters for other player-install sources:
 

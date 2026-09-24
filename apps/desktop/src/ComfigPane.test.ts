@@ -73,14 +73,18 @@ describe("ComfigPane workspaces", () => {
     expect(document.body.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
   });
 
-  it("keeps the committed preset and authentic preview when a selection fails", async () => {
+  it("keeps the committed preset summary when a selection fails", async () => {
     const apply = vi.fn(async () => false);
     await act(async () => render(apply));
-    const preview = document.querySelector("img")?.getAttribute("src");
+    const summary = document.querySelector('[aria-label="Selected preset details"]');
+    expect(summary?.textContent).toContain("Medium");
+    expect(summary?.textContent).toContain("1 module override");
     await act(async () => document.getElementById("comfig-preset-high")?.click());
     expect(apply).toHaveBeenCalledWith("high");
     expect(document.querySelector<HTMLInputElement>("#comfig-preset-medium")?.checked).toBe(true);
-    expect(document.querySelector("img")?.getAttribute("src")).toBe(preview);
+    expect(summary?.textContent).toContain("Medium");
+    expect(summary?.textContent).not.toContain("High quality for modern systems");
+    expect(document.querySelector("img")).toBeNull();
     for (const preset of COMFIG_PRESETS) {
       expect(document.getElementById(`comfig-preset-${preset.id}`)).not.toBeNull();
     }

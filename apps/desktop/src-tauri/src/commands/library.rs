@@ -139,6 +139,7 @@ pub async fn switch_profile(
             &preflight_id,
         )?;
         let manifest = execs_core::load_manifest(&profiles, &preflight_id)?;
+        refuse_missing_legacy_casual_cache(&profiles, &manifest)?;
         if manifest
             .preloader
             .as_ref()
@@ -201,9 +202,83 @@ where
 {
     let library = execs_core::profile::load_library_from(profiles, Some(root))?;
     refuse_different_pending_target(library.pending_switch_profile_id.as_deref(), id)?;
+    refuse_missing_legacy_casual_cache(profiles, &execs_core::load_manifest(profiles, id)?)?;
     Ok(execs_core::switch::switch_profile_to(
         profiles, root, id, running, options, progress,
     )?)
+}
+
+fn refuse_missing_legacy_casual_cache(
+    profiles: &Path,
+    manifest: &execs_core::profile::ProfileManifest,
+) -> Result<(), CommandError> {
+    if manifest
+        .preloader
+        .as_ref()
+        .is_some_and(execs_core::preloader::PreloaderSelection::needs_cueki_library)
+        && !crate::mods_fetch::is_cached_at(
+            profiles.parent().ok_or_else(|| {
+                CommandError::new("Io", "The profile library has no data folder.")
+            })?,
+        )
+    {
+        return Err(CommandError::new(
+            "LegacyCasualSourceMissing",
+            "This profile has saved Casual library choices, but their verified source cache is unavailable. Review the exact choices before removing them, or restore the original cache on this device.",
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn review_retired_casual_profile(
+    id: String,
+) -> Result<execs_core::preloader::RetiredLibraryReview, CommandError> {
+    with_root(move |root| {
+        let profiles = execs_core::profiles_dir();
+        execs_core::profile::load_library_from(&profiles, Some(&root))?;
+        if crate::mods_fetch::is_cached_at(profiles.parent().ok_or_else(|| {
+            CommandError::new("Io", "The profile library has no data folder.")
+        })?) {
+            return Err(CommandError::new(
+                "LegacyCasualSourceAvailable",
+                "The verified library cache is available. Choose this profile again to switch without changing its saved choices.",
+            ));
+        }
+        execs_core::preloader::retired_library_review(&profiles, &id)?
+            .ok_or_else(|| CommandError::new("NoLegacyCasualChoices", "This profile no longer has saved library choices to review."))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn clear_retired_casual_profile(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    expected_revision: String,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        let profiles = execs_core::profiles_dir();
+        if crate::mods_fetch::is_cached_at(profiles.parent().ok_or_else(|| {
+            CommandError::new("Io", "The profile library has no data folder.")
+        })?) {
+            return Err(CommandError::new(
+                "LegacyCasualSourceAvailable",
+                "The verified library cache is available. Choose this profile again to switch without changing its saved choices.",
+            ));
+        }
+        let running = execs_core::process_lock::live_process_names();
+        execs_core::preloader::clear_retired_library_choices(
+            &profiles,
+            &root,
+            &id,
+            &expected_revision,
+            &running,
+        )?;
+        Ok(execs_core::profile::load_library_from(&profiles, Some(&root))?)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -221,8 +296,10 @@ mod tests {
 
 /// Read-only disclosure for the export review. The ZIP writer rechecks sources.
 #[tauri::command]
-pub async fn inspect_profile_export_credentials(id: String) -> Result<Vec<String>, CommandError> {
-    with_root(move |root| Ok(execs_core::inspect_profile_export_credentials(&root, &id)?)).await
+pub async fn inspect_profile_export(
+    id: String,
+) -> Result<execs_core::ProfileExportReview, CommandError> {
+    with_root(move |root| Ok(execs_core::inspect_profile_export(&root, &id)?)).await
 }
 
 /// Zip a profile to a path the user picks. The gate is taken once the save
@@ -233,6 +310,7 @@ pub async fn export_profile(
     gate: tauri::State<'_, WriteGate>,
     app: AppHandle,
     id: String,
+    expected_review_revision: String,
 ) -> Result<Option<String>, CommandError> {
     let for_name = id.clone();
     let (context, suggested) = with_root(move |root| {
@@ -273,7 +351,7 @@ pub async fn export_profile(
     // async runtime's worker thread.
     with_root(move |root| {
         context.ensure_current(&root)?;
-        execs_core::export_profile(&root, &id, &path)?;
+        execs_core::export_profile_reviewed(&root, &id, &path, &expected_review_revision)?;
         Ok(Some(path.to_string_lossy().into_owned()))
     })
     .await

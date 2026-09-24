@@ -179,14 +179,16 @@ afterEach(async () => {
 });
 
 describe("Mods HUD recovery through the real settings host", () => {
-  it("shows direct author choices before the cueki catalog is cached", async () => {
+  it("shows only direct author choices with the uncached saved particle still removable", async () => {
     await render();
     expect(api.getDefaultMods).toHaveBeenCalledOnce();
     expect(element("mods-addon-flat-textures-v1")).toBeTruthy();
     expect(element("mods-addon-developer-textures-overhaul-v2")).toBeTruthy();
     expect(element("mods-addon-no-burning-overlay")).toBeTruthy();
     expect(element("mods-addon-no-sentry-shield-overlay")).toBeTruthy();
-    expect(element("mods-download").textContent).toContain("Download other choices");
+    expect(element("mods-particle-square-series")).toBeTruthy();
+    expect(box.querySelector('[data-testid="mods-download"]')).toBeNull();
+    expect(box.textContent).toContain("New library choices and downloads are paused");
   });
 
   it.each(["archive", "folder"] as const)(

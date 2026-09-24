@@ -1043,7 +1043,7 @@ export function SettingsHost({
           stockArtSources={crosshairContent}
           sourceStatus={crosshairSourceStatus}
           onOpenMods={() => onNavigate?.("mods")}
-          scene={<CrosshairScene api={api} />}
+          scene={<CrosshairScene />}
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSaveStock={(gameplayText) =>
@@ -1091,8 +1091,6 @@ export function SettingsHost({
           : null;
       return (
         <ViewmodelPane
-          api={api}
-          profileId={profileId}
           record={detail?.viewmodel ?? null}
           globalViewmodelsShown={globalViewmodelsShown}
           profilePreload={modsPayload?.profilePreload ?? null}
@@ -1100,14 +1098,6 @@ export function SettingsHost({
           onOpenCasualSetup={() => {
             setCasualOpenRequest((current) => current + 1);
             onNavigate?.("mods");
-          }}
-          onBuild={(hidden, preload, hideMode) => {
-            void write(
-              async () => {
-                await api.buildViewmodelPack(hidden, preload, hideMode);
-              },
-              { success: "Pack built", failure: "Could not build" },
-            );
           }}
           onImport={(preload) => {
             return write(
@@ -1190,22 +1180,6 @@ export function SettingsHost({
           hudImportRequired={modsHudImportRequired}
           onReviewHudImport={() => onNavigate?.("hud")}
           onDismissHudImport={() => setModsHudImportRequired(null)}
-          onDownloadLibrary={() => {
-            setModsLoading(true);
-            api
-              .downloadDefaultMods()
-              .then((mods) => {
-                setModsCatalog(mods.catalog);
-                return refreshModsStatus().then(() => onError(null, "mods:download"));
-              })
-              .catch((err) => {
-                onError(
-                  err instanceof Error ? err.message : "Could not download the mod library.",
-                  "mods:download",
-                );
-              })
-              .finally(() => setModsLoading(false));
-          }}
           onApply={(addons, particleMods, profileParticleMods) => {
             void write(
               async () => {

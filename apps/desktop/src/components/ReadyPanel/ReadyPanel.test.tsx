@@ -62,6 +62,10 @@ beforeEach(() => {
       dismissImport: vi.fn(),
       exportProfile: vi.fn(async () => {}),
       switchProfile: vi.fn(async () => {}),
+      retiredCasualReview: null,
+      retiredCasualInFlight: false,
+      confirmRetiredCasualReview: vi.fn(async () => {}),
+      cancelRetiredCasualReview: vi.fn(),
       switchHandoff: null,
       captureKeptPacks: vi.fn(async () => {}),
       dismissSwitchHandoff: vi.fn(),
@@ -96,7 +100,19 @@ beforeEach(() => {
     onLaunch: vi.fn(),
     onCancelLaunch: vi.fn(),
     onReviewFiles: vi.fn(),
-    onInspectExport: vi.fn(async () => ["tf/cfg/config.cfg:8"]),
+    onInspectExport: vi.fn(async () => ({
+      revision: "saved-profile-revision",
+      credentialLocations: ["tf/cfg/config.cfg:8"],
+      customPacks: [
+        { path: "tf/custom/creator.vpk", fileCount: 1, kind: "other" as const },
+        {
+          path: "tf/custom/execs-crosshairs/",
+          fileCount: 3,
+          kind: "crosshairScripts" as const,
+        },
+        { path: "tf/custom/execs-viewmodels.vpk", fileCount: 1, kind: "viewmodels" as const },
+      ],
+    })),
   };
 });
 
@@ -138,7 +154,87 @@ it("focuses a saved profile's repair action when that profile cannot be switched
   expect(props.profiles.reviewFolderRepair).toHaveBeenCalledExactlyOnceWith("preview-1");
 });
 
-it("discloses credential locations before export and offers Files review", async () => {
+it("reviews exact saved Casual removals and preserves Cancel as an explicit choice", async () => {
+  props.profiles.retiredCasualReview = {
+    profileId: "preview-1",
+    name: "Main",
+    revision: "reviewed-selection",
+    addonsToRemove: ["factory new"],
+    particleModsToRemove: ["Square_Series"],
+    directAddonsKept: ["Flat Textures v1"],
+    profileParticleModsKept: ["installed-particles"],
+  };
+  await render();
+  const review = box.querySelector<HTMLElement>('[data-testid="retired-casual-review"]');
+  expect(review?.textContent).toContain("factory new");
+  expect(review?.textContent).toContain("Square Series");
+  expect(review?.textContent).toContain("Direct-author addons (1)");
+  expect(review?.textContent).toContain("Cancel keeps it exactly as it is");
+  expect(props.profiles.confirmRetiredCasualReview).not.toHaveBeenCalled();
+  await act(async () =>
+    [...(review?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+      .find((button) => button.textContent === "Cancel")
+      ?.click(),
+  );
+  expect(props.profiles.cancelRetiredCasualReview).toHaveBeenCalledOnce();
+  expect(props.profiles.confirmRetiredCasualReview).not.toHaveBeenCalled();
+  await act(async () =>
+    [...(review?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+      .find((button) => button.textContent === "Remove saved choices and switch")
+      ?.click(),
+  );
+  expect(props.profiles.confirmRetiredCasualReview).toHaveBeenCalledOnce();
+});
+
+it("keeps Cancel and Escape closed while a reviewed Casual clear is in flight", async () => {
+  props.profiles.retiredCasualReview = {
+    profileId: "preview-1",
+    name: "Main",
+    revision: "reviewed-selection",
+    addonsToRemove: ["factory new"],
+    particleModsToRemove: [],
+    directAddonsKept: [],
+    profileParticleModsKept: [],
+  };
+  let finishClear: (() => void) | undefined;
+  props.profiles.confirmRetiredCasualReview = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishClear = resolve;
+      }),
+  );
+  await render();
+  await act(async () => {
+    box
+      .querySelector<HTMLButtonElement>('[data-testid="retired-casual-review"] .btn-primary')
+      ?.click();
+  });
+  expect(props.profiles.confirmRetiredCasualReview).toHaveBeenCalledOnce();
+
+  props.profiles.retiredCasualInFlight = true;
+  await render();
+  const review = box.querySelector<HTMLElement>('[data-testid="retired-casual-review"]');
+  expect(review).not.toBeNull();
+  expect(review?.querySelector('[role="status"]')?.textContent).toContain("Please wait");
+  expect(review?.textContent).not.toContain("Cancel keeps it exactly as it is");
+  const cancel = [...(review?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+    (button) => button.textContent === "Cancel",
+  );
+  expect(cancel?.disabled).toBe(true);
+  expect(review?.querySelector<HTMLButtonElement>(".btn-primary")?.disabled).toBe(true);
+  await act(async () => {
+    cancel?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    box.querySelector<HTMLElement>(".scrim")?.click();
+    review?.querySelector<HTMLButtonElement>(".btn-primary")?.click();
+  });
+  expect(props.profiles.cancelRetiredCasualReview).not.toHaveBeenCalled();
+  expect(props.profiles.confirmRetiredCasualReview).toHaveBeenCalledOnce();
+  expect(box.querySelector('[data-testid="retired-casual-review"]')).not.toBeNull();
+  await act(async () => finishClear?.());
+});
+
+it("discloses credentials and included custom packs before export and offers Files review", async () => {
   (props.profiles.library as ProfileLibrary).activeProfileId = "preview-1";
   await render();
   await act(async () =>
@@ -155,6 +251,13 @@ it("discloses credential locations before export and offers Files review", async
   });
   expect(props.onInspectExport).toHaveBeenCalledWith("preview-1");
   expect(box.textContent).toContain("tf/cfg/config.cfg:8");
+  expect(box.textContent).toContain("Custom packs in this ZIP: 3");
+  expect(box.textContent).toContain("tf/custom/creator.vpk");
+  expect(box.textContent).toContain("tf/custom/execs-crosshairs/");
+  expect(box.textContent).toContain("modified copies of installed TF2 files");
+  expect(box.textContent).toContain("tf/custom/execs-viewmodels.vpk");
+  expect(box.textContent).toContain("another creator’s animations");
+  expect(box.textContent).toContain("Export does not verify permission");
   expect(box.textContent).not.toContain("hunter2");
   expect(props.profiles.exportProfile).not.toHaveBeenCalled();
   await act(async () => {
@@ -164,6 +267,32 @@ it("discloses credential locations before export and offers Files review", async
   });
   expect(props.onReviewFiles).toHaveBeenCalledOnce();
   expect(props.profiles.exportProfile).not.toHaveBeenCalled();
+});
+
+it("passes the reviewed profile revision to the ZIP exporter", async () => {
+  (props.profiles.library as ProfileLibrary).activeProfileId = "preview-1";
+  await render();
+  await act(async () =>
+    box.querySelector<HTMLDetailsElement>('[data-testid="profile-library"] summary')?.click(),
+  );
+  await act(async () =>
+    box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]')?.click(),
+  );
+  await act(async () => {
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Export profile")
+      ?.click();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    [...box.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Export ZIP…")
+      ?.click();
+  });
+  expect(props.profiles.exportProfile).toHaveBeenCalledExactlyOnceWith(
+    "preview-1",
+    "saved-profile-revision",
+  );
 });
 
 it("closes deletion review before routing to Files from export review", async () => {

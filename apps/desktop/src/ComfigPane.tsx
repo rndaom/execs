@@ -1,9 +1,5 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { useState } from "react";
-import presetHigh from "./assets/presets/high.webp";
-import presetLow from "./assets/presets/low.webp";
-import presetMedium from "./assets/presets/medium.webp";
-import presetUltra from "./assets/presets/ultra.webp";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -22,6 +18,7 @@ import {
   COMFIG_PRESETS,
   type ComfigModule,
   type ComfigModuleGroupId,
+  comfigPresetById,
   comfigPresetLabel,
   oldComfigPresetMessage,
 } from "./lib/comfig-catalog";
@@ -35,15 +32,6 @@ import {
 } from "./lib/comfig-ui";
 import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { canWriteSettings } from "./lib/settings-ui";
-
-/** Real in-game screenshots per preset (koth_sawmill, staged identically),
- * from the mastercomfig comfig-app repo (MIT). */
-const PRESET_IMAGES: Partial<Record<ComfigPreset, string>> = {
-  ultra: presetUltra,
-  high: presetHigh,
-  medium: presetMedium,
-  low: presetLow,
-};
 
 const DEFAULT_VISIBLE_MODULES = 12;
 
@@ -151,8 +139,9 @@ export function ComfigPane({
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
   const selectedPresetLabel = comfigPresetLabel(state.preset);
+  const selectedPreset = comfigPresetById(state.preset);
   const oldPresetMessage = oldComfigPresetMessage(state.preset);
-  const presetImage = PRESET_IMAGES[state.preset] ?? null;
+  const moduleOverrideCount = Object.values(state.modules).filter(Boolean).length;
   const activeGroup =
     COMFIG_MODULE_GROUPS.find((group) => group.id === activeGroupId) ?? COMFIG_MODULE_GROUPS[0];
   const normalizedSearch = moduleSearch.trim().toLowerCase();
@@ -246,27 +235,24 @@ export function ComfigPane({
           </div>
         </div>
 
-        {presetImage ? (
-          <figure className="surface hero-preview m-0 self-start">
-            <img
-              src={presetImage}
-              alt={`In-game screenshot of the ${selectedPresetLabel} preset on koth_sawmill`}
-              className="aspect-video w-full object-cover"
-            />
-            <figcaption className="flex items-baseline justify-between gap-3 px-4 py-3">
-              <span className="t-row">{selectedPresetLabel}</span>
-              <span className="t-meta text-ink-faint">koth_sawmill · mastercomfig</span>
-            </figcaption>
-          </figure>
-        ) : (
-          <div className="surface hero-preview grid aspect-video place-items-center self-start p-6 text-center">
-            <p className="t-meta">
-              {oldPresetMessage
-                ? `${selectedPresetLabel} — no current preset screenshot available.`
-                : "Custom preset — modules decide every setting."}
+        <aside className="surface hero-preview self-start p-5" aria-label="Selected preset details">
+          <p className="t-meta text-ink-faint">Selected preset</p>
+          <h3 className="t-section mt-2">{selectedPresetLabel}</h3>
+          <p className="t-meta mt-2">
+            {selectedPreset?.description ??
+              oldPresetMessage ??
+              "This saved preset is not offered by the current catalog."}
+          </p>
+          <div className="mt-5 border-t border-edge pt-4">
+            <p className="t-row">
+              {moduleOverrideCount} module {moduleOverrideCount === 1 ? "override" : "overrides"}
+            </p>
+            <p className="t-meta mt-1">
+              Preset values apply unless a module below has its own setting. The preset guide opens
+              mastercomfig’s current reference.
             </p>
           </div>
-        )}
+        </aside>
       </div>
 
       <div className="section pane-workspace comfig-workspace">
@@ -436,8 +422,7 @@ export function ComfigPane({
       </section>
 
       <p className="pane-note mt-6">
-        Uses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is
-        not affiliated with mastercomfig or{" "}
+        Uses official mastercomfig packages. execs is not affiliated with mastercomfig or{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app")}

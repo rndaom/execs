@@ -104,7 +104,9 @@ describe("GameplayPane weapon controls", () => {
     ).toBe(true);
     await act(async () => control("gameplay-transparent-viewmodels")?.click());
     expect(toggleAddon).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("not a live FOV preview");
+    expect(document.querySelector('[aria-label="Field of view values"]')?.textContent).toContain(
+      "These values describe the cfg settings",
+    );
   });
 
   it("shares transparent addon guidance and routes to its Comfig owner", async () => {

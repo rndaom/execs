@@ -68,7 +68,11 @@ function Harness() {
           onLaunch={noop}
           onCancelLaunch={noop}
           onReviewFiles={noop}
-          onInspectExport={async () => []}
+          onInspectExport={async () => ({
+            revision: "review",
+            credentialLocations: [],
+            customPacks: [],
+          })}
           settings={
             <SettingsHost
               api={api}
@@ -307,19 +311,19 @@ describe("operation errors across host reloads", () => {
     await render();
     const id = profiles.library?.activeProfileId;
     if (!id) throw new Error("No fixture profile");
-    await act(async () => profiles.exportProfile(id));
+    await act(async () => profiles.exportProfile(id, "review"));
     const readsAfterExport = reads.mock.calls.length;
     revision += 1;
     await render();
     expect(reads.mock.calls.length).toBeGreaterThan(readsAfterExport);
     expect(errors.error).toBe("Export destination is read-only");
-    await act(async () => profiles.exportProfile(id));
+    await act(async () => profiles.exportProfile(id, "review"));
     expect(errors.error).toBe("Export destination is read-only");
     const retry = deferred<string | null>();
     exportCall.mockReturnValueOnce(retry.promise);
     let pendingExport!: Promise<void>;
     await act(async () => {
-      pendingExport = profiles.exportProfile(id);
+      pendingExport = profiles.exportProfile(id, "review");
     });
     expect(errors.error).toBe("Export destination is read-only");
     await act(async () => {

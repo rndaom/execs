@@ -44,7 +44,6 @@ function props(overrides: Partial<ModsPaneProps> = {}): ModsPaneProps {
     mods: PREVIEW_PROFILE_MODS,
     loading: false,
     report: null,
-    onDownloadLibrary: vi.fn(),
     onApply: vi.fn(),
     onToggleBypass: vi.fn(),
     onTogglePreload: vi.fn(),
@@ -70,6 +69,34 @@ function button(id: string): HTMLButtonElement {
 }
 
 describe("ModsPane profile particle containment", () => {
+  it("shows only saved library choices and lets an uncached legacy choice be removed", async () => {
+    const onApply = vi.fn();
+    const initial = props({
+      payload: { ...PREVIEW_MODS_STATUS, modsCached: false },
+      onApply,
+    });
+    await act(async () => root.render(createElement(ModsPane, initial)));
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+
+    expect(document.querySelector('[data-testid="mods-particle-tf2-classic"]')).toBeNull();
+    expect(
+      document.querySelector('[data-testid="mods-addon-ultimate-visual-fix-pack"]'),
+    ).toBeNull();
+    const saved = button("mods-particle-square-series");
+    expect(saved.getAttribute("aria-checked")).toBe("true");
+    expect(document.body.textContent).toContain("New library choices and downloads are paused");
+
+    await act(async () => saved.click());
+    expect(saved.getAttribute("aria-checked")).toBe("false");
+    expect(button("mods-apply").disabled).toBe(false);
+    await act(async () => button("mods-apply").click());
+    expect(onApply).toHaveBeenCalledWith(["No Burning Overlay"], [], []);
+
+    await act(async () => saved.click());
+    expect(saved.getAttribute("aria-checked")).toBe("true");
+    expect(document.querySelector('[data-testid="mods-apply"]')).toBeNull();
+  });
+
   it("routes a refused HUD payload to explicit HUD review without retrying an install", async () => {
     const onReviewHudImport = vi.fn();
     const onDismissHudImport = vi.fn();
@@ -102,13 +129,13 @@ describe("ModsPane profile particle containment", () => {
         createElement(ModsPane, next),
       );
     await act(async () => root.render(render(initial)));
-    await act(async () => button("mods-particle-tf2-classic").click());
+    await act(async () => button("mods-particle-square-series").click());
     expect(reportPending).toHaveBeenLastCalledWith(expect.any(String), true);
     expect(initial.onApply).not.toHaveBeenCalled();
 
     const payload = {
       ...PREVIEW_MODS_STATUS,
-      status: { ...PREVIEW_MODS_STATUS.status, particleMods: ["Square_Series", "TF2_Classic"] },
+      status: { ...PREVIEW_MODS_STATUS.status, particleMods: [] },
     };
     await act(async () => root.render(render({ ...initial, payload })));
     expect(reportPending).toHaveBeenLastCalledWith(expect.any(String), false);
@@ -174,11 +201,11 @@ describe("ModsPane profile particle containment", () => {
   it("discards dirty picks when profiles change even if their installed bytes match", async () => {
     const initial = props();
     await act(async () => root.render(createElement(ModsPane, initial)));
-    await act(async () => button("mods-particle-tf2-classic").click());
+    await act(async () => button("mods-particle-square-series").click());
     expect(button("mods-apply").disabled).toBe(false);
 
     await act(async () => root.render(createElement(ModsPane, { ...initial, profileId: "other" })));
-    expect(button("mods-particle-tf2-classic").getAttribute("aria-checked")).toBe("false");
+    expect(button("mods-particle-square-series").getAttribute("aria-checked")).toBe("true");
     expect(document.querySelector('[data-testid="mods-apply"]')).toBeNull();
   });
 
@@ -231,10 +258,10 @@ describe("ModsPane profile particle containment", () => {
     const onApply = vi.fn();
     await act(async () => root.render(createElement(ModsPane, props({ onApply }))));
     await act(async () => document.getElementById("mods-task-casual")?.click());
-    const choice = button("mods-particle-tf2-classic");
+    const choice = button("mods-particle-square-series");
     expect(choice.disabled).toBe(false);
     await act(async () => choice.click());
-    expect(choice.getAttribute("aria-checked")).toBe("true");
+    expect(choice.getAttribute("aria-checked")).toBe("false");
     expect(button("mods-apply").disabled).toBe(true);
     await act(async () => button("mods-apply").click());
     expect(onApply).not.toHaveBeenCalled();

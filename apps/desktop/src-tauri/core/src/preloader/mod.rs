@@ -84,9 +84,10 @@ mod profiles;
 pub mod square_overlays;
 pub(crate) use profiles::selection_for_snapshot;
 pub use profiles::{
-    apply_profile_preloader, capture_installed_selections, clear_saved_profile_selection,
-    prepare_profile_preloader, selected_profile_particle_mod_ids, selection_for_export,
-    ProfileContext, MODS_RELEASE, MODS_SHA256,
+    apply_profile_preloader, capture_installed_selections, clear_retired_library_choices,
+    clear_saved_profile_selection, prepare_profile_preloader, retired_library_review,
+    selected_profile_particle_mod_ids, selection_for_export, ProfileContext, RetiredLibraryReview,
+    MODS_RELEASE, MODS_SHA256,
 };
 mod state;
 mod transaction;

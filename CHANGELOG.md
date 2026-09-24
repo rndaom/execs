@@ -8,8 +8,9 @@ User-facing changes only. The release workflow publishes the matching
 ### Improved
 
 - Files keeps saved password and remote-console cfg commands through local saves, imports and
-  exports. Export review names possible credential locations before creating a ZIP, without
-  displaying their values. Help now focuses on searchable command details; production hides
+  exports. Export review names possible credential locations, lists the included custom packs,
+  and flags Crosshair scripts and Viewmodels VPKs before creating a ZIP, without displaying
+  credential values. The review expires if the profile changes. Help now focuses on searchable command details; production hides
   offline catalog gaps, and startup warnings link to the affected cfg line.
 - Launch offers 21 documented TF2-relevant options through search and eight-item pages while
   retaining direct editing of the full launch string.
@@ -34,14 +35,27 @@ User-facing changes only. The release workflow publishes the matching
   segments visible while the in-game size reference stays at 1280×720.
 - HUD: sort by sourced TF2 HUDs listing activity and popularity, show uncredited creators without
   inventing names, and refresh older catalog and statistics caches for accurate metadata.
-- Viewmodels: organize all nine classes and 64 groups around an adjacent preview and build action;
-  Hide weapon explains the result without showing an unverified hands-only image.
+- Viewmodels: import, replace or remove a compatible VPK, with saved packs from earlier builds
+  still available through profile switching and export/import.
 - Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
-  controls and clearer source retry feedback. Sorts use only data the sources actually publish.
+  controls and clearer source retry feedback.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum
   window size.
 - Reduce background lifecycle polling while execs is hidden or unfocused, refresh on return,
   and back off failed reads while keeping launch and maintenance state guarded.
+
+### Changed
+
+- Retire new CompVMInstaller Viewmodels builds and remote previews. Existing profile-owned VPKs
+  remain usable, but their recorded group choices cannot be rebuilt in the app.
+- Retire new Venom Crosshairs, TF2Hitsounds and comfig hosted-sound catalog downloads. Existing
+  profile-owned VTFs and WAVs remain usable; a saved remote WAV needs a new source to change its
+  baked boost.
+- Retire new cueki mod-library downloads and selections. Four direct-author Casual addons remain
+  available. Saved library choices can still apply with their original verified cache; if the cache
+  is missing, an explicit review can remove only those choices from an inactive profile before
+  switching. Cancel preserves them.
+- Replace packaged preset and promotional game captures with text and browser preview media.
 
 ### Added
 

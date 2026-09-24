@@ -235,6 +235,26 @@ export async function switchProfile(id: string): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("switch_profile", { id });
 }
 
+export type RetiredCasualReview = {
+  profileId: string;
+  revision: string;
+  addonsToRemove: string[];
+  particleModsToRemove: string[];
+  directAddonsKept: string[];
+  profileParticleModsKept: string[];
+};
+
+export async function reviewRetiredCasualProfile(id: string): Promise<RetiredCasualReview> {
+  return call<RetiredCasualReview>("review_retired_casual_profile", { id });
+}
+
+export async function clearRetiredCasualProfile(
+  id: string,
+  expectedRevision: string,
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("clear_retired_casual_profile", { id, expectedRevision });
+}
+
 export async function onSwitchProgress(
   handler: (progress: SwitchProgress) => void,
 ): Promise<UnlistenFn> {
@@ -243,12 +263,25 @@ export async function onSwitchProgress(
   });
 }
 
-export async function exportProfile(id: string): Promise<string | null> {
-  return call<string | null>("export_profile", { id });
+export async function exportProfile(
+  id: string,
+  expectedReviewRevision: string,
+): Promise<string | null> {
+  return call<string | null>("export_profile", { id, expectedReviewRevision });
 }
 
-export async function inspectProfileExportCredentials(id: string): Promise<string[]> {
-  return call<string[]>("inspect_profile_export_credentials", { id });
+export type ProfileExportReview = {
+  revision: string;
+  credentialLocations: string[];
+  customPacks: {
+    path: string;
+    fileCount: number;
+    kind: "other" | "crosshairScripts" | "viewmodels";
+  }[];
+};
+
+export async function inspectProfileExport(id: string): Promise<ProfileExportReview> {
+  return call<ProfileExportReview>("inspect_profile_export", { id });
 }
 
 export type ProfileImportReview = {
@@ -783,44 +816,12 @@ export async function deactivateCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("deactivate_crosshairs");
 }
 
-/** "full" hides the weapon and the arms; "weapon" keeps the hands animating. */
-export type ViewmodelHideMode = "full" | "weapon";
-
-/** Build a Yttrium-style pack from hidden animation groups and install it. */
-export async function buildViewmodelPack(
-  hidden: string[],
-  preload: boolean,
-  hideMode: ViewmodelHideMode = "full",
-): Promise<ProfileDetail> {
-  // camelCase: Tauri v2 lower-camels command args, and a snake_case key
-  // would silently arrive as None.
-  return call<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
-}
-
 export async function importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_viewmodels", { preload });
 }
 
 export async function removeViewmodels(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_viewmodels");
-}
-
-/**
- * Whether this machine can compile a viewmodel pack (TF2's own studiomdl,
- * Windows only for now). False disables Build rather than sending a Linux
- * user into a dead end with a `.exe` in the error.
- */
-export async function viewmodelBuildAvailable(): Promise<boolean> {
-  return call<boolean>("viewmodel_build_available");
-}
-
-/**
- * One of CompVMInstaller's preview screenshots (JPEG bytes) by its upstream
- * resource stem, e.g. `scout_scattergun`. Raw bytes cross the bridge as an
- * ArrayBuffer, not a JSON array.
- */
-export async function viewmodelPreviewImage(name: string): Promise<ArrayBuffer> {
-  return call<ArrayBuffer>("viewmodel_preview_image", { name });
 }
 
 // ---------------------------------------------------------------------------
@@ -1204,10 +1205,6 @@ export async function recoverPreloader(): Promise<PreloaderStatusPayload> {
 
 export async function getDefaultMods(): Promise<DefaultModsPayload> {
   return call<DefaultModsPayload>("get_default_mods");
-}
-
-export async function downloadDefaultMods(): Promise<DefaultModsPayload> {
-  return call<DefaultModsPayload>("download_default_mods");
 }
 
 export async function applyPreloaderMods(

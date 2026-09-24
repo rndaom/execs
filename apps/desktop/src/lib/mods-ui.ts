@@ -1,6 +1,5 @@
 import type {
   CatalogAddon,
-  CatalogParticleMod,
   GameBananaCategory,
   GameBananaMod,
   ModRecord,
@@ -190,7 +189,7 @@ export function modsStatusLine(
     return "Finish interrupted recovery first";
   }
   if (status && !status.modsCached && needsCuekiLibrary(selection)) {
-    return "Download the mod library first";
+    return "Saved library source unavailable on this device — remove those choices or restore the verified cache";
   }
   if (selectionDirty(status, selection)) {
     return "Unsaved changes";
@@ -608,33 +607,9 @@ const PREVIEW_ADDONS: CatalogAddon[] = [
     bytes: 175_509,
     hasSound: false,
   },
-  {
-    id: "Ultimate Visual Fix Pack",
-    name: "Ultimate Visual Fix Pack",
-    kind: "Texture",
-    description: "Fixes various visual bugs.",
-    fileCount: 577,
-    bytes: 24_800_000,
-    hasSound: false,
-  },
-];
-
-const PREVIEW_PARTICLES: CatalogParticleMod[] = [
-  {
-    name: "Square_Series",
-    pcfFiles: ["explosion.pcf", "muzzle_flash.pcf", "rockettrail.pcf"],
-    fileCount: 61,
-    bytes: 9_400_000,
-  },
-  {
-    name: "TF2_Classic",
-    pcfFiles: ["rockettrail.pcf", "stickybomb.pcf"],
-    fileCount: 18,
-    bytes: 2_100_000,
-  },
 ];
 
 export const PREVIEW_MODS_CATALOG: ModsCatalog = {
   addons: PREVIEW_ADDONS,
-  particleMods: PREVIEW_PARTICLES,
+  particleMods: [],
 };

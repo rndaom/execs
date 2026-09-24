@@ -464,6 +464,18 @@ export function createPreviewApi(state: PreviewState): Api {
       library = { ...(library ?? emptyLibrary(BROWSED.path, true)), activeProfileId: id };
       return library;
     },
+    async reviewRetiredCasualProfile() {
+      throw new BridgeError(
+        "No unavailable saved library choices in preview data.",
+        "NoLegacyCasualChoices",
+      );
+    },
+    async clearRetiredCasualProfile() {
+      throw new BridgeError(
+        "No unavailable saved library choices in preview data.",
+        "NoLegacyCasualChoices",
+      );
+    },
     async onSwitchProgress(handler: (progress: SwitchProgress) => void) {
       progressHandler = handler;
       return () => {
@@ -473,8 +485,12 @@ export function createPreviewApi(state: PreviewState): Api {
     async exportProfile() {
       return null;
     },
-    async inspectProfileExportCredentials() {
-      return ["tf/cfg/config.cfg:8"];
+    async inspectProfileExport() {
+      return {
+        revision: "preview-export-review",
+        credentialLocations: ["tf/cfg/config.cfg:8"],
+        customPacks: [{ path: "tf/custom/example.vpk", fileCount: 1, kind: "other" }],
+      };
     },
     async onProfileImportReading(handler) {
       importReadingHandler = handler;
@@ -829,15 +845,6 @@ export function createPreviewApi(state: PreviewState): Api {
     },
 
     // --- viewmodels ---------------------------------------------------------
-    async buildViewmodelPack(hidden: string[], preload: boolean, hideMode = "full" as const) {
-      viewmodel = {
-        id: "preview",
-        source: "compiled",
-        preload,
-        options: { hidden: hidden.join(","), mode: hideMode },
-      };
-      return requireDetail();
-    },
     async importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
       viewmodel = { id: "preview", source: "imported", preload, options: {} };
       return requireDetail();
@@ -845,12 +852,6 @@ export function createPreviewApi(state: PreviewState): Api {
     async removeViewmodels() {
       viewmodel = null;
       return requireDetail();
-    },
-    async viewmodelPreviewImage(name: string) {
-      throw notInPreview(`Fetching the ${name} preview`);
-    },
-    async viewmodelBuildAvailable() {
-      return true;
     },
     // --- hit and kill sounds ------------------------------------------------
     async hitsoundBytes() {
@@ -1036,10 +1037,6 @@ export function createPreviewApi(state: PreviewState): Api {
       return { ...modsPayload, profileParticleSources: particleSources() };
     },
     async getDefaultMods() {
-      return { cached: true, catalog: PREVIEW_MODS_CATALOG };
-    },
-    async downloadDefaultMods() {
-      modsPayload = { ...modsPayload, modsCached: true };
       return { cached: true, catalog: PREVIEW_MODS_CATALOG };
     },
     async applyPreloaderMods(
