@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
@@ -285,35 +285,81 @@ pub fn validate_url_for(url: &str, source: RemoteSource) -> Result<reqwest::Url,
     Ok(parsed)
 }
 
+fn ipv6_has_prefix(ip: Ipv6Addr, prefix: Ipv6Addr, bits: u32) -> bool {
+    ip.to_bits() >> (128 - bits) == prefix.to_bits() >> (128 - bits)
+}
+
 fn ip_is_private_or_special(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => {
-            let [a, b, c, _] = ip.octets();
+            let [a, b, c, d] = ip.octets();
             a == 0
                 || a == 10
                 || a == 127
                 || (a == 100 && (64..=127).contains(&b))
                 || (a == 169 && b == 254)
                 || (a == 172 && (16..=31).contains(&b))
-                || (a == 192 && b == 0 && c == 0)
+                // IANA lists only .9 and .10 as globally reachable in this /24.
+                // https://www.iana.org/assignments/iana-ipv4-special-registry
+                || (a == 192 && b == 0 && c == 0 && d != 9 && d != 10)
                 || (a == 192 && b == 168)
                 || (a == 192 && b == 0 && c == 2)
+                || (a == 192 && b == 88 && c == 99 && d == 2)
                 || (a == 198 && (b == 18 || b == 19))
                 || (a == 198 && b == 51 && c == 100)
                 || (a == 203 && b == 0 && c == 113)
                 || a >= 224
         }
         IpAddr::V6(ip) => {
-            let octets = ip.octets();
-            ip.is_unspecified()
-                || ip.is_loopback()
-                || ip.is_multicast()
-                || (octets[0] & 0xfe) == 0xfc
-                || (octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80)
-                || ip.segments()[..2] == [0x2001, 0x0db8]
-                || ip
-                    .to_ipv4_mapped()
-                    .is_some_and(|ip| ip_is_private_or_special(IpAddr::V4(ip)))
+            // The NAT64 well-known prefix is globally reachable, but RFC 6052
+            // forbids embedding non-global IPv4 addresses in it. Keep public
+            // DNS64 destinations usable without trusting a translator to
+            // enforce that rule for us.
+            // https://www.iana.org/assignments/iana-ipv6-special-registry
+            // https://www.rfc-editor.org/rfc/rfc6052.html#section-3.1
+            if ipv6_has_prefix(ip, Ipv6Addr::new(0x64, 0xff9b, 0, 0, 0, 0, 0, 0), 96) {
+                let octets = ip.octets();
+                let embedded = Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
+                return ip_is_private_or_special(IpAddr::V4(embedded));
+            }
+
+            // IANA currently allocates global IPv6 unicast from 2000::/3.
+            // The other ranges are reserved, local, multicast, or transition
+            // space (including deprecated IPv4-compatible and site-local
+            // addresses and IPv4-mapped addresses). A local route to one of
+            // those ranges must not turn a download into a local request.
+            // https://www.iana.org/assignments/ipv6-address-space
+            if !ipv6_has_prefix(ip, Ipv6Addr::new(0x2000, 0, 0, 0, 0, 0, 0, 0), 3) {
+                return true;
+            }
+
+            // 2001::/23 is reserved for IETF protocol assignments except
+            // these explicitly globally reachable anycast and protocol
+            // prefixes. In particular, Teredo and benchmarking stay blocked.
+            // The 6to4 prefix can encapsulate traffic toward an embedded
+            // private IPv4 address, so reject the whole transition range.
+            // 3ffe::/16 was returned to IANA; 3fff::/20 is documentation.
+            // https://www.iana.org/assignments/iana-ipv6-special-registry
+            // https://www.iana.org/assignments/ipv6-unicast-address-assignments
+            // https://www.rfc-editor.org/rfc/rfc3964.html
+            let ietf_protocol_assignment =
+                ipv6_has_prefix(ip, Ipv6Addr::new(0x2001, 0, 0, 0, 0, 0, 0, 0), 23);
+            let globally_reachable_ietf_assignment = [
+                (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 1), 128),
+                (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 2), 128),
+                (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 3), 128),
+                (Ipv6Addr::new(0x2001, 3, 0, 0, 0, 0, 0, 0), 32),
+                (Ipv6Addr::new(0x2001, 4, 0x112, 0, 0, 0, 0, 0), 48),
+                (Ipv6Addr::new(0x2001, 0x20, 0, 0, 0, 0, 0, 0), 28),
+                (Ipv6Addr::new(0x2001, 0x30, 0, 0, 0, 0, 0, 0), 28),
+            ]
+            .iter()
+            .any(|(prefix, bits)| ipv6_has_prefix(ip, *prefix, *bits));
+            (ietf_protocol_assignment && !globally_reachable_ietf_assignment)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 0), 32)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x2002, 0, 0, 0, 0, 0, 0, 0), 16)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x3ffe, 0, 0, 0, 0, 0, 0, 0), 16)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x3fff, 0, 0, 0, 0, 0, 0, 0), 20)
         }
     }
 }
@@ -1126,6 +1172,95 @@ mod tests {
         assert!(ip_is_private_or_special("169.254.169.254".parse().unwrap()));
         assert!(ip_is_private_or_special("::1".parse().unwrap()));
         assert!(!ip_is_private_or_special("1.1.1.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn direct_destinations_reject_non_global_and_transition_addresses() {
+        // IANA IPv4/IPv6 special-purpose registries and IPv6 address space:
+        // https://www.iana.org/assignments/iana-ipv4-special-registry
+        // https://www.iana.org/assignments/iana-ipv6-special-registry
+        // https://www.iana.org/assignments/ipv6-address-space
+        for literal in [
+            "0.0.0.1",
+            "10.0.0.1",
+            "100.64.0.1",
+            "127.0.0.1",
+            "169.254.169.254",
+            "172.16.0.1",
+            "192.0.0.8",
+            "192.0.0.170",
+            "192.0.2.1",
+            "192.88.99.2",
+            "192.168.0.1",
+            "198.18.0.1",
+            "198.51.100.1",
+            "203.0.113.1",
+            "224.0.0.1",
+            "240.0.0.1",
+            "::",
+            "::1",
+            "::7f00:1",        // Deprecated IPv4-compatible loopback.
+            "::a00:1",         // Deprecated IPv4-compatible private IPv4.
+            "::ffff:7f00:1",   // IPv4-mapped loopback.
+            "::ffff:101:101",  // IPv4-mapped addresses are not IPv6-global.
+            "64:ff9b::7f00:1", // Well-known NAT64 prefix plus loopback.
+            "64:ff9b::a00:1",  // Well-known NAT64 prefix plus private IPv4.
+            "64:ff9b:1::1",    // Local-use NAT64 prefix.
+            "100::1",          // Discard-only.
+            "100:0:0:1::1",    // Dummy prefix.
+            "2001::1",         // Teredo.
+            "2001:1::4",       // Unallocated IETF protocol assignment.
+            "2001:2::1",       // Benchmarking.
+            "2001:10::1",      // Deprecated ORCHID.
+            "2001:db8::1",     // Documentation.
+            "2002:7f00:1::1",  // 6to4 with embedded loopback IPv4.
+            "2002:101:101::1", // Reject all 6to4 tunnels.
+            "3ffe::1",         // Returned 6bone range.
+            "3fff::1",         // Documentation.
+            "4000::1",         // Reserved outside global unicast space.
+            "5f00::1",         // Special-purpose SRv6 range.
+            "fc00::1",         // Unique-local.
+            "fe80::1",         // Link-local.
+            "fec0::1",         // Deprecated site-local.
+            "ff02::1",         // Multicast.
+        ] {
+            let ip: IpAddr = literal.parse().unwrap();
+            assert!(
+                ip_is_private_or_special(ip),
+                "unexpectedly allowed {literal}"
+            );
+            assert!(
+                public_socket_addrs(vec![SocketAddr::new(ip, 443)]).is_err(),
+                "unexpectedly connected to {literal}"
+            );
+        }
+
+        for literal in [
+            "1.1.1.1",
+            "8.8.8.8",
+            "192.0.0.9",        // Globally reachable IANA anycast exception.
+            "192.0.0.10",       // Globally reachable IANA anycast exception.
+            "64:ff9b::101:101", // Well-known NAT64 prefix plus public IPv4.
+            "2001:1::1",        // Globally reachable IANA anycast exception.
+            "2001:1::2",        // Globally reachable IANA anycast exception.
+            "2001:1::3",        // Globally reachable IANA anycast exception.
+            "2001:3::1",        // AMT.
+            "2001:4:112::1",    // AS112-v6.
+            "2001:20::1",       // ORCHIDv2.
+            "2001:30::1",       // DETs.
+            "2606:4700:4700::1111",
+        ] {
+            let ip: IpAddr = literal.parse().unwrap();
+            assert!(
+                !ip_is_private_or_special(ip),
+                "unexpectedly blocked {literal}"
+            );
+            assert_eq!(
+                public_socket_addrs(vec![SocketAddr::new(ip, 443)]).unwrap(),
+                vec![SocketAddr::new(ip, 443)],
+                "unexpectedly refused {literal}"
+            );
+        }
     }
 
     #[test]
