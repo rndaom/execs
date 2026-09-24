@@ -22,6 +22,14 @@ function Test-FullyQualifiedWindowsPath([string]$Path) {
         $Path -match '^[\\/]{2}(?![.?][\\/])[^\\/]+[\\/][^\\/]+'
 }
 
+function Test-SendKeysLiteralPath([string]$Path) {
+    if (-not (Test-FullyQualifiedWindowsPath $Path) -or $Path -match '[\x00-\x1f]') { return $false }
+    foreach ($special in @('+', '^', '%', '~', '(', ')', '{', '}', '[', ']')) {
+        if ($Path.Contains($special)) { return $false }
+    }
+    return $true
+}
+
 function Assert-Contained([string]$Root, [string]$Path, [bool]$MissingLeaf = $false) {
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
     $full = [IO.Path]::GetFullPath($Path)
@@ -74,15 +82,20 @@ function Assert-ExportDialogIdentity($Dialog, $Windows, [int]$ExpectedPid, [long
     throw 'Export dialog has an unexpected window owner.'
 }
 
-function Get-ExportCandidateFiles([string]$Destination, [string]$Documents) {
+function Get-ExportCandidateFiles([string]$Destination, [string]$Documents, [string]$SuggestedName = '') {
     if (-not (Test-FullyQualifiedWindowsPath $Destination) -or -not [IO.Path]::GetFileName($Destination)) {
         throw 'Invalid export diagnostic path.'
     }
     $name = [IO.Path]::GetFileName($Destination)
     $candidates = @(@{ label = 'exact'; path = $Destination }, @{ label = 'adjacent-appended-zip'; path = $Destination + '.zip' })
     if ($Documents -and (Test-Path -LiteralPath $Documents -PathType Container)) {
+        if (-not (Test-FullyQualifiedWindowsPath $Documents)) { throw 'Invalid Documents diagnostic path.' }
         $candidates += @(@{ label = 'documents-basename'; path = (Join-Path $Documents $name) },
             @{ label = 'documents-appended-zip'; path = (Join-Path $Documents ($name + '.zip')) })
+        if ($SuggestedName) {
+            if ($SuggestedName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}\.zip$') { throw 'Invalid suggested export name.' }
+            $candidates += @{ label = 'documents-suggested-name'; path = (Join-Path $Documents $SuggestedName) }
+        }
     }
     @($candidates | ForEach-Object {
         $item = Get-Item -LiteralPath $_.path -ErrorAction SilentlyContinue

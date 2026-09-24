@@ -106,7 +106,56 @@ test("native UI actions and observation select the canonical local Windows Power
 });
 
 test(
-  "export diagnostics distinguish the exact destination from alternate ZIP locations",
+  "native filename typing accepts the fixture path and refuses SendKeys syntax",
+  {
+    skip: process.platform !== "win32",
+  },
+  () =>
+    withFixture((fixture) => {
+      const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+      const script = `
+. '${helper}'
+$special = @('+', '^', '%', '~', '(', ')', '{', '}', '[', ']')
+$rejected = @($special | ForEach-Object { -not (Test-SendKeysLiteralPath ($env:EXECS_TEST_DESTINATION + $_)) })
+[pscustomobject]@{
+  accepted = Test-SendKeysLiteralPath $env:EXECS_TEST_DESTINATION
+  relativeRefused = -not (Test-SendKeysLiteralPath 'C:relative.zip')
+  rootRelativeRefused = -not (Test-SendKeysLiteralPath '\\relative.zip')
+  newlineRefused = -not (Test-SendKeysLiteralPath ($env:EXECS_TEST_DESTINATION + [char]10))
+  specialRefused = $rejected
+} | ConvertTo-Json -Depth 4 -Compress
+`;
+      for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+        const result = spawnSync(
+          command,
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
+            "-Command",
+            script,
+          ],
+          {
+            encoding: "utf8",
+            timeout: 10_000,
+            windowsHide: true,
+            env: { ...process.env, EXECS_TEST_DESTINATION: fixture.exportPath },
+          },
+        );
+        assert.equal(result.status, 0, result.stderr);
+        const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
+        assert.equal(actual.accepted, true);
+        assert.equal(actual.relativeRefused, true);
+        assert.equal(actual.rootRelativeRefused, true);
+        assert.equal(actual.newlineRefused, true);
+        assert.deepEqual(actual.specialRefused, Array(10).fill(true));
+      }
+    }),
+);
+
+test(
+  "export diagnostics inspect only five exact names and keep alternates distinct",
   {
     skip: process.platform !== "win32",
   },
@@ -116,15 +165,26 @@ test(
       mkdirSync(documents);
       writeFileSync(`${fixture.exportPath}.zip`, "adjacent");
       writeFileSync(join(documents, basename(fixture.exportPath)), "documents");
+      writeFileSync(join(documents, "Package smoke - active.zip"), "suggested");
       writeFileSync(join(documents, "unrelated.zip"), "sentinel");
       const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
       const script = `
 . '${helper}'
-$files = @(Get-ExportCandidateFiles $env:EXECS_TEST_DESTINATION $env:EXECS_TEST_DOCUMENTS)
+$diagnosticReads = @()
+function Get-Item {
+  [CmdletBinding()]
+  param([string]$LiteralPath)
+  $script:diagnosticReads += $LiteralPath
+  Microsoft.PowerShell.Management\\Get-Item -LiteralPath $LiteralPath -ErrorAction SilentlyContinue
+}
+$files = @(Get-ExportCandidateFiles $env:EXECS_TEST_DESTINATION $env:EXECS_TEST_DOCUMENTS 'Package smoke - active.zip')
 $invalidRefused = $false
 try { $null = Get-ExportCandidateFiles 'exports\\relative.zip' $env:EXECS_TEST_DOCUMENTS }
 catch { $invalidRefused = $true }
-[pscustomobject]@{ files = $files; invalidRefused = $invalidRefused } | ConvertTo-Json -Depth 5 -Compress
+$suggestedTraversalRefused = $false
+try { $null = Get-ExportCandidateFiles $env:EXECS_TEST_DESTINATION $env:EXECS_TEST_DOCUMENTS '..\\secret.zip' }
+catch { $suggestedTraversalRefused = $true }
+[pscustomobject]@{ files = $files; reads = $diagnosticReads; invalidRefused = $invalidRefused; suggestedTraversalRefused = $suggestedTraversalRefused } | ConvertTo-Json -Depth 5 -Compress
 `;
       for (const command of ["pwsh", windowsNativeShell("Observe", process.env.WINDIR).command]) {
         const result = spawnSync(
@@ -152,10 +212,12 @@ catch { $invalidRefused = $true }
         const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
         const byLabel = Object.fromEntries(actual.files.map((file) => [file.label, file]));
         assert.equal(actual.invalidRefused, true);
+        assert.equal(actual.suggestedTraversalRefused, true);
         assert.deepEqual(Object.keys(byLabel).sort(), [
           "adjacent-appended-zip",
           "documents-appended-zip",
           "documents-basename",
+          "documents-suggested-name",
           "exact",
         ]);
         assert.deepEqual(
@@ -165,13 +227,16 @@ catch { $invalidRefused = $true }
             `${fixture.exportPath}.zip`,
             join(documents, basename(fixture.exportPath)),
             join(documents, `${basename(fixture.exportPath)}.zip`),
+            join(documents, "Package smoke - active.zip"),
           ].sort(),
         );
+        assert.deepEqual(actual.reads.sort(), actual.files.map((file) => file.path).sort());
         assert.equal(byLabel.exact.exists, false);
         assert.equal(byLabel["adjacent-appended-zip"].exists, true);
         assert.equal(byLabel["adjacent-appended-zip"].bytes, 8);
         assert.equal(byLabel["documents-basename"].exists, true);
         assert.equal(byLabel["documents-appended-zip"].exists, false);
+        assert.equal(byLabel["documents-suggested-name"].exists, true);
       }
     }),
 );

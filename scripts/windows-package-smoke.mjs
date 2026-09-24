@@ -649,6 +649,7 @@ export async function main() {
         report.exportTimeoutObservation = native("Observe", {
           process: appIdentity,
           destination: fixture.exportPath,
+          suggestedName: `${fixture.activeProfileName}.zip`,
           capture: join(evidence, "04-native-after-save.png"),
         });
       } catch (observationError) {

@@ -1,0 +1,45 @@
+{
+  "windows": [],
+  "processes": [
+    {
+      "pid": 3016,
+      "parent": 7516,
+      "executable": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\downloads\\msedgedriver.exe",
+      "created": "2026-09-24T03:13:45.7156280Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\downloads\\msedgedriver.exe --port=59914",
+      "session": 2
+    },
+    {
+      "pid": 5808,
+      "parent": 3016,
+      "executable": "C:\\Windows\\system32\\conhost.exe",
+      "created": "2026-09-24T03:13:45.7211530Z",
+      "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+      "session": 2
+    }
+  ],
+  "uiDiagnostics": null,
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "listeners": [
+    {
+      "address": "::1",
+      "pid": 3016,
+      "port": 59914
+    },
+    {
+      "address": "127.0.0.1",
+      "pid": 3016,
+      "port": 59914
+    }
+  ],
+  "packageCode": 15700,
+  "version": "131.0.2903.86",
+  "process": {
+    "pid": 3016,
+    "parent": 7516,
+    "executable": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\downloads\\msedgedriver.exe",
+    "created": "2026-09-24T03:13:45.7156280Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\downloads\\msedgedriver.exe --port=59914",
+    "session": 2
+  }
+}

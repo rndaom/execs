@@ -323,7 +323,7 @@ if ($Action -eq 'Observe') {
         }
     } catch { $controlsError = $_.Exception.Message }
     $documents = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
-    $candidateFiles = @(Get-ExportCandidateFiles $destination $documents)
+    $candidateFiles = @(Get-ExportCandidateFiles $destination $documents $r.suggestedName)
     @{ at = [DateTime]::UtcNow.ToString('o'); process = $owned; requestedPath = $destination; foregroundHandle = $foreground
         windows = $records; nativeDialogControls = $controls; controlsError = $controlsError
         exportDialogVisible = (@($records | Where-Object { $_.title -ceq 'Export profile' -and $_.class -ceq '#32770' -and $_.visible }).Count -eq 1)
@@ -379,11 +379,18 @@ $ownershipRoute = Assert-ExportDialogIdentity $record @($windows | ForEach-Objec
 $edits = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and $_.Current.AutomationId -ceq '1001' -and $_.Current.Name -ceq 'File name:' })
 $buttons = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Button -and $_.Current.AutomationId -ceq '1' -and $_.Current.Name -match '^Save$' })
 if ($edits.Count -ne 1 -or $buttons.Count -ne 1) { throw 'Native Save controls are not unambiguous.' }
+if (-not (Test-SendKeysLiteralPath $destination)) { throw 'Requested path contains unsupported native keystrokes.' }
 $edit = $edits[0]
+$null = Owned-Process $r.process
+$windows = @(Windows-ForOwner)
+$ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
 $edit.SetFocus()
 $value = $edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
 if ($value.Current.IsReadOnly) { throw 'File name is read-only.' }
-$value.SetValue($destination)
+if (-not $edit.Current.HasKeyboardFocus) { throw 'Native filename did not receive keyboard focus.' }
+[Windows.Forms.SendKeys]::SendWait('^a')
+[Windows.Forms.SendKeys]::SendWait($destination)
+if ($value.Current.Value -cne $destination) { throw 'Native filename did not accept the typed path.' }
 [Windows.Forms.SendKeys]::SendWait('{TAB}')
 Start-Sleep -Milliseconds 150
 if ($value.Current.Value -cne $destination) { throw 'Native filename did not accept the requested path.' }
@@ -407,7 +414,15 @@ $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows
 if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before Save.' }
 $null = Assert-Contained $r.root $destination $true
 if ($value.Current.Value -cne $destination) { throw 'Native filename changed before Save.' }
+$buttons[0].SetFocus()
+if (-not $buttons[0].Current.HasKeyboardFocus) { throw 'Native Save button did not receive keyboard focus.' }
 Save-Observation 'invoking-save' $windows $controls $acceptedValue $ownershipRoute
-$buttons[0].GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+$null = Owned-Process $r.process
+$windows = @(Windows-ForOwner)
+$ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
+if (-not $buttons[0].Current.IsEnabled -or -not $buttons[0].Current.HasKeyboardFocus) { throw 'Native Save button lost readiness.' }
+if ($value.Current.Value -cne $destination) { throw 'Native filename changed before focused Save.' }
+if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before focused Save.' }
+[Windows.Forms.SendKeys]::SendWait('{ENTER}')
 @{ dialog = $record; ownershipRoute = $ownershipRoute; requestedPath = $destination; acceptedFieldValue = $acceptedValue
-    input = 'Native UIA ValuePattern, physical Tab, and Save InvokePattern'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8
+    input = 'Physical filename keystrokes, Tab, and focused Save Enter'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8
