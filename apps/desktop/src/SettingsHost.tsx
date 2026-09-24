@@ -13,12 +13,7 @@ import type { SetOperationError } from "./hooks/useOperationErrors";
 import { InventoryPane } from "./InventoryPane";
 import { LaunchPane } from "./LaunchPane";
 import type { Api } from "./lib/api";
-import {
-  bindsFilePath,
-  configBindsFromFiles,
-  shouldSyncTrackedBinds,
-  syncTrackedBindsFromConfig,
-} from "./lib/binds-ui";
+import { bindsFilePath, shouldSyncTrackedBinds } from "./lib/binds-ui";
 import {
   type ContentIndex,
   type CrosshairSourceStatus,
@@ -48,7 +43,6 @@ import {
   type DirtyFileDraft,
   type FilesDraftStore,
 } from "./lib/files-drafts";
-import { addEditorTextToBudget, editorCfgCandidates } from "./lib/files-limits";
 import { cfgHudFolder } from "./lib/files-reference";
 import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/files-ui";
 import { gameplayPath, seedGameplay } from "./lib/gameplay-ui";
@@ -57,12 +51,12 @@ import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
+import { type CfgText, readSettingsSnapshot } from "./lib/settings-loading";
 import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
-type CfgText = { path: string; text: string; source?: FilesSource };
 const FilesPane = lazy(() =>
   import("./FilesPane").then((module) => ({ default: module.FilesPane })),
 );
@@ -283,85 +277,22 @@ export function SettingsHost({
     loadBlocked.current = true;
     setLoading(true);
     try {
-      const next = await api.getActiveProfileDetail();
-      if (stale()) {
-        return;
-      }
-      const context = next ? await api.getFilesContext() : null;
-      if (stale()) return;
-      if (context && context.profileId !== next?.id)
-        throw new Error("The profile changed while loading Files.");
-      const candidates = editorCfgCandidates(next?.files ?? []);
-      const loaded: CfgText[] = [];
-      let totalBytes = 0;
-      const missing: string[] = [];
-      let wasLimited = candidates.limited;
-      for (const file of candidates.files) {
-        try {
-          const content = await api.readProfileFile(file.path);
-          if (stale()) return;
-          if (
-            content.source &&
-            context &&
-            (content.source.profileId !== context.profileId ||
-              content.source.root !== context.root ||
-              content.source.layer !== context.layer)
-          )
-            throw new Error("The Files source identity changed during loading.");
-          if (content.text === null) {
-            if (content.source?.sha256 === null && content.source.librarySha256 !== null) {
-              loaded.push({ path: content.path, text: "", source: content.source });
-            }
-            missing.push(file.path);
-            continue;
-          }
-          const nextTotal = addEditorTextToBudget(totalBytes, content.text);
-          if (nextTotal === null) {
-            wasLimited = true;
-            break;
-          }
-          totalBytes = nextTotal;
-          loaded.push({ path: content.path, text: content.text, source: content.source });
-        } catch {
-          if (stale()) return;
-          missing.push(file.path);
-        }
-      }
-      const incompleteCfg = wasLimited || missing.length > 0;
-      const incompleteReason = !incompleteCfg
-        ? null
-        : missing.length > 0
-          ? `Could not read settings: ${missing.join(", ")}. Retry before saving CFG settings.`
-          : "Some cfg files exceed the editor limits. CFG settings cannot be saved from an incomplete load.";
-      const state = await api.getComfigState();
-      if (stale()) return;
-      const nextLaunch = next?.launchOptions ?? (await api.getProfileLaunchOptions());
-      if (stale()) return;
-      const verified = await api.getActiveProfileDetail();
-      if (stale()) return;
-      if (verified?.id !== next?.id)
-        throw new Error("The active profile changed. Retry loading settings.");
-      let nextFiles = loaded;
-      const nextLayer = next?.layer ?? "comfig";
-      if (opts?.syncBinds && !running && !incompleteCfg) {
-        const bindsPath = bindsFilePath(nextLayer);
-        const managed = nextFiles.find((file) => file.path === bindsPath)?.text ?? "";
-        const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(nextFiles));
-        if (synced !== managed) {
-          const expected = nextFiles.find((file) => file.path === bindsPath)?.source;
-          if (!expected)
-            throw new Error("The Binds source identity is unavailable. Retry loading settings.");
-          await api.writeOwnedFile(bindsPath, synced, expected);
-          if (stale()) return;
-          const refreshed = await api.readProfileFile(bindsPath);
-          if (stale()) return;
-          nextFiles = nextFiles.map((file) =>
-            file.path === bindsPath
-              ? { path: bindsPath, text: refreshed.text ?? synced, source: refreshed.source }
-              : file,
-          );
-        }
-      }
+      const snapshot = await readSettingsSnapshot(api, {
+        isStale: stale,
+        syncBinds: opts?.syncBinds === true && !running,
+      });
+      if (!snapshot) return;
+      const {
+        detail: next,
+        context,
+        files: nextFiles,
+        inspectedFiles: loaded,
+        missing,
+        incomplete: incompleteCfg,
+        incompleteReason,
+        comfigState: state,
+        launchOptions: nextLaunch,
+      } = snapshot;
       // Publish every seed in the same React batch, only after the complete read.
       const changedProfile = detailRef.current?.id !== next?.id;
       if (changedProfile || launchRef.current === launchSeedRef.current) {
