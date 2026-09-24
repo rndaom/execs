@@ -36,7 +36,7 @@ import {
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 const helperPath = fileURLToPath(new URL("./windows-package-native.ps1", import.meta.url));
 export function windowsNativeShell(action, windowsDirectory) {
-  if (action !== "Save" && action !== "Close") return { command: "pwsh", sta: false };
+  if (!["Save", "Close", "Observe"].includes(action)) return { command: "pwsh", sta: false };
   assert.match(windowsDirectory, /^[A-Za-z]:\\/, "Windows directory must be a local drive path");
   assert.equal(
     win32.normalize(windowsDirectory),
@@ -640,9 +640,28 @@ export async function main() {
       capture: join(evidence, "03-native-export-save.png"),
       observation: join(evidence, "native-save-observations.json"),
     });
-    await waitUntil("native export written to exact requested path", () =>
-      existsSync(fixture.exportPath),
-    );
+    try {
+      await waitUntil("native export written to exact requested path", () =>
+        existsSync(fixture.exportPath),
+      );
+    } catch (exportError) {
+      try {
+        report.exportTimeoutObservation = native("Observe", {
+          process: appIdentity,
+          destination: fixture.exportPath,
+          capture: join(evidence, "04-native-after-save.png"),
+        });
+      } catch (observationError) {
+        report.exportTimeoutObservationError = observationError.message;
+      }
+      try {
+        report.exportTimeoutWebview = await driver.read(nativeState);
+      } catch (observationError) {
+        report.exportTimeoutWebviewError = observationError.message;
+      }
+      save();
+      throw exportError;
+    }
     proof = inspectWindowsExport(fixture);
     copyFileSync(fixture.exportPath, join(evidence, "previous-ui-export.zip"));
     report.archive = proof;

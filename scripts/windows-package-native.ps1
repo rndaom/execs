@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('Host', 'PolicyApply', 'PolicyRestore', 'Inspect', 'Save', 'Close', 'Cleanup', 'ExtractDriver')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('Host', 'PolicyApply', 'PolicyRestore', 'Inspect', 'Observe', 'Save', 'Close', 'Cleanup', 'ExtractDriver')][string]$Action,
     [Parameter(Mandatory)][string]$Request
 )
 $ErrorActionPreference = 'Stop'
@@ -277,6 +277,60 @@ if ($Action -eq 'Inspect') {
     exit
 }
 if ($uiError) { throw "Native UI Automation unavailable: $uiError" }
+if ($Action -eq 'Observe') {
+    $destination = Assert-Contained $r.root $r.destination $true
+    $evidenceRoot = Assert-Contained $r.root (Join-Path $r.root 'evidence')
+    $capture = Assert-Contained $evidenceRoot $r.capture $true
+    if (Test-Path -LiteralPath $capture) { throw 'Native observation capture already exists.' }
+    $windows = @(Windows-ForOwner)
+    if ($windows.Count -gt 32) { throw 'Unexpected owned window count.' }
+    $records = @($windows | ForEach-Object { Window-Record $_ })
+    $foreground = [WindowsPackageNative]::GetForegroundWindow().ToInt64()
+    $foregroundWindows = @($windows | Where-Object {
+        [long]$_.Current.NativeWindowHandle -eq $foreground -and
+        [int]$_.Current.ProcessId -eq $owned.pid -and
+        [WindowsPackageNative]::WindowPid([IntPtr]$_.Current.NativeWindowHandle) -eq $owned.pid -and
+        [WindowsPackageNative]::IsWindowVisible([IntPtr]$_.Current.NativeWindowHandle)
+    })
+    $captureError = $null
+    $captured = $false
+    if ($foregroundWindows.Count -eq 1) {
+        try {
+            $bounds = $foregroundWindows[0].Current.BoundingRectangle
+            if ($bounds.Width -lt 1 -or $bounds.Height -lt 1 -or $bounds.Width -gt 4096 -or $bounds.Height -gt 4096) { throw 'Invalid owned foreground bounds.' }
+            $bitmap = [Drawing.Bitmap]::new([int]$bounds.Width, [int]$bounds.Height)
+            $graphics = [Drawing.Graphics]::FromImage($bitmap)
+            try {
+                $graphics.CopyFromScreen([int]$bounds.Left, [int]$bounds.Top, 0, 0, $bitmap.Size)
+                $bitmap.Save($capture, [Drawing.Imaging.ImageFormat]::Png)
+                $captured = $true
+            } finally { $graphics.Dispose(); $bitmap.Dispose() }
+        } catch { $captureError = $_.Exception.Message }
+    }
+    $controls = @()
+    $controlsError = $null
+    try {
+        $nativeDialogs = @($windows | Where-Object { $_.Current.ClassName -ceq '#32770' -and [WindowsPackageNative]::IsWindowVisible([IntPtr]$_.Current.NativeWindowHandle) })
+        if ($nativeDialogs.Count -gt 4) { throw 'Unexpected native dialog count.' }
+        foreach ($window in $nativeDialogs) {
+            $controls += @($window.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
+                Select-Object -First 160 | ForEach-Object {
+                    $name = [string]$_.Current.Name
+                    $id = [string]$_.Current.AutomationId
+                    @{ name = $name.Substring(0, [Math]::Min($name.Length, 256)); type = $_.Current.ControlType.ProgrammaticName
+                        id = $id.Substring(0, [Math]::Min($id.Length, 128)); enabled = $_.Current.IsEnabled; offscreen = $_.Current.IsOffscreen }
+                })
+        }
+    } catch { $controlsError = $_.Exception.Message }
+    $documents = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+    $candidateFiles = @(Get-ExportCandidateFiles $destination $documents)
+    @{ at = [DateTime]::UtcNow.ToString('o'); process = $owned; requestedPath = $destination; foregroundHandle = $foreground
+        windows = $records; nativeDialogControls = $controls; controlsError = $controlsError
+        exportDialogVisible = (@($records | Where-Object { $_.title -ceq 'Export profile' -and $_.class -ceq '#32770' -and $_.visible }).Count -eq 1)
+        candidateFiles = $candidateFiles; capturedOwnedForeground = $captured; capture = $(if ($captured) { $capture } else { $null }); captureError = $captureError } |
+        ConvertTo-Json -Depth 8
+    exit
+}
 function Foreground($Window) {
     $handle = [IntPtr]$Window.Current.NativeWindowHandle
     $null = [WindowsPackageNative]::SetForegroundWindow($handle)
@@ -295,7 +349,8 @@ if ($Action -eq 'Close') {
 
 $destination = Assert-Contained $r.root $r.destination $true
 if (Test-Path -LiteralPath $destination) { throw 'Export destination already exists.' }
-$observationPath = Assert-Contained $r.root $r.observation $true
+$evidenceRoot = Assert-Contained $r.root (Join-Path $r.root 'evidence')
+$observationPath = Assert-Contained $evidenceRoot $r.observation $true
 function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null, $OwnershipRoute = $null) {
     $observation = @{ stage = $Stage; at = [DateTime]::UtcNow.ToString('o'); requestedPath = $destination; fieldValue = $FieldValue
         ownershipRoute = $OwnershipRoute
@@ -337,7 +392,7 @@ Save-Observation 'filename-committed-before-save' $windows $controls $acceptedVa
 $null = Owned-Process $r.process
 $windows = @(Windows-ForOwner)
 $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
-$capture = Assert-Contained $r.root $r.capture $true
+$capture = Assert-Contained $evidenceRoot $r.capture $true
 $bounds = $dialog.Current.BoundingRectangle
 $bitmap = [Drawing.Bitmap]::new([int]$bounds.Width, [int]$bounds.Height)
 $graphics = [Drawing.Graphics]::FromImage($bitmap)

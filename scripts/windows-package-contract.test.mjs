@@ -78,13 +78,13 @@ const event = {
   pull_request: { head: { repo: { full_name: "rndaom/execs" } } },
 };
 
-test("only native UI actions select the canonical local Windows PowerShell executable", () => {
+test("native UI actions and observation select the canonical local Windows PowerShell executable", () => {
   const windowsDirectory = "C:\\Windows";
   const desktop = {
     command: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
     sta: true,
   };
-  for (const action of ["Save", "Close"])
+  for (const action of ["Save", "Close", "Observe"])
     assert.deepEqual(windowsNativeShell(action, windowsDirectory), desktop);
   for (const action of [
     "Host",
@@ -104,6 +104,77 @@ test("only native UI actions select the canonical local Windows PowerShell execu
   ])
     assert.throws(() => windowsNativeShell("Save", path));
 });
+
+test(
+  "export diagnostics distinguish the exact destination from alternate ZIP locations",
+  {
+    skip: process.platform !== "win32",
+  },
+  () =>
+    withFixture((fixture, parent) => {
+      const documents = join(parent, "documents");
+      mkdirSync(documents);
+      writeFileSync(`${fixture.exportPath}.zip`, "adjacent");
+      writeFileSync(join(documents, basename(fixture.exportPath)), "documents");
+      writeFileSync(join(documents, "unrelated.zip"), "sentinel");
+      const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+      const script = `
+. '${helper}'
+$files = @(Get-ExportCandidateFiles $env:EXECS_TEST_DESTINATION $env:EXECS_TEST_DOCUMENTS)
+$invalidRefused = $false
+try { $null = Get-ExportCandidateFiles 'exports\\relative.zip' $env:EXECS_TEST_DOCUMENTS }
+catch { $invalidRefused = $true }
+[pscustomobject]@{ files = $files; invalidRefused = $invalidRefused } | ConvertTo-Json -Depth 5 -Compress
+`;
+      for (const command of ["pwsh", windowsNativeShell("Observe", process.env.WINDIR).command]) {
+        const result = spawnSync(
+          command,
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
+            "-Command",
+            script,
+          ],
+          {
+            encoding: "utf8",
+            timeout: 10_000,
+            windowsHide: true,
+            env: {
+              ...process.env,
+              EXECS_TEST_DESTINATION: fixture.exportPath,
+              EXECS_TEST_DOCUMENTS: documents,
+            },
+          },
+        );
+        assert.equal(result.status, 0, result.stderr);
+        const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
+        const byLabel = Object.fromEntries(actual.files.map((file) => [file.label, file]));
+        assert.equal(actual.invalidRefused, true);
+        assert.deepEqual(Object.keys(byLabel).sort(), [
+          "adjacent-appended-zip",
+          "documents-appended-zip",
+          "documents-basename",
+          "exact",
+        ]);
+        assert.deepEqual(
+          actual.files.map((file) => file.path).sort(),
+          [
+            fixture.exportPath,
+            `${fixture.exportPath}.zip`,
+            join(documents, basename(fixture.exportPath)),
+            join(documents, `${basename(fixture.exportPath)}.zip`),
+          ].sort(),
+        );
+        assert.equal(byLabel.exact.exists, false);
+        assert.equal(byLabel["adjacent-appended-zip"].exists, true);
+        assert.equal(byLabel["adjacent-appended-zip"].bytes, 8);
+        assert.equal(byLabel["documents-basename"].exists, true);
+        assert.equal(byLabel["documents-appended-zip"].exists, false);
+      }
+    }),
+);
 
 test("Desktop PowerShell loads the Framework UI Automation client in STA", {
   skip: process.platform !== "win32",
