@@ -18,6 +18,8 @@ The class-aware follow-up maps the generic shotgun item's Engineer, Soldier, Hea
 
 The pure [hand-activity translator](../../../apps/desktop/src-tauri/core/src/viewmodel_activity.rs) implements the functional role/action families of Valve's [pinned first-person activity table](https://github.com/ValveSoftware/source-sdk-2013/blob/b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/game/shared/tf/tf_weaponbase.cpp), including the distinct `PRIMARY2` reload targets and identity entries for special melee actions. It reports whether a role rule matched, so an unchanged fallback does not masquerade as a confirmed mapping. It has no disk or game side effects. Item/team replacement precedence, inspect's loadout path, specialized weapon behavior and retail reachability still need the combined graph and in-game verification.
 
+The class-slot follow-up also retains each class's effective loadout slot from `used_by_classes`, separately from the default `item_slot` and animation role. The installed patch has 37 item/class slots that differ from the item default, including shotgun variants. TF2 treats the presence of a class key as usable and a value of `1` as the default slot; the [pinned item-schema parser](https://github.com/ValveSoftware/source-sdk-2013/blob/b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/game/shared/tf/tf_item_schema.cpp) provides that rule. This is still static schema metadata, not proof of an equip or animation path.
+
 ## Acceptance before enabling Build
 
 1. Bind every read to the confirmed app-440 root and bounded, CRC-checked installed sources. Reject missing, malformed, mixed-version or updated inputs; never write to the TF2 archive while deriving or compiling.

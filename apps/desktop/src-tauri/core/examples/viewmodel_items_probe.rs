@@ -17,6 +17,21 @@ fn main() {
         catalog.schema_sha256,
         catalog.items.len()
     );
+    let class_slot_overrides: Vec<_> = catalog
+        .items
+        .values()
+        .flat_map(|item| {
+            item.class_loadout_slots
+                .iter()
+                .filter(move |(_, slot)| *slot != &item.loadout_slot)
+                .map(move |(class, slot)| (item.id, class.clone(), slot.clone()))
+        })
+        .collect();
+    println!(
+        "{} effective item/class loadout slots differ from their item default: {:?}",
+        class_slot_overrides.len(),
+        class_slot_overrides.iter().take(12).collect::<Vec<_>>()
+    );
     for id in [220, 140] {
         let item = catalog.items.get(&id).expect("expected installed item");
         println!(
