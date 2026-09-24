@@ -22,6 +22,8 @@ The pure [hand-activity translator](../../../apps/desktop/src-tauri/core/src/vie
 
 The class-slot follow-up also retains each class's effective loadout slot from `used_by_classes`, separately from the default `item_slot` and animation role. The installed patch has 37 item/class slots that differ from the item default, including shotgun variants. TF2 treats the presence of a class key as usable and a value of `1` as the default slot; the [pinned item-schema parser](https://github.com/ValveSoftware/source-sdk-2013/blob/b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/game/shared/tf/tf_item_schema.cpp) provides that rule. This is still static schema metadata, not proof of an equip or animation path.
 
+The attachment-routing follow-up keeps the schema's `attach_to_hands` and `attach_to_hands_vm_only` flags distinct. Valve's [weapon viewmodel selection](https://github.com/ValveSoftware/source-sdk-2013/blob/b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/game/shared/tf/tf_weaponbase.cpp) uses `ShouldAttachToHands()` before choosing the shared class hands model. Of 496 installed `tf_weapon_*` definitions on patch 10828683, 487 request that shared model and one sets the separate viewmodel-only attachment flag. This narrows source candidates; it does not establish in-game item availability or animation reachability.
+
 ## Acceptance before enabling Build
 
 1. Bind every read to the confirmed app-440 root and bounded, CRC-checked installed sources. Reject missing, malformed, mixed-version or updated inputs; never write to the TF2 archive while deriving or compiling.

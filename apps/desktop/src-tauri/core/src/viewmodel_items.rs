@@ -29,6 +29,10 @@ pub struct StockItem {
     /// Installed schema identifier, not a localized display label.
     pub name: String,
     pub item_class: String,
+    /// TF2 chooses the shared class hands viewmodel only when this is set.
+    pub attach_to_hands: bool,
+    /// Separate installed flag for viewmodel-only attachment behavior.
+    pub attach_to_hands_vm_only: bool,
     /// Default `item_slot`; TF2 can override it inside `used_by_classes`.
     pub loadout_slot: Option<String>,
     /// Effective loadout slot for each eligible class. `None` means the item
@@ -178,6 +182,14 @@ fn optional_string<'a>(map: &'a VdfMap, key: &str) -> Result<Option<&'a str>, St
         None => Ok(None),
         Some(VdfValue::Str(value)) => Ok(Some(value)),
         Some(VdfValue::Obj(_)) => Err(invalid(format!("item schema {key} is not a string"))),
+    }
+}
+
+fn schema_bool(map: &VdfMap, key: &str) -> Result<bool, StockSourceError> {
+    match optional_string(map, key)? {
+        None | Some("0") => Ok(false),
+        Some("1") => Ok(true),
+        Some(_) => Err(invalid(format!("item schema {key} is not 0 or 1"))),
     }
 }
 
@@ -360,6 +372,8 @@ pub fn parse_stock_item_schema(
             item_class: optional_string(&item, "item_class")?
                 .unwrap_or("")
                 .to_string(),
+            attach_to_hands: schema_bool(&item, "attach_to_hands")?,
+            attach_to_hands_vm_only: schema_bool(&item, "attach_to_hands_vm_only")?,
             loadout_slot,
             class_loadout_slots,
             animation_slot: optional_string(&item, "anim_slot")?.map(str::to_ascii_uppercase),
@@ -460,6 +474,8 @@ mod tests {
                 {
                     "item_class" "tf_weapon_pistol"
                     "item_slot" "secondary"
+                    "attach_to_hands" "1"
+                    "attach_to_hands_vm_only" "0"
                     "used_by_classes" { "scout" "1" }
                     "visuals"
                     {
@@ -493,7 +509,7 @@ mod tests {
                         }
                     }
                 }
-                "221" { "prefab" "scout_weapon" }
+                "221" { "prefab" "scout_weapon" "attach_to_hands" "0" "attach_to_hands_vm_only" "1" }
                 "222"
                 {
                     "prefab" "scout_weapon"
@@ -524,6 +540,8 @@ mod tests {
         assert_eq!(catalog.items.len(), 3);
         let shortstop = &catalog.items[&220];
         assert_eq!(shortstop.classes, ["scout"]);
+        assert!(shortstop.attach_to_hands);
+        assert!(!shortstop.attach_to_hands_vm_only);
         assert_eq!(shortstop.loadout_slot.as_deref(), Some("primary"));
         assert_eq!(
             shortstop.class_loadout_slots["scout"].as_deref(),
@@ -566,6 +584,8 @@ mod tests {
             inherited.blu_replacements["ACT_VM_DRAW"],
             "ACT_SECONDARY_VM_DRAW"
         );
+        assert!(!catalog.items[&221].attach_to_hands);
+        assert!(catalog.items[&221].attach_to_hands_vm_only);
     }
 
     #[test]
@@ -630,6 +650,16 @@ mod tests {
                 .unwrap_err()
                 .0
                 .contains("unavailable visual")
+        );
+        let invalid_attachment = SCHEMA.replace(
+            "\"attach_to_hands\" \"1\"",
+            "\"attach_to_hands\" \"future\"",
+        );
+        assert!(
+            parse_stock_item_schema(invalid_attachment.as_bytes(), "fixture".into())
+                .unwrap_err()
+                .0
+                .contains("attach_to_hands")
         );
     }
 
