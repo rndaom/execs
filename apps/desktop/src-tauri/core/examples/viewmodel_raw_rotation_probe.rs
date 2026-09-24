@@ -5,8 +5,8 @@ use std::path::Path;
 
 use execs_core::viewmodel_pose::parse_stock_pose_mdl;
 use execs_core::viewmodel_rotation_values::{
-    decode_animated_rotation_samples, decode_raw_rotation_record,
-    decode_terminal_raw_rotation_record, terminal_raw_rotation_len,
+    decode_animated_rotation_frames, decode_raw_rotation_record,
+    decode_terminal_raw_rotation_record, parse_bone_rotation_bases, terminal_raw_rotation_len,
 };
 use execs_core::viewmodel_source::{read_stock_animation_index, read_stock_bone_index};
 use execs_core::vpk::{map_vpk_entries, read_vpk_entry};
@@ -21,6 +21,7 @@ fn audit(
     bone: &execs_core::viewmodel_source::StockBoneModel,
 ) -> (usize, usize, usize, usize) {
     let pose = parse_stock_pose_mdl(bytes, model, bone).expect("verified pose inventory");
+    let bases = parse_bone_rotation_bases(bytes, bone).expect("verified bone rotations");
     let table = usize::try_from(integer(bytes, 184)).expect("animation table");
     let mut decoded = 0;
     let mut terminal = 0;
@@ -83,8 +84,15 @@ fn audit(
                         animated_terminal += 1;
                     } else {
                         let end = at + usize::try_from(next).expect("bounded record");
-                        decode_animated_rotation_samples(&bytes[at..end], frames)
-                            .expect("animated rotation channels");
+                        let basis = &bases[usize::from(header[0])];
+                        decode_animated_rotation_frames(
+                            &bytes[at..end],
+                            frames,
+                            basis.base_angles,
+                            basis.scale,
+                            basis.fixed_alignment.then_some(basis.alignment),
+                        )
+                        .expect("animated rotation frames");
                         animated += 1;
                     }
                 }
