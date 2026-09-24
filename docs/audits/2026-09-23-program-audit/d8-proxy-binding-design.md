@@ -1,6 +1,6 @@
 # D8 proxy destination binding: implementation design
 
-**Status:** Open for hosted qualification. Draft product commits `fbc17f2` and `b2cce06` implement and probe the numeric destination transport with passing Windows loopback fixtures. The reqwest analysis and candidate plan below record why that implementation was chosen; they describe the state before the curl migration.
+**Status:** Checked for the scoped D8 connection-binding finding on draft head `b6a3ca8`. Product proxy fixtures pass on Windows and hosted Linux, and the Linux package dependency correction passes hosted native and package checks. Live CDN redirects and installed candidate upgrades remain release qualification. The reqwest analysis and candidate plan below record why the curl transport was chosen; they describe the state before that migration.
 
 ## Required invariant
 
@@ -29,7 +29,7 @@ This is broader than a `net.rs` option change. `hud_fetch.rs`, `hud_stats.rs` an
 - A redirect fixture tries an allowed first hop followed by a private DNS answer, a disallowed host, non-HTTPS URL and unexpected port. Each is refused before a second network connection. A valid multi-hop redirect binds each hop independently; a changed DNS answer cannot make the proxy choose a private destination.
 - Connection stalls, proxy tunnel stalls, origin body stalls, oversized `Content-Length` and streaming overflow honor existing time and byte limits. Cache verification still rejects bad bytes and failed writes. Existing native network tests, workspace fmt/Clippy/tests, and the packaged Windows/Linux smoke matrices pass.
 
-**Design conclusion at this checkpoint:** The former reqwest client had no supported hook for independent CONNECT target and origin TLS name. The later product implementation uses libcurl; keep D8 unchecked until its remaining acceptance evidence exists.
+**Design conclusion at this earlier checkpoint:** The former reqwest client had no supported hook for independent CONNECT target and origin TLS name. The later product implementation uses libcurl. Its hosted acceptance evidence appears below.
 
 ## Bounded transport probe — September 24, 2026
 
@@ -45,4 +45,12 @@ Draft commit `fbc17f2` moves native downloads to an owned curl client in `net.rs
 
 The [product loopback fixture](../../../tools/d8-product-proxy-probe.py) passed 18 cases on Windows/Schannel after this change and follow-up `b2cce06`: IPv4 and IPv6 numeric HTTP `CONNECT` with Basic auth; original SNI/Host and wrong-name rejection; declared and streamed size caps; `HTTPS_PROXY` with an inactive SOCKS setting; approved and refused redirects, including a next-hop private DNS answer rejected before a second tunnel; `NO_PROXY` direct numeric binding; HTTPS proxy TLS and 407 failure; same-vetted-origin tunnel reuse; numeric SOCKS5h IPv4/IPv6 targets; and proxy CONNECT/origin-body stalls bounded by test-only deadlines. The full Rust workspace tests, workspace Clippy with warnings denied, formatting, generated notice check and Biome passed locally. An independent read-only review found no unresolved high-severity binding flaw. These fixtures do not dial the claimed public targets.
 
-**Remaining before D8 closure:** run exact-head hosted Windows/Linux native and package workflows, verify the Linux proxy path and actual AppImage/`.deb` dependency inventories. Live CDN redirect smoke belongs to release qualification separately. No release is authorized by this transport change.
+**At this local product checkpoint**, exact-head hosted Windows/Linux native and package workflows, the Linux proxy path and AppImage/`.deb` dependency inventories still needed verification. The hosted checkpoints below record those results. Live CDN redirect smoke belongs to release qualification separately. No release is authorized by this transport change.
+
+## Hosted and packaged checkpoint — September 24, 2026
+
+At PR head `a9dc1a4`, [all five CI jobs](https://github.com/rndaom/execs/actions/runs/35960302999), [native Linux](https://github.com/rndaom/execs/actions/runs/35960302997), [unsigned Linux packages](../../design/2026-09-22-overhaul/implementation/package-smoke/run-35960303004/README.md), and [Windows previous-public capability](https://github.com/rndaom/execs/actions/runs/35960302998) passed. The mandatory Linux CI step ran the **product** proxy fixture through 18 passing cases, matching the 18 local Windows cases. The Linux packages passed native AppImage and Debian startup/round trips with source notices generated; the artifact's limits are recorded in the [package evidence](../../design/2026-09-22-overhaul/implementation/package-smoke/run-35960303004/README.md).
+
+An isolated unsigned Windows 0.2.0 NSIS candidate built from `a9dc1a4` (SHA-256 `2A822318F6041097FA37755CF18EA0BC5EC20706FE9FCDA878A476883EB0C2E4`). Its generated installer instructions include source-matching bundled curl and zlib notices; the built binary opened and closed with isolated app data. The installer was not installed, so candidate upgrade and signed updater remain release gates.
+
+The follow-up [dependency inventory at `1fadaa2`](https://github.com/rndaom/execs/actions/runs/35961809850) found the native Linux binary directly needs OpenSSL 3 and zlib while the Debian package declared only WebKit/GTK. Draft head `b6a3ca8` adds `libssl3 | libssl3t64` and `zlib1g` to Debian dependencies and asserts the generated field. [All five CI jobs](https://github.com/rndaom/execs/actions/runs/35963148612), [native Linux](https://github.com/rndaom/execs/actions/runs/35963148622), [Linux packages](../../design/2026-09-22-overhaul/implementation/package-smoke/run-35963148670/README.md), and [Windows previous-public capability](https://github.com/rndaom/execs/actions/runs/35963148614) passed. The package receipt confirms AppImage bundles OpenSSL but uses host zlib, consistent with [AppImage's curated base-library model](https://docs.appimage.org/introduction/concepts.html); other distributions remain untested. The three native Linux package round trips passed. This closes the scoped D8 finding. Live CDN redirects and installed candidate upgrades remain release qualification.

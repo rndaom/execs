@@ -29,7 +29,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Viewmodels.** Hide weapons per class, compiled with the game's own tools on Windows. Linux supports importing prebuilt packs.
 - **Sounds.** Hit and kill sounds from a library, or your own WAV.
 - **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading supports selected customizations; server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
-- **Files.** Edit any cfg with a linter that knows the engine.
+- **Files.** Edit your own UTF-8 cfgs with a Source-aware linter; inspect provided cfgs read-only.
 
 <p align="center">
   <img src="docs/media/hud.png" width="49%" alt="HUD pane">

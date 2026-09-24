@@ -17,9 +17,6 @@ User-facing changes only. The release workflow publishes the matching
   cfg values until the slider is changed.
 - Binds and Gameplay save changes quietly in the background. A short notice still explains when
   TF2 keeps a draft pending, and a failed save remains visible for retry.
-- Development Inventory shows TF2 quality borders, kit target artwork and illustrative
-  war-paint patterns with wear labels. Artwork loads progressively, and an oversized optional
-  texture no longer blocks other item images.
 - Refresh every pane with the overhaul: subtly warmed dark surfaces, TF2 orange selection, clearer type,
   less redundant copy, compact navigation, consistent dialogs and restrained motion. Profile menus,
   pane navigation and Binds categories now ease into place. Each pane
@@ -28,7 +25,7 @@ User-facing changes only. The release workflow publishes the matching
 - Comfig and the setup wizard now offer mastercomfig's current presets without an expanded list of
   retired choices. Existing profiles still show a legacy preset until you choose a current one.
 - Keep separate scroll positions for visited panes and App settings. Profile changes reset
-  profile-specific positions while preserving account-owned Inventory browsing.
+  profile-specific positions.
 - Enlarge or reduce the interface with Ctrl + Plus / Minus, and restore its original size with
   Ctrl + 0. The layout reflows while keeping keyboard access to controls.
 - Crosshair: keep the designer beside its preview, retain unfinished designs, and distinguish
@@ -46,9 +43,6 @@ User-facing changes only. The release workflow publishes the matching
   and direct text editing of the complete string.
 - Reduce background lifecycle polling while execs is hidden or unfocused, refresh on return,
   and back off failed reads while keeping launch and maintenance state guarded.
-- Inventory loads automatically and refreshes every two minutes while visible
-  and focused, and after TF2 closes. Background refreshes retain your place and
-  artwork; connection failures retry with backoff and offer a Retry button.
 
 ### Added
 
@@ -59,17 +53,6 @@ User-facing changes only. The release workflow publishes the matching
 - Gameplay controls for automatic reload and fast weapon switching, preserving existing
   alternative fast-switch values until you choose to change them.
 - Binds: include primary attack, secondary attack and reload in a dedicated Combat group.
-- Development builds: browse a read-only Steam backpack snapshot with pages,
-  search, quality filters, item details, and base artwork from the installed TF2.
-  Inventory organization remains in development and is not enabled in release builds.
-- Inventory preview: show your Steam name and avatar, inspect larger item artwork,
-  and browse by name, quality, or type with one page control. View sorting keeps
-  Steam backpack positions unchanged.
-- Inventory preview: identify war paints, killstreak kit targets and fabricator
-  outputs, including available wear, sheen and effect names. Preview installed
-  war-paint pattern swatches without implying a rendered weapon or wear preview.
-- Inventory preview: show TF2 quality borders, complete 50-slot rows, and larger installed
-  war-paint swatches without hiding other artwork when one pattern fails.
 
 ### Fixed
 
@@ -103,6 +86,9 @@ User-facing changes only. The release workflow publishes the matching
   help, and points startup-setting failures to the first cfg path and line. UTF-8 BOMs and malformed
   individual binds no longer create unrelated findings or hide later known settings.
 - Refresh packaged credits and dependency licenses to match the current application.
+- Bind native download connections and proxy tunnels to checked public addresses while
+  preserving HTTPS certificate checks and configured proxy access. Debian packages now
+  declare the OpenSSL and zlib libraries required by the transport.
 - Files: keep the editor's position when Tab returns focus after visiting another pane.
 - Offer a clear Choose profile action when saved profiles exist but none is active.
   Import review now describes the unchanged TF2 setup without assuming an active profile.
