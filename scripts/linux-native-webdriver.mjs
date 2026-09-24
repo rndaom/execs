@@ -91,6 +91,7 @@ export class NativeWebDriver {
       };
       probe.listener = (event) => probe.events.push({type: event.type, trusted: event.isTrusted,
         x: event.clientX, y: event.clientY, onTarget: target.contains(event.target),
+        box: target.getBoundingClientRect().toJSON(),
         target: event.target.tagName + ':' + event.target.textContent.trim().slice(0, 80)});
       window.__execsNativeClickProbe = probe;
       document.addEventListener('pointerdown', probe.listener, true);
@@ -159,21 +160,34 @@ export function classifyClickTrace(trace) {
     box.left >= 0 && box.top >= 0 && box.right <= width + 1 && box.bottom <= height + 1,
     "Intended control is outside the viewport",
   );
-  for (const key of ["left", "right", "top", "bottom"]) {
-    assert.ok(
-      Math.abs(box[key] - trace.afterBox[key]) <= 1,
-      "Control moved during native click; coordinate result is ambiguous",
-    );
-  }
-  const click = trace.events.findLast((event) => event.type === "click");
-  assert.ok(click?.trusted, "No trusted native click was observed");
-  const inBox =
-    click.x >= box.left && click.x <= box.right && click.y >= box.top && click.y <= box.bottom;
-  if (click.onTarget) {
-    assert.ok(inBox, "Native target and event coordinates disagree");
+  const pointerdownIndex = trace.events.findLastIndex((event) => event.type === "pointerdown");
+  const clickIndex = trace.events.findLastIndex((event) => event.type === "click");
+  const pointerdown = trace.events[pointerdownIndex];
+  const click = trace.events[clickIndex];
+  assert.ok(
+    pointerdown?.trusted && click?.trusted && pointerdownIndex < clickIndex,
+    "No trusted native pointerdown and click sequence was observed",
+  );
+  // A click handler may move the control. Movement before the input remains ambiguous.
+  for (const event of [pointerdown, click])
+    for (const key of ["left", "right", "top", "bottom"])
+      assert.ok(
+        Number.isFinite(event.box?.[key]) && Math.abs(box[key] - event.box[key]) <= 1,
+        "Control moved before native click; coordinate result is ambiguous",
+      );
+  const inBox = (event) =>
+    event.x >= event.box.left &&
+    event.x <= event.box.right &&
+    event.y >= event.box.top &&
+    event.y <= event.box.bottom;
+  if (pointerdown.onTarget && click.onTarget) {
+    assert.ok(inBox(pointerdown) && inBox(click), "Native target and event coordinates disagree");
     return "on-target";
   }
-  assert.ok(!inBox, "Native click hit another element inside the intended control");
+  assert.ok(
+    !pointerdown.onTarget && !click.onTarget && !inBox(pointerdown) && !inBox(click),
+    "Native pointer sequence changed targets or coordinates disagree",
+  );
   return "driver-coordinate-mismatch";
 }
 

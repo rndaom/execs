@@ -1,0 +1,30 @@
+[
+  {
+    "key": "SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2\\AdditionalBrowserArguments",
+    "name": "execs.exe",
+    "existed": false,
+    "kind": null,
+    "value": null
+  },
+  {
+    "key": "SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2\\AdditionalBrowserArguments",
+    "name": "com.rndaom.execs",
+    "existed": false,
+    "kind": null,
+    "value": null
+  },
+  {
+    "key": "SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2\\UserDataFolder",
+    "name": "execs.exe",
+    "existed": false,
+    "kind": null,
+    "value": null
+  },
+  {
+    "key": "SOFTWARE\\Policies\\Microsoft\\Edge\\WebView2\\UserDataFolder",
+    "name": "com.rndaom.execs",
+    "existed": false,
+    "kind": null,
+    "value": null
+  }
+]

@@ -227,26 +227,40 @@ test("menu evidence checks clipping and hit testing instead of accepting off-scr
 
 test("zoom input diagnosis distinguishes an off-target driver coordinate from an app hit-test failure", () => {
   const box = { left: 180, top: 80, right: 300, bottom: 120, width: 120, height: 40 };
+  const events = [
+    { type: "pointerdown", trusted: true, x: 240, y: 100, onTarget: true, box },
+    { type: "click", trusted: true, x: 240, y: 100, onTarget: true, box },
+  ];
   const trace = {
     expected: { box, width: 480, height: 320, hit: true },
     afterBox: box,
-    events: [{ type: "click", trusted: true, x: 240, y: 100, onTarget: true }],
+    events,
   };
   assert.equal(classifyClickTrace(trace), "on-target");
   assert.equal(
+    classifyClickTrace({ ...trace, afterBox: { ...box, top: 100, bottom: 140 } }),
+    "on-target",
+  );
+  assert.equal(
     classifyClickTrace({
       ...trace,
-      events: [{ type: "click", trusted: true, x: 120, y: 50, onTarget: false }],
+      events: events.map((event) => ({ ...event, x: 120, y: 50, onTarget: false })),
     }),
     "driver-coordinate-mismatch",
   );
   for (const changed of [
     { ...trace, events: [] },
-    { ...trace, events: [{ ...trace.events[0], trusted: false }] },
-    { ...trace, events: [{ ...trace.events[0], onTarget: false }] },
-    { ...trace, events: [{ ...trace.events[0], x: 120 }] },
+    { ...trace, events: [events[1]] },
+    { ...trace, events: [events[1], events[0]] },
+    { ...trace, events: [{ ...events[0], trusted: false }, events[1]] },
+    { ...trace, events: [events[0], { ...events[1], trusted: false }] },
+    { ...trace, events: [{ ...events[0], onTarget: false }, events[1]] },
+    { ...trace, events: [events[0], { ...events[1], onTarget: false }] },
+    { ...trace, events: [{ ...events[0], x: 120 }, events[1]] },
+    { ...trace, events: [events[0], { ...events[1], x: 120 }] },
+    { ...trace, events: [{ ...events[0], box: { ...box, top: 100 } }, events[1]] },
+    { ...trace, events: [events[0], { ...events[1], box: { ...box, top: 100 } }] },
     { ...trace, expected: { ...trace.expected, hit: false } },
-    { ...trace, afterBox: { ...box, top: 100 } },
   ])
     assert.throws(() => classifyClickTrace(changed));
 });

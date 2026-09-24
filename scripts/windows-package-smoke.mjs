@@ -584,21 +584,26 @@ export async function main() {
     await capture("01-installed-old-app");
     const summary = '[data-testid="profile-library"] summary';
     const click = await driver.observeClick(summary);
+    const webviewInput = { phase: "genuine-webview-input", click };
+    report.checks.push(webviewInput);
+    save();
     assert.equal(classifyClickTrace(click), "on-target");
     assert.equal((await driver.read(nativeState)).menuOpen, true);
     await driver.key("\uE004");
     const focus = await driver.read(
       "return {inside: document.querySelector('[data-testid=profile-library]').contains(document.activeElement), summary: document.activeElement?.tagName === 'SUMMARY', tag: document.activeElement?.tagName, text: document.activeElement?.textContent};",
     );
+    webviewInput.keyboard = { key: "Tab", focus };
+    save();
     assert.equal(focus.inside, true);
     assert.equal(focus.summary, false);
-    report.checks.push({ phase: "genuine-webview-input", click, keyboard: { key: "Tab", focus } });
     await capture("02-old-profile-menu");
     const exportClick = await driver.observeClick(
       `[data-testid="profile-export"][aria-label="Export ${fixture.activeProfileName}"]`,
     );
-    assert.equal(classifyClickTrace(exportClick), "on-target");
     report.checks.push({ phase: "export-click", trace: exportClick });
+    save();
+    assert.equal(classifyClickTrace(exportClick), "on-target");
     report.nativeSave = native("Save", {
       process: appIdentity,
       destination: fixture.exportPath,

@@ -1,0 +1,34 @@
+{
+  "windows": [],
+  "packageCode": 15700,
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "listeners": [],
+  "version": "0.1.8",
+  "uiDiagnostics": null,
+  "processes": [
+    {
+      "pid": 1996,
+      "parent": 7792,
+      "executable": "D:\\a\\_temp\\execs-windows-package-NDuZfn\\installed\\execs.exe",
+      "created": "2026-09-24T02:18:10.0941190Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-NDuZfn\\installed\\execs.exe",
+      "session": 2
+    },
+    {
+      "pid": 764,
+      "parent": 1996,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T02:18:11.5459710Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-NDuZfn\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=59176 --lang=en-US --mojo-named-platform-channel-pipe=1996.7424.12564709925871729545",
+      "session": 2
+    }
+  ],
+  "process": {
+    "pid": 1996,
+    "parent": 7792,
+    "executable": "D:\\a\\_temp\\execs-windows-package-NDuZfn\\installed\\execs.exe",
+    "created": "2026-09-24T02:18:10.0941190Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-NDuZfn\\installed\\execs.exe",
+    "session": 2
+  }
+}
