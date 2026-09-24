@@ -13,7 +13,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   assertDevelopmentPackageCheckpoint,
@@ -167,6 +167,26 @@ function inspectPackage(path, kind, destination, env, version, candidate) {
       !files.some((entry) => /\/libwayland-(client|server|cursor|egl)\.so(?:\.\d+)*$/.test(entry)),
       "Candidate AppImage carries conflicting host Wayland libraries",
     );
+  const bundledNativeLibraries =
+    kind === "appimage" && candidate
+      ? Object.fromEntries(
+          ["libssl.so.3", "libcrypto.so.3", "libz.so.1"].map((name) => [
+            name,
+            files
+              .filter((entry) => entry.endsWith(`/${name}`))
+              .map((entry) => {
+                const target = realpathSync(entry);
+                requireContained(tree, target);
+                assert.ok(lstatSync(target).isFile(), `Bundled library is not a file: ${entry}`);
+                return relative(tree, entry);
+              }),
+          ]),
+        )
+      : null;
+  if (bundledNativeLibraries)
+    console.log(
+      `Candidate AppImage native library inventory: ${JSON.stringify(bundledNativeLibraries)}`,
+    );
   return {
     path,
     kind,
@@ -176,6 +196,7 @@ function inspectPackage(path, kind, destination, env, version, candidate) {
     binarySha256: sha256(executable),
     packagedNotices: true,
     ...(kind === "appimage" && candidate ? { bundledWaylandAbsent: true } : {}),
+    ...(bundledNativeLibraries ? { bundledNativeLibraries } : {}),
   };
 }
 
