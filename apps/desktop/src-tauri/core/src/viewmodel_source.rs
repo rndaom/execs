@@ -78,12 +78,16 @@ fn span(bytes: &[u8], offset: usize, size: usize, field: &str) -> Result<(), Sto
 
 fn i32_at(bytes: &[u8], offset: usize, field: &str) -> Result<i32, StockSourceError> {
     span(bytes, offset, 4, field)?;
-    Ok(i32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()))
+    Ok(i32::from_le_bytes(
+        bytes[offset..offset + 4].try_into().unwrap(),
+    ))
 }
 
 fn f32_at(bytes: &[u8], offset: usize, field: &str) -> Result<f32, StockSourceError> {
     span(bytes, offset, 4, field)?;
-    Ok(f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()))
+    Ok(f32::from_le_bytes(
+        bytes[offset..offset + 4].try_into().unwrap(),
+    ))
 }
 
 fn positive_offset(value: i32, field: &str) -> Result<usize, StockSourceError> {
@@ -106,7 +110,11 @@ fn name_at(bytes: &[u8], offset: usize, field: &str) -> Result<String, StockSour
         .position(|byte| *byte == 0)
         .map(|length| offset + length)
         .ok_or_else(|| invalid(format!("{field} lacks a bounded NUL terminator")))?;
-    if end == offset || bytes[offset..end].iter().any(|byte| !(32..=126).contains(byte)) {
+    if end == offset
+        || bytes[offset..end]
+            .iter()
+            .any(|byte| !(32..=126).contains(byte))
+    {
         return Err(invalid(format!("{field} is not printable ASCII")));
     }
     Ok(String::from_utf8(bytes[offset..end].to_vec()).expect("ASCII name"))
@@ -163,17 +171,25 @@ pub fn parse_stock_animation_mdl(bytes: &[u8]) -> Result<StockAnimationModel, St
         "sequence",
     )?;
     if anim_table.is_empty() || seq_table.is_empty() {
-        return Err(invalid("stock animation model has no animations or sequences"));
+        return Err(invalid(
+            "stock animation model has no animations or sequences",
+        ));
     }
 
     let mut animations = Vec::with_capacity(anim_table.len());
     for base in anim_table {
         if i32_at(bytes, base, "animation baseptr")? != -(base as i32) {
-            return Err(invalid("animation descriptor does not point back to the header"));
+            return Err(invalid(
+                "animation descriptor does not point back to the header",
+            ));
         }
         let name = name_at(
             bytes,
-            relative_offset(base, i32_at(bytes, base + 4, "animation name")?, "animation name")?,
+            relative_offset(
+                base,
+                i32_at(bytes, base + 4, "animation name")?,
+                "animation name",
+            )?,
             "animation name",
         )?;
         let fps = f32_at(bytes, base + 8, "animation FPS")?;
@@ -191,11 +207,17 @@ pub fn parse_stock_animation_mdl(bytes: &[u8]) -> Result<StockAnimationModel, St
     let mut sequences = Vec::with_capacity(seq_table.len());
     for base in seq_table {
         if i32_at(bytes, base, "sequence baseptr")? != -(base as i32) {
-            return Err(invalid("sequence descriptor does not point back to the header"));
+            return Err(invalid(
+                "sequence descriptor does not point back to the header",
+            ));
         }
         let label = name_at(
             bytes,
-            relative_offset(base, i32_at(bytes, base + 4, "sequence label")?, "sequence label")?,
+            relative_offset(
+                base,
+                i32_at(bytes, base + 4, "sequence label")?,
+                "sequence label",
+            )?,
             "sequence label",
         )?;
         let activity_offset = i32_at(bytes, base + 8, "sequence activity")?;
@@ -207,9 +229,10 @@ pub fn parse_stock_animation_mdl(bytes: &[u8]) -> Result<StockAnimationModel, St
             if bytes[at] == 0 {
                 None
             } else {
-                Some(name_at(bytes, at, "sequence activity").map_err(|error| {
-                    invalid(format!("sequence {label}: {error}"))
-                })?)
+                Some(
+                    name_at(bytes, at, "sequence activity")
+                        .map_err(|error| invalid(format!("sequence {label}: {error}")))?,
+                )
             }
         };
         let blends = usize::try_from(i32_at(bytes, base + 56, "sequence blend count")?)
@@ -221,7 +244,9 @@ pub fn parse_stock_animation_mdl(bytes: &[u8]) -> Result<StockAnimationModel, St
         let height = usize::try_from(i32_at(bytes, base + 72, "sequence blend height")?)
             .map_err(|_| invalid("sequence blend height is invalid"))?;
         if width == 0 || height == 0 || width.checked_mul(height) != Some(blends) {
-            return Err(invalid("sequence blend grid does not match the blend count"));
+            return Err(invalid(
+                "sequence blend grid does not match the blend count",
+            ));
         }
         let grid = relative_offset(
             base,
@@ -256,7 +281,9 @@ pub fn parse_stock_animation_mdl(bytes: &[u8]) -> Result<StockAnimationModel, St
 /// Inspect all nine class animation models from the selected app-440 install.
 /// Every VPK body must match the directory's CRC. The install identity and
 /// selected entry locations are checked again before the result is returned.
-pub fn read_stock_animation_index(tf2_root: &Path) -> Result<StockAnimationIndex, StockSourceError> {
+pub fn read_stock_animation_index(
+    tf2_root: &Path,
+) -> Result<StockAnimationIndex, StockSourceError> {
     let root = normalize_tf2_root(tf2_root).map_err(|error| invalid(error.message()))?;
     let steam_inf_path = root.join("tf/steam.inf");
     let steam_inf = read_small_text_bounded(&steam_inf_path, MAX_STEAM_INF_BYTES)
@@ -280,12 +307,18 @@ pub fn read_stock_animation_index(tf2_root: &Path) -> Result<StockAnimationIndex
         let body = read_vpk_entry(&vpk_path, entry)
             .map_err(|error| invalid(format!("Could not read {rel}: {}", error.0)))?;
         if crc32(&body) != entry.crc {
-            return Err(invalid(format!("TF2 stock model {rel} differs from its VPK CRC")));
+            return Err(invalid(format!(
+                "TF2 stock model {rel} differs from its VPK CRC"
+            )));
         }
-        let model = parse_stock_animation_mdl(&body)
-            .map_err(|error| invalid(format!("{rel}: {error}")))?;
+        let model =
+            parse_stock_animation_mdl(&body).map_err(|error| invalid(format!("{rel}: {error}")))?;
         let expected_name = format!("weapons/c_models/c_{class_id}_animations.mdl");
-        if !model.model_name.replace('\\', "/").eq_ignore_ascii_case(&expected_name) {
+        if !model
+            .model_name
+            .replace('\\', "/")
+            .eq_ignore_ascii_case(&expected_name)
+        {
             return Err(invalid(format!("{rel} has a different model identity")));
         }
         models.insert(class_id.to_string(), model);
@@ -300,7 +333,9 @@ pub fn read_stock_animation_index(tf2_root: &Path) -> Result<StockAnimationIndex
     for class_id in CLASSES {
         let rel = format!("models/weapons/c_models/c_{class_id}_animations.mdl");
         if entries.get(&rel) != updated_entries.get(&rel) {
-            return Err(invalid(format!("TF2 stock model {rel} changed during inspection")));
+            return Err(invalid(format!(
+                "TF2 stock model {rel} changed during inspection"
+            )));
         }
         let entry = updated_entries.get(&rel).expect("entry checked above");
         let body = read_vpk_entry(&vpk_path, entry)
@@ -308,7 +343,9 @@ pub fn read_stock_animation_index(tf2_root: &Path) -> Result<StockAnimationIndex
         if crc32(&body) != entry.crc
             || sha256_hex(&body) != models.get(class_id).expect("class indexed above").sha256
         {
-            return Err(invalid(format!("TF2 stock model {rel} changed during inspection")));
+            return Err(invalid(format!(
+                "TF2 stock model {rel} changed during inspection"
+            )));
         }
     }
     Ok(StockAnimationIndex {

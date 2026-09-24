@@ -6,7 +6,9 @@ use std::path::Path;
 use execs_core::viewmodel_source::read_stock_animation_index;
 
 fn main() {
-    let root = std::env::args().nth(1).expect("provide the confirmed TF2 root");
+    let root = std::env::args()
+        .nth(1)
+        .expect("provide the confirmed TF2 root");
     let index = read_stock_animation_index(Path::new(&root)).expect("stock animation index");
     println!("TF2 patch: {}", index.patch_version);
     let (mut animations, mut sequences, mut blends) = (0, 0, 0);
