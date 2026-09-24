@@ -1192,7 +1192,7 @@ mod tests {
     }
 
     #[test]
-    fn local_connect_proxy_remains_reachable_but_resolves_target_itself() {
+    fn authenticated_connect_proxy_remains_reachable_but_resolves_target_itself() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -1230,7 +1230,7 @@ mod tests {
             calls.lock().unwrap().push(host.to_owned());
             Ok(vec!["127.0.0.1:0".parse().unwrap()])
         });
-        let proxy = reqwest::Proxy::https(format!("http://localhost:{port}")).unwrap();
+        let proxy = reqwest::Proxy::https(format!("http://tester:pass@localhost:{port}")).unwrap();
         let client = reqwest::blocking::Client::builder()
             .proxy(proxy)
             .dns_resolver(Arc::new(resolver))
@@ -1245,7 +1245,44 @@ mod tests {
             .is_err());
         let request = server.join().unwrap();
         assert!(request.starts_with("CONNECT api.github.com:443 HTTP/1.1\r\n"));
+        assert!(request.contains("Proxy-Authorization: Basic dGVzdGVyOnBhc3M=\r\n"));
         assert_eq!(*queried.lock().unwrap(), ["localhost"]);
+    }
+
+    #[test]
+    fn proxy_exclusion_uses_the_guarded_direct_resolver() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let proxy = reqwest::Proxy::https(format!(
+            "http://localhost:{}",
+            listener.local_addr().unwrap().port()
+        ))
+        .unwrap()
+        .no_proxy(reqwest::NoProxy::from_string("api.github.com"));
+        let queried = Arc::new(Mutex::new(Vec::<String>::new()));
+        let calls = Arc::clone(&queried);
+        let resolver = PublicDestinationResolver::with_lookup(move |host| {
+            calls.lock().unwrap().push(host.to_owned());
+            Ok(vec!["127.0.0.1:0".parse().unwrap()])
+        });
+        let client = reqwest::blocking::Client::builder()
+            .proxy(proxy)
+            .dns_resolver(Arc::new(resolver))
+            .https_only(true)
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+        assert!(client
+            .get("https://api.github.com/repos/o/r")
+            .send()
+            .is_err());
+        assert_eq!(*queried.lock().unwrap(), ["api.github.com"]);
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock,
+            "NO_PROXY must not send a CONNECT request"
+        );
     }
 
     #[test]
