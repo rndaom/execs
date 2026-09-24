@@ -26,7 +26,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Binds.** Click an action, press a key.
 - **HUD.** Install from the hud-db catalog, tune its options, or import your own.
 - **Crosshair.** Stock crosshairs, your own designs or PNGs per weapon, and crosshairs already saved in your profile.
-- **Viewmodels.** Import a user-provided model VPK. Packs saved by earlier development builds remain switchable and exportable, but their recorded class choices cannot be rebuilt.
+- **Viewmodels.** This development build accepts a user-provided model VPK and preserves earlier built packs and choices through profile switching and export/import. Its own builder is being replaced with an independent implementation based on the player's installed TF2 files; restoring class/group and Full/Weapon controls is required before 0.2.0 ships.
 - **Sounds.** Use stock hit and kill effects from your TF2 install or your own WAV.
 - **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading offers four direct-author addon choices and particle sources from your installed mods. Older saved cueki library choices need their original verified local cache; new library downloads are paused. Server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
 - **Files.** Edit your own UTF-8 cfgs with a Source-aware linter; inspect provided cfgs read-only.
@@ -84,7 +84,7 @@ execs installs work by the TF2 community:
 
 - [mastercomfig](https://github.com/mastercomfig/mastercomfig) and [hud-db](https://github.com/mastercomfig/hud-db) by [mastercoms](https://github.com/mastercoms)
 - [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) by [CriticalFlaw](https://github.com/CriticalFlaw)
-- Previously built viewmodel packs used [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), with previews by Oblique; new source and preview downloads are retired
+- Previously built viewmodel packs used [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), with previews by Oblique; those remote source and preview downloads have ended while an independent local-source builder is developed
 - [casual-pre-loader](https://github.com/cueki/casual-pre-loader) by [cueki](https://github.com/cueki)
 - [Flat Textures (2021)](https://gamebanana.com/mods/295065) by [flewvar](https://gamebanana.com/members/1764119), with textures credited to [JarateKing](https://github.com/JarateKing)
 - [Developer Textures Overhaul v2](https://gamebanana.com/mods/336110), a rework by FPS_Engineer; earlier material was reuploaded and continued by ayrtonSilna, who did not identify its original creator

@@ -4,7 +4,7 @@ import { useCanWrite } from "./hooks/useAppStatus";
 import type { ViewmodelRecord } from "./lib/bridge";
 import { legacyViewmodelSelectionCount, VIEWMODEL_CASUAL_COPY } from "./lib/viewmodel-ui";
 
-/** Saved packs remain usable while new animation builds await a rights-cleared source. */
+/** Saved packs remain usable while the replacement builder is completed. */
 export function ViewmodelPane({
   record,
   globalViewmodelsShown,
@@ -40,9 +40,9 @@ export function ViewmodelPane({
       />
       <div role="note" className="surface mb-4 px-4 py-3">
         <p className="t-meta">
-          New viewmodel builds and screenshot previews are unavailable while rights for their
-          upstream assets are unresolved. Saved packs can still be imported, switched, exported with
-          a profile, or removed.
+          The Viewmodels builder and previews are being rebuilt for 0.2.0. Building is temporarily
+          unavailable in this development build. Saved packs can still be imported, switched,
+          exported with a profile, or removed.
         </p>
       </div>
       {record?.sourceChanged ? (
@@ -98,9 +98,8 @@ export function ViewmodelPane({
             </p>
             {previouslyBuilt ? (
               <p className="pane-note mt-3">
-                Recorded choices are read only. Building a new pack from them is unavailable while
-                the animation source and preview rights are unresolved. Replacing this VPK does not
-                modify other profiles.
+                Recorded choices are preserved while the replacement builder is completed. They are
+                temporarily read only. Replacing this VPK does not modify other profiles.
               </p>
             ) : null}
           </>

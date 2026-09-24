@@ -46,8 +46,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
-- Retire new CompVMInstaller Viewmodels builds and remote previews. Existing profile-owned VPKs
-  remain usable, but their recorded group choices cannot be rebuilt in the app.
+- Temporarily pause Viewmodels Build and generated previews while replacing the CompVMInstaller
+  dependency with a builder based on the player's installed TF2 files. Existing profile-owned VPKs
+  and choices remain intact; equivalent class/group and Full/Weapon controls are required before
+  0.2.0 ships.
 - Retire new Venom Crosshairs, TF2Hitsounds and comfig hosted-sound catalog downloads. Existing
   profile-owned VTFs and WAVs remain usable; a saved remote WAV needs a new source to change its
   baked boost.
