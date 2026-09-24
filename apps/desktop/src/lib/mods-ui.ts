@@ -141,12 +141,18 @@ export function selectionDirty(
 
 export const DIRECT_FLAT_TEXTURES_ID = "Flat Textures v1";
 export const DIRECT_DEVELOPER_TEXTURES_ID = "Developer Textures Overhaul v2";
+export const DIRECT_BURNING_OVERLAY_ID = "No Burning Overlay";
+export const DIRECT_SENTRY_OVERLAY_ID = "No Sentry Shield Overlay";
 
 function needsCuekiLibrary(selection: ModSelection): boolean {
   return (
     selection.particleMods.length > 0 ||
     selection.addons.some(
-      (addon) => addon !== DIRECT_FLAT_TEXTURES_ID && addon !== DIRECT_DEVELOPER_TEXTURES_ID,
+      (addon) =>
+        addon !== DIRECT_FLAT_TEXTURES_ID &&
+        addon !== DIRECT_DEVELOPER_TEXTURES_ID &&
+        addon !== DIRECT_BURNING_OVERLAY_ID &&
+        addon !== DIRECT_SENTRY_OVERLAY_ID,
     )
   );
 }
@@ -569,7 +575,8 @@ const PREVIEW_ADDONS: CatalogAddon[] = [
     id: DIRECT_DEVELOPER_TEXTURES_ID,
     name: DIRECT_DEVELOPER_TEXTURES_ID,
     kind: "Texture",
-    description: "Original GameBanana file by FPS_Engineer; earlier work credited to ayrtonSilna.",
+    description:
+      "FPS_Engineer rework; earlier pack reuploaded by ayrtonSilna, original maker unidentified.",
     fileCount: 996,
     bytes: 55_750_859,
     hasSound: false,
@@ -584,21 +591,21 @@ const PREVIEW_ADDONS: CatalogAddon[] = [
     hasSound: false,
   },
   {
-    id: "No Burning Overlay",
-    name: "No Burning Overlay",
-    kind: "Misc",
-    description: "Removes first person burning effect while on fire.",
-    fileCount: 3,
-    bytes: 41_200,
+    id: DIRECT_BURNING_OVERLAY_ID,
+    name: DIRECT_BURNING_OVERLAY_ID,
+    kind: "Texture",
+    description: "Original Square Series GameBanana file submitted by ghytd.",
+    fileCount: 2,
+    bytes: 175_232,
     hasSound: false,
   },
   {
-    id: "No Sentry Shield Overlay",
-    name: "No Sentry Shield Overlay",
-    kind: "Misc",
-    description: "Removes the opaque shield for wrangled sentries.",
-    fileCount: 5,
-    bytes: 88_000,
+    id: DIRECT_SENTRY_OVERLAY_ID,
+    name: DIRECT_SENTRY_OVERLAY_ID,
+    kind: "Texture",
+    description: "Original Square Series GameBanana file submitted by ghytd.",
+    fileCount: 4,
+    bytes: 175_509,
     hasSound: false,
   },
   {

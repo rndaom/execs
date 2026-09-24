@@ -36,8 +36,8 @@ pub fn catalog_addon() -> super::CatalogAddon {
         id: ID.into(),
         name: ID.into(),
         kind: "Texture".into(),
-        description:
-            "Original GameBanana file by FPS_Engineer; earlier work credited to ayrtonSilna.".into(),
+        description: "FPS_Engineer rework; earlier pack reuploaded by ayrtonSilna, original maker unidentified."
+            .into(),
         file_count: PAYLOAD_FILES,
         bytes: PAYLOAD_BYTES,
         has_sound: false,

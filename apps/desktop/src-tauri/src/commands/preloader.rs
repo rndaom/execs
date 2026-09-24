@@ -358,6 +358,7 @@ pub async fn apply_preloader_mods(
     let needs_cueki_library = selection.needs_cueki_library();
     let needs_flat_textures = selection.uses_flat_textures();
     let needs_developer_textures = selection.uses_developer_textures();
+    let needs_square_overlays = selection.uses_square_overlays();
     let (context, zip) = with_root(move |root| {
         execs_core::refuse_if_running()?;
         let context = ProfileSelectionContext::capture(&root)?;
@@ -371,6 +372,9 @@ pub async fn apply_preloader_mods(
         }
         if needs_developer_textures {
             crate::mods_fetch::ensure_developer_textures_7z()?;
+        }
+        if needs_square_overlays {
+            crate::mods_fetch::ensure_square_overlays_zip()?;
         }
         Ok((context, zip))
     })

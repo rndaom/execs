@@ -176,6 +176,54 @@ fn missing_or_corrupt_direct_developer_source_keeps_the_installed_selection_byte
 }
 
 #[test]
+fn missing_or_corrupt_square_source_keeps_the_installed_selection_byte_exact() {
+    let (root, data) = fake_root();
+    let cueki = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(
+        &root,
+        &data,
+        &cueki,
+        &PreloaderSelection {
+            particle_mods: vec!["Blue Water".into()],
+            ..PreloaderSelection::default()
+        },
+        &[],
+    )
+    .unwrap();
+    let watched = [
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
+    let selected = PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+        ],
+        particle_mods: vec!["Blue Water".into()],
+        ..PreloaderSelection::default()
+    };
+    let err = apply_preloader_selection(&root, &data, &cueki, &selected, &[]).unwrap_err();
+    assert!(err.contains("Download the Square Series"), "{err}");
+    for (path, bytes) in watched.iter().zip(&before) {
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+    let cache = square_overlays::cache_path(&data);
+    std::fs::write(&cache, vec![0; square_overlays::ARCHIVE_BYTES as usize]).unwrap();
+    let err = apply_preloader_selection(&root, &data, &cueki, &selected, &[]).unwrap_err();
+    assert!(err.contains("pinned revision"), "{err}");
+    for (path, bytes) in watched.iter().zip(&before) {
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+}
+
+#[test]
 fn flat_target_switch_refuses_missing_or_corrupt_source_before_removing_the_current_profile() {
     let (root, data) = fake_root();
     std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
@@ -347,6 +395,95 @@ fn developer_target_switch_refuses_missing_or_corrupt_source_before_removing_cur
     assert_unchanged();
 }
 
+#[test]
+fn square_target_switch_refuses_missing_or_corrupt_source_before_removing_current_profile() {
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let profiles = data.join("profiles");
+    let active = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .active_profile_id
+    .unwrap();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Square", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+        ],
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    let watched = [
+        root.join("tf/cfg/config.cfg"),
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).ok())
+        .collect();
+    let assert_unchanged = || {
+        for (path, bytes) in watched.iter().zip(&before) {
+            assert_eq!(&std::fs::read(path).ok(), bytes, "{}", path.display());
+        }
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id,
+            Some(active.clone())
+        );
+    };
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("Download the Square Series"));
+    assert_unchanged();
+
+    let cache = square_overlays::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, vec![0; square_overlays::ARCHIVE_BYTES as usize]).unwrap();
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("pinned revision"));
+    assert_unchanged();
+}
+
 /// Run explicitly with exact author and cueki downloads in the environment;
 /// this keeps third-party bytes out of the repository and the normal test
 /// suite. The fake TF2 root is entirely under the test's temporary folder.
@@ -392,7 +529,7 @@ fn pinned_flat_author_archive_applies_alone_and_with_other_choices() {
     assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
 
     let mixed = PreloaderSelection {
-        addons: vec![flat_textures::ID.into(), "No Burning Overlay".into()],
+        addons: vec![flat_textures::ID.into(), "factory new".into()],
         ..PreloaderSelection::default()
     };
     let report = apply_preloader_selection(&root, &data, Path::new(&cueki), &mixed, &[]).unwrap();
@@ -400,7 +537,7 @@ fn pinned_flat_author_archive_applies_alone_and_with_other_choices() {
     let entries = map_vpk_entries(&pack).unwrap();
     let entry = entries.get("materials/brick/brickwall001.vtf").unwrap();
     assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
-    assert!(entries.contains_key("materials/effects/tiledfire/firelayeredslowtiled512.vtf"));
+    assert!(entries.contains_key("materials/patterns/paint_blood_drops.vmt"));
 
     revert_preloader(&root, &data, &[]).unwrap();
     assert!(!pack.exists());
@@ -464,7 +601,7 @@ fn pinned_developer_archive_applies_alone_with_flat_and_with_cueki() {
         .contains_key("materials/brick/brickwall001.vtf"));
 
     let mixed = PreloaderSelection {
-        addons: vec![developer_textures::ID.into(), "No Burning Overlay".into()],
+        addons: vec![developer_textures::ID.into(), "factory new".into()],
         ..PreloaderSelection::default()
     };
     let report = apply_preloader_selection(&root, &data, Path::new(&cueki), &mixed, &[]).unwrap();
@@ -472,7 +609,95 @@ fn pinned_developer_archive_applies_alone_with_flat_and_with_cueki() {
     assert_sample();
     assert!(map_vpk_entries(&pack)
         .unwrap()
-        .contains_key("materials/effects/tiledfire/firelayeredslowtiled512.vtf"));
+        .contains_key("materials/patterns/paint_blood_drops.vmt"));
+
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert!(!pack.exists());
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
+#[ignore = "requires EXECS_D7_SQUARE_ZIP and EXECS_D7_CUEKI_ZIP"]
+fn pinned_square_overlays_apply_separately_together_and_with_cueki() {
+    let author = std::fs::read(std::env::var("EXECS_D7_SQUARE_ZIP").unwrap()).unwrap();
+    let cueki = std::env::var("EXECS_D7_CUEKI_ZIP").unwrap();
+    let game_files = square_overlays::validate_bytes(&author).unwrap();
+    assert_eq!(
+        crate::hash::sha256_file(Path::new(&cueki)).unwrap(),
+        MODS_SHA256
+    );
+    let burning_path = "materials/effects/tiledfire/firelayeredslowtiled512.vtf";
+    let sentry_path = "materials/models/buildables/sentry_shield/sentry_shield.vtf";
+    let burning_expected =
+        game_files[&format!("mods/addons/{}/{burning_path}", square_overlays::BURNING_ID)].clone();
+    let sentry_expected =
+        game_files[&format!("mods/addons/{}/{sentry_path}", square_overlays::SENTRY_ID)].clone();
+    let (root, data) = fake_root();
+    let cache = square_overlays::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, author).unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let dummy_cueki = data.join("preloader/unused-mods.zip");
+    let pack = root.join("tf/custom/execs-preloader.vpk");
+    let assert_packed = |path: &str, expected: &[u8]| {
+        let entries = map_vpk_entries(&pack).unwrap();
+        let entry = entries.get(path).unwrap();
+        assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
+    };
+
+    let burning = PreloaderSelection {
+        addons: vec![square_overlays::BURNING_ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &burning, &[]).unwrap();
+    assert_eq!(report.addons_installed, burning.addons);
+    assert_packed(burning_path, &burning_expected);
+    assert!(!map_vpk_entries(&pack).unwrap().contains_key(sentry_path));
+
+    let sentry = PreloaderSelection {
+        addons: vec![square_overlays::SENTRY_ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &sentry, &[]).unwrap();
+    assert_eq!(report.addons_installed, sentry.addons);
+    assert_packed(sentry_path, &sentry_expected);
+    assert!(!map_vpk_entries(&pack).unwrap().contains_key(burning_path));
+
+    let pair = PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+        ],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &pair, &[]).unwrap();
+    assert_eq!(report.addons_installed, pair.addons);
+    assert_packed(burning_path, &burning_expected);
+    assert_packed(sentry_path, &sentry_expected);
+
+    let mixed = PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+            "factory new".into(),
+        ],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, Path::new(&cueki), &mixed, &[]).unwrap();
+    assert_eq!(report.addons_installed, mixed.addons);
+    assert_packed(burning_path, &burning_expected);
+    assert_packed(sentry_path, &sentry_expected);
+    assert!(map_vpk_entries(&pack)
+        .unwrap()
+        .contains_key("materials/patterns/paint_blood_drops.vmt"));
 
     revert_preloader(&root, &data, &[]).unwrap();
     assert!(!pack.exists());
@@ -689,6 +914,111 @@ fn pinned_developer_selection_survives_switch_export_import_and_stock_restore() 
         preloader_status(&root, &data).unwrap().addons,
         vec![developer_textures::ID]
     );
+    crate::switch::switch_profile_to(&profiles, &root, &original, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert!(!root.join("tf/custom/execs-preloader.vpk").exists());
+    assert!(preloader_status(&root, &data).unwrap().addons.is_empty());
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
+#[ignore = "requires EXECS_D7_SQUARE_ZIP"]
+fn pinned_square_overlay_selections_survive_switch_export_import_and_stock_restore() {
+    let author = std::env::var("EXECS_D7_SQUARE_ZIP").unwrap();
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let cache = square_overlays::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::copy(author, &cache).unwrap();
+    let profiles = data.join("profiles");
+    let original = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .profiles
+    .last()
+    .unwrap()
+    .id
+    .clone();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Square", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let selected = vec![
+        square_overlays::BURNING_ID.into(),
+        square_overlays::SENTRY_ID.into(),
+    ];
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: selected.clone(),
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(preloader_status(&root, &data).unwrap().addons, selected);
+    assert!(root.join("tf/custom/execs-preloader.vpk").exists());
+
+    let exported = data.join("square-profile.zip");
+    crate::zip::export_profile_to(&profiles, &root, &target, &exported).unwrap();
+    let exported_zip = zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
+    assert!(!exported_zip
+        .file_names()
+        .any(|name| name.contains("execs-preloader.vpk") || name.contains("square-overlays-")));
+    let imported = crate::zip::import_profile_from(&profiles, &root, &exported, ["bash"])
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|profile| profile.id != original && profile.id != target)
+        .unwrap()
+        .id;
+    assert_eq!(
+        crate::profile::load_manifest(&profiles, &imported)
+            .unwrap()
+            .preloader
+            .unwrap()
+            .addons,
+        selected
+    );
+    crate::switch::switch_profile_to(&profiles, &root, &imported, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(preloader_status(&root, &data).unwrap().addons, selected);
     crate::switch::switch_profile_to(&profiles, &root, &original, ["bash"], no_steam(), |_| {})
         .unwrap();
     assert!(!root.join("tf/custom/execs-preloader.vpk").exists());

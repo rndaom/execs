@@ -7,8 +7,10 @@ import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import { BridgeError, type GameBananaPage } from "./lib/bridge";
 import {
+  DIRECT_BURNING_OVERLAY_ID,
   DIRECT_DEVELOPER_TEXTURES_ID,
   DIRECT_FLAT_TEXTURES_ID,
+  DIRECT_SENTRY_OVERLAY_ID,
   PREVIEW_GAMEBANANA_RECORDS,
   PREVIEW_MODS_CATALOG,
   PREVIEW_MODS_STATUS,
@@ -77,7 +79,10 @@ function makeApi() {
       catalog: {
         addons: PREVIEW_MODS_CATALOG.addons.filter(
           (addon) =>
-            addon.id === DIRECT_FLAT_TEXTURES_ID || addon.id === DIRECT_DEVELOPER_TEXTURES_ID,
+            addon.id === DIRECT_FLAT_TEXTURES_ID ||
+            addon.id === DIRECT_DEVELOPER_TEXTURES_ID ||
+            addon.id === DIRECT_BURNING_OVERLAY_ID ||
+            addon.id === DIRECT_SENTRY_OVERLAY_ID,
         ),
         particleMods: [],
       },
@@ -174,11 +179,13 @@ afterEach(async () => {
 });
 
 describe("Mods HUD recovery through the real settings host", () => {
-  it("shows both direct author choices before the cueki catalog is cached", async () => {
+  it("shows direct author choices before the cueki catalog is cached", async () => {
     await render();
     expect(api.getDefaultMods).toHaveBeenCalledOnce();
     expect(element("mods-addon-flat-textures-v1")).toBeTruthy();
     expect(element("mods-addon-developer-textures-overhaul-v2")).toBeTruthy();
+    expect(element("mods-addon-no-burning-overlay")).toBeTruthy();
+    expect(element("mods-addon-no-sentry-shield-overlay")).toBeTruthy();
     expect(element("mods-download").textContent).toContain("Download other choices");
   });
 

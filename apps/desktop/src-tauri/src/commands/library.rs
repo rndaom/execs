@@ -153,6 +153,13 @@ pub async fn switch_profile(
         {
             crate::mods_fetch::ensure_developer_textures_7z()?;
         }
+        if manifest
+            .preloader
+            .as_ref()
+            .is_some_and(execs_core::preloader::PreloaderSelection::uses_square_overlays)
+        {
+            crate::mods_fetch::ensure_square_overlays_zip()?;
+        }
         Ok(RootContext::capture(&root))
     })
     .await?;

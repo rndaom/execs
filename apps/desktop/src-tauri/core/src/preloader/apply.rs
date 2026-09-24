@@ -38,7 +38,7 @@ use super::transaction::{
 use super::{
     catalog::read_mods_catalog, DUPLICATE_EFFECT_FILES, DX8_TWIN_STEMS, MISC_VPK, PRELOADER_VPK,
 };
-use super::{developer_textures, flat_textures};
+use super::{developer_textures, flat_textures, square_overlays};
 use crate::mods::{profile_particle_sources_from, read_mod_pcf, ParticleSource};
 use crate::profile::{load_library_from, profiles_dir};
 
@@ -51,12 +51,14 @@ enum SourceEntry {
     Cueki(usize, String),
     FlatTextures(usize, String),
     DeveloperTextures(String),
+    SquareOverlay(String),
 }
 
 struct SelectionArchive {
     cueki: SourceZip,
     flat_textures: Option<SourceZip>,
     developer_textures: Option<BTreeMap<String, Vec<u8>>>,
+    square_overlays: Option<BTreeMap<String, Vec<u8>>>,
     entries: Vec<SourceEntry>,
 }
 
@@ -145,6 +147,19 @@ impl SelectionArchive {
                     virtual_name: name.clone(),
                 })
             }
+            SourceEntry::SquareOverlay(name) => {
+                let content = self
+                    .square_overlays
+                    .as_ref()
+                    .and_then(|files| files.get(name))
+                    .ok_or("The Square Series overlay author payload is unavailable.")?;
+                Ok(SelectionEntry {
+                    size: content.len() as u64,
+                    is_dir: false,
+                    inner: SelectionEntryInner::Content(Cursor::new(content.as_slice())),
+                    virtual_name: name.clone(),
+                })
+            }
         }
     }
 }
@@ -187,6 +202,11 @@ fn selection_archive(
         {
             continue;
         }
+        if selection.addons.iter().any(|id| {
+            square_overlays::is_overlay(id) && name.starts_with(&format!("mods/addons/{id}/"))
+        }) {
+            continue;
+        }
         entries.push(SourceEntry::Cueki(index, name));
     }
     let flat_textures = if selection.uses_flat_textures() {
@@ -212,10 +232,29 @@ fn selection_archive(
     } else {
         None
     };
+    let square_overlays = if selection.uses_square_overlays() {
+        let files = square_overlays::read_verified(data_dir)?;
+        entries.extend(
+            files
+                .keys()
+                .filter(|name| {
+                    selection.addons.iter().any(|id| {
+                        square_overlays::is_overlay(id)
+                            && name.starts_with(&format!("mods/addons/{id}/"))
+                    })
+                })
+                .cloned()
+                .map(SourceEntry::SquareOverlay),
+        );
+        Some(files)
+    } else {
+        None
+    };
     Ok(SelectionArchive {
         cueki,
         flat_textures,
         developer_textures,
+        square_overlays,
         entries,
     })
 }
@@ -241,6 +280,13 @@ fn selection_catalog(
             .addons
             .retain(|addon| addon.id != developer_textures::ID);
         catalog.addons.push(developer_textures::catalog_addon());
+    }
+    if selection.uses_square_overlays() {
+        square_overlays::read_verified(data_dir)?;
+        catalog
+            .addons
+            .retain(|addon| !square_overlays::is_overlay(&addon.id));
+        catalog.addons.extend(square_overlays::catalog_addons());
     }
     Ok(catalog)
 }

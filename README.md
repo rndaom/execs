@@ -16,7 +16,7 @@
 
 ![An overview of execs](docs/media/promo.gif)
 
-The demo and screenshots show an earlier release with sample data. The current download has updated controls and layouts; these images do not preview unreleased features.
+This README describes the in-development 0.2.0 branch. The Download link installs the latest public release, v0.1.8; its controls and available catalogs differ from this branch. The demo and screenshots are older sample captures and do not preview the unreleased work.
 
 ## What it does
 
@@ -90,7 +90,8 @@ execs installs work by the TF2 community:
 - [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), previews by Oblique
 - [casual-pre-loader](https://github.com/cueki/casual-pre-loader) by [cueki](https://github.com/cueki)
 - [Flat Textures (2021)](https://gamebanana.com/mods/295065) by [flewvar](https://gamebanana.com/members/1764119), with textures credited to [JarateKing](https://github.com/JarateKing)
-- [Developer Textures Overhaul v2](https://gamebanana.com/mods/336110) by FPS_Engineer, with earlier VMT work credited to ayrtonSilna
+- [Developer Textures Overhaul v2](https://gamebanana.com/mods/336110), a rework by FPS_Engineer; earlier material was reuploaded and continued by ayrtonSilna, who did not identify its original creator
+- [Square Series](https://gamebanana.com/mods/435309), submitted by ghytd, supplies the No Burning Overlay and No Sentry Shield Overlay Casual choices
 - Previously installed [Venom Crosshairs](https://github.com/hbivnm/Venom-Crosshairs) by [HbiVnm](https://github.com/hbivnm) and the [list](https://github.com/hbivnm/Venom-Crosshairs-List) contributors; new downloads are unavailable in execs
 - Previously installed [TF2Hitsounds](https://github.com/WishingStardust/TF2Hitsounds) by [WishingStardust](https://github.com/WishingStardust) and [comfig.app hit sounds](https://comfig.app/app/?page=hits) uploaded by their makers; new catalog downloads are unavailable in execs
 

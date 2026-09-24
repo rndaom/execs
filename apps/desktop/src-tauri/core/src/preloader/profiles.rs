@@ -37,10 +37,18 @@ impl PreloaderSelection {
             .any(|addon| addon == super::developer_textures::ID)
     }
 
+    pub fn uses_square_overlays(&self) -> bool {
+        self.addons
+            .iter()
+            .any(|addon| super::square_overlays::is_overlay(addon))
+    }
+
     pub fn needs_cueki_library(&self) -> bool {
         !self.particle_mods.is_empty()
             || self.addons.iter().any(|addon| {
-                addon != super::flat_textures::ID && addon != super::developer_textures::ID
+                addon != super::flat_textures::ID
+                    && addon != super::developer_textures::ID
+                    && !super::square_overlays::is_overlay(addon)
             })
     }
 
@@ -229,6 +237,9 @@ pub fn prepare_profile_preloader(
     if selection.uses_developer_textures() {
         super::developer_textures::read_verified(&data).map_err(ProfileError::Io)?;
     }
+    if selection.uses_square_overlays() {
+        super::square_overlays::read_verified(&data).map_err(ProfileError::Io)?;
+    }
     let zip = if selection.needs_cueki_library() {
         let zip = data
             .join("preloader")
@@ -401,7 +412,36 @@ mod tests {
         let mixed = PreloaderSelection {
             addons: vec![
                 super::super::developer_textures::ID.into(),
-                "No Burning Overlay".into(),
+                "factory new".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(mixed.needs_cueki_library());
+    }
+
+    #[test]
+    fn square_overlays_keep_both_saved_ids_without_requiring_the_cueki_zip() {
+        let each = [
+            super::super::square_overlays::BURNING_ID,
+            super::super::square_overlays::SENTRY_ID,
+        ];
+        for id in each {
+            let selection = PreloaderSelection {
+                addons: vec![id.into()],
+                ..PreloaderSelection::default()
+            };
+            assert!(selection.uses_square_overlays());
+            assert!(!selection.needs_cueki_library());
+        }
+        let both = PreloaderSelection {
+            addons: each.into_iter().map(str::to_owned).collect(),
+            ..PreloaderSelection::default()
+        };
+        assert!(!both.needs_cueki_library());
+        let mixed = PreloaderSelection {
+            addons: vec![
+                super::super::square_overlays::BURNING_ID.into(),
+                "factory new".into(),
             ],
             ..PreloaderSelection::default()
         };

@@ -81,6 +81,7 @@ pub mod flat_textures;
 mod gameinfo;
 mod pack;
 mod profiles;
+pub mod square_overlays;
 pub(crate) use profiles::selection_for_snapshot;
 pub use profiles::{
     apply_profile_preloader, capture_installed_selections, clear_saved_profile_selection,

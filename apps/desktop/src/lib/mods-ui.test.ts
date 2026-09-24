@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DIRECT_BURNING_OVERLAY_ID,
   DIRECT_DEVELOPER_TEXTURES_ID,
   DIRECT_FLAT_TEXTURES_ID,
+  DIRECT_SENTRY_OVERLAY_ID,
   foldCategories,
   formatModBytes,
   gameBananaIdOf,
@@ -223,6 +225,20 @@ describe("mods apply gating", () => {
     expect(modsStatusLine(uncached, directFlat, false)).toBe("Unsaved changes");
     const directDeveloper = selection({ addons: [DIRECT_DEVELOPER_TEXTURES_ID] });
     expect(modsApplyEnabled(uncached, directDeveloper)).toBe(true);
+    expect(modsApplyEnabled(uncached, selection({ addons: [DIRECT_BURNING_OVERLAY_ID] }))).toBe(
+      true,
+    );
+    expect(modsApplyEnabled(uncached, selection({ addons: [DIRECT_SENTRY_OVERLAY_ID] }))).toBe(
+      true,
+    );
+    expect(
+      modsApplyEnabled(
+        uncached,
+        selection({
+          addons: [DIRECT_BURNING_OVERLAY_ID, DIRECT_SENTRY_OVERLAY_ID],
+        }),
+      ),
+    ).toBe(true);
     expect(
       modsApplyEnabled(
         uncached,
@@ -232,10 +248,7 @@ describe("mods apply gating", () => {
       ),
     ).toBe(true);
     expect(
-      modsApplyEnabled(
-        uncached,
-        selection({ addons: [DIRECT_FLAT_TEXTURES_ID, "No Burning Overlay"] }),
-      ),
+      modsApplyEnabled(uncached, selection({ addons: [DIRECT_FLAT_TEXTURES_ID, "factory new"] })),
     ).toBe(false);
     expect(modsApplyEnabled(uncached, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(null, selection())).toBe(false);
