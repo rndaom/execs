@@ -123,7 +123,36 @@ $reusedPid = Test-OwnedConsoleHost $child $child @($driver) ([pscustomobject]@{ 
 $otherParent = Test-OwnedConsoleHost $child $child @([pscustomobject]@{ pid = 5740; executable = "$root\\installed\\execs.exe"; created = $driver.created }) $parent $root $windowsDirectory
 $otherChild = Test-OwnedConsoleHost ([pscustomobject]@{ pid = 2756; parent = 5740; executable = "$windowsDirectory\\System32\\other.exe"; created = $child.created }) $child @($driver) $parent $root $windowsDirectory
 $unrelated = Test-OwnedConsoleHost ([pscustomobject]@{ pid = 2756; parent = 9999; executable = $child.executable; created = $child.created }) $child @($driver) $parent $root $windowsDirectory
-[pscustomobject]@{ accepted = $accepted; reusedPid = $reusedPid; otherParent = $otherParent; otherChild = $otherChild; unrelated = $unrelated } | ConvertTo-Json -Compress
+$hostedRoot = 'D:\\a\\_temp\\execs-windows-package-o5N4XO'
+$hostedDriver = [pscustomobject]@{ pid = 5740; executable = "$hostedRoot\\downloads\\msedgedriver.exe"; created = $driver.created }
+$hostedChild = [pscustomobject]@{ pid = 2756; parent = 5740; executable = 'C:\\Windows\\system32\\conhost.exe'; created = $child.created }
+$hostedParent = [pscustomobject]@{ pid = 5740; executable = $hostedDriver.executable; created = $hostedDriver.created }
+$hostedAccepted = Test-OwnedConsoleHost $hostedChild $hostedChild @($hostedDriver) $hostedParent $hostedRoot 'C:\\Windows'
+$diagnostic = $null
+if (-not $accepted -or -not $hostedAccepted) {
+  $diagnostic = [pscustomobject]@{
+    powerShellVersion = $PSVersionTable.PSVersion.ToString()
+    root = $root
+    windowsDirectory = $windowsDirectory
+    childPath = $child.executable
+    expectedChildPath = [IO.Path]::GetFullPath([IO.Path]::Combine($windowsDirectory, 'System32', 'conhost.exe'))
+    childPathMatches = $child.executable.Equals([IO.Path]::GetFullPath([IO.Path]::Combine($windowsDirectory, 'System32', 'conhost.exe')), [StringComparison]::OrdinalIgnoreCase)
+    parentCount = @(@($driver) | Where-Object { [int]$_.pid -eq [int]$child.parent }).Count
+    driverPath = $driver.executable
+    expectedDriverPath = [IO.Path]::GetFullPath([IO.Path]::Combine($root, 'downloads', 'msedgedriver.exe'))
+    driverPathMatches = $driver.executable.Equals([IO.Path]::GetFullPath([IO.Path]::Combine($root, 'downloads', 'msedgedriver.exe')), [StringComparison]::OrdinalIgnoreCase)
+    observedParentPidMatches = [int]$parent.pid -eq [int]$driver.pid
+    observedParentPathMatches = $parent.executable.Equals($driver.executable, [StringComparison]::OrdinalIgnoreCase)
+    hostedChildPath = $hostedChild.executable
+    hostedExpectedChildPath = [IO.Path]::GetFullPath([IO.Path]::Combine('C:\\Windows', 'System32', 'conhost.exe'))
+    hostedChildPathMatches = $hostedChild.executable.Equals([IO.Path]::GetFullPath([IO.Path]::Combine('C:\\Windows', 'System32', 'conhost.exe')), [StringComparison]::OrdinalIgnoreCase)
+    hostedDriverPath = $hostedDriver.executable
+    hostedExpectedDriverPath = [IO.Path]::GetFullPath([IO.Path]::Combine($hostedRoot, 'downloads', 'msedgedriver.exe'))
+    hostedDriverPathMatches = $hostedDriver.executable.Equals([IO.Path]::GetFullPath([IO.Path]::Combine($hostedRoot, 'downloads', 'msedgedriver.exe')), [StringComparison]::OrdinalIgnoreCase)
+    parentTicksMatch = Test-ProcessCreatedMatch $parent.created $driver.created
+  }
+}
+[pscustomobject]@{ accepted = $accepted; hostedAccepted = $hostedAccepted; reusedPid = $reusedPid; otherParent = $otherParent; otherChild = $otherChild; unrelated = $unrelated; diagnostic = $diagnostic } | ConvertTo-Json -Compress
 `;
   const result = spawnSync(
     "pwsh",
@@ -133,10 +162,12 @@ $unrelated = Test-OwnedConsoleHost ([pscustomobject]@{ pid = 2756; parent = 9999
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout.trim()), {
     accepted: true,
+    hostedAccepted: true,
     reusedPid: false,
     otherParent: false,
     otherChild: false,
     unrelated: false,
+    diagnostic: null,
   });
 });
 

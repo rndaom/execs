@@ -218,7 +218,7 @@ if ($Action -eq 'Cleanup') {
         if (-not $observed) { $absent += [int]$expected.pid; continue }
         $record = Process-Record $observed
         if (-not (Test-ProcessCreatedMatch $record.created $expected.created) -or $record.executable -ine $expected.executable) { throw 'Cleanup process identity changed.' }
-        $consolePath = [IO.Path]::GetFullPath((Join-Path $env:WINDIR 'System32\conhost.exe'))
+        $consolePath = [IO.Path]::GetFullPath([IO.Path]::Combine($env:WINDIR, 'System32', 'conhost.exe'))
         $parentRecord = $null
         if ($record.executable.Equals($consolePath, [StringComparison]::OrdinalIgnoreCase)) {
             $parentObserved = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$record.parent)"

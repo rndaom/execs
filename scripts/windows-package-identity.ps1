@@ -17,12 +17,12 @@ function Test-ProcessCreatedMatch($Actual, $Expected) {
 
 function Test-OwnedConsoleHost($Record, $Expected, $Processes, $ParentRecord, [string]$OwnedRoot, [string]$WindowsDirectory) {
     if (-not $ParentRecord) { return $false }
-    $consolePath = [IO.Path]::GetFullPath((Join-Path $WindowsDirectory 'System32\conhost.exe'))
+    $consolePath = [IO.Path]::GetFullPath([IO.Path]::Combine($WindowsDirectory, 'System32', 'conhost.exe'))
     if (-not $Record.executable.Equals($consolePath, [StringComparison]::OrdinalIgnoreCase) -or
         [int]$Record.parent -ne [int]$Expected.parent) { return $false }
     $parents = @($Processes | Where-Object { [int]$_.pid -eq [int]$Expected.parent })
     if ($parents.Count -ne 1) { return $false }
-    $driverPath = [IO.Path]::GetFullPath((Join-Path $OwnedRoot 'downloads\msedgedriver.exe'))
+    $driverPath = [IO.Path]::GetFullPath([IO.Path]::Combine($OwnedRoot, 'downloads', 'msedgedriver.exe'))
     return $parents[0].executable.Equals($driverPath, [StringComparison]::OrdinalIgnoreCase) -and
         [int]$ParentRecord.pid -eq [int]$parents[0].pid -and
         $ParentRecord.executable.Equals($parents[0].executable, [StringComparison]::OrdinalIgnoreCase) -and
