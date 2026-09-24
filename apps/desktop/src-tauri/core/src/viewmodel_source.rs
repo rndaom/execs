@@ -1,7 +1,7 @@
 //! Read-only stock animation metadata for the independent Viewmodels builder.
 //!
-//! Layouts follow Valve's `studiohdr_t`, `mstudioanimdesc_t` and
-//! `mstudioseqdesc_t` in Source SDK 2013 `src/public/studio.h` at
+//! Layouts follow Valve's `studiohdr_t`, `mstudiobone_t`,
+//! `mstudioanimdesc_t` and `mstudioseqdesc_t` in Source SDK 2013 `src/public/studio.h` at
 //! b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474. This module does not use
 //! CompVMInstaller data, decode animation frames, or change the player's game.
 
@@ -24,6 +24,8 @@ const MAX_NAME_BYTES: usize = 192;
 const HEADER_BYTES: usize = 408;
 const ANIM_DESC_BYTES: usize = 100;
 const SEQ_DESC_BYTES: usize = 212;
+const BONE_DESC_BYTES: usize = 216;
+const MAX_BONES: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StockSourceError(pub String);
@@ -63,6 +65,25 @@ pub struct StockAnimationModel {
 pub struct StockAnimationIndex {
     pub patch_version: String,
     pub models: BTreeMap<String, StockAnimationModel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StockBone {
+    pub name: String,
+    pub parent: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StockBoneModel {
+    pub model_name: String,
+    pub sha256: String,
+    pub bones: Vec<StockBone>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StockBoneIndex {
+    pub patch_version: String,
+    pub models: BTreeMap<String, StockBoneModel>,
 }
 
 fn invalid(message: impl Into<String>) -> StockSourceError {
@@ -278,6 +299,118 @@ pub fn parse_stock_animation_mdl(bytes: &[u8]) -> Result<StockAnimationModel, St
     })
 }
 
+/// Parse the bounded bone hierarchy in an installed class animation MDL.
+/// This identifies possible weapon attachment bones, but does not decode poses
+/// or establish whether moving a bone would hide anything in retail TF2.
+pub fn parse_stock_bone_mdl(bytes: &[u8]) -> Result<StockBoneModel, StockSourceError> {
+    if bytes.len() > MAX_MDL_BYTES {
+        return Err(invalid("MDL exceeds the 8 MiB limit"));
+    }
+    span(bytes, 0, HEADER_BYTES, "studiohdr_t")?;
+    if &bytes[..4] != b"IDST" || i32_at(bytes, 4, "version")? != 48 {
+        return Err(invalid("expected a Source IDST MDL v48 file"));
+    }
+    if i32_at(bytes, 76, "declared length")? != bytes.len() as i32 {
+        return Err(invalid("studiohdr_t length differs from the file length"));
+    }
+    let model_name = name_at(bytes, 12, "model name")?;
+    let bone_count = usize::try_from(i32_at(bytes, 156, "bone count")?)
+        .ok()
+        .filter(|count| (1..=MAX_BONES).contains(count))
+        .ok_or_else(|| invalid("bone count exceeds the limit"))?;
+    let bone_offsets = table(
+        bytes,
+        bone_count as i32,
+        i32_at(bytes, 160, "bone table")?,
+        BONE_DESC_BYTES,
+        "bone",
+    )?;
+    if bone_offsets[0] < HEADER_BYTES {
+        return Err(invalid("bone table overlaps the MDL header"));
+    }
+    let mut bones = Vec::with_capacity(bone_count);
+    for base in bone_offsets {
+        let name = name_at(
+            bytes,
+            relative_offset(base, i32_at(bytes, base, "bone name")?, "bone name")?,
+            "bone name",
+        )?;
+        let parent = i32_at(bytes, base + 4, "bone parent")?;
+        let parent = if parent == -1 {
+            None
+        } else {
+            Some(
+                usize::try_from(parent)
+                    .ok()
+                    .filter(|parent| *parent < bone_count)
+                    .ok_or_else(|| invalid(format!("bone {name} has an invalid parent")))?,
+            )
+        };
+        bones.push(StockBone { name, parent });
+    }
+    let mut seen_names = std::collections::BTreeSet::new();
+    for (index, bone) in bones.iter().enumerate() {
+        if !seen_names.insert(bone.name.to_ascii_lowercase()) {
+            return Err(invalid(format!("duplicate bone name {}", bone.name)));
+        }
+        let mut current = bone.parent;
+        let mut remaining = bone_count;
+        while let Some(parent) = current {
+            if parent == index || remaining == 0 {
+                return Err(invalid(format!("bone {} has a parent cycle", bone.name)));
+            }
+            current = bones[parent].parent;
+            remaining -= 1;
+        }
+    }
+    Ok(StockBoneModel {
+        model_name,
+        sha256: sha256_hex(bytes),
+        bones,
+    })
+}
+
+/// Index the nine installed class bone hierarchies against the verified stock
+/// animation MDLs. Every source is checked before and after this read.
+pub fn read_stock_bone_index(tf2_root: &Path) -> Result<StockBoneIndex, StockSourceError> {
+    let animation_index = read_stock_animation_index(tf2_root)?;
+    let root = normalize_tf2_root(tf2_root).map_err(|error| invalid(error.message()))?;
+    let vpk_path = root.join("tf/tf2_misc_dir.vpk");
+    let entries = map_vpk_entries(&vpk_path)
+        .map_err(|error| invalid(format!("Could not map tf2_misc VPK: {}", error.0)))?;
+    let mut models = BTreeMap::new();
+    for class_id in CLASSES {
+        let rel = format!("models/weapons/c_models/c_{class_id}_animations.mdl");
+        let entry = entries
+            .get(&rel)
+            .ok_or_else(|| invalid(format!("TF2 stock model {rel} is missing")))?;
+        if entry.total_len() > MAX_MDL_BYTES {
+            return Err(invalid(format!("TF2 stock model {rel} exceeds 8 MiB")));
+        }
+        let bytes = read_vpk_entry(&vpk_path, entry)
+            .map_err(|error| invalid(format!("Could not read {rel}: {}", error.0)))?;
+        let expected = &animation_index.models[class_id];
+        if crc32(&bytes) != entry.crc || sha256_hex(&bytes) != expected.sha256 {
+            return Err(invalid(format!(
+                "TF2 stock model {rel} changed during bone inspection"
+            )));
+        }
+        let model =
+            parse_stock_bone_mdl(&bytes).map_err(|error| invalid(format!("{rel}: {error}")))?;
+        if model.model_name != expected.model_name {
+            return Err(invalid(format!("TF2 stock model {rel} changed identity")));
+        }
+        models.insert(class_id.to_string(), model);
+    }
+    if read_stock_animation_index(tf2_root)? != animation_index {
+        return Err(invalid("TF2 stock models changed during bone inspection"));
+    }
+    Ok(StockBoneIndex {
+        patch_version: animation_index.patch_version,
+        models,
+    })
+}
+
 /// Inspect all nine class animation models from the selected app-440 install.
 /// Every VPK body must match the directory's CRC. The install identity and
 /// selected entry locations are checked again before the result is returned.
@@ -405,6 +538,60 @@ mod tests {
 
     fn sample_mdl() -> Vec<u8> {
         sample_mdl_for("scout")
+    }
+
+    fn sample_bone_mdl() -> Vec<u8> {
+        let bone_table = HEADER_BYTES;
+        let mut bytes = vec![0; bone_table + 3 * BONE_DESC_BYTES];
+        bytes[..4].copy_from_slice(b"IDST");
+        let model_name = b"weapons/c_models/c_scout_animations.mdl";
+        bytes[12..12 + model_name.len()].copy_from_slice(model_name);
+        write_i32(&mut bytes, 4, 48);
+        write_i32(&mut bytes, 156, 3);
+        write_i32(&mut bytes, 160, bone_table as i32);
+        for (index, (name, parent)) in [("root", -1), ("bip_hand_L", 0), ("weapon_bone_L", 1)]
+            .into_iter()
+            .enumerate()
+        {
+            let base = bone_table + index * BONE_DESC_BYTES;
+            let relative_name = append_name(&mut bytes, base, name);
+            write_i32(&mut bytes, base, relative_name);
+            write_i32(&mut bytes, base + 4, parent);
+        }
+        let length = bytes.len() as i32;
+        write_i32(&mut bytes, 76, length);
+        bytes
+    }
+
+    #[test]
+    fn reads_bone_parents_and_refuses_cycles_or_unsafe_offsets() {
+        let bytes = sample_bone_mdl();
+        let model = parse_stock_bone_mdl(&bytes).unwrap();
+        assert_eq!(model.bones[0].name, "root");
+        assert_eq!(model.bones[0].parent, None);
+        assert_eq!(model.bones[2].name, "weapon_bone_L");
+        assert_eq!(model.bones[2].parent, Some(1));
+        assert_eq!(model.sha256, sha256_hex(&bytes));
+
+        let mut cycle = bytes.clone();
+        write_i32(&mut cycle, HEADER_BYTES + 4, 2);
+        assert!(parse_stock_bone_mdl(&cycle)
+            .unwrap_err()
+            .0
+            .contains("cycle"));
+        let mut out_of_bounds = bytes.clone();
+        write_i32(&mut out_of_bounds, HEADER_BYTES, i32::MAX);
+        assert!(parse_stock_bone_mdl(&out_of_bounds).is_err());
+        let mut missing_parent = bytes;
+        write_i32(
+            &mut missing_parent,
+            HEADER_BYTES + 2 * BONE_DESC_BYTES + 4,
+            9,
+        );
+        assert!(parse_stock_bone_mdl(&missing_parent)
+            .unwrap_err()
+            .0
+            .contains("parent"));
     }
 
     #[test]
