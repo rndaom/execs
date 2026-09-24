@@ -53,6 +53,17 @@ const MELEE_UNCHANGED: [&str; 14] = [
     "ACT_BACKSTAB_VM_IDLE",
 ];
 
+/// Base activities represented by the pinned general hand-role table.
+/// Inspect uses its separate class-loadout path.
+pub fn base_hand_activities() -> impl Iterator<Item = &'static str> {
+    BASIC_ACTIONS
+        .into_iter()
+        .chain(["ACT_VM_HITCENTER", "ACT_VM_SWINGHARD"])
+        .chain(["ACT_RELOAD_START", "ACT_RELOAD_FINISH"])
+        .chain(MULTIPLAYER_ATTACKS)
+        .chain(MELEE_UNCHANGED)
+}
+
 /// Translate a base hand activity after an independently resolved role.
 /// Unknown role/action pairs preserve the engine's identity fallback.
 pub fn translate_hand_activity(role: &str, base: &str) -> HandActivityTranslation {
