@@ -750,7 +750,7 @@ export function SettingsHost({
         }
         setModsPayload(payload);
         onError(null, "mods:status");
-        if (tab === "mods" && payload.modsCached) {
+        if (tab === "mods") {
           setModsLoading(true);
           api
             .getDefaultMods()

@@ -139,6 +139,15 @@ export function selectionDirty(
   return serializeModSelection(installedModSelection(status)) !== serializeModSelection(selection);
 }
 
+export const DIRECT_FLAT_TEXTURES_ID = "Flat Textures v1";
+
+function needsCuekiLibrary(selection: ModSelection): boolean {
+  return (
+    selection.particleMods.length > 0 ||
+    selection.addons.some((addon) => addon !== DIRECT_FLAT_TEXTURES_ID)
+  );
+}
+
 /**
  * Whether Apply should be live.
  *
@@ -153,7 +162,7 @@ export function modsApplyEnabled(
   if (!status || status.recoveryRequired === true) {
     return false;
   }
-  if (!status.modsCached && (selection.addons.length > 0 || selection.particleMods.length > 0)) {
+  if (!status.modsCached && needsCuekiLibrary(selection)) {
     return false;
   }
   return selectionDirty(status, selection) || status.status.stale === true;
@@ -171,11 +180,7 @@ export function modsStatusLine(
   if (status?.recoveryRequired) {
     return "Finish interrupted recovery first";
   }
-  if (
-    status &&
-    !status.modsCached &&
-    (selection.addons.length > 0 || selection.particleMods.length > 0)
-  ) {
+  if (status && !status.modsCached && needsCuekiLibrary(selection)) {
     return "Download the mod library first";
   }
   if (selectionDirty(status, selection)) {
@@ -557,6 +562,15 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
 };
 
 const PREVIEW_ADDONS: CatalogAddon[] = [
+  {
+    id: DIRECT_FLAT_TEXTURES_ID,
+    name: DIRECT_FLAT_TEXTURES_ID,
+    kind: "Texture",
+    description: "Original GameBanana file by flewvar; textures credited to JarateKing.",
+    fileCount: 3_143,
+    bytes: 337_882,
+    hasSound: false,
+  },
   {
     id: "No Burning Overlay",
     name: "No Burning Overlay",

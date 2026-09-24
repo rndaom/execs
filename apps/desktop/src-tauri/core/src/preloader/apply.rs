@@ -17,6 +17,7 @@ use crate::vpk::{
     map_vpk_entries, patch_vpk_entry_if_unchanged, write_vpk_v2, VpkEntryLocation, VpkError,
 };
 
+use super::flat_textures;
 use super::gameinfo::{
     gameinfo_bypass_state, preflight_gameinfo_bypass, set_gameinfo_bypass_with_sampler,
 };
@@ -43,15 +44,84 @@ use crate::profile::{load_library_from, profiles_dir};
 
 trait ModLibraryReader: Read + Seek {}
 impl<T: Read + Seek> ModLibraryReader for T {}
-type SelectionArchive = zip::ZipArchive<Box<dyn ModLibraryReader>>;
+
+type SourceZip = zip::ZipArchive<Box<dyn ModLibraryReader>>;
+
+enum SourceEntry {
+    Cueki(usize, String),
+    FlatTextures(usize, String),
+}
+
+struct SelectionArchive {
+    cueki: SourceZip,
+    flat_textures: Option<SourceZip>,
+    entries: Vec<SourceEntry>,
+}
+
+struct SelectionEntry<'a> {
+    inner: zip::read::ZipFile<'a>,
+    virtual_name: String,
+}
+
+impl SelectionEntry<'_> {
+    fn name(&self) -> &str {
+        &self.virtual_name
+    }
+
+    fn size(&self) -> u64 {
+        self.inner.size()
+    }
+
+    fn is_dir(&self) -> bool {
+        self.inner.is_dir()
+    }
+}
+
+impl Read for SelectionEntry<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl SelectionArchive {
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn by_index(&mut self, index: usize) -> Result<SelectionEntry<'_>, String> {
+        match self
+            .entries
+            .get(index)
+            .ok_or("Invalid mod library entry index.")?
+        {
+            SourceEntry::Cueki(source_index, name) => Ok(SelectionEntry {
+                inner: self
+                    .cueki
+                    .by_index(*source_index)
+                    .map_err(|err| err.to_string())?,
+                virtual_name: name.clone(),
+            }),
+            SourceEntry::FlatTextures(source_index, name) => Ok(SelectionEntry {
+                inner: self
+                    .flat_textures
+                    .as_mut()
+                    .ok_or("The Flat Textures author archive is unavailable.")?
+                    .by_index(*source_index)
+                    .map_err(|err| err.to_string())?,
+                virtual_name: name.clone(),
+            }),
+        }
+    }
+}
 
 /// Empty/profile-only selections need no default-library download. An empty
 /// archive lets the same preflight and rollback path restore old patches.
 fn selection_archive(
+    data_dir: &Path,
     zip_path: &Path,
     selection: &PreloaderSelection,
 ) -> Result<SelectionArchive, String> {
-    let reader: Box<dyn ModLibraryReader> = if !selection.needs_default_library() {
+    let reader: Box<dyn ModLibraryReader> = if !selection.needs_cueki_library() {
         let cursor = zip::ZipWriter::new(Cursor::new(Vec::new()))
             .finish()
             .map_err(|err| format!("Could not prepare an empty mod selection: {err}"))?;
@@ -62,18 +132,62 @@ fn selection_archive(
                 .map_err(|err| format!("Could not open the mod library: {err}"))?,
         )
     };
-    zip::ZipArchive::new(reader).map_err(|err| format!("Could not read the mod library: {err}"))
+    let mut cueki: SourceZip = zip::ZipArchive::new(reader)
+        .map_err(|err| format!("Could not read the mod library: {err}"))?;
+    let mut entries = Vec::with_capacity(cueki.len());
+    for index in 0..cueki.len() {
+        let entry = cueki
+            .by_index(index)
+            .map_err(|err| format!("Could not read the mod library: {err}"))?;
+        let name = entry.name().replace('\\', "/");
+        // Once this selection uses the direct author file, no copy from
+        // cueki's bundled version can replace it, including on a mixed pick.
+        if selection.uses_flat_textures()
+            && name.starts_with(&format!("mods/addons/{}/", flat_textures::ID))
+        {
+            continue;
+        }
+        entries.push(SourceEntry::Cueki(index, name));
+    }
+    let flat_textures = if selection.uses_flat_textures() {
+        let verified = flat_textures::read_verified(data_dir)?;
+        entries.extend(
+            verified
+                .entries
+                .into_iter()
+                .map(|(index, name)| SourceEntry::FlatTextures(index, name)),
+        );
+        let reader: Box<dyn ModLibraryReader> = Box::new(Cursor::new(verified.bytes));
+        Some(
+            zip::ZipArchive::new(reader)
+                .map_err(|err| format!("Could not read the Flat Textures author archive: {err}"))?,
+        )
+    } else {
+        None
+    };
+    Ok(SelectionArchive {
+        cueki,
+        flat_textures,
+        entries,
+    })
 }
 
 fn selection_catalog(
+    data_dir: &Path,
     zip_path: &Path,
     selection: &PreloaderSelection,
 ) -> Result<super::ModsCatalog, String> {
-    if !selection.needs_default_library() {
-        Ok(super::ModsCatalog::default())
+    let mut catalog = if !selection.needs_cueki_library() {
+        super::ModsCatalog::default()
     } else {
-        read_mods_catalog(zip_path)
+        read_mods_catalog(zip_path)?
+    };
+    if selection.uses_flat_textures() {
+        flat_textures::read_verified(data_dir)?;
+        catalog.addons.retain(|addon| addon.id != flat_textures::ID);
+        catalog.addons.push(flat_textures::catalog_addon());
     }
+    Ok(catalog)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -261,7 +375,7 @@ pub(super) fn prepare_preloader_selection(
     entries: &BTreeMap<String, VpkEntryLocation>,
     profile: Option<&ProfileContext>,
 ) -> Result<BTreeSet<String>, String> {
-    let catalog = selection_catalog(zip_path, selection)?;
+    let catalog = selection_catalog(data_dir, zip_path, selection)?;
     for name in &selection.addons {
         if !catalog.addons.iter().any(|addon| &addon.id == name) {
             return Err(format!("Unknown addon: {name}"));
@@ -286,7 +400,7 @@ pub(super) fn prepare_preloader_selection(
         ));
     }
 
-    let mut archive = selection_archive(zip_path, selection)?;
+    let mut archive = selection_archive(data_dir, zip_path, selection)?;
     let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();
     for mod_name in &selection.particle_mods {
         let prefix = format!("mods/particles/{mod_name}/actual_particles/");
@@ -693,7 +807,7 @@ fn apply_preloader_selection_inner(
 
     // Validate the selection BEFORE the destructive restore pass: a stale UI
     // selection must fail without having uninstalled the user's mods first.
-    let catalog = selection_catalog(zip_path, selection)?;
+    let catalog = selection_catalog(data_dir, zip_path, selection)?;
     for name in &selection.addons {
         if !catalog.addons.iter().any(|addon| &addon.id == name) {
             return Err(format!("Unknown addon: {name}"));
@@ -770,7 +884,7 @@ fn apply_preloader_selection_inner(
             .map_err(|err| format!("Could not remove the previous {PRELOADER_VPK}: {err}"))?;
     }
 
-    let mut archive = selection_archive(zip_path, selection)?;
+    let mut archive = selection_archive(data_dir, zip_path, selection)?;
 
     // Particle worklist: selection order, later mods win a contested file.
     let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();

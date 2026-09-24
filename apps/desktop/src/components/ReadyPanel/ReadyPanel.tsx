@@ -216,6 +216,10 @@ export function ReadyPanel({
           The ZIP includes this profile’s cfg files and launch options exactly as saved. These may
           contain server passwords or remote-console settings. Review them before sharing the ZIP.
         </p>
+        <p className="t-body mt-3 text-ink-muted">
+          The ZIP also includes the profile’s custom packs. Some may contain TF2-derived files or
+          other creators’ work. Check their sharing terms before sending the ZIP to someone else.
+        </p>
         {exportLocations === null && !exportReviewError ? (
           <p className="t-meta mt-4" role="status">
             Checking this profile’s cfg files…

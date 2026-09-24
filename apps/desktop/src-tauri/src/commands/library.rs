@@ -126,10 +126,34 @@ pub async fn switch_profile(
     app: AppHandle,
     id: String,
 ) -> Result<ProfileLibrary, CommandError> {
+    // The direct author archive is fetched before taking the write gate.
+    // Core repeats its exact-byte check during switch preflight, before the
+    // previous profile's live files are removed.
+    let preflight_id = id.clone();
+    let root_context = with_root(move |root| {
+        execs_core::refuse_if_running()?;
+        let profiles = execs_core::profiles_dir();
+        let library = execs_core::profile::load_library_from(&profiles, Some(&root))?;
+        refuse_different_pending_target(
+            library.pending_switch_profile_id.as_deref(),
+            &preflight_id,
+        )?;
+        let manifest = execs_core::load_manifest(&profiles, &preflight_id)?;
+        if manifest
+            .preloader
+            .as_ref()
+            .is_some_and(execs_core::preloader::PreloaderSelection::uses_flat_textures)
+        {
+            crate::mods_fetch::ensure_flat_textures_zip()?;
+        }
+        Ok(RootContext::capture(&root))
+    })
+    .await?;
     // This is the sole writer allowed through a durable pending-switch state:
     // re-applying its recorded target is what completes recovery.
     let _guard = gate.lock_for_switch().await?;
     with_root(move |root| {
+        root_context.ensure_current(&root)?;
         let cloud = execs_core::launch::find_cloud_config();
         switch_profile_command_to(
             &execs_core::profiles_dir(),

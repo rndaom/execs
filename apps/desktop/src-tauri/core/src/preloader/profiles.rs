@@ -25,8 +25,18 @@ pub struct ProfileContext {
 }
 
 impl PreloaderSelection {
-    pub fn needs_default_library(&self) -> bool {
-        !self.addons.is_empty() || !self.particle_mods.is_empty()
+    pub fn uses_flat_textures(&self) -> bool {
+        self.addons
+            .iter()
+            .any(|addon| addon == super::flat_textures::ID)
+    }
+
+    pub fn needs_cueki_library(&self) -> bool {
+        !self.particle_mods.is_empty()
+            || self
+                .addons
+                .iter()
+                .any(|addon| addon != super::flat_textures::ID)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -208,7 +218,10 @@ pub fn prepare_profile_preloader(
     {
         return Ok(None);
     }
-    let zip = if selection.needs_default_library() {
+    if selection.uses_flat_textures() {
+        super::flat_textures::read_verified(&data).map_err(ProfileError::Io)?;
+    }
+    let zip = if selection.needs_cueki_library() {
         let zip = data
             .join("preloader")
             .join(format!("mods-{MODS_RELEASE}.zip"));
@@ -340,5 +353,24 @@ mod tests {
             ),
             ["installed", "saved", "shared"]
         );
+    }
+
+    #[test]
+    fn flat_textures_keeps_its_saved_id_without_requiring_the_cueki_zip() {
+        let flat = PreloaderSelection {
+            addons: vec![super::super::flat_textures::ID.into()],
+            ..PreloaderSelection::default()
+        };
+        assert!(flat.uses_flat_textures());
+        assert!(!flat.needs_cueki_library());
+        let mixed = PreloaderSelection {
+            addons: vec![
+                super::super::flat_textures::ID.into(),
+                "Another addon".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(mixed.uses_flat_textures());
+        assert!(mixed.needs_cueki_library());
     }
 }

@@ -22,6 +22,7 @@ import type {
   PreloaderReport,
   PreloaderStatusPayload,
 } from "./lib/bridge";
+import { openExternal } from "./lib/bridge";
 import {
   formatModBytes,
   installedModSelection,
@@ -535,13 +536,16 @@ export function ModsPane({
                 >
                   {loading
                     ? "Downloading…"
-                    : `Download library (${formatModBytes(payload.modsSizeBytes)})`}
+                    : `Download other choices (${formatModBytes(payload.modsSizeBytes)})`}
                 </button>
               ) : null
             }
           >
             {payload && !payload.modsCached && !loading ? (
-              <p className="t-meta mt-4">One-time download, verified and cached.</p>
+              <p className="t-meta mt-4">
+                Flat Textures v1 is available now; its author file downloads on Apply. The other
+                choices need a one-time, verified library download.
+              </p>
             ) : null}
             {loading && !catalog ? (
               <p className="t-meta mt-4" role="status">
@@ -564,7 +568,17 @@ export function ModsPane({
                     >
                       <div>
                         <p className="t-meta mt-2">
-                          From cueki’s default library, packed into your preload addon.
+                          Flat Textures v1 uses the{" "}
+                          <button
+                            type="button"
+                            className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+                            onClick={() => void openExternal("https://gamebanana.com/mods/295065")}
+                          >
+                            original GameBanana file
+                          </button>{" "}
+                          by flewvar, with textures credited to JarateKing. Other choices come from
+                          cueki’s default library. Selected files are packed into your local preload
+                          addon.
                         </p>
                         <ul className="mt-3 list-none p-0">
                           {catalog.addons.map((addon) => (

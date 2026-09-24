@@ -128,13 +128,46 @@ pub use zip::{
 
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::AtomicU64;
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "execs-core-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    let prefix = format!("execs-core-{}", std::process::id());
+    create_test_temp_dir_in(&std::env::temp_dir(), &prefix, &NEXT)
+}
+
+#[cfg(test)]
+fn create_test_temp_dir_in(
+    parent: &std::path::Path,
+    prefix: &str,
+    next: &std::sync::atomic::AtomicU64,
+) -> std::path::PathBuf {
+    use std::sync::atomic::Ordering;
+
+    loop {
+        let dir = parent.join(format!("{prefix}-{}", next.fetch_add(1, Ordering::Relaxed)));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return dir,
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => panic!("Could not create test directory {}: {err}", dir.display()),
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_temp_dir_never_reuses_an_existing_counter_path() {
+    use std::sync::atomic::AtomicU64;
+
+    let parent = test_temp_dir();
+    let stale = parent.join("fixture-0");
+    std::fs::create_dir(&stale).unwrap();
+    std::fs::write(stale.join("sentinel"), b"older test run").unwrap();
+
+    let next = AtomicU64::new(0);
+    let fresh = create_test_temp_dir_in(&parent, "fixture", &next);
+    assert_eq!(fresh, parent.join("fixture-1"));
+    assert!(fresh.read_dir().unwrap().next().is_none());
+    assert_eq!(
+        std::fs::read(stale.join("sentinel")).unwrap(),
+        b"older test run"
+    );
 }

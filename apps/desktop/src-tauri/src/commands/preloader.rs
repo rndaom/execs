@@ -307,19 +307,16 @@ pub struct DefaultModsPayload {
     pub catalog: Option<ModsCatalog>,
 }
 
-/// The catalog if the library zip is already cached; never downloads.
+/// The direct author choice is always available; the other choices appear
+/// when cueki's library zip is cached. This command never downloads.
 #[tauri::command]
 pub async fn get_default_mods() -> Result<DefaultModsPayload, CommandError> {
     blocking(|| {
-        if !crate::mods_fetch::is_cached() {
-            return Ok(DefaultModsPayload {
-                cached: false,
-                catalog: None,
-            });
-        }
-        let catalog = execs_core::preloader::read_mods_catalog(&crate::mods_fetch::cache_path())?;
+        let cached = crate::mods_fetch::is_cached();
+        let cache_path = crate::mods_fetch::cache_path();
+        let catalog = crate::mods_fetch::catalog_with_flat(cached.then_some(cache_path.as_path()))?;
         Ok(DefaultModsPayload {
-            cached: true,
+            cached,
             catalog: Some(catalog),
         })
     })
@@ -331,7 +328,7 @@ pub async fn get_default_mods() -> Result<DefaultModsPayload, CommandError> {
 pub async fn download_default_mods() -> Result<DefaultModsPayload, CommandError> {
     blocking(|| {
         let zip = crate::mods_fetch::ensure_mods_zip()?;
-        let catalog = execs_core::preloader::read_mods_catalog(&zip)?;
+        let catalog = crate::mods_fetch::catalog_with_flat(Some(&zip))?;
         Ok(DefaultModsPayload {
             cached: true,
             catalog: Some(catalog),
@@ -357,17 +354,20 @@ pub async fn apply_preloader_mods(
         particle_mods,
         profile_particle_mods: profile_particle_mods.unwrap_or_default(),
     };
-    let needs_library = selection.needs_default_library();
+    let needs_cueki_library = selection.needs_cueki_library();
+    let needs_flat_textures = selection.uses_flat_textures();
     let (context, zip) = with_root(move |root| {
         execs_core::refuse_if_running()?;
-        Ok((
-            ProfileSelectionContext::capture(&root)?,
-            if needs_library {
-                crate::mods_fetch::ensure_mods_zip()?
-            } else {
-                crate::mods_fetch::cache_path()
-            },
-        ))
+        let context = ProfileSelectionContext::capture(&root)?;
+        let zip = if needs_cueki_library {
+            crate::mods_fetch::ensure_mods_zip()?
+        } else {
+            crate::mods_fetch::cache_path()
+        };
+        if needs_flat_textures {
+            crate::mods_fetch::ensure_flat_textures_zip()?;
+        }
+        Ok((context, zip))
     })
     .await?;
     let _guard = gate.lock_for_preloader_recovery().await?;

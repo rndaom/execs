@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DIRECT_FLAT_TEXTURES_ID,
   foldCategories,
   formatModBytes,
   gameBananaIdOf,
@@ -216,6 +217,15 @@ describe("mods apply gating", () => {
   it("requires the cached library only when selecting its content", () => {
     const uncached = { ...stale, modsCached: false };
     expect(modsApplyEnabled(uncached, selection())).toBe(true);
+    const directFlat = selection({ addons: [DIRECT_FLAT_TEXTURES_ID] });
+    expect(modsApplyEnabled(uncached, directFlat)).toBe(true);
+    expect(modsStatusLine(uncached, directFlat, false)).toBe("Unsaved changes");
+    expect(
+      modsApplyEnabled(
+        uncached,
+        selection({ addons: [DIRECT_FLAT_TEXTURES_ID, "No Burning Overlay"] }),
+      ),
+    ).toBe(false);
     expect(modsApplyEnabled(uncached, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(null, selection())).toBe(false);
     expect(modsStatusLine(uncached, INSTALLED, false)).toContain("Download the mod library");

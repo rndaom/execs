@@ -6,7 +6,12 @@ import { ToastProvider } from "./components/ui/Toast";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import { BridgeError, type GameBananaPage } from "./lib/bridge";
-import { PREVIEW_GAMEBANANA_RECORDS, PREVIEW_MODS_STATUS } from "./lib/mods-ui";
+import {
+  DIRECT_FLAT_TEXTURES_ID,
+  PREVIEW_GAMEBANANA_RECORDS,
+  PREVIEW_MODS_CATALOG,
+  PREVIEW_MODS_STATUS,
+} from "./lib/mods-ui";
 import { SettingsHost } from "./SettingsHost";
 
 // Real settings queue, Mods pane, import dialog, cards, and toast. Only IPC is
@@ -65,6 +70,13 @@ function makeApi() {
       ...PREVIEW_MODS_STATUS,
       modsCached: false,
       status: { ...PREVIEW_MODS_STATUS.status, untrackedModified: [] },
+    })),
+    getDefaultMods: vi.fn(async () => ({
+      cached: false,
+      catalog: {
+        addons: PREVIEW_MODS_CATALOG.addons.filter((addon) => addon.id === DIRECT_FLAT_TEXTURES_ID),
+        particleMods: [],
+      },
     })),
     gameBananaModCategories: vi.fn(async () => []),
     searchGameBananaMods: vi.fn(async () => page),
@@ -158,6 +170,13 @@ afterEach(async () => {
 });
 
 describe("Mods HUD recovery through the real settings host", () => {
+  it("shows the direct Flat choice before the cueki catalog is cached", async () => {
+    await render();
+    expect(api.getDefaultMods).toHaveBeenCalledOnce();
+    expect(element("mods-addon-flat-textures-v1")).toBeTruthy();
+    expect(element("mods-download").textContent).toContain("Download other choices");
+  });
+
   it.each(["archive", "folder"] as const)(
     "routes a rejected %s import to one actionable HUD review without success feedback",
     async (kind) => {
