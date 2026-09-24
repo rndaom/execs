@@ -32,6 +32,25 @@ fn main() {
         class_slot_overrides.len(),
         class_slot_overrides.iter().take(12).collect::<Vec<_>>()
     );
+    let weapon_items: Vec<_> = catalog
+        .items
+        .values()
+        .filter(|item| item.item_class.starts_with("tf_weapon_"))
+        .collect();
+    let shared_hands = weapon_items
+        .iter()
+        .filter(|item| item.attach_to_hands)
+        .count();
+    let vm_only = weapon_items
+        .iter()
+        .filter(|item| item.attach_to_hands_vm_only)
+        .count();
+    println!(
+        "{} weapon-class items: {} request the shared hands model, {} set viewmodel-only attachment",
+        weapon_items.len(),
+        shared_hands,
+        vm_only
+    );
     for id in [220, 140] {
         let item = catalog.items.get(&id).expect("expected installed item");
         println!(

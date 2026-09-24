@@ -337,6 +337,8 @@ mod tests {
             id: 1,
             name: "fixture".into(),
             item_class: "tf_weapon_example".into(),
+            attach_to_hands: true,
+            attach_to_hands_vm_only: false,
             loadout_slot: Some("secondary".into()),
             class_loadout_slots: BTreeMap::from([("scout".into(), Some("secondary".into()))]),
             animation_slot: None,
