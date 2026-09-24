@@ -8,11 +8,16 @@
 //! ceiling.
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
+
+#[cfg(test)]
+use curl::easy::SslOpt;
+use curl::easy::{Easy, List};
 
 /// Honest product identification. Some hosts (comfig.app's sound CDN) hand a
 /// bot challenge to empty or bare-library user agents; a product token with
@@ -93,20 +98,6 @@ pub enum RemoteSource {
 }
 
 impl RemoteSource {
-    const ALL: [Self; 11] = [
-        Self::GitHubApi,
-        Self::GitHubRaw,
-        Self::GitHubRelease,
-        Self::GitHubCodeload,
-        Self::Dropbox,
-        Self::TeamFortressTv,
-        Self::GameBananaApi,
-        Self::GameBananaDownload,
-        Self::ComfigApp,
-        Self::ComfigHits,
-        Self::Tf2Huds,
-    ];
-
     fn initial_hosts(self) -> &'static [&'static str] {
         match self {
             Self::GitHubApi => &["api.github.com"],
@@ -222,20 +213,6 @@ fn is_gamebanana_shard_host(host: &str) -> bool {
         .is_some_and(|number| {
             !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
         })
-}
-
-/// The resolver receives only a hostname, without the request or proxy URI.
-/// Every host admitted by `validate_url_shape` must be in this set so direct
-/// connections through `send_get` cannot skip the public-address check. In
-/// that path, other names are user-configured proxy hosts and retain reqwest's
-/// normal DNS behavior. This is not a guard for callers bypassing `send_get`.
-fn is_download_host(host: &str) -> bool {
-    let host = host.to_ascii_lowercase();
-    RemoteSource::ALL.iter().any(|source| {
-        source.initial_hosts().contains(&host.as_str())
-            || source.redirect_hosts().contains(&host.as_str())
-    }) || is_dropbox_shard_host(&host)
-        || is_gamebanana_shard_host(&host)
 }
 
 fn validate_url_shape(
@@ -377,73 +354,17 @@ fn public_socket_addrs(addresses: Vec<SocketAddr>) -> Result<Vec<SocketAddr>, st
     Ok(addresses)
 }
 
-fn connection_socket_addrs(
-    host: &str,
-    addresses: Vec<SocketAddr>,
-) -> Result<Vec<SocketAddr>, std::io::Error> {
-    if is_download_host(host) {
-        public_socket_addrs(addresses)
-    } else if addresses.is_empty() {
-        Err(std::io::Error::other("The proxy host has no addresses."))
-    } else {
-        Ok(addresses)
-    }
-}
-
-type HostLookup = dyn Fn(&str) -> Result<Vec<SocketAddr>, std::io::Error> + Send + Sync;
-
-struct PublicDestinationResolver {
-    lookup: Arc<HostLookup>,
-}
-
-impl Default for PublicDestinationResolver {
-    fn default() -> Self {
-        Self {
-            lookup: Arc::new(|host| {
-                (host, 0)
-                    .to_socket_addrs()
-                    .map(|addresses| addresses.collect())
-            }),
-        }
-    }
-}
-
-#[cfg(test)]
-impl PublicDestinationResolver {
-    fn with_lookup(
-        lookup: impl Fn(&str) -> Result<Vec<SocketAddr>, std::io::Error> + Send + Sync + 'static,
-    ) -> Self {
-        Self {
-            lookup: Arc::new(lookup),
-        }
-    }
-}
-
-impl reqwest::dns::Resolve for PublicDestinationResolver {
-    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        let host = name.as_str().to_owned();
-        let lookup = Arc::clone(&self.lookup);
-        Box::pin(async move {
-            let addresses = tokio::task::spawn_blocking(move || {
-                let addresses = lookup(&host)?;
-                connection_socket_addrs(&host, addresses)
-            })
-            .await??;
-            Ok(Box::new(addresses.into_iter()) as reqwest::dns::Addrs)
-        })
-    }
-}
-
 type DnsKey = (String, u16);
 type DnsLookupRegistry = HashMap<DnsKey, Weak<DnsLookup>>;
+type DnsAddressCache = HashMap<DnsKey, (Instant, Vec<SocketAddr>)>;
 
-fn dns_cache() -> &'static Mutex<HashMap<DnsKey, Instant>> {
-    static CACHE: OnceLock<Mutex<HashMap<DnsKey, Instant>>> = OnceLock::new();
+fn dns_cache() -> &'static Mutex<DnsAddressCache> {
+    static CACHE: OnceLock<Mutex<DnsAddressCache>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 struct DnsLookup {
-    result: Mutex<Option<Result<(), String>>>,
+    result: Mutex<Option<Result<Vec<SocketAddr>, String>>>,
     ready: Condvar,
 }
 
@@ -452,19 +373,19 @@ fn dns_lookups() -> &'static Mutex<DnsLookupRegistry> {
     LOOKUPS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
+fn validated_destination_addrs(url: &reqwest::Url) -> Result<Vec<SocketAddr>, String> {
     let host = url
         .host_str()
         .ok_or_else(|| "The download URL has no host.".to_string())?;
     let port = url.port_or_known_default().unwrap_or(443);
     let key = (host.to_string(), port);
-    if dns_cache()
+    if let Some((_, addresses)) = dns_cache()
         .lock()
         .ok()
-        .and_then(|cache| cache.get(&key).copied())
-        .is_some_and(|checked| checked.elapsed() < DNS_CHECK_TTL)
+        .and_then(|cache| cache.get(&key).cloned())
+        .filter(|(checked, _)| checked.elapsed() < DNS_CHECK_TTL)
     {
-        return Ok(());
+        return Ok(addresses);
     }
 
     let (lookup, start) = {
@@ -492,13 +413,11 @@ fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
                 .map_err(|_| "Could not resolve the download host.".to_string())
                 .and_then(|addresses| {
                     let addresses = addresses.collect::<Vec<_>>();
-                    public_socket_addrs(addresses)
-                        .map(|_| ())
-                        .map_err(|err| err.to_string())
+                    public_socket_addrs(addresses).map_err(|err| err.to_string())
                 });
-            if result.is_ok() {
+            if let Ok(addresses) = &result {
                 if let Ok(mut cache) = dns_cache().lock() {
-                    cache.insert(lookup_key, Instant::now());
+                    cache.insert(lookup_key, (Instant::now(), addresses.clone()));
                 }
             }
             if let Ok(mut slot) = lookup.result.lock() {
@@ -531,39 +450,431 @@ fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
     }
 }
 
+/// The fetchers share one policy; each transfer owns its curl handle so a
+/// redirect can never inherit a prior hop's CONNECT destination.
+#[derive(Clone)]
+pub struct Client {
+    connect_timeout: Duration,
+    total_timeout: Duration,
+    idle: Arc<Mutex<Vec<(ConnectionKey, Easy)>>>,
+    #[cfg(test)]
+    fixture: Option<FixtureTransport>,
+}
+
+#[cfg(test)]
+#[derive(Clone)]
+struct FixtureTransport {
+    addresses: Vec<SocketAddr>,
+    proxy: Option<String>,
+    no_proxy: Option<String>,
+    ca_path: Option<PathBuf>,
+}
+
+/// Reuse a TLS connection only for the same original name, vetted numeric
+/// destination and proxy environment. A changed address or proxy route gets
+/// a different handle and cannot inherit a prior connection.
+#[derive(PartialEq, Eq)]
+struct ConnectionKey {
+    host: String,
+    address: SocketAddr,
+    port: u16,
+    proxy_environment: [Option<OsString>; 6],
+    #[cfg(test)]
+    fixture_proxy: Option<String>,
+    #[cfg(test)]
+    fixture_no_proxy: Option<String>,
+}
+
+impl ConnectionKey {
+    fn new(_client: &Client, host: &str, address: SocketAddr, port: u16) -> Self {
+        let proxy_environment = [
+            std::env::var_os("HTTPS_PROXY"),
+            std::env::var_os("https_proxy"),
+            std::env::var_os("ALL_PROXY"),
+            std::env::var_os("all_proxy"),
+            std::env::var_os("NO_PROXY"),
+            std::env::var_os("no_proxy"),
+        ];
+        Self {
+            host: host.to_string(),
+            address,
+            port,
+            proxy_environment,
+            #[cfg(test)]
+            fixture_proxy: _client
+                .fixture
+                .as_ref()
+                .and_then(|fixture| fixture.proxy.clone()),
+            #[cfg(test)]
+            fixture_no_proxy: _client
+                .fixture
+                .as_ref()
+                .and_then(|fixture| fixture.no_proxy.clone()),
+        }
+    }
+}
+
+impl Client {
+    fn take_handle(&self, key: &ConnectionKey) -> Easy {
+        self.idle
+            .lock()
+            .ok()
+            .and_then(|mut idle| {
+                idle.iter()
+                    .position(|(candidate, _)| candidate == key)
+                    .map(|index| idle.swap_remove(index).1)
+            })
+            .unwrap_or_else(Easy::new)
+    }
+
+    fn recycle_handle(&self, key: ConnectionKey, easy: Easy) {
+        if let Ok(mut idle) = self.idle.lock() {
+            if idle.len() == 24 {
+                idle.remove(0);
+            }
+            idle.push((key, easy));
+        }
+    }
+}
+
+pub fn client() -> Result<Client, String> {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    Ok(CLIENT
+        .get_or_init(|| build(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_TIMEOUT))
+        .clone())
+}
+
+pub fn api_client() -> Result<Client, String> {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    Ok(CLIENT
+        .get_or_init(|| build(API_CONNECT_TIMEOUT, API_TIMEOUT))
+        .clone())
+}
+
+fn build(connect: Duration, total: Duration) -> Client {
+    Client {
+        connect_timeout: connect,
+        total_timeout: total,
+        idle: Arc::new(Mutex::new(Vec::new())),
+        #[cfg(test)]
+        fixture: None,
+    }
+}
+
+#[derive(Debug)]
+struct Response {
+    status: reqwest::StatusCode,
+    location: Option<String>,
+    body: Vec<u8>,
+}
+
+#[derive(Default)]
+struct TransferState {
+    status: Option<u16>,
+    location: Option<String>,
+    content_length: Option<u64>,
+    header_bytes: usize,
+    body: Vec<u8>,
+    abort_reason: Option<String>,
+    redirect_abort: bool,
+}
+
+fn curl_error(err: curl::Error) -> String {
+    if err.is_operation_timedout() {
+        "The request timed out. Check your connection and try again.".into()
+    } else if err.is_couldnt_connect() || err.is_couldnt_resolve_proxy() {
+        "Could not connect. Check your connection and try again.".into()
+    } else {
+        format!("The download failed ({err})")
+    }
+}
+
+#[derive(Debug)]
+struct TransferFailure {
+    message: String,
+    retryable: bool,
+}
+
+impl TransferFailure {
+    fn fatal(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            retryable: false,
+        }
+    }
+
+    fn from_perform(err: curl::Error) -> Self {
+        let retryable = err.is_couldnt_connect();
+        Self {
+            message: curl_error(err),
+            retryable,
+        }
+    }
+}
+
+fn curl_setup_error(err: curl::Error) -> TransferFailure {
+    TransferFailure::fatal(curl_error(err))
+}
+
+fn connect_to_entry(host: &str, address: SocketAddr, port: u16) -> String {
+    let ip = match address.ip() {
+        IpAddr::V4(ip) => ip.to_string(),
+        IpAddr::V6(ip) => format!("[{ip}]"),
+    };
+    format!("{host}:{port}:{ip}:{port}")
+}
+
+fn parse_header(state: &mut TransferState, bytes: &[u8], max_bytes: u64) -> bool {
+    state.header_bytes = state.header_bytes.saturating_add(bytes.len());
+    if state.header_bytes > 64 * 1024 {
+        state.abort_reason = Some("The download returned oversized HTTP headers.".into());
+        return false;
+    }
+    if bytes.starts_with(b"HTTP/") {
+        let status = bytes
+            .split(|&byte| byte == b' ')
+            .nth(1)
+            .and_then(|raw| std::str::from_utf8(raw).ok())
+            .and_then(|raw| raw.trim().parse::<u16>().ok());
+        state.status = status;
+        state.location = None;
+        state.content_length = None;
+        state.header_bytes = bytes.len();
+    } else if let Some(separator) = bytes.iter().position(|&byte| byte == b':') {
+        let (name, raw) = bytes.split_at(separator);
+        let raw = &raw[1..];
+        let value = raw.strip_suffix(b"\r\n").unwrap_or(raw);
+        let value = value.strip_prefix(b" ").unwrap_or(value);
+        if name.eq_ignore_ascii_case(b"location") {
+            if state.location.is_some() {
+                state.abort_reason =
+                    Some("The download returned multiple redirect destinations.".into());
+                return false;
+            }
+            state.location = std::str::from_utf8(value).ok().map(str::to_owned);
+        } else if name.eq_ignore_ascii_case(b"content-length") {
+            if state.content_length.is_some() {
+                state.abort_reason =
+                    Some("The download returned multiple Content-Length values.".into());
+                return false;
+            }
+            match std::str::from_utf8(value)
+                .ok()
+                .and_then(|v| v.trim().parse::<u64>().ok())
+            {
+                Some(length)
+                    if length <= max_bytes
+                        || state.status.is_some_and(|s| (300..400).contains(&s)) =>
+                {
+                    state.content_length = Some(length);
+                }
+                Some(_) => {
+                    state.abort_reason = Some(too_large(max_bytes));
+                    return false;
+                }
+                None => {
+                    state.abort_reason =
+                        Some("The download returned an invalid Content-Length.".into());
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn transfer_one(
+    client: &Client,
+    url: &reqwest::Url,
+    address: SocketAddr,
+    deadline: Instant,
+    max_bytes: u64,
+) -> Result<Response, TransferFailure> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(TransferFailure::fatal("The download timed out."));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| TransferFailure::fatal("The download URL has no host."))?;
+    let port = url.port_or_known_default().unwrap_or(443);
+    let key = ConnectionKey::new(client, host, address, port);
+    let mut easy = client.take_handle(&key);
+    // curl_easy_reset clears prior hop options (especially CONNECT_TO), but
+    // keeps live connections for this exact vetted origin/route key.
+    easy.reset();
+    easy.url(url.as_str()).map_err(curl_setup_error)?;
+    easy.useragent(USER_AGENT).map_err(curl_setup_error)?;
+    easy.follow_location(false).map_err(curl_setup_error)?;
+    easy.connect_timeout(client.connect_timeout.min(remaining))
+        .map_err(curl_setup_error)?;
+    easy.timeout(remaining).map_err(curl_setup_error)?;
+    easy.ssl_verify_peer(true).map_err(curl_setup_error)?;
+    easy.ssl_verify_host(true).map_err(curl_setup_error)?;
+    easy.proxy_ssl_verify_peer(true).map_err(curl_setup_error)?;
+    easy.proxy_ssl_verify_host(true).map_err(curl_setup_error)?;
+    let mut destinations = List::new();
+    destinations
+        .append(&connect_to_entry(host, address, port))
+        .map_err(curl_setup_error)?;
+    easy.connect_to(destinations).map_err(curl_setup_error)?;
+    #[cfg(test)]
+    if let Some(fixture) = &client.fixture {
+        if let Some(proxy) = &fixture.proxy {
+            easy.proxy(proxy).map_err(curl_setup_error)?;
+        }
+        if let Some(no_proxy) = &fixture.no_proxy {
+            easy.noproxy(no_proxy).map_err(curl_setup_error)?;
+        }
+        if let Some(ca_path) = &fixture.ca_path {
+            easy.cainfo(
+                ca_path
+                    .to_str()
+                    .ok_or_else(|| TransferFailure::fatal("Invalid CA path."))?,
+            )
+            .map_err(curl_setup_error)?;
+            easy.proxy_cainfo(
+                ca_path
+                    .to_str()
+                    .ok_or_else(|| TransferFailure::fatal("Invalid CA path."))?,
+            )
+            .map_err(curl_setup_error)?;
+            if cfg!(windows) {
+                // The disposable fixture CA has no CRL endpoint. This test
+                // setting is absent from the production transport.
+                easy.ssl_options(SslOpt::new().no_revoke(true))
+                    .map_err(curl_setup_error)?;
+                easy.proxy_ssl_options(SslOpt::new().no_revoke(true))
+                    .map_err(curl_setup_error)?;
+            }
+        }
+    }
+
+    let state = std::cell::RefCell::new(TransferState::default());
+    let performed = {
+        let mut transfer = easy.transfer();
+        transfer
+            .header_function(|header| parse_header(&mut state.borrow_mut(), header, max_bytes))
+            .map_err(curl_setup_error)?;
+        transfer
+            .write_function(|chunk| {
+                let mut state = state.borrow_mut();
+                if state
+                    .status
+                    .is_some_and(|status| (300..400).contains(&status))
+                {
+                    state.redirect_abort = true;
+                    return Ok(0);
+                }
+                if state.body.len() as u64 + chunk.len() as u64 > max_bytes {
+                    state.abort_reason = Some(too_large(max_bytes));
+                    return Ok(0);
+                }
+                state.body.extend_from_slice(chunk);
+                Ok(chunk.len())
+            })
+            .map_err(curl_setup_error)?;
+        transfer.perform()
+    };
+    let state = state.into_inner();
+    if let Some(reason) = state.abort_reason {
+        return Err(TransferFailure::fatal(reason));
+    }
+    let proxy_code = easy.http_connectcode().map_err(curl_setup_error)?;
+    if proxy_code != 0 && proxy_code != 200 {
+        let message = if proxy_code == 407 {
+            "The configured proxy rejected its credentials (407).".to_string()
+        } else {
+            format!("The configured proxy refused the connection ({proxy_code}).")
+        };
+        return Err(TransferFailure::fatal(message));
+    }
+    if let Err(err) = performed {
+        if !state.redirect_abort {
+            return Err(TransferFailure::from_perform(err));
+        }
+    }
+    let status_code = easy.response_code().map_err(curl_setup_error)?;
+    let status_code = u16::try_from(status_code)
+        .map_err(|_| TransferFailure::fatal("The download returned an invalid HTTP status."))?;
+    let status = reqwest::StatusCode::from_u16(status_code)
+        .map_err(|_| TransferFailure::fatal("The download returned an invalid HTTP status."))?;
+    let response = Response {
+        status,
+        location: state.location,
+        body: state.body,
+    };
+    client.recycle_handle(key, easy);
+    Ok(response)
+}
+
 fn send_get(
-    client: &reqwest::blocking::Client,
+    client: &Client,
     url: &str,
     source: RemoteSource,
     timeout: Option<Duration>,
-) -> Result<reqwest::blocking::Response, String> {
+    max_bytes: u64,
+) -> Result<Response, String> {
     let mut current = validate_url_for(url, source)?;
-    let deadline = timeout.map(|timeout| Instant::now() + timeout);
+    let deadline = Instant::now() + timeout.unwrap_or(client.total_timeout);
     for redirects in 0..=MAX_REDIRECTS {
-        validate_public_resolution(&current)?;
-        let mut request = client.get(current.clone());
-        if let Some(deadline) = deadline {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("The download timed out.".into());
+        #[cfg(test)]
+        let addresses = if let Some(fixture) = &client.fixture {
+            public_socket_addrs(fixture.addresses.clone()).map_err(|err| err.to_string())?
+        } else {
+            validated_destination_addrs(&current)?
+        };
+        #[cfg(not(test))]
+        let addresses = validated_destination_addrs(&current)?;
+        let mut last_error = None;
+        let mut last_retryable = false;
+        let mut response = None;
+        for address in addresses {
+            match transfer_one(client, &current, address, deadline, max_bytes) {
+                Ok(received) => {
+                    response = Some(received);
+                    break;
+                }
+                Err(err) => {
+                    let retryable = err.retryable;
+                    last_error = Some(err.message);
+                    last_retryable = retryable;
+                    // Never let curl resolve the origin hostname as a fallback.
+                    // A fresh transfer can only use another vetted address.
+                    if !retryable || Instant::now() >= deadline {
+                        break;
+                    }
+                }
             }
-            request = request.timeout(remaining);
         }
-        let response = request.send().map_err(request_error)?;
-        if !response.status().is_redirection() {
+        let response = match response {
+            Some(response) => response,
+            None => {
+                if last_retryable {
+                    if let (Some(host), Some(port)) =
+                        (current.host_str(), current.port_or_known_default())
+                    {
+                        if let Ok(mut cache) = dns_cache().lock() {
+                            cache.remove(&(host.to_string(), port));
+                        }
+                    }
+                }
+                return Err(
+                    last_error.unwrap_or_else(|| "The download host has no addresses.".into())
+                );
+            }
+        };
+        if !response.status.is_redirection() {
             return Ok(response);
         }
         if redirects == MAX_REDIRECTS {
             return Err("The download redirected too many times.".into());
         }
         let location = response
-            .headers()
-            .get(reqwest::header::LOCATION)
-            .ok_or_else(|| "The download returned a redirect with no destination.".to_string())?
-            .to_str()
-            .map_err(|_| "The download returned an invalid redirect.".to_string())?;
+            .location
+            .ok_or_else(|| "The download returned a redirect with no destination.".to_string())?;
         let next = current
-            .join(location)
+            .join(&location)
             .map_err(|_| "The download returned an invalid redirect.".to_string())?;
         validate_url_shape(&next, source, true)?;
         current = next;
@@ -571,86 +882,42 @@ fn send_get(
     Err("The download redirected too many times.".into())
 }
 
-pub fn client() -> Result<reqwest::blocking::Client, String> {
-    static CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
-    CLIENT
-        .get_or_init(|| build(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_TIMEOUT))
-        .clone()
-}
-
-pub fn api_client() -> Result<reqwest::blocking::Client, String> {
-    static CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
-    CLIENT
-        .get_or_init(|| build(API_CONNECT_TIMEOUT, API_TIMEOUT))
-        .clone()
-}
-
-fn build(connect: Duration, total: Duration) -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
-        .user_agent(USER_AGENT)
-        .connect_timeout(connect)
-        .timeout(total)
-        .https_only(true)
-        // reqwest also resolves configured proxy hosts here. Those hosts keep
-        // their normal DNS behavior; only approved download destinations are
-        // filtered. An HTTPS proxy still resolves the CONNECT target itself,
-        // so its target address is not bound by this resolver.
-        .dns_resolver(Arc::new(PublicDestinationResolver::default()))
-        // Redirects are followed manually so every hop receives the same host,
-        // scheme and private-address checks as the initial request.
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|err| err.to_string())
-}
-
-pub fn request_error(err: reqwest::Error) -> String {
-    if err.is_timeout() {
-        "The request timed out. Check your connection and try again.".into()
-    } else if err.is_connect() {
-        "Could not connect. Check your connection and try again.".into()
-    } else {
-        format!("The download failed ({err})")
-    }
-}
-
 /// GET a small text document with the API timeout policy. The body is read
 /// under `API_MAX_BYTES`, never buffered whole on the server's say-so.
-pub fn get_text_for(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    source: RemoteSource,
-) -> Result<String, String> {
+pub fn get_text_for(client: &Client, url: &str, source: RemoteSource) -> Result<String, String> {
     get_text_for_limit(client, url, source, API_MAX_BYTES)
 }
 
 pub fn get_text_for_limit(
-    client: &reqwest::blocking::Client,
+    client: &Client,
     url: &str,
     source: RemoteSource,
     max_bytes: u64,
 ) -> Result<String, String> {
-    let mut response = send_get(client, url, source, Some(API_TIMEOUT))?;
-    if !response.status().is_success() {
-        return Err(format!("Could not download {url} ({})", response.status()));
+    let response = send_get(
+        client,
+        url,
+        source,
+        Some(API_TIMEOUT),
+        max_bytes.min(API_MAX_BYTES),
+    )?;
+    if !response.status.is_success() {
+        return Err(format!("Could not download {url} ({})", response.status));
     }
-    let hint = response.content_length();
-    let bytes = read_capped(&mut response, max_bytes.min(API_MAX_BYTES), hint)?;
-    Ok(text_from_bytes(bytes))
+    Ok(text_from_bytes(response.body))
 }
 
 /// GET a JSON document with the API timeout policy, under the same ceiling.
 pub fn get_json_for<T: serde::de::DeserializeOwned>(
-    client: &reqwest::blocking::Client,
+    client: &Client,
     url: &str,
     source: RemoteSource,
 ) -> Result<T, String> {
-    let mut response = send_get(client, url, source, Some(API_TIMEOUT))?;
-    if !response.status().is_success() {
-        return Err(format!("Could not read {url} ({})", response.status()));
+    let response = send_get(client, url, source, Some(API_TIMEOUT), API_MAX_BYTES)?;
+    if !response.status.is_success() {
+        return Err(format!("Could not read {url} ({})", response.status));
     }
-    let hint = response.content_length();
-    let bytes = read_capped(&mut response, API_MAX_BYTES, hint)?;
-    serde_json::from_slice(&bytes).map_err(|err| err.to_string())
+    serde_json::from_slice(&response.body).map_err(|err| err.to_string())
 }
 
 /// Every host this app reads text from serves UTF-8; a stray byte becomes
@@ -734,17 +1001,17 @@ pub fn download_bytes_for_timeout(
     source: RemoteSource,
     timeout: Option<Duration>,
 ) -> Result<Vec<u8>, String> {
-    let mut response = send_get(
+    let response = send_get(
         &client()?,
         url,
         source,
         Some(timeout.unwrap_or(DOWNLOAD_TIMEOUT)),
+        max_bytes,
     )?;
-    if !response.status().is_success() {
-        return Err(format!("Could not download {url} ({})", response.status()));
+    if !response.status.is_success() {
+        return Err(format!("Could not download {url} ({})", response.status));
     }
-    let hint = response.content_length();
-    read_capped(&mut response, max_bytes, hint)
+    Ok(response.body)
 }
 
 /// A pinned asset, from the cache when it still verifies and from the network
@@ -1162,6 +1429,257 @@ mod tests {
     }
 
     #[test]
+    fn curl_connect_proxy_receives_only_a_vetted_numeric_target() {
+        for (address, authority) in [
+            ("1.1.1.1:443", "1.1.1.1:443"),
+            ("[2606:4700:4700::1111]:443", "[2606:4700:4700::1111]:443"),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let proxy = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    let mut chunk = [0u8; 256];
+                    let count = stream.read(&mut chunk).unwrap();
+                    assert!(count > 0 && request.len() < 4096);
+                    request.extend_from_slice(&chunk[..count]);
+                }
+                stream
+                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+                    .unwrap();
+                String::from_utf8(request).unwrap()
+            });
+            let client = Client {
+                connect_timeout: Duration::from_secs(2),
+                total_timeout: Duration::from_secs(3),
+                idle: Arc::new(Mutex::new(Vec::new())),
+                fixture: Some(FixtureTransport {
+                    addresses: vec![address.parse().unwrap()],
+                    proxy: Some(format!("http://tester:pass@127.0.0.1:{port}")),
+                    no_proxy: Some(String::new()),
+                    ca_path: None,
+                }),
+            };
+            let _ = send_get(
+                &client,
+                "https://api.github.com/repos/o/r",
+                RemoteSource::GitHubApi,
+                None,
+                1024,
+            );
+            let request = proxy.join().unwrap();
+            assert!(
+                request.starts_with(&format!("CONNECT {authority} HTTP/1.1\r\n")),
+                "{request}"
+            );
+            assert!(
+                request.contains("Proxy-Authorization: Basic dGVzdGVyOnBhc3M=\r\n"),
+                "{request}"
+            );
+            assert!(!request.contains("CONNECT api.github.com:443"), "{request}");
+        }
+    }
+
+    /// Run with tools/d8-curl-prototype/d8-curl-probe.py in product mode.
+    #[test]
+    #[ignore = "requires the ephemeral loopback proxy and CA fixture"]
+    fn curl_product_tls_fixture() {
+        let proxy = std::env::var("D8_PROXY").unwrap();
+        let target = std::env::var("D8_TARGET").unwrap();
+        let ca_path = PathBuf::from(std::env::var("D8_CA").unwrap());
+        let case = std::env::var("D8_CASE").unwrap();
+        let client = Client {
+            connect_timeout: Duration::from_secs(3),
+            total_timeout: Duration::from_secs(5),
+            idle: Arc::new(Mutex::new(Vec::new())),
+            fixture: Some(FixtureTransport {
+                addresses: if case == "no_proxy" {
+                    vec![target.parse().unwrap()]
+                } else if case == "bad_cert" {
+                    vec![
+                        format!("{target}:443").parse().unwrap(),
+                        "8.8.8.8:443".parse().unwrap(),
+                    ]
+                } else {
+                    vec![format!("{target}:443").parse().unwrap()]
+                },
+                proxy: (!matches!(case.as_str(), "env_proxy" | "socks5h" | "no_proxy"))
+                    .then_some(proxy),
+                no_proxy: (case != "no_proxy").then(String::new),
+                ca_path: Some(ca_path),
+            }),
+        };
+        if case == "reuse" {
+            for _ in 0..2 {
+                let response = send_get(
+                    &client,
+                    "https://api.github.com/repos/o/r",
+                    RemoteSource::GitHubApi,
+                    None,
+                    1024,
+                )
+                .unwrap();
+                assert_eq!(response.status, reqwest::StatusCode::OK);
+                assert_eq!(response.body, b"ok");
+            }
+            assert_eq!(client.idle.lock().unwrap().len(), 1);
+            println!("REUSED");
+            return;
+        }
+        let (url, source) = if case == "redirect" || case == "blocked_redirect" {
+            (
+                "https://github.com/o/r/releases/download/v/x",
+                RemoteSource::GitHubRelease,
+            )
+        } else {
+            ("https://api.github.com/repos/o/r", RemoteSource::GitHubApi)
+        };
+        let result = if case == "no_proxy" {
+            let address = client.fixture.as_ref().unwrap().addresses[0];
+            let direct_url = reqwest::Url::parse(&format!(
+                "https://api.github.com:{}/repos/o/r",
+                address.port()
+            ))
+            .unwrap();
+            transfer_one(
+                &client,
+                &direct_url,
+                address,
+                Instant::now() + Duration::from_secs(5),
+                1024,
+            )
+            .map_err(|error| error.message)
+        } else {
+            send_get(&client, url, source, None, 1024)
+        };
+        match case.as_str() {
+            "valid" | "no_proxy" | "env_proxy" | "socks5h" => {
+                let response = result.unwrap();
+                assert_eq!(response.status, reqwest::StatusCode::OK);
+                assert_eq!(response.body, b"ok");
+                println!("ok");
+            }
+            "bad_cert" => {
+                let error = result.unwrap_err();
+                eprintln!("{error}");
+                assert!(
+                    error.to_ascii_lowercase().contains("certificate"),
+                    "{error}"
+                );
+                println!("CERT_REJECTED");
+            }
+            "oversize_declared" | "oversize_streamed" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("larger than"), "{error}");
+                println!("TOO_LARGE");
+            }
+            "redirect" => {
+                let response = result.unwrap();
+                assert_eq!(response.status, reqwest::StatusCode::OK);
+                assert_eq!(response.body, b"ok");
+                println!("REDIRECT_OK");
+            }
+            "blocked_redirect" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("untrusted host"), "{error}");
+                println!("REDIRECT_BLOCKED");
+            }
+            "https_proxy_bad_cert" => {
+                let error = result.unwrap_err();
+                assert!(
+                    error.to_ascii_lowercase().contains("certificate"),
+                    "{error}"
+                );
+                println!("PROXY_CERT_REJECTED");
+            }
+            "https_proxy_407" => {
+                match result {
+                    Ok(response) => {
+                        assert_eq!(
+                            response.status,
+                            reqwest::StatusCode::PROXY_AUTHENTICATION_REQUIRED
+                        )
+                    }
+                    Err(error) => {
+                        assert!(
+                            error.to_ascii_lowercase().contains("proxy") || error.contains("407"),
+                            "{error}"
+                        );
+                    }
+                }
+                println!("PROXY_AUTH_REJECTED");
+            }
+            _ => panic!("unknown D8 fixture case"),
+        }
+    }
+
+    #[test]
+    fn private_destination_is_refused_before_the_proxy_is_contacted() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let client = Client {
+            connect_timeout: Duration::from_secs(2),
+            total_timeout: Duration::from_secs(3),
+            idle: Arc::new(Mutex::new(Vec::new())),
+            fixture: Some(FixtureTransport {
+                addresses: vec!["127.0.0.1:443".parse().unwrap()],
+                proxy: Some(format!(
+                    "http://127.0.0.1:{}",
+                    listener.local_addr().unwrap().port()
+                )),
+                no_proxy: Some(String::new()),
+                ca_path: None,
+            }),
+        };
+        let error = send_get(
+            &client,
+            "https://api.github.com/repos/o/r",
+            RemoteSource::GitHubApi,
+            None,
+            1024,
+        )
+        .unwrap_err();
+        assert!(error.contains("private or reserved"), "{error}");
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    }
+
+    #[test]
+    fn curl_response_headers_preserve_origin_metadata_and_enforce_the_cap() {
+        let mut state = TransferState::default();
+        assert!(parse_header(
+            &mut state,
+            b"HTTP/1.1 200 Connection established\r\n",
+            1024
+        ));
+        assert!(parse_header(&mut state, b"Content-Length: 0\r\n", 1024));
+        assert!(parse_header(&mut state, b"HTTP/2 200\r\n", 1024));
+        assert_eq!(state.status, Some(200));
+        assert!(parse_header(&mut state, b"Content-Length: 32\r\n", 1024));
+        assert_eq!(state.content_length, Some(32));
+        assert!(parse_header(&mut state, b"HTTP/2 302\r\n", 1024));
+        assert!(parse_header(
+            &mut state,
+            b"Location: https://raw.githubusercontent.com/o/r/file\r\n",
+            1024
+        ));
+        assert_eq!(
+            state.location.as_deref(),
+            Some("https://raw.githubusercontent.com/o/r/file")
+        );
+        assert!(parse_header(&mut state, b"HTTP/2 200\r\n", 1024));
+        assert!(state.location.is_none());
+        assert!(!parse_header(&mut state, b"Content-Length: 1025\r\n", 1024));
+        assert!(state.abort_reason.unwrap().contains("larger than"));
+    }
+
+    #[test]
     fn redirects_cannot_downgrade_or_leave_the_source_host_set() {
         let private = reqwest::Url::parse("https://127.0.0.1/archive.zip").unwrap();
         assert!(validate_url_shape(&private, RemoteSource::Dropbox, true).is_err());
@@ -1261,163 +1779,6 @@ mod tests {
                 "unexpectedly refused {literal}"
             );
         }
-    }
-
-    #[test]
-    fn every_approved_download_host_is_filtered_but_proxy_hosts_are_not() {
-        for source in RemoteSource::ALL {
-            for host in source
-                .initial_hosts()
-                .iter()
-                .chain(source.redirect_hosts().iter())
-            {
-                assert!(is_download_host(host), "{host}");
-            }
-        }
-        assert!(is_download_host("shard.dl.dropboxusercontent.com"));
-        assert!(is_download_host("filecache42.gamebanana.com"));
-        assert!(!is_download_host("localhost"));
-        assert!(!is_download_host("proxy.example.com"));
-        let loopback: SocketAddr = "127.0.0.1:0".parse().unwrap();
-        let public: SocketAddr = "1.1.1.1:0".parse().unwrap();
-        assert!(connection_socket_addrs("api.github.com", vec![loopback]).is_err());
-        assert!(connection_socket_addrs("api.github.com", vec![public, loopback]).is_err());
-        assert_eq!(
-            connection_socket_addrs("api.github.com", vec![public]).unwrap(),
-            vec![public]
-        );
-        assert_eq!(
-            connection_socket_addrs("localhost", vec![loopback]).unwrap(),
-            vec![loopback]
-        );
-    }
-
-    #[test]
-    fn direct_connection_rechecks_dns_and_refuses_a_private_answer() {
-        let public: SocketAddr = "1.1.1.1:0".parse().unwrap();
-        let private: SocketAddr = "127.0.0.1:0".parse().unwrap();
-        public_socket_addrs(vec![public]).unwrap(); // Initial public DNS precheck.
-
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let queried = Arc::new(Mutex::new(Vec::<String>::new()));
-        let calls = Arc::clone(&queried);
-        let resolver = PublicDestinationResolver::with_lookup(move |host| {
-            calls.lock().unwrap().push(host.to_owned());
-            Ok(vec![private]) // DNS changed before reqwest opens the socket.
-        });
-        let client = reqwest::blocking::Client::builder()
-            .no_proxy()
-            .dns_resolver(Arc::new(resolver))
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(2))
-            .build()
-            .unwrap();
-        let url = format!(
-            "http://api.github.com:{}/repos/o/r",
-            listener.local_addr().unwrap().port()
-        );
-        assert!(client.get(url).send().is_err());
-        assert_eq!(*queried.lock().unwrap(), ["api.github.com"]);
-        assert_eq!(
-            listener.accept().unwrap_err().kind(),
-            std::io::ErrorKind::WouldBlock,
-            "the loopback listener must not receive a connection"
-        );
-    }
-
-    #[test]
-    fn authenticated_connect_proxy_remains_reachable_but_resolves_target_itself() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = std::thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(3);
-            let mut stream = loop {
-                match listener.accept() {
-                    Ok((stream, _)) => break stream,
-                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                        assert!(Instant::now() < deadline, "proxy was never contacted");
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(err) => panic!("proxy accept failed: {err}"),
-                }
-            };
-            stream
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .unwrap();
-            let mut request = Vec::new();
-            while !request.ends_with(b"\r\n\r\n") {
-                let mut chunk = [0u8; 256];
-                let count = stream.read(&mut chunk).unwrap();
-                assert!(count > 0 && request.len() < 4096);
-                request.extend_from_slice(&chunk[..count]);
-            }
-            stream
-                .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
-                .unwrap();
-            String::from_utf8(request).unwrap()
-        });
-
-        let queried = Arc::new(Mutex::new(Vec::<String>::new()));
-        let calls = Arc::clone(&queried);
-        let resolver = PublicDestinationResolver::with_lookup(move |host| {
-            calls.lock().unwrap().push(host.to_owned());
-            Ok(vec!["127.0.0.1:0".parse().unwrap()])
-        });
-        let proxy = reqwest::Proxy::https(format!("http://tester:pass@localhost:{port}")).unwrap();
-        let client = reqwest::blocking::Client::builder()
-            .proxy(proxy)
-            .dns_resolver(Arc::new(resolver))
-            .https_only(true)
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(2))
-            .build()
-            .unwrap();
-        assert!(client
-            .get("https://api.github.com/repos/o/r")
-            .send()
-            .is_err());
-        let request = server.join().unwrap();
-        assert!(request.starts_with("CONNECT api.github.com:443 HTTP/1.1\r\n"));
-        assert!(request.contains("Proxy-Authorization: Basic dGVzdGVyOnBhc3M=\r\n"));
-        assert_eq!(*queried.lock().unwrap(), ["localhost"]);
-    }
-
-    #[test]
-    fn proxy_exclusion_uses_the_guarded_direct_resolver() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let proxy = reqwest::Proxy::https(format!(
-            "http://localhost:{}",
-            listener.local_addr().unwrap().port()
-        ))
-        .unwrap()
-        .no_proxy(reqwest::NoProxy::from_string("api.github.com"));
-        let queried = Arc::new(Mutex::new(Vec::<String>::new()));
-        let calls = Arc::clone(&queried);
-        let resolver = PublicDestinationResolver::with_lookup(move |host| {
-            calls.lock().unwrap().push(host.to_owned());
-            Ok(vec!["127.0.0.1:0".parse().unwrap()])
-        });
-        let client = reqwest::blocking::Client::builder()
-            .proxy(proxy)
-            .dns_resolver(Arc::new(resolver))
-            .https_only(true)
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(2))
-            .build()
-            .unwrap();
-        assert!(client
-            .get("https://api.github.com/repos/o/r")
-            .send()
-            .is_err());
-        assert_eq!(*queried.lock().unwrap(), ["api.github.com"]);
-        assert_eq!(
-            listener.accept().unwrap_err().kind(),
-            std::io::ErrorKind::WouldBlock,
-            "NO_PROXY must not send a CONNECT request"
-        );
     }
 
     #[test]

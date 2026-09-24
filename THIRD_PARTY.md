@@ -49,6 +49,10 @@ development probe and its protocol references are documented in
 - [CodeMirror 6](https://codemirror.net/) and [Lezer](https://lezer.codemirror.net/)
   power the local Files editor, search, history and completion. MIT licenses;
   package versions and full notices are included in the dependency inventory.
+- [libcurl](https://curl.se/libcurl/) through the [curl Rust binding](https://github.com/alexcrichton/curl-rust)
+  handles HTTPS downloads with destination-bound connections. Windows uses
+  Schannel; Linux uses OpenSSL. Their licenses and exact locked versions are
+  included in the packaged dependency inventory.
 
 Runtime dependencies are listed in `apps/desktop/package.json` and
 `apps/desktop/src-tauri/Cargo.toml`. The Rust and JavaScript dependency inventory records permissive licenses

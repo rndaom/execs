@@ -356,7 +356,7 @@ fn now_secs() -> u64 {
 /// only a majority failure is treated as "the refresh did not work". The
 /// count rides back with the entries so the cache knows it is partial.
 fn fetch_catalog_entries(
-    client: &reqwest::blocking::Client,
+    client: &net::Client,
     tree_sha: &str,
     documents: &[(String, String)],
     deadline: Instant,

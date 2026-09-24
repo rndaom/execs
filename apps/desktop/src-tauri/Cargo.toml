@@ -20,7 +20,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 execs-core = { path = "core" }
 execs-inventory-probe = { path = "../../../tools/inventory-probe" }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+curl = { version = "=0.4.50", features = ["static-curl"] }
+# URL and status types remain in the fetchers; libcurl owns native transfers.
+reqwest = { version = "0.12", default-features = false }
 serde = { version = "1", features = ["derive"] }
 # Required by tauri::generate_context! macro expansion, not by our own code.
 serde_json = "1"

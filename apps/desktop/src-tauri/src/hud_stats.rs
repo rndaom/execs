@@ -353,7 +353,7 @@ where
 }
 
 fn fetch_tf2huds_counts(
-    client: &reqwest::blocking::Client,
+    client: &net::Client,
     deadline: Instant,
     repositories: &BTreeMap<String, String>,
 ) -> Result<Walk<Counts>, String> {

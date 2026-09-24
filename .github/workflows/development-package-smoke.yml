@@ -38,7 +38,7 @@ jobs:
       - name: Install build, package and native automation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb xauth dbus-x11 xclip xdotool imagemagick python3 libfuse2 fuse3
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev zlib1g-dev patchelf webkit2gtk-driver xvfb xauth dbus-x11 xclip xdotool imagemagick python3 libfuse2 fuse3
           command -v WebKitWebDriver
           command -v fusermount3
           command -v import
