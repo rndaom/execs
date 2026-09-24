@@ -40,8 +40,8 @@ Other PNGs in this directory are iteration evidence. In particular, `sounds-1200
 - In-game and Custom are real modes. Shapes, My designs, Community, and Import PNG retain their existing source behavior. Design geometry and names are local drafts; Save to library and Build pack remain separate actions. Color/display size retain their existing autosave behavior.
 - The designer retains all ten styles and all geometry controls. Stock crosshair controls and per-weapon overrides remain available; no options were removed to match the limited generated example.
 - Viewmodels retains all nine classes and all 64 existing groups. Show, Hide weapon, and Hide all change the selected class membership while the existing hide mode applies to all hidden groups in the pack; the UI discloses that rule. Secondary, melee and PDA groups remain accessible through disclosures.
-- Game scenes and viewmodel references are genuine existing pinned CompVMInstaller screenshots, with native cached previews retained. No generated game art was added. Because that source has no hands-only reference, Hide weapon shows a labelled stock reference and explains the result; Hide all uses its genuine blank reference.
-- The sound library has one Hit/Kill assignment pair per row. Stock effects do not expose a nonfunctional file boost; custom files retain Off/+6/+12 dB. Existing pitch, repeat delay, own WAV, source filters, sort options, and removal remain intact. Browser-only audition and native pickers are truthfully unavailable.
+- Show and Hide all retain genuine pinned CompVMInstaller screenshots and native caching. Hide weapon explains that the built pack hides the weapon and keeps the hands visible; it shows no image because upstream has no accurate hands-only capture.
+- The sound library has one Hit/Kill assignment pair per row. Boost options remain visible for stock effects but are disabled with an explanation; custom files support 0/+6/+12 dB. Existing pitch, repeat delay, own WAV, source filters, sort options, and removal remain intact. Browser-only audition and native pickers are truthfully unavailable.
 
 ## Behavior and validation
 

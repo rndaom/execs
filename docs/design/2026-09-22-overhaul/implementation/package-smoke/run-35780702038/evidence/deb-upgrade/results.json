@@ -1,0 +1,124 @@
+{
+  "label": "deb-upgrade",
+  "status": "failed",
+  "fixture": {
+    "exporterTag": "v0.1.8",
+    "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "archives": [
+      {
+        "name": "no-hud",
+        "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
+      },
+      {
+        "name": "single-hud",
+        "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9"
+      }
+    ],
+    "authored": "Schema-1 library index, profile IDs/names, settings and disposable TF2 root; source export manifests and payload bytes are unchanged except the named library identity fields. This Linux case additionally authors isolated HOME/XDG/TMPDIR and disables candidate startup update checking before recording its baseline. Actual installed-old UI export provenance must be recorded by the runner; fixture metadata alone does not prove it."
+  },
+  "isolation": {
+    "APPDATA": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/roaming",
+    "LOCALAPPDATA": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/local",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/config",
+    "HOME": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/home",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK/tmp"
+  },
+  "checks": [],
+  "captures": [],
+  "preservation": [
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "before-package-installation",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK",
+      "recordedAt": "2026-09-22T20:42:29.249Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "c688893635a87c30c07be0947e6790b90ff711fd0067b82420ea923f53e542b3",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "3154fa575072fb11913e4dfe077ba205b3d9b9a70a1cd7e09e540f66f78d68d3",
+        "profiles/index.json": "e582e1520e6af2c3de984e56fb95d571e470f31a42a2c34555abfc9eb58b77c3",
+        "settings.json": "a319d209e371b28e9cce5f82c0031d30b0cb80b73235b0c5f0670fa183b57c49"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "after-final-owned-process-cleanup",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-HzEdtT/execs-development-package-zNXxjK",
+      "recordedAt": "2026-09-22T20:42:29.532Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "c688893635a87c30c07be0947e6790b90ff711fd0067b82420ea923f53e542b3",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "3154fa575072fb11913e4dfe077ba205b3d9b9a70a1cd7e09e540f66f78d68d3",
+        "profiles/index.json": "e582e1520e6af2c3de984e56fb95d571e470f31a42a2c34555abfc9eb58b77c3",
+        "settings.json": "a319d209e371b28e9cce5f82c0031d30b0cb80b73235b0c5f0670fa183b57c49"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-package-installation"
+    }
+  ],
+  "error": "AssertionError [ERR_ASSERTION]: Debian bundle differs from the built production ELF\n+ actual - expected\n\n+ '3d6d40fb743b03e46af9909e5ed861081634aa738a1a2c4cf04f5bf0f5cdea58'\n- 'e0eff8183241835bb3d7bab989730b91d2c0b37add4ab651e57be5968bb11791'\n\n    at main (file:///home/runner/work/execs/execs/scripts/development-package-smoke.mjs:368:18)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/runner/work/execs/execs/scripts/development-package-smoke.mjs:513:3",
+  "finalization": [
+    {
+      "stage": "owned-process-cleanup",
+      "status": "passed"
+    },
+    {
+      "stage": "final-fixture-comparison",
+      "status": "passed"
+    }
+  ]
+}

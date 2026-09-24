@@ -1,6 +1,6 @@
 # execs overhaul review
 
-The current development direction uses neutral black, gray and white with TF2 orange selections and necessary highlights, and removes decorative text. The earlier Foundry concept gallery and its **85 accepted captures across 15 pages and flows** document the previous candidate; they are retained as historical evidence and do not verify the revised appearance. The [integrated QA report](design-qa.md) records that earlier implementation and its platform limits. The [combined plan](combined-release-plan.md) records the current direction.
+The current development direction uses dark neutrals with a restrained warm-brown cast, warm off-white text, and TF2 orange selections and necessary highlights, and removes decorative text. The earlier Foundry concept gallery and its **85 accepted captures across 15 pages and flows** document the previous candidate; they are retained as historical evidence and do not verify the revised appearance. The [integrated QA report](design-qa.md) records that earlier implementation and its platform limits. The [combined plan](combined-release-plan.md) records the current direction, and the [September 23 program audit](../../audits/2026-09-23-program-audit/README.md) tracks the current remediation work.
 
 The review is a local screenshot artifact. It makes no native calls, saves no product settings and uses no external dependencies. Its interactive-fixture link opens the separate development app at `http://127.0.0.1:1422/?preview=settings-comfig`; the screenshots show production UI running browser fixture data, not a packaged native session. Inventory remains development-only. No release or deployment is part of this review.
 
@@ -12,7 +12,7 @@ python -m http.server 1424 --bind 127.0.0.1
 
 Then open [the implementation review](http://127.0.0.1:1424/implementation/review.html). If Python is not on PATH, the bundled runtime is at `C:\Users\Random\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe`.
 
-## Current implementation review
+## Earlier Foundry implementation review
 
 - `implementation/review.html`, `review.css` and `review.js` provide the page/flow selector, accepted-state choices and accessible full-size viewer.
 - `implementation/review-data.json` lists the accepted screenshots, their viewport and limitations, their scoped QA sources, and the relevant Foundry board view. Rejected and superseded captures are excluded explicitly rather than inferred from directory contents.

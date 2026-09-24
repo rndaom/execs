@@ -1,0 +1,86 @@
+# Program audit remediation
+
+Updated as fixes are implemented and verified. A checked box means the change and its targeted test passed; it does not assert retail TF2, Steam Cloud, or installer qualification. Existing release gates remain in `docs/design/2026-09-22-overhaul/`.
+
+**Status:** 33 of 35 findings are checked. D7 awaits third-party permissions; D8 needs a proxy-aware connection design and regression fixtures.
+
+## Integrity and trust
+
+- [x] A1 — Kept external packs during switches
+- [x] A2 — Active-profile deletion handoff
+- [x] A3 — Viewmodel VPK member boundary
+- [x] A4 — Managed Binds file preservation
+- [x] A5 — Feature record provenance after drift
+- [x] A6 — Imported feature metadata payload binding
+- [x] A7 — Sound settings and file commit
+- [x] A8 — Current setup cloning with live edits
+
+## Effective state and conflicting content
+
+- [x] B1 — External crosshair selection round-trip
+- [x] B2 — Crosshair and Mod script collisions
+- [x] B3 — HUD overlays and modded stock crosshair art
+- [x] B4 — Later CFG and Launch override disclosure
+- [x] B5 — Multiple keys for one binding
+- [x] B6 — Global and per-class viewmodel visibility
+- [x] B7 — Accepted external packs in Mods Installed
+- [x] B8 — CFG failure scoped by dependent pane
+- [x] B9 — Stale profile detail after failed load
+- [x] B10 — Selected HUD projection in CFG inference
+- [x] B11 — Competing installed hitsound sources
+
+## Coverage and UI coherence
+
+- [x] C1 — HUD Editor crosshair controls
+- [x] C2 — Unsupported HUD Special operations
+- [x] C3 — HUD schema compatibility coverage
+- [x] C4 — Shared viewmodel preload ownership
+- [x] C5 — Transparent viewmodel guidance
+- [x] C6 — Partial custom crosshair builds
+- [x] C7 — Comfig module Default labels
+- [x] C8 — Mods Installed count and Casual changes
+
+## External connections
+
+- [x] D1 — Embedded mastercomfig guide window routing
+- [x] D2 — HUD artwork revision pin
+- [x] D3 — GameBanana GUI results and HUD routing
+- [x] D4 — GameBanana download variant choice
+- [x] D5 — GitHub HUD showcase cache expiry
+- [x] D6 — Inventory probe documentation refresh
+- [ ] D7 — Third-party permission follow-up
+- [ ] D8 — DNS precheck/connection binding review
+
+## Verification log
+
+Record the test, outcome, and any limit here when checking an item above.
+
+- **Integrated gates:** `pnpm test` passed (963 desktop, 170 cfglint, 103 package-script tests with five expected skips) using the bundled Python runtime for package fixtures. Desktop TypeScript, `cargo fmt --check`, workspace Clippy with warnings denied, and `cargo test --workspace --locked` passed (native 123/4 ignored; core 738/7 ignored; integration suites passed). `pnpm check` passes after narrowly excluding the archived qualification runs from Biome; their 39 source files were independently verified against the byte counts and SHA-256 values in both provenance manifests. Retail TF2, Steam Cloud, and packaged installer checks remain separate release qualification.
+
+- **A1/A2:** A switch now refuses still-installed Keep packs before Remove and offers capture into the current profile; fixtures cover unique-name carryover and same-path replacement with live/index bytes unchanged on refusal. Active-profile deletion with Keep installed stores a durable handoff marker, so another profile cannot switch in until Save current as… captures the retained setup. Core unit and integration suites passed (738 unit tests, seven existing ignored cases; 18 absorb and 11 pack-identity tests).
+- **A3:** Viewmodel import enumerates bounded VPK members and refuses unrelated content before writes. A model plus `cfg/autoexec.cfg` fixture leaves the live and library VPKs unchanged. 21 viewmodel tests, 19 VPK tests, core check/Clippy, formatting, and diff checks passed. Retail mount behavior remains a release qualification item.
+- **A6:** Native ZIP import binds crosshair material/script, viewmodel VPK, and hitsound slot records to manifest files whose hashes were already verified. Three crafted metadata-only ZIPs refuse publication; the full ZIP test group passed (41 passed, one environment-dependent case ignored).
+- **A7:** The native sound command journals scoped CFG, autoexec, WAVs, and the record together. Controlled invalid-WAV and manifest-commit failures preserved old bytes and metadata; focused Rust and frontend tests passed.
+- **A8:** Current setup creation now verifies the saved active config, reads bounded live `tf/cfg/config.cfg` under the write gate, and copies recent live edits into the new profile. A switch later absorbs that drift into the former active profile. All 14 wizard unit tests passed, including a recent-live-edit fixture.
+- **A4/B5:** Managed Binds edits retain unrelated aliases, commands, and comments; the pane lists all inferred startup keys and their sources and makes replacement versus adding explicit. Focused desktop tests (54) and cfglint tests (170) passed. Class/Launch/runtime overrides are tracked separately under B4.
+- **A5:** Accepted external drift of managed crosshair, viewmodel, and hitsound payloads marks their saved records `sourceChanged` and each pane warns that the old label may be inaccurate. A Files edit to the Gameplay cfg marks crosshair provenance only when a crosshair CVar changes; an FOV-only edit does not. Focused fixtures and the full core suite passed. Legacy records without an earlier payload fingerprint cannot be retroactively verified.
+- **B1:** Unknown external `cl_crosshair_file` values survive color, size, and Gameplay edits and remain visible as external values. Focused frontend tests and the native custom-to-stock roundtrip passed.
+- **B4:** Binds, Gameplay, Crosshair, and Sounds now show a read-only notice for matching saved Launch `+` commands and inspected class CFG lines, with links to the source and no extra write gate. 88 focused frontend tests, including a host integration case, passed. Launch timing and later in-game commands remain runtime qualification limits.
+- **B11:** Sounds lists other installed packs containing canonical hit/kill paths through the bounded shared content index and labels precedence as conditional. 27 hitsound Rust and 44 focused frontend tests passed; exact retail playback remains qualification work.
+- **C6:** Custom Crosshair Build refuses unreadable scripts and requested weapon overrides that were not built before touching live files. Focused Rust/frontend tests passed.
+- **B2:** Build, Mod import, and profile switch preflight refuse case-insensitive weapon-script collisions with loose packs and VPKs before live writes. Successful Build records a SHA-256 of the Valve weapon scripts it used; Crosshair warns when those sources change, cannot be read, or predate the hash. The focused Crosshair (31), Mods (28), source-index (3), host, and frontend tests plus the switch no-write fixture pass. Retail mount behavior remains qualification work.
+- **B3:** Crosshair now discloses a selected HUD overlay glyph source and installed stock-art candidates, with routes to HUD/Mods and conditional language. The shared content-index and Crosshair tests passed (29 Rust, 44 frontend; one installed-game Rust case ignored), plus host wiring tests. Retail drawing order remains qualification work.
+- **B6/C4:** Viewmodels shows effective global Draw state with a route to Gameplay, and shared preload status with a route to its single Casual setup control. Build/import waits for that status to load. Focused Viewmodel tests passed.
+- **B7:** Accepting an external loose folder or VPK now creates a stable `External` Mod record linked to the exact pack name. The record survives file drift, profile export/import, and switching, and can be removed through Installed. The native round-trip fixture and frontend Mods checks passed.
+- **B8/B9/B10:** CFG inventory failures keep same-profile data visibly stale, block only dependent CFG writes, and show the offending path plus retry/Files review; unrelated Comfig/Launch remain available. A failed profile load does not display prior-profile values under the new name. Native detail exposes the selected HUD root so retained inactive roots stay out of CFG inference. Focused SettingsHost/cfg-state tests passed, including the prior failure cases.
+- **C4/C5/C7/C8:** The preload owner is Casual setup; shared transparent-viewmodel guidance and Comfig ownership appear across wizard/Comfig/Gameplay; duplicate Comfig choices are named “Use preset” and “Module default”; and Mods calls the Installed inventory “Custom packs.” Focused pane tests passed. The latest desktop suite passed 963 tests in 105 files; a final integration run remains scheduled.
+- **C1/C2:** The pinned HUD Editor CrosshairStyles palette now edits supported HUD overlay glyphs as a separate source. Unsupported `Special`, `Pulse`, `Shadow`, and unknown operations remain visible but unavailable, with saved values retained. Ten focused core compatibility tests, both pinned corpus tests, 46 HUD frontend tests, and a TypeScript check passed. The rayshud background no longer looks editable when it would do nothing.
+- **C3:** The pinned archive/schema harness confirmed all 52 e.v.e Plus alternate choices cause an intended file or CFG effect, so that HUD is enabled. BerryHUD, HExHUD, Community HUD Fixes, and SunsetHUD remain gated with specific tested compatibility reasons rather than silent controls. The corpus harness and schema gate tests passed; these four HUDs remain compatibility limits.
+- **D2:** HUD resource artwork URLs now use the same tree SHA as catalog JSON; old moving-`main` cache entries are rewritten in memory on load. A native cache migration test passed.
+- **D3:** GameBanana GUI results now include root 1644; HUD subcategory 1649 routes to HUD and other GUI entries to author-guided import. Native Mods install refuses GUI items by name or root ID. Verified against the official categories/index endpoints; 18 native GameBanana and 21 focused frontend tests passed.
+- **D4:** Browse lists bounded author download variants with name, description, and size; installation requires a supported file choice, and native rechecks the selected ID and exact download URL. HUD catalog downloads only an unambiguous single ZIP/7z, routing other pages to manual import. Verified against the official download-page API; the GameBanana native, frontend, typecheck, and Clippy checks passed. The HUD catalog has no integrated variant picker.
+- **D5:** Showcase albums expire after 24 hours and have a manual Refresh pictures action that bypasses cache. The album age test, bridge/preview command path, and HUD interaction test passed.
+- **D7 (open):** `THIRD_PARTY.md` still records unanswered permission requests for CompVMInstaller previews/animations, Venom textures, and TF2Hitsounds. Repository pins and credits were checked, but permission has not been granted; release use of those assets remains an owner decision.
+- **D8 (open):** A custom reqwest resolver was tested for direct connections, then reverted after review: [reqwest's proxy support](https://docs.rs/reqwest/0.12.28/reqwest/blocking/struct.ClientBuilder.html) can send `CONNECT` with the destination hostname, so the proxy performs another DNS lookup, and the resolver would reject hostname-based local proxies. The existing bounded precheck, host policy, TLS, and redirect checks remain. Closing this item needs a proxy-aware connection design and direct/proxy regression tests.
+- **D6:** Updated the Inventory development README to match the active-pane refresh/backoff and installed-metadata behavior in the current code. Documentation change checked against the pane and project guide.
+- **D1:** Embedded guide navigation now requires HTTPS on the two exact intended hosts and denies separate window requests. This follows Tauri's distinct [navigation and new-window hooks](https://docs.rs/tauri/2.11.5/tauri/webview/struct.WebviewWindowBuilder.html). The native crate suite passed (120 tests, four existing live-network cases ignored); a packaged native click check remains release qualification.
