@@ -33,7 +33,11 @@ pub struct StockItem {
     /// None means the weapon-script role remains unresolved.
     pub animation_slot: Option<String>,
     pub classes: Vec<String>,
+    /// The neutral `visuals` block before team selection.
     pub common_replacements: BTreeMap<String, String>,
+    /// Effective RED and BLU replacements after `use_visualsblock_as_base`.
+    /// An absent team block falls back to `visuals`; a present block is separate
+    /// unless it explicitly inherits an earlier block.
     pub red_replacements: BTreeMap<String, String>,
     pub blu_replacements: BTreeMap<String, String>,
     /// Team-specific visuals may affect the model even without activity edits.
@@ -58,7 +62,7 @@ pub struct CandidateSequence {
 pub struct ReplacementCandidate {
     pub item_id: u32,
     pub class: String,
-    /// `common`, `red`, or `blu`; team-specific visuals are kept separate.
+    /// Effective `red` or `blu` visual selected by the engine.
     pub visual: &'static str,
     pub base_activity: String,
     pub target_activity: String,
@@ -137,7 +141,6 @@ pub fn explicit_replacement_candidates(
                 .get(model_id)
                 .ok_or_else(|| invalid(format!("class {class} animation model is missing")))?;
             for (visual, replacements) in [
-                ("common", &item.common_replacements),
                 ("red", &item.red_replacements),
                 ("blu", &item.blu_replacements),
             ] {
@@ -203,39 +206,55 @@ fn inherited(
 
 fn replacements(
     visual: Option<&VdfMap>,
+    earlier: &[(&str, &BTreeMap<String, String>)],
     context: &str,
-) -> Result<BTreeMap<String, String>, StockSourceError> {
+) -> Result<Option<BTreeMap<String, String>>, StockSourceError> {
     let mut result = BTreeMap::new();
     let Some(visual) = visual else {
-        return Ok(result);
+        return Ok(None);
     };
-    let Some(table) = optional_object(visual, "animation_replacement")? else {
-        return Ok(result);
-    };
-    for (from, value) in &table.entries {
-        let to = value
-            .as_str()
-            .ok_or_else(|| invalid(format!("{context} replacement {from} is not a string")))?;
-        let from = from.to_ascii_uppercase();
-        let to = to.to_ascii_uppercase();
-        if from.is_empty()
-            || to.is_empty()
-            || from.len() > 128
-            || to.len() > 128
-            || !from
-                .bytes()
-                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
-            || !to
-                .bytes()
-                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
-            || result.insert(from.clone(), to).is_some()
-        {
-            return Err(invalid(format!(
-                "{context} has an invalid or duplicate activity replacement {from}"
-            )));
+    for (key, value) in &visual.entries {
+        if key.eq_ignore_ascii_case("use_visualsblock_as_base") {
+            let name = value
+                .as_str()
+                .ok_or_else(|| invalid(format!("{context} visual base is not a string")))?;
+            let base = earlier
+                .iter()
+                .find(|(earlier_name, _)| name.eq_ignore_ascii_case(earlier_name))
+                .ok_or_else(|| invalid(format!("{context} refers to unavailable visual {name}")))?;
+            result.clone_from(base.1);
+        } else if key.eq_ignore_ascii_case("animation_replacement") {
+            let table = value
+                .as_obj()
+                .ok_or_else(|| invalid(format!("{context} replacements are not an object")))?;
+            let mut seen = BTreeSet::new();
+            for (from, value) in &table.entries {
+                let to = value.as_str().ok_or_else(|| {
+                    invalid(format!("{context} replacement {from} is not a string"))
+                })?;
+                let from = from.to_ascii_uppercase();
+                let to = to.to_ascii_uppercase();
+                if from.is_empty()
+                    || to.is_empty()
+                    || from.len() > 128
+                    || to.len() > 128
+                    || !from.bytes().all(|byte| {
+                        byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+                    || !to.bytes().all(|byte| {
+                        byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+                    || !seen.insert(from.clone())
+                {
+                    return Err(invalid(format!(
+                        "{context} has an invalid or duplicate activity replacement {from}"
+                    )));
+                }
+                result.insert(from, to);
+            }
         }
     }
-    Ok(result)
+    Ok(Some(result))
 }
 
 /// Resolve numeric item definitions and prefab-provided Viewmodels metadata.
@@ -282,6 +301,20 @@ pub fn parse_stock_item_schema(
         let common = optional_object(&item, "visuals")?;
         let red = optional_object(&item, "visuals_red")?;
         let blu = optional_object(&item, "visuals_blu")?;
+        let common_replacements =
+            replacements(common, &[], &format!("item {id} visuals"))?.unwrap_or_default();
+        let mut red_bases = Vec::new();
+        if common.is_some() {
+            red_bases.push(("visuals", &common_replacements));
+        }
+        let red_replacements = replacements(red, &red_bases, &format!("item {id} RED visuals"))?
+            .unwrap_or_else(|| common_replacements.clone());
+        let mut blu_bases = red_bases;
+        if red.is_some() {
+            blu_bases.push(("visuals_red", &red_replacements));
+        }
+        let blu_replacements = replacements(blu, &blu_bases, &format!("item {id} BLU visuals"))?
+            .unwrap_or_else(|| common_replacements.clone());
         let record = StockItem {
             id,
             name: optional_string(&item, "name")?.unwrap_or("").to_string(),
@@ -291,9 +324,9 @@ pub fn parse_stock_item_schema(
             loadout_slot: optional_string(&item, "item_slot")?.map(str::to_ascii_lowercase),
             animation_slot: optional_string(&item, "anim_slot")?.map(str::to_ascii_uppercase),
             classes,
-            common_replacements: replacements(common, &format!("item {id} common visuals"))?,
-            red_replacements: replacements(red, &format!("item {id} RED visuals"))?,
-            blu_replacements: replacements(blu, &format!("item {id} BLU visuals"))?,
+            common_replacements,
+            red_replacements,
+            blu_replacements,
             has_team_visuals: red.is_some() || blu.is_some(),
         };
         if result.insert(id, record).is_some() {
@@ -421,6 +454,25 @@ mod tests {
                     }
                 }
                 "221" { "prefab" "scout_weapon" }
+                "222"
+                {
+                    "prefab" "scout_weapon"
+                    "visuals"
+                    {
+                        "animation_replacement"
+                        {
+                            "ACT_VM_IDLE" "ACT_SECONDARY_VM_IDLE_2"
+                        }
+                    }
+                    "visuals_red"
+                    {
+                        "use_visualsblock_as_base" "visuals"
+                        "animation_replacement"
+                        {
+                            "ACT_VM_DRAW" "ACT_PRIMARY_VM_DRAW"
+                        }
+                    }
+                }
                 "not-an-id" { "prefab" "scout_weapon" }
             }
         }
@@ -429,7 +481,7 @@ mod tests {
     #[test]
     fn resolves_prefabs_and_keeps_loadout_role_and_team_paths_distinct() {
         let catalog = parse_stock_item_schema(SCHEMA.as_bytes(), "fixture".into()).unwrap();
-        assert_eq!(catalog.items.len(), 2);
+        assert_eq!(catalog.items.len(), 3);
         let shortstop = &catalog.items[&220];
         assert_eq!(shortstop.classes, ["scout"]);
         assert_eq!(shortstop.loadout_slot.as_deref(), Some("primary"));
@@ -446,8 +498,30 @@ mod tests {
             shortstop.red_replacements["ACT_PRIMARY_VM_INSPECT_START"],
             "ACT_PRIMARY_ALT1_VM_INSPECT_START"
         );
+        assert!(!shortstop.red_replacements.contains_key("ACT_VM_DRAW"));
+        assert_eq!(
+            shortstop.blu_replacements["ACT_VM_DRAW"],
+            "ACT_SECONDARY_VM_DRAW"
+        );
         assert!(shortstop.has_team_visuals);
         assert_eq!(catalog.items[&221].animation_slot, None);
+        assert_eq!(
+            catalog.items[&221].red_replacements,
+            catalog.items[&221].common_replacements
+        );
+        let inherited = &catalog.items[&222];
+        assert_eq!(
+            inherited.red_replacements["ACT_VM_DRAW"],
+            "ACT_PRIMARY_VM_DRAW"
+        );
+        assert_eq!(
+            inherited.red_replacements["ACT_VM_IDLE"],
+            "ACT_SECONDARY_VM_IDLE_2"
+        );
+        assert_eq!(
+            inherited.blu_replacements["ACT_VM_DRAW"],
+            "ACT_SECONDARY_VM_DRAW"
+        );
     }
 
     #[test]
@@ -466,6 +540,16 @@ mod tests {
                 .unwrap_err()
                 .0
                 .contains("invalid")
+        );
+        let future_visual = SCHEMA.replace(
+            "\"use_visualsblock_as_base\" \"visuals\"",
+            "\"use_visualsblock_as_base\" \"visuals_blu\"",
+        );
+        assert!(
+            parse_stock_item_schema(future_visual.as_bytes(), "fixture".into())
+                .unwrap_err()
+                .0
+                .contains("unavailable visual")
         );
     }
 
@@ -502,7 +586,7 @@ mod tests {
         )
         .unwrap();
         let root = dir.join("Team Fortress 2");
-        assert_eq!(read_stock_item_catalog(&root).unwrap().items.len(), 2);
+        assert_eq!(read_stock_item_catalog(&root).unwrap().items.len(), 3);
         let entry = map_vpk_entries(&vpk).unwrap()[SCHEMA_PATH].clone();
         let mut bytes = fs::read(&vpk).unwrap();
         let at = (entry.data_base + u64::from(entry.offset)) as usize;

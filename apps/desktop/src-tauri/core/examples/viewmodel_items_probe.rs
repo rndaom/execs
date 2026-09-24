@@ -20,7 +20,7 @@ fn main() {
     for id in [220, 140] {
         let item = catalog.items.get(&id).expect("expected installed item");
         println!(
-            "{id} {}: classes {:?}, loadout {:?}, animation role {:?}, common/red/blu replacements {}/{}/{}, team visuals {}",
+            "{id} {}: classes {:?}, loadout {:?}, animation role {:?}, neutral/effective RED/effective BLU replacements {}/{}/{}, team visuals {}",
             item.name,
             item.classes,
             item.loadout_slot,
@@ -39,7 +39,7 @@ fn main() {
         .filter(|link| !link.sequences.is_empty())
         .count();
     println!(
-        "{} explicit item/class/activity replacements, {} with direct local MDL sequences",
+        "{} effective item/class/team/activity replacements, {} with direct local MDL sequences",
         links.len(),
         matched
     );
