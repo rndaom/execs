@@ -16,7 +16,7 @@ use crate::viewmodel_weapon_mdl::prototype_weapon_hide_mdl;
 use crate::vpk::{read_vpk_dir_bytes, validate_vpk_dir_bytes_with_paths, write_vpk_v2, VpkError};
 
 const MAX_CANDIDATE_VPK_BYTES: usize = 64 * 1024 * 1024;
-const CLASSES: [&str; 9] = [
+pub(crate) const CLASSES: [&str; 9] = [
     "scout", "soldier", "pyro", "demoman", "heavy", "engineer", "medic", "sniper", "spy",
 ];
 
