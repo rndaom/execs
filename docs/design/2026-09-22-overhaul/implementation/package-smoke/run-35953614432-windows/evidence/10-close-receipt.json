@@ -1,0 +1,13 @@
+{
+  "request": "owned-native-window-close",
+  "requestedAt": "2026-09-24T03:58:59.8517558Z",
+  "window": {
+    "handle": 262590,
+    "owner": 0,
+    "class": "Tauri Window",
+    "pid": 8144,
+    "visible": true,
+    "title": "execs",
+    "nativePid": 8144
+  }
+}

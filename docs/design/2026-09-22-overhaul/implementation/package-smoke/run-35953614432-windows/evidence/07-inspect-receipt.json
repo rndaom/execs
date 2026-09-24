@@ -1,0 +1,45 @@
+{
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "processes": [
+    {
+      "pid": 5352,
+      "parent": 1276,
+      "executable": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\downloads\\msedgedriver.exe",
+      "created": "2026-09-24T03:58:46.0994630Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\downloads\\msedgedriver.exe --port=58072",
+      "session": 2
+    },
+    {
+      "pid": 7904,
+      "parent": 5352,
+      "executable": "C:\\Windows\\system32\\conhost.exe",
+      "created": "2026-09-24T03:58:46.1051230Z",
+      "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+      "session": 2
+    }
+  ],
+  "listeners": [
+    {
+      "pid": 5352,
+      "address": "::1",
+      "port": 58072
+    },
+    {
+      "pid": 5352,
+      "address": "127.0.0.1",
+      "port": 58072
+    }
+  ],
+  "windows": [],
+  "version": "131.0.2903.86",
+  "uiDiagnostics": null,
+  "packageCode": 15700,
+  "process": {
+    "pid": 5352,
+    "parent": 1276,
+    "executable": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\downloads\\msedgedriver.exe",
+    "created": "2026-09-24T03:58:46.0994630Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\downloads\\msedgedriver.exe --port=58072",
+    "session": 2
+  }
+}
