@@ -41,6 +41,7 @@ pub mod viewmodel_inspect;
 pub mod viewmodel_items;
 pub mod viewmodel_pose;
 pub mod viewmodel_pose_values;
+pub mod viewmodel_record_span;
 pub mod viewmodel_rotation_values;
 pub mod viewmodel_scripts;
 pub mod viewmodel_source;
