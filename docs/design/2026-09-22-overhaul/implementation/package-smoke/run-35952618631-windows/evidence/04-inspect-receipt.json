@@ -1,0 +1,34 @@
+{
+  "version": "0.1.8",
+  "listeners": [],
+  "process": {
+    "pid": 7984,
+    "parent": 7808,
+    "executable": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+    "created": "2026-09-24T03:44:08.4124760Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+    "session": 2
+  },
+  "processes": [
+    {
+      "pid": 7984,
+      "parent": 7808,
+      "executable": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+      "created": "2026-09-24T03:44:08.4124760Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+      "session": 2
+    },
+    {
+      "pid": 824,
+      "parent": 7984,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:09.2434720Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=57501 --lang=en-US --mojo-named-platform-channel-pipe=7984.7848.179379283348580803",
+      "session": 2
+    }
+  ],
+  "windows": [],
+  "uiDiagnostics": null,
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "packageCode": 15700
+}

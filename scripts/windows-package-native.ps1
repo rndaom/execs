@@ -359,9 +359,23 @@ $destination = Assert-Contained $r.root $r.destination $true
 if (Test-Path -LiteralPath $destination) { throw 'Export destination already exists.' }
 $evidenceRoot = Assert-Contained $r.root (Join-Path $r.root 'evidence')
 $observationPath = Assert-Contained $evidenceRoot $r.observation $true
-function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null, $OwnershipRoute = $null, $DefaultButtonResult = $null) {
+function Focus-Record($Dialog, $FileType, $Filename) {
+    $focused = [Windows.Automation.AutomationElement]::FocusedElement
+    $inDialog = Test-FocusWithin $focused $Dialog
+    $record = @{ inDialog = $inDialog; inFileType = $false; inFilename = $false }
+    if ($inDialog) {
+        $record.inFileType = Test-FocusWithin $focused $FileType
+        $record.inFilename = Test-FocusWithin $focused $Filename
+        $name = [string]$focused.Current.Name
+        $id = [string]$focused.Current.AutomationId
+        $record.control = @{ name = $name.Substring(0, [Math]::Min($name.Length, 256)); id = $id.Substring(0, [Math]::Min($id.Length, 128))
+            type = $focused.Current.ControlType.ProgrammaticName; handle = $focused.Current.NativeWindowHandle }
+    }
+    return $record
+}
+function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null, $OwnershipRoute = $null, $DefaultButtonResult = $null, $Focus = $null) {
     $observation = @{ stage = $Stage; at = [DateTime]::UtcNow.ToString('o'); requestedPath = $destination; fieldValue = $FieldValue
-        ownershipRoute = $OwnershipRoute; defaultButtonResult = $DefaultButtonResult
+        ownershipRoute = $OwnershipRoute; defaultButtonResult = $DefaultButtonResult; focus = $Focus
         windows = @($Windows | ForEach-Object { Window-Record $_ })
         controls = @($Controls | Select-Object -First 500 | ForEach-Object { @{ name = $_.Current.Name; type = $_.Current.ControlType.ProgrammaticName
             id = $_.Current.AutomationId; enabled = $_.Current.IsEnabled; offscreen = $_.Current.IsOffscreen } }) }
@@ -385,8 +399,9 @@ $record = Window-Record $dialog
 $windows = @(Windows-ForOwner)
 $ownershipRoute = Assert-ExportDialogIdentity $record @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
 $edits = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and $_.Current.AutomationId -ceq '1001' -and $_.Current.Name -ceq 'File name:' })
+$fileTypes = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::ComboBox -and $_.Current.AutomationId -ceq 'FileTypeControlHost' -and $_.Current.Name -ceq 'Save as type:' })
 $buttons = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Button -and $_.Current.AutomationId -ceq '1' -and $_.Current.Name -match '^Save$' })
-if ($edits.Count -ne 1 -or $buttons.Count -ne 1) { throw 'Native Save controls are not unambiguous.' }
+if ($edits.Count -ne 1 -or $fileTypes.Count -ne 1 -or $buttons.Count -ne 1) { throw 'Native Save controls are not unambiguous.' }
 if (-not (Test-SendKeysLiteralPath $destination)) { throw 'Requested path contains unsupported native keystrokes.' }
 $edit = $edits[0]
 $null = Owned-Process $r.process
@@ -400,13 +415,23 @@ if (-not $edit.Current.HasKeyboardFocus) { throw 'Native filename did not receiv
 [Windows.Forms.SendKeys]::SendWait($destination)
 if ($value.Current.Value -cne $destination) { throw 'Native filename did not accept the typed path.' }
 [Windows.Forms.SendKeys]::SendWait('{TAB}')
-Start-Sleep -Milliseconds 150
+$tabFocusDeadline = [DateTime]::UtcNow.AddSeconds(2)
+do {
+    $focusAfterTab = Focus-Record $dialog $fileTypes[0] $edit
+    if ($focusAfterTab.inFileType) { break }
+    if (-not $focusAfterTab.inDialog -or [DateTime]::UtcNow -gt $tabFocusDeadline) {
+        Save-Observation 'filetype-focus-missing-after-tab' $windows $controls $value.Current.Value $ownershipRoute $null $focusAfterTab
+        throw 'Physical Tab did not focus the native Save as type control.'
+    }
+    Start-Sleep -Milliseconds 50
+} while ($true)
 if ($value.Current.Value -cne $destination) { throw 'Native filename did not accept the requested path.' }
 $acceptedValue = $value.Current.Value
-Save-Observation 'filename-committed-before-save' $windows $controls $acceptedValue $ownershipRoute
 $null = Owned-Process $r.process
 $windows = @(Windows-ForOwner)
 $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
+$defaultAfterTab = [WindowsPackageNative]::DialogDefaultButtonResult([IntPtr]$dialog.Current.NativeWindowHandle)
+Save-Observation 'filename-committed-after-tab' $windows $controls $acceptedValue $ownershipRoute $defaultAfterTab $focusAfterTab
 $capture = Assert-Contained $evidenceRoot $r.capture $true
 $bounds = $dialog.Current.BoundingRectangle
 $bitmap = [Drawing.Bitmap]::new([int]$bounds.Width, [int]$bounds.Height)
@@ -422,25 +447,42 @@ $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows
 if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before Save.' }
 $null = Assert-Contained $r.root $destination $true
 if ($value.Current.Value -cne $destination) { throw 'Native filename changed before Save.' }
-$edit.SetFocus()
-if (-not $edit.Current.HasKeyboardFocus) { throw 'Native filename did not regain keyboard focus.' }
+$focusBeforeShiftTab = Focus-Record $dialog $fileTypes[0] $edit
+if (-not $focusBeforeShiftTab.inFileType) {
+    Save-Observation 'filetype-focus-lost-before-shift-tab' $windows $controls $acceptedValue $ownershipRoute $defaultAfterTab $focusBeforeShiftTab
+    throw 'Native Save as type control lost focus before Shift+Tab.'
+}
+[Windows.Forms.SendKeys]::SendWait('+{TAB}')
+$focusDeadline = [DateTime]::UtcNow.AddSeconds(2)
+do {
+    $focusAfterShiftTab = Focus-Record $dialog $fileTypes[0] $edit
+    if ($focusAfterShiftTab.inFilename) { break }
+    if (-not $focusAfterShiftTab.inDialog -or [DateTime]::UtcNow -gt $focusDeadline) {
+        Save-Observation 'filename-focus-missing-after-shift-tab' $windows $controls $acceptedValue $ownershipRoute $defaultAfterTab $focusAfterShiftTab
+        throw 'Physical Shift+Tab did not return focus to the native filename.'
+    }
+    Start-Sleep -Milliseconds 50
+} while ($true)
 $null = Owned-Process $r.process
 $windows = @(Windows-ForOwner)
 $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
 $defaultButtonResult = [WindowsPackageNative]::DialogDefaultButtonResult([IntPtr]$dialog.Current.NativeWindowHandle)
-Save-Observation 'filename-focused-before-enter' $windows $controls $acceptedValue $ownershipRoute $defaultButtonResult
+Save-Observation 'filename-focused-after-shift-tab' $windows $controls $value.Current.Value $ownershipRoute $defaultButtonResult $focusAfterShiftTab
 $null = Owned-Process $r.process
 $windows = @(Windows-ForOwner)
 $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
 if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before Enter.' }
 $null = Assert-Contained $r.root $destination $true
 $defaultButtonResult = [WindowsPackageNative]::DialogDefaultButtonResult([IntPtr]$dialog.Current.NativeWindowHandle)
-$filenameFocused = $edit.Current.HasKeyboardFocus
+$focusBeforeEnter = Focus-Record $dialog $fileTypes[0] $edit
+$filenameFocused = $focusBeforeEnter.inFilename
 $saveEnabled = $buttons[0].Current.IsEnabled
 $saveVisible = -not $buttons[0].Current.IsOffscreen
 if (-not (Test-SaveEnterReadiness $value.Current.Value $destination $filenameFocused $saveEnabled $saveVisible $defaultButtonResult)) {
+    Save-Observation 'enter-readiness-refused' $windows $controls $value.Current.Value $ownershipRoute $defaultButtonResult $focusBeforeEnter
     throw "Native filename or default Save button is not ready for Enter ($defaultButtonResult)."
 }
 [Windows.Forms.SendKeys]::SendWait('{ENTER}')
 @{ dialog = $record; ownershipRoute = $ownershipRoute; requestedPath = $destination; acceptedFieldValue = $acceptedValue
-    defaultButtonResult = $defaultButtonResult; input = 'Physical filename keystrokes, Tab, focused filename Enter with default Save'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8
+    defaultButtonResult = $defaultButtonResult; focusBeforeEnter = $focusBeforeEnter
+    input = 'Physical filename keystrokes, Tab, Shift+Tab to filename, Enter with default Save'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8

@@ -284,6 +284,7 @@ test("Desktop PowerShell loads the Framework UI Automation client in STA", {
 }, () => {
   const shell = windowsNativeShell("Save", process.env.WINDIR);
   assert.equal(realpathSync.native(shell.command).toLowerCase(), shell.command.toLowerCase());
+  const identityHelper = resolve("scripts/windows-package-identity.ps1");
   const script = String.raw`
 $ErrorActionPreference = 'Stop'
 $wpf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'
@@ -291,10 +292,20 @@ Add-Type -LiteralPath (Join-Path $wpf 'UIAutomationTypes.dll')
 Add-Type -LiteralPath (Join-Path $wpf 'UIAutomationClient.dll')
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+. $env:EXECS_TEST_IDENTITY_HELPER
 $root = [Windows.Automation.AutomationElement]::RootElement
 if (-not $root) { throw 'UI Automation root unavailable.' }
+$selfFocus = Test-FocusWithin $root $root
+$missingFocus = Test-FocusWithin $null $root
+$missingTarget = Test-FocusWithin $root $null
+$child = $root.FindFirst([Windows.Automation.TreeScope]::Children, [Windows.Automation.Condition]::TrueCondition)
+if (-not $child) { throw 'UI Automation desktop child unavailable for focus ancestry contract.' }
+$childWithinRoot = Test-FocusWithin $child $root
+$rootWithinChild = Test-FocusWithin $root $child
 [pscustomobject]@{ edition = $PSVersionTable.PSEdition; apartment = [Threading.Thread]::CurrentThread.GetApartmentState().ToString()
-    root = $true; types = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $wpf 'UIAutomationTypes.dll')).FullName } | ConvertTo-Json -Compress
+    root = $true; selfFocus = $selfFocus; missingFocus = $missingFocus; missingTarget = $missingTarget
+    childWithinRoot = $childWithinRoot; rootWithinChild = $rootWithinChild
+    types = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $wpf 'UIAutomationTypes.dll')).FullName } | ConvertTo-Json -Compress
 `;
   const result = spawnSync(
     shell.command,
@@ -308,13 +319,23 @@ if (-not $root) { throw 'UI Automation root unavailable.' }
       "-Command",
       script,
     ],
-    { encoding: "utf8", timeout: 10_000, windowsHide: true },
+    {
+      encoding: "utf8",
+      timeout: 10_000,
+      windowsHide: true,
+      env: { ...process.env, EXECS_TEST_IDENTITY_HELPER: identityHelper },
+    },
   );
   assert.equal(result.status, 0, result.stderr);
   const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
   assert.equal(actual.edition, "Desktop");
   assert.equal(actual.apartment, "STA");
   assert.equal(actual.root, true);
+  assert.equal(actual.selfFocus, true);
+  assert.equal(actual.missingFocus, false);
+  assert.equal(actual.missingTarget, false);
+  assert.equal(actual.childWithinRoot, true);
+  assert.equal(actual.rootWithinChild, false);
   assert.match(actual.types, /^UIAutomationTypes, Version=4\.0\.0\.0,/);
 });
 

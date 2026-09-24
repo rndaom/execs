@@ -38,6 +38,17 @@ function Test-SaveEnterReadiness([string]$FieldValue, [string]$Destination, [boo
         ($DefaultButtonResult -band 0xffff) -eq 1)
 }
 
+function Test-FocusWithin($Focused, $Target) {
+    if (-not $Focused -or -not $Target) { return $false }
+    $walker = [Windows.Automation.TreeWalker]::RawViewWalker
+    $node = $Focused
+    for ($depth = 0; $depth -lt 16 -and $node; $depth++) {
+        if ([Windows.Automation.Automation]::Compare($node, $Target)) { return $true }
+        $node = $walker.GetParent($node)
+    }
+    return $false
+}
+
 function Assert-Contained([string]$Root, [string]$Path, [bool]$MissingLeaf = $false) {
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
     $full = [IO.Path]::GetFullPath($Path)
