@@ -62,12 +62,12 @@ async function click(selector: string) {
   await act(async () => element(selector).click());
 }
 
-describe("Viewmodels workspace after the upstream builder is retired", () => {
+describe("Viewmodels workspace while the builder is replaced", () => {
   it("offers local VPK import without a builder, copied option list, or remote images", async () => {
     await render(false, false);
     expect(box.textContent).toContain("Import a model-only VPK");
     expect(box.textContent).toContain(
-      "New viewmodel builds and screenshot previews are unavailable",
+      "The Viewmodels builder and previews are being rebuilt for 0.2.0",
     );
     expect(box.textContent).toContain("Global Draw viewmodel: Off");
     expect(box.textContent).toContain("Casual preload: Off");
@@ -95,7 +95,7 @@ describe("Viewmodels workspace after the upstream builder is retired", () => {
     );
     expect(box.textContent).toContain("2 recorded choices");
     expect(box.textContent).toContain("Switching profiles uses the saved VPK bytes");
-    expect(box.textContent).toContain("Building a new pack from them is unavailable");
+    expect(box.textContent).toContain("Recorded choices are preserved");
     expect(box.querySelector('[data-testid="viewmodel-build"]')).toBeNull();
     await click('[data-testid="viewmodel-remove"]');
     expect(removePack).toHaveBeenCalledOnce();

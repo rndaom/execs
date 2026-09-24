@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { legacyViewmodelSelectionCount, previewViewmodelRecord } from "./viewmodel-ui";
 
-describe("retired viewmodel builder compatibility", () => {
+describe("saved viewmodel builder choice compatibility", () => {
   it("counts saved legacy IDs without interpreting or changing them", () => {
     const record = previewViewmodelRecord("compiled");
     record.options.hidden = "legacy/one,legacy/two,legacy/one";

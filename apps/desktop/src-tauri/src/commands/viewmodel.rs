@@ -20,13 +20,13 @@ pub async fn build_viewmodel_pack(
     hide_mode: Option<String>,
 ) -> Result<ProfileDetail, CommandError> {
     let _ = (hidden, preload, hide_mode);
-    Err(retired_builder_error())
+    Err(builder_unavailable_error())
 }
 
-fn retired_builder_error() -> CommandError {
+fn builder_unavailable_error() -> CommandError {
     CommandError::new(
         "SourceUnavailable",
-        "Viewmodel building is unavailable while source rights are unresolved. Import a model-only VPK instead.",
+        "Viewmodel building is temporarily unavailable while the replacement builder is completed. Import a model-only VPK for now.",
     )
 }
 
@@ -34,7 +34,7 @@ fn retired_builder_error() -> CommandError {
 #[tauri::command]
 pub async fn viewmodel_preview_image(name: String) -> Result<tauri::ipc::Response, CommandError> {
     let _ = name;
-    Err(retired_builder_error())
+    Err(builder_unavailable_error())
 }
 
 /// Compatibility response for a cached older frontend.
