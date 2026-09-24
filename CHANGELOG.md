@@ -39,8 +39,7 @@ User-facing changes only. The release workflow publishes the matching
 - Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
   controls and clearer source retry feedback. Sorts use only data the sources actually publish.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum
-  window size. Launch options gain a guided option picker with validated values, removable groups
-  and direct text editing of the complete string.
+  window size.
 - Reduce background lifecycle polling while execs is hidden or unfocused, refresh on return,
   and back off failed reads while keeping launch and maintenance state guarded.
 
@@ -89,13 +88,12 @@ User-facing changes only. The release workflow publishes the matching
 - Bind native download connections and proxy tunnels to checked public addresses while
   preserving HTTPS certificate checks and configured proxy access. Debian packages now
   declare the OpenSSL and zlib libraries required by the transport.
-- Files: keep the editor's position when Tab returns focus after visiting another pane.
 - Offer a clear Choose profile action when saved profiles exist but none is active.
   Import review now describes the unchanged TF2 setup without assuming an active profile.
 - Keep profile actions visible in inactive libraries and enlarged interfaces, with scrolling
   for short windows and longer profile lists.
 - Keep menus, pending-review actions and keyboard focus reachable when the interface is enlarged.
-- Files: restore the editor's scroll position when returning from another pane, alongside its
+- Files: restore the editor's scroll and focus when returning from another pane, alongside its
   draft, selection and undo history.
 - Keep complete cfg paths readable in the unsaved-changes dialog without horizontal scrolling.
 - Pending-change review moves keyboard focus to the selected pane; close requests also wait
@@ -118,8 +116,6 @@ User-facing changes only. The release workflow publishes the matching
 - Keep Casual preload console history, remove an invalid post-disconnect script call, and avoid
   duplicate managed launch hooks. The supported offline preload step remains explicit.
 - Correct installer, platform and Casual compatibility descriptions in the README and promo.
-- Releases: restore published changelog entries so upgrade validation starts from the correct
-  previous public version.
 - Profiles: retain saved particle selections when repairing custom folder names,
   including profiles that are not active.
 - Profiles: switch shared preloader selections with the target profile.
