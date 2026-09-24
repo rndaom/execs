@@ -357,6 +357,7 @@ pub fn read_stock_animation_index(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn write_i32(bytes: &mut [u8], at: usize, value: i32) {
         bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
@@ -369,13 +370,13 @@ mod tests {
         offset as i32
     }
 
-    fn sample_mdl() -> Vec<u8> {
+    fn sample_mdl_for(class_id: &str) -> Vec<u8> {
         let animation = HEADER_BYTES;
         let sequence = animation + ANIM_DESC_BYTES;
         let mut bytes = vec![0; sequence + SEQ_DESC_BYTES];
         bytes[..4].copy_from_slice(b"IDST");
-        let model_name = b"weapons/c_models/c_scout_animations.mdl";
-        bytes[12..12 + model_name.len()].copy_from_slice(model_name);
+        let model_name = format!("weapons/c_models/c_{class_id}_animations.mdl");
+        bytes[12..12 + model_name.len()].copy_from_slice(model_name.as_bytes());
         write_i32(&mut bytes, 4, 48);
         write_i32(&mut bytes, 180, 1);
         write_i32(&mut bytes, 184, animation as i32);
@@ -400,6 +401,10 @@ mod tests {
         let length = bytes.len() as i32;
         write_i32(&mut bytes, 76, length);
         bytes
+    }
+
+    fn sample_mdl() -> Vec<u8> {
+        sample_mdl_for("scout")
     }
 
     #[test]
@@ -449,5 +454,46 @@ mod tests {
         bytes[activity] = 0;
         let model = parse_stock_animation_mdl(&bytes).unwrap();
         assert_eq!(model.sequences[0].activity, None);
+    }
+
+    #[test]
+    fn installed_index_requires_app_440_and_matching_stock_crcs() {
+        let dir = crate::test_temp_dir();
+        let tf = dir.join("Team Fortress 2/tf");
+        fs::create_dir_all(&tf).unwrap();
+        fs::write(tf.join("steam.inf"), b"appID=440\nPatchVersion=fixture\n").unwrap();
+        let files: BTreeMap<_, _> = CLASSES
+            .into_iter()
+            .map(|class_id| {
+                (
+                    format!("models/weapons/c_models/c_{class_id}_animations.mdl"),
+                    sample_mdl_for(class_id),
+                )
+            })
+            .collect();
+        let vpk = tf.join("tf2_misc_dir.vpk");
+        fs::write(&vpk, crate::vpk::write_vpk_v2(&files)).unwrap();
+        let index = read_stock_animation_index(&dir.join("Team Fortress 2")).unwrap();
+        assert_eq!(index.patch_version, "fixture");
+        assert_eq!(index.models.len(), 9);
+        assert_eq!(
+            index.models["scout"].sequences[0].activity.as_deref(),
+            Some("ACT_VM_DRAW")
+        );
+
+        let entry = map_vpk_entries(&vpk).unwrap()
+            ["models/weapons/c_models/c_scout_animations.mdl"]
+            .clone();
+        let mut bytes = fs::read(&vpk).unwrap();
+        let at = (entry.data_base + u64::from(entry.offset)) as usize;
+        bytes[at + 12] ^= 1;
+        fs::write(&vpk, bytes).unwrap();
+        let error = read_stock_animation_index(&dir.join("Team Fortress 2")).unwrap_err();
+        assert!(error.0.contains("VPK CRC"), "{error}");
+
+        fs::write(tf.join("steam.inf"), b"appID=730\nPatchVersion=fixture\n").unwrap();
+        let error = read_stock_animation_index(&dir.join("Team Fortress 2")).unwrap_err();
+        assert!(error.0.contains("not Team Fortress 2"), "{error}");
+        fs::remove_dir_all(dir).unwrap();
     }
 }
