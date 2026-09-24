@@ -9,6 +9,7 @@ if ($env:CI -cne 'true' -or $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_OS -
     $env:GITHUB_REF -notmatch '^refs/(heads|pull)/') { throw 'Disposable hosted Windows only.' }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($identity.User.Value -eq 'S-1-5-18') { throw 'SYSTEM is refused.' }
+. (Join-Path $PSScriptRoot 'windows-package-identity.ps1')
 
 function Assert-Contained([string]$Root, [string]$Path, [bool]$MissingLeaf = $false) {
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
@@ -71,7 +72,8 @@ function Owned-Process($Expected) {
     $process = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$Expected.pid)"
     if (-not $process) { throw 'Owned process already exited.' }
     $record = Process-Record $process
-    if ($record.executable -ine $Expected.executable -or ($Expected.PSObject.Properties['created'] -and $record.created -ne $Expected.created)) { throw 'Process identity changed.' }
+    if ($record.executable -ine $Expected.executable -or ($Expected.PSObject.Properties['created'] -and
+        -not (Test-ProcessCreatedMatch $record.created $Expected.created))) { throw 'Process identity changed.' }
     $null = Assert-Contained $r.root $record.executable
     if ([WindowsPackageNative]::PackageCode($record.pid) -ne 15700) { throw 'Packaged app context refused.' }
     return $record
@@ -215,14 +217,14 @@ if ($Action -eq 'Cleanup') {
         $observed = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$expected.pid)"
         if (-not $observed) { $absent += [int]$expected.pid; continue }
         $record = Process-Record $observed
-        if ($record.created -ne $expected.created -or $record.executable -ine $expected.executable) { throw 'Cleanup process identity changed.' }
+        if (-not (Test-ProcessCreatedMatch $record.created $expected.created) -or $record.executable -ine $expected.executable) { throw 'Cleanup process identity changed.' }
         if ($record.executable.StartsWith($r.root + '\', [StringComparison]::OrdinalIgnoreCase)) {
             $null = Assert-Contained $r.root $record.executable
         } elseif ([IO.Path]::GetFileName($record.executable) -ine 'msedgewebview2.exe' -or
             -not $record.commandLine.Contains($r.userData, [StringComparison]::OrdinalIgnoreCase) -or
             $expected.parent -notin @($r.processes.pid)) { throw 'Cleanup target is outside the owned app/driver/browser tree.' }
         $process = Get-Process -Id $record.pid
-        if ([Math]::Abs(($process.StartTime.ToUniversalTime() - [DateTime]::Parse($record.created)).Ticks) -ge 10000) { throw 'Cleanup start time changed.' }
+        if ([Math]::Abs($process.StartTime.ToUniversalTime().Ticks - (ConvertTo-ProcessUtcTicks $record.created)) -ge 10000) { throw 'Cleanup start time changed.' }
         $process.Kill()
         if (-not $process.WaitForExit(5000)) { throw 'Owned cleanup did not exit.' }
         $stopped += $record

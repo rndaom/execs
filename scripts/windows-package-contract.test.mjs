@@ -75,6 +75,34 @@ const event = {
   pull_request: { head: { repo: { full_name: "rndaom/execs" } } },
 };
 
+test("PowerShell process identity compares exact UTC ticks after JSON date conversion", {
+  skip: process.platform !== "win32",
+}, () => {
+  const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+  const script = `
+. '${helper}'
+$actual = '2026-09-24T01:15:58.1247050Z'
+$json = '{"created":"2026-09-24T01:15:58.1247050Z"}' | ConvertFrom-Json
+if ($json.created -isnot [DateTime]) { throw 'The test did not exercise JSON DateTime conversion.' }
+$same = Test-ProcessCreatedMatch $actual $json.created
+$different = Test-ProcessCreatedMatch $actual '2026-09-24T01:15:58.1247051Z'
+$malformedRejected = $false
+try { $null = Test-ProcessCreatedMatch $actual 'invalid' } catch { $malformedRejected = $true }
+[pscustomobject]@{ same = $same; different = $different; malformedRejected = $malformedRejected } | ConvertTo-Json -Compress
+`;
+  const result = spawnSync(
+    "pwsh",
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+    { encoding: "utf8", timeout: 10_000, windowsHide: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.trim()), {
+    same: true,
+    different: false,
+    malformedRejected: true,
+  });
+});
+
 test("complete host gate refuses local/self-hosted/tag/fork/SYSTEM and signing contexts", () => {
   assertWindowsHost(env, event, "win32", "x64");
   for (const change of [
