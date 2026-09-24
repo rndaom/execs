@@ -1909,9 +1909,9 @@ fn gameinfo_does_not_toggle_prefixes_or_lines_with_extra_tokens() {
 }
 
 /// After a TF2 update replaces gameinfo.txt while the bypass is off, the
-/// backup must follow the new file — and it must be restorable.
+/// backup follows the new file and the live toggle preserves those new bytes.
 #[test]
-fn gameinfo_backup_refreshes_after_a_game_update_and_restores() {
+fn gameinfo_backup_refreshes_after_a_game_update_and_reverses_the_toggle() {
     let (root, data) = fake_root();
     let path = root.join("tf/gameinfo.txt");
     let backup = data.join("preloader/gameinfo.original.txt");
@@ -1932,11 +1932,8 @@ fn gameinfo_backup_refreshes_after_a_game_update_and_restores() {
     set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
     assert_eq!(std::fs::read(&backup).unwrap(), updated);
 
-    // The backup is a real repair path.
-    std::fs::write(&path, b"corrupted").unwrap();
-    assert!(restore_gameinfo_from_backup(&root, &data, &[]).unwrap());
+    assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
     assert_eq!(std::fs::read(&path).unwrap(), updated);
-    assert!(!restore_gameinfo_from_backup(&root, &data, &[]).unwrap());
 }
 
 /// The run lock lives in core now, not only in the command layer: the
@@ -1976,11 +1973,6 @@ fn preloader_writes_refuse_while_tf2_runs_and_touch_nothing() {
         set_gameinfo_bypass(&root, &data, false, &running).unwrap_err(),
         locked
     );
-    assert_eq!(
-        restore_gameinfo_from_backup(&root, &data, &running).unwrap_err(),
-        locked
-    );
-
     assert_eq!(std::fs::read(&gameinfo).unwrap(), gameinfo_before);
     assert_eq!(std::fs::read(&vpk_path).unwrap(), dir_before);
     assert_eq!(std::fs::read(&sibling_path).unwrap(), sibling_before);
@@ -3481,18 +3473,18 @@ fn an_unexplained_snapshot_survives_restore_and_torn_writes_do_not() {
     assert!(originals.is_dir());
 }
 
-/// The pristine backup is only worth restoring when it is a gameinfo file.
+/// A corrupt backup cannot authorize a live toggle while bypassed.
 #[test]
-fn a_backup_that_is_not_a_gameinfo_file_is_refused() {
+fn a_corrupt_backup_refuses_the_active_gameinfo_toggle() {
     let (root, data) = fake_root();
     let path = root.join("tf/gameinfo.txt");
+    set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
     let before = std::fs::read(&path).unwrap();
     let backup = data.join("preloader/gameinfo.original.txt");
-    std::fs::create_dir_all(backup.parent().unwrap()).unwrap();
     std::fs::write(&backup, b"corrupted").unwrap();
 
-    let err = restore_gameinfo_from_backup(&root, &data, &[]).unwrap_err();
-    assert!(err.contains("not a GameInfo file"), "{err}");
+    let err = set_gameinfo_bypass(&root, &data, false, &[]).unwrap_err();
+    assert!(err.contains("does not match the active bypass"), "{err}");
     assert_eq!(std::fs::read(&path).unwrap(), before);
     assert!(!crate::hash::part_path(&path).exists());
 }

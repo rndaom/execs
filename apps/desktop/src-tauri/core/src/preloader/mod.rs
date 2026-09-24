@@ -92,7 +92,6 @@ pub use profiles::{
 mod state;
 mod transaction;
 
-// The public API is exactly what `preloader.rs` exported before the split.
 pub use apply::{
     apply_preloader_selection, apply_preloader_selection_with_sampler, forget_preload_profile,
     preload_profiles, preloader_status, profile_particle_cleanup_selection, rebuild_keep_lists,
@@ -102,8 +101,7 @@ pub use apply::{
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{
-    gameinfo_bypass_state, restore_gameinfo_from_backup, restore_gameinfo_from_backup_with_sampler,
-    set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
+    gameinfo_bypass_state, set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
 };
 pub use state::{preload_is_wanted, PatchedEntry, PreloaderState, SkipNotice};
 pub use transaction::{
