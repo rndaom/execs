@@ -144,6 +144,65 @@ if (-not $root) { throw 'UI Automation root unavailable.' }
   assert.match(actual.types, /^UIAutomationTypes, Version=4\.0\.0\.0,/);
 });
 
+test("native Save accepts only the unique foreground dialog in the exact app process", {
+  skip: process.platform !== "win32",
+}, () => {
+  const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+  const script = `
+. '${helper}'
+$main = [pscustomobject]@{ title = 'execs'; class = 'Tauri Window'; visible = $true; pid = 5668; nativePid = 5668; handle = 131532; owner = 0 }
+$dialog = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; visible = $true; pid = 5668; nativePid = 5668; handle = 66172; owner = 0 }
+function Check($Candidate, $Windows, [long]$Foreground = 66172) {
+    try { return Assert-ExportDialogIdentity $Candidate $Windows 5668 $Foreground }
+    catch { return 'refused' }
+}
+$windowOwned = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; visible = $true; pid = 5668; nativePid = 5668; handle = 66172; owner = 131532 }
+$otherDialog = [pscustomobject]@{ title = 'Open'; class = '#32770'; visible = $true; pid = 5668; nativePid = 5668; handle = 66200; owner = 0 }
+$foreignProcess = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; visible = $true; pid = 7777; nativePid = 7777; handle = 66172; owner = 0 }
+$spoofedHandle = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; visible = $true; pid = 5668; nativePid = 7777; handle = 66172; owner = 0 }
+$foreignOwner = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; visible = $true; pid = 5668; nativePid = 5668; handle = 66172; owner = 99999 }
+[pscustomobject]@{
+    processOwned = Check $dialog @($main, $dialog)
+    windowOwned = Check $windowOwned @($main, $windowOwned)
+    samePidUnrelatedDialog = Check $otherDialog @($main, $otherDialog)
+    competingSamePidDialog = Check $dialog @($main, $dialog, $otherDialog)
+    foreignProcess = Check $foreignProcess @($main, $foreignProcess)
+    spoofedHandle = Check $spoofedHandle @($main, $spoofedHandle)
+    foreignOwner = Check $foreignOwner @($main, $foreignOwner)
+    lostForeground = Check $dialog @($main, $dialog) 99999
+    missingMain = Check $dialog @($dialog)
+    duplicateMain = Check $dialog @($main, $main, $dialog)
+} | ConvertTo-Json -Compress
+`;
+  for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+    const result = spawnSync(
+      command,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
+        "-Command",
+        script,
+      ],
+      { encoding: "utf8", timeout: 10_000, windowsHide: true },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim()), {
+      processOwned: "process-owned-top-level",
+      windowOwned: "main-window-owned",
+      samePidUnrelatedDialog: "refused",
+      competingSamePidDialog: "refused",
+      foreignProcess: "refused",
+      spoofedHandle: "refused",
+      foreignOwner: "refused",
+      lostForeground: "refused",
+      missingMain: "refused",
+      duplicateMain: "refused",
+    });
+  }
+});
+
 test(
   "both PowerShell editions retain owned-path containment and reject reparse points",
   {

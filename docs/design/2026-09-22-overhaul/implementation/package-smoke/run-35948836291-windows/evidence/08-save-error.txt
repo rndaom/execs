@@ -1,0 +1,17 @@
+Command failed: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoLogo -NoProfile -NonInteractive -Sta -ExecutionPolicy RemoteSigned -File D:\a\execs\execs\scripts\windows-package-native.ps1 -Action Save -Request D:\a\_temp\execs-windows-package-OfHbbB\requests\08-save.json
+File dialog owner/visibility unknown.
+At D:\a\execs\execs\scripts\windows-package-native.ps1:320 char:129
++ ... er) -ne $owned.pid) { throw 'File dialog owner/visibility unknown.' }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (File dialog owner/visibility unknown.:String) [], RuntimeException
+    + FullyQualifiedErrorId : File dialog owner/visibility unknown.
+ 
+
+
+File dialog owner/visibility unknown.
+At D:\a\execs\execs\scripts\windows-package-native.ps1:320 char:129
++ ... er) -ne $owned.pid) { throw 'File dialog owner/visibility unknown.' }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (File dialog owner/visibility unknown.:String) [], RuntimeException
+    + FullyQualifiedErrorId : File dialog owner/visibility unknown.
+ 

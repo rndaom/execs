@@ -54,3 +54,22 @@ function Test-OwnedConsoleHost($Record, $Expected, $Processes, $ParentRecord, [s
         $ParentRecord.executable.Equals($parents[0].executable, [StringComparison]::OrdinalIgnoreCase) -and
         (Test-ProcessCreatedMatch $ParentRecord.created $parents[0].created)
 }
+
+function Assert-ExportDialogIdentity($Dialog, $Windows, [int]$ExpectedPid, [long]$ForegroundHandle) {
+    $observed = @($Windows)
+    $main = @($observed | Where-Object {
+        $_.title -ceq 'execs' -and $_.class -ceq 'Tauri Window' -and $_.visible -and
+        [int]$_.pid -eq $ExpectedPid -and [int]$_.nativePid -eq $ExpectedPid -and [long]$_.handle -gt 0
+    })
+    $nativeDialogs = @($observed | Where-Object { $_.class -ceq '#32770' -and $_.visible })
+    if ($main.Count -ne 1 -or $nativeDialogs.Count -ne 1) { throw 'Expected one owned main window and one native dialog.' }
+    $save = $nativeDialogs[0]
+    if ($save.title -cne 'Export profile' -or [long]$save.handle -le 0 -or
+        [int]$save.pid -ne $ExpectedPid -or [int]$save.nativePid -ne $ExpectedPid -or
+        [long]$Dialog.handle -ne [long]$save.handle -or [long]$ForegroundHandle -ne [long]$save.handle) {
+        throw 'Export dialog identity or foreground changed.'
+    }
+    if ([long]$save.owner -eq [long]$main[0].handle) { return 'main-window-owned' }
+    if ([long]$save.owner -eq 0) { return 'process-owned-top-level' }
+    throw 'Export dialog has an unexpected window owner.'
+}

@@ -261,6 +261,7 @@ function Windows-ForOwner {
 function Window-Record($Window) {
     $current = $Window.Current
     @{ title = $current.Name; class = $current.ClassName; handle = $current.NativeWindowHandle; pid = $current.ProcessId
+        nativePid = [WindowsPackageNative]::WindowPid([IntPtr]$current.NativeWindowHandle)
         owner = [WindowsPackageNative]::GetWindow([IntPtr]$current.NativeWindowHandle, 4).ToInt64(); visible = [WindowsPackageNative]::IsWindowVisible([IntPtr]$current.NativeWindowHandle) }
 }
 if ($Action -eq 'Inspect') {
@@ -295,8 +296,9 @@ if ($Action -eq 'Close') {
 $destination = Assert-Contained $r.root $r.destination $true
 if (Test-Path -LiteralPath $destination) { throw 'Export destination already exists.' }
 $observationPath = Assert-Contained $r.root $r.observation $true
-function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null) {
+function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null, $OwnershipRoute = $null) {
     $observation = @{ stage = $Stage; at = [DateTime]::UtcNow.ToString('o'); requestedPath = $destination; fieldValue = $FieldValue
+        ownershipRoute = $OwnershipRoute
         windows = @($Windows | ForEach-Object { Window-Record $_ })
         controls = @($Controls | Select-Object -First 500 | ForEach-Object { @{ name = $_.Current.Name; type = $_.Current.ControlType.ProgrammaticName
             id = $_.Current.AutomationId; enabled = $_.Current.IsEnabled; offscreen = $_.Current.IsOffscreen } }) }
@@ -317,7 +319,8 @@ $controls = @($dialog.FindAll([Windows.Automation.TreeScope]::Descendants, [Wind
 Save-Observation 'dialog-found-before-focus' $windows $controls
 Foreground $dialog
 $record = Window-Record $dialog
-if (-not $record.visible -or $record.owner -eq 0 -or [WindowsPackageNative]::WindowPid([IntPtr]$record.owner) -ne $owned.pid) { throw 'File dialog owner/visibility unknown.' }
+$windows = @(Windows-ForOwner)
+$ownershipRoute = Assert-ExportDialogIdentity $record @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
 $edits = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and $_.Current.AutomationId -ceq '1001' -and $_.Current.Name -ceq 'File name:' })
 $buttons = @($controls | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Button -and $_.Current.AutomationId -ceq '1' -and $_.Current.Name -match '^Save$' })
 if ($edits.Count -ne 1 -or $buttons.Count -ne 1) { throw 'Native Save controls are not unambiguous.' }
@@ -330,8 +333,10 @@ $value.SetValue($destination)
 Start-Sleep -Milliseconds 150
 if ($value.Current.Value -cne $destination) { throw 'Native filename did not accept the requested path.' }
 $acceptedValue = $value.Current.Value
-Save-Observation 'filename-committed-before-save' $windows $controls $acceptedValue
-if ([WindowsPackageNative]::GetForegroundWindow() -ne [IntPtr]$record.handle) { throw 'Save dialog lost foreground.' }
+Save-Observation 'filename-committed-before-save' $windows $controls $acceptedValue $ownershipRoute
+$null = Owned-Process $r.process
+$windows = @(Windows-ForOwner)
+$ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
 $capture = Assert-Contained $r.root $r.capture $true
 $bounds = $dialog.Current.BoundingRectangle
 $bitmap = [Drawing.Bitmap]::new([int]$bounds.Width, [int]$bounds.Height)
@@ -341,7 +346,13 @@ try {
     $bitmap.Save($capture, [Drawing.Imaging.ImageFormat]::Png)
 } finally { $graphics.Dispose(); $bitmap.Dispose() }
 $tree = @($controls | ForEach-Object { @{ name = $_.Current.Name; type = $_.Current.ControlType.ProgrammaticName; id = $_.Current.AutomationId; enabled = $_.Current.IsEnabled } })
-Save-Observation 'invoking-save' $windows $controls $acceptedValue
+$null = Owned-Process $r.process
+$windows = @(Windows-ForOwner)
+$ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
+if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before Save.' }
+$null = Assert-Contained $r.root $destination $true
+if ($value.Current.Value -cne $destination) { throw 'Native filename changed before Save.' }
+Save-Observation 'invoking-save' $windows $controls $acceptedValue $ownershipRoute
 $buttons[0].GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
-@{ dialog = $record; requestedPath = $destination; acceptedFieldValue = $acceptedValue
+@{ dialog = $record; ownershipRoute = $ownershipRoute; requestedPath = $destination; acceptedFieldValue = $acceptedValue
     input = 'Native UIA ValuePattern, physical Tab, and Save InvokePattern'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8
