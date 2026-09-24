@@ -465,6 +465,7 @@ pub struct Client {
 #[derive(Clone)]
 struct FixtureTransport {
     addresses: Vec<SocketAddr>,
+    addresses_by_host: HashMap<String, Vec<SocketAddr>>,
     proxy: Option<String>,
     no_proxy: Option<String>,
     ca_path: Option<PathBuf>,
@@ -820,7 +821,12 @@ fn send_get(
     for redirects in 0..=MAX_REDIRECTS {
         #[cfg(test)]
         let addresses = if let Some(fixture) = &client.fixture {
-            public_socket_addrs(fixture.addresses.clone()).map_err(|err| err.to_string())?
+            let addresses = current
+                .host_str()
+                .and_then(|host| fixture.addresses_by_host.get(host))
+                .cloned()
+                .unwrap_or_else(|| fixture.addresses.clone());
+            public_socket_addrs(addresses).map_err(|err| err.to_string())?
         } else {
             validated_destination_addrs(&current)?
         };
@@ -1459,6 +1465,7 @@ mod tests {
                 idle: Arc::new(Mutex::new(Vec::new())),
                 fixture: Some(FixtureTransport {
                     addresses: vec![address.parse().unwrap()],
+                    addresses_by_host: HashMap::new(),
                     proxy: Some(format!("http://tester:pass@127.0.0.1:{port}")),
                     no_proxy: Some(String::new()),
                     ca_path: None,
@@ -1484,7 +1491,7 @@ mod tests {
         }
     }
 
-    /// Run with tools/d8-curl-prototype/d8-curl-probe.py in product mode.
+    /// Run with tools/d8-product-proxy-probe.py.
     #[test]
     #[ignore = "requires the ephemeral loopback proxy and CA fixture"]
     fn curl_product_tls_fixture() {
@@ -1492,9 +1499,18 @@ mod tests {
         let target = std::env::var("D8_TARGET").unwrap();
         let ca_path = PathBuf::from(std::env::var("D8_CA").unwrap());
         let case = std::env::var("D8_CASE").unwrap();
+        let stalled = matches!(case.as_str(), "proxy_connect_stall" | "origin_body_stall");
         let client = Client {
-            connect_timeout: Duration::from_secs(3),
-            total_timeout: Duration::from_secs(5),
+            connect_timeout: if stalled {
+                Duration::from_millis(700)
+            } else {
+                Duration::from_secs(3)
+            },
+            total_timeout: if stalled {
+                Duration::from_millis(700)
+            } else {
+                Duration::from_secs(5)
+            },
             idle: Arc::new(Mutex::new(Vec::new())),
             fixture: Some(FixtureTransport {
                 addresses: if case == "no_proxy" {
@@ -1506,6 +1522,16 @@ mod tests {
                     ]
                 } else {
                     vec![format!("{target}:443").parse().unwrap()]
+                },
+                // Simulate a private DNS answer for the approved redirect
+                // destination; send_get must filter each hop before CONNECT.
+                addresses_by_host: if case == "private_redirect" {
+                    HashMap::from([(
+                        "objects.githubusercontent.com".to_string(),
+                        vec!["127.0.0.1:443".parse().unwrap()],
+                    )])
+                } else {
+                    HashMap::new()
                 },
                 proxy: (!matches!(case.as_str(), "env_proxy" | "socks5h" | "no_proxy"))
                     .then_some(proxy),
@@ -1530,7 +1556,10 @@ mod tests {
             println!("REUSED");
             return;
         }
-        let (url, source) = if case == "redirect" || case == "blocked_redirect" {
+        let (url, source) = if matches!(
+            case.as_str(),
+            "redirect" | "blocked_redirect" | "private_redirect"
+        ) {
             (
                 "https://github.com/o/r/releases/download/v/x",
                 RemoteSource::GitHubRelease,
@@ -1538,6 +1567,7 @@ mod tests {
         } else {
             ("https://api.github.com/repos/o/r", RemoteSource::GitHubApi)
         };
+        let started = Instant::now();
         let result = if case == "no_proxy" {
             let address = client.fixture.as_ref().unwrap().addresses[0];
             let direct_url = reqwest::Url::parse(&format!(
@@ -1588,6 +1618,18 @@ mod tests {
                 assert!(error.contains("untrusted host"), "{error}");
                 println!("REDIRECT_BLOCKED");
             }
+            "private_redirect" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("private or reserved address"), "{error}");
+                println!("PRIVATE_REDIRECT_BLOCKED");
+            }
+            "proxy_connect_stall" | "origin_body_stall" => {
+                let error = result.unwrap_err();
+                assert!(error.to_ascii_lowercase().contains("timed out"), "{error}");
+                let elapsed = started.elapsed();
+                assert!(elapsed < Duration::from_millis(1600), "{elapsed:?}");
+                println!("DEADLINE_ENFORCED:{case}:{}", elapsed.as_millis());
+            }
             "https_proxy_bad_cert" => {
                 let error = result.unwrap_err();
                 assert!(
@@ -1627,6 +1669,7 @@ mod tests {
             idle: Arc::new(Mutex::new(Vec::new())),
             fixture: Some(FixtureTransport {
                 addresses: vec!["127.0.0.1:443".parse().unwrap()],
+                addresses_by_host: HashMap::new(),
                 proxy: Some(format!(
                     "http://127.0.0.1:{}",
                     listener.local_addr().unwrap().port()

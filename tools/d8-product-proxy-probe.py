@@ -16,6 +16,7 @@ import ssl
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from cryptography import x509
@@ -139,6 +140,9 @@ def probe(
                     headers = read_headers(conn).decode("ascii")
                     result["connect"] = headers.split("\r\n", 1)[0]
                     result["auth"] = f"Proxy-Authorization: {AUTH}\r\n" in headers
+                    if case == "proxy_connect_stall":
+                        time.sleep(2)
+                        return
                     conn.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
                     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                     context.load_cert_chain(str(leaf[0]), str(leaf[1]))
@@ -166,12 +170,20 @@ def probe(
                                     b"Connection: close\r\n\r\n401\r\n"
                                     + b"x" * 1025 + b"\r\n0\r\n\r\n"
                                 )
+                            elif case == "origin_body_stall":
+                                response = (
+                                    b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n"
+                                    b"Connection: close\r\n\r\nok"
+                                )
                             else:
                                 response = (
                                     b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n"
                                     b"Connection: close\r\n\r\nok"
                                 )
                             secure.sendall(response)
+                            if case == "origin_body_stall":
+                                result["partial_body_sent"] = True
+                                time.sleep(2)
                     except ssl.SSLError as error:
                         result["tls_error"] = error.reason
         except Exception as error:  # propagate worker failures to main thread
@@ -240,14 +252,21 @@ def probe(
 
 
 def product_redirect_probe(
-    leaves: dict[str, tuple[Path, Path]], root: Path, blocked: bool
+    leaves: dict[str, tuple[Path, Path]], root: Path, blocked: bool,
+    private: bool = False,
 ) -> dict[str, object]:
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.bind(("127.0.0.1", 0))
     listener.listen(2)
     listener.settimeout(5)
     result: dict[str, object] = {"connects": [], "snis": [], "hosts": [], "auth": []}
-    names = ["github.com"] if blocked else ["github.com", "objects.githubusercontent.com"]
+    names = ["github.com"] if blocked or private else ["github.com", "objects.githubusercontent.com"]
+    if private:
+        case = "private_redirect"
+    elif blocked:
+        case = "blocked_redirect"
+    else:
+        case = "redirect"
 
     def serve() -> None:
         try:
@@ -302,7 +321,7 @@ def product_redirect_probe(
         D8_PROXY=f"http://tester:pass@127.0.0.1:{port}",
         D8_TARGET="1.1.1.1",
         D8_CA=str(root),
-        D8_CASE="blocked_redirect" if blocked else "redirect",
+        D8_CASE=case,
     )
     completed = subprocess.run(
         [
@@ -731,6 +750,9 @@ def main() -> None:
             env_proxy = probe("1.1.1.1", leaves[HOST], root, case="env_proxy")
             redirected = product_redirect_probe(leaves, root, blocked=False)
             blocked_redirect = product_redirect_probe(leaves, root, blocked=True)
+            private_redirect = product_redirect_probe(leaves, root, blocked=False, private=True)
+            proxy_stall = probe("1.1.1.1", leaves[HOST], root, case="proxy_connect_stall")
+            origin_stall = probe("1.1.1.1", leaves[HOST], root, case="origin_body_stall")
             no_proxy = product_no_proxy_probe(leaves[HOST], root)
             bad_proxy_cert = product_https_proxy_probe(leaves["wrong.example"], root, bad_cert=True)
             bad_proxy_auth = product_https_proxy_probe(leaves["localhost"], root, bad_cert=False)
@@ -774,6 +796,17 @@ def main() -> None:
         assert blocked_redirect["exit_code"] == 0 and "REDIRECT_BLOCKED" in str(blocked_redirect["stdout"]), blocked_redirect
         assert blocked_redirect["connects"] == ["CONNECT 1.1.1.1:443 HTTP/1.1"], blocked_redirect
         print("Untrusted redirect refused before another CONNECT: PASS")
+        assert private_redirect["exit_code"] == 0 and "PRIVATE_REDIRECT_BLOCKED" in str(private_redirect["stdout"]), private_redirect
+        assert private_redirect["connects"] == ["CONNECT 1.1.1.1:443 HTTP/1.1"], private_redirect
+        assert private_redirect["snis"] == ["github.com"] and private_redirect["auth"] == [True], private_redirect
+        print("Approved redirect with private DNS answer refused before another CONNECT: PASS")
+        assert proxy_stall["exit_code"] == 0 and "DEADLINE_ENFORCED:proxy_connect_stall:" in str(proxy_stall["stdout"]), proxy_stall
+        assert proxy_stall["connect"] == "CONNECT 1.1.1.1:443 HTTP/1.1" and proxy_stall["auth"] is True, proxy_stall
+        print("Authenticated proxy stall before CONNECT response respects deadline: PASS")
+        assert origin_stall["exit_code"] == 0 and "DEADLINE_ENFORCED:origin_body_stall:" in str(origin_stall["stdout"]), origin_stall
+        assert origin_stall["connect"] == "CONNECT 1.1.1.1:443 HTTP/1.1" and origin_stall["auth"] is True, origin_stall
+        assert origin_stall["sni"] == HOST and origin_stall["host"] is True and origin_stall["partial_body_sent"] is True, origin_stall
+        print("Origin stall after partial body respects deadline: PASS")
         assert no_proxy["exit_code"] == 0 and "test result: ok" in str(no_proxy["stdout"]), no_proxy
         assert no_proxy["sni"] == HOST and no_proxy["host"] is True, no_proxy
         assert no_proxy["proxy_contacted"] is False, no_proxy
