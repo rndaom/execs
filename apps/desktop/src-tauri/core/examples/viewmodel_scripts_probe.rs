@@ -30,6 +30,8 @@ fn main() {
     let mut unresolved = 0;
     let mut unsupported_type = 0;
     let mut override_slots = BTreeMap::new();
+    let mut missing_scripts: BTreeMap<&str, Vec<u32>> = BTreeMap::new();
+    let mut special_overrides: BTreeMap<&str, Vec<u32>> = BTreeMap::new();
     for item in &weapon_items {
         if let Some(slot) = &item.animation_slot {
             *override_slots.entry(slot.as_str()).or_insert(0usize) += 1;
@@ -37,11 +39,23 @@ fn main() {
         let resolved = resolve_item_role(item, &scripts);
         match resolved.source {
             ItemRoleSource::ItemOverride => item_override += 1,
-            ItemRoleSource::UnsupportedItemOverride => unsupported_override += 1,
+            ItemRoleSource::UnsupportedItemOverride => {
+                unsupported_override += 1;
+                special_overrides
+                    .entry(item.animation_slot.as_deref().unwrap_or(""))
+                    .or_default()
+                    .push(item.id);
+            }
             ItemRoleSource::WeaponScript => script_role += 1,
             ItemRoleSource::WeaponScriptDefault => default_role += 1,
             ItemRoleSource::Unresolved if resolved.script_path.is_some() => unsupported_type += 1,
-            ItemRoleSource::Unresolved => unresolved += 1,
+            ItemRoleSource::Unresolved => {
+                unresolved += 1;
+                missing_scripts
+                    .entry(&item.item_class)
+                    .or_default()
+                    .push(item.id);
+            }
         }
     }
     println!(
@@ -54,4 +68,12 @@ fn main() {
         weapon_items.len(), item_override, unsupported_override, script_role, default_role, unresolved, unsupported_type
     );
     println!("item override slots: {override_slots:?}");
+    println!("unsupported item overrides: {special_overrides:?}");
+    println!("missing exact scripts: {missing_scripts:?}");
+    let shotgun_scripts: Vec<_> = scripts
+        .scripts
+        .keys()
+        .filter(|stem| stem.starts_with("tf_weapon_shotgun"))
+        .collect();
+    println!("installed shotgun script stems: {shotgun_scripts:?}");
 }
