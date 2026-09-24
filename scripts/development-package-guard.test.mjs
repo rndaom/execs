@@ -32,6 +32,7 @@ import {
   selectOwnedDialog,
   verifyAppImageMount,
   waitForDialogState,
+  waitForOwnedDialogDismissal,
 } from "./development-package-native.mjs";
 import {
   assertNoPlayerProcesses,
@@ -375,6 +376,93 @@ test("GTK state polling times out a still-viewable dialog", async () => {
     ),
     /Timed out: GTK response/,
   );
+  time = 0;
+  assert.equal(
+    await waitForDialogState(
+      "GTK response",
+      () => observe([mainWindow, gtkDialog]),
+      (value) => ownedDialogDismissal(value, 700, initial),
+      { timeout: 2, now: () => time++, pause: async () => {}, allowTimeout: true },
+    ),
+    null,
+  );
+});
+
+test("a retained import dialog gets one guarded Return retry", async () => {
+  const importDialog = { ...gtkDialog, title: "Import profile" };
+  const initial = selectOwnedDialog(observe([mainWindow, importDialog]), 700, "Import profile");
+  let presses = 1;
+  let retryCalls = 0;
+  const waits = [];
+  const wait = async (_label, inspect, decide, options) => {
+    waits.push(options);
+    return options?.allowTimeout ? null : decide(inspect());
+  };
+  const result = await waitForOwnedDialogDismissal(
+    700,
+    initial,
+    () => observe([mainWindow, { ...importDialog, mapState: presses === 2 ? 0 : 2 }]),
+    () => {
+      retryCalls++;
+      presses++;
+    },
+    { wait },
+  );
+  assert.deepEqual(result, {
+    dismissal: { state: "unmapped", dialogId: 123, mainWindowId: 100 },
+    returnPresses: 2,
+  });
+  assert.equal(retryCalls, 1);
+  assert.equal(waits.length, 2);
+  assert.deepEqual(waits[0], { timeout: 5_000, allowTimeout: true });
+  assert.equal(waits[1], undefined);
+});
+
+test("a dismissed import or export dialog never receives a second Return", async () => {
+  for (const title of ["Import profile", "Export profile"]) {
+    const current = { ...gtkDialog, title };
+    const initial = selectOwnedDialog(observe([mainWindow, current]), 700, title);
+    let retries = 0;
+    const result = await waitForOwnedDialogDismissal(
+      700,
+      initial,
+      () => observe([mainWindow, { ...current, mapState: 0 }]),
+      () => retries++,
+      { wait: async (_label, inspect, decide) => decide(inspect()) },
+    );
+    assert.equal(result.dismissal.state, "unmapped");
+    assert.equal(result.returnPresses, 1);
+    assert.equal(retries, 0);
+  }
+});
+
+test("import Return retry refuses a changed dialog and never masks an undismissed one", async () => {
+  const importDialog = { ...gtkDialog, title: "Import profile" };
+  const initial = selectOwnedDialog(observe([mainWindow, importDialog]), 700, "Import profile");
+  let retryCalls = 0;
+  const retry = () => retryCalls++;
+  const timedOutFirst = async (_label, _inspect, _decide, options) => {
+    if (options?.allowTimeout) return null;
+    throw new Error("Timed out: still viewable after retry");
+  };
+  await assert.rejects(
+    waitForOwnedDialogDismissal(
+      700,
+      initial,
+      () => observe([mainWindow, { ...importDialog, id: 124 }]),
+      retry,
+      { wait: timedOutFirst },
+    ),
+    /Another visible owned window/,
+  );
+  assert.equal(retryCalls, 0);
+  await assert.rejects(
+    waitForOwnedDialogDismissal(700, initial, () => observe([mainWindow, importDialog]), retry, {
+      wait: timedOutFirst,
+    }),
+    /Timed out: still viewable after retry/,
+  );
+  assert.equal(retryCalls, 1);
 });
 
 test("configuration entrypoint refuses a local host before creating any file", () => {

@@ -140,7 +140,7 @@ export async function waitForDialogState(
   label,
   inspect,
   decide,
-  { timeout = 15_000, now = Date.now, pause = delay } = {},
+  { timeout = 15_000, now = Date.now, pause = delay, allowTimeout = false } = {},
 ) {
   const deadline = now() + timeout;
   do {
@@ -148,7 +148,31 @@ export async function waitForDialogState(
     if (result) return result;
     await pause(Math.min(150, Math.max(0, deadline - now())));
   } while (now() < deadline);
+  if (allowTimeout) return null;
   throw new Error(`Timed out: ${label}`);
+}
+
+/** A location-entry Return may leave an import chooser open. Retry only the
+ * same verified, still-viewable dialog once; the later archive review still
+ * proves which file the native app actually read. */
+export async function waitForOwnedDialogDismissal(
+  pid,
+  dialog,
+  inspect,
+  retryImportReturn,
+  { wait = waitForDialogState } = {},
+) {
+  const label = "owned GTK dialog becomes unmapped or absent after native input";
+  const decide = (observation) => ownedDialogDismissal(observation, pid, dialog);
+  if (dialog.title !== "Import profile") {
+    return { dismissal: await wait(label, inspect, decide), returnPresses: 1 };
+  }
+  const first = await wait(label, inspect, decide, { timeout: 5_000, allowTimeout: true });
+  if (first) return { dismissal: first, returnPresses: 1 };
+  const settled = decide(inspect());
+  if (settled) return { dismissal: settled, returnPresses: 1 };
+  await retryImportReturn();
+  return { dismissal: await wait(label, inspect, decide), returnPresses: 2 };
 }
 
 export function verifyAppImageMount(executable, temporaryDirectory, mountInfo) {
@@ -456,11 +480,13 @@ export class DevelopmentPackageSession {
       capture("path");
       input("accept-path", ["key", "--clearmodifiers", "Return"]);
       phase = "awaiting-dismissal";
-      receipt.dismissal = await waitForDialogState(
-        "owned GTK dialog becomes unmapped or absent after native input",
-        inspect,
-        (observation) => ownedDialogDismissal(observation, this.native.pid, dialog),
-      );
+      const response = await waitForOwnedDialogDismissal(this.native.pid, dialog, inspect, () => {
+        capture("still-open-after-return");
+        input("retry-accept-path", ["key", "--clearmodifiers", "Return"]);
+        phase = "awaiting-second-dismissal";
+      });
+      receipt.dismissal = response.dismissal;
+      receipt.returnPresses = response.returnPresses;
       receipt.status = "dismissed-awaiting-file-proof";
       this.saveReport();
     } catch (cause) {
