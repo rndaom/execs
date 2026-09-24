@@ -1,6 +1,6 @@
 # D7 — Valve asset transformation and profile export
 
-Status: **open**. This is a source and product-path review, not a legal conclusion or a permission grant. It covers a possible future Viewmodels builder that derives models from the player's installed TF2 files. The earlier CompVMInstaller builder is retired in the current development branch.
+Status: **open**. This is a source and product-path review, not a legal conclusion or a permission grant. The owner confirmed the Viewmodels builder is required for 0.2.0. The replacement derives models from the player's installed TF2 files; the earlier CompVMInstaller path is disabled in the current development branch while that replacement is built.
 
 ## Primary-source boundary
 
