@@ -105,15 +105,14 @@ test("native UI actions and observation select the canonical local Windows Power
     assert.throws(() => windowsNativeShell("Save", path));
 });
 
-test(
-  "native filename typing accepts the fixture path and refuses SendKeys syntax",
-  {
-    skip: process.platform !== "win32",
-  },
-  () =>
-    withFixture((fixture) => {
-      const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
-      const script = `
+test("native filename typing accepts a safe hosted path and refuses SendKeys syntax", {
+  skip: process.platform !== "win32",
+}, () => {
+  // The pure validator must not depend on os.tmpdir(): hosted TEMP can use a RUNNER~1 alias.
+  const safeHostedDestination =
+    "D:\\a\\_temp\\execs-windows-package-PF11Xy\\fixture\\exports\\previous-ui-export.zip";
+  const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+  const script = `
 . '${helper}'
 $special = @('+', '^', '%', '~', '(', ')', '{', '}', '[', ']')
 $rejected = @($special | ForEach-Object { -not (Test-SendKeysLiteralPath ($env:EXECS_TEST_DESTINATION + $_)) })
@@ -121,38 +120,39 @@ $rejected = @($special | ForEach-Object { -not (Test-SendKeysLiteralPath ($env:E
   accepted = Test-SendKeysLiteralPath $env:EXECS_TEST_DESTINATION
   relativeRefused = -not (Test-SendKeysLiteralPath 'C:relative.zip')
   rootRelativeRefused = -not (Test-SendKeysLiteralPath '\\relative.zip')
+  shortAliasRefused = -not (Test-SendKeysLiteralPath 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\export.zip')
   newlineRefused = -not (Test-SendKeysLiteralPath ($env:EXECS_TEST_DESTINATION + [char]10))
   specialRefused = $rejected
 } | ConvertTo-Json -Depth 4 -Compress
 `;
-      for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
-        const result = spawnSync(
-          command,
-          [
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
-            "-Command",
-            script,
-          ],
-          {
-            encoding: "utf8",
-            timeout: 10_000,
-            windowsHide: true,
-            env: { ...process.env, EXECS_TEST_DESTINATION: fixture.exportPath },
-          },
-        );
-        assert.equal(result.status, 0, result.stderr);
-        const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
-        assert.equal(actual.accepted, true);
-        assert.equal(actual.relativeRefused, true);
-        assert.equal(actual.rootRelativeRefused, true);
-        assert.equal(actual.newlineRefused, true);
-        assert.deepEqual(actual.specialRefused, Array(10).fill(true));
-      }
-    }),
-);
+  for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+    const result = spawnSync(
+      command,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
+        "-Command",
+        script,
+      ],
+      {
+        encoding: "utf8",
+        timeout: 10_000,
+        windowsHide: true,
+        env: { ...process.env, EXECS_TEST_DESTINATION: safeHostedDestination },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
+    assert.equal(actual.accepted, true);
+    assert.equal(actual.relativeRefused, true);
+    assert.equal(actual.rootRelativeRefused, true);
+    assert.equal(actual.shortAliasRefused, true);
+    assert.equal(actual.newlineRefused, true);
+    assert.deepEqual(actual.specialRefused, Array(10).fill(true));
+  }
+});
 
 test(
   "export diagnostics inspect only five exact names and keep alternates distinct",
