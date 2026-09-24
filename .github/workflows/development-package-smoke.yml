@@ -64,6 +64,21 @@ jobs:
         run: node scripts/development-package-guard.mjs --prepare
       - name: Build optimized AppImage and Debian packages without updater signatures
         run: pnpm --filter @execs/desktop tauri build --ci --bundles appimage,deb --config "$RUNNER_TEMP/execs-development-package-config.json" -- --locked
+      - name: Inspect native and Debian runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=apps/desktop/src-tauri/target/release/execs
+          debs=(apps/desktop/src-tauri/target/release/bundle/deb/execs_*_amd64.deb)
+          test -x "$binary"
+          test "${#debs[@]}" -eq 1
+          ldd "$binary" | tee "$RUNNER_TEMP/execs-development-native-ldd.txt"
+          if grep -q 'not found' "$RUNNER_TEMP/execs-development-native-ldd.txt"; then
+            echo 'A native shared library is missing from the build host.' >&2
+            exit 1
+          fi
+          dpkg-deb --field "${debs[0]}" Depends | tee "$RUNNER_TEMP/execs-development-deb-depends.txt"
+          test -s "$RUNNER_TEMP/execs-development-deb-depends.txt"
       - name: Install pinned external native driver
         run: cargo install tauri-driver --version 2.0.6 --locked
       - name: Previous-public package upgrades, native round trip and Debian first install
