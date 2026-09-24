@@ -1,0 +1,226 @@
+{
+  "runId": 35937290557,
+  "workflowUrl": "https://github.com/rndaom/execs/actions/runs/35937290557",
+  "artifactId": 10783592416,
+  "artifactName": "development-linux-packages-4c363147a62a624a7bda7f2ecae13541d505d37f",
+  "artifactApiSizeBytes": 1414713,
+  "head": "65d20bd905435a6d4813b39c13537339d94b7b2b",
+  "testedMerge": "4c363147a62a624a7bda7f2ecae13541d505d37f",
+  "files": [
+    {
+      "path": "evidence/appimage-upgrade/candidate-import-complete.png",
+      "bytes": 72592,
+      "sha256": "9ac0e30d3c10c597b1b295c4650e3cde5ace0c77afcd5e3422730eed6c4b7d3d"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-import-dialog.png",
+      "bytes": 22021,
+      "sha256": "112736a6f6a6f720f4068c9179dde4c7a9be4c7e3a0336a28e14dc8cad589b40"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-import-path.png",
+      "bytes": 26612,
+      "sha256": "83dd64688c00b7498efd9806eca59fc4a7f8cc20ca2f146c2f299239db4cee3b"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-import-review.png",
+      "bytes": 78616,
+      "sha256": "ca3a8640dfbe74c8b3e99a05ac7f0d49a945d1ebc7caa30fe4ff7931f4aaa1ed"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-launch-driver.log",
+      "bytes": 486,
+      "sha256": "f2fb52c4a35ebfd63706d3250ad98416327e63479a6169c2ac6c41774296d9f2"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-preserved-profile-read.png",
+      "bytes": 59481,
+      "sha256": "2ec6e12e50310330fa003f5cc217b6b1e2a56b4ba1a8b21fc0becaeb0c00d460"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-profile-after-reopen.png",
+      "bytes": 59341,
+      "sha256": "df76ec747ccb8dd33916ef97674a4dd6da287f075ef75eb093edf9932848c8bc"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-reopen-driver.log",
+      "bytes": 360,
+      "sha256": "d95d2a33827034da28921063dea052c79e549349fd322b0b4121aae6134b7ead"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-switch-complete.png",
+      "bytes": 76611,
+      "sha256": "bfce0dfef8f98bf02c07ca11c28bfb9a99a156aaefc2e04192e068b22f2faf23"
+    },
+    {
+      "path": "evidence/appimage-upgrade/candidate-switched-profile-read.png",
+      "bytes": 76399,
+      "sha256": "0482442c3dc305c08222f60c4031db504aa018644bc6ac0390280bce10c269d3"
+    },
+    {
+      "path": "evidence/appimage-upgrade/fixture-baseline.json",
+      "bytes": 15786,
+      "sha256": "624f3a58c1742a73ac4a620715c95860055fbb228f4c417c8ea8c246945ea529"
+    },
+    {
+      "path": "evidence/appimage-upgrade/previous-export-complete.png",
+      "bytes": 56309,
+      "sha256": "1d226449dd4e59ed004c84d848c9ea1aee71daaf6cabaa1f31aaa3b19c7999db"
+    },
+    {
+      "path": "evidence/appimage-upgrade/previous-export-dialog.png",
+      "bytes": 28729,
+      "sha256": "b54a42726e7066481c1bbe55123003848f1420bef571225727816b385329af8a"
+    },
+    {
+      "path": "evidence/appimage-upgrade/previous-export-path.png",
+      "bytes": 30901,
+      "sha256": "ddd4149efefc82bc945f501a870cc9485d24dde5bf446cb75b1e0f51f8d80915"
+    },
+    {
+      "path": "evidence/appimage-upgrade/previous-launch-driver.log",
+      "bytes": 204,
+      "sha256": "469c9b514af550e63c82327d7448f69b3b5d19f0d3a911a3346147e23618c958"
+    },
+    {
+      "path": "evidence/appimage-upgrade/previous-profile-read.png",
+      "bytes": 55951,
+      "sha256": "287d7dffd2632f37f5b2137b7b31df08c6e02376ad77aea351bddf090f3ac569"
+    },
+    {
+      "path": "evidence/appimage-upgrade/previous-ui-export.zip",
+      "bytes": 1674,
+      "sha256": "6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2"
+    },
+    {
+      "path": "evidence/appimage-upgrade/results.json",
+      "bytes": 217898,
+      "sha256": "d1d91a281c2e0a1961095a706532bd168e71fc7f3b0e7ebc1b67dc484ad51a1e"
+    },
+    {
+      "path": "evidence/deb-first-install/candidate-launch-driver.log",
+      "bytes": 204,
+      "sha256": "589b9de0d59f53417c293c6c4d80a01a8ea3bb6e87529fac83e350bd2a1c86f2"
+    },
+    {
+      "path": "evidence/deb-first-install/candidate-preserved-profile-read.png",
+      "bytes": 59533,
+      "sha256": "807bca79d4087341e338bb4398a61ef71af8d0699133220f0591cfbb3a52c92d"
+    },
+    {
+      "path": "evidence/deb-first-install/candidate-profile-after-reopen.png",
+      "bytes": 59341,
+      "sha256": "df76ec747ccb8dd33916ef97674a4dd6da287f075ef75eb093edf9932848c8bc"
+    },
+    {
+      "path": "evidence/deb-first-install/candidate-reopen-driver.log",
+      "bytes": 204,
+      "sha256": "98e002d99ad6cfca7ab0fa7b46d25d8e798116f08a58a2d31d23c561c0533b0a"
+    },
+    {
+      "path": "evidence/deb-first-install/fixture-baseline.json",
+      "bytes": 15786,
+      "sha256": "f5dfdd4047b94baa02681a7ebb516f5d9ae959c532138ec7d9d743a7522c72bd"
+    },
+    {
+      "path": "evidence/deb-first-install/results.json",
+      "bytes": 41005,
+      "sha256": "2dd539b930ec36ccf3866ed8d37dc909650ab08822e86bd1f86fb8d1070500d3"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-import-complete.png",
+      "bytes": 72537,
+      "sha256": "b640d2934edba9a2e6c6b34516fc355f7b5305065aa83ee57aa8af3bcb84df9a"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-import-dialog.png",
+      "bytes": 24818,
+      "sha256": "5e9764d2eefa48d7e672a6229d8c727feb6928eb8452298dfe00520cc3fb1698"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-import-path.png",
+      "bytes": 29153,
+      "sha256": "8f7638244793b712ec2689cf253a2dbd57540d4247541e1ae5c9774a988a8dd2"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-import-review.png",
+      "bytes": 78553,
+      "sha256": "e9645e1b7338753b028eeac4dd474e189f498b1f51017b642756a63f3e18123f"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-launch-driver.log",
+      "bytes": 330,
+      "sha256": "1538b2462bda342520eaf219b2706a3963e6fd579a314cbdf9f42ac9455b12d4"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-preserved-profile-read.png",
+      "bytes": 59335,
+      "sha256": "85a94d905878bad2aebdc2c548f51b68ea820307a8966e09e3d3ac1e6edb5f1a"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-profile-after-reopen.png",
+      "bytes": 59364,
+      "sha256": "51a050f8dad9b4631dc8b82697ff8e70b32125aed6715d64c59d7f158de63838"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-reopen-driver.log",
+      "bytes": 204,
+      "sha256": "cdcd5529fddcdf411e2e4ca2cc31eed1fbf4ed34d2e31daca0d5ad835ee27f08"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-switch-complete.png",
+      "bytes": 76464,
+      "sha256": "02b774677bbf3baf850f490587811969ed6f828c2b614d18861b78274af08c34"
+    },
+    {
+      "path": "evidence/deb-upgrade/candidate-switched-profile-read.png",
+      "bytes": 76267,
+      "sha256": "e6d4712d765e4bab05b06ca0787cf4983918f44da7523cd419504e39d1055245"
+    },
+    {
+      "path": "evidence/deb-upgrade/fixture-baseline.json",
+      "bytes": 15786,
+      "sha256": "52078f05842293fe2d21443956bd543229f587eefdadb7c961a289ebcddd0705"
+    },
+    {
+      "path": "evidence/deb-upgrade/previous-export-complete.png",
+      "bytes": 56374,
+      "sha256": "b88f86d309cf58d752e7d01e785996f16994fe665e3db8f12ef681911e60e868"
+    },
+    {
+      "path": "evidence/deb-upgrade/previous-export-dialog.png",
+      "bytes": 46310,
+      "sha256": "3b1b2cd9a5901aa6baf62220bef7fd23a5750caba4e94525a2b72f6a128ecfd4"
+    },
+    {
+      "path": "evidence/deb-upgrade/previous-export-path.png",
+      "bytes": 48507,
+      "sha256": "21829611520fbc64eb99b4947b18944ba4fb3e59e8a9de348cc3fb3eac6b8c35"
+    },
+    {
+      "path": "evidence/deb-upgrade/previous-launch-driver.log",
+      "bytes": 360,
+      "sha256": "eaad717d2b090aaf6bb9e62417b0fccdf69f17154d54a739999fe530cd04633b"
+    },
+    {
+      "path": "evidence/deb-upgrade/previous-profile-read.png",
+      "bytes": 55941,
+      "sha256": "a28847b1262596c42179f12dd0f0c0170d24bedba7a321d85935c2e291a8657c"
+    },
+    {
+      "path": "evidence/deb-upgrade/previous-ui-export.zip",
+      "bytes": 1674,
+      "sha256": "6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2"
+    },
+    {
+      "path": "evidence/deb-upgrade/results.json",
+      "bytes": 225792,
+      "sha256": "8a0f7e050ef2143d29979763a5c067b05f8f09557da30f61515d5bd0fbb58459"
+    },
+    {
+      "path": "evidence/results.json",
+      "bytes": 544869,
+      "sha256": "1b7a636f814b6b751332d0288f6d1e4ecab8924c807528a2734655cd5f6925db"
+    }
+  ]
+}

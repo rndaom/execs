@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "tf2Root": "D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\fixture-tf2",
+  "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+  "profiles": [
+    {
+      "id": "f20a0001-8d01-4000-8000-000000000001",
+      "name": "Package smoke - active",
+      "createdAt": "2026-09-20T00:00:00Z",
+      "updatedAt": "2026-09-20T00:00:00Z"
+    },
+    {
+      "id": "f20a0001-8d01-4000-8000-000000000002",
+      "name": "Package smoke - saved HUD",
+      "createdAt": "2026-09-20T00:00:00Z",
+      "updatedAt": "2026-09-20T00:00:00Z"
+    }
+  ]
+}

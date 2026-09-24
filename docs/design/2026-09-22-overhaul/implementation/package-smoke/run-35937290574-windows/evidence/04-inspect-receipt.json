@@ -1,0 +1,33 @@
+{
+  "packageCode": 15700,
+  "processes": [
+    {
+      "pid": 7052,
+      "parent": 4040,
+      "executable": "D:\\a\\_temp\\execs-windows-package-Muaopv\\installed\\execs.exe",
+      "created": "2026-09-24T00:12:22.0526320Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-Muaopv\\installed\\execs.exe",
+      "session": 2
+    },
+    {
+      "pid": 7460,
+      "parent": 7052,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T00:12:22.9621560Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=61644 --lang=en-US --mojo-named-platform-channel-pipe=7052.964.10259176745882823249",
+      "session": 2
+    }
+  ],
+  "listeners": [],
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "process": {
+    "pid": 7052,
+    "parent": 4040,
+    "executable": "D:\\a\\_temp\\execs-windows-package-Muaopv\\installed\\execs.exe",
+    "created": "2026-09-24T00:12:22.0526320Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-Muaopv\\installed\\execs.exe",
+    "session": 2
+  },
+  "version": "0.1.8",
+  "windows": []
+}
