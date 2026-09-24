@@ -87,7 +87,14 @@ fn known_item_override(value: &str) -> bool {
     known_weapon_type(value)
         || matches!(
             value,
-            "ITEM3" | "ITEM4" | "MELEE_ALLCLASS" | "SECONDARY2" | "PRIMARY2"
+            "HEAD"
+                | "MISC"
+                | "ITEM3"
+                | "ITEM4"
+                | "MELEE_ALLCLASS"
+                | "SECONDARY2"
+                | "PRIMARY2"
+                | "PASSTIME_BALL"
         )
 }
 
@@ -226,7 +233,7 @@ pub fn resolve_item_role(item: &StockItem, scripts: &StockWeaponScriptIndex) -> 
     if let Some(role) = item
         .animation_slot
         .as_deref()
-        .filter(|role| !role.is_empty())
+        .filter(|role| !role.is_empty() && *role != "FORCE_NOT_USED")
     {
         return ItemRole {
             role: known_item_override(role).then(|| role.to_string()),
@@ -357,7 +364,21 @@ mod tests {
             resolve_item_role(&item, &scripts).source,
             ItemRoleSource::Unresolved
         );
+        scripts
+            .scripts
+            .get_mut("tf_weapon_example")
+            .unwrap()
+            .weapon_type = Some("SECONDARY".into());
         item.animation_slot = Some("FORCE_NOT_USED".into());
+        let forced_script = resolve_item_role(&item, &scripts);
+        assert_eq!(forced_script.source, ItemRoleSource::WeaponScript);
+        assert_eq!(forced_script.role.as_deref(), Some("SECONDARY"));
+        item.animation_slot = Some("PASSTIME_BALL".into());
+        assert_eq!(
+            resolve_item_role(&item, &scripts).source,
+            ItemRoleSource::ItemOverride
+        );
+        item.animation_slot = Some("FUTURE".into());
         assert_eq!(
             resolve_item_role(&item, &scripts).source,
             ItemRoleSource::UnsupportedItemOverride
