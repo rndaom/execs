@@ -40,6 +40,7 @@ import {
   observeCleanupExits,
   readBoundedResponse,
   recordLogErrors,
+  windowsNativeShell,
 } from "./windows-package-smoke.mjs";
 
 const python =
@@ -76,6 +77,135 @@ const event = {
   repository: { full_name: "rndaom/execs" },
   pull_request: { head: { repo: { full_name: "rndaom/execs" } } },
 };
+
+test("only native UI actions select the canonical local Windows PowerShell executable", () => {
+  const windowsDirectory = "C:\\Windows";
+  const desktop = {
+    command: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    sta: true,
+  };
+  for (const action of ["Save", "Close"])
+    assert.deepEqual(windowsNativeShell(action, windowsDirectory), desktop);
+  for (const action of [
+    "Host",
+    "PolicyApply",
+    "PolicyRestore",
+    "Inspect",
+    "Cleanup",
+    "ExtractDriver",
+  ])
+    assert.deepEqual(windowsNativeShell(action, windowsDirectory), { command: "pwsh", sta: false });
+  for (const path of [
+    "C:Windows",
+    "\\Windows",
+    "\\\\server\\share\\Windows",
+    "\\\\?\\C:\\Windows",
+    "C:\\Windows\\..\\other",
+  ])
+    assert.throws(() => windowsNativeShell("Save", path));
+});
+
+test("Desktop PowerShell loads the Framework UI Automation client in STA", {
+  skip: process.platform !== "win32",
+}, () => {
+  const shell = windowsNativeShell("Save", process.env.WINDIR);
+  assert.equal(realpathSync.native(shell.command).toLowerCase(), shell.command.toLowerCase());
+  const script = String.raw`
+$ErrorActionPreference = 'Stop'
+$wpf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'
+Add-Type -LiteralPath (Join-Path $wpf 'UIAutomationTypes.dll')
+Add-Type -LiteralPath (Join-Path $wpf 'UIAutomationClient.dll')
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$root = [Windows.Automation.AutomationElement]::RootElement
+if (-not $root) { throw 'UI Automation root unavailable.' }
+[pscustomobject]@{ edition = $PSVersionTable.PSEdition; apartment = [Threading.Thread]::CurrentThread.GetApartmentState().ToString()
+    root = $true; types = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $wpf 'UIAutomationTypes.dll')).FullName } | ConvertTo-Json -Compress
+`;
+  const result = spawnSync(
+    shell.command,
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Sta",
+      "-ExecutionPolicy",
+      "RemoteSigned",
+      "-Command",
+      script,
+    ],
+    { encoding: "utf8", timeout: 10_000, windowsHide: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
+  assert.equal(actual.edition, "Desktop");
+  assert.equal(actual.apartment, "STA");
+  assert.equal(actual.root, true);
+  assert.match(actual.types, /^UIAutomationTypes, Version=4\.0\.0\.0,/);
+});
+
+test(
+  "both PowerShell editions retain owned-path containment and reject reparse points",
+  {
+    skip: process.platform !== "win32",
+  },
+  () =>
+    withFixture((fixture, parent) => {
+      const link = join(fixture.scratch, "native-redirect");
+      symlinkSync(parent, link, "junction");
+      const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+      const script = String.raw`
+$ErrorActionPreference = 'Stop'
+. '${helper}'
+function Refused([string]$candidate, [bool]$missingLeaf = $false) {
+    try { $null = Assert-Contained $env:EXECS_TEST_ROOT $candidate $missingLeaf; return $false }
+    catch { return $true }
+}
+$valid = Assert-Contained $env:EXECS_TEST_ROOT $env:EXECS_TEST_VALID
+$missing = Assert-Contained $env:EXECS_TEST_ROOT $env:EXECS_TEST_MISSING $true
+[pscustomobject]@{
+    valid = $valid -eq [IO.Path]::GetFullPath($env:EXECS_TEST_VALID)
+    missing = $missing -eq [IO.Path]::GetFullPath($env:EXECS_TEST_MISSING)
+    relative = Refused 'exports\previous-ui-export.zip'
+    driveRelative = Refused ($env:EXECS_TEST_ROOT.Substring(0, 1) + ':exports\previous-ui-export.zip')
+    rootRelative = Refused '\exports\previous-ui-export.zip'
+    sibling = Refused $env:EXECS_TEST_SIBLING
+    missingAncestor = Refused $env:EXECS_TEST_MISSING_ANCESTOR $true
+    reparse = Refused $env:EXECS_TEST_LINKED
+    root = Refused $env:EXECS_TEST_ROOT
+    uncQualified = Test-FullyQualifiedWindowsPath '\\server\share\file'
+    deviceRejected = -not (Test-FullyQualifiedWindowsPath '\\?\C:\file')
+} | ConvertTo-Json -Compress
+`;
+      const environment = {
+        ...process.env,
+        EXECS_TEST_ROOT: fixture.scratch,
+        EXECS_TEST_VALID: join(fixture.scratch, "exports"),
+        EXECS_TEST_MISSING: fixture.exportPath,
+        EXECS_TEST_SIBLING: join(parent, "fixture-sibling", "file"),
+        EXECS_TEST_MISSING_ANCESTOR: join(fixture.scratch, "missing", "file"),
+        EXECS_TEST_LINKED: join(link, "exports"),
+      };
+      for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+        const result = spawnSync(
+          command,
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
+            "-Command",
+            script,
+          ],
+          { encoding: "utf8", timeout: 10_000, windowsHide: true, env: environment },
+        );
+        assert.equal(result.status, 0, result.stderr);
+        const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
+        for (const [name, value] of Object.entries(actual))
+          assert.equal(value, true, `${command}: ${name}`);
+      }
+    }),
+);
 
 test("PowerShell process identity compares exact UTC ticks after JSON date conversion", {
   skip: process.platform !== "win32",

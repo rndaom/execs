@@ -35,6 +35,25 @@ import {
 
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 const helperPath = fileURLToPath(new URL("./windows-package-native.ps1", import.meta.url));
+export function windowsNativeShell(action, windowsDirectory) {
+  if (action !== "Save" && action !== "Close") return { command: "pwsh", sta: false };
+  assert.match(windowsDirectory, /^[A-Za-z]:\\/, "Windows directory must be a local drive path");
+  assert.equal(
+    win32.normalize(windowsDirectory),
+    windowsDirectory,
+    "Windows directory is not canonical",
+  );
+  return {
+    command: win32.join(
+      windowsDirectory,
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    ),
+    sta: true,
+  };
+}
 const nativeState = `return {
   href: location.href, native: typeof window.__TAURI_INTERNALS__?.invoke === 'function',
   width: innerWidth, height: innerHeight, ready: document.readyState,
@@ -269,12 +288,23 @@ export async function main() {
       copyFileSync(request, join(evidence, `${label}-request.json`));
     }
     const execute = () => {
+      const shell = windowsNativeShell(action, process.env.WINDIR);
+      if (shell.sta) {
+        for (const path of [process.env.WINDIR, shell.command]) {
+          assert.equal(
+            realpathSync.native(path).toLowerCase(),
+            path.toLowerCase(),
+            "Windows PowerShell path is redirected",
+          );
+        }
+      }
       const output = execFileSync(
-        "pwsh",
+        shell.command,
         [
           "-NoLogo",
           "-NoProfile",
           "-NonInteractive",
+          ...(shell.sta ? ["-Sta", "-ExecutionPolicy", "RemoteSigned"] : []),
           "-File",
           helperPath,
           "-Action",

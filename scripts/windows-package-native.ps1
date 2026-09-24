@@ -11,24 +11,6 @@ $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($identity.User.Value -eq 'S-1-5-18') { throw 'SYSTEM is refused.' }
 . (Join-Path $PSScriptRoot 'windows-package-identity.ps1')
 
-function Assert-Contained([string]$Root, [string]$Path, [bool]$MissingLeaf = $false) {
-    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
-    $full = [IO.Path]::GetFullPath($Path)
-    if (-not [IO.Path]::IsPathFullyQualified($Path) -or -not $full.StartsWith($rootFull + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Outside owned root: $Path" }
-    $current = Get-Item -LiteralPath $rootFull -Force
-    if (-not $current.PSIsContainer -or ($current.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Invalid owned root.' }
-    $parts = $full.Substring($rootFull.Length + 1).Split('\')
-    for ($i = 0; $i -lt $parts.Length; $i++) {
-        $next = Join-Path $current.FullName $parts[$i]
-        if (-not (Test-Path -LiteralPath $next)) {
-            if ($MissingLeaf -and $i -eq $parts.Length - 1) { return $full }
-            throw "Missing path: $next"
-        }
-        $current = Get-Item -LiteralPath $next -Force
-        if ($current.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Reparse point refused: $next" }
-    }
-    return $full
-}
 if ($Request -ceq '-') {
     if ($Action -notin @('Inspect', 'Cleanup')) { throw 'Only read/cleanup process actions accept stdin.' }
     $buffer = [char[]]::new(1024 * 1024 + 1)
