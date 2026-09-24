@@ -60,6 +60,10 @@ name = "viewmodel_group_weight_probe"
 required-features = ["probes"]
 
 [[example]]
+name = "viewmodel_vpk_candidate_probe"
+required-features = ["probes"]
+
+[[example]]
 name = "pack_probe"
 required-features = ["probes"]
 
