@@ -25,7 +25,7 @@ pub struct PositionValueAudit {
     pub bounded_records: usize,
     pub unbounded_records: usize,
     pub bounded_raw_records: usize,
-    pub unbounded_raw_records: usize,
+    pub decoded_terminal_raw_records: usize,
     pub decoded_channels: usize,
     pub decoded_frames: usize,
     pub repeated_frames: usize,
@@ -165,6 +165,53 @@ pub fn source_float16_to_f32(bits: u16) -> f32 {
     }
 }
 
+fn raw_vector48(bytes: &[u8]) -> Result<[f32; 3], StockSourceError> {
+    let bytes: [u8; 6] = bytes
+        .try_into()
+        .map_err(|_| invalid("raw Vector48 position requires six bytes"))?;
+    let mut position = [0.0; 3];
+    for axis in 0..3 {
+        position[axis] =
+            source_float16_to_f32(u16::from_le_bytes([bytes[axis * 2], bytes[axis * 2 + 1]]));
+    }
+    Ok(position)
+}
+
+/// Fixed size for a terminal raw-position bone record. Animated channels
+/// cannot be bounded from `nextoffset=0` and are rejected here.
+pub fn terminal_raw_position_len(flags: u8) -> Result<usize, StockSourceError> {
+    if flags & 0x01 == 0
+        || flags & !(0x01 | 0x02 | 0x10 | 0x20) != 0
+        || flags & 0x02 != 0 && flags & 0x20 != 0
+    {
+        return Err(invalid("terminal record is not fixed-size raw position"));
+    }
+    Ok(4 + if flags & 0x02 != 0 { 6 } else { 0 } + if flags & 0x20 != 0 { 8 } else { 0 } + 6)
+}
+
+/// Decode a terminal raw position at its exact Source-defined fixed size.
+/// The caller must have verified the MDL and bone-chain start first.
+pub fn decode_terminal_raw_position_record(
+    record: &[u8],
+    frame_count: u16,
+) -> Result<Vec<[f32; 3]>, StockSourceError> {
+    let header = record
+        .get(..4)
+        .ok_or_else(|| invalid("terminal bone record header is truncated"))?;
+    if frame_count == 0
+        || header[2] != 0
+        || header[3] != 0
+        || record.len() != terminal_raw_position_len(header[1])?
+    {
+        return Err(invalid(
+            "terminal raw position size, frames or nextoffset is invalid",
+        ));
+    }
+    let position_start = record.len() - 6;
+    let position = raw_vector48(&record[position_start..])?;
+    Ok(vec![position; usize::from(frame_count)])
+}
+
 /// Decode the whole-frame local position of one bounded Source bone record.
 /// `base_position` and `position_scale` must come from the same verified MDL
 /// bone (or its linear-bone table). Rotation, sequence weights, blending,
@@ -203,13 +250,7 @@ pub fn decode_position_frames(
         let payload = record
             .get(position_start..position_start + 6)
             .ok_or_else(|| invalid("raw Vector48 position is truncated"))?;
-        let mut position = [0.0; 3];
-        for axis in 0..3 {
-            position[axis] = source_float16_to_f32(u16::from_le_bytes([
-                payload[axis * 2],
-                payload[axis * 2 + 1],
-            ]));
-        }
+        let position = raw_vector48(payload)?;
         return Ok(vec![position; usize::from(frame_count)]);
     }
     let mut frames = vec![
@@ -394,7 +435,12 @@ pub fn audit_stock_position_values_mdl(
                 let next = i16::from_le_bytes([header[2], header[3]]);
                 if header[1] & 0x01 != 0 {
                     if next == 0 {
-                        audit.unbounded_raw_records += 1;
+                        let len = terminal_raw_position_len(header[1])?;
+                        let record = bytes
+                            .get(at..at.saturating_add(len))
+                            .ok_or_else(|| invalid("terminal raw position exceeds MDL"))?;
+                        decode_terminal_raw_position_record(record, frames)?;
+                        audit.decoded_terminal_raw_records += 1;
                     } else {
                         let end = at
                             + usize::try_from(next)
@@ -504,6 +550,23 @@ mod tests {
         assert_eq!(source_float16_to_f32(0x7c00), 65504.0);
         assert_eq!(source_float16_to_f32(0x7e00), 0.0);
         assert_eq!(source_float16_to_f32(0x0001), 2f32.powi(-24));
+    }
+
+    #[test]
+    fn terminal_raw_vector48_uses_its_fixed_payload_size() {
+        let mut record = [0u8; 18];
+        record[..4].copy_from_slice(&[0, 0x21, 0, 0]);
+        record[12..18].copy_from_slice(&[0, 0x3c, 0, 0xc0, 0, 0x38]);
+        assert_eq!(terminal_raw_position_len(0x21).unwrap(), 18);
+        assert_eq!(
+            decode_terminal_raw_position_record(&record, 3).unwrap(),
+            [[1.0, -2.0, 0.5]; 3]
+        );
+        assert!(decode_terminal_raw_position_record(&record[..17], 3).is_err());
+        assert!(decode_terminal_raw_position_record(&record, 0).is_err());
+        assert!(terminal_raw_position_len(0x0d).is_err());
+        record[2] = 18;
+        assert!(decode_terminal_raw_position_record(&record, 3).is_err());
     }
 
     #[test]
