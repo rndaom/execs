@@ -47,6 +47,7 @@ pub mod viewmodel_rotation_values;
 pub mod viewmodel_scripts;
 pub mod viewmodel_source;
 pub mod viewmodel_transform_preflight;
+pub mod viewmodel_weights;
 pub mod vpk;
 pub mod vtf_read;
 pub mod wizard;
