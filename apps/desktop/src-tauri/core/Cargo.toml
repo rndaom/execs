@@ -52,6 +52,10 @@ name = "viewmodel_raw_rotation_probe"
 required-features = ["probes"]
 
 [[example]]
+name = "viewmodel_weapon_mdl_probe"
+required-features = ["probes"]
+
+[[example]]
 name = "pack_probe"
 required-features = ["probes"]
 
