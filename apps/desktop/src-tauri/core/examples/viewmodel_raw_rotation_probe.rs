@@ -5,7 +5,8 @@ use std::path::Path;
 
 use execs_core::viewmodel_pose::parse_stock_pose_mdl;
 use execs_core::viewmodel_rotation_values::{
-    decode_raw_rotation_record, decode_terminal_raw_rotation_record, terminal_raw_rotation_len,
+    decode_animated_rotation_samples, decode_raw_rotation_record,
+    decode_terminal_raw_rotation_record, terminal_raw_rotation_len,
 };
 use execs_core::viewmodel_source::{read_stock_animation_index, read_stock_bone_index};
 use execs_core::vpk::{map_vpk_entries, read_vpk_entry};
@@ -18,11 +19,13 @@ fn audit(
     bytes: &[u8],
     model: &execs_core::viewmodel_source::StockAnimationModel,
     bone: &execs_core::viewmodel_source::StockBoneModel,
-) -> (usize, usize) {
+) -> (usize, usize, usize, usize) {
     let pose = parse_stock_pose_mdl(bytes, model, bone).expect("verified pose inventory");
     let table = usize::try_from(integer(bytes, 184)).expect("animation table");
     let mut decoded = 0;
     let mut terminal = 0;
+    let mut animated = 0;
+    let mut animated_terminal = 0;
     for (index, animation) in model.animations.iter().enumerate() {
         if pose.animations[index].unsupported_reason.is_some() {
             continue;
@@ -30,23 +33,31 @@ fn audit(
         let descriptor = table + index * 100;
         let section_frames = integer(bytes, descriptor + 84);
         let starts = if section_frames == 0 {
-            vec![descriptor + usize::try_from(integer(bytes, descriptor + 56)).expect("local data")]
+            vec![(
+                descriptor + usize::try_from(integer(bytes, descriptor + 56)).expect("local data"),
+                animation.frames,
+            )]
         } else {
+            let section_frames = usize::try_from(section_frames).expect("section frame count");
             let section_table = descriptor
                 + usize::try_from(integer(bytes, descriptor + 80)).expect("section table");
             (0..pose.animations[index].section_count)
-                .filter(|section| {
-                    section * usize::try_from(section_frames).unwrap()
-                        < usize::from(animation.frames)
-                })
+                .filter(|section| section * section_frames < usize::from(animation.frames))
                 .map(|section| {
-                    descriptor
-                        + usize::try_from(integer(bytes, section_table + section * 8 + 4))
-                            .expect("section data")
+                    (
+                        descriptor
+                            + usize::try_from(integer(bytes, section_table + section * 8 + 4))
+                                .expect("section data"),
+                        u16::try_from(
+                            section_frames
+                                .min(usize::from(animation.frames) - section * section_frames),
+                        )
+                        .expect("section frame count"),
+                    )
                 })
                 .collect()
         };
-        for start in starts {
+        for (start, frames) in starts {
             let mut at = start;
             for _ in 0..=bone.bones.len() {
                 let header = &bytes[at..at + 4];
@@ -67,6 +78,16 @@ fn audit(
                         decoded += 1;
                     }
                 }
+                if header[1] & 0x08 != 0 {
+                    if next == 0 {
+                        animated_terminal += 1;
+                    } else {
+                        let end = at + usize::try_from(next).expect("bounded record");
+                        decode_animated_rotation_samples(&bytes[at..end], frames)
+                            .expect("animated rotation channels");
+                        animated += 1;
+                    }
+                }
                 if next == 0 {
                     break;
                 }
@@ -74,7 +95,7 @@ fn audit(
             }
         }
     }
-    (decoded, terminal)
+    (decoded, terminal, animated, animated_terminal)
 }
 
 fn main() {
@@ -88,17 +109,23 @@ fn main() {
     let vpk_path = root.join("tf/tf2_misc_dir.vpk");
     let entries = map_vpk_entries(&vpk_path).expect("stock VPK tree");
     println!("TF2 patch {}", animations.patch_version);
-    let mut totals = (0, 0);
+    let mut totals = (0, 0, 0, 0);
     for (class, model) in &animations.models {
         let rel = format!("models/weapons/c_models/c_{class}_animations.mdl");
         let bytes = read_vpk_entry(&vpk_path, entries.get(&rel).expect("class MDL entry"))
             .expect("class MDL bytes");
-        let (decoded, terminal) = audit(&bytes, model, &bones.models[class]);
-        println!("{class}: {decoded} bounded raw rotations, {terminal} terminal raw rotations");
+        let (decoded, terminal, animated, animated_terminal) =
+            audit(&bytes, model, &bones.models[class]);
+        println!("{class}: {decoded} bounded raw, {terminal} terminal raw, {animated} bounded animated, {animated_terminal} terminal animated");
         totals.0 += decoded;
         totals.1 += terminal;
+        totals.2 += animated;
+        totals.3 += animated_terminal;
     }
-    println!("total: {} bounded, {} terminal", totals.0, totals.1);
+    println!(
+        "total: {} bounded raw, {} terminal raw, {} bounded animated, {} terminal animated",
+        totals.0, totals.1, totals.2, totals.3
+    );
     assert_eq!(
         read_stock_animation_index(root).expect("source recheck"),
         animations
