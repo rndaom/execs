@@ -4,6 +4,7 @@
 //! local animation record. Animated angle channels, section interpolation,
 //! bone weights, and model writes remain separate builder work.
 
+use crate::viewmodel_pose_values::decode_anim_values;
 use crate::viewmodel_source::StockSourceError;
 
 fn invalid(message: &str) -> StockSourceError {
@@ -121,6 +122,120 @@ pub fn decode_terminal_raw_rotation_record(record: &[u8]) -> Result<[f32; 4], St
     }
 }
 
+/// Expand whole-frame integer samples from a bounded animated-rotation record.
+/// A zero axis pointer contributes zero. Bone rotation scales and base angles
+/// are applied by a later pose step; this returns only the stored channels.
+pub fn decode_animated_rotation_samples(
+    record: &[u8],
+    frame_count: u16,
+) -> Result<Vec<[i16; 3]>, StockSourceError> {
+    if frame_count == 0 {
+        return Err(invalid("animated rotation has no frames"));
+    }
+    let header = record
+        .get(..4)
+        .ok_or_else(|| invalid("animated rotation header is truncated"))?;
+    let flags = header[1];
+    let next = i16::from_le_bytes([header[2], header[3]]);
+    if usize::try_from(next).ok() != Some(record.len()) {
+        return Err(invalid("animated rotation is not bounded by nextoffset"));
+    }
+    if flags & 0x08 == 0 || flags & 0x22 != 0 || flags & !(0x01 | 0x04 | 0x08 | 0x10) != 0 {
+        return Err(invalid("bone record has incompatible rotation encodings"));
+    }
+    let pointer_end = 10 + if flags & 0x04 != 0 { 6 } else { 0 };
+    let pointers = record
+        .get(4..10)
+        .ok_or_else(|| invalid("animated rotation pointers are truncated"))?;
+    if record.len() < pointer_end {
+        return Err(invalid("animated rotation overlaps position pointers"));
+    }
+    let mut frames = vec![[0; 3]; usize::from(frame_count)];
+    for axis in 0..3 {
+        let offset = i16::from_le_bytes([pointers[axis * 2], pointers[axis * 2 + 1]]);
+        if offset == 0 {
+            continue;
+        }
+        let start = usize::try_from(offset)
+            .ok()
+            .and_then(|offset| 4usize.checked_add(offset))
+            .filter(|start| *start >= pointer_end && *start < record.len())
+            .ok_or_else(|| invalid("animated rotation axis pointer is invalid"))?;
+        let decoded = decode_anim_values(&record[start..], frame_count)?;
+        for (frame, sample) in decoded.samples.into_iter().enumerate() {
+            frames[frame][axis] = sample;
+        }
+    }
+    Ok(frames)
+}
+
+/// Convert Source's right-handed radian Euler angles into a local quaternion.
+/// The axes are X, Y, Z in that order; this is distinct from engine QAngle.
+pub fn radian_euler_quaternion(angles: [f32; 3]) -> Result<[f32; 4], StockSourceError> {
+    if !angles.iter().all(|value| value.is_finite()) {
+        return Err(invalid("rotation angles are not finite"));
+    }
+    let (sr, cr) = (angles[0] * 0.5).sin_cos();
+    let (sp, cp) = (angles[1] * 0.5).sin_cos();
+    let (sy, cy) = (angles[2] * 0.5).sin_cos();
+    let sr_cp = sr * cp;
+    let cr_sp = cr * sp;
+    let cr_cp = cr * cp;
+    let sr_sp = sr * sp;
+    Ok([
+        sr_cp * cy - cr_sp * sy,
+        cr_sp * cy + sr_cp * sy,
+        cr_cp * sy - sr_sp * cy,
+        cr_cp * cy + sr_sp * sy,
+    ])
+}
+
+/// Apply a verified bone's base radian angles and rotation scale to bounded
+/// animated integer samples. `alignment`, when supplied for a bone with
+/// `BONE_FIXED_ALIGNMENT`, chooses the equivalent quaternion sign closest to
+/// that stored orientation. Delta records ignore both base and alignment.
+pub fn decode_animated_rotation_frames(
+    record: &[u8],
+    frame_count: u16,
+    base_angles: [f32; 3],
+    rotation_scale: [f32; 3],
+    alignment: Option<[f32; 4]>,
+) -> Result<Vec<[f32; 4]>, StockSourceError> {
+    if !base_angles
+        .iter()
+        .chain(&rotation_scale)
+        .chain(alignment.iter().flatten())
+        .all(|value| value.is_finite())
+    {
+        return Err(invalid("rotation basis contains a non-finite value"));
+    }
+    let delta = record.get(1).is_some_and(|flags| flags & 0x10 != 0);
+    let samples = decode_animated_rotation_samples(record, frame_count)?;
+    let mut frames = Vec::with_capacity(samples.len());
+    for sample in samples {
+        let mut angles = [0.0; 3];
+        for axis in 0..3 {
+            angles[axis] = f32::from(sample[axis]) * rotation_scale[axis]
+                + if delta { 0.0 } else { base_angles[axis] };
+        }
+        let mut rotation = radian_euler_quaternion(angles)?;
+        if let Some(alignment) = alignment.filter(|_| !delta) {
+            let dot: f32 = alignment
+                .iter()
+                .zip(rotation)
+                .map(|(reference, actual)| reference * actual)
+                .sum();
+            if dot < 0.0 {
+                rotation
+                    .iter_mut()
+                    .for_each(|component| *component = -*component);
+            }
+        }
+        frames.push(rotation);
+    }
+    Ok(frames)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +300,56 @@ mod tests {
         assert_eq!(terminal_raw_rotation_len(0x21).unwrap(), 18);
         assert!(terminal_raw_rotation_len(0x28).is_err());
         assert!(decode_terminal_raw_rotation_record(&raw[..11]).is_err());
+    }
+
+    #[test]
+    fn animated_axes_expand_independent_runs_after_position_pointers() {
+        let mut record = [0u8; 24];
+        record[..4].copy_from_slice(&[3, 0x0c, 24, 0]);
+        record[4..10].copy_from_slice(&[12, 0, 0, 0, 16, 0]);
+        record[16..20].copy_from_slice(&[1, 3, 5, 0]);
+        record[20..24].copy_from_slice(&[1, 3, 251, 255]);
+        assert_eq!(
+            decode_animated_rotation_samples(&record, 3).unwrap(),
+            [[5, 0, -5]; 3]
+        );
+        record[4] = 4;
+        assert!(decode_animated_rotation_samples(&record, 3).is_err());
+        record[4] = 12;
+        record[1] |= 0x20;
+        assert!(decode_animated_rotation_samples(&record, 3).is_err());
+        record[1] = 0x0c;
+        record[2] = 0;
+        assert!(decode_animated_rotation_samples(&record, 3).is_err());
+    }
+
+    #[test]
+    fn animated_frames_apply_base_scale_delta_and_fixed_alignment() {
+        let record = [0, 0x08, 14, 0, 6, 0, 0, 0, 0, 0, 1, 2, 1, 0];
+        let half_pi = std::f32::consts::FRAC_PI_2;
+        let frames = decode_animated_rotation_frames(
+            &record,
+            2,
+            [half_pi, 0.0, 0.0],
+            [half_pi, 1.0, 1.0],
+            Some([-1.0, 0.0, 0.0, 0.0]),
+        )
+        .unwrap();
+        assert!(frames[0][0] < -0.999_999);
+        assert!(frames[0][3].abs() < 0.000_001);
+        assert_eq!(frames[0], frames[1]);
+        let mut delta_record = record;
+        delta_record[1] |= 0x10;
+        let delta = decode_animated_rotation_frames(
+            &delta_record,
+            2,
+            [half_pi, 0.0, 0.0],
+            [half_pi, 1.0, 1.0],
+            Some([-1.0, 0.0, 0.0, 0.0]),
+        )
+        .unwrap();
+        assert!((delta[0][0] - half_pi.sin()).abs() > 0.1);
+        assert!(delta[0][0] > 0.7);
+        assert!(delta[0][3] > 0.7);
     }
 }
