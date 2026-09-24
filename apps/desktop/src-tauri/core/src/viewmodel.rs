@@ -1220,14 +1220,17 @@ mod tests {
         )
         .unwrap();
         let saved = load_manifest(&profiles, &id).unwrap();
-        assert_eq!(saved.viewmodel.as_ref().unwrap().source, ViewmodelSource::Compiled);
+        assert_eq!(
+            saved.viewmodel.as_ref().unwrap().source,
+            ViewmodelSource::Compiled
+        );
         assert_eq!(saved.viewmodel.as_ref().unwrap().options, legacy_options);
         assert_eq!(std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(), vpk);
 
         let archive = root.join("legacy-viewmodels.zip");
         crate::zip::export_profile_to(&profiles, &tf2, &id, &archive).unwrap();
-        let imported = crate::zip::import_profile_from(&profiles, &tf2, &archive, unlocked())
-            .unwrap();
+        let imported =
+            crate::zip::import_profile_from(&profiles, &tf2, &archive, unlocked()).unwrap();
         let imported_id = imported
             .profiles
             .iter()
@@ -1238,8 +1241,12 @@ mod tests {
         let imported_manifest = load_manifest(&profiles, &imported_id).unwrap();
         assert_eq!(imported_manifest.viewmodel, saved.viewmodel);
         assert_eq!(
-            std::fs::read(exclusive_file_path(&profiles, &imported_id, EXECS_VIEWMODELS_VPK))
-                .unwrap(),
+            std::fs::read(exclusive_file_path(
+                &profiles,
+                &imported_id,
+                EXECS_VIEWMODELS_VPK
+            ))
+            .unwrap(),
             vpk
         );
 
@@ -1268,13 +1275,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(), vpk);
-        assert_eq!(load_manifest(&profiles, &imported_id).unwrap().viewmodel, saved.viewmodel);
+        assert_eq!(
+            load_manifest(&profiles, &imported_id).unwrap().viewmodel,
+            saved.viewmodel
+        );
 
-        remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &imported_id, unlocked())
-            .unwrap();
+        remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &imported_id, unlocked()).unwrap();
         assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists());
-        assert!(load_manifest(&profiles, &imported_id).unwrap().viewmodel.is_none());
-        assert_eq!(load_manifest(&profiles, &id).unwrap().viewmodel, saved.viewmodel);
+        assert!(load_manifest(&profiles, &imported_id)
+            .unwrap()
+            .viewmodel
+            .is_none());
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().viewmodel,
+            saved.viewmodel
+        );
         assert_eq!(
             std::fs::read(exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK)).unwrap(),
             vpk

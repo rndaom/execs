@@ -310,11 +310,13 @@ fn profile_export_custom_packs(files: &[ProfileFile]) -> Vec<ProfileExportPack> 
             None => (custom_path, false),
         };
         let path = format!("tf/custom/{root}{}", if folder { "/" } else { "" });
-        let pack = packs.entry(path.to_lowercase()).or_insert_with(|| ProfileExportPack {
-            path,
-            file_count: 0,
-            kind: ProfileExportPackKind::Other,
-        });
+        let pack = packs
+            .entry(path.to_lowercase())
+            .or_insert_with(|| ProfileExportPack {
+                path,
+                file_count: 0,
+                kind: ProfileExportPackKind::Other,
+            });
         pack.file_count += 1;
         if lower == "tf/custom/execs-viewmodels.vpk" {
             pack.kind = ProfileExportPackKind::Viewmodels;
@@ -3421,9 +3423,14 @@ mod tests {
         manifest.launch_options = "-novid".into();
         save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
         fs::write(&destination, b"previous export").unwrap();
-        let error =
-            export_profile_to_with_review(&profiles, &root, id, &destination, Some(&review.revision))
-                .unwrap_err();
+        let error = export_profile_to_with_review(
+            &profiles,
+            &root,
+            id,
+            &destination,
+            Some(&review.revision),
+        )
+        .unwrap_err();
         assert!(error.message().contains("changed since export review"));
         assert_eq!(fs::read(&destination).unwrap(), b"previous export");
         cleanup(&dir);

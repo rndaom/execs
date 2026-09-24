@@ -108,8 +108,8 @@ pub use settings::{
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
 pub use viewmodel::{
-    ensure_profile_preload, import_viewmodel_vpk,
-    profile_has_preload, remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
+    ensure_profile_preload, import_viewmodel_vpk, profile_has_preload,
+    remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
     set_viewmodel_preload,
 };
 pub use wizard::{
@@ -117,9 +117,9 @@ pub use wizard::{
     GitHubAsset, GitHubRelease, OfficialAddon, StartFrom, WizardAsset, WizardResult, WizardSpec,
 };
 pub use zip::{
-    export_profile, export_profile_reviewed, export_profile_to, import_profile, import_profile_from,
-    import_reviewed_profile, inspect_profile_export, inspect_profile_import, safe_zip_file_name,
-    ProfileExportReview, ProfileImportReview,
+    export_profile, export_profile_reviewed, export_profile_to, import_profile,
+    import_profile_from, import_reviewed_profile, inspect_profile_export, inspect_profile_import,
+    safe_zip_file_name, ProfileExportReview, ProfileImportReview,
 };
 
 #[cfg(test)]
