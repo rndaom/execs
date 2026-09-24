@@ -80,6 +80,8 @@ jobs:
           fi
           dpkg-deb --field "${debs[0]}" Depends | tee "$RUNNER_TEMP/execs-development-deb-depends.txt"
           test -s "$RUNNER_TEMP/execs-development-deb-depends.txt"
+          grep -Eq '(^|, )libwebkit2gtk-4\.1-0(,|$)' "$RUNNER_TEMP/execs-development-deb-depends.txt"
+          grep -Eq '(^|, )libgtk-3-0(,|$)' "$RUNNER_TEMP/execs-development-deb-depends.txt"
           grep -Eq '(^|, )libssl3 \| libssl3t64(,|$)' "$RUNNER_TEMP/execs-development-deb-depends.txt"
           grep -Eq '(^|, )zlib1g(,|$)' "$RUNNER_TEMP/execs-development-deb-depends.txt"
       - name: Install pinned external native driver
