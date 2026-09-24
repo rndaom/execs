@@ -64,7 +64,10 @@ fn legacy_community_stem(record: &CrosshairRecord, name: &str) -> Option<&'stati
         "venom_dot" => "dot",
         _ => return None,
     };
-    (record.library.get(old_name).is_some_and(|format| format == "vtf")
+    (record
+        .library
+        .get(old_name)
+        .is_some_and(|format| format == "vtf")
         && !record.library.contains_key(name))
     .then_some(old_name)
 }
@@ -1015,17 +1018,14 @@ fn load_stored_pack_vtf(profiles_dir: &Path, profile_id: &str, name: &str) -> Op
         .as_ref()
         .and_then(|record| legacy_community_stem(record, name));
     for stored_name in std::iter::once(name).chain(legacy_name) {
-        let rel = format!(
-            "tf/custom/{EXECS_CROSSHAIRS_PACK}/{prefix}{THUMB_DIR}/{stored_name}.vtf"
-        );
+        let rel =
+            format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{prefix}{THUMB_DIR}/{stored_name}.vtf");
         let path = exclusive_file_path(profiles_dir, profile_id, &rel);
-        let Some(bytes) = read_regular_file_bounded_within(
-            profiles_dir,
-            &path,
-            MAX_STORED_CROSSHAIR_BYTES,
-        )
-        .ok()
-        .flatten() else {
+        let Some(bytes) =
+            read_regular_file_bounded_within(profiles_dir, &path, MAX_STORED_CROSSHAIR_BYTES)
+                .ok()
+                .flatten()
+        else {
             continue;
         };
         if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
@@ -2422,17 +2422,15 @@ cl_crosshair_blue 56
             let zip_path = root.join("legacy-crosshair.zip");
             crate::zip::export_profile_to(&profiles, &tf2, &id, &zip_path).unwrap();
             let imported_profiles = root.join("imported");
-            let imported = crate::zip::import_profile_from(
-                &imported_profiles,
-                &tf2,
-                &zip_path,
-                unlocked(),
-            )
-            .unwrap();
+            let imported =
+                crate::zip::import_profile_from(&imported_profiles, &tf2, &zip_path, unlocked())
+                    .unwrap();
             let imported_id = &imported.profiles[0].id;
 
-            assert!(stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
-                .is_some_and(|stored| stored == bytes));
+            assert!(
+                stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
+                    .is_some_and(|stored| stored == bytes)
+            );
             let settings = CrosshairBuildSettings {
                 scale: 32,
                 stock: crate::profile::CrosshairStockSettings {
@@ -2456,9 +2454,16 @@ cl_crosshair_blue 56
                 unlocked(),
             )
             .unwrap();
-            assert!(rebuilt.crosshair.as_ref().unwrap().library.contains_key(&new_name));
-            assert!(stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
-                .is_some_and(|stored| stored == bytes));
+            assert!(rebuilt
+                .crosshair
+                .as_ref()
+                .unwrap()
+                .library
+                .contains_key(&new_name));
+            assert!(
+                stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
+                    .is_some_and(|stored| stored == bytes)
+            );
             let selected = apply_crosshairs_configured_with_scripts(
                 &imported_profiles,
                 &tf2,
@@ -2475,8 +2480,10 @@ cl_crosshair_blue 56
             )
             .unwrap();
             assert_eq!(selected.crosshair.as_ref().unwrap().shape, new_name);
-            assert!(stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
-                .is_some_and(|stored| stored == bytes));
+            assert!(
+                stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
+                    .is_some_and(|stored| stored == bytes)
+            );
             cleanup(&root);
         }
     }
