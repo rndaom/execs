@@ -218,8 +218,17 @@ if ($Action -eq 'Cleanup') {
         if (-not $observed) { $absent += [int]$expected.pid; continue }
         $record = Process-Record $observed
         if (-not (Test-ProcessCreatedMatch $record.created $expected.created) -or $record.executable -ine $expected.executable) { throw 'Cleanup process identity changed.' }
+        $consolePath = [IO.Path]::GetFullPath((Join-Path $env:WINDIR 'System32\conhost.exe'))
+        $parentRecord = $null
+        if ($record.executable.Equals($consolePath, [StringComparison]::OrdinalIgnoreCase)) {
+            $parentObserved = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$record.parent)"
+            if ($parentObserved) { $parentRecord = Process-Record $parentObserved }
+        }
+        $ownedConsoleHost = Test-OwnedConsoleHost $record $expected $r.processes $parentRecord $r.root $env:WINDIR
         if ($record.executable.StartsWith($r.root + '\', [StringComparison]::OrdinalIgnoreCase)) {
             $null = Assert-Contained $r.root $record.executable
+        } elseif ($ownedConsoleHost) {
+            $null = Assert-Contained $r.root $parentRecord.executable
         } elseif ([IO.Path]::GetFileName($record.executable) -ine 'msedgewebview2.exe' -or
             -not $record.commandLine.Contains($r.userData, [StringComparison]::OrdinalIgnoreCase) -or
             $expected.parent -notin @($r.processes.pid)) { throw 'Cleanup target is outside the owned app/driver/browser tree.' }
@@ -235,11 +244,34 @@ if ($Action -eq 'Cleanup') {
 
 $owned = Owned-Process $r.process
 $uiError = $null
+$uiDiagnostics = $null
+$uiLoadStage = 'UIAutomationTypes'
+$wpf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'
+$uiTypesPath = Join-Path $wpf 'UIAutomationTypes.dll'
+$uiClientPath = Join-Path $wpf 'UIAutomationClient.dll'
 try {
-    $wpf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'
-    Add-Type -Path (Join-Path $wpf 'UIAutomationTypes.dll'), (Join-Path $wpf 'UIAutomationClient.dll')
-    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-} catch { $uiError = $_.Exception.Message }
+    Add-Type -LiteralPath $uiTypesPath
+    $uiLoadStage = 'UIAutomationClient'
+    Add-Type -LiteralPath $uiClientPath
+    $uiLoadStage = 'System.Windows.Forms'
+    Add-Type -AssemblyName System.Windows.Forms
+    $uiLoadStage = 'System.Drawing'
+    Add-Type -AssemblyName System.Drawing
+} catch {
+    $uiError = $_.Exception.Message
+    $uiDiagnostics = @{ failedStage = $uiLoadStage; exception = $_.Exception.ToString(); powerShellVersion = $PSVersionTable.PSVersion.ToString(); psHome = $PSHOME
+        files = @(@($uiTypesPath, $uiClientPath) | ForEach-Object {
+            $path = $_
+            $file = @{ path = $path; exists = Test-Path -LiteralPath $path }
+            if ($file.exists) {
+                try { $file.identity = [Reflection.AssemblyName]::GetAssemblyName($path).FullName }
+                catch { $file.identityError = $_.Exception.Message }
+            }
+            $file
+        })
+        loaded = @([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -in @('UIAutomationTypes', 'UIAutomationClient', 'System.Windows.Forms', 'System.Drawing') } |
+            ForEach-Object { @{ identity = $_.FullName; path = $_.Location } }) }
+}
 function Windows-ForOwner {
     $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$owned.pid)
     @([Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $condition))
@@ -257,7 +289,7 @@ if ($Action -eq 'Inspect') {
         try { $windows = @(Windows-ForOwner | ForEach-Object { Window-Record $_ }) } catch { $uiError = $_.Exception.Message }
     }
     @{ process = $owned; packageCode = [WindowsPackageNative]::PackageCode($owned.pid); processes = $tree
-        windows = $windows; uiError = $uiError; listeners = $connections
+        windows = $windows; uiError = $uiError; uiDiagnostics = $uiDiagnostics; listeners = $connections
         version = (Get-Item -LiteralPath $owned.executable).VersionInfo.ProductVersion } | ConvertTo-Json -Depth 10
     exit
 }

@@ -31,8 +31,10 @@ import {
 import {
   actionBeforeEvidence,
   assertDebugListener,
+  assertDriverListener,
   assertNativePage,
   attachWebView,
+  edgeDriverArguments,
   finalizeProbe,
   finishWindowsProbe,
   observeCleanupExits,
@@ -100,6 +102,41 @@ try { $null = Test-ProcessCreatedMatch $actual 'invalid' } catch { $malformedRej
     same: true,
     different: false,
     malformedRejected: true,
+  });
+});
+
+test("PowerShell cleanup admits only a direct console host child of the same owned driver process", {
+  skip: process.platform !== "win32",
+}, () => {
+  const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+  const syntheticRoot = join(tmpdir(), "execs-windows-package-test").replaceAll("'", "''");
+  const windowsDirectory = (process.env.WINDIR ?? "C:\\Windows").replaceAll("'", "''");
+  const script = `
+. '${helper}'
+$root = '${syntheticRoot}'
+$windowsDirectory = '${windowsDirectory}'
+$driver = [pscustomobject]@{ pid = 5740; executable = "$root\\downloads\\msedgedriver.exe"; created = '2026-09-24T01:46:25.1929830Z' }
+$child = [pscustomobject]@{ pid = 2756; parent = 5740; executable = "$windowsDirectory\\System32\\conhost.exe"; created = '2026-09-24T01:46:25.1985680Z' }
+$parent = [pscustomobject]@{ pid = 5740; executable = $driver.executable; created = $driver.created }
+$accepted = Test-OwnedConsoleHost $child $child @($driver) $parent $root $windowsDirectory
+$reusedPid = Test-OwnedConsoleHost $child $child @($driver) ([pscustomobject]@{ pid = 5740; executable = $driver.executable; created = '2026-09-24T01:46:26.1929830Z' }) $root $windowsDirectory
+$otherParent = Test-OwnedConsoleHost $child $child @([pscustomobject]@{ pid = 5740; executable = "$root\\installed\\execs.exe"; created = $driver.created }) $parent $root $windowsDirectory
+$otherChild = Test-OwnedConsoleHost ([pscustomobject]@{ pid = 2756; parent = 5740; executable = "$windowsDirectory\\System32\\other.exe"; created = $child.created }) $child @($driver) $parent $root $windowsDirectory
+$unrelated = Test-OwnedConsoleHost ([pscustomobject]@{ pid = 2756; parent = 9999; executable = $child.executable; created = $child.created }) $child @($driver) $parent $root $windowsDirectory
+[pscustomobject]@{ accepted = $accepted; reusedPid = $reusedPid; otherParent = $otherParent; otherChild = $otherChild; unrelated = $unrelated } | ConvertTo-Json -Compress
+`;
+  const result = spawnSync(
+    "pwsh",
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+    { encoding: "utf8", timeout: 10_000, windowsHide: true },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.trim()), {
+    accepted: true,
+    reusedPid: false,
+    otherParent: false,
+    otherChild: false,
+    unrelated: false,
   });
 });
 
@@ -356,6 +393,30 @@ test("native page/listener checks reject preview and unowned or exposed debuggin
   assert.throws(() =>
     assertDebugListener({ ...observation, processes: [] }, 9999, "D:\\fixture\\webview"),
   );
+});
+
+test("EdgeDriver uses its local-only default and rejects wildcard or unowned listeners", () => {
+  assert.deepEqual(edgeDriverArguments(60189), ["--port=60189"]);
+  assert.throws(() => edgeDriverArguments(0));
+  const observation = {
+    process: { pid: 5740 },
+    listeners: [{ port: 60189, address: "127.0.0.1", pid: 5740 }],
+  };
+  assert.equal(assertDriverListener(observation, 60189).length, 1);
+  assert.equal(
+    assertDriverListener(
+      { ...observation, listeners: [{ port: 60189, address: "::1", pid: 5740 }] },
+      60189,
+    ).length,
+    1,
+  );
+  for (const listeners of [
+    [],
+    [{ port: 60189, address: "::", pid: 5740 }],
+    [{ port: 60189, address: "0.0.0.0", pid: 5740 }],
+    [{ port: 60189, address: "127.0.0.1", pid: 9999 }],
+  ])
+    assert.throws(() => assertDriverListener({ ...observation, listeners }, 60189));
 });
 
 test("WebView2 attachment uses an owned loopback endpoint without launching or navigating an app", async () => {

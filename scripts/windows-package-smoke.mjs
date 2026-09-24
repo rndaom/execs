@@ -106,6 +106,24 @@ export function assertDebugListener(observation, port, userData) {
   return listeners;
 }
 
+export function edgeDriverArguments(port) {
+  assert.ok(Number.isInteger(port) && port > 1023 && port < 65536);
+  // Chromium EdgeDriver binds localhost by default. An allowed-ips flag enables remote binding.
+  return [`--port=${port}`];
+}
+
+export function assertDriverListener(observation, port) {
+  const listeners = observation.listeners.filter((row) => row.port === port);
+  assert.ok(listeners.length > 0, "Driver listener missing");
+  assert.ok(
+    listeners.every(
+      (row) => row.pid === observation.process.pid && ["127.0.0.1", "::1"].includes(row.address),
+    ),
+    "Driver exposed outside loopback",
+  );
+  return listeners;
+}
+
 /** All cleanup attempts run; a successful stage cannot conceal cleanup failure. */
 export async function finalizeProbe(primaryError, actions) {
   const errors = primaryError ? [primaryError] : [];
@@ -541,12 +559,7 @@ export async function main() {
     };
     const driverPort = await freePort();
     assert.notEqual(driverPort, debugPort);
-    const driverProcess = track(
-      driverBinary,
-      [`--port=${driverPort}`, "--allowed-ips=127.0.0.1", "--host=127.0.0.1"],
-      "edge-driver",
-      env,
-    );
+    const driverProcess = track(driverBinary, edgeDriverArguments(driverPort), "edge-driver", env);
     driver = new NativeWebDriver(driverPort);
     await waitUntil("external Edge driver ready", async () => {
       assert.ifError(driverProcess.error);
@@ -554,12 +567,7 @@ export async function main() {
       return (await driver.request("GET", "/status")).ready;
     });
     const driverObservation = inspect(driverProcess);
-    const driverListeners = driverObservation.listeners.filter((row) => row.port === driverPort);
-    assert.ok(driverListeners.length > 0);
-    assert.ok(
-      driverListeners.every((row) => ["127.0.0.1", "::1"].includes(row.address)),
-      "Driver exposed outside loopback",
-    );
+    assertDriverListener(driverObservation, driverPort);
     await attachWebView(driver, debugPort);
     report.capabilities = driver.capabilities;
     const page = await waitUntil(
