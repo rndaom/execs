@@ -48,6 +48,10 @@ name = "viewmodel_scripts_probe"
 required-features = ["probes"]
 
 [[example]]
+name = "viewmodel_raw_rotation_probe"
+required-features = ["probes"]
+
+[[example]]
 name = "pack_probe"
 required-features = ["probes"]
 
