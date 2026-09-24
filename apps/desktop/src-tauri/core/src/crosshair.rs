@@ -55,6 +55,20 @@ pub fn valid_crosshair_name(name: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
 }
 
+/// A valid imported pack can store a community VTF under a name later
+/// reserved for a first-party shape. Only its explicit VTF library record
+/// permits recovery under the namespaced name used by current drafts.
+fn legacy_community_stem(record: &CrosshairRecord, name: &str) -> Option<&'static str> {
+    let old_name = match name {
+        "venom_circle" => "circle",
+        "venom_dot" => "dot",
+        _ => return None,
+    };
+    (record.library.get(old_name).is_some_and(|format| format == "vtf")
+        && !record.library.contains_key(name))
+    .then_some(old_name)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CrosshairAssetFormat {
@@ -519,23 +533,30 @@ where
             )));
         }
         for name in record.library.keys() {
+            let migrated_name = match name.as_str() {
+                "circle" if legacy_community_stem(record, "venom_circle").is_some() => {
+                    "venom_circle"
+                }
+                "dot" if legacy_community_stem(record, "venom_dot").is_some() => "venom_dot",
+                _ => name.as_str(),
+            };
             if settings
                 .and_then(|s| s.library_names.as_ref())
-                .is_some_and(|names| !names.contains(name))
+                .is_some_and(|names| !names.iter().any(|requested| requested == migrated_name))
             {
                 continue;
             }
-            if needed.contains_key(name) || SHAPES.contains(&name.as_str()) {
+            if needed.contains_key(migrated_name) || SHAPES.contains(&migrated_name) {
                 continue;
             }
-            if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, name) {
+            if let Some(bytes) = load_stored_pack_vtf(profiles_dir, profile_id, migrated_name) {
                 account_recovered_library_asset(
-                    name,
+                    migrated_name,
                     bytes.len(),
                     &mut community_names,
                     &mut community_bytes,
                 )?;
-                needed.insert(name.clone(), ResolvedAsset::VtfVerbatim(bytes));
+                needed.insert(migrated_name.to_owned(), ResolvedAsset::VtfVerbatim(bytes));
             }
         }
     }
@@ -989,16 +1010,31 @@ fn load_stored_pack_vtf(profiles_dir: &Path, profile_id: &str, name: &str) -> Op
     } else {
         ""
     };
-    let rel = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{prefix}{THUMB_DIR}/{name}.vtf");
-    let path = exclusive_file_path(profiles_dir, profile_id, &rel);
-    let bytes = read_regular_file_bounded_within(profiles_dir, &path, MAX_STORED_CROSSHAIR_BYTES)
+    let legacy_name = manifest
+        .crosshair
+        .as_ref()
+        .and_then(|record| legacy_community_stem(record, name));
+    for stored_name in std::iter::once(name).chain(legacy_name) {
+        let rel = format!(
+            "tf/custom/{EXECS_CROSSHAIRS_PACK}/{prefix}{THUMB_DIR}/{stored_name}.vtf"
+        );
+        let path = exclusive_file_path(profiles_dir, profile_id, &rel);
+        let Some(bytes) = read_regular_file_bounded_within(
+            profiles_dir,
+            &path,
+            MAX_STORED_CROSSHAIR_BYTES,
+        )
         .ok()
-        .flatten()?;
-    if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
-        return None;
+        .flatten() else {
+            continue;
+        };
+        if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
+            return None;
+        }
+        crate::vtf_read::decode_vtf_frame0(&bytes).ok()?;
+        return Some(bytes);
     }
-    crate::vtf_read::decode_vtf_frame0(&bytes).ok()?;
-    Some(bytes)
+    None
 }
 
 pub fn remove_crosshairs(tf2_root: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
@@ -2323,6 +2359,126 @@ cl_crosshair_blue 56
             );
         }
         cleanup(&root);
+    }
+
+    #[test]
+    fn imported_legacy_community_circle_and_dot_rebuild_from_saved_vtfs() {
+        for old_name in ["circle", "dot"] {
+            let (root, tf2, id) = setup();
+            let profiles = root.join("profiles");
+            let scripts = BTreeMap::from([("tf_weapon_scattergun".into(), sample_script())]);
+            let new_name = format!("venom_{old_name}");
+            let bytes = encode_vtf_bgra8888(&vec![37; 31 * 47 * 4], 31, 47).unwrap();
+            let assets = BTreeMap::from([(
+                new_name.clone(),
+                CrosshairAsset {
+                    format: CrosshairAssetFormat::Vtf,
+                    bytes: bytes.clone(),
+                },
+            )]);
+            apply_crosshairs_with_scripts(
+                &profiles,
+                &tf2,
+                &id,
+                &new_name,
+                &BTreeMap::new(),
+                None,
+                None,
+                &assets,
+                None,
+                &scripts,
+                unlocked(),
+            )
+            .unwrap();
+
+            // Model a native ZIP whose library and material use the bare
+            // community name. Import accepts this verified payload.
+            let material_root = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}");
+            let old_vtf = format!("{material_root}/{old_name}.vtf");
+            let old_vmt = format!("{material_root}/{old_name}.vmt");
+            let new_vtf = format!("{material_root}/{new_name}.vtf");
+            let new_vmt = format!("{material_root}/{new_name}.vmt");
+            let vmt = encode_vmt(old_name).into_bytes();
+            mutate_profile_files_to(
+                &profiles,
+                &tf2,
+                &id,
+                &[
+                    (old_vtf, FileSource::Bytes(&bytes)),
+                    (old_vmt, FileSource::Bytes(&vmt)),
+                ],
+                &[new_vtf, new_vmt],
+                ProfileLiveProjection::MirrorIfActive,
+                unlocked(),
+                |manifest| {
+                    let record = manifest.crosshair.as_mut().unwrap();
+                    record.shape = old_name.into();
+                    record.library.remove(&new_name);
+                    record.library.insert(old_name.into(), "vtf".into());
+                    Ok(())
+                },
+            )
+            .unwrap();
+            let zip_path = root.join("legacy-crosshair.zip");
+            crate::zip::export_profile_to(&profiles, &tf2, &id, &zip_path).unwrap();
+            let imported_profiles = root.join("imported");
+            let imported = crate::zip::import_profile_from(
+                &imported_profiles,
+                &tf2,
+                &zip_path,
+                unlocked(),
+            )
+            .unwrap();
+            let imported_id = &imported.profiles[0].id;
+
+            assert!(stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
+                .is_some_and(|stored| stored == bytes));
+            let settings = CrosshairBuildSettings {
+                scale: 32,
+                stock: crate::profile::CrosshairStockSettings {
+                    file: String::new(),
+                    scale: 32,
+                },
+                library_names: Some(vec![new_name.clone()]),
+            };
+            let rebuilt = apply_crosshairs_configured_with_scripts(
+                &imported_profiles,
+                &tf2,
+                imported_id,
+                "cross",
+                &BTreeMap::new(),
+                None,
+                None,
+                &BTreeMap::new(),
+                None,
+                Some(&settings),
+                &scripts,
+                unlocked(),
+            )
+            .unwrap();
+            assert!(rebuilt.crosshair.as_ref().unwrap().library.contains_key(&new_name));
+            assert!(stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
+                .is_some_and(|stored| stored == bytes));
+            let selected = apply_crosshairs_configured_with_scripts(
+                &imported_profiles,
+                &tf2,
+                imported_id,
+                &new_name,
+                &BTreeMap::new(),
+                None,
+                None,
+                &BTreeMap::new(),
+                None,
+                Some(&settings),
+                &scripts,
+                unlocked(),
+            )
+            .unwrap();
+            assert_eq!(selected.crosshair.as_ref().unwrap().shape, new_name);
+            assert!(stored_pack_crosshair(&imported_profiles, imported_id, &new_name)
+                .is_some_and(|stored| stored == bytes));
+            cleanup(&root);
+        }
     }
 
     /// Never publish a record that claims coverage of an unbuilt weapon.

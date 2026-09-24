@@ -111,6 +111,32 @@ async function elapsed() {
 }
 
 describe("0.1.4 crosshair workflow", () => {
+  it("previews a legacy imported community shape under its migrated name", async () => {
+    if (!record) throw new Error("Expected a saved crosshair pack");
+    const legacy: CrosshairRecord = {
+      ...record,
+      shape: "circle",
+      assignments: { tf_weapon_scattergun: "dot" },
+      library: { circle: "vtf", dot: "vtf" },
+    };
+    const previews = {
+      circle: { width: 1, height: 1, rgba: [37, 38, 39, 255] },
+      dot: { width: 1, height: 1, rgba: [40, 41, 42, 255] },
+    };
+    const captured: { draftApi?: CrosshairDraftApi } = {};
+    function Harness() {
+      captured.draftApi = useCrosshairDraft("A", legacy, previews);
+      return null;
+    }
+    await act(async () => root.render(<Harness />));
+    const draftApi = captured.draftApi;
+    if (!draftApi) throw new Error("Expected a crosshair draft");
+    expect(draftApi.draft.shape).toBe("venom_circle");
+    expect(draftApi.draft.assignments.tf_weapon_scattergun).toBe("venom_dot");
+    expect(draftApi.previewFor("venom_circle")).toEqual(previews.circle);
+    expect(draftApi.previewFor("venom_dot")).toEqual(previews.dot);
+  });
+
   it("links to HUD controls when a HUD overlay can add another crosshair", async () => {
     hudOverlayState = "enabled";
     await render();

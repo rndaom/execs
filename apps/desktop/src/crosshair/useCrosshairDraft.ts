@@ -66,7 +66,13 @@ export function useCrosshairDraft(
     if (fetched) {
       return fetched;
     }
-    const stored = packPreviews?.[name];
+    let stored = packPreviews?.[name];
+    if (!stored && (name === "venom_circle" || name === "venom_dot")) {
+      const oldName = name.slice("venom_".length);
+      if (record?.library?.[oldName] === "vtf" && !(name in record.library)) {
+        stored = packPreviews?.[oldName];
+      }
+    }
     return stored ? { width: stored.width, height: stored.height, rgba: stored.rgba } : null;
   }
 
