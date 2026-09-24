@@ -35,7 +35,7 @@ rfd = { version = "0.16", default-features = false, features = ["gtk3"] }
 # The write gate's mutex. Must be tokio's (not std's): the guard is held
 # across `.await` in every async command, and std's would also bring back
 # poisoning.
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["rt", "sync"] }
 
 [features]
 release-probes = ["tauri/test"]

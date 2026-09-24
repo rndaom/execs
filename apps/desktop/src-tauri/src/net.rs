@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
@@ -93,6 +93,20 @@ pub enum RemoteSource {
 }
 
 impl RemoteSource {
+    const ALL: [Self; 11] = [
+        Self::GitHubApi,
+        Self::GitHubRaw,
+        Self::GitHubRelease,
+        Self::GitHubCodeload,
+        Self::Dropbox,
+        Self::TeamFortressTv,
+        Self::GameBananaApi,
+        Self::GameBananaDownload,
+        Self::ComfigApp,
+        Self::ComfigHits,
+        Self::Tf2Huds,
+    ];
+
     fn initial_hosts(self) -> &'static [&'static str] {
         match self {
             Self::GitHubApi => &["api.github.com"],
@@ -192,6 +206,38 @@ fn host_matches(url: &reqwest::Url, allowed: &[&str]) -> bool {
     url.host_str().is_some_and(|host| allowed.contains(&host))
 }
 
+fn is_dropbox_shard_host(host: &str) -> bool {
+    host.strip_suffix(".dl.dropboxusercontent.com")
+        .is_some_and(|label| {
+            !label.is_empty()
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+}
+
+fn is_gamebanana_shard_host(host: &str) -> bool {
+    host.strip_suffix(".gamebanana.com")
+        .and_then(|label| label.strip_prefix("filecache"))
+        .is_some_and(|number| {
+            !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+        })
+}
+
+/// The resolver receives only a hostname, without the request or proxy URI.
+/// Every host admitted by `validate_url_shape` must be in this set so direct
+/// connections through `send_get` cannot skip the public-address check. In
+/// that path, other names are user-configured proxy hosts and retain reqwest's
+/// normal DNS behavior. This is not a guard for callers bypassing `send_get`.
+fn is_download_host(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    RemoteSource::ALL.iter().any(|source| {
+        source.initial_hosts().contains(&host.as_str())
+            || source.redirect_hosts().contains(&host.as_str())
+    }) || is_dropbox_shard_host(&host)
+        || is_gamebanana_shard_host(&host)
+}
+
 fn validate_url_shape(
     url: &reqwest::Url,
     source: RemoteSource,
@@ -216,24 +262,10 @@ fn validate_url_shape(
     // and only on redirects, never arbitrary subdomains or initial URLs.
     let dropbox_shard = redirect
         && source == RemoteSource::Dropbox
-        && url.host_str().is_some_and(|host| {
-            host.strip_suffix(".dl.dropboxusercontent.com")
-                .is_some_and(|label| {
-                    !label.is_empty()
-                        && label
-                            .bytes()
-                            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-                })
-        });
+        && url.host_str().is_some_and(is_dropbox_shard_host);
     let gamebanana_shard = redirect
         && source == RemoteSource::GameBananaDownload
-        && url.host_str().is_some_and(|host| {
-            host.strip_suffix(".gamebanana.com")
-                .and_then(|label| label.strip_prefix("filecache"))
-                .is_some_and(|number| {
-                    !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
-                })
-        });
+        && url.host_str().is_some_and(is_gamebanana_shard_host);
     if !host_matches(url, allowed) && !dropbox_shard && !gamebanana_shard {
         return Err("The download redirected to an untrusted host.".into());
     }
@@ -283,6 +315,76 @@ fn ip_is_private_or_special(ip: IpAddr) -> bool {
                     .to_ipv4_mapped()
                     .is_some_and(|ip| ip_is_private_or_special(IpAddr::V4(ip)))
         }
+    }
+}
+
+fn public_socket_addrs(addresses: Vec<SocketAddr>) -> Result<Vec<SocketAddr>, std::io::Error> {
+    if addresses.is_empty()
+        || addresses
+            .iter()
+            .any(|address| ip_is_private_or_special(address.ip()))
+    {
+        return Err(std::io::Error::other(
+            "The download host resolves to a private or reserved address.",
+        ));
+    }
+    Ok(addresses)
+}
+
+fn connection_socket_addrs(
+    host: &str,
+    addresses: Vec<SocketAddr>,
+) -> Result<Vec<SocketAddr>, std::io::Error> {
+    if is_download_host(host) {
+        public_socket_addrs(addresses)
+    } else if addresses.is_empty() {
+        Err(std::io::Error::other("The proxy host has no addresses."))
+    } else {
+        Ok(addresses)
+    }
+}
+
+type HostLookup = dyn Fn(&str) -> Result<Vec<SocketAddr>, std::io::Error> + Send + Sync;
+
+struct PublicDestinationResolver {
+    lookup: Arc<HostLookup>,
+}
+
+impl Default for PublicDestinationResolver {
+    fn default() -> Self {
+        Self {
+            lookup: Arc::new(|host| {
+                (host, 0)
+                    .to_socket_addrs()
+                    .map(|addresses| addresses.collect())
+            }),
+        }
+    }
+}
+
+#[cfg(test)]
+impl PublicDestinationResolver {
+    fn with_lookup(
+        lookup: impl Fn(&str) -> Result<Vec<SocketAddr>, std::io::Error> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            lookup: Arc::new(lookup),
+        }
+    }
+}
+
+impl reqwest::dns::Resolve for PublicDestinationResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_owned();
+        let lookup = Arc::clone(&self.lookup);
+        Box::pin(async move {
+            let addresses = tokio::task::spawn_blocking(move || {
+                let addresses = lookup(&host)?;
+                connection_socket_addrs(&host, addresses)
+            })
+            .await??;
+            Ok(Box::new(addresses.into_iter()) as reqwest::dns::Addrs)
+        })
     }
 }
 
@@ -344,15 +446,9 @@ fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
                 .map_err(|_| "Could not resolve the download host.".to_string())
                 .and_then(|addresses| {
                     let addresses = addresses.collect::<Vec<_>>();
-                    if addresses.is_empty()
-                        || addresses
-                            .iter()
-                            .any(|address| ip_is_private_or_special(address.ip()))
-                    {
-                        Err("The download host resolves to a private or reserved address.".into())
-                    } else {
-                        Ok(())
-                    }
+                    public_socket_addrs(addresses)
+                        .map(|_| ())
+                        .map_err(|err| err.to_string())
                 });
             if result.is_ok() {
                 if let Ok(mut cache) = dns_cache().lock() {
@@ -449,6 +545,11 @@ fn build(connect: Duration, total: Duration) -> Result<reqwest::blocking::Client
         .connect_timeout(connect)
         .timeout(total)
         .https_only(true)
+        // reqwest also resolves configured proxy hosts here. Those hosts keep
+        // their normal DNS behavior; only approved download destinations are
+        // filtered. An HTTPS proxy still resolves the CONNECT target itself,
+        // so its target address is not bound by this resolver.
+        .dns_resolver(Arc::new(PublicDestinationResolver::default()))
         // Redirects are followed manually so every hop receives the same host,
         // scheme and private-address checks as the initial request.
         .redirect(reqwest::redirect::Policy::none())
@@ -759,6 +860,8 @@ fn cached_file_accepts_within(
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::io::Write;
+    use std::net::TcpListener;
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("execs-net-{name}-{}", std::process::id()));
@@ -1023,6 +1126,126 @@ mod tests {
         assert!(ip_is_private_or_special("169.254.169.254".parse().unwrap()));
         assert!(ip_is_private_or_special("::1".parse().unwrap()));
         assert!(!ip_is_private_or_special("1.1.1.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn every_approved_download_host_is_filtered_but_proxy_hosts_are_not() {
+        for source in RemoteSource::ALL {
+            for host in source
+                .initial_hosts()
+                .iter()
+                .chain(source.redirect_hosts().iter())
+            {
+                assert!(is_download_host(host), "{host}");
+            }
+        }
+        assert!(is_download_host("shard.dl.dropboxusercontent.com"));
+        assert!(is_download_host("filecache42.gamebanana.com"));
+        assert!(!is_download_host("localhost"));
+        assert!(!is_download_host("proxy.example.com"));
+        let loopback: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let public: SocketAddr = "1.1.1.1:0".parse().unwrap();
+        assert!(connection_socket_addrs("api.github.com", vec![loopback]).is_err());
+        assert!(connection_socket_addrs("api.github.com", vec![public, loopback]).is_err());
+        assert_eq!(
+            connection_socket_addrs("api.github.com", vec![public]).unwrap(),
+            vec![public]
+        );
+        assert_eq!(
+            connection_socket_addrs("localhost", vec![loopback]).unwrap(),
+            vec![loopback]
+        );
+    }
+
+    #[test]
+    fn direct_connection_rechecks_dns_and_refuses_a_private_answer() {
+        let public: SocketAddr = "1.1.1.1:0".parse().unwrap();
+        let private: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        public_socket_addrs(vec![public]).unwrap(); // Initial public DNS precheck.
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let queried = Arc::new(Mutex::new(Vec::<String>::new()));
+        let calls = Arc::clone(&queried);
+        let resolver = PublicDestinationResolver::with_lookup(move |host| {
+            calls.lock().unwrap().push(host.to_owned());
+            Ok(vec![private]) // DNS changed before reqwest opens the socket.
+        });
+        let client = reqwest::blocking::Client::builder()
+            .no_proxy()
+            .dns_resolver(Arc::new(resolver))
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+        let url = format!(
+            "http://api.github.com:{}/repos/o/r",
+            listener.local_addr().unwrap().port()
+        );
+        assert!(client.get(url).send().is_err());
+        assert_eq!(*queried.lock().unwrap(), ["api.github.com"]);
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock,
+            "the loopback listener must not receive a connection"
+        );
+    }
+
+    #[test]
+    fn local_connect_proxy_remains_reachable_but_resolves_target_itself() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "proxy was never contacted");
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("proxy accept failed: {err}"),
+                }
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut chunk = [0u8; 256];
+                let count = stream.read(&mut chunk).unwrap();
+                assert!(count > 0 && request.len() < 4096);
+                request.extend_from_slice(&chunk[..count]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+            String::from_utf8(request).unwrap()
+        });
+
+        let queried = Arc::new(Mutex::new(Vec::<String>::new()));
+        let calls = Arc::clone(&queried);
+        let resolver = PublicDestinationResolver::with_lookup(move |host| {
+            calls.lock().unwrap().push(host.to_owned());
+            Ok(vec!["127.0.0.1:0".parse().unwrap()])
+        });
+        let proxy = reqwest::Proxy::https(format!("http://localhost:{port}")).unwrap();
+        let client = reqwest::blocking::Client::builder()
+            .proxy(proxy)
+            .dns_resolver(Arc::new(resolver))
+            .https_only(true)
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+        assert!(client
+            .get("https://api.github.com/repos/o/r")
+            .send()
+            .is_err());
+        let request = server.join().unwrap();
+        assert!(request.starts_with("CONNECT api.github.com:443 HTTP/1.1\r\n"));
+        assert_eq!(*queried.lock().unwrap(), ["localhost"]);
     }
 
     #[test]
