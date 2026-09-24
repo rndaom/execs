@@ -17,7 +17,6 @@ use crate::vpk::{
     map_vpk_entries, patch_vpk_entry_if_unchanged, write_vpk_v2, VpkEntryLocation, VpkError,
 };
 
-use super::flat_textures;
 use super::gameinfo::{
     gameinfo_bypass_state, preflight_gameinfo_bypass, set_gameinfo_bypass_with_sampler,
 };
@@ -39,6 +38,7 @@ use super::transaction::{
 use super::{
     catalog::read_mods_catalog, DUPLICATE_EFFECT_FILES, DX8_TWIN_STEMS, MISC_VPK, PRELOADER_VPK,
 };
+use super::{developer_textures, flat_textures};
 use crate::mods::{profile_particle_sources_from, read_mod_pcf, ParticleSource};
 use crate::profile::{load_library_from, profiles_dir};
 
@@ -50,17 +50,26 @@ type SourceZip = zip::ZipArchive<Box<dyn ModLibraryReader>>;
 enum SourceEntry {
     Cueki(usize, String),
     FlatTextures(usize, String),
+    DeveloperTextures(String),
 }
 
 struct SelectionArchive {
     cueki: SourceZip,
     flat_textures: Option<SourceZip>,
+    developer_textures: Option<BTreeMap<String, Vec<u8>>>,
     entries: Vec<SourceEntry>,
 }
 
 struct SelectionEntry<'a> {
-    inner: zip::read::ZipFile<'a>,
+    inner: SelectionEntryInner<'a>,
     virtual_name: String,
+    size: u64,
+    is_dir: bool,
+}
+
+enum SelectionEntryInner<'a> {
+    Zip(Box<zip::read::ZipFile<'a>>),
+    Content(Cursor<&'a [u8]>),
 }
 
 impl SelectionEntry<'_> {
@@ -69,17 +78,20 @@ impl SelectionEntry<'_> {
     }
 
     fn size(&self) -> u64 {
-        self.inner.size()
+        self.size
     }
 
     fn is_dir(&self) -> bool {
-        self.inner.is_dir()
+        self.is_dir
     }
 }
 
 impl Read for SelectionEntry<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.inner.read(buf)
+        match &mut self.inner {
+            SelectionEntryInner::Zip(entry) => entry.read(buf),
+            SelectionEntryInner::Content(entry) => entry.read(buf),
+        }
     }
 }
 
@@ -94,22 +106,45 @@ impl SelectionArchive {
             .get(index)
             .ok_or("Invalid mod library entry index.")?
         {
-            SourceEntry::Cueki(source_index, name) => Ok(SelectionEntry {
-                inner: self
+            SourceEntry::Cueki(source_index, name) => {
+                let entry = self
                     .cueki
                     .by_index(*source_index)
-                    .map_err(|err| err.to_string())?,
-                virtual_name: name.clone(),
-            }),
-            SourceEntry::FlatTextures(source_index, name) => Ok(SelectionEntry {
-                inner: self
+                    .map_err(|err| err.to_string())?;
+                Ok(SelectionEntry {
+                    size: entry.size(),
+                    is_dir: entry.is_dir(),
+                    inner: SelectionEntryInner::Zip(Box::new(entry)),
+                    virtual_name: name.clone(),
+                })
+            }
+            SourceEntry::FlatTextures(source_index, name) => {
+                let entry = self
                     .flat_textures
                     .as_mut()
                     .ok_or("The Flat Textures author archive is unavailable.")?
                     .by_index(*source_index)
-                    .map_err(|err| err.to_string())?,
-                virtual_name: name.clone(),
-            }),
+                    .map_err(|err| err.to_string())?;
+                Ok(SelectionEntry {
+                    size: entry.size(),
+                    is_dir: entry.is_dir(),
+                    inner: SelectionEntryInner::Zip(Box::new(entry)),
+                    virtual_name: name.clone(),
+                })
+            }
+            SourceEntry::DeveloperTextures(name) => {
+                let content = self
+                    .developer_textures
+                    .as_ref()
+                    .and_then(|files| files.get(name))
+                    .ok_or("The Developer Textures author payload is unavailable.")?;
+                Ok(SelectionEntry {
+                    size: content.len() as u64,
+                    is_dir: false,
+                    inner: SelectionEntryInner::Content(Cursor::new(content.as_slice())),
+                    virtual_name: name.clone(),
+                })
+            }
         }
     }
 }
@@ -147,6 +182,11 @@ fn selection_archive(
         {
             continue;
         }
+        if selection.uses_developer_textures()
+            && name.starts_with(&format!("mods/addons/{}/", developer_textures::ID))
+        {
+            continue;
+        }
         entries.push(SourceEntry::Cueki(index, name));
     }
     let flat_textures = if selection.uses_flat_textures() {
@@ -165,9 +205,17 @@ fn selection_archive(
     } else {
         None
     };
+    let developer_textures = if selection.uses_developer_textures() {
+        let files = developer_textures::read_verified(data_dir)?;
+        entries.extend(files.keys().cloned().map(SourceEntry::DeveloperTextures));
+        Some(files)
+    } else {
+        None
+    };
     Ok(SelectionArchive {
         cueki,
         flat_textures,
+        developer_textures,
         entries,
     })
 }
@@ -186,6 +234,13 @@ fn selection_catalog(
         flat_textures::read_verified(data_dir)?;
         catalog.addons.retain(|addon| addon.id != flat_textures::ID);
         catalog.addons.push(flat_textures::catalog_addon());
+    }
+    if selection.uses_developer_textures() {
+        developer_textures::read_verified(data_dir)?;
+        catalog
+            .addons
+            .retain(|addon| addon.id != developer_textures::ID);
+        catalog.addons.push(developer_textures::catalog_addon());
     }
     Ok(catalog)
 }

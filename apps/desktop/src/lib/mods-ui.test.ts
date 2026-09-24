@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DIRECT_DEVELOPER_TEXTURES_ID,
   DIRECT_FLAT_TEXTURES_ID,
   foldCategories,
   formatModBytes,
@@ -220,6 +221,16 @@ describe("mods apply gating", () => {
     const directFlat = selection({ addons: [DIRECT_FLAT_TEXTURES_ID] });
     expect(modsApplyEnabled(uncached, directFlat)).toBe(true);
     expect(modsStatusLine(uncached, directFlat, false)).toBe("Unsaved changes");
+    const directDeveloper = selection({ addons: [DIRECT_DEVELOPER_TEXTURES_ID] });
+    expect(modsApplyEnabled(uncached, directDeveloper)).toBe(true);
+    expect(
+      modsApplyEnabled(
+        uncached,
+        selection({
+          addons: [DIRECT_FLAT_TEXTURES_ID, DIRECT_DEVELOPER_TEXTURES_ID],
+        }),
+      ),
+    ).toBe(true);
     expect(
       modsApplyEnabled(
         uncached,

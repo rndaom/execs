@@ -7,7 +7,7 @@ import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import { SoundsPane } from "./SoundsPane";
 
-it("retries failed sources while retaining the last usable catalog", async () => {
+it("retries a failed stock read and offers only stock and user WAV sources", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Audio",
@@ -24,14 +24,8 @@ it("retries failed sources while retaining the last usable catalog", async () =>
     .fn()
     .mockRejectedValueOnce(new Error("Game archive unavailable"))
     .mockResolvedValue(["hitsound"]);
-  const index = vi
-    .fn()
-    .mockResolvedValueOnce([{ hash: "A", name: "Kept sound", kind: "hit" }])
-    .mockRejectedValueOnce(new Error("Network unavailable"))
-    .mockResolvedValue([{ hash: "B", name: "Fresh sound", kind: "hit" }]);
   const api = {
     listStockHitsounds: stock,
-    comfigHitsoundIndex: index,
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
   try {
@@ -51,23 +45,22 @@ it("retries failed sources while retaining the last usable catalog", async () =>
         </AppStatusProvider>,
       ),
     );
-    expect(box.querySelector('[data-testid="sounds-row-comfig:A"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid^="sounds-row-comfig:"]')).toBeNull();
+    expect(box.querySelector('[data-testid^="sounds-row-community:"]')).toBeNull();
+    expect(box.textContent).not.toContain("TF2Hitsounds");
+    expect(box.textContent).not.toContain("comfig.app");
     expect(box.textContent).toContain("Game archive unavailable");
     const stockBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
     expect(stockBoost?.disabled).toBe(true);
-    expect(box.textContent).toContain("Choose a custom sound from the library to boost it.");
+    expect(box.textContent).toContain("Choose your own WAV to boost it.");
     const retry = () =>
       [...box.querySelectorAll("button")].find((button) =>
         button.textContent?.includes("Retry sources"),
       );
     await act(async () => retry()?.click());
     expect(box.querySelector('[data-testid="sounds-stock-error"]')).toBeNull();
-    expect(box.textContent).toContain("Network unavailable");
-    expect(box.querySelector('[data-testid="sounds-row-comfig:A"]')).not.toBeNull();
-    await act(async () => retry()?.click());
-    expect(box.querySelector('[data-testid="sounds-comfig-error"]')).toBeNull();
-    expect(box.querySelector('[data-testid="sounds-row-comfig:A"]')).toBeNull();
-    expect(box.querySelector('[data-testid="sounds-row-comfig:B"]')).not.toBeNull();
+    expect(stock).toHaveBeenCalledTimes(2);
+    expect(box.querySelector('[data-testid="sounds-row-stock:0"]')).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -75,7 +68,7 @@ it("retries failed sources while retaining the last usable catalog", async () =>
   }
 });
 
-it("names clip actions, duplicate sources and slot volumes without changing row focus order", async () => {
+it("keeps a legacy saved sound playable while only user files enter the new library", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Audio",
@@ -90,13 +83,23 @@ it("names clip actions, duplicate sources and slot volumes without changing row 
   const box = document.createElement("div");
   document.body.append(box);
   const root = createRoot(box);
+  const hitsoundBytes = vi.fn(() => new Promise<ArrayBuffer>(() => {}));
   const api = {
     listStockHitsounds: async () => ["hitsound"],
-    comfigHitsoundIndex: async () => [
-      { hash: "A", name: "Bubble Pop", kind: "hit" },
-      { hash: "B", name: "Bubble Pop", kind: "hit" },
-    ],
-    hitsoundBytes: () => new Promise(() => {}),
+    pickHitsoundFile: async () => ({
+      token: "a".repeat(32),
+      name: "Own Pop.wav",
+      converted: false,
+      info: {
+        formatTag: 1,
+        channels: 1,
+        sampleRate: 44100,
+        bitsPerSample: 16,
+        dataBytes: 2,
+        durationMs: 1,
+      },
+    }),
+    hitsoundBytes,
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
   try {
@@ -120,18 +123,23 @@ it("names clip actions, duplicate sources and slot volumes without changing row 
         </ToastProvider>,
       ),
     );
-    const first = box.querySelector('[data-testid="sounds-row-comfig:A"]');
-    const second = box.querySelector('[data-testid="sounds-row-comfig:B"]');
-    if (!first || !second) throw new Error("Sound rows did not load");
-    const buttons = [...second.querySelectorAll("button")];
+    expect(box.querySelector('[data-testid="sounds-retired-source"]')?.textContent).toContain(
+      "saved WAV remains in the profile",
+    );
+    expect(box.querySelector('[data-testid^="sounds-row-comfig:"]')).toBeNull();
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="sounds-choose-file"]')?.click(),
+    );
+    const own = box.querySelector(
+      '[data-testid="sounds-row-own:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]',
+    );
+    if (!own) throw new Error("Own WAV row did not load");
+    const buttons = [...own.querySelectorAll("button")];
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Play Bubble Pop (comfig.app, sound 2)",
-      "Assign Bubble Pop (comfig.app, sound 2) as hit sound",
-      "Assign Bubble Pop (comfig.app, sound 2) as kill sound",
+      "Play Own Pop.wav (Your file)",
+      "Assign Own Pop.wav (Your file) as hit sound",
+      "Assign Own Pop.wav (Your file) as kill sound",
     ]);
-    expect(
-      first.querySelector('[data-testid="sounds-assign-hit-comfig:A"]')?.hasAttribute("disabled"),
-    ).toBe(true);
     expect(buttons[1].disabled).toBe(false);
     for (const button of buttons) {
       expect(button.tabIndex).toBe(0);
@@ -139,7 +147,7 @@ it("names clip actions, duplicate sources and slot volumes without changing row 
       expect(document.activeElement).toBe(button);
     }
     await act(async () => buttons[0].click());
-    expect(buttons[0].getAttribute("aria-label")).toBe("Stop Bubble Pop (comfig.app, sound 2)");
+    expect(buttons[0].getAttribute("aria-label")).toBe("Stop Own Pop.wav (Your file)");
     expect(box.querySelector("#sounds-hit-volume")?.getAttribute("aria-label")).toBe(
       "Hit sound volume",
     );
@@ -149,77 +157,13 @@ it("names clip actions, duplicate sources and slot volumes without changing row 
     expect(box.querySelector('[data-testid="sounds-hit-play"]')?.getAttribute("aria-label")).toBe(
       "Play Bubble Pop (hit sound, comfig.app · saved by execs)",
     );
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="sounds-hit-play"]')?.click(),
+    );
+    expect(hitsoundBytes).toHaveBeenLastCalledWith({ kind: "installed", slot: "hit" });
     const customBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
-    expect(customBoost?.disabled).toBe(false);
-    await act(async () => customBoost?.click());
-    expect(customBoost?.checked).toBe(true);
-  } finally {
-    await act(async () => root.unmount());
-    box.remove();
-    vi.unstubAllGlobals();
-  }
-});
-
-it("shows one sound page at a time and resets to the first page when the source changes", async () => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubGlobal(
-    "Audio",
-    class {
-      pause = vi.fn();
-      addEventListener = vi.fn();
-      removeEventListener = vi.fn();
-    },
-  );
-  const box = document.createElement("div");
-  document.body.append(box);
-  const root = createRoot(box);
-  const api = {
-    listStockHitsounds: async () => ["hitsound"],
-    comfigHitsoundIndex: async () =>
-      Array.from({ length: 26 }, (_, index) => ({
-        hash: String(index),
-        name: `Clip ${String(index + 1).padStart(2, "0")}`,
-        kind: "hit",
-      })),
-    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
-  } as unknown as Api;
-  try {
-    await act(async () =>
-      root.render(
-        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
-          <SoundsPane
-            api={api}
-            profileId="A"
-            record={null}
-            layer="vanilla"
-            effective={{}}
-            managedText=""
-            onSave={async () => {}}
-            onRemove={() => {}}
-          />
-        </AppStatusProvider>,
-      ),
-    );
-    await act(async () =>
-      (box.querySelector('label[for$="-comfig"]') as HTMLLabelElement)?.click(),
-    );
-    expect(box.querySelectorAll('[data-testid^="sounds-row-comfig:"]')).toHaveLength(24);
-    expect(box.querySelector('[data-testid="sounds-row-comfig:0"]')).not.toBeNull();
-    expect(box.querySelector('[data-testid="sounds-row-comfig:24"]')).toBeNull();
-    await act(async () =>
-      (box.querySelector('[data-testid="sounds-page-next-top"]') as HTMLButtonElement).click(),
-    );
-    expect(box.querySelectorAll('[data-testid^="sounds-row-comfig:"]')).toHaveLength(2);
-    expect(box.querySelector('[data-testid="sounds-row-comfig:0"]')).toBeNull();
-    expect(box.querySelector('[data-testid="sounds-row-comfig:24"]')).not.toBeNull();
-    await act(async () => (box.querySelector('label[for$="-stock"]') as HTMLLabelElement)?.click());
-    await act(async () =>
-      (box.querySelector('label[for$="-comfig"]') as HTMLLabelElement)?.click(),
-    );
-    expect(box.querySelector('[data-testid="sounds-row-comfig:0"]')).not.toBeNull();
-    expect(
-      box.querySelector('[data-testid="sounds-page-prev-top"]')?.hasAttribute("disabled"),
-    ).toBe(true);
+    expect(customBoost?.disabled).toBe(true);
+    expect(box.textContent).toContain("This saved catalog sound keeps its current boost.");
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -242,7 +186,6 @@ it("discloses competing mounted sound paths without claiming a playback winner",
   const root = createRoot(box);
   const api = {
     listStockHitsounds: async () => ["hitsound"],
-    comfigHitsoundIndex: async () => [],
     getHitsoundSources: async () => ({
       hits: {
         "sound/ui/hitsound.wav": [
@@ -306,7 +249,6 @@ it("keeps the selected sound visible after an autosave failure", async () => {
   const onSave = vi.fn(async () => false);
   const api = {
     listStockHitsounds: async () => ["hitsound"],
-    comfigHitsoundIndex: async () => [{ hash: "A", name: "Bubble Pop", kind: "hit" }],
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
   try {
@@ -328,12 +270,69 @@ it("keeps the selected sound visible after an autosave failure", async () => {
     );
     await act(async () =>
       box
-        .querySelector('[data-testid="sounds-assign-hit-comfig:A"]')
+        .querySelector('[data-testid="sounds-assign-hit-stock:1"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
     await act(async () => new Promise((resolve) => setTimeout(resolve, 800)));
     expect(onSave).toHaveBeenCalledOnce();
-    expect(box.querySelector('[data-testid="sounds-hit-name"]')?.textContent).toBe("Bubble Pop");
+    expect(box.querySelector('[data-testid="sounds-hit-name"]')?.textContent).toBe("Electro");
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("shows a dormant saved WAV and restores it without rewriting the sound pack", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const onSave = vi.fn(async (_text: string, _pack: unknown) => true);
+  const api = {
+    listStockHitsounds: async () => ["hitsound"],
+    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
+  } as unknown as Api;
+  try {
+    await act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={{ hit: { name: "quack", source: "community" } }}
+            layer="vanilla"
+            effective={{ tf_dingalingaling_effect: "2" }}
+            managedText=""
+            onSave={onSave}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    expect(box.querySelector('[data-testid="sounds-saved-inactive"]')?.textContent).toContain(
+      "Saved custom sound files stay in this profile",
+    );
+    expect(box.querySelector('[data-testid="sounds-hit-name"]')?.textContent).toBe("Notes");
+    expect(onSave).not.toHaveBeenCalled();
+
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="sounds-use-saved-hit"]')?.click(),
+    );
+    expect(box.querySelector('[data-testid="sounds-hit-name"]')?.textContent).toBe("Quack");
+    expect(box.querySelector('[data-testid="sounds-saved-inactive"]')).toBeNull();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 800)));
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0]?.[1]).toBeNull();
+    expect(onSave.mock.calls[0]?.[0]).toContain("tf_dingalingaling_effect 0");
   } finally {
     await act(async () => root.unmount());
     box.remove();

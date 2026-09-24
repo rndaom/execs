@@ -7,6 +7,7 @@ import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import { BridgeError, type GameBananaPage } from "./lib/bridge";
 import {
+  DIRECT_DEVELOPER_TEXTURES_ID,
   DIRECT_FLAT_TEXTURES_ID,
   PREVIEW_GAMEBANANA_RECORDS,
   PREVIEW_MODS_CATALOG,
@@ -74,7 +75,10 @@ function makeApi() {
     getDefaultMods: vi.fn(async () => ({
       cached: false,
       catalog: {
-        addons: PREVIEW_MODS_CATALOG.addons.filter((addon) => addon.id === DIRECT_FLAT_TEXTURES_ID),
+        addons: PREVIEW_MODS_CATALOG.addons.filter(
+          (addon) =>
+            addon.id === DIRECT_FLAT_TEXTURES_ID || addon.id === DIRECT_DEVELOPER_TEXTURES_ID,
+        ),
         particleMods: [],
       },
     })),
@@ -170,10 +174,11 @@ afterEach(async () => {
 });
 
 describe("Mods HUD recovery through the real settings host", () => {
-  it("shows the direct Flat choice before the cueki catalog is cached", async () => {
+  it("shows both direct author choices before the cueki catalog is cached", async () => {
     await render();
     expect(api.getDefaultMods).toHaveBeenCalledOnce();
     expect(element("mods-addon-flat-textures-v1")).toBeTruthy();
+    expect(element("mods-addon-developer-textures-overhaul-v2")).toBeTruthy();
     expect(element("mods-download").textContent).toContain("Download other choices");
   });
 

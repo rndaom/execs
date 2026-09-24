@@ -58,7 +58,7 @@ beforeEach(() => {
     files: [{ path }],
     launchOptions: "",
     crosshair: { id: "execs-crosshairs", shape: "cross", assignments: {} },
-    hitsound: { hit: { name: "quack", source: "community", boost: 0 } },
+    hitsound: { hit: { name: "own.wav", source: "file", token: "a".repeat(32), boost: 0 } },
   };
   comfig = { preset: "medium", modules: {}, addons: [] };
   api = {
@@ -76,9 +76,19 @@ beforeEach(() => {
     getPackCrosshairPreviews: vi.fn(async () => ({})),
     listStockHitsounds: vi.fn(async () => []),
     getHitsoundSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
-    comfigHitsoundIndex: vi.fn(async () => [
-      { hash: "next-hash", name: "Next sound", kind: "hit" },
-    ]),
+    pickHitsoundFile: vi.fn(async () => ({
+      token: "b".repeat(32),
+      name: "Next sound.wav",
+      converted: false,
+      info: {
+        formatTag: 1,
+        channels: 1,
+        sampleRate: 44100,
+        bitsPerSample: 16,
+        dataBytes: 2,
+        durationMs: 1,
+      },
+    })),
     writeManagedCfg: vi.fn(async (_path: string, text: string) => {
       cfg = text;
       return detail;
@@ -107,7 +117,9 @@ beforeEach(() => {
             hit: {
               ...detail.hitsound.hit,
               boost: hit.boost,
-              ...(hit.pick.kind === "comfig" ? { name: hit.pick.name, source: "comfig" } : {}),
+              ...(hit.pick.kind === "file"
+                ? { name: hit.pick.name, source: "file", token: hit.pick.token }
+                : {}),
             },
           },
         };
@@ -274,6 +286,7 @@ describe("sound acknowledgements through the real host", () => {
         await pending.promise;
         return apply(...args);
       });
+      if (field === "source") vi.stubGlobal("__TAURI_INTERNALS__", {});
       await render({ tab: "sounds" });
       await click('[data-testid="sounds-hit-boost-6"]');
       await elapsed();
@@ -285,8 +298,8 @@ describe("sound acknowledgements through the real host", () => {
       }
       if (field === "boost") await click('[data-testid="sounds-hit-boost-12"]');
       if (field === "source") {
-        await input('[data-testid="sounds-search"]', "Next sound");
-        await click('[data-testid="sounds-assign-hit-comfig:next-hash"]');
+        await click('[data-testid="sounds-choose-file"]');
+        await click(`[data-testid="sounds-assign-hit-own:${"b".repeat(32)}"]`);
       }
       await act(async () => pending.resolve(null));
       if (field === "volume")
@@ -296,7 +309,7 @@ describe("sound acknowledgements through the real host", () => {
       if (field === "boost")
         expect(element<HTMLInputElement>('[data-testid="sounds-hit-boost-12"]').checked).toBe(true);
       if (field === "source")
-        expect(element('[data-testid="sounds-hit-name"]').textContent).toBe("Next sound");
+        expect(element('[data-testid="sounds-hit-name"]').textContent).toBe("Next sound.wav");
       await elapsed();
       expect(api.writeManagedCfg).toHaveBeenCalledTimes(
         field === "volume" || field === "pitch" ? 1 : 0,
@@ -309,9 +322,9 @@ describe("sound acknowledgements through the real host", () => {
       if (field === "boost") expect(api.applyHitsoundsWithSettings.mock.calls[1][3].boost).toBe(12);
       if (field === "source")
         expect(api.applyHitsoundsWithSettings.mock.calls[1][3].pick).toEqual({
-          kind: "comfig",
-          hash: "next-hash",
-          name: "Next sound",
+          kind: "file",
+          token: "b".repeat(32),
+          name: "Next sound.wav",
         });
       expect(props.onPendingChange).toHaveBeenLastCalledWith(false);
     },

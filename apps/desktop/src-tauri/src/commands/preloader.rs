@@ -307,14 +307,15 @@ pub struct DefaultModsPayload {
     pub catalog: Option<ModsCatalog>,
 }
 
-/// The direct author choice is always available; the other choices appear
+/// The direct author choices are always available; the other choices appear
 /// when cueki's library zip is cached. This command never downloads.
 #[tauri::command]
 pub async fn get_default_mods() -> Result<DefaultModsPayload, CommandError> {
     blocking(|| {
         let cached = crate::mods_fetch::is_cached();
         let cache_path = crate::mods_fetch::cache_path();
-        let catalog = crate::mods_fetch::catalog_with_flat(cached.then_some(cache_path.as_path()))?;
+        let catalog =
+            crate::mods_fetch::catalog_with_direct(cached.then_some(cache_path.as_path()))?;
         Ok(DefaultModsPayload {
             cached,
             catalog: Some(catalog),
@@ -328,7 +329,7 @@ pub async fn get_default_mods() -> Result<DefaultModsPayload, CommandError> {
 pub async fn download_default_mods() -> Result<DefaultModsPayload, CommandError> {
     blocking(|| {
         let zip = crate::mods_fetch::ensure_mods_zip()?;
-        let catalog = crate::mods_fetch::catalog_with_flat(Some(&zip))?;
+        let catalog = crate::mods_fetch::catalog_with_direct(Some(&zip))?;
         Ok(DefaultModsPayload {
             cached: true,
             catalog: Some(catalog),
@@ -356,6 +357,7 @@ pub async fn apply_preloader_mods(
     };
     let needs_cueki_library = selection.needs_cueki_library();
     let needs_flat_textures = selection.uses_flat_textures();
+    let needs_developer_textures = selection.uses_developer_textures();
     let (context, zip) = with_root(move |root| {
         execs_core::refuse_if_running()?;
         let context = ProfileSelectionContext::capture(&root)?;
@@ -366,6 +368,9 @@ pub async fn apply_preloader_mods(
         };
         if needs_flat_textures {
             crate::mods_fetch::ensure_flat_textures_zip()?;
+        }
+        if needs_developer_textures {
+            crate::mods_fetch::ensure_developer_textures_7z()?;
         }
         Ok((context, zip))
     })

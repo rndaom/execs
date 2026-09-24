@@ -1,6 +1,5 @@
 mod comfig_fetch;
 mod commands;
-mod crosshair_fetch;
 mod error;
 mod gamebanana;
 mod hitsound_fetch;
@@ -713,8 +712,6 @@ pub fn run() {
             commands::hud::get_hud_schema,
             commands::hud::apply_hud_options,
             commands::crosshair::apply_crosshairs,
-            commands::crosshair::fetch_community_crosshair,
-            commands::crosshair::fetch_community_crosshair_previews,
             commands::crosshair::get_pack_crosshair_previews,
             commands::crosshair::get_stock_crosshair_sprites,
             commands::crosshair::get_crosshair_content_sources,
@@ -729,7 +726,6 @@ pub fn run() {
             commands::hitsound::hitsound_bytes,
             commands::hitsound::list_stock_hitsounds,
             commands::hitsound::get_hitsound_sources,
-            commands::hitsound::comfig_hitsound_index,
             commands::hitsound::pick_hitsound_file,
             commands::hitsound::apply_hitsounds,
             commands::hitsound::apply_hitsounds_with_settings,

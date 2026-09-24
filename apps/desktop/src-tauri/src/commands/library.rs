@@ -146,6 +146,13 @@ pub async fn switch_profile(
         {
             crate::mods_fetch::ensure_flat_textures_zip()?;
         }
+        if manifest
+            .preloader
+            .as_ref()
+            .is_some_and(execs_core::preloader::PreloaderSelection::uses_developer_textures)
+        {
+            crate::mods_fetch::ensure_developer_textures_7z()?;
+        }
         Ok(RootContext::capture(&root))
     })
     .await?;

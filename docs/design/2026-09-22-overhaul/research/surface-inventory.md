@@ -131,8 +131,8 @@ Sources: `CrosshairPane.tsx:220`, `StockCrosshairSettings.tsx:118`, `crosshair/*
 - [ ] Color field, hue slider, valid/invalid hex entry, Saturation and brightness disclosure expanded.
 - [ ] Custom mode with installed pack, inactive saved pack, mode change pending, Use in-game crosshair.
 - [ ] Built-in source with a different base shape and pending Build pack action.
-- [ ] My designs source empty/populated; open Design a crosshair, every available style, shape-specific controls, outline/opacity/center dot/drop shadow, name and saved design.
-- [ ] Community source and search/empty state; native Community crosshairs picker, selected tile, multiple picks, paging/search/add. Browser disables opening this picker.
+- [ ] Saved library empty/populated; open Design a crosshair, every available style, shape-specific controls, outline/opacity/center dot/drop shadow, name and saved design.
+- [ ] Previously installed VTF selections remain visible in Saved library with a retired-source notice and local-pack previews; new Venom catalog downloads are unavailable under the D7 source decision.
 - [ ] Import PNG field and a permitted fixture image; size normalization/resize choice, wrong format/error where safely supported.
 - [ ] Weapon overrides expanded in All classes; representative Mixed shapes state; shape popup open.
 - [ ] Each class tab (Scout, Soldier, Pyro, Demoman, Heavy, Engineer, Medic, Sniper, Spy), per-weapon override and Copy to all classes.

@@ -137,6 +137,45 @@ describe("0.1.4 crosshair workflow", () => {
     expect(draftApi.previewFor("venom_dot")).toEqual(previews.dot);
   });
 
+  it("keeps a retired catalog selection in the saved library without offering a download", async () => {
+    if (!record) throw new Error("Expected a saved crosshair pack");
+    record = {
+      ...record,
+      shape: "venom_circle",
+      assignments: { tf_weapon_scattergun: "venom_dot" },
+      library: { venom_circle: "vtf", venom_dot: "vtf" },
+    };
+    await render();
+    expect(box.textContent).toContain("New Venom downloads are no longer offered");
+    expect(box.textContent).toContain("Build pack reuses files already in the saved pack");
+    expect(box.querySelector('[data-testid="crosshair-open-community"]')).toBeNull();
+    await click('input[value="designs"]');
+    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-venom_circle"]').checked).toBe(
+      true,
+    );
+    expect(box.querySelector('[data-testid="crosshair-shape-venom_dot"]')).not.toBeNull();
+    await click('[data-testid="crosshair-build"]');
+    expect(build).toHaveBeenCalledWith(
+      "venom_circle",
+      { tf_weapon_scattergun: "venom_dot" },
+      undefined,
+      [17, 123, 241],
+      {},
+      null,
+      expect.objectContaining({ libraryNames: ["venom_circle", "venom_dot"] }),
+    );
+  });
+
+  it("keeps a non-prefixed legacy VTF selected and selectable", async () => {
+    if (!record) throw new Error("Expected a saved crosshair pack");
+    record = { ...record, shape: "bomo1", library: { bomo1: "vtf" } };
+    await render();
+    await click('input[value="designs"]');
+    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-bomo1"]').checked).toBe(true);
+    await click('[data-testid="crosshair-build"]');
+    expect(build.mock.calls.at(-1)?.[0]).toBe("bomo1");
+  });
+
   it("links to HUD controls when a HUD overlay can add another crosshair", async () => {
     hudOverlayState = "enabled";
     await render();

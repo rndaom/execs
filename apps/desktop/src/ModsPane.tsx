@@ -543,8 +543,9 @@ export function ModsPane({
           >
             {payload && !payload.modsCached && !loading ? (
               <p className="t-meta mt-4">
-                Flat Textures v1 is available now; its author file downloads on Apply. The other
-                choices need a one-time, verified library download.
+                Flat Textures v1 and Developer Textures Overhaul v2 are available now; their author
+                files download on Apply. The other choices need a one-time, verified library
+                download.
               </p>
             ) : null}
             {loading && !catalog ? (
@@ -576,9 +577,18 @@ export function ModsPane({
                           >
                             original GameBanana file
                           </button>{" "}
-                          by flewvar, with textures credited to JarateKing. Other choices come from
-                          cueki’s default library. Selected files are packed into your local preload
-                          addon.
+                          by flewvar, with textures credited to JarateKing. Developer Textures
+                          Overhaul v2 uses the{" "}
+                          <button
+                            type="button"
+                            className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+                            onClick={() => void openExternal("https://gamebanana.com/mods/336110")}
+                          >
+                            original GameBanana file
+                          </button>{" "}
+                          by FPS_Engineer, with earlier work credited to ayrtonSilna. Other choices
+                          come from cueki’s default library. Selected files are packed into your
+                          local preload addon.
                         </p>
                         <ul className="mt-3 list-none p-0">
                           {catalog.addons.map((addon) => (

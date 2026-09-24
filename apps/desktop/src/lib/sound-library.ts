@@ -1,15 +1,12 @@
-import type { ComfigHitsound, HitsoundKind, HitsoundPick, PickedHitsound } from "./bridge";
-import { COMMUNITY_HITSOUNDS } from "./community-hitsounds";
+import type { HitsoundKind, HitsoundPick, PickedHitsound } from "./bridge";
 import { type SoundChoice, STOCK_HITSOUND_EFFECTS } from "./hitsound-ui";
 
 /** Where a library sound comes from. */
-export type SoundSourceId = "own" | "stock" | "community" | "comfig";
+export type SoundSourceId = "own" | "stock";
 
 export const SOUND_SOURCE_LABELS: Record<SoundSourceId, string> = {
   own: "Your file",
   stock: "Built into TF2",
-  community: "Community pack",
-  comfig: "comfig.app",
 };
 
 /** One row of the browsable library, usable in either slot. */
@@ -18,8 +15,6 @@ export type SoundLibraryEntry = {
   id: string;
   label: string;
   source: SoundSourceId;
-  /** Upstream hint about what it was made for; both slots still accept it. */
-  suggested?: HitsoundKind;
   /** What the picker installs / auditions for a given slot. */
   choiceFor: (kind: HitsoundKind) => SoundChoice;
   pickFor: (kind: HitsoundKind) => HitsoundPick;
@@ -75,7 +70,7 @@ export function parseSoundPageJump(value: string, pageCount: number): number | n
   return Number.isSafeInteger(page) && page <= pageCount ? page - 1 : null;
 }
 
-const SOURCE_ORDER: SoundSourceId[] = ["own", "stock", "community", "comfig"];
+const SOURCE_ORDER: SoundSourceId[] = ["own", "stock"];
 
 export function stockEntries(): SoundLibraryEntry[] {
   return STOCK_HITSOUND_EFFECTS.map((effect) => ({
@@ -88,16 +83,6 @@ export function stockEntries(): SoundLibraryEntry[] {
   }));
 }
 
-export function communityEntries(): SoundLibraryEntry[] {
-  return COMMUNITY_HITSOUNDS.map((entry) => ({
-    id: `community:${entry.id}`,
-    label: entry.label,
-    source: "community",
-    choiceFor: () => ({ kind: "community", id: entry.id }),
-    pickFor: () => ({ kind: "community", name: entry.id }),
-  }));
-}
-
 export function ownEntry(picked: PickedHitsound): SoundLibraryEntry {
   return {
     id: `own:${picked.token}`,
@@ -107,17 +92,6 @@ export function ownEntry(picked: PickedHitsound): SoundLibraryEntry {
     choiceFor: () => ({ kind: "file", picked }),
     pickFor: () => ({ kind: "file", token: picked.token, name: picked.name }),
   };
-}
-
-export function comfigEntries(index: ComfigHitsound[]): SoundLibraryEntry[] {
-  return index.map((entry) => ({
-    id: `comfig:${entry.hash}`,
-    label: entry.name,
-    source: "comfig",
-    suggested: entry.kind,
-    choiceFor: () => ({ kind: "comfig", hash: entry.hash, name: entry.name }),
-    pickFor: () => ({ kind: "comfig", hash: entry.hash, name: entry.name }),
-  }));
 }
 
 /** Stable across filtering/sorting; duplicate source names get a local ordinal. */

@@ -3591,6 +3591,125 @@ mod tests {
     }
 
     #[test]
+    fn saved_catalog_wavs_survive_export_import_and_profile_switch() {
+        use crate::hitsound::{
+            apply_hitsounds_to, stored_hitsound, HitsoundChange, HitsoundEntry, HitsoundKind,
+            HitsoundSource, HITSOUND_REL, KILLSOUND_REL,
+        };
+
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        seed_live(&root);
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Saved catalog sounds",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let source_id = saved.active_profile_id.unwrap();
+
+        // A valid 10 ms, 44.1 kHz mono PCM WAV stands in for already saved
+        // profile bytes. This path must never need the retired remote fetches.
+        let wav = |sample: u8| {
+            let samples = vec![sample; 882];
+            let mut wav = Vec::new();
+            wav.extend_from_slice(b"RIFF");
+            wav.extend_from_slice(&(36 + samples.len() as u32).to_le_bytes());
+            wav.extend_from_slice(b"WAVEfmt ");
+            wav.extend_from_slice(&16u32.to_le_bytes());
+            wav.extend_from_slice(&1u16.to_le_bytes());
+            wav.extend_from_slice(&1u16.to_le_bytes());
+            wav.extend_from_slice(&44_100u32.to_le_bytes());
+            wav.extend_from_slice(&88_200u32.to_le_bytes());
+            wav.extend_from_slice(&2u16.to_le_bytes());
+            wav.extend_from_slice(&16u16.to_le_bytes());
+            wav.extend_from_slice(b"data");
+            wav.extend_from_slice(&(samples.len() as u32).to_le_bytes());
+            wav.extend_from_slice(&samples);
+            wav
+        };
+        let hit_wav = wav(0x40);
+        let kill_wav = wav(0x20);
+
+        let mut community = HitsoundEntry::new("quack".into(), HitsoundSource::Community);
+        community.boost = 6;
+        let mut comfig = HitsoundEntry::new("Saved upload".into(), HitsoundSource::Comfig);
+        comfig.boost = 12;
+        comfig.hash = Some("a".repeat(128));
+        apply_hitsounds_to(
+            &profiles,
+            &root,
+            &source_id,
+            HitsoundChange::Install {
+                entry: community,
+                wav: hit_wav.clone(),
+            },
+            HitsoundChange::Install {
+                entry: comfig,
+                wav: kill_wav.clone(),
+            },
+            unlocked(),
+        )
+        .unwrap();
+        let source_record = load_manifest(&profiles, &source_id).unwrap().hitsound;
+
+        let archive = dir.join("saved-catalog-sounds.zip");
+        export_profile_to(&profiles, &root, &source_id, &archive).unwrap();
+        let imported = import_profile_from(&profiles, &root, &archive, unlocked()).unwrap();
+        let imported_id = imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != source_id)
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(imported.active_profile_id.as_deref(), Some(source_id.as_str()));
+        assert_eq!(load_manifest(&profiles, &imported_id).unwrap().hitsound, source_record);
+        assert_eq!(
+            stored_hitsound(&profiles, &imported_id, HitsoundKind::Hit),
+            Some(hit_wav.clone())
+        );
+        assert_eq!(
+            stored_hitsound(&profiles, &imported_id, HitsoundKind::Kill),
+            Some(kill_wav.clone())
+        );
+
+        // Clear the original active profile first, so the imported copy must
+        // restore both canonical WAVs from its own verified library files.
+        apply_hitsounds_to(
+            &profiles,
+            &root,
+            &source_id,
+            HitsoundChange::Clear,
+            HitsoundChange::Clear,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!root.join(HITSOUND_REL).exists());
+        assert!(!root.join(KILLSOUND_REL).exists());
+        let no_steam = Vec::new();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &imported_id,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                steam_roots: Some(&no_steam),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(fs::read(root.join(HITSOUND_REL)).unwrap(), hit_wav);
+        assert_eq!(fs::read(root.join(KILLSOUND_REL)).unwrap(), kill_wav);
+        assert_eq!(load_manifest(&profiles, &imported_id).unwrap().hitsound, source_record);
+        cleanup(&dir);
+    }
+
+    #[test]
     fn feature_records_without_verified_payloads_refuse_import() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");

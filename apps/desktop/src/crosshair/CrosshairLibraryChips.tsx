@@ -1,4 +1,4 @@
-import { PencilSimple, Plus, X } from "@phosphor-icons/react";
+import { PencilSimple, X } from "@phosphor-icons/react";
 import {
   type CrosshairColor,
   type CrosshairShape,
@@ -10,8 +10,7 @@ import type { PreviewPixels } from "./useCrosshairDraft";
 
 /**
  * The base-crosshair picker: first-party shapes, the imported PNG, and every
- * library entry — each drawn, not named — plus the two doors into the
- * designer and the community pack.
+ * library entry — each drawn, not named — plus the designer entry.
  */
 export function CrosshairLibraryChips({
   choices,
@@ -20,14 +19,11 @@ export function CrosshairLibraryChips({
   customRgba,
   previewFor,
   locked,
-  canBrowseCommunity,
   hasDesign,
   onSelect,
   onRemove,
   onOpenDesigner,
-  onOpenCommunity,
   showDesigner = true,
-  showCommunity = true,
   designerLabel,
 }: {
   choices: CrosshairShape[];
@@ -36,14 +32,11 @@ export function CrosshairLibraryChips({
   customRgba: number[] | null;
   previewFor: (name: string) => PreviewPixels | null;
   locked: boolean;
-  canBrowseCommunity: boolean;
   hasDesign: boolean;
   onSelect: (shape: CrosshairShape) => void;
   onRemove: (shape: CrosshairShape) => void;
   onOpenDesigner: () => void;
-  onOpenCommunity: () => void;
   showDesigner?: boolean;
-  showCommunity?: boolean;
   designerLabel?: string;
 }) {
   return (
@@ -64,18 +57,6 @@ export function CrosshairLibraryChips({
             >
               <PencilSimple size={13} />
               {designerLabel ?? (hasDesign ? "Edit design" : "Design your own")}
-            </button>
-          ) : null}
-          {showCommunity ? (
-            <button
-              type="button"
-              data-testid="crosshair-open-community"
-              disabled={locked || !canBrowseCommunity}
-              onClick={onOpenCommunity}
-              className="btn btn-ghost"
-            >
-              <Plus size={13} />
-              Community crosshairs
             </button>
           ) : null}
         </div>

@@ -796,13 +796,6 @@ export function createPreviewApi(state: PreviewState): Api {
       );
       return requireDetail();
     },
-    async fetchCommunityCrosshair(file: string) {
-      throw notInPreview(`Downloading ${file}`);
-    },
-    async fetchCommunityCrosshairPreviews() {
-      // No network in preview: the picker shows name-only tiles.
-      return {};
-    },
     async getPackCrosshairPreviews() {
       return crosshairPixels;
     },
@@ -863,12 +856,6 @@ export function createPreviewApi(state: PreviewState): Api {
     async hitsoundBytes() {
       throw notInPreview("Auditioning sounds");
     },
-    async comfigHitsoundIndex() {
-      return [
-        { name: "Quake 3 hit", hash: "a".repeat(128), kind: "hit" as const },
-        { name: "Kill bell", hash: "b".repeat(128), kind: "kill" as const },
-      ];
-    },
     async listStockHitsounds() {
       // Every stock effect is "present" in preview; nothing can play anyway.
       const { STOCK_HITSOUND_EFFECTS } = await import("./hitsound-ui");
@@ -883,21 +870,30 @@ export function createPreviewApi(state: PreviewState): Api {
     async applyHitsounds(hit: HitsoundSlotChange, kill: HitsoundSlotChange) {
       const next: HitsoundRecord = { ...(hitsound ?? {}) };
       const apply = (slot: "hit" | "kill", change: HitsoundSlotChange) => {
+        if (change.change === "install" && ["community", "comfig"].includes(change.pick.kind)) {
+          throw new BridgeError("This sound catalog is no longer offered.", "SourceUnavailable");
+        }
+        if (
+          change.change === "install" &&
+          change.pick.kind === "installed" &&
+          next[change.pick.slot]?.source !== "file"
+        ) {
+          throw new BridgeError(
+            "This saved catalog sound cannot be re-encoded from its original source.",
+            "SourceUnavailable",
+          );
+        }
         if (change.change === "clear") {
           next[slot] = null;
         } else if (change.change === "install") {
           const pick = change.pick;
           const boost = change.boost;
           next[slot] =
-            pick.kind === "community"
-              ? { name: pick.name, source: "community", boost }
-              : pick.kind === "file"
-                ? { name: pick.name, source: "file", boost }
-                : pick.kind === "comfig"
-                  ? { name: pick.name, source: "comfig", boost }
-                  : next[slot]
-                    ? { ...next[slot], boost }
-                    : null;
+            pick.kind === "file"
+              ? { name: pick.name, source: "file", boost }
+              : next[slot]
+                ? { ...next[slot], boost }
+                : null;
         }
       };
       apply("hit", hit);

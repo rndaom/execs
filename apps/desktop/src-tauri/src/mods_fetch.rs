@@ -1,5 +1,5 @@
 //! Fetch Casual selection sources on demand. cueki's default library and the
-//! original Flat Textures v1 author file are pinned and hash-verified under
+//! original Flat and Developer Textures author files are pinned and verified under
 //! the execs data dir, so installs work offline after each first download.
 
 use std::path::Path;
@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 use crate::net::{self, RemoteSource, Verify};
 
-use execs_core::preloader::flat_textures;
 use execs_core::preloader::ModsCatalog;
+use execs_core::preloader::{developer_textures, flat_textures};
 use execs_core::preloader::{MODS_RELEASE, MODS_SHA256};
 const MODS_URL: &str =
     "https://github.com/cueki/casual-pre-loader/releases/download/v1.7.1/mods.zip";
@@ -94,34 +94,77 @@ fn pinned_flat_file_listed(files: &[crate::gamebanana::GameBananaDownloadVariant
     })
 }
 
-/// The direct author choice is visible before the larger cueki download.
+/// Fetch the original Developer Textures author 7z. The fixed file must still
+/// appear under its author mod before any cache miss follows GameBanana /dl/.
+pub fn ensure_developer_textures_7z() -> Result<PathBuf, String> {
+    let cached = developer_textures::cache_path(&execs_core::execs_data_dir());
+    if !net::cached_file_accepts(
+        &cached,
+        Verify::Sha256(developer_textures::ARCHIVE_SHA256),
+        developer_textures::ARCHIVE_BYTES,
+    ) && !pinned_developer_file_listed(&crate::gamebanana::download_variants(
+        developer_textures::MOD_ID,
+    )?) {
+        return Err(
+            "The pinned Developer Textures author file is no longer listed as expected.".into(),
+        );
+    }
+    net::download_pinned_validated_for(
+        &format!("https://gamebanana.com/dl/{}", developer_textures::FILE_ID),
+        &cached,
+        Verify::Sha256(developer_textures::ARCHIVE_SHA256),
+        developer_textures::ARCHIVE_BYTES,
+        RemoteSource::GameBananaDownload,
+        |bytes| developer_textures::validate_bytes(bytes).map(|_| ()),
+    )?;
+    Ok(cached)
+}
+
+fn pinned_developer_file_listed(files: &[crate::gamebanana::GameBananaDownloadVariant]) -> bool {
+    files.iter().any(|file| {
+        file.id == developer_textures::FILE_ID
+            && file.file_name == developer_textures::ARCHIVE_FILE_NAME
+            && file.size_bytes == Some(developer_textures::ARCHIVE_BYTES)
+            && file.supported
+    })
+}
+
+/// The direct author choices are visible before the larger cueki download.
 /// Once that archive is cached, merge its other choices without ever offering
-/// cueki's bundled copy of Flat Textures as a second source.
-pub fn catalog_with_flat(cueki_zip: Option<&Path>) -> Result<ModsCatalog, String> {
+/// cueki's bundled copies as second sources.
+pub fn catalog_with_direct(cueki_zip: Option<&Path>) -> Result<ModsCatalog, String> {
     let mut catalog = match cueki_zip {
         Some(path) => execs_core::preloader::read_mods_catalog(path)?,
         None => ModsCatalog::default(),
     };
-    catalog.addons.retain(|addon| addon.id != flat_textures::ID);
+    catalog
+        .addons
+        .retain(|addon| addon.id != flat_textures::ID && addon.id != developer_textures::ID);
     catalog.addons.push(flat_textures::catalog_addon());
+    catalog.addons.push(developer_textures::catalog_addon());
     catalog.addons.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(catalog)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{catalog_with_flat, pinned_flat_file_listed};
+    use super::{catalog_with_direct, pinned_developer_file_listed, pinned_flat_file_listed};
     use crate::gamebanana::GameBananaDownloadVariant;
     use crate::net::{self, RemoteSource};
-    use execs_core::preloader::flat_textures;
+    use execs_core::preloader::{developer_textures, flat_textures};
     use std::time::Duration;
 
     #[test]
-    fn flat_choice_is_available_before_cueki_library_download() {
-        let catalog = catalog_with_flat(None).unwrap();
-        assert_eq!(catalog.addons.len(), 1);
-        assert_eq!(catalog.addons[0].id, flat_textures::ID);
-        assert_eq!(catalog.addons[0].file_count, flat_textures::PAYLOAD_FILES);
+    fn direct_choices_are_available_before_cueki_library_download() {
+        let catalog = catalog_with_direct(None).unwrap();
+        assert_eq!(catalog.addons.len(), 2);
+        assert_eq!(catalog.addons[0].id, developer_textures::ID);
+        assert_eq!(
+            catalog.addons[0].file_count,
+            developer_textures::PAYLOAD_FILES
+        );
+        assert_eq!(catalog.addons[1].id, flat_textures::ID);
+        assert_eq!(catalog.addons[1].file_count, flat_textures::PAYLOAD_FILES);
         assert!(catalog.particle_mods.is_empty());
     }
 
@@ -150,6 +193,31 @@ mod tests {
         assert!(!pinned_flat_file_listed(&[changed]));
     }
 
+    #[test]
+    fn developer_author_file_needs_exact_listing_metadata() {
+        let exact = GameBananaDownloadVariant {
+            id: developer_textures::FILE_ID,
+            file_name: developer_textures::ARCHIVE_FILE_NAME.into(),
+            description: String::new(),
+            size_bytes: Some(developer_textures::ARCHIVE_BYTES),
+            added_at: None,
+            supported: true,
+        };
+        assert!(pinned_developer_file_listed(std::slice::from_ref(&exact)));
+        let mut changed = exact.clone();
+        changed.id += 1;
+        assert!(!pinned_developer_file_listed(&[changed]));
+        let mut changed = exact.clone();
+        changed.file_name = "other.7z".into();
+        assert!(!pinned_developer_file_listed(&[changed]));
+        let mut changed = exact.clone();
+        changed.size_bytes = None;
+        assert!(!pinned_developer_file_listed(&[changed]));
+        let mut changed = exact;
+        changed.supported = false;
+        assert!(!pinned_developer_file_listed(&[changed]));
+    }
+
     /// Exercises the current author listing and approved live /dl/ redirect
     /// chain without writing to the user's cache or TF2 installation.
     #[test]
@@ -165,5 +233,20 @@ mod tests {
         )
         .unwrap();
         flat_textures::validate_bytes(&bytes).unwrap();
+    }
+
+    #[test]
+    #[ignore = "live GameBanana author-file regression"]
+    fn live_developer_textures_author_file_matches_the_pinned_payload() {
+        let files = crate::gamebanana::download_variants(developer_textures::MOD_ID).unwrap();
+        assert!(pinned_developer_file_listed(&files));
+        let bytes = net::download_bytes_for_timeout(
+            &format!("https://gamebanana.com/dl/{}", developer_textures::FILE_ID),
+            developer_textures::ARCHIVE_BYTES,
+            RemoteSource::GameBananaDownload,
+            Some(Duration::from_secs(60)),
+        )
+        .unwrap();
+        developer_textures::validate_bytes(&bytes).unwrap();
     }
 }

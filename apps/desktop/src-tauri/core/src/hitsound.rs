@@ -73,16 +73,16 @@ impl HitsoundKind {
     }
 }
 
-/// Where an installed sound came from, so the pane can show its origin and
-/// re-offer the right thing.
+/// Where an installed sound came from, retained with profile bytes even when
+/// a remote source is no longer offered for new selections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HitsoundSource {
-    /// A pinned community-pack entry; `name` is the upstream file stem.
+    /// Legacy TF2Hitsounds entry; `name` is the upstream file stem.
     Community,
     /// A file the user picked; `name` is its original file name.
     File,
-    /// comfig.app's hits library; `name` is the entry's display name.
+    /// Legacy comfig.app entry; `name` is the entry's display name.
     Comfig,
 }
 

@@ -76,6 +76,7 @@ pub const DX8_TWIN_STEMS: [&str; 22] = [
 // ---------------------------------------------------------------------------
 mod apply;
 mod catalog;
+pub mod developer_textures;
 pub mod flat_textures;
 mod gameinfo;
 mod pack;

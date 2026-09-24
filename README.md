@@ -25,9 +25,9 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Comfig.** [mastercomfig](https://comfig.app) presets, modules, addons.
 - **Binds.** Click an action, press a key.
 - **HUD.** Install from the hud-db catalog, tune its options, or import your own.
-- **Crosshair.** Stock, 173 community crosshairs, or your own design per weapon.
+- **Crosshair.** Stock crosshairs, your own designs or PNGs per weapon, and crosshairs already saved in your profile.
 - **Viewmodels.** Hide weapons per class, compiled with the game's own tools on Windows. Linux supports importing prebuilt packs.
-- **Sounds.** Hit and kill sounds from a library, or your own WAV.
+- **Sounds.** Use stock hit and kill effects from your TF2 install or your own WAV.
 - **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading supports selected customizations; server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
 - **Files.** Edit your own UTF-8 cfgs with a Source-aware linter; inspect provided cfgs read-only.
 
@@ -36,8 +36,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
   <img src="docs/media/crosshair.png" width="49%" alt="Crosshair pane">
 </p>
 <p align="center">
-  <img src="docs/media/mods.png" width="49%" alt="Mods pane">
-  <img src="docs/media/sounds.png" width="49%" alt="Sounds pane">
+  <img src="docs/media/mods.png" width="75%" alt="Mods pane">
 </p>
 
 ## Install
@@ -91,9 +90,9 @@ execs installs work by the TF2 community:
 - [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), previews by Oblique
 - [casual-pre-loader](https://github.com/cueki/casual-pre-loader) by [cueki](https://github.com/cueki)
 - [Flat Textures (2021)](https://gamebanana.com/mods/295065) by [flewvar](https://gamebanana.com/members/1764119), with textures credited to [JarateKing](https://github.com/JarateKing)
-- [Venom Crosshairs](https://github.com/hbivnm/Venom-Crosshairs) by [HbiVnm](https://github.com/hbivnm) and the [list](https://github.com/hbivnm/Venom-Crosshairs-List) contributors
-- [TF2Hitsounds](https://github.com/WishingStardust/TF2Hitsounds) by [WishingStardust](https://github.com/WishingStardust)
-- the [comfig.app hit sounds](https://comfig.app/app/?page=hits) uploaded by their makers
+- [Developer Textures Overhaul v2](https://gamebanana.com/mods/336110) by FPS_Engineer, with earlier VMT work credited to ayrtonSilna
+- Previously installed [Venom Crosshairs](https://github.com/hbivnm/Venom-Crosshairs) by [HbiVnm](https://github.com/hbivnm) and the [list](https://github.com/hbivnm/Venom-Crosshairs-List) contributors; new downloads are unavailable in execs
+- Previously installed [TF2Hitsounds](https://github.com/WishingStardust/TF2Hitsounds) by [WishingStardust](https://github.com/WishingStardust) and [comfig.app hit sounds](https://comfig.app/app/?page=hits) uploaded by their makers; new catalog downloads are unavailable in execs
 
 Licenses and how each one is used: [THIRD_PARTY.md](THIRD_PARTY.md).
 

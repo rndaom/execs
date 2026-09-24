@@ -1,7 +1,6 @@
 import { type Dispatch, type SetStateAction, useMemo } from "react";
 import { draftRecordKey, useSeededDraft } from "../hooks/useSeededDraft";
 import type { CrosshairAssetPayload, CrosshairRecord, StockCrosshairSprite } from "../lib/bridge";
-import { communityLibraryName } from "../lib/community-crosshairs";
 import {
   type CrosshairDesign,
   renderCrosshairDesign,
@@ -25,7 +24,6 @@ export type CrosshairDraftApi = {
   discard: () => void;
   /** Local pixels for library entries added this session. */
   previewFor: (name: string) => PreviewPixels | null;
-  addCommunity: (id: string, preview: PreviewPixels, bytes: number[]) => void;
   removeLibraryEntry: (name: string) => void;
   saveDesign: (design: CrosshairDesign, label?: string) => void;
   acknowledge: (sent: CrosshairDraft, color: [number, number, number]) => void;
@@ -74,19 +72,6 @@ export function useCrosshairDraft(
       }
     }
     return stored ? { width: stored.width, height: stored.height, rgba: stored.rgba } : null;
-  }
-
-  function addCommunity(id: string, preview: PreviewPixels, bytes: number[]) {
-    // Namespaced: two upstream stems ("circle", "dot") are first-party shape
-    // names, and a bare id made the builtin shape win the preview while the
-    // backend wrote one VTF for both meanings.
-    const name = communityLibraryName(id);
-    setFetchedPreviews((current) => ({ ...current, [name]: preview }));
-    setDraft((current) => ({
-      ...current,
-      shape: name,
-      library: { ...current.library, [name]: { format: "vtf", bytes } },
-    }));
   }
 
   function removeLibraryEntry(name: string) {
@@ -158,7 +143,7 @@ export function useCrosshairDraft(
 
   function setImportedPng(pixels: number[]) {
     // Functional: the decode is async, so anything the user changed while the
-    // image loaded (colour, an override, a community add) would be reverted by
+    // image loaded (colour or an override) would be reverted by
     // a spread of the captured draft.
     setDraft((current) => ({
       ...current,
@@ -186,7 +171,6 @@ export function useCrosshairDraft(
       setFetchedPreviews({});
     },
     previewFor,
-    addCommunity,
     removeLibraryEntry,
     saveDesign,
     setImportedPng,

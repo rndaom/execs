@@ -40,7 +40,7 @@ fn gc_picked_for_library(root: &std::path::Path) -> Result<(), CommandError> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum HitsoundPick {
-    /// A pinned community-pack entry by upstream stem.
+    /// Retained for old IPC callers; new catalog reads are refused.
     Community { name: String },
     /// A user file the dialog already prepared, by its stash token.
     File { token: String, name: String },
@@ -48,8 +48,29 @@ pub enum HitsoundPick {
     Installed { slot: HitsoundKind },
     /// One of the engine's own sounds, by file stem, from the user's VPK.
     Stock { stem: String },
-    /// A comfig.app hits-library entry by its opaque 128-hex object id.
+    /// Retained for old IPC callers; new catalog reads are refused.
     Comfig { hash: String, name: String },
+}
+
+fn retired_catalog_error() -> CommandError {
+    CommandError::new(
+        "SourceUnavailable",
+        "This sound catalog is no longer offered. Saved profile WAVs remain installed; choose your own WAV or a built-in TF2 effect for a new sound.",
+    )
+}
+
+fn retired_boost_error() -> CommandError {
+    CommandError::new(
+        "SourceUnavailable",
+        "This saved catalog sound cannot be re-encoded from its original source. Keep its current boost or choose your own WAV.",
+    )
+}
+
+fn require_boostable_source(source: HitsoundSource) -> Result<(), CommandError> {
+    match source {
+        HitsoundSource::File => Ok(()),
+        HitsoundSource::Community | HitsoundSource::Comfig => Err(retired_boost_error()),
+    }
 }
 
 fn pick_bytes(
@@ -58,13 +79,19 @@ fn pick_bytes(
     pick: &HitsoundPick,
 ) -> Result<Vec<u8>, CommandError> {
     match pick {
-        HitsoundPick::Community { name } => Ok(crate::hitsound_fetch::fetch_community_wav(name)?),
+        HitsoundPick::Community { name } => {
+            let _ = name;
+            Err(retired_catalog_error())
+        }
+        HitsoundPick::Comfig { hash, name } => {
+            let _ = (hash, name);
+            Err(retired_catalog_error())
+        }
         HitsoundPick::File { token, .. } => Ok(crate::hitsound_fetch::read_picked(token)?),
         HitsoundPick::Installed { slot } => {
             execs_core::stored_hitsound(&execs_core::profiles_dir(), profile_id, *slot)
                 .ok_or_else(|| CommandError::unknown("Nothing is installed in that slot."))
         }
-        HitsoundPick::Comfig { hash, .. } => Ok(crate::hitsound_fetch::fetch_comfig_wav(hash)?),
         HitsoundPick::Stock { stem } => {
             let stock = execs_core::extract_stock_hitsounds(root)?;
             stock
@@ -75,9 +102,8 @@ fn pick_bytes(
     }
 }
 
-/// WAV bytes for the audio element as a `Response`. ADPCM sources (every
-/// comfig.app sound) are decoded to PCM for the preview only; what gets
-/// installed is still the original file.
+/// WAV bytes for the audio element as a `Response`. Saved ADPCM sources are
+/// decoded to PCM for preview only; installed files stay unchanged.
 #[tauri::command]
 pub async fn hitsound_bytes(pick: HitsoundPick) -> Result<tauri::ipc::Response, CommandError> {
     let bytes = with_profile(move |root, profile_id| {
@@ -89,13 +115,6 @@ pub async fn hitsound_bytes(pick: HitsoundPick) -> Result<tauri::ipc::Response, 
     })
     .await?;
     Ok(tauri::ipc::Response::new(bytes))
-}
-
-/// comfig.app's hits library (pinned index), for the browsable list.
-#[tauri::command]
-pub async fn comfig_hitsound_index(
-) -> Result<Vec<crate::hitsound_fetch::ComfigHitsound>, CommandError> {
-    blocking(|| Ok(crate::hitsound_fetch::fetch_comfig_index()?)).await
 }
 
 /// The stock hit/kill sound stems present in the user's sound VPK.
@@ -214,18 +233,12 @@ fn resolve_change(
             let boost = execs_core::clamp_boost_db(boost);
             let (entry, raw) =
                 match &pick {
-                    HitsoundPick::Community { name } => (
-                        HitsoundEntry::new(name.clone(), HitsoundSource::Community),
-                        pick_bytes(root, profile_id, &pick)?,
-                    ),
+                    HitsoundPick::Community { .. } | HitsoundPick::Comfig { .. } => {
+                        return Err(retired_catalog_error());
+                    }
                     HitsoundPick::File { name, token } => {
                         let mut entry = HitsoundEntry::new(name.clone(), HitsoundSource::File);
                         entry.token = Some(token.clone());
-                        (entry, pick_bytes(root, profile_id, &pick)?)
-                    }
-                    HitsoundPick::Comfig { name, hash } => {
-                        let mut entry = HitsoundEntry::new(name.clone(), HitsoundSource::Comfig);
-                        entry.hash = Some(hash.clone());
                         (entry, pick_bytes(root, profile_id, &pick)?)
                     }
                     // Re-install what is already there at a different boost: the
@@ -256,8 +269,9 @@ fn installed_source(
         HitsoundKind::Kill => record.kill,
     }
     .ok_or_else(|| CommandError::unknown("Nothing is installed in that slot."))?;
+    require_boostable_source(entry.source)?;
     // The installed bytes are the source whenever nothing was baked into them
-    // yet; only an already-boosted entry has to go back to where it came from.
+    // yet; only an already-boosted user file has to go back to its stash.
     let installed = || {
         if entry.boost == 0 {
             execs_core::stored_hitsound(&execs_core::profiles_dir(), profile_id, slot)
@@ -266,15 +280,7 @@ fn installed_source(
         }
     };
     let raw = match entry.source {
-        HitsoundSource::Community => crate::hitsound_fetch::fetch_community_wav(&entry.name)
-            .or_else(|err| installed().ok_or(CommandError::unknown(err)))?,
-        HitsoundSource::Comfig => match entry.hash.as_deref() {
-            Some(hash) => crate::hitsound_fetch::fetch_comfig_wav(hash)
-                .or_else(|err| installed().ok_or(CommandError::unknown(err)))?,
-            None => installed().ok_or_else(|| {
-                CommandError::unknown("Pick this sound from the library again to change its boost.")
-            })?,
-        },
+        HitsoundSource::Community | HitsoundSource::Comfig => return Err(retired_boost_error()),
         HitsoundSource::File => entry
             .token
             .as_deref()
@@ -376,4 +382,53 @@ pub async fn remove_hitsounds(
         Ok(detail)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn retired_catalog_picks_refuse_preview_and_install_before_any_fetch_or_cache_read() {
+        let root = Path::new("unused");
+        for pick in [
+            HitsoundPick::Community {
+                name: "quack".into(),
+            },
+            HitsoundPick::Comfig {
+                hash: "a".repeat(128),
+                name: "Saved upload".into(),
+            },
+        ] {
+            assert_eq!(
+                pick_bytes(root, "unused", &pick).unwrap_err().code,
+                "SourceUnavailable"
+            );
+            assert_eq!(
+                resolve_change(
+                    root,
+                    "unused",
+                    HitsoundSlotChange::Install { pick, boost: 0 },
+                )
+                .unwrap_err()
+                .code,
+                "SourceUnavailable"
+            );
+        }
+    }
+
+    #[test]
+    fn saved_catalog_sources_keep_their_wav_but_cannot_be_reencoded() {
+        assert!(require_boostable_source(HitsoundSource::File).is_ok());
+        for source in [HitsoundSource::Community, HitsoundSource::Comfig] {
+            let err = require_boostable_source(source).unwrap_err();
+            assert_eq!(err.code, "SourceUnavailable");
+            assert!(err.message.contains("Keep its current boost"));
+        }
+        assert!(matches!(
+            resolve_change(Path::new("unused"), "unused", HitsoundSlotChange::Keep),
+            Ok(HitsoundChange::Keep)
+        ));
+    }
 }

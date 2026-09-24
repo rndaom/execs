@@ -140,11 +140,14 @@ export function selectionDirty(
 }
 
 export const DIRECT_FLAT_TEXTURES_ID = "Flat Textures v1";
+export const DIRECT_DEVELOPER_TEXTURES_ID = "Developer Textures Overhaul v2";
 
 function needsCuekiLibrary(selection: ModSelection): boolean {
   return (
     selection.particleMods.length > 0 ||
-    selection.addons.some((addon) => addon !== DIRECT_FLAT_TEXTURES_ID)
+    selection.addons.some(
+      (addon) => addon !== DIRECT_FLAT_TEXTURES_ID && addon !== DIRECT_DEVELOPER_TEXTURES_ID,
+    )
   );
 }
 
@@ -562,6 +565,15 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
 };
 
 const PREVIEW_ADDONS: CatalogAddon[] = [
+  {
+    id: DIRECT_DEVELOPER_TEXTURES_ID,
+    name: DIRECT_DEVELOPER_TEXTURES_ID,
+    kind: "Texture",
+    description: "Original GameBanana file by FPS_Engineer; earlier work credited to ayrtonSilna.",
+    fileCount: 996,
+    bytes: 55_750_859,
+    hasSound: false,
+  },
   {
     id: DIRECT_FLAT_TEXTURES_ID,
     name: DIRECT_FLAT_TEXTURES_ID,

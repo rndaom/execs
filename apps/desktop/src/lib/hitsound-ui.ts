@@ -152,10 +152,13 @@ export function slotChange(
       return boost === boostOf(installed)
         ? { change: "keep" }
         : { change: "install", pick: { kind: "installed", slot: kind }, boost };
-    default:
-      // A stock effect: the file is dormant either way, and dropping it keeps
-      // the pack honest about what plays.
-      return installed ? { change: "clear" } : { change: "keep" };
+    case "stock":
+      // A nonzero built-in effect leaves a saved custom WAV dormant. Keep it
+      // when unrelated settings change; selecting the default file effect
+      // must clear it or the old custom WAV would play instead of TF2's ding.
+      return installed && stockEffect(slot.choice.effect) === 0
+        ? { change: "clear" }
+        : { change: "keep" };
   }
 }
 

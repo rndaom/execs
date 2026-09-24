@@ -2,7 +2,6 @@ import {
   ArrowClockwise,
   ArrowLeft,
   ArrowRight,
-  ArrowSquareOut,
   MagnifyingGlass,
   Play,
   Stop,
@@ -20,17 +19,14 @@ import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import { forgetSoundUrl, soundKey, useSoundPlayer } from "./hooks/useSoundPlayer";
 import type { Api } from "./lib/api";
 import {
-  type ComfigHitsound,
   type ContentIndex,
   type HitsoundKind,
   type HitsoundRecord,
   type HitsoundSlotChange,
   isTauri,
-  openExternal,
   type PickedHitsound,
   type ProfileFile,
 } from "./lib/bridge";
-import { COMMUNITY_HITSOUND_CREDIT, COMMUNITY_HITSOUND_REPO } from "./lib/community-hitsounds";
 import {
   clampGameplay,
   type GameplayLayer,
@@ -42,6 +38,7 @@ import {
 import {
   BOOST_STEPS,
   type BoostDb,
+  boostOf,
   choiceLabel,
   choiceSourceLabel,
   HITSOUND_CASUAL_COPY,
@@ -49,6 +46,7 @@ import {
   pickForChoice,
   type SlotDraft,
   type SoundChoice,
+  STOCK_HITSOUND_EFFECTS,
   sameChoice,
   seedSoundsDraft,
   serializeSoundsDraft,
@@ -56,8 +54,6 @@ import {
   soundsToCvars,
 } from "./lib/hitsound-ui";
 import {
-  comfigEntries,
-  communityEntries,
   filterSoundLibrary,
   ownEntry,
   pageSoundLibrary,
@@ -81,17 +77,14 @@ const SLOT_TITLES: Record<HitsoundKind, string> = {
 const SOURCE_FILTERS: { id: SoundSourceId | "all"; label: string }[] = [
   { id: "all", label: "All" },
   { id: "stock", label: "Stock" },
-  { id: "community", label: "TF2Hitsounds" },
-  { id: "comfig", label: "comfig.app" },
   { id: "own", label: "Yours" },
 ];
 
 /**
  * The Sounds pane: a hit sound and a kill sound, each an on/off, the chosen
  * sound with a play button, and a volume; pitch-by-damage and the repeat
- * delay fold under Advanced. Below sits the library — every sound from every
- * source in one searchable, sortable list, each row playable and assignable
- * to either slot. Files go into the profile's sound pack; the cvars ride the
+ * delay fold under Advanced. Below sits the library of built-in effects and
+ * user-picked WAVs. Files go into the profile's sound pack; the cvars ride the
  * same managed gameplay cfg the Crosshair pane writes.
  */
 export function SoundsPane({
@@ -151,8 +144,6 @@ export function SoundsPane({
   const [picked, setPicked] = useState<PickedHitsound | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  const [comfig, setComfig] = useState<ComfigHitsound[] | null>(null);
-  const [comfigError, setComfigError] = useState<string | null>(null);
   const [stockStems, setStockStems] = useState<string[] | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
   const [sources, setSources] = useState<ContentIndex | null>(null);
@@ -174,7 +165,6 @@ export function SoundsPane({
     let cancelled = false;
     setLibraryLoading(true);
     setStockError(null);
-    setComfigError(null);
     const stockRead = api
       .listStockHitsounds()
       .then((stems) => {
@@ -188,20 +178,7 @@ export function SoundsPane({
           setStockStems((current) => current ?? []);
         }
       });
-    const comfigRead = api
-      .comfigHitsoundIndex()
-      .then((index) => {
-        if (!cancelled) {
-          setComfig(index);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setComfig((current) => current ?? []);
-          setComfigError(err instanceof Error ? err.message : "comfig.app is unavailable.");
-        }
-      });
-    void Promise.all([stockRead, comfigRead]).then(() => {
+    void stockRead.then(() => {
       if (!cancelled) setLibraryLoading(false);
     });
     return () => {
@@ -242,13 +219,8 @@ export function SoundsPane({
   useEffect(() => () => player.stop(), [player.stop]);
 
   const library = useMemo<SoundLibraryEntry[]>(
-    () => [
-      ...(picked ? [ownEntry(picked)] : []),
-      ...stockEntries(),
-      ...communityEntries(),
-      ...comfigEntries(comfig ?? []),
-    ],
-    [picked, comfig],
+    () => [...(picked ? [ownEntry(picked)] : []), ...stockEntries()],
+    [picked],
   );
   const rows = useMemo(
     () => filterSoundLibrary(library, query, sort, source === "all" ? null : new Set([source])),
@@ -263,6 +235,16 @@ export function SoundsPane({
 
   const dirty = serializeSoundsDraft(draft) !== serializeSoundsDraft(seeded);
   const needsPack = packChangeNeeded(draft, record);
+  const dormantSounds = (["hit", "kill"] as const).flatMap((kind) => {
+    const entry = record?.[kind];
+    const choice = draft[kind].choice;
+    return entry && choice.kind === "stock" && choice.effect > 0
+      ? [{ kind, entry, effect: choice.effect }]
+      : [];
+  });
+  const hasSavedCatalogSound = [record?.hit, record?.kill].some(
+    (entry) => entry?.source === "community" || entry?.source === "comfig",
+  );
   const hitSources = sources?.hits["sound/ui/hitsound.wav"] ?? [];
   const killSources = sources?.hits["sound/ui/killsound.wav"] ?? [];
   const sourceIssues = [
@@ -356,6 +338,43 @@ export function SoundsPane({
           />
         ))}
       </div>
+
+      {dormantSounds.length ? (
+        <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
+          <p>
+            Saved custom sound files stay in this profile while built-in effects play. Assigning
+            your own WAV replaces one; Remove sound files deletes both saved files.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {dormantSounds.map(({ kind, entry, effect }) => (
+              <button
+                key={kind}
+                type="button"
+                data-testid={`sounds-use-saved-${kind}`}
+                className="btn btn-ghost"
+                onClick={() =>
+                  patchSlot(kind, {
+                    choice: { kind: "installed", entry },
+                    boost: boostOf(entry),
+                  })
+                }
+              >
+                Use saved {kind} sound instead of{" "}
+                {STOCK_HITSOUND_EFFECTS[effect]?.label ?? "effect"}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {hasSavedCatalogSound ? (
+        <section data-testid="sounds-retired-source" className="pane-note mt-4">
+          This profile has a sound from a catalog execs no longer offers. Its saved WAV remains in
+          the profile and can still play. To change its baked boost, choose a WAV you provide.
+          Assigning your own WAV replaces it; choosing Default ding or Remove sound files deletes
+          it.
+        </section>
+      ) : null}
 
       {record?.sourceChanged ? (
         <section data-testid="sounds-source-changed" role="alert" className="surface mt-4 p-3">
@@ -564,9 +583,7 @@ export function SoundsPane({
           />
         </div>
 
-        <p className="t-meta mt-2">
-          These sound sources do not publish dates or popularity counts.
-        </p>
+        <p className="t-meta mt-2">Built-in effects come from your TF2 install.</p>
         {paged.pageCount > 1 ? (
           <SoundPagination
             position="top"
@@ -606,9 +623,6 @@ export function SoundsPane({
                   </span>
                   <span className="t-meta truncate">
                     {SOUND_SOURCE_LABELS[entry.source]}
-                    {entry.suggested
-                      ? ` · made for ${entry.suggested === "hit" ? "hits" : "kills"}`
-                      : ""}
                     {entry.meta ? ` · ${entry.meta}` : ""}
                   </span>
                 </span>
@@ -655,14 +669,9 @@ export function SoundsPane({
             }}
           />
         ) : null}
-        {comfigError || stockError ? (
+        {stockError ? (
           <div className="pane-toolbar mt-3 rounded-md border border-edge bg-panel p-3">
             <div className="min-w-0">
-              {comfigError ? (
-                <p data-testid="sounds-comfig-error" className="t-meta">
-                  comfig.app list unavailable: {comfigError}
-                </p>
-              ) : null}
               {stockError ? (
                 <p data-testid="sounds-stock-error" className="t-meta">
                   Built-in sounds unavailable: {stockError}
@@ -682,26 +691,8 @@ export function SoundsPane({
       </section>
 
       <p className="pane-note mt-6">
-        {HITSOUND_CASUAL_COPY} Built-in effects are previewed from your own copy of the game.{" "}
-        {COMMUNITY_HITSOUND_CREDIT}{" "}
-        <button
-          type="button"
-          onClick={() => void openExternal(COMMUNITY_HITSOUND_REPO)}
-          className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-        >
-          TF2Hitsounds
-          <ArrowSquareOut size={11} />
-        </button>
-        . comfig.app sounds are community uploads owned by their uploaders; browse them at{" "}
-        <button
-          type="button"
-          onClick={() => void openExternal("https://comfig.app/app/?page=hits")}
-          className="inline-flex items-center gap-0.5 text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-        >
-          comfig.app
-          <ArrowSquareOut size={11} />
-        </button>
-        . execs is not affiliated with either.
+        {HITSOUND_CASUAL_COPY} Built-in effects are previewed from your own copy of the game. Add a
+        WAV you have permission to use for a custom sound.
       </p>
     </section>
   );
@@ -835,6 +826,7 @@ function SoundSlot({
   const title = SLOT_TITLES[kind];
   const key = soundKey(pickForChoice(kind, slot.choice));
   const isPlaying = playing === key;
+  const retiredBoost = slot.choice.kind === "installed" && slot.choice.entry.source !== "file";
   return (
     <section data-testid={`sounds-${kind}`} className="min-w-0">
       <div className="flex items-center justify-between gap-4">
@@ -895,14 +887,16 @@ function SoundSlot({
           <p className="t-row">Boost</p>
           <p className="t-meta">
             {slot.choice.kind === "stock"
-              ? "Choose a custom sound from the library to boost it."
-              : "Makes the custom file itself louder."}
+              ? "Choose your own WAV to boost it."
+              : retiredBoost
+                ? "This saved catalog sound keeps its current boost. Choose your own WAV to change it."
+                : "Makes the custom file itself louder."}
           </p>
         </div>
         <Segmented
           label={`${title} boost`}
           size="sm"
-          disabled={locked || slot.choice.kind === "stock"}
+          disabled={locked || slot.choice.kind === "stock" || retiredBoost}
           testIdPrefix={`sounds-${kind}-boost`}
           options={BOOST_STEPS.map((db) => ({
             id: String(db) as "0" | "6" | "12",

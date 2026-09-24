@@ -93,7 +93,6 @@ pub enum RemoteSource {
     GameBananaApi,
     GameBananaDownload,
     ComfigApp,
-    ComfigHits,
     Tf2Huds,
 }
 
@@ -117,7 +116,6 @@ impl RemoteSource {
                 "files.gamebanana.com",
             ],
             Self::ComfigApp => &["comfig.app", "www.comfig.app"],
-            Self::ComfigHits => &["hits.comfig.app"],
             Self::Tf2Huds => &["tf2huds.dev", "www.tf2huds.dev"],
         }
     }
@@ -163,7 +161,6 @@ impl RemoteSource {
                 host == "files.gamebanana.com" || path.starts_with("/dl/")
             }
             Self::ComfigApp => path.starts_with("/huds"),
-            Self::ComfigHits => path.ends_with(".wav"),
             Self::Tf2Huds => path == "/" || path.starts_with("/huds/") || path.starts_with("/hud/"),
         }
     }
@@ -187,7 +184,6 @@ fn source_for_url(url: &reqwest::Url) -> Option<RemoteSource> {
         }
         "files.gamebanana.com" => RemoteSource::GameBananaDownload,
         "comfig.app" | "www.comfig.app" => RemoteSource::ComfigApp,
-        "hits.comfig.app" => RemoteSource::ComfigHits,
         "tf2huds.dev" | "www.tf2huds.dev" => RemoteSource::Tf2Huds,
         _ => return None,
     })
@@ -1432,6 +1428,10 @@ mod tests {
             RemoteSource::GameBananaDownload
         )
         .is_ok());
+        assert!(source_for_url(
+            &reqwest::Url::parse("https://hits.comfig.app/retired.wav").unwrap()
+        )
+        .is_none());
     }
 
     #[test]

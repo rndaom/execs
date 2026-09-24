@@ -748,31 +748,6 @@ export async function applyCrosshairs(
   });
 }
 
-export type CommunityCrosshair = {
-  file: string;
-  width: number;
-  height: number;
-  rgba: number[];
-  bytes: number[];
-};
-
-/** Download (with cache) one community crosshair and its decoded preview. */
-export async function fetchCommunityCrosshair(file: string): Promise<CommunityCrosshair> {
-  return call<CommunityCrosshair>("fetch_community_crosshair", { file });
-}
-
-/**
- * Thumbnails for the community picker: every requested upstream file stem,
- * fetched (with cache) and decoded. Missing keys failed to download or decode.
- */
-export async function fetchCommunityCrosshairPreviews(
-  files: string[],
-): Promise<Record<string, StockCrosshairSprite>> {
-  return call<Record<string, StockCrosshairSprite>>("fetch_community_crosshair_previews", {
-    files,
-  });
-}
-
 /** Decoded previews of the installed pack's library crosshairs. */
 export async function getPackCrosshairPreviews(): Promise<Record<string, StockCrosshairSprite>> {
   return call<Record<string, StockCrosshairSprite>>("get_pack_crosshair_previews");
@@ -906,18 +881,6 @@ export type PickedHitsound = {
 /** Raw WAV bytes for auditioning one pick in an audio element. */
 export async function hitsoundBytes(pick: HitsoundPick): Promise<ArrayBuffer> {
   return call<ArrayBuffer>("hitsound_bytes", { pick });
-}
-
-/** One comfig.app hits-library entry from the pinned index. */
-export type ComfigHitsound = {
-  name: string;
-  hash: string;
-  kind: HitsoundKind;
-};
-
-/** comfig.app's hits library (pinned index, cached). */
-export async function comfigHitsoundIndex(): Promise<ComfigHitsound[]> {
-  return call<ComfigHitsound[]>("comfig_hitsound_index");
 }
 
 /** Stems of the stock hit/kill sounds found in the user's own sound VPK. */

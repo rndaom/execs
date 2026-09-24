@@ -31,12 +31,17 @@ impl PreloaderSelection {
             .any(|addon| addon == super::flat_textures::ID)
     }
 
+    pub fn uses_developer_textures(&self) -> bool {
+        self.addons
+            .iter()
+            .any(|addon| addon == super::developer_textures::ID)
+    }
+
     pub fn needs_cueki_library(&self) -> bool {
         !self.particle_mods.is_empty()
-            || self
-                .addons
-                .iter()
-                .any(|addon| addon != super::flat_textures::ID)
+            || self.addons.iter().any(|addon| {
+                addon != super::flat_textures::ID && addon != super::developer_textures::ID
+            })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -221,6 +226,9 @@ pub fn prepare_profile_preloader(
     if selection.uses_flat_textures() {
         super::flat_textures::read_verified(&data).map_err(ProfileError::Io)?;
     }
+    if selection.uses_developer_textures() {
+        super::developer_textures::read_verified(&data).map_err(ProfileError::Io)?;
+    }
     let zip = if selection.needs_cueki_library() {
         let zip = data
             .join("preloader")
@@ -371,6 +379,32 @@ mod tests {
             ..PreloaderSelection::default()
         };
         assert!(mixed.uses_flat_textures());
+        assert!(mixed.needs_cueki_library());
+    }
+
+    #[test]
+    fn developer_textures_keeps_its_saved_id_without_requiring_the_cueki_zip() {
+        let developer = PreloaderSelection {
+            addons: vec![super::super::developer_textures::ID.into()],
+            ..PreloaderSelection::default()
+        };
+        assert!(developer.uses_developer_textures());
+        assert!(!developer.needs_cueki_library());
+        let both_direct = PreloaderSelection {
+            addons: vec![
+                super::super::developer_textures::ID.into(),
+                super::super::flat_textures::ID.into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(!both_direct.needs_cueki_library());
+        let mixed = PreloaderSelection {
+            addons: vec![
+                super::super::developer_textures::ID.into(),
+                "No Burning Overlay".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
         assert!(mixed.needs_cueki_library());
     }
 }

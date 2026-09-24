@@ -2,7 +2,6 @@ import { type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
-import { CommunityPicker } from "./crosshair/CommunityPicker";
 import { CrosshairDesigner, type CrosshairDesignerDraft } from "./crosshair/CrosshairDesigner";
 import { CrosshairLibraryChips } from "./crosshair/CrosshairLibraryChips";
 import { CrosshairPreview, crosshairShapeLabel } from "./crosshair/CrosshairPreview";
@@ -25,8 +24,6 @@ import type {
   CrosshairSourceStatus,
   StockCrosshairSprite,
 } from "./lib/bridge";
-import { isTauri } from "./lib/bridge";
-import { COMMUNITY_CROSSHAIR_CREDIT } from "./lib/community-crosshairs";
 import {
   defaultCrosshairDesign,
   designFromPreset,
@@ -47,7 +44,7 @@ import { CrosshairControls, useCrosshairControls } from "./StockCrosshairSetting
 /**
  * The Crosshair pane: TF2's own crosshair controls, then the first-party
  * custom-crosshair builder. Orchestration only — the preview, chip grid,
- * override table, community picker and designer are their own components and
+ * override table and designer are their own components and
  * the draft plus every mutation on it live in `useCrosshairDraft`.
  */
 export function CrosshairPane({
@@ -112,7 +109,6 @@ export function CrosshairPane({
     setDraft,
     seeded,
     previewFor,
-    addCommunity,
     removeLibraryEntry,
     saveDesign,
     setImportedPng,
@@ -125,7 +121,6 @@ export function CrosshairPane({
   // picking a shape is what makes it dirty.
   const dirty = crosshairDraftDirty({ ...draft, color: null }, { ...seeded, color: null });
   const [classTab, setClassTab] = useState<ClassTab>(ALL_CLASSES_TAB);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
   const [designerSession, setDesignerSession] = useSeededDraft<{
     initial: CrosshairDesignerDraft;
@@ -136,6 +131,13 @@ export function CrosshairPane({
     JSON.stringify(designerSession.initial) !== JSON.stringify(designerSession.current);
 
   const libraryNames = Object.keys(draft.library).sort();
+  const hasSavedVtf =
+    Object.entries(record?.library ?? {}).some(
+      ([name, format]) => name.startsWith("venom_") || format === "vtf",
+    ) ||
+    Object.entries(draft.library).some(
+      ([name, entry]) => name.startsWith("venom_") || entry.format === "vtf",
+    );
   const usesCustom =
     draft.customRgba !== null ||
     previewFor("custom") !== null ||
@@ -178,10 +180,9 @@ export function CrosshairPane({
   useEffect(() => {
     if (!activity) {
       setDesignerOpen(false);
-      setPickerOpen(false);
     }
   }, [activity]);
-  const [source, setSource] = useState<"builtin" | "designs" | "community" | "import">("builtin");
+  const [source, setSource] = useState<"builtin" | "designs" | "import">("builtin");
   const [search, setSearch] = useState("");
   const filteredChoices = shapeChoices
     .filter((name) =>
@@ -189,11 +190,7 @@ export function CrosshairPane({
         ? (CROSSHAIR_SHAPES as readonly string[]).includes(name)
         : source === "import"
           ? name === "custom"
-          : source === "community"
-            ? name.startsWith("venom_")
-            : !name.startsWith("venom_") &&
-              !(CROSSHAIR_SHAPES as readonly string[]).includes(name) &&
-              name !== "custom",
+          : !(CROSSHAIR_SHAPES as readonly string[]).includes(name) && name !== "custom",
     )
     .filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()));
   const [stockSelection, setStockSelection] = useState(
@@ -348,6 +345,14 @@ export function CrosshairPane({
           ) : null}
         </div>
       ) : null}
+      {hasSavedVtf ? (
+        <p className="pane-note mb-4" data-testid="crosshair-retired-source-notice">
+          Saved VTF crosshairs stay in this profile. New Venom downloads are no longer offered in
+          execs. Build pack reuses files already in the saved pack; if one is missing, the build
+          stops without changing the installed pack. Choose a Shape or import your own PNG to
+          replace a missing crosshair.
+        </p>
+      ) : null}
       {hudOverlayState === "enabled" || hudOverlayState === "possible" ? (
         <div className="pane-note mb-4" data-testid="crosshair-hud-overlay-notice">
           <p>
@@ -399,8 +404,7 @@ export function CrosshairPane({
                   }}
                   options={[
                     { id: "builtin", label: "Shapes" },
-                    { id: "designs", label: "My designs" },
-                    { id: "community", label: "Community" },
+                    { id: "designs", label: "Saved library" },
                     { id: "import", label: "Import PNG" },
                   ]}
                 />
@@ -408,12 +412,12 @@ export function CrosshairPane({
               {source === "builtin" ? (
                 <p className="t-meta mb-4">
                   Select a shape, then Customize shape to make an editable copy. Saved copies appear
-                  in My designs.
+                  in Saved library.
                 </p>
               ) : source === "designs" ? (
                 <p className="t-meta mb-4">
-                  Your named crosshairs. Design your own starts a new one; select a design to edit
-                  it.
+                  Your saved designs and imported crosshairs. Design your own starts a new one;
+                  select a design to edit it.
                 </p>
               ) : null}
               {editingDesign ? (
@@ -433,7 +437,7 @@ export function CrosshairPane({
                 />
               ) : (
                 <>
-                  {source === "designs" || source === "community" ? (
+                  {source === "designs" ? (
                     <input
                       aria-label="Find a crosshair"
                       placeholder="Find a crosshair"
@@ -452,7 +456,6 @@ export function CrosshairPane({
                     customRgba={draft.customRgba}
                     previewFor={previewFor}
                     locked={locked}
-                    canBrowseCommunity={isTauri()}
                     hasDesign={Boolean(designLibrary(draft.design)[draft.shape])}
                     showDesigner={
                       source === "designs" ||
@@ -460,19 +463,17 @@ export function CrosshairPane({
                         (CROSSHAIR_SHAPES as readonly string[]).includes(draft.shape))
                     }
                     designerLabel={source === "builtin" ? "Customize shape" : undefined}
-                    showCommunity={source === "community"}
                     onSelect={(shape) => setDraft((current) => ({ ...current, shape }))}
                     onRemove={removeLibraryEntry}
                     onOpenDesigner={() => openDesigner(source === "builtin")}
-                    onOpenCommunity={() => setPickerOpen(true)}
                   />
                   {filteredChoices.length === 0 && source !== "import" ? (
                     <p className="pane-note mt-3">
                       {source === "designs"
-                        ? "Create a named design, then build it into your pack."
-                        : source === "community"
-                          ? "Add crosshairs from the Venom library to use them here."
-                          : "No crosshairs match."}
+                        ? search.trim()
+                          ? "No saved crosshairs match."
+                          : "Create a named design, then build it into your pack."
+                        : "No crosshairs match."}
                     </p>
                   ) : null}
                   {designerDirty ? (
@@ -643,21 +644,13 @@ export function CrosshairPane({
             </p>
           ) : null}
           <p className="pane-note mt-3">
-            {COMMUNITY_CROSSHAIR_CREDIT} Scene screenshots by yttrium and Oblique (CompVMInstaller).
-            Stock crosshair previews are decoded from your own copy of the game. execs is not
-            affiliated with Valve or Steam; Team Fortress 2 and its sprites are © Valve Corporation.
+            Previously installed Venom Crosshairs are credited to HbiVnm and their respective
+            creators. Scene screenshots by yttrium and Oblique (CompVMInstaller). Stock crosshair
+            previews are decoded from your own copy of the game. execs is not affiliated with Valve
+            or Steam; Team Fortress 2 and its sprites are © Valve Corporation.
           </p>
         </Disclosure>
       </section>
-      {pickerOpen ? (
-        <CommunityPicker
-          open
-          existing={draft.library}
-          color={color}
-          onAdd={addCommunity}
-          onClose={() => setPickerOpen(false)}
-        />
-      ) : null}
     </section>
   );
 }
