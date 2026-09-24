@@ -104,7 +104,7 @@ Cvar and small-file panes autosave (`useAutosave`: 700 ms debounce, coalesced, d
 
 ## Third-party sources
 
-All fetched at runtime, pinned, credited in the UI, the README and `THIRD_PARTY.md`: mastercomfig (releases, cvar dumps for cfglint, preset screenshots vendored, hits index), hud-db, TF2HUD.Editor schemas, CompVMInstaller (no upstream license; permission requested), casual-pre-loader (GPL, behaviour re-implemented clean-room, mods.zip downloaded), Venom Crosshairs, TF2Hitsounds, GameBanana. Do not vendor GPL code, Valve sprites or sounds, `vtf2tga.exe`, or AI-generated preview art. Imgur's API is not used.
+Runtime sources and packaged exceptions are credited in the UI, the README and `THIRD_PARTY.md`: mastercomfig (current releases; pinned cvar dumps and hits index; preset screenshots vendored), hud-db, TF2HUD.Editor schemas, CompVMInstaller (GPLv3 program notice; animation and preview asset permissions unresolved), casual-pre-loader (GPL, behaviour re-implemented clean-room, pinned mods.zip downloaded), Venom Crosshairs, TF2Hitsounds and GameBanana. Each integration applies its own revision and download validation; a pin or program license does not establish every asset author's permission. Do not vendor GPL code, Valve sprites or sounds, `vtf2tga.exe`, or AI-generated preview art. Imgur's API is not used.
 
 ## Updates and release
 
