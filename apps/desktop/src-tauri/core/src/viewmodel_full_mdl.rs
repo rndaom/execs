@@ -36,11 +36,17 @@ fn patch_i32(bytes: &mut [u8], offset: usize, value: i32) -> Result<(), StockSou
     Ok(())
 }
 
-fn append_full_hide_chain(bytes: &mut Vec<u8>, bone_count: usize) -> Result<usize, StockSourceError> {
+fn append_full_hide_chain(
+    bytes: &mut Vec<u8>,
+    bone_count: usize,
+) -> Result<usize, StockSourceError> {
     let chain_bytes = bone_count
         .checked_mul(10)
         .ok_or_else(|| invalid("full-hide bone chain size overflows"))?;
-    if bone_count == 0 || bone_count > 128 || bytes.len().saturating_add(chain_bytes) > MAX_MDL_BYTES {
+    if bone_count == 0
+        || bone_count > 128
+        || bytes.len().saturating_add(chain_bytes) > MAX_MDL_BYTES
+    {
         return Err(invalid("full-hide bone chain exceeds the model limit"));
     }
     let start = bytes.len();
@@ -63,7 +69,13 @@ pub fn prototype_full_hide_mdl(
     hidden_animations: &BTreeSet<String>,
 ) -> Result<Vec<u8>, StockSourceError> {
     let pose = parse_stock_pose_mdl(original, animation_model, bone_model)?;
-    if bone_model.bones.len() > 128 || bone_model.bones.iter().skip(1).any(|bone| bone.parent.is_none()) {
+    if bone_model.bones.len() > 128
+        || bone_model
+            .bones
+            .iter()
+            .skip(1)
+            .any(|bone| bone.parent.is_none())
+    {
         return Err(invalid("full-hide model has more than one root bone"));
     }
     let mut names = BTreeMap::new();
@@ -87,7 +99,9 @@ pub fn prototype_full_hide_mdl(
         let index = names[name.as_str()];
         let animation = &pose.animations[index];
         if animation.unsupported_reason.is_some() || animation.section_count == 0 {
-            return Err(invalid(format!("local animation {name} uses an unsupported source path")));
+            return Err(invalid(format!(
+                "local animation {name} uses an unsupported source path"
+            )));
         }
         let base = table
             .checked_add(index * ANIM_DESC_BYTES)
@@ -120,7 +134,8 @@ pub fn prototype_full_hide_mdl(
             }
         }
     }
-    let model_length = i32::try_from(output.len()).map_err(|_| invalid("model length exceeds i32"))?;
+    let model_length =
+        i32::try_from(output.len()).map_err(|_| invalid("model length exceeds i32"))?;
     patch_i32(&mut output, 76, model_length)?;
     let rebuilt_animations = parse_stock_animation_mdl(&output)?;
     let rebuilt_bones = parse_stock_bone_mdl(&output)?;
@@ -129,14 +144,18 @@ pub fn prototype_full_hide_mdl(
         || rebuilt_animations.sequences != animation_model.sequences
         || rebuilt_bones.bones != bone_model.bones
     {
-        return Err(invalid("candidate model changed stock animation or bone metadata"));
+        return Err(invalid(
+            "candidate model changed stock animation or bone metadata",
+        ));
     }
     for name in hidden_animations {
         let summary = &rebuilt_pose.animations[names[name.as_str()]];
         if summary.bone_records != summary.section_count * bone_model.bones.len()
             || summary.root.raw != summary.section_count
         {
-            return Err(invalid(format!("candidate model did not replace every {name} section")));
+            return Err(invalid(format!(
+                "candidate model did not replace every {name} section"
+            )));
         }
     }
     Ok(output)
@@ -175,10 +194,7 @@ mod tests {
         write_i32(&mut bytes, 184, animation_table as i32);
         write_i32(&mut bytes, 188, 1);
         write_i32(&mut bytes, 192, sequence as i32);
-        for (index, (name, parent)) in [("root", -1), ("weapon_bone", 0)]
-            .into_iter()
-            .enumerate()
-        {
+        for (index, (name, parent)) in [("root", -1), ("weapon_bone", 0)].into_iter().enumerate() {
             let base = bone_table + index * BONE;
             let offset = append_name(&mut bytes, base, name);
             write_i32(&mut bytes, base, offset);
@@ -254,15 +270,30 @@ mod tests {
             )
             .unwrap();
             let original_len = bytes.len();
-            assert_eq!(&output[original_len..original_len + 10], &[0, 1, 10, 0, 0x40, 0xd6, 0x40, 0xd6, 0x40, 0xd6]);
-            assert_eq!(&output[original_len + 10..original_len + 20], &[1, 1, 0, 0, 0x40, 0xd6, 0x40, 0xd6, 0x40, 0xd6]);
+            assert_eq!(
+                &output[original_len..original_len + 10],
+                &[0, 1, 10, 0, 0x40, 0xd6, 0x40, 0xd6, 0x40, 0xd6]
+            );
+            assert_eq!(
+                &output[original_len + 10..original_len + 20],
+                &[1, 1, 0, 0, 0x40, 0xd6, 0x40, 0xd6, 0x40, 0xd6]
+            );
             let new_animations = parse_stock_animation_mdl(&output).unwrap();
             let new_bones = parse_stock_bone_mdl(&output).unwrap();
             let pose = parse_stock_pose_mdl(&output, &new_animations, &new_bones).unwrap();
-            assert_eq!(pose.animations[0].root.raw, pose.animations[0].section_count);
-            assert_eq!(pose.animations[0].weapon.raw, pose.animations[0].section_count);
+            assert_eq!(
+                pose.animations[0].root.raw,
+                pose.animations[0].section_count
+            );
+            assert_eq!(
+                pose.animations[0].weapon.raw,
+                pose.animations[0].section_count
+            );
             assert_eq!(pose.animations[1].root.raw, 1);
-            assert_eq!(i32_at(&output, 940 + 56, "kept pointer").unwrap(), i32_at(&bytes, 940 + 56, "kept pointer").unwrap());
+            assert_eq!(
+                i32_at(&output, 940 + 56, "kept pointer").unwrap(),
+                i32_at(&bytes, 940 + 56, "kept pointer").unwrap()
+            );
         }
     }
 
