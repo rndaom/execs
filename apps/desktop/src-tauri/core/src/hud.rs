@@ -47,13 +47,14 @@ pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
     "rayshud",
     "budhud",
     "flawhud",
+    "eve-plus",
     "m0rehud",
     "kbnhud",
     "hypnotize-hud",
     "hypnotizehud",
 ];
 
-const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db/main";
+const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db";
 const MAX_HUD_CATALOG_CACHE_BYTES: u64 = 16 * 1024 * 1024;
 const CURRENT_HUD_UI_VERSION: u32 = 3;
 
@@ -483,6 +484,7 @@ pub fn schema_file_name(id: &str) -> Option<&'static str> {
         "rayshud" => Some("rayshud.json"),
         "budhud" => Some("budhud.json"),
         "flawhud" => Some("flawhud.json"),
+        "eve-plus" => Some("eve-plus.json"),
         "m0rehud" => Some("m0rehud-classic.json"),
         "kbnhud" => Some("kbnhud.json"),
         "hypnotize-hud" | "hypnotizehud" => Some("hypnotize-hud.json"),
@@ -544,7 +546,20 @@ pub fn github_repo_parts(repo: &str) -> Option<(String, String)> {
     Some((owner.to_string(), name.to_string()))
 }
 
-pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, ProfileError> {
+pub fn catalog_entry_from_json(
+    id: &str,
+    raw: &str,
+    tree_sha: &str,
+) -> Result<HudCatalogEntry, ProfileError> {
+    if tree_sha.len() != 40
+        || !tree_sha
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(ProfileError::Io(
+            "Invalid hud-db revision for HUD art.".into(),
+        ));
+    }
     #[derive(Deserialize)]
     struct RawSocial {
         #[serde(default)]
@@ -586,7 +601,7 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         .resources
         .iter()
         .filter(|name| is_safe_screenshot_name(name))
-        .map(|name| format!("{RAW_HUD_DB}/hud-resources/{id}/{name}.webp"))
+        .map(|name| format!("{RAW_HUD_DB}/{tree_sha}/hud-resources/{id}/{name}.webp"))
         .collect();
     let banner = screenshots.first().cloned();
     let album = parsed
@@ -1977,6 +1992,7 @@ pub(crate) fn normalize_hud_rel(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const CATALOG_SHA: &str = "1111111111111111111111111111111111111111";
 
     /// A three-file HUD inside a wrapper folder, written with py7zr (LZMA2).
     const HUD_MIN_7Z: &[u8] = include_bytes!("../fixtures/hud-min.7z");
@@ -2675,6 +2691,7 @@ mod tests {
         let rays = catalog_entry_from_json(
             "rayshud",
             r#"{"name":"rayshud","author":"raysfire","contributors":["CriticalFlaw"],"repo":"https://github.com/raysfire/rayshud","hash":"abc123","resources":["banner"]}"#,
+            CATALOG_SHA,
         )
         .unwrap();
         assert!(rays.github);
@@ -2685,11 +2702,12 @@ mod tests {
         );
         assert_eq!(
             rays.banner.as_deref(),
-            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/banner.webp")
+            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/rayshud/banner.webp")
         );
         let toon = catalog_entry_from_json(
             "toonhud",
             r#"{"name":"ToonHUD","author":"toonhud","repo":"https://toonhud.com/","hash":"11.4"}"#,
+            CATALOG_SHA,
         )
         .unwrap();
         assert!(!toon.github);
@@ -2703,18 +2721,19 @@ mod tests {
         let entry = catalog_entry_from_json(
             "budhud",
             r#"{"name":"budhud","author":"whisker","repo":"https://github.com/rbjaxter/budhud","hash":"def456","resources":["https://youtu.be/abc","menu","hud-minmode"],"social":{"album":"https://imgur.com/a/vsxPG"}}"#,
+            CATALOG_SHA,
         )
         .unwrap();
         // The first resource is a video URL — the banner must skip it.
         assert_eq!(
             entry.banner.as_deref(),
-            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/menu.webp")
+            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/budhud/menu.webp")
         );
         assert_eq!(
             entry.screenshots,
             vec![
-                "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/menu.webp",
-                "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/hud-minmode.webp",
+                "https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/budhud/menu.webp",
+                "https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/budhud/hud-minmode.webp",
             ]
         );
         assert_eq!(entry.album.as_deref(), Some("https://imgur.com/a/vsxPG"));

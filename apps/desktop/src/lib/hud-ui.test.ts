@@ -11,7 +11,9 @@ import {
   hudCatalogControls,
   hudDisplayName,
   hudOptionsDirty,
+  hudOverlayCrosshairState,
   hudPageLinks,
+  hudSchemaUnavailableReason,
   hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
@@ -106,6 +108,63 @@ describe("hud catalog helpers", () => {
   it("round-trips HUD color strings", () => {
     expect(parseHudRgba("0 153 255 255")).toEqual({ r: 0, g: 153, b: 255, a: 255 });
     expect(formatHudRgba(0, 153, 255, 128)).toBe("0 153 255 128");
+  });
+
+  it("distinguishes a HUD overlay's saved enable state from an uncertain source", () => {
+    const schema = {
+      author: "fixture",
+      sections: [
+        {
+          name: "Crosshair",
+          controls: [
+            {
+              name: "rh_toggle_xhair_enable",
+              label: "Toggle",
+              controlType: "checkbox",
+              value: "false",
+              choices: [],
+            },
+            {
+              name: "rh_val_xhair_style",
+              label: "Style",
+              controlType: "crosshair",
+              value: "<",
+              choices: [],
+            },
+          ],
+        },
+      ],
+    };
+    expect(hudOverlayCrosshairState("rayshud", schema, {})).toBe("disabled");
+    expect(hudOverlayCrosshairState("rayshud", schema, { rh_toggle_xhair_enable: "true" })).toBe(
+      "enabled",
+    );
+    expect(hudOverlayCrosshairState("hypnotizehud", schema, {})).toBe("possible");
+    const unsupported = {
+      ...schema,
+      sections: [
+        {
+          ...schema.sections[0],
+          controls: [
+            { ...schema.sections[0].controls[0], unavailableReason: "unsupported" },
+            schema.sections[0].controls[1],
+          ],
+        },
+      ],
+    };
+    expect(
+      hudOverlayCrosshairState("rayshud", unsupported, { rh_toggle_xhair_enable: "true" }),
+    ).toBe("possible");
+    expect(hudOverlayCrosshairState("rayshud", null, {})).toBe("none");
+  });
+
+  it("explains why overlapping catalog HUDs have no editor controls yet", () => {
+    expect(hudSchemaUnavailableReason("berryhud")).toContain("multiple HUD roots");
+    expect(hudSchemaUnavailableReason("hexhud")).toContain("missing");
+    expect(hudSchemaUnavailableReason("hud-fixes")).toContain("missing");
+    expect(hudSchemaUnavailableReason("sunsethud")).toContain("unresolved");
+    expect(hudSchemaUnavailableReason("eve-plus")).toContain("No in-app options");
+    expect(hudSchemaUnavailableReason("unknown")).toContain("No in-app options");
   });
 });
 

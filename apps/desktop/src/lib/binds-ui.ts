@@ -8,7 +8,8 @@ export type ManagedExecStem = "execs_binds" | "execs_gameplay";
 export const EXECS_BINDS_STEM = "execs_binds" satisfies ManagedExecStem;
 export const EXECS_GAMEPLAY_STEM = "execs_gameplay" satisfies ManagedExecStem;
 
-export const MANAGED_BINDS_HEADER = "// execs binds — managed, do not edit by hand";
+export const MANAGED_BINDS_HEADER =
+  "// execs binds — standalone action binds are managed; other lines are kept";
 export const MANAGED_EXEC_COMMENT = "// execs:managed";
 
 export const BIND_ACTIONS = [
@@ -20,10 +21,41 @@ export const BIND_ACTIONS = [
   { id: "duck", label: "Duck", command: "+duck" },
   { id: "attack", label: "Primary attack", command: "+attack" },
   { id: "attack2", label: "Secondary attack", command: "+attack2" },
+  { id: "attack3", label: "Special attack", command: "+attack3" },
   { id: "reload", label: "Reload", command: "+reload" },
+  { id: "inspect", label: "Inspect", command: "+inspect" },
+  { id: "taunt", label: "Taunt", command: "+taunt" },
+  { id: "invprev", label: "Previous weapon", command: "invprev" },
+  { id: "invnext", label: "Next weapon", command: "invnext" },
+  { id: "lastinv", label: "Last weapon", command: "lastinv" },
+  { id: "slot1", label: "Weapon slot 1", command: "slot1" },
+  { id: "slot2", label: "Weapon slot 2", command: "slot2" },
+  { id: "slot3", label: "Weapon slot 3", command: "slot3" },
+  { id: "slot4", label: "Weapon slot 4", command: "slot4" },
+  { id: "slot5", label: "Weapon slot 5", command: "slot5" },
+  { id: "slot6", label: "Weapon slot 6 / grappling hook", command: "slot6" },
   { id: "medic", label: "Call medic", command: "voicemenu 0 0" },
   { id: "use", label: "Use", command: "+use" },
   { id: "voice", label: "Voice chat", command: "+voicerecord" },
+  { id: "chat", label: "Text chat", command: "say" },
+  { id: "teamchat", label: "Team chat", command: "say_team" },
+  { id: "partychat", label: "Party chat", command: "say_party" },
+  { id: "voicemenu1", label: "Voice menu 1", command: "voice_menu_1" },
+  { id: "voicemenu2", label: "Voice menu 2", command: "voice_menu_2" },
+  { id: "voicemenu3", label: "Voice menu 3", command: "voice_menu_3" },
+  { id: "actionslot", label: "Action slot item", command: "+use_action_slot_item" },
+  { id: "dropitem", label: "Drop carried item", command: "dropitem" },
+  { id: "showscores", label: "Scoreboard", command: "+showscores" },
+  { id: "spray", label: "Spray", command: "impulse 201" },
+  { id: "ready", label: "Mann vs. Machine ready", command: "player_ready_toggle" },
+  { id: "lastdisguise", label: "Last disguise", command: "lastdisguise" },
+  { id: "changeclass", label: "Change class", command: "changeclass" },
+  { id: "changeteam", label: "Change team", command: "changeteam" },
+  { id: "character", label: "Character loadout", command: "open_charinfo_direct" },
+  { id: "backpack", label: "Backpack", command: "open_charinfo_backpack" },
+  { id: "mapinfo", label: "Map info", command: "showmapinfo" },
+  { id: "contracts", label: "Contracts", command: "show_quest_log" },
+  { id: "console", label: "Developer console", command: "toggleconsole" },
   { id: "loadout0", label: "Loadout A", command: "load_itempreset 0" },
   { id: "loadout1", label: "Loadout B", command: "load_itempreset 1" },
   { id: "loadout2", label: "Loadout C", command: "load_itempreset 2" },
@@ -34,6 +66,7 @@ export type BindAction = (typeof BIND_ACTIONS)[number];
 export type BindActionId = BindAction["id"];
 
 export type BindMap = Map<string, string> | Record<string, string>;
+export type BindSourceMap = Record<string, { file: string; line: number }>;
 
 const ACTION_IDS = new Set<string>(BIND_ACTIONS.map((action) => action.id));
 
@@ -311,52 +344,30 @@ function bindEntries(binds: BindMap): Array<[string, string]> {
   return binds instanceof Map ? [...binds.entries()] : Object.entries(binds);
 }
 
-/** Last key bound to `command` (cfglint key → command map). */
-export function lastKeyForCommand(binds: BindMap, command: string): string | null {
-  const wanted = normalizeBindCommand(command);
-  let found: string | null = null;
-  for (const [key, value] of bindEntries(binds)) {
-    if (normalizeBindCommand(value) === wanted) {
-      found = key.toLowerCase();
-    }
-  }
-  return found;
-}
-
-export function keyForAction(effectiveBinds: BindMap, actionId: BindActionId): string | null {
-  const action = bindActionById(actionId);
-  return action ? lastKeyForCommand(effectiveBinds, action.command) : null;
-}
-
-/** The managed overlay is what execs will apply, so it wins over stale config.cfg data. */
-export function displayedKeyForAction(
-  effectiveBinds: BindMap,
-  managedBinds: Partial<Record<BindActionId, string>>,
+export function actionBindings(
+  binds: BindMap,
+  sources: BindSourceMap,
+  managedText: string,
+  managedPath: string,
   actionId: BindActionId,
-): string | null {
-  const managedKey = managedBinds[actionId]?.trim().toLowerCase();
-  if (managedKey) {
-    return managedKey;
-  }
-
+): Array<{ key: string; source: { file: string; line: number } | null; owned: boolean }> {
   const action = bindActionById(actionId);
-  if (!action) {
-    return null;
-  }
-  const claimedKeys = new Set(
-    Object.values(managedBinds)
-      .map((key) => key?.trim().toLowerCase())
-      .filter((key): key is string => Boolean(key)),
-  );
+  if (!action) return [];
   const wanted = normalizeBindCommand(action.command);
-  let found: string | null = null;
-  for (const [key, command] of bindEntries(effectiveBinds)) {
+  const ownedKeys = new Set(
+    ownedManagedBindKeys(managedText)
+      .filter((bind) => bind.actionId === actionId)
+      .map((bind) => bind.key),
+  );
+  return bindEntries(binds).flatMap(([key, command]) => {
+    if (normalizeBindCommand(command) !== wanted) return [];
     const normalizedKey = key.toLowerCase();
-    if (!claimedKeys.has(normalizedKey) && normalizeBindCommand(command) === wanted) {
-      found = normalizedKey;
-    }
-  }
-  return found;
+    const source = sources[normalizedKey] ?? null;
+    const owned =
+      ownedKeys.has(normalizedKey) &&
+      (source === null || source.file.toLowerCase() === managedPath.toLowerCase());
+    return [{ key: normalizedKey, source, owned }];
+  });
 }
 
 /** Only a completed absorb that observed config.cfg drift may update managed binds. */
@@ -364,20 +375,64 @@ export function shouldSyncTrackedBinds(bindSyncRequest: number | null, running: 
   return bindSyncRequest !== null && !running;
 }
 
-export function parseManagedBinds(text: string): Partial<Record<BindActionId, string>> {
-  const assigned: Partial<Record<BindActionId, string>> = {};
-  for (const command of parseCommands(text, "execs_binds.cfg")) {
-    if (command.name !== "bind" || command.args.length < 2) {
-      continue;
-    }
-    const key = command.args[0].toLowerCase();
-    const payload = command.args.slice(1).join(" ");
-    const action = COMMAND_TO_ACTION.get(normalizeBindCommand(payload));
-    if (action) {
-      assigned[action.id] = key;
-    }
+/** Only a standalone, uncommented known-action bind belongs to the Binds pane. */
+function ownedBindLine(raw: string): { actionId: BindActionId; key: string } | null {
+  const commands = parseCommands(raw, "execs_binds.cfg");
+  if (commands.length !== 1) return null;
+  const command = commands[0];
+  if (
+    command.name !== "bind" ||
+    command.args.length < 2 ||
+    command.tokens.some((token) => !token.closed) ||
+    raw.slice(command.to).trim() !== ""
+  ) {
+    return null;
   }
-  return assigned;
+  const action = COMMAND_TO_ACTION.get(normalizeBindCommand(command.args.slice(1).join(" ")));
+  return action ? { actionId: action.id, key: command.args[0].toLowerCase() } : null;
+}
+
+function fileLines(text: string): string[] {
+  return text.match(/[^\r\n]*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
+}
+
+function fileNewline(text: string): string {
+  return text.includes("\r\n") ? "\r\n" : text.includes("\r") ? "\r" : "\n";
+}
+
+export function ownedManagedBindKeys(text: string): Array<{ actionId: BindActionId; key: string }> {
+  return fileLines(text).flatMap((line) => {
+    const owned = ownedBindLine(line);
+    return owned ? [owned] : [];
+  });
+}
+
+function appendManagedLines(text: string, lines: string[]): string {
+  if (lines.length === 0) return text;
+  const newline = fileNewline(text);
+  const prefix = text || `${MANAGED_BINDS_HEADER}${newline}`;
+  const separator = /[\r\n]$/.test(prefix) ? "" : newline;
+  return `${prefix}${separator}${lines.join(newline)}${newline}`;
+}
+
+/** Rewrites pane-owned standalone lines while retaining every other line's bytes. */
+function replaceOwnedLines(text: string, lines: string[]): string {
+  const preserved = fileLines(text)
+    .filter((line) => ownedBindLine(line) === null)
+    .join("");
+  // The pane's assignments run last so a retained custom command cannot
+  // silently undo a choice made in Binds.
+  return appendManagedLines(preserved, lines);
+}
+
+/** Remove one key owned by this pane, leaving custom lines untouched. */
+export function removeOwnedManagedBind(text: string, actionId: BindActionId, key: string): string {
+  return fileLines(text)
+    .filter((line) => {
+      const owned = ownedBindLine(line);
+      return owned?.actionId !== actionId || owned.key !== key.toLowerCase();
+    })
+    .join("");
 }
 
 function quoteCfgToken(value: string): string {
@@ -410,14 +465,19 @@ export function applyRecordedBind(
   if (!key || key === "escape") {
     return currentFile;
   }
-  const next = { ...parseManagedBinds(currentFile) };
-  for (const id of BIND_ACTIONS.map((action) => action.id)) {
-    if (next[id] === key && id !== actionId) {
-      delete next[id];
-    }
-  }
-  next[actionId] = key;
-  return serializeManagedBinds(next);
+  const owned = ownedManagedBindKeys(currentFile);
+  if (owned.some((bind) => bind.actionId === actionId && bind.key === key)) return currentFile;
+  // A key has one final payload. Reusing a pane-owned key moves that key to
+  // the new action, but does not remove the action's other keys.
+  const withoutClaim = fileLines(currentFile)
+    .filter((line) => ownedBindLine(line)?.key !== key)
+    .join("");
+  const action = bindActionById(actionId);
+  return action
+    ? appendManagedLines(withoutClaim, [
+        `bind ${quoteCfgToken(key)} ${quoteCfgToken(action.command)}`,
+      ])
+    : currentFile;
 }
 
 /** Binds from `tf/cfg/config.cfg` only — not the managed overlay. */
@@ -442,18 +502,23 @@ export function configBindsFromFiles(
 }
 
 export function syncTrackedBindsFromConfig(currentFile: string, configBinds: BindMap): string {
-  const current = parseManagedBinds(currentFile);
-  const next: Partial<Record<BindActionId, string>> = {};
-  for (const action of BIND_ACTIONS) {
-    const configKey = lastKeyForCommand(configBinds, action.command);
-    if (configKey) {
-      next[action.id] = configKey;
-    }
-  }
-  const serialized = serializeManagedBinds(next);
-  return currentFile.trim().length === 0 || serializeManagedBinds(current) !== serialized
-    ? serialized
-    : currentFile;
+  const next = bindEntries(configBinds).flatMap(([key, command]) => {
+    const action = COMMAND_TO_ACTION.get(normalizeBindCommand(command));
+    return action ? [{ actionId: action.id, key: key.toLowerCase() }] : [];
+  });
+  const current = ownedManagedBindKeys(currentFile);
+  const identity = (bindings: typeof next) =>
+    bindings
+      .map(({ actionId, key }) => `${actionId}:${key}`)
+      .sort()
+      .join("\n");
+  if (currentFile.trim().length > 0 && identity(current) === identity(next)) return currentFile;
+  const ordered = BIND_ACTIONS.flatMap((action) =>
+    next
+      .filter((bind) => bind.actionId === action.id)
+      .map((bind) => `bind ${quoteCfgToken(bind.key)} ${quoteCfgToken(action.command)}`),
+  );
+  return replaceOwnedLines(currentFile, ordered);
 }
 
 function execStem(target: string): string {

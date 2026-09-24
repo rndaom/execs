@@ -22,7 +22,7 @@ describe("viewmodel ui", () => {
   it("seeds the draft from a record and ignores legacy compiled-era keys", () => {
     const record = previewViewmodelRecord();
     const seeded = seedViewmodelDraft(record);
-    expect(seeded.preload).toBe(true);
+    expect(seeded).not.toHaveProperty("preload");
     expect(seeded.hidden).toEqual(["scout/melee", "scout/scatterguns"]);
     const legacy = seedViewmodelDraft({
       id: "execs-viewmodels",
@@ -31,7 +31,7 @@ describe("viewmodel ui", () => {
       options: { scattergun: '{"hide":true}' },
     });
     expect(legacy.hidden).toEqual([]);
-    expect(legacy.preload).toBe(false);
+    expect(legacy).not.toHaveProperty("preload");
   });
 
   it("toggles hidden groups deterministically", () => {
@@ -45,7 +45,6 @@ describe("viewmodel ui", () => {
 
   it("changes one class without losing other classes and keeps the pack-wide hide mode explicit", () => {
     const initial = {
-      preload: true,
       hidden: ["scout/scatterguns", "soldier/rockets"],
       hideMode: "full" as const,
     };

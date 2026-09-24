@@ -13,7 +13,9 @@ use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{archive_too_large, blocking, read_bounded_file, with_profile, ActiveContext};
 use crate::error::CommandError;
-use crate::gamebanana::{self, GameBananaCategory, GameBananaPage, GameBananaProfile};
+use crate::gamebanana::{
+    self, GameBananaCategory, GameBananaDownloadVariant, GameBananaPage, GameBananaProfile,
+};
 use crate::WriteGate;
 
 /// Install everything the user picked, and report the profile as it ends up.
@@ -206,6 +208,15 @@ pub async fn gamebanana_mod_categories(
     blocking(move || Ok(gamebanana::categories(refresh.unwrap_or(false))?)).await
 }
 
+/// Show the author's file names and descriptions before a specific file is
+/// downloaded. The selected id is rechecked against a fresh page at install.
+#[tauri::command]
+pub async fn gamebanana_download_variants(
+    id: u64,
+) -> Result<Vec<GameBananaDownloadVariant>, CommandError> {
+    blocking(move || Ok(gamebanana::download_variants(id)?)).await
+}
+
 /// Download a GameBanana mod and install it into the active profile.
 ///
 /// The name and page URL on the record come from `Mod/{id}/ProfilePage` rather
@@ -220,10 +231,11 @@ pub async fn gamebanana_mod_categories(
 pub async fn install_gamebanana_mod(
     gate: tauri::State<'_, WriteGate>,
     id: u64,
+    file_id: u64,
 ) -> Result<ProfileDetail, CommandError> {
     let (context, profile, packs) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
-        let (profile, packs) = fetch_gamebanana_mod(id)?;
+        let (profile, packs) = fetch_gamebanana_mod(id, file_id)?;
         Ok((ActiveContext::capture(&root, &profile_id), profile, packs))
     })
     .await?;
@@ -247,9 +259,10 @@ pub async fn install_gamebanana_mod(
 /// newest file read into packs.
 fn fetch_gamebanana_mod(
     id: u64,
+    file_id: u64,
 ) -> Result<(GameBananaProfile, Vec<(String, ModContent)>), CommandError> {
     let profile = gamebanana::mod_profile(id)?;
-    let pick = gamebanana::download_url(id)?;
+    let pick = gamebanana::download_file(id, file_id)?;
     let bytes = crate::net::download_bytes(&pick.url, gamebanana::MOD_MAX_BYTES)?;
     let packs = packs_from_download(&profile.name, &pick.file_name, bytes)?;
     Ok((profile, packs))

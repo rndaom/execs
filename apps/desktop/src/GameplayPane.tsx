@@ -7,9 +7,11 @@ import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
+import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import {
   ALL_TRACERS_NOTE,
   clampGameplay,
+  clampInt,
   FLIP_VIEWMODELS_NOTE,
   FOV_MAX,
   FOV_MIN,
@@ -19,8 +21,6 @@ import {
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
-  VIEWMODEL_FOV_MAX,
-  VIEWMODEL_FOV_MIN,
 } from "./lib/gameplay-ui";
 
 export type GameplayPaneProps = {
@@ -31,9 +31,11 @@ export type GameplayPaneProps = {
   managedText: string;
   /** The mastercomfig transparent-viewmodels addon state (mirrors the Comfig pane). */
   transparentViewmodels: boolean;
-  /** Comfig-layer profile with official packages installed. */
+  /** Official addon belongs to a Comfig profile. */
   canUseComfigAddons: boolean;
   onToggleTransparentViewmodels: () => void;
+  onOpenComfig?: () => void;
+  onDrawViewmodelChange?: (shown: boolean) => void;
   /** Resolves when the write settles; the toast reports it. */
   onSave: (gameplayText: string) => Promise<unknown>;
 };
@@ -46,6 +48,8 @@ export function GameplayPane({
   transparentViewmodels,
   canUseComfigAddons,
   onToggleTransparentViewmodels,
+  onOpenComfig,
+  onDrawViewmodelChange,
   onSave,
 }: GameplayPaneProps) {
   const { running, busy } = useAppStatus();
@@ -86,15 +90,16 @@ export function GameplayPane({
               suffix="°"
               onChange={(fov_desired) => patch({ fov_desired })}
             />
+            {/* The readout keeps an imported fraction until the slider moves. */}
             <SliderRow
               id="gameplay-viewmodel-fov"
               testId="gameplay-viewmodel-fov"
               label="Viewmodel FOV"
               description="Weapon perspective, independent of your world view."
               value={draft.viewmodel_fov}
-              min={VIEWMODEL_FOV_MIN}
-              max={VIEWMODEL_FOV_MAX}
-              step={0.1}
+              inputValue={clampInt(draft.viewmodel_fov, 1, 179)}
+              min={1}
+              max={179}
               suffix="°"
               onChange={(viewmodel_fov) => patch({ viewmodel_fov })}
             />
@@ -119,7 +124,10 @@ export function GameplayPane({
             testId="gameplay-draw-viewmodel"
             label="Draw viewmodel"
             checked={draft.r_drawviewmodel === 1}
-            onChange={(next) => patch({ r_drawviewmodel: next ? 1 : 0 })}
+            onChange={(next) => {
+              patch({ r_drawviewmodel: next ? 1 : 0 });
+              onDrawViewmodelChange?.(next);
+            }}
           />
           <SwitchRow
             id="gameplay-min-viewmodels"
@@ -176,16 +184,21 @@ export function GameplayPane({
                 id="gameplay-transparent-viewmodels"
                 testId="gameplay-transparent-viewmodels"
                 label="Transparent viewmodels"
-                description="Applies immediately."
+                description={OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]}
                 checked={transparentViewmodels}
                 disabled={addonLocked || !canUseComfigAddons}
                 note={
                   canUseComfigAddons
-                    ? "Needs DirectX 9 and a HUD that supports it; turns off post-processing and anti-aliasing."
-                    : "Needs mastercomfig packages from the Comfig pane."
+                    ? "Managed in Comfig. Applies when you select it."
+                    : "Available with a Comfig profile."
                 }
                 onChange={() => onToggleTransparentViewmodels()}
               />
+              {onOpenComfig ? (
+                <button type="button" className="btn btn-ghost mt-2" onClick={onOpenComfig}>
+                  Open Comfig addons
+                </button>
+              ) : null}
               <SwitchRow
                 id="gameplay-tracers-fp"
                 testId="gameplay-tracers-fp"
@@ -218,6 +231,7 @@ function SliderRow({
   label,
   description,
   value,
+  inputValue,
   min,
   max,
   step = 1,
@@ -229,6 +243,7 @@ function SliderRow({
   label: string;
   description: string;
   value: number;
+  inputValue?: number;
   min: number;
   max: number;
   step?: number;
@@ -261,7 +276,7 @@ function SliderRow({
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={inputValue ?? value}
         aria-describedby={`${id}-description`}
         onChange={(event) => onChange(Number(event.target.value))}
         className="range mt-3 block w-full"

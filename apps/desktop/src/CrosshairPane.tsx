@@ -18,11 +18,18 @@ import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity } from "./hooks/useAutosave";
 import { useExplicitDraft } from "./hooks/useExplicitDraft";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
-import type { CrosshairAssetPayload, CrosshairRecord, StockCrosshairSprite } from "./lib/bridge";
+import type {
+  ContentIndex,
+  CrosshairAssetPayload,
+  CrosshairRecord,
+  CrosshairSourceStatus,
+  StockCrosshairSprite,
+} from "./lib/bridge";
 import { isTauri } from "./lib/bridge";
 import { COMMUNITY_CROSSHAIR_CREDIT } from "./lib/community-crosshairs";
 import {
   defaultCrosshairDesign,
+  designFromPreset,
   parseDesign,
   renderCrosshairDesign,
 } from "./lib/crosshair-designer";
@@ -54,6 +61,12 @@ export function CrosshairPane({
   onApply,
   onRemove,
   onDeactivate,
+  stockArtSources = null,
+  sourceStatus = null,
+  onOpenMods,
+  hudOverlayState = "none",
+  hudName,
+  onOpenHud,
   scene,
 }: {
   /** The profile these drafts belong to; a switch discards them. */
@@ -79,6 +92,12 @@ export function CrosshairPane({
   ) => Promise<boolean>;
   onRemove: () => void;
   onDeactivate?: () => Promise<unknown>;
+  stockArtSources?: ContentIndex | null;
+  sourceStatus?: CrosshairSourceStatus | null;
+  onOpenMods?: () => void;
+  hudOverlayState?: "enabled" | "disabled" | "possible" | "none";
+  hudName?: string;
+  onOpenHud?: () => void;
   scene?: ReactNode;
 }) {
   const { running, busy } = useAppStatus();
@@ -142,6 +161,14 @@ export function CrosshairPane({
     onSaveStock,
     mode === activeMode,
   );
+  const stockFile = controls.draft.cl_crosshair_file;
+  const stockArtPaths = /^crosshair[1-7]$/i.test(stockFile)
+    ? [
+        `materials/vgui/crosshairs/${stockFile.toLowerCase()}.vtf`,
+        `materials/vgui/crosshairs/${stockFile.toLowerCase()}.vmt`,
+      ]
+    : [];
+  const stockArtConflict = stockArtPaths.flatMap((path) => stockArtSources?.hits[path] ?? [])[0];
   const color: CrosshairColor = [
     controls.draft.cl_crosshair_red,
     controls.draft.cl_crosshair_green,
@@ -187,10 +214,12 @@ export function CrosshairPane({
     setMode(activeMode);
     if (mode !== activeMode) controls.reset();
   }
-  function openDesigner() {
+  function openDesigner(fromPreset = false) {
     if (!designerSession) {
       const initial = {
-        design: parseDesign(designLibrary(draft.design)[draft.shape]) ?? defaultCrosshairDesign(),
+        design:
+          parseDesign(designLibrary(draft.design)[draft.shape]) ??
+          (fromPreset ? designFromPreset(draft.shape) : defaultCrosshairDesign()),
         name: draft.shape.startsWith("design-") ? draft.shape.slice(7).replaceAll("-", " ") : "",
       };
       setDesignerSession({ initial, current: initial });
@@ -282,6 +311,75 @@ export function CrosshairPane({
           applied
         </p>
       ) : null}
+      {record?.sourceChanged ? (
+        <div className="pane-note mb-4" data-testid="crosshair-source-changed">
+          <p>
+            This saved crosshair pack changed outside execs. Its previews and weapon assignments may
+            not match the saved design. Review its assets, then Build pack or remove the saved pack.
+          </p>
+          {mode !== "custom" ? (
+            <button
+              type="button"
+              className="btn btn-ghost mt-2"
+              onClick={() => chooseMode("custom")}
+            >
+              Review custom pack
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {record && sourceStatus && !["none", "current"].includes(sourceStatus.state) ? (
+        <div className="pane-note mb-4" data-testid="crosshair-script-source-status">
+          <p>
+            {sourceStatus.state === "changed"
+              ? "TF2's weapon scripts changed since this pack was built. Review the pack and Build pack again to refresh its scripts."
+              : sourceStatus.state === "unverified"
+                ? "This older crosshair pack has no recorded TF2 weapon-script version. Review and Build pack to verify it against the current game files."
+                : `Could not check TF2's weapon scripts: ${sourceStatus.reason ?? "the source is unavailable"}.`}
+          </p>
+          {mode !== "custom" ? (
+            <button
+              type="button"
+              className="btn btn-ghost mt-2"
+              onClick={() => chooseMode("custom")}
+            >
+              Review custom pack
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {hudOverlayState === "enabled" || hudOverlayState === "possible" ? (
+        <div className="pane-note mb-4" data-testid="crosshair-hud-overlay-notice">
+          <p>
+            {hudOverlayState === "enabled"
+              ? `${hudName ?? "Your HUD"} has a crosshair overlay selected. TF2 may draw it along with the engine crosshair shown here.`
+              : `${hudName ?? "Your HUD"} includes crosshair overlay controls. Its in-game state cannot be confirmed from the saved options.`}
+          </p>
+          {onOpenHud ? (
+            <button type="button" className="btn btn-ghost mt-2" onClick={onOpenHud}>
+              Open HUD options
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {mode === "stock" && stockArtConflict ? (
+        <div className="pane-note mb-4" data-testid="crosshair-stock-art-notice">
+          <p>
+            {stockArtConflict.pack} also supplies {stockArtConflict.member}. The preview uses
+            Valve's original sprite, so TF2 may draw different art.
+          </p>
+          {onOpenMods ? (
+            <button type="button" className="btn btn-ghost mt-2" onClick={onOpenMods}>
+              Open installed mods
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {mode === "stock" && stockArtSources?.incomplete.length ? (
+        <p className="pane-note mb-4" data-testid="crosshair-source-scan-incomplete">
+          Some custom packs could not be checked for crosshair art: {stockArtSources.incomplete[0]}
+        </p>
+      ) : null}
       <CrosshairControls
         {...controls}
         sprites={stockSprites}
@@ -307,6 +405,17 @@ export function CrosshairPane({
                   ]}
                 />
               </div>
+              {source === "builtin" ? (
+                <p className="t-meta mb-4">
+                  Select a shape, then Customize shape to make an editable copy. Saved copies appear
+                  in My designs.
+                </p>
+              ) : source === "designs" ? (
+                <p className="t-meta mb-4">
+                  Your named crosshairs. Design your own starts a new one; select a design to edit
+                  it.
+                </p>
+              ) : null}
               {editingDesign ? (
                 <CrosshairDesigner
                   open
@@ -345,11 +454,16 @@ export function CrosshairPane({
                     locked={locked}
                     canBrowseCommunity={isTauri()}
                     hasDesign={Boolean(designLibrary(draft.design)[draft.shape])}
-                    showDesigner={source === "designs"}
+                    showDesigner={
+                      source === "designs" ||
+                      (source === "builtin" &&
+                        (CROSSHAIR_SHAPES as readonly string[]).includes(draft.shape))
+                    }
+                    designerLabel={source === "builtin" ? "Customize shape" : undefined}
                     showCommunity={source === "community"}
                     onSelect={(shape) => setDraft((current) => ({ ...current, shape }))}
                     onRemove={removeLibraryEntry}
-                    onOpenDesigner={openDesigner}
+                    onOpenDesigner={() => openDesigner(source === "builtin")}
                     onOpenCommunity={() => setPickerOpen(true)}
                   />
                   {filteredChoices.length === 0 && source !== "import" ? (
@@ -362,7 +476,11 @@ export function CrosshairPane({
                     </p>
                   ) : null}
                   {designerDirty ? (
-                    <button type="button" onClick={openDesigner} className="btn btn-ghost mt-3">
+                    <button
+                      type="button"
+                      onClick={() => openDesigner()}
+                      className="btn btn-ghost mt-3"
+                    >
                       Resume unsaved design
                     </button>
                   ) : null}

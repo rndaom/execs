@@ -71,8 +71,11 @@ beforeEach(() => {
     readProfileFile: vi.fn(async () => ({ path, text: cfg })),
     getComfigState: vi.fn(async () => comfig),
     getStockCrosshairSprites: vi.fn(async () => ({})),
+    getCrosshairContentSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
+    getCrosshairSourceStatus: vi.fn(async () => ({ state: "none" })),
     getPackCrosshairPreviews: vi.fn(async () => ({})),
     listStockHitsounds: vi.fn(async () => []),
+    getHitsoundSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
     comfigHitsoundIndex: vi.fn(async () => [
       { hash: "next-hash", name: "Next sound", kind: "hit" },
     ]),
@@ -111,6 +114,13 @@ beforeEach(() => {
       }
       return detail;
     }),
+    applyHitsoundsWithSettings: vi.fn(
+      async (_path: string, text: string, _id: string, hit: any) => {
+        cfg = text;
+        const apply = api.applyHitsounds.getMockImplementation();
+        return apply(hit);
+      },
+    ),
     setComfigPreset: vi.fn(async (preset: string) => {
       comfig = { ...comfig, preset };
       return detail;
@@ -259,15 +269,15 @@ describe("sound acknowledgements through the real host", () => {
     "saves a newer %s edit after an older boost lands",
     async (field) => {
       const pending = deferred<any>();
-      const apply = api.applyHitsounds.getMockImplementation();
-      api.applyHitsounds.mockImplementationOnce(async (...args: any[]) => {
+      const apply = api.applyHitsoundsWithSettings.getMockImplementation();
+      api.applyHitsoundsWithSettings.mockImplementationOnce(async (...args: any[]) => {
         await pending.promise;
         return apply(...args);
       });
       await render({ tab: "sounds" });
       await click('[data-testid="sounds-hit-boost-6"]');
       await elapsed();
-      expect(api.applyHitsounds).toHaveBeenCalledTimes(1);
+      expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(1);
       if (field === "volume") await input("#sounds-hit-volume", "40");
       if (field === "pitch") {
         await click('[data-testid="sounds-advanced"] summary');
@@ -288,12 +298,17 @@ describe("sound acknowledgements through the real host", () => {
       if (field === "source")
         expect(element('[data-testid="sounds-hit-name"]').textContent).toBe("Next sound");
       await elapsed();
-      expect(api.writeManagedCfg).toHaveBeenCalledTimes(2);
+      expect(api.writeManagedCfg).toHaveBeenCalledTimes(
+        field === "volume" || field === "pitch" ? 1 : 0,
+      );
+      expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(
+        field === "volume" || field === "pitch" ? 1 : 2,
+      );
       if (field === "volume") expect(cfg).toContain("tf_dingaling_volume 0.4\n");
       if (field === "pitch") expect(cfg).toContain("tf_dingaling_pitchmindmg 80\n");
-      if (field === "boost") expect(api.applyHitsounds.mock.calls[1][0].boost).toBe(12);
+      if (field === "boost") expect(api.applyHitsoundsWithSettings.mock.calls[1][3].boost).toBe(12);
       if (field === "source")
-        expect(api.applyHitsounds.mock.calls[1][0].pick).toEqual({
+        expect(api.applyHitsoundsWithSettings.mock.calls[1][3].pick).toEqual({
           kind: "comfig",
           hash: "next-hash",
           name: "Next sound",
@@ -303,7 +318,7 @@ describe("sound acknowledgements through the real host", () => {
   );
 
   it("keeps a failed boost retryable and discards its draft on a profile switch", async () => {
-    api.applyHitsounds.mockRejectedValueOnce(new Error("pack refused"));
+    api.applyHitsoundsWithSettings.mockRejectedValueOnce(new Error("pack refused"));
     await render({ tab: "sounds" });
     await click('[data-testid="sounds-hit-boost-6"]');
     await elapsed();
@@ -311,7 +326,7 @@ describe("sound acknowledgements through the real host", () => {
     await render({ running: true });
     await render({ running: false });
     await elapsed();
-    expect(api.applyHitsounds).toHaveBeenCalledTimes(2);
+    expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(2);
     await render({ running: true });
     await input("#sounds-hit-volume", "40");
     detail = { ...detail, id: "B", hitsound: null };
@@ -320,7 +335,7 @@ describe("sound acknowledgements through the real host", () => {
     expect(element<HTMLInputElement>("#sounds-hit-volume").value).toBe("90");
     await render({ running: false });
     await elapsed();
-    expect(api.writeManagedCfg).toHaveBeenCalledTimes(2);
+    expect(api.writeManagedCfg).not.toHaveBeenCalled();
   });
 });
 

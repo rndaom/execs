@@ -196,6 +196,51 @@ it.each([
   },
 );
 
+it("offers an explicit capture after a kept-pack switch refusal", async () => {
+  await render();
+  const active = must(must(state.library).activeProfileId);
+  const target = previewSavedProfile("Other", 9);
+  await act(async () =>
+    state.setLibrary({
+      ...must(state.library),
+      profiles: [...must(state.library).profiles, target],
+    }),
+  );
+  const switchCall = vi
+    .spyOn(api, "switchProfile")
+    .mockRejectedValue(
+      new BridgeError("These kept packs are still installed: shared.vpk.", "KeptPackHandoff"),
+    );
+  const capture = vi.spyOn(api, "absorbPacks");
+  await act(async () => state.switchProfile(target.id));
+  expect(state.switchHandoff).toMatchObject({ kind: "kept", ownerId: active });
+  expect(capture).not.toHaveBeenCalled();
+  expect(switchCall).toHaveBeenCalledTimes(1);
+  await act(async () => state.captureKeptPacks());
+  expect(capture).toHaveBeenCalledWith("captureKept");
+  expect(switchCall).toHaveBeenCalledTimes(1);
+  expect(state.switchHandoff).toBeNull();
+});
+
+it("routes retained live files to Save current as without mutating them", async () => {
+  await render();
+  const target = previewSavedProfile("Other", 9);
+  await act(async () =>
+    state.setLibrary({
+      ...must(state.library),
+      profiles: [...must(state.library).profiles, target],
+    }),
+  );
+  vi.spyOn(api, "switchProfile").mockRejectedValue(
+    new BridgeError("Save current as… before switching.", "PendingLiveHandoff"),
+  );
+  const capture = vi.spyOn(api, "absorbPacks");
+  await act(async () => state.switchProfile(target.id));
+  expect(state.switchHandoff?.kind).toBe("retained");
+  await act(async () => state.captureKeptPacks());
+  expect(capture).not.toHaveBeenCalled();
+});
+
 it("routes active HUD conflicts from absorb without turning them into a generic failure", async () => {
   const library = await api.getProfileLibrary();
   vi.spyOn(api, "absorbOwned").mockRejectedValue(

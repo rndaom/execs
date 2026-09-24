@@ -25,6 +25,29 @@ export const DEVELOPMENT_CONFIG = "execs-development-package-config.json";
 export const unsignedConfig = { bundle: { createUpdaterArtifacts: false } };
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+/** Tauri changes only its embedded bundle-kind marker for a Debian package. */
+export function assertDebianBundledBinary(buildBinary, bundledBinary) {
+  const original = Buffer.from("__TAURI_BUNDLE_TYPE_VAR_UNK");
+  const debian = Buffer.from("__TAURI_BUNDLE_TYPE_VAR_DEB");
+  assert.equal(original.length, debian.length);
+  assert.equal(buildBinary.length, bundledBinary.length, "Debian executable size changed");
+  const offset = buildBinary.indexOf(original);
+  assert.ok(offset >= 0, "Build executable lacks Tauri's bundle marker");
+  assert.equal(buildBinary.indexOf(original, offset + 1), -1, "Ambiguous Tauri bundle marker");
+  const expected = Buffer.from(buildBinary);
+  debian.copy(expected, offset);
+  assert.equal(
+    sha256(bundledBinary),
+    sha256(expected),
+    "Debian executable differs beyond Tauri's bundle-kind marker",
+  );
+  return {
+    buildSha256: sha256(buildBinary),
+    packagedSha256: sha256(bundledBinary),
+    markerOffset: offset,
+  };
+}
+
 export function assertDevelopmentHost(env = process.env, platform = process.platform) {
   assert.equal(platform, "linux", "Development package smoke currently implements Linux only");
   assert.equal(env.CI, "true", "Development package smoke requires CI");

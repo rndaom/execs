@@ -3,6 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use sha2::{Digest, Sha256};
+
 use crate::apply::{cfg_layer_from_manifest, detail_from_manifest, ProfileDetail};
 use crate::archive::read_regular_file_bounded_within;
 use crate::hash::{metadata_is_link, validate_dir_within};
@@ -81,6 +83,74 @@ pub struct CrosshairBuildSettings {
     pub library_names: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CrosshairSourceState {
+    None,
+    Current,
+    Changed,
+    Unverified,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosshairSourceStatus {
+    pub state: CrosshairSourceState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+fn weapon_scripts_fingerprint(scripts: &BTreeMap<String, String>) -> String {
+    let mut hash = Sha256::new();
+    for (path, body) in scripts {
+        hash.update((path.len() as u64).to_le_bytes());
+        hash.update(path.as_bytes());
+        hash.update((body.len() as u64).to_le_bytes());
+        hash.update(body.as_bytes());
+    }
+    format!("{:x}", hash.finalize())
+}
+
+/// Compare a saved pack with the currently installed Valve weapon scripts.
+/// Legacy records have no hash and remain readable, but are unverified.
+pub fn crosshair_source_status_to(
+    profiles: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<CrosshairSourceStatus, ProfileError> {
+    let manifest = load_manifest(profiles, profile_id)?;
+    let Some(record) = manifest.crosshair else {
+        return Ok(CrosshairSourceStatus {
+            state: CrosshairSourceState::None,
+            reason: None,
+        });
+    };
+    let Some(saved_hash) = record.source_scripts_sha256 else {
+        return Ok(CrosshairSourceStatus {
+            state: CrosshairSourceState::Unverified,
+            reason: None,
+        });
+    };
+    let scripts = match load_weapon_scripts(tf2_root) {
+        Ok(scripts) => scripts,
+        Err(err) => {
+            return Ok(CrosshairSourceStatus {
+                state: CrosshairSourceState::Unavailable,
+                reason: Some(err.message()),
+            });
+        }
+    };
+    Ok(CrosshairSourceStatus {
+        state: if weapon_scripts_fingerprint(&scripts) == saved_hash {
+            CrosshairSourceState::Current
+        } else {
+            CrosshairSourceState::Changed
+        },
+        reason: None,
+    })
+}
+
 fn validate_build_settings(settings: &CrosshairBuildSettings) -> Result<(), ProfileError> {
     if settings.library_names.as_ref().is_some_and(|names| {
         names.len() > MAX_LIBRARY_ENTRIES || names.iter().any(|name| !valid_crosshair_name(name))
@@ -89,22 +159,19 @@ fn validate_build_settings(settings: &CrosshairBuildSettings) -> Result<(), Prof
             "The crosshair library names are invalid or exceed the limit.".into(),
         ));
     }
+    // Retain a player's external material selection for when the custom pack
+    // is deactivated. Only a cfg-safe material name may enter a saved record.
     if !(16..=64).contains(&settings.scale)
         || !(16..=64).contains(&settings.stock.scale)
-        || ![
-            "",
-            "crosshair1",
-            "crosshair2",
-            "crosshair3",
-            "crosshair4",
-            "crosshair5",
-            "crosshair6",
-            "crosshair7",
-        ]
-        .contains(&settings.stock.file.as_str())
+        || settings.stock.file.len() > 128
+        || !settings
+            .stock
+            .file
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/'))
     {
         return Err(ProfileError::Io(
-            "Crosshair size must be 16–64 and the in-game selection must be valid.".into(),
+            "Crosshair size must be 16–64 and the in-game material name must be cfg-safe.".into(),
         ));
     }
     Ok(())
@@ -507,11 +574,8 @@ where
         ));
     }
 
-    // One weapon script our minimal VDF parser chokes on must not fail the
-    // whole apply and leave the user with no crosshairs at all. Skip it and
-    // carry on; only a run where nothing patched is a real failure.
-    let mut patched_count = 0usize;
-    let mut skipped_scripts: Vec<String> = Vec::new();
+    let mut patched_stems = BTreeSet::new();
+    let mut failed_scripts: Vec<String> = Vec::new();
     for (script, body) in scripts {
         let base = script.rsplit('/').next().unwrap_or(script);
         let stem = base
@@ -528,21 +592,58 @@ where
             .unwrap_or((CROSSHAIR_SIZE, CROSSHAIR_SIZE));
         let patched = match patch_crosshair_script(body, &used, width, height) {
             Ok(patched) => patched,
-            Err(_) => {
-                skipped_scripts.push(script.clone());
+            Err(err) => {
+                failed_scripts.push(format!("{script}: {err}"));
                 continue;
             }
         };
+        if !patched_stems.insert(stem.to_string()) {
+            return Err(ProfileError::Io(format!(
+                "The local TF2 VPK has more than one source script for {stem}. Crosshairs were not applied."
+            )));
+        }
         prepared_files.push((
             format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/scripts/{stem}.txt"),
             patched.into_bytes(),
         ));
-        patched_count += 1;
     }
-    if patched_count == 0 && !skipped_scripts.is_empty() {
+    if !failed_scripts.is_empty() {
         return Err(ProfileError::Io(format!(
-            "None of the {} weapon scripts could be read. Crosshairs were not applied.",
-            skipped_scripts.len()
+            "Could not build every weapon script ({} failed). First: {}. Crosshairs were not applied.",
+            failed_scripts.len(), failed_scripts[0]
+        )));
+    }
+    let unbuilt: Vec<_> = assignments
+        .keys()
+        .filter(|stem| !patched_stems.contains(*stem))
+        .cloned()
+        .collect();
+    if !unbuilt.is_empty() {
+        return Err(ProfileError::Io(format!(
+            "Requested weapon overrides have no built script: {}. Crosshairs were not applied.",
+            unbuilt.join(", ")
+        )));
+    }
+    let script_paths: Vec<String> = patched_stems
+        .iter()
+        .map(|stem| format!("scripts/{stem}.txt"))
+        .collect();
+    let script_refs: Vec<&str> = script_paths.iter().map(String::as_str).collect();
+    let existing = crate::content_index::scan_custom_paths(
+        tf2_root,
+        &script_refs,
+        Some(EXECS_CROSSHAIRS_PACK),
+    );
+    if let Some(reason) = existing.incomplete.first() {
+        return Err(ProfileError::Io(format!(
+            "Could not check other custom packs for weapon script conflicts: {reason} Crosshairs were not applied."
+        )));
+    }
+    if let Some((path, sources)) = existing.hits.iter().next() {
+        let source = &sources[0];
+        return Err(ProfileError::Io(format!(
+            "Weapon script {path} is also supplied by {}/{}. Remove or review that pack before building crosshairs. Crosshairs were not applied.",
+            source.pack, source.member
         )));
     }
 
@@ -620,6 +721,8 @@ where
     let record = CrosshairRecord {
         id: EXECS_CROSSHAIRS_PACK.into(),
         inactive: false,
+        source_changed: false,
+        source_scripts_sha256: Some(weapon_scripts_fingerprint(scripts)),
         scale: settings.map(|s| s.scale).or_else(|| {
             existing_manifest
                 .crosshair
@@ -1011,10 +1114,8 @@ pub fn decode_weapon_scripts(
     files: &BTreeMap<String, Vec<u8>>,
 ) -> Result<BTreeMap<String, String>, ProfileError> {
     let mut out = BTreeMap::new();
-    // A script that neither reads as KeyValues nor ICE-decrypts is skipped,
-    // not fatal: one stray entry in a modified `tf2_misc_dir.vpk` must not
-    // take every crosshair with it. Only an archive with nothing usable
-    // fails, and then the first failure says why.
+    // An incomplete source cannot support an honest claim of full weapon
+    // coverage. Report the first unreadable member before applying anything.
     let mut failures: Vec<String> = Vec::new();
     for (path, bytes) in files {
         let lower = path.replace('\\', "/").to_ascii_lowercase();
@@ -1031,14 +1132,16 @@ pub fn decode_weapon_scripts(
             Err(err) => failures.push(format!("Could not read {path}: {err}")),
         }
     }
+    if !failures.is_empty() {
+        return Err(ProfileError::Io(format!(
+            "Could not read all local TF2 weapon scripts ({} failed). First: {}. Crosshairs were not applied.",
+            failures.len(), failures[0]
+        )));
+    }
     if out.is_empty() {
-        return Err(ProfileError::Io(match failures.first() {
-            Some(first) => format!(
-                "No tf_weapon script in the local TF2 VPK could be read ({} failed). {first}",
-                failures.len()
-            ),
-            None => "No tf_weapon scripts were found in the local TF2 VPK.".into(),
-        }));
+        return Err(ProfileError::Io(
+            "No tf_weapon scripts were found in the local TF2 VPK.".into(),
+        ));
     }
     Ok(out)
 }
@@ -1538,7 +1641,7 @@ mod tests {
             library_names: None,
             scale: 48,
             stock: crate::profile::CrosshairStockSettings {
-                file: "crosshair3".into(),
+                file: "myreticle".into(),
                 scale: 24,
             },
         };
@@ -1558,6 +1661,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(built.crosshair.as_ref().unwrap().scale, Some(48));
+        assert!(!built.crosshair.as_ref().unwrap().source_changed);
         let material = format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/{THUMB_DIR}/odd.vtf");
         assert_eq!(std::fs::read(tf2.join(&material)).unwrap(), bytes);
         let script = std::fs::read_to_string(tf2.join(format!(
@@ -1646,7 +1750,7 @@ mod tests {
         let cfg = std::fs::read_to_string(tf2.join(GAMEPLAY_VANILLA_PATH)).unwrap();
         assert_eq!(
             crate::managed_cfg::scalar(cfg.as_bytes(), "cl_crosshair_file"),
-            Some("crosshair3".into())
+            Some("myreticle".into())
         );
         assert_eq!(
             crate::managed_cfg::scalar(cfg.as_bytes(), "cl_crosshair_scale"),
@@ -1699,11 +1803,69 @@ mod tests {
     }
 
     #[test]
+    fn saved_weapon_script_hash_detects_a_tf2_update_without_mutating_the_pack() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        assert_eq!(
+            crosshair_source_status_to(&profiles, &tf2, &id)
+                .unwrap()
+                .state,
+            CrosshairSourceState::None
+        );
+        let scripts =
+            BTreeMap::from([("scripts/tf_weapon_scattergun.ctx".into(), sample_script())]);
+        let misc = tf2.join("tf/tf2_misc_dir.vpk");
+        std::fs::write(&misc, build_script_vpk(&scripts)).unwrap();
+        apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "dot",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(
+            crosshair_source_status_to(&profiles, &tf2, &id)
+                .unwrap()
+                .state,
+            CrosshairSourceState::Current
+        );
+        let changed = BTreeMap::from([(
+            "scripts/tf_weapon_scattergun.ctx".into(),
+            sample_script().replace("Scattergun", "Updated Scattergun"),
+        )]);
+        std::fs::write(&misc, build_script_vpk(&changed)).unwrap();
+        assert_eq!(
+            crosshair_source_status_to(&profiles, &tf2, &id)
+                .unwrap()
+                .state,
+            CrosshairSourceState::Changed
+        );
+        std::fs::write(&misc, b"broken archive").unwrap();
+        assert_eq!(
+            crosshair_source_status_to(&profiles, &tf2, &id)
+                .unwrap()
+                .state,
+            CrosshairSourceState::Unavailable
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        cleanup(&root);
+    }
+
+    #[test]
     fn old_crosshair_records_keep_their_mode_and_scale_and_bad_sizes_cannot_mutate() {
         let record: CrosshairRecord =
             serde_json::from_str(r#"{"id":"execs-crosshairs","shape":"cross"}"#).unwrap();
         assert!(!record.inactive);
         assert_eq!(record.scale, None);
+        assert_eq!(record.source_scripts_sha256, None);
         let (root, tf2, id) = setup();
         let profiles = root.join("profiles");
         let before = load_manifest(&profiles, &id).unwrap();
@@ -2163,16 +2325,15 @@ cl_crosshair_blue 56
         cleanup(&root);
     }
 
-    /// One weapon script our minimal VDF parser chokes on must not fail the
-    /// whole apply and leave the user with no crosshairs at all.
+    /// Never publish a record that claims coverage of an unbuilt weapon.
     #[test]
-    fn an_unparseable_weapon_script_is_skipped_not_fatal() {
+    fn an_unparseable_weapon_script_refuses_the_entire_build() {
         let (root, tf2, id) = setup();
         let mut scripts = BTreeMap::new();
         scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
         scripts.insert("scripts/tf_weapon_rocket.ctx".into(), "{{{ broken".into());
-
-        let detail = apply_crosshairs_with_scripts(
+        let before_manifest = load_manifest(&root.join("profiles"), &id).unwrap();
+        let err = apply_crosshairs_with_scripts(
             &root.join("profiles"),
             &tf2,
             &id,
@@ -2185,26 +2346,53 @@ cl_crosshair_blue 56
             &scripts,
             unlocked(),
         )
-        .unwrap();
-        assert!(detail.crosshair.is_some());
-        assert!(tf2
-            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt")
-            .is_file());
-        assert!(!tf2
-            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_rocket.txt")
-            .is_file());
-
-        // Nothing patched at all is still an error.
-        let before_manifest = load_manifest(&root.join("profiles"), &id).unwrap();
-        let script_rel = "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt";
-        let before_live = std::fs::read(tf2.join(script_rel)).unwrap();
-        let before_stored =
-            std::fs::read(exclusive_file_path(&root.join("profiles"), &id, script_rel)).unwrap();
-        let mut all_broken = BTreeMap::new();
-        all_broken.insert(
-            "scripts/tf_weapon_rocket.ctx".to_string(),
-            "{{{".to_string(),
+        .unwrap_err();
+        assert!(err.message().contains("tf_weapon_rocket.ctx"), "{err:?}");
+        assert_eq!(
+            load_manifest(&root.join("profiles"), &id).unwrap(),
+            before_manifest
         );
+        assert!(!tf2.join("tf/custom/execs-crosshairs").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn an_override_without_a_matching_weapon_script_refuses_the_build() {
+        let (root, tf2, id) = setup();
+        let scripts =
+            BTreeMap::from([("scripts/tf_weapon_scattergun.ctx".into(), sample_script())]);
+        let assignments = BTreeMap::from([("tf_weapon_rocket".into(), "dot".into())]);
+        let before_manifest = load_manifest(&root.join("profiles"), &id).unwrap();
+        let err = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &assignments,
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("tf_weapon_rocket"), "{err:?}");
+        assert_eq!(
+            load_manifest(&root.join("profiles"), &id).unwrap(),
+            before_manifest
+        );
+        assert!(!tf2.join("tf/custom/execs-crosshairs").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn duplicate_weapon_script_stems_refuse_ambiguous_build() {
+        let (root, tf2, id) = setup();
+        let scripts = BTreeMap::from([
+            ("scripts/tf_weapon_scattergun.ctx".into(), sample_script()),
+            ("scripts/tf_weapon_scattergun.txt".into(), sample_script()),
+        ]);
         let err = apply_crosshairs_with_scripts(
             &root.join("profiles"),
             &tf2,
@@ -2215,23 +2403,49 @@ cl_crosshair_blue 56
             None,
             &BTreeMap::new(),
             None,
-            &all_broken,
+            &scripts,
             unlocked(),
         )
         .unwrap_err();
         assert!(
-            matches!(err, ProfileError::Io(ref msg) if msg.contains("None of the")),
+            err.message().contains("more than one source script"),
             "{err:?}"
         );
-        assert_eq!(
-            load_manifest(&root.join("profiles"), &id).unwrap(),
-            before_manifest
-        );
-        assert_eq!(std::fs::read(tf2.join(script_rel)).unwrap(), before_live);
-        assert_eq!(
-            std::fs::read(exclusive_file_path(&root.join("profiles"), &id, script_rel)).unwrap(),
-            before_stored
-        );
+        assert!(!tf2.join("tf/custom/execs-crosshairs").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn another_pack_with_the_same_virtual_weapon_script_refuses_build() {
+        let (root, tf2, id) = setup();
+        let scripts =
+            BTreeMap::from([("scripts/tf_weapon_scattergun.ctx".into(), sample_script())]);
+        let custom = tf2.join("tf/custom");
+        std::fs::create_dir_all(&custom).unwrap();
+        let vpk = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "SCRIPTS/TF_WEAPON_SCATTERGUN.TXT".into(),
+            b"other mod's script".to_vec(),
+        )]));
+        std::fs::write(custom.join("other.vpk"), vpk).unwrap();
+        let before = load_manifest(&root.join("profiles"), &id).unwrap();
+        let err = apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("other.vpk"), "{err:?}");
+        assert!(err.message().contains("scripts/tf_weapon_scattergun.txt"));
+        assert_eq!(load_manifest(&root.join("profiles"), &id).unwrap(), before);
+        assert!(!custom.join("execs-crosshairs").exists());
         cleanup(&root);
     }
 
@@ -2623,11 +2837,9 @@ cl_crosshair_blue 56
         assert!(decoded.values().any(|text| text.contains("Scattergun")));
     }
 
-    /// One stray script in a modified `tf2_misc_dir.vpk` used to fail the
-    /// whole decode and block crosshairs entirely. It is skipped; only an
-    /// archive with nothing readable is an error.
+    /// An unreadable source member must be reported before claiming coverage.
     #[test]
-    fn a_script_that_will_not_decode_is_skipped_not_fatal() {
+    fn a_script_that_will_not_decode_refuses_the_source() {
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         files.insert(
             "scripts/tf_weapon_scattergun.ctx".into(),
@@ -2642,11 +2854,8 @@ cl_crosshair_blue 56
             "scripts/tf_weapon_broken.ctx".into(),
             vec![0xFF, 0xFE, 0x00, 0x01, 0x80, 0x7F, 0x13, 0x37],
         );
-        let decoded = decode_weapon_scripts(&files).unwrap();
-        assert_eq!(decoded.len(), 2, "{:?}", decoded.keys());
-        assert!(decoded["scripts/tf_weapon_scattergun.ctx"].contains("Scattergun"));
-        assert!(decoded["scripts/tf_weapon_bat.txt"].contains("Bat"));
-        assert!(!decoded.contains_key("scripts/tf_weapon_broken.ctx"));
+        let err = decode_weapon_scripts(&files).unwrap_err();
+        assert!(err.message().contains("tf_weapon_broken.ctx"), "{err:?}");
 
         // Nothing usable at all still fails, and says what went wrong.
         let mut only_broken: BTreeMap<String, Vec<u8>> = BTreeMap::new();

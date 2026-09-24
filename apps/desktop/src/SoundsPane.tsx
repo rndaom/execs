@@ -21,12 +21,14 @@ import { forgetSoundUrl, soundKey, useSoundPlayer } from "./hooks/useSoundPlayer
 import type { Api } from "./lib/api";
 import {
   type ComfigHitsound,
+  type ContentIndex,
   type HitsoundKind,
   type HitsoundRecord,
   type HitsoundSlotChange,
   isTauri,
   openExternal,
   type PickedHitsound,
+  type ProfileFile,
 } from "./lib/bridge";
 import { COMMUNITY_HITSOUND_CREDIT, COMMUNITY_HITSOUND_REPO } from "./lib/community-hitsounds";
 import {
@@ -98,6 +100,8 @@ export function SoundsPane({
   record,
   effective,
   managedText,
+  sourceFiles,
+  sourceRefreshKey,
   onSave,
   onRemove,
 }: {
@@ -108,6 +112,9 @@ export function SoundsPane({
   layer: GameplayLayer;
   effective: Record<string, string>;
   managedText: string;
+  /** A changed custom file snapshot calls for a fresh mounted-path scan. */
+  sourceFiles?: ProfileFile[];
+  sourceRefreshKey?: string | number;
   /**
    * The cvars and, when the files changed, the sound pack — one write, so one
    * toast. Resolves when it settles.
@@ -148,9 +155,19 @@ export function SoundsPane({
   const [comfigError, setComfigError] = useState<string | null>(null);
   const [stockStems, setStockStems] = useState<string[] | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
+  const [sources, setSources] = useState<ContentIndex | null>(null);
+  const [sourcesError, setSourcesError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [libraryLoading, setLibraryLoading] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
+  const customFilesKey = useMemo(
+    () =>
+      sourceFiles
+        ?.filter((file) => file.path.startsWith("tf/custom/"))
+        .map((file) => `${file.path}:${file.sha256}`)
+        .join("\n") ?? "",
+    [sourceFiles],
+  );
 
   useEffect(() => {
     void reloadKey;
@@ -192,6 +209,35 @@ export function SoundsPane({
     };
   }, [api, reloadKey]);
 
+  useEffect(() => {
+    // Re-scan retained panes after a custom pack change or install refresh.
+    void customFilesKey;
+    void sourceRefreshKey;
+    if (!profileId) {
+      setSources(null);
+      setSourcesError(null);
+      return;
+    }
+    let cancelled = false;
+    setSources(null);
+    setSourcesError(null);
+    api
+      .getHitsoundSources()
+      .then((index) => {
+        if (!cancelled) setSources(index);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setSourcesError(
+            err instanceof Error ? err.message : "Sound paths could not be inspected.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, profileId, customFilesKey, sourceRefreshKey]);
+
   // Leaving the pane must not leave a sound playing in the background.
   useEffect(() => () => player.stop(), [player.stop]);
 
@@ -217,6 +263,12 @@ export function SoundsPane({
 
   const dirty = serializeSoundsDraft(draft) !== serializeSoundsDraft(seeded);
   const needsPack = packChangeNeeded(draft, record);
+  const hitSources = sources?.hits["sound/ui/hitsound.wav"] ?? [];
+  const killSources = sources?.hits["sound/ui/killsound.wav"] ?? [];
+  const sourceIssues = [
+    ...new Set([...(sources?.incomplete ?? []), ...(sourcesError ? [sourcesError] : [])]),
+  ];
+  const sourcesLoading = Boolean(profileId && !sources && !sourcesError);
 
   function patchSlot(kind: HitsoundKind, update: Partial<SlotDraft>) {
     setDraft((current) => ({ ...current, [kind]: { ...current[kind], ...update } }));
@@ -304,6 +356,68 @@ export function SoundsPane({
           />
         ))}
       </div>
+
+      {record?.sourceChanged ? (
+        <section data-testid="sounds-source-changed" role="alert" className="surface mt-4 p-3">
+          <h2 className="t-row">Saved sound source changed</h2>
+          <p className="t-meta mt-1">
+            A managed WAV changed outside execs. Its saved name and source may no longer describe
+            the installed audio. Reselect both sounds from the library below, or use Remove sound
+            files to return to TF2&apos;s default paths.
+          </p>
+        </section>
+      ) : null}
+
+      {hitSources.length || killSources.length || sourceIssues.length || sourcesLoading ? (
+        <section data-testid="sounds-source-conflicts" className="surface mt-4 p-3">
+          <h2 className="t-row">Sound file sources</h2>
+          {sourcesLoading ? (
+            <p className="t-meta mt-1">Checking other installed sound files…</p>
+          ) : null}
+          {hitSources.length || killSources.length ? (
+            <p className="t-meta mt-1">
+              These packs also provide TF2&apos;s canonical sound paths. A saved sound in execs
+              describes its managed file; the in-game source depends on TF2&apos;s mount order and
+              has not been verified here.
+            </p>
+          ) : null}
+          {(
+            [
+              ["Hit sound", hitSources],
+              ["Kill sound", killSources],
+            ] as const
+          ).map(([label, candidates]) =>
+            candidates.length ? (
+              <div key={label} className="mt-2">
+                <p className="t-meta">{label} path also appears in:</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-[12.5px] text-ink-muted">
+                  {candidates.map((candidate) => (
+                    <li key={`${candidate.pack}:${candidate.member}:${candidate.kind}`}>
+                      <code>
+                        tf/custom/{candidate.pack}
+                        {candidate.kind === "loose" ? "/" : " → "}
+                        {candidate.member}
+                      </code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null,
+          )}
+          {sourceIssues.length ? (
+            <div data-testid="sounds-source-incomplete" className="t-meta mt-2 text-warn">
+              <p>
+                Some installed packs could not be inspected, so this source list may be incomplete.
+              </p>
+              <ul className="mt-1 list-disc pl-5">
+                {sourceIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {player.error ? (
         <p data-testid="sounds-play-error" className="t-meta mt-4 text-warn">
@@ -776,26 +890,28 @@ function SoundSlot({
           onChange={(volume) => onChange({ volume })}
         />
       </div>
-      {slot.choice.kind !== "stock" ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="t-row">Boost</p>
-            <p className="t-meta">Makes the file itself louder.</p>
-          </div>
-          <Segmented
-            label={`${title} boost`}
-            size="sm"
-            disabled={locked}
-            testIdPrefix={`sounds-${kind}-boost`}
-            options={BOOST_STEPS.map((db) => ({
-              id: String(db) as "0" | "6" | "12",
-              label: db === 0 ? "Off" : `+${db} dB`,
-            }))}
-            value={String(slot.boost) as "0" | "6" | "12"}
-            onChange={(id) => onChange({ boost: Number(id) as BoostDb })}
-          />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="t-row">Boost</p>
+          <p className="t-meta">
+            {slot.choice.kind === "stock"
+              ? "Choose a custom sound from the library to boost it."
+              : "Makes the custom file itself louder."}
+          </p>
         </div>
-      ) : null}
+        <Segmented
+          label={`${title} boost`}
+          size="sm"
+          disabled={locked || slot.choice.kind === "stock"}
+          testIdPrefix={`sounds-${kind}-boost`}
+          options={BOOST_STEPS.map((db) => ({
+            id: String(db) as "0" | "6" | "12",
+            label: db === 0 ? "Off" : `+${db} dB`,
+          }))}
+          value={slot.choice.kind === "stock" ? "0" : (String(slot.boost) as "0" | "6" | "12")}
+          onChange={(id) => onChange({ boost: Number(id) as BoostDb })}
+        />
+      </div>
     </section>
   );
 }

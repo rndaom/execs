@@ -159,6 +159,42 @@ pub async fn get_stock_crosshair_sprites(
     with_root(|root| Ok(execs_core::extract_stock_crosshair_sprites(&root)?)).await
 }
 
+/// Candidate custom-pack members that could replace Valve's stock preview art.
+/// The index deliberately does not claim a runtime winner.
+#[tauri::command]
+pub async fn get_crosshair_content_sources(
+) -> Result<execs_core::content_index::ContentIndex, CommandError> {
+    with_root(|root| {
+        let paths: Vec<String> = (1..=7)
+            .flat_map(|number| {
+                ["vtf", "vmt"].map(move |extension| {
+                    format!("materials/vgui/crosshairs/crosshair{number}.{extension}")
+                })
+            })
+            .collect();
+        let path_refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+        Ok(execs_core::content_index::scan_custom_paths(
+            &root,
+            &path_refs,
+            Some(execs_core::crosshair::EXECS_CROSSHAIRS_PACK),
+        ))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_crosshair_source_status(
+) -> Result<execs_core::crosshair::CrosshairSourceStatus, CommandError> {
+    with_profile(|root, profile_id| {
+        Ok(execs_core::crosshair::crosshair_source_status_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+        )?)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn remove_crosshairs(
     gate: tauri::State<'_, WriteGate>,

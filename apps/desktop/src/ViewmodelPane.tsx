@@ -39,7 +39,7 @@ const GROUPS_PANEL_ID = "viewmodel-groups-panel";
 const SOLDIER_NOTE_ID = "viewmodel-soldier-original-note";
 
 function serializeViewmodelDraft(draft: ViewmodelDraft): string {
-  return JSON.stringify([serializeHiddenGroups(draft.hidden), draft.hideMode, draft.preload]);
+  return JSON.stringify([serializeHiddenGroups(draft.hidden), draft.hideMode]);
 }
 
 /** The original 64 Yttrium groups, with the draft, preview and build kept together. */
@@ -47,6 +47,10 @@ export function ViewmodelPane({
   api,
   profileId,
   record,
+  globalViewmodelsShown,
+  profilePreload,
+  onOpenGameplay,
+  onOpenCasualSetup,
   onBuild,
   onImport,
   onRemove,
@@ -54,6 +58,10 @@ export function ViewmodelPane({
   api: Api;
   profileId: string | null;
   record: ViewmodelRecord | null;
+  globalViewmodelsShown: boolean | null;
+  profilePreload: boolean | null;
+  onOpenGameplay: () => void;
+  onOpenCasualSetup: () => void;
   onBuild: (hidden: string[], preload: boolean, hideMode: ViewmodelHideMode) => void;
   onImport: (preload: boolean) => void;
   onRemove: () => void;
@@ -93,12 +101,11 @@ export function ViewmodelPane({
   const hiddenSet = new Set(draft.hidden);
   const focus = groups.find((group) => group.id === focusGroup) ?? groups[0];
   const focusHidden = hiddenSet.has(focus.id);
-  // Upstream has stock and fully hidden screenshots, but no weapon-only image.
-  // Keep the stock frame as a reference and identify what the built pack changes.
-  const weaponOnlyReference = focusHidden && draft.hideMode === "weapon";
-  const stem = viewmodelStemForGroup(classId, focus.id, focusHidden && !weaponOnlyReference);
-  const preview = useViewmodelPreview(api, native ? stem : null);
-  const stageSrc = native ? preview.src : viewmodelPreviewUrl(stem);
+  // The source provides stock and fully hidden captures, but no hands-only capture.
+  const weaponOnly = focusHidden && draft.hideMode === "weapon";
+  const stem = viewmodelStemForGroup(classId, focus.id, focusHidden && !weaponOnly);
+  const preview = useViewmodelPreview(api, native && !weaponOnly ? stem : null);
+  const stageSrc = weaponOnly ? null : native ? preview.src : viewmodelPreviewUrl(stem);
   const focusInfo = viewmodelGroupPreview(focus.id);
 
   useEffect(() => {
@@ -146,7 +153,12 @@ export function ViewmodelPane({
         : dirty || !builtPack
           ? `${draft.hidden.length} ${draft.hidden.length === 1 ? "group" : "groups"} ready to build.`
           : `${draft.hidden.length} ${draft.hidden.length === 1 ? "group" : "groups"} hidden in this profile.`;
-  const canApply = canBuild && !locked && draft.hidden.length > 0 && (dirty || !builtPack);
+  const canApply =
+    canBuild &&
+    !locked &&
+    profilePreload !== null &&
+    draft.hidden.length > 0 &&
+    (dirty || !builtPack);
   const stageCaption = `${capitalize(classId)} · ${focus.label}`;
 
   return (
@@ -161,6 +173,45 @@ export function ViewmodelPane({
           ) : null
         }
       />
+      {record?.sourceChanged ? (
+        <div
+          data-testid="viewmodel-source-changed"
+          role="alert"
+          className="surface mb-4 px-4 py-3 text-warn"
+        >
+          The saved viewmodel VPK changed outside execs. These selections and previews may no longer
+          describe its models. {builtPack ? "Rebuild the pack" : "Replace the model-only VPK"} or
+          remove it to restore a verified state.
+        </div>
+      ) : null}
+      <div
+        data-testid="viewmodel-global-status"
+        role="status"
+        className="surface mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+      >
+        <p className="t-meta">
+          Global Draw viewmodel:{" "}
+          {globalViewmodelsShown === null ? "Unknown" : globalViewmodelsShown ? "On" : "Off"}.
+          {globalViewmodelsShown === false
+            ? " Gameplay hides all first-person viewmodels, including groups set to Show below."
+            : " Managed in Gameplay."}
+        </p>
+        <button type="button" className="btn btn-ghost" onClick={onOpenGameplay}>
+          Open Gameplay
+        </button>
+      </div>
+      <div
+        data-testid="viewmodel-preload-status"
+        className="surface mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+      >
+        <p className="t-meta">
+          Casual preload: {profilePreload === null ? "Checking…" : profilePreload ? "On" : "Off"}.
+          Managed in Mods → Casual setup.
+        </p>
+        <button type="button" className="btn btn-ghost" onClick={onOpenCasualSetup}>
+          Open Casual setup
+        </button>
+      </div>
       <ClassTabs
         tabs={VIEWMODEL_CLASSES.map((id) => ({
           id,
@@ -233,39 +284,41 @@ export function ViewmodelPane({
         <div className="min-w-0 self-start">
           <figure
             data-testid="viewmodel-stage"
-            data-stem={stem}
+            data-stem={weaponOnly ? "" : stem}
             data-hidden={focusHidden ? "true" : "false"}
-            data-reference={weaponOnlyReference ? "true" : "false"}
-            className="surface vm-stage relative m-0 aspect-video w-full overflow-hidden"
+            data-preview-kind={weaponOnly ? "unavailable" : "capture"}
+            className="surface vm-stage m-0 w-full overflow-hidden"
           >
-            {stageSrc && stageSrc !== failedSrc ? (
-              <img
-                key={stageSrc}
-                data-testid="viewmodel-preview-image"
-                src={stageSrc}
-                alt={stageCaption}
-                onError={() => setFailedSrc(stageSrc)}
-                className="absolute inset-0 size-full object-cover enter-fade"
-              />
-            ) : (
-              <div className="absolute inset-0 grid place-content-center gap-2 px-6 text-center">
-                <Eye size={24} className="mx-auto text-ink-muted" />
-                <p className="t-row">
-                  {preview.loading ? "Loading preview…" : "Preview unavailable"}
-                </p>
-              </div>
-            )}
-            {weaponOnlyReference ? (
-              <div className="absolute left-3 top-3 rounded-md bg-bg/90 px-3 py-2 text-[12px] leading-snug text-ink">
-                <span className="block font-semibold">Weapon hidden · hands visible</span>
-                <span className="text-ink-muted">Stock image shown for reference</span>
-              </div>
-            ) : null}
-            <figcaption className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-bg/90 px-3 py-2 text-[12px] text-ink">
-              <span>{preview.loading ? "Loading preview…" : stageCaption}</span>
+            <div className="relative aspect-video w-full">
+              {weaponOnly ? (
+                <div className="absolute inset-0 grid place-content-center gap-2 px-6 text-center">
+                  <EyeSlash size={24} className="mx-auto text-ink-muted" />
+                  <p className="t-row">Weapon hidden, hands visible</p>
+                  <p className="t-meta">A hands-only preview is not available.</p>
+                </div>
+              ) : stageSrc && stageSrc !== failedSrc ? (
+                <img
+                  key={stageSrc}
+                  data-testid="viewmodel-preview-image"
+                  src={stageSrc}
+                  alt={stageCaption}
+                  onError={() => setFailedSrc(stageSrc)}
+                  className="absolute inset-0 size-full object-cover enter-fade"
+                />
+              ) : (
+                <div className="absolute inset-0 grid place-content-center gap-2 px-6 text-center">
+                  <Eye size={24} className="mx-auto text-ink-muted" />
+                  <p className="t-row">
+                    {preview.loading ? "Loading preview…" : "Preview unavailable"}
+                  </p>
+                </div>
+              )}
+            </div>
+            <figcaption className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-edge bg-bg px-3 py-2 text-[12px] leading-snug text-ink">
+              <span>{!weaponOnly && preview.loading ? "Loading preview…" : stageCaption}</span>
               <span className="text-ink-muted">
-                {weaponOnlyReference
-                  ? "Reference image"
+                {weaponOnly
+                  ? "Weapon hidden · hands visible"
                   : focusHidden
                     ? "Weapon and hands hidden"
                     : "Weapon and hands shown"}
@@ -279,7 +332,7 @@ export function ViewmodelPane({
                 type="button"
                 data-testid="viewmodel-build"
                 disabled={!canApply}
-                onClick={() => onBuild(draft.hidden, draft.preload, draft.hideMode)}
+                onClick={() => onBuild(draft.hidden, profilePreload ?? false, draft.hideMode)}
                 className="btn btn-primary"
               >
                 {builtPack ? "Rebuild pack" : "Build pack"}
@@ -287,8 +340,8 @@ export function ViewmodelPane({
               <button
                 type="button"
                 data-testid="viewmodel-import"
-                disabled={locked}
-                onClick={() => onImport(draft.preload)}
+                disabled={locked || profilePreload === null}
+                onClick={() => onImport(profilePreload ?? false)}
                 className="btn btn-ghost"
               >
                 <DownloadSimple size={15} />
@@ -332,6 +385,10 @@ export function ViewmodelPane({
         >
           <p className="pane-note mt-3">{VIEWMODEL_CASUAL_COPY}</p>
           <p className="pane-note mt-3">
+            Import a model-only VPK here. Use Mods for a pack that also contains CFG, HUD, sound,
+            scripts or materials.
+          </p>
+          <p className="pane-note mt-3">
             Hidden-viewmodel animations from{" "}
             <button
               type="button"
@@ -343,7 +400,8 @@ export function ViewmodelPane({
               Yttrium's Competitive Viewmodels <ArrowSquareOut size={12} />
             </button>{" "}
             (©2018 yttrium), fetched from the original project and rebuilt locally.{" "}
-            {VIEWMODEL_PREVIEW_CREDIT}
+            {VIEWMODEL_PREVIEW_CREDIT} Hide weapon keeps the hands visible, but no verified
+            hands-only preview is available.
           </p>
         </Disclosure>
       </section>

@@ -13,23 +13,32 @@ User-facing changes only. The release workflow publishes the matching
   offline catalog gaps, and startup warnings link to the affected cfg line.
 - Launch offers 21 documented TF2-relevant options through search and eight-item pages while
   retaining direct editing of the full launch string.
+- Gameplay's viewmodel FOV slider now selects whole numbers while preserving existing fractional
+  cfg values until the slider is changed.
+- Binds and Gameplay save changes quietly in the background. A short notice still explains when
+  TF2 keeps a draft pending, and a failed save remains visible for retry.
 - Development Inventory shows TF2 quality borders, kit target artwork and illustrative
   war-paint patterns with wear labels. Artwork loads progressively, and an oversized optional
   texture no longer blocks other item images.
-- Refresh every pane with the overhaul: neutral dark surfaces, TF2 orange selection, clearer type,
-  less redundant copy, compact navigation, consistent dialogs and restrained motion. Each pane
+- Refresh every pane with the overhaul: subtly warmed dark surfaces, TF2 orange selection, clearer type,
+  less redundant copy, compact navigation, consistent dialogs and restrained motion. Profile menus,
+  pane navigation and Binds categories now ease into place. Each pane
   keeps a layout suited to its task, and the app follows system reduced motion or your own Reduce
   preference.
+- Comfig and the setup wizard now offer mastercomfig's current presets without an expanded list of
+  retired choices. Existing profiles still show a legacy preset until you choose a current one.
 - Keep separate scroll positions for visited panes and App settings. Profile changes reset
   profile-specific positions while preserving account-owned Inventory browsing.
 - Enlarge or reduce the interface with Ctrl + Plus / Minus, and restore its original size with
   Ctrl + 0. The layout reflows while keeping keyboard access to controls.
 - Crosshair: keep the designer beside its preview, retain unfinished designs, and distinguish
   saving a design to the library from building the installed pack. Weapon pickers stay in view.
+- Crosshair Shapes can start an editable design, and a separate sprite detail view keeps thin
+  segments visible while the in-game size reference stays at 1280×720.
 - HUD: sort by sourced TF2 HUDs listing activity and popularity, show uncredited creators without
   inventing names, and refresh older catalog and statistics caches for accurate metadata.
 - Viewmodels: organize all nine classes and 64 groups around an adjacent preview and build action;
-  label Hide weapon reference images clearly where a hands-only source image is unavailable.
+  Hide weapon explains the result without showing an unverified hands-only image.
 - Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
   controls and clearer source retry feedback. Sorts use only data the sources actually publish.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum
@@ -64,6 +73,29 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Profiles now stop a switch that would carry over a kept external pack or replace its bytes,
+  and offer to capture the pack first. After deleting an active profile while keeping its
+  installed setup, Save current as… captures that setup before switching elsewhere.
+- Accepted external custom packs appear in Mods Installed with a removable record that
+  survives profile switches and export/import. Externally changed crosshair, viewmodel and
+  sound files show a source warning until repaired or replaced.
+- Creating a profile from Current setup includes recent live `config.cfg` edits. Imported
+  profile feature records must have the matching verified crosshair, viewmodel or sound files.
+- Binds preserves unrelated lines in its managed cfg and shows every key assigned to an
+  action. Binds, Gameplay, Crosshair and Sounds identify saved class and Launch overrides.
+- Crosshair retains unrecognized external selections, refuses incomplete weapon-script
+  builds and conflicting mod scripts, and warns when Valve source scripts change.
+  HUD overlays, custom stock art and competing hitsound paths are identified as possible
+  in-game sources.
+- Sounds applies settings and sound files together so a failed install keeps the prior
+  values. Viewmodel VPK imports reject unrelated content before installing anything.
+- HUD options distinguish overlays from stock crosshairs, show unsupported controls as
+  unavailable, and refresh showcase pictures. Supported e.v.e Plus options are enabled.
+- Mods Browse includes GameBanana GUI results and asks which author file to install when
+  a download has variants. HUD results route to HUD import, and other GUIs explain how
+  to import the author's intended files.
+- Sounds: keep the 0/6/12 dB Boost controls visible and explain that stock effects need a custom
+  sound before they can be boosted.
 - Files no longer warns about dormant quit, disconnect or retry aliases as though they run at
   startup, or treats a dormant self-reloading alias as an active exec cycle. Uneven quotes remain
   advisory, and startup diagnostics suggest a known command for a close spelling mistake.

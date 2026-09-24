@@ -5,3 +5,7 @@
 *.webp binary
 *.jpg binary
 *.woff2 binary
+
+# Archived CI evidence is byte-preserved; provenance hashes include original line endings.
+docs/design/2026-09-22-overhaul/implementation/linux-native/run-*/** -text
+docs/design/2026-09-22-overhaul/implementation/package-smoke/run-*/** -text

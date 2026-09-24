@@ -28,6 +28,7 @@ export function CrosshairLibraryChips({
   onOpenCommunity,
   showDesigner = true,
   showCommunity = true,
+  designerLabel,
 }: {
   choices: CrosshairShape[];
   selected: CrosshairShape;
@@ -43,6 +44,7 @@ export function CrosshairLibraryChips({
   onOpenCommunity: () => void;
   showDesigner?: boolean;
   showCommunity?: boolean;
+  designerLabel?: string;
 }) {
   return (
     <fieldset>
@@ -61,7 +63,7 @@ export function CrosshairLibraryChips({
               className="btn btn-ghost"
             >
               <PencilSimple size={13} />
-              {hasDesign ? "Edit design" : "Design your own"}
+              {designerLabel ?? (hasDesign ? "Edit design" : "Design your own")}
             </button>
           ) : null}
           {showCommunity ? (

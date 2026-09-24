@@ -109,6 +109,21 @@ pub async fn list_stock_hitsounds() -> Result<Vec<String>, CommandError> {
     .await
 }
 
+/// Other tf/custom packs with the canonical hit/kill sound virtual paths.
+/// These are candidates only; TF2's current in-game winner is not inferred.
+#[tauri::command]
+pub async fn get_hitsound_sources() -> Result<execs_core::content_index::ContentIndex, CommandError>
+{
+    with_root(|root| {
+        Ok(execs_core::content_index::scan_custom_paths(
+            &root,
+            &["sound/ui/hitsound.wav", "sound/ui/killsound.wav"],
+            Some(execs_core::EXECS_HITSOUNDS_PACK),
+        ))
+    })
+    .await
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PickedHitsound {
@@ -295,6 +310,53 @@ pub async fn apply_hitsounds(
         let detail = execs_core::apply_hitsounds(&root, &profile_id, hit, kill)?;
         // Cache cleanup is post-commit and retryable; it must never make a
         // successful sound install look rolled back to the renderer.
+        let _ = gc_picked_for_library(&root);
+        Ok(detail)
+    })
+    .await
+}
+
+/// Save the Sounds pane's scoped CFG and changed files in one recoverable
+/// profile transaction. Fetching and decoding happen before the write gate;
+/// ActiveContext rejects a profile or install change before publication.
+#[tauri::command]
+pub async fn apply_hitsounds_with_settings(
+    gate: tauri::State<'_, WriteGate>,
+    cache_gate: tauri::State<'_, HitsoundCacheGate>,
+    path: String,
+    text: String,
+    expected_profile_id: String,
+    hit: HitsoundSlotChange,
+    kill: HitsoundSlotChange,
+) -> Result<ProfileDetail, CommandError> {
+    super::files::validate_editor_path(&path)?;
+    super::files::validate_editor_text(&text)?;
+    let _cache_guard = cache_gate.0.lock().await;
+    let (context, hit, kill) = with_profile(move |root, profile_id| {
+        if profile_id != expected_profile_id {
+            return Err(CommandError::new(
+                "ProfileChanged",
+                "The active profile changed before saving. Try again.",
+            ));
+        }
+        execs_core::refuse_if_running()?;
+        let context = ActiveContext::capture(&root, &profile_id);
+        let hit = resolve_change(&root, &profile_id, hit)?;
+        let kill = resolve_change(&root, &profile_id, kill)?;
+        Ok((context, hit, kill))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        let detail = execs_core::hitsound::apply_hitsounds_with_settings(
+            &root,
+            &profile_id,
+            &path,
+            text.as_bytes(),
+            hit,
+            kill,
+        )?;
         let _ = gc_picked_for_library(&root);
         Ok(detail)
     })

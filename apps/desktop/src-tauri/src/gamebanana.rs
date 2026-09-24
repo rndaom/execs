@@ -6,7 +6,7 @@
 //! per call, the app's own user agent, and a short in-memory cache so paging
 //! back and forth does not hammer the site.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -27,6 +27,7 @@ const LIST_TTL: Duration = Duration::from_secs(10 * 60);
 const CATEGORY_TTL: Duration = Duration::from_secs(10 * 60);
 const CACHE_MAX_ENTRIES: usize = 128;
 const CACHE_MAX_BYTES: usize = 16 * MIB as usize;
+const MAX_DOWNLOAD_VARIANTS: usize = 128;
 
 /// A mod archive ceiling matching the one core enforces on a pack.
 pub const MOD_MAX_BYTES: u64 = 512 * MIB;
@@ -40,6 +41,8 @@ pub struct GameBananaMod {
     pub author: String,
     pub category: String,
     pub category_id: u64,
+    pub sub_category: Option<String>,
+    pub route: GameBananaModRoute,
     /// GameBanana omits metrics from some listing modes. Missing source data is
     /// kept missing rather than being presented as a zero.
     pub likes: Option<u64>,
@@ -53,6 +56,14 @@ pub struct GameBananaMod {
     /// GameBanana's content-rating flag (nudity, gore, ...). Hidden unless the
     /// user asks for mature content.
     pub mature: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GameBananaModRoute {
+    Mod,
+    Hud,
+    Manual,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,6 +181,8 @@ struct RawRecord {
     submitter: Option<NamedRow>,
     #[serde(rename = "_aRootCategory", default)]
     root_category: Option<CategoryRow>,
+    #[serde(rename = "_aSubCategory", default)]
+    sub_category: Option<CategoryRow>,
     #[serde(rename = "_bHasContentRatings", default)]
     has_content_ratings: bool,
 }
@@ -333,7 +346,7 @@ fn page_from(
         .filter(|record| record.model.is_empty() || record.model == "Mod")
         .map(record_to_mod)
         .filter(|record| category.is_none_or_matches(record))
-        .filter(|record| is_installable_category(&record.category))
+        .filter(|record| is_browsable_category(&record.category))
         .filter(|record| include_mature || !record.mature)
         .collect();
     let per_page = if response.metadata.per_page == 0 {
@@ -386,6 +399,12 @@ impl CategoryFilter for Option<u64> {
 
 fn record_to_mod(record: &RawRecord) -> GameBananaMod {
     let category = record.root_category.as_ref();
+    let sub_category = record.sub_category.as_ref();
+    let category_id = category
+        .and_then(|row| category_id_from_url(&row.profile_url))
+        .unwrap_or(0);
+    let is_gui =
+        category_id == 1644 || category.is_some_and(|row| row.name.eq_ignore_ascii_case("GUIs"));
     GameBananaMod {
         id: record.id,
         name: record.name.clone(),
@@ -395,9 +414,20 @@ fn record_to_mod(record: &RawRecord) -> GameBananaMod {
             .map(|row| row.name.clone())
             .unwrap_or_default(),
         category: category.map(|row| row.name.clone()).unwrap_or_default(),
-        category_id: category
-            .and_then(|row| category_id_from_url(&row.profile_url))
-            .unwrap_or(0),
+        category_id,
+        sub_category: sub_category.map(|row| row.name.clone()),
+        route: if is_gui {
+            if sub_category.is_some_and(|row| {
+                row.name.eq_ignore_ascii_case("HUDs")
+                    || category_id_from_url(&row.profile_url) == Some(1649)
+            }) {
+                GameBananaModRoute::Hud
+            } else {
+                GameBananaModRoute::Manual
+            }
+        } else {
+            GameBananaModRoute::Mod
+        },
         likes: record.likes,
         views: record.views,
         downloads: record.downloads,
@@ -492,19 +522,10 @@ fn validated_mod_page(candidate: &str, expected_id: u64) -> Option<String> {
     Some(parsed.to_string())
 }
 
-/// TF2's root categories, minus the ones that are not a `tf/custom` pack this
-/// app can install. GameBanana's TF2 list is Castaways, Decal Tool, Effects,
-/// Game files, GUIs, Maps, Prefabs, Serverside Weapons, Skins and Textures —
-/// Maps and GUIs are the brief's exclusions, Decal Tool is where sprays live,
-/// and Prefabs (Hammer content) and Serverside Weapons (server plugins) install
-/// nowhere near `tf/custom` either.
-const EXCLUDED_CATEGORIES: [&str; 5] = [
-    "maps",
-    "guis",
-    "decal tool",
-    "prefabs",
-    "serverside weapons",
-];
+/// Browse can show GUI submissions, but those need a HUD or author-guided
+/// import route rather than the generic Mods installer. These other roots do
+/// not belong on the product's TF2 customization surfaces.
+const EXCLUDED_CATEGORIES: [&str; 4] = ["maps", "decal tool", "prefabs", "serverside weapons"];
 
 /// The installable root categories, cached for ten minutes.
 ///
@@ -515,7 +536,7 @@ pub fn categories(refresh: bool) -> Result<Vec<GameBananaCategory>, String> {
     let (raw, _): (Vec<RawCategory>, _) = fetch_json(&url, CATEGORY_TTL, refresh)?;
     Ok(raw
         .into_iter()
-        .filter(|category| is_installable_category(&category.name))
+        .filter(|category| is_browsable_category(&category.name))
         .map(|category| GameBananaCategory {
             id: category.id,
             name: category.name,
@@ -528,8 +549,14 @@ pub fn is_excluded_category(name: &str) -> bool {
     EXCLUDED_CATEGORIES.contains(&lower.as_str())
 }
 
-fn is_installable_category(name: &str) -> bool {
+fn is_browsable_category(name: &str) -> bool {
     !name.trim().is_empty() && !is_excluded_category(name)
+}
+
+fn is_mod_install_category(category: &CategoryRow) -> bool {
+    is_browsable_category(&category.name)
+        && !category.name.eq_ignore_ascii_case("GUIs")
+        && category_id_from_url(&category.profile_url) != Some(1644)
 }
 
 /// Name and page URL, so an install can record what the user actually chose
@@ -557,8 +584,11 @@ fn profile_from(page: ProfilePage, id: u64) -> Result<GameBananaProfile, String>
         .root_category
         .as_ref()
         .ok_or("Could not verify that mod's GameBanana category. Try again later.")?;
-    if !is_installable_category(&category.name) {
-        return Err("That GameBanana category cannot be installed from the Mods pane.".into());
+    if !is_mod_install_category(category) {
+        return Err(
+            "That GameBanana category needs HUD or manual import; it cannot be installed from Mods."
+                .into(),
+        );
     }
     Ok(GameBananaProfile {
         name: if page.name.is_empty() {
@@ -582,14 +612,31 @@ struct DownloadPage {
     files: Vec<DownloadFile>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct DownloadFile {
+    #[serde(rename = "_idRow", default)]
+    pub id: u64,
     #[serde(rename = "_sFile", default)]
     pub file: String,
     #[serde(rename = "_sDownloadUrl", default)]
     pub download_url: String,
     #[serde(rename = "_tsDateAdded", default)]
     pub added: u64,
+    #[serde(rename = "_nFilesize")]
+    pub size_bytes: Option<u64>,
+    #[serde(rename = "_sDescription", default)]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameBananaDownloadVariant {
+    pub id: u64,
+    pub file_name: String,
+    pub description: String,
+    pub size_bytes: Option<u64>,
+    pub added_at: Option<u64>,
+    pub supported: bool,
 }
 
 /// The file chosen off a mod's download page. `_sDownloadUrl` is an opaque
@@ -627,49 +674,125 @@ pub fn mod_id_from_url(url: &str) -> Option<u64> {
     (!segments.any(|part| !part.is_empty())).then_some(id)
 }
 
-/// The newest file on a mod's download page that this app can unpack.
-pub fn download_url(id: u64) -> Result<DownloadPick, String> {
+fn download_files(id: u64) -> Result<Vec<DownloadFile>, String> {
     let url = format!("{API}/Mod/{id}/DownloadPage");
     let page: DownloadPage =
         net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
             .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
-    pick_file(page.files)
+    Ok(page.files)
 }
 
-/// Same, from a mod page URL (how hud-db spells a GameBanana entry). A HUD is
-/// always an archive, so only the URL matters here.
+/// Author names and descriptions are shown before choosing a file. The
+/// download URL stays native-side and is rechecked when the selection is used.
+pub fn download_variants(id: u64) -> Result<Vec<GameBananaDownloadVariant>, String> {
+    variants_from_files(download_files(id)?)
+}
+
+fn variants_from_files(
+    mut files: Vec<DownloadFile>,
+) -> Result<Vec<GameBananaDownloadVariant>, String> {
+    if files.len() > MAX_DOWNLOAD_VARIANTS {
+        return Err(
+            "That GameBanana listing has too many files. Review it on the author's page.".into(),
+        );
+    }
+    let mut ids = BTreeSet::new();
+    files.retain(|file| {
+        validated_download_url(file).is_some()
+            && !file.file.is_empty()
+            && file.file.len() <= 256
+            && !file.file.chars().any(char::is_control)
+    });
+    if files.iter().any(|file| !ids.insert(file.id)) {
+        return Err("GameBanana returned duplicate download file identities.".into());
+    }
+    files.sort_by_key(|file| std::cmp::Reverse(file.added));
+    if files.is_empty() {
+        return Err("That GameBanana page lists no trusted files.".into());
+    }
+    Ok(files
+        .into_iter()
+        .map(|file| GameBananaDownloadVariant {
+            id: file.id,
+            file_name: file.file.clone(),
+            description: file.description.trim().chars().take(1000).collect(),
+            size_bytes: file.size_bytes,
+            added_at: (file.added > 0).then_some(file.added),
+            supported: mod_file_is_supported(&file),
+        })
+        .collect())
+}
+
+pub fn download_file(id: u64, file_id: u64) -> Result<DownloadPick, String> {
+    pick_file_by_id(download_files(id)?, file_id)
+}
+
+/// hud-db's GameBanana entries have no file-choice UI. Only a single listed
+/// ZIP or 7z is safe to choose automatically; any alternatives require the
+/// author page and an explicit manual HUD import.
 pub fn download_url_for_page(page_url: &str) -> Result<String, String> {
     let id = mod_id_from_url(page_url).ok_or("That GameBanana link has no mod id.")?;
-    Ok(download_url(id)?.url)
+    pick_hud_archive(download_files(id)?)
 }
 
-/// Prefer the newest archive this app can open — zip, 7z, or a bare VPK. A RAR
-/// is only chosen when nothing else exists, and is refused with its own message
-/// at extraction.
-pub fn pick_file(mut files: Vec<DownloadFile>) -> Result<DownloadPick, String> {
-    files = files
-        .into_iter()
-        .filter_map(|mut file| {
-            let validated =
-                net::validate_url_for(&file.download_url, RemoteSource::GameBananaDownload).ok()?;
-            file.download_url = validated.to_string();
-            Some(file)
-        })
-        .collect();
-    files.sort_by_key(|file| std::cmp::Reverse(file.added));
-    let unpackable = |name: &str| {
-        let lower = name.to_ascii_lowercase();
-        lower.ends_with(".zip") || lower.ends_with(".7z") || lower.ends_with(".vpk")
-    };
+fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPick, String> {
+    // Recheck the page rather than accepting a stale or caller-supplied URL.
+    variants_from_files(files.clone())?;
     let chosen = files
         .iter()
-        .find(|file| unpackable(&file.file))
-        .or_else(|| files.first())
-        .ok_or("That GameBanana page lists no files.")?;
+        .find(|file| file.id == file_id && validated_download_url(file).is_some())
+        .ok_or("That GameBanana file is no longer listed. Choose a file again.")?;
+    if !mod_file_is_supported(chosen) {
+        return Err(
+            "That GameBanana file is not a supported VPK, ZIP, or 7z within the size limit.".into(),
+        );
+    }
     Ok(DownloadPick {
-        url: chosen.download_url.clone(),
+        url: validated_download_url(chosen).expect("validated above"),
         file_name: chosen.file.clone(),
     })
+}
+
+fn pick_hud_archive(files: Vec<DownloadFile>) -> Result<String, String> {
+    variants_from_files(files.clone())?;
+    if files.len() > 1 {
+        return Err(
+            "That HUD offers multiple files. Choose one on the author's page, then import it in HUD."
+                .into(),
+        );
+    }
+    let only = &files[0];
+    if !is_archive_file(&only.file) || only.size_bytes.is_some_and(|size| size > MOD_MAX_BYTES) {
+        return Err(
+            "That HUD has no supported ZIP or 7z. Open the author's page and import a compatible HUD archive."
+                .into(),
+        );
+    }
+    Ok(validated_download_url(only).expect("validated above"))
+}
+
+fn validated_download_url(file: &DownloadFile) -> Option<String> {
+    if file.id == 0 {
+        return None;
+    }
+    let url = net::validate_url_for(&file.download_url, RemoteSource::GameBananaDownload).ok()?;
+    (matches!(
+        url.host_str(),
+        Some("gamebanana.com" | "www.gamebanana.com")
+    ) && url.path() == format!("/dl/{}", file.id)
+        && url.query().is_none()
+        && url.fragment().is_none())
+    .then(|| url.to_string())
+}
+
+fn is_archive_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".zip") || lower.ends_with(".7z")
+}
+
+fn mod_file_is_supported(file: &DownloadFile) -> bool {
+    (is_archive_file(&file.file) || file.file.to_ascii_lowercase().ends_with(".vpk"))
+        && file.size_bytes.is_none_or(|size| size <= MOD_MAX_BYTES)
 }
 
 /// Whether a downloaded file is a bare VPK rather than an archive: by the
@@ -965,9 +1088,14 @@ mod tests {
     }
 
     #[test]
-    fn only_installable_root_categories_are_offered() {
+    fn browse_includes_guis_but_direct_mod_install_does_not() {
         assert!(is_excluded_category("Maps"));
-        assert!(is_excluded_category("GUIs"));
+        assert!(!is_excluded_category("GUIs"));
+        assert!(is_browsable_category("GUIs"));
+        assert!(!is_mod_install_category(&CategoryRow {
+            name: "GUIs".into(),
+            profile_url: "https://gamebanana.com/mods/cats/1644".into(),
+        }));
         assert!(is_excluded_category("Decal Tool"));
         assert!(is_excluded_category("Prefabs"));
         assert!(is_excluded_category("Serverside Weapons"));
@@ -1013,7 +1141,7 @@ mod tests {
             );
             assert_eq!(
                 page.records.iter().map(|r| r.id).collect::<Vec<_>>(),
-                if mature { vec![6, 7] } else { vec![6] }
+                if mature { vec![2, 6, 7] } else { vec![2, 6] }
             );
             assert_eq!(page.total, GameBananaTotal::Estimated { value: 100 });
             assert_eq!(page.per_page, 20);
@@ -1022,6 +1150,27 @@ mod tests {
                 "filtered rows do not mean the next API page is empty"
             );
         }
+    }
+
+    #[test]
+    fn gui_huds_are_discovered_without_offering_a_mod_install() {
+        let response: IndexResponse = serde_json::from_value(serde_json::json!({
+            "_aRecords": [
+                { "_idRow": 1, "_sModelName": "Mod", "_sName": "A HUD",
+                  "_aRootCategory": { "_sName": "GUIs", "_sProfileUrl": "https://gamebanana.com/mods/cats/1644" },
+                  "_aSubCategory": { "_sName": "HUDs", "_sProfileUrl": "https://gamebanana.com/mods/cats/1649" } },
+                { "_idRow": 2, "_sModelName": "Mod", "_sName": "A menu",
+                  "_aRootCategory": { "_sName": "GUIs", "_sProfileUrl": "https://gamebanana.com/mods/cats/1644" },
+                  "_aSubCategory": { "_sName": "Menus" } }
+            ]
+        }))
+        .unwrap();
+        let page = page_from(response, Some(1644), false, network_cache_info());
+        assert_eq!(page.records.len(), 2);
+        assert_eq!(page.records[0].route, GameBananaModRoute::Hud);
+        assert_eq!(page.records[0].sub_category.as_deref(), Some("HUDs"));
+        assert_eq!(page.records[1].route, GameBananaModRoute::Manual);
+        assert_eq!(page.records[1].sub_category.as_deref(), Some("Menus"));
     }
 
     #[test]
@@ -1034,7 +1183,7 @@ mod tests {
         let profile = profile_from(serde_json::from_value(valid.clone()).unwrap(), 7).unwrap();
         assert_eq!(profile.name, "A skin");
         assert_eq!(profile.url, "https://gamebanana.com/mods/7");
-        for name in EXCLUDED_CATEGORIES.into_iter().chain([""]) {
+        for name in EXCLUDED_CATEGORIES.into_iter().chain(["", "GUIs"]) {
             let mut page = valid.clone();
             page["_aRootCategory"]["_sName"] = name.into();
             assert!(
@@ -1042,6 +1191,12 @@ mod tests {
                 "{name}"
             );
         }
+        let mut renamed_gui = valid.clone();
+        renamed_gui["_aRootCategory"] = serde_json::json!({
+            "_sName": "Interface",
+            "_sProfileUrl": "https://gamebanana.com/mods/cats/1644"
+        });
+        assert!(profile_from(serde_json::from_value(renamed_gui).unwrap(), 7).is_err());
         for field in ["_aRootCategory", "_aGame"] {
             let mut page = valid.clone();
             page.as_object_mut().unwrap().remove(field);
@@ -1054,7 +1209,7 @@ mod tests {
     }
 
     #[test]
-    fn the_newest_unpackable_file_wins_and_a_vpk_counts() {
+    fn file_choices_keep_author_descriptions_and_bind_selected_ids() {
         assert_eq!(
             mod_id_from_url("https://gamebanana.com/mods/461758"),
             Some(461758)
@@ -1070,49 +1225,66 @@ mod tests {
             None
         );
 
-        let files = vec![
-            DownloadFile {
-                file: "old.rar".into(),
-                download_url: "https://gamebanana.com/dl/1".into(),
-                added: 10,
-            },
-            DownloadFile {
-                file: "newest.rar".into(),
-                download_url: "https://gamebanana.com/dl/3".into(),
-                added: 30,
-            },
-            DownloadFile {
-                file: "middle.vpk".into(),
-                download_url: "https://gamebanana.com/dl/2".into(),
-                added: 20,
-            },
-        ];
-        // The pick carries the uploaded name: the URL alone is an opaque id,
-        // so it is the only thing that says "this is a bare VPK".
+        let files: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([
+            { "_idRow": 1, "_sFile": "old.rar", "_sDownloadUrl": "https://gamebanana.com/dl/1", "_tsDateAdded": 10 },
+            { "_idRow": 3, "_sFile": "new.zip", "_sDownloadUrl": "https://gamebanana.com/dl/3", "_tsDateAdded": 30,
+              "_sDescription": "Class select remake", "_nFilesize": 1234 },
+            { "_idRow": 2, "_sFile": "middle.vpk", "_sDownloadUrl": "https://gamebanana.com/dl/2", "_tsDateAdded": 20 }
+        ]))
+        .unwrap();
+        let variants = variants_from_files(files.clone()).unwrap();
         assert_eq!(
-            pick_file(files).unwrap(),
+            variants.iter().map(|file| file.id).collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        );
+        assert_eq!(variants[0].description, "Class select remake");
+        assert_eq!(variants[0].size_bytes, Some(1234));
+        assert!(variants[0].supported);
+        assert!(variants[1].supported);
+        assert!(!variants[2].supported);
+        assert_eq!(
+            pick_file_by_id(files.clone(), 2).unwrap(),
             DownloadPick {
                 url: "https://gamebanana.com/dl/2".into(),
                 file_name: "middle.vpk".into(),
             }
         );
+        assert!(pick_file_by_id(files.clone(), 1).is_err());
+        assert!(pick_file_by_id(files, 999).is_err());
 
-        let only_rar = vec![DownloadFile {
-            file: "x.rar".into(),
-            download_url: "https://gamebanana.com/dl/9".into(),
-            added: 1,
-        }];
-        let pick = pick_file(only_rar).unwrap();
-        assert_eq!(pick.url, "https://gamebanana.com/dl/9");
-        assert_eq!(pick.file_name, "x.rar");
-        assert!(pick_file(Vec::new()).is_err());
+        let hostile: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([
+            { "_idRow": 4, "_sFile": "looks-safe.zip", "_sDownloadUrl": "https://127.0.0.1/private.zip" },
+            { "_idRow": 5, "_sFile": "mismatch.zip", "_sDownloadUrl": "https://gamebanana.com/dl/6" }
+        ]))
+        .unwrap();
+        assert!(variants_from_files(hostile).is_err());
+    }
 
-        let hostile = vec![DownloadFile {
-            file: "looks-safe.zip".into(),
-            download_url: "https://127.0.0.1/private.zip".into(),
-            added: 100,
-        }];
-        assert!(pick_file(hostile).is_err());
+    #[test]
+    fn hud_downloads_require_one_compatible_archive() {
+        let files: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([
+            { "_idRow": 1, "_sFile": "hud.vpk", "_sDownloadUrl": "https://gamebanana.com/dl/1" },
+            { "_idRow": 2, "_sFile": "hud.zip", "_sDownloadUrl": "https://gamebanana.com/dl/2" }
+        ]))
+        .unwrap();
+        assert!(pick_hud_archive(files.clone())
+            .unwrap_err()
+            .contains("multiple files"));
+        assert_eq!(
+            pick_hud_archive(files.iter().skip(1).cloned().collect()).unwrap(),
+            "https://gamebanana.com/dl/2"
+        );
+        let another: DownloadFile = serde_json::from_value(serde_json::json!({
+            "_idRow": 3, "_sFile": "hud-alt.7z", "_sDownloadUrl": "https://gamebanana.com/dl/3",
+            "_sDescription": "Alternative layout"
+        }))
+        .unwrap();
+        assert!(pick_hud_archive([files.clone(), vec![another]].concat())
+            .unwrap_err()
+            .contains("multiple files"));
+        assert!(pick_hud_archive(files.into_iter().take(1).collect())
+            .unwrap_err()
+            .contains("no supported ZIP or 7z"));
     }
 
     #[test]
@@ -1313,7 +1485,7 @@ mod tests {
         assert!(page
             .records
             .iter()
-            .all(|r| is_installable_category(&r.category)));
+            .all(|r| is_browsable_category(&r.category)));
         for record in page.records.iter().take(3) {
             println!(
                 "#{} {:?} by {:?} [{} / {}] likes={:?} views={:?} downloads={:?} thumb={:?} url={}",
@@ -1347,10 +1519,14 @@ mod tests {
             found.records.first().map(|record| &record.name)
         );
 
-        let profile = mod_profile(page.records[0].id).unwrap();
+        let mod_record = page
+            .records
+            .iter()
+            .find(|record| record.route == GameBananaModRoute::Mod)
+            .unwrap();
+        let profile = mod_profile(mod_record.id).unwrap();
         println!("profile: {profile:?}");
-        // These are a Training map and a HUD: their immediate categories
-        // are children of the excluded Maps and GUIs roots.
+        // A Training map and HUD cannot enter the generic Mods installer.
         assert!(mod_profile(74812).unwrap_err().contains("category"));
         assert!(mod_profile(26852).unwrap_err().contains("category"));
     }

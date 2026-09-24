@@ -5,7 +5,7 @@
 @import "tailwindcss";
 
 /*
- * execs' neutral dark desktop design system.
+ * execs' warm-neutral dark desktop design system.
  *
  * Real game imagery stays source-owned. Flat rows, clear type and tailored corners
  * leave room for the different jobs each pane performs.
@@ -19,17 +19,17 @@
  */
 @theme {
   /* Three-step surface scale. */
-  --color-bg: #0e0e10;
-  --color-panel: #19191c;
-  --color-panel-raised: #252529;
+  --color-bg: #100f0e;
+  --color-panel: #1c1a18;
+  --color-panel-raised: #292622;
 
   /* Hairlines are ink at low alpha so they read the same on every surface. */
-  --color-edge: rgb(242 242 244 / 0.12);
-  --color-edge-strong: rgb(242 242 244 / 0.22);
+  --color-edge: rgb(242 235 228 / 0.12);
+  --color-edge-strong: rgb(242 235 228 / 0.22);
 
-  --color-ink: #f2f2f4;
-  --color-ink-muted: #c7c7cb;
-  --color-ink-faint: #a9a9af;
+  --color-ink: #f2efeb;
+  --color-ink-muted: #cac5bf;
+  --color-ink-faint: #ada59e;
 
   --color-brand: #d98449;
   --color-brand-hover: #e69a61;
@@ -491,7 +491,6 @@ a:focus-visible,
   .inventory-item-selected,
   .inventory-item-selected:hover {
     background: color-mix(in srgb, var(--color-brand) 6%, var(--color-panel));
-    box-shadow: inset 0 0 0 1px var(--color-brand);
   }
 
   .inventory-paint-art,
@@ -504,41 +503,18 @@ a:focus-visible,
     justify-content: center;
   }
 
-  .inventory-paint-sample {
+  .inventory-paint-icon {
     width: 100%;
     height: 100%;
-    background-position: center;
-    background-size: 96px;
+    object-fit: contain;
   }
 
-  .inventory-paint-masked {
-    mask-position: center;
-    mask-repeat: no-repeat;
-    mask-size: contain;
-    -webkit-mask-position: center;
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-size: contain;
-  }
-
-  .inventory-paint-generic {
-    clip-path: polygon(
-      4% 36%,
-      48% 36%,
-      52% 24%,
-      70% 24%,
-      73% 36%,
-      98% 36%,
-      98% 53%,
-      72% 53%,
-      68% 64%,
-      54% 64%,
-      48% 53%,
-      38% 53%,
-      32% 80%,
-      21% 80%,
-      25% 53%,
-      4% 53%
-    );
+  .inventory-paint-only-swatch {
+    width: 52px;
+    height: 52px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-sm);
+    object-fit: cover;
   }
 
   .inventory-paint-art-large,
@@ -547,20 +523,26 @@ a:focus-visible,
     margin-bottom: 16px;
   }
 
-  .inventory-paint-art-large .inventory-paint-sample {
-    background-size: 160px;
+  .inventory-paint-art-large .inventory-paint-only-swatch {
+    width: 112px;
+    height: 112px;
   }
 
   .inventory-paint-swatch {
     position: absolute;
     right: 0;
     bottom: 0;
-    width: 42px;
-    height: 42px;
+    width: 22px;
+    height: 22px;
     border: 1px solid var(--color-edge-strong);
     border-radius: var(--radius-sm);
     object-fit: cover;
     background: var(--color-panel);
+  }
+
+  .inventory-paint-art-large .inventory-paint-swatch {
+    width: 42px;
+    height: 42px;
   }
 
   .inventory-kit-icon {

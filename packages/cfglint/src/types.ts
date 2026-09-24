@@ -152,6 +152,8 @@ export interface LintResult {
   effective: Map<string, CvarValue>;
   /** key (lowercased) -> payload of the final bind. */
   binds: Map<string, string>;
+  /** Source of each final startup bind, keyed like `binds`. */
+  bindSources: Map<string, { file: string; line: number }>;
   /** False when a work limit or unresolved startup exec prevents safe settings inference. */
   executionComplete: boolean;
   /** mastercomfig modules.cfg levels, e.g. { texture_quality: "high" }. */

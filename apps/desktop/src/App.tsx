@@ -444,6 +444,12 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   filesCloseReady={filesExit.ready}
                   settingsDraftStore={settingsDraftStore}
                   tab={settingsTab}
+                  activeProfileId={profiles.library?.activeProfileId ?? null}
+                  activeProfileName={
+                    profiles.library?.profiles.find(
+                      (profile) => profile.id === profiles.library?.activeProfileId,
+                    )?.name ?? null
+                  }
                   onNavigate={navigateSettings}
                   running={lock.running}
                   externalBusy={

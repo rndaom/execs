@@ -50,7 +50,7 @@ export function ModList({
 
   return (
     <PaneSection
-      title="Installed mods"
+      title="Custom packs"
       description="The packs in this profile’s custom folder."
       id="mods-yours"
       first={first}
@@ -64,7 +64,7 @@ export function ModList({
           />
         ) : (
           <span className="t-meta tnum">
-            {mods.length} {mods.length === 1 ? "mod" : "mods"}
+            {mods.length} {mods.length === 1 ? "pack" : "packs"}
           </span>
         )
       }

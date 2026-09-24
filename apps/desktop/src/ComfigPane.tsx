@@ -3,10 +3,7 @@ import { useState } from "react";
 import presetHigh from "./assets/presets/high.webp";
 import presetLow from "./assets/presets/low.webp";
 import presetMedium from "./assets/presets/medium.webp";
-import presetMediumHigh from "./assets/presets/medium_high.webp";
-import presetMediumLow from "./assets/presets/medium_low.webp";
 import presetUltra from "./assets/presets/ultra.webp";
-import presetVeryLow from "./assets/presets/very_low.webp";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -22,15 +19,15 @@ import {
 } from "./lib/bridge";
 import {
   COMFIG_MODULE_GROUPS,
+  COMFIG_PRESETS,
   type ComfigModule,
   type ComfigModuleGroupId,
   comfigPresetLabel,
-  FEATURED_PRESETS,
-  presetListExpanded,
-  visibleComfigPresets,
+  oldComfigPresetMessage,
 } from "./lib/comfig-catalog";
 import {
   type ComfigUiState,
+  canUseTransparentViewmodels,
   hasBaseVpk,
   hasComfigCustom,
   OFFICIAL_ADDON_DETAILS,
@@ -41,14 +38,11 @@ import { canWriteSettings } from "./lib/settings-ui";
 
 /** Real in-game screenshots per preset (koth_sawmill, staged identically),
  * from the mastercomfig comfig-app repo (MIT). */
-const PRESET_IMAGES: Record<Exclude<ComfigPreset, "none">, string> = {
+const PRESET_IMAGES: Partial<Record<ComfigPreset, string>> = {
   ultra: presetUltra,
   high: presetHigh,
-  medium_high: presetMediumHigh,
   medium: presetMedium,
-  medium_low: presetMediumLow,
   low: presetLow,
-  very_low: presetVeryLow,
 };
 
 const DEFAULT_VISIBLE_MODULES = 12;
@@ -108,11 +102,20 @@ function ModuleControl({
                 selected ? selectedClass : "text-ink-muted hover:bg-panel-raised hover:text-ink"
               }`}
             >
-              {option ? readableLevel(option) : "Default"}
+              {option === ""
+                ? "Use preset"
+                : option === "default"
+                  ? "Module default"
+                  : readableLevel(option)}
             </button>
           );
         })}
       </fieldset>
+      {module.levels.includes("default") ? (
+        <p className="t-meta mt-1">
+          Use preset inherits its value; Module default writes an explicit override.
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -142,16 +145,14 @@ export function ComfigPane({
   const [activeGroupId, setActiveGroupId] = useState<ComfigModuleGroupId>("graphics");
   const [moduleSearch, setModuleSearch] = useState("");
   const [showAllModules, setShowAllModules] = useState(false);
-  const [showAllPresets, setShowAllPresets] = useState(false);
 
   const locked = !canWriteSettings(running, busy);
   const paths = detail?.files.map((file) => file.path) ?? [];
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
-  const presetsExpanded = presetListExpanded(state.preset, showAllPresets);
-  const visiblePresets = visibleComfigPresets(state.preset, showAllPresets);
   const selectedPresetLabel = comfigPresetLabel(state.preset);
-  const presetImage = state.preset === "none" ? null : PRESET_IMAGES[state.preset];
+  const oldPresetMessage = oldComfigPresetMessage(state.preset);
+  const presetImage = PRESET_IMAGES[state.preset] ?? null;
   const activeGroup =
     COMFIG_MODULE_GROUPS.find((group) => group.id === activeGroupId) ?? COMFIG_MODULE_GROUPS[0];
   const normalizedSearch = moduleSearch.trim().toLowerCase();
@@ -208,8 +209,14 @@ export function ComfigPane({
             </div>
           </div>
 
+          {oldPresetMessage ? (
+            <p data-testid="comfig-old-preset" className="t-meta mt-3 text-ink-muted">
+              {oldPresetMessage}
+            </p>
+          ) : null}
+
           <div data-testid="comfig-preset" className="mt-4 grid grid-cols-2 gap-2">
-            {visiblePresets.map((item) => (
+            {COMFIG_PRESETS.map((item) => (
               <OptionTile
                 key={item.id}
                 id={`comfig-preset-${item.id}`}
@@ -227,15 +234,6 @@ export function ComfigPane({
           </div>
 
           <div className="pane-actions mt-3">
-            {FEATURED_PRESETS.has(state.preset) ? (
-              <button
-                type="button"
-                onClick={() => setShowAllPresets((current) => !current)}
-                className="btn btn-ghost"
-              >
-                {presetsExpanded ? "Show core presets" : "Show all presets"}
-              </button>
-            ) : null}
             <button
               type="button"
               data-testid="comfig-preset-guide"
@@ -262,7 +260,11 @@ export function ComfigPane({
           </figure>
         ) : (
           <div className="surface hero-preview grid aspect-video place-items-center self-start p-6 text-center">
-            <p className="t-meta">Custom preset — modules decide every setting.</p>
+            <p className="t-meta">
+              {oldPresetMessage
+                ? `${selectedPresetLabel} — no current preset screenshot available.`
+                : "Custom preset — modules decide every setting."}
+            </p>
           </div>
         )}
       </div>
@@ -376,7 +378,11 @@ export function ComfigPane({
                 label={item.label}
                 description={OFFICIAL_ADDON_DETAILS[item.id]}
                 checked={state.addons.includes(item.id)}
-                disabled={locked}
+                disabled={
+                  locked ||
+                  (item.id === "transparent-viewmodels" &&
+                    !canUseTransparentViewmodels(detail?.layer ?? null))
+                }
                 onChange={() => {
                   void onToggleAddon(item.id);
                 }}

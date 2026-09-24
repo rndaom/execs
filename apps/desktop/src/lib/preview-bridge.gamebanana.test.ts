@@ -7,10 +7,10 @@ describe("GameBanana preview bridge", () => {
     const first = await api.searchGameBananaMods("", "new", null, 1, false);
     const second = await api.searchGameBananaMods("", "new", null, 2, false);
     expect(first.records).toHaveLength(20);
-    expect(first.total).toEqual({ kind: "estimated", value: 22 });
+    expect(first.total).toEqual({ kind: "estimated", value: 24 });
     expect(first.complete).toBe(false);
     expect(first.filters.installability).toBe("page");
-    expect(second.records).toHaveLength(2);
+    expect(second.records).toHaveLength(4);
     expect(second.complete).toBe(true);
   });
 
@@ -30,9 +30,11 @@ describe("GameBanana preview bridge", () => {
 
   it("keeps absent source values absent while simulating server ordering", async () => {
     const api = createPreviewApi("settings-mods");
-    const downloads = await api.searchGameBananaMods("", "downloads", null, 1, true);
-    expect(downloads.records.some((record) => record.downloads === null)).toBe(true);
-    const known = downloads.records.flatMap((record) =>
+    const first = await api.searchGameBananaMods("", "downloads", null, 1, true);
+    const second = await api.searchGameBananaMods("", "downloads", null, 2, true);
+    const records = [...first.records, ...second.records];
+    expect(records.some((record) => record.downloads === null)).toBe(true);
+    const known = records.flatMap((record) =>
       record.downloads === null ? [] : [record.downloads],
     );
     expect(known).toEqual([...known].sort((a, b) => b - a));

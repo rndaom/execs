@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrosshairPane } from "../CrosshairPane";
 import { AppStatusProvider } from "../hooks/useAppStatus";
 import { AutosaveActivity, AutosavePending } from "../hooks/useAutosave";
-import type { CrosshairRecord } from "../lib/bridge";
+import type { ContentIndex, CrosshairRecord, CrosshairSourceStatus } from "../lib/bridge";
 import { defaultCrosshairDesign, renderCrosshairDesign } from "../lib/crosshair-designer";
 import { ColorPicker } from "./ColorPicker";
 import { CrosshairDesigner } from "./CrosshairDesigner";
@@ -18,10 +18,15 @@ let record: CrosshairRecord | null;
 let running: boolean;
 let managed: string;
 let active: boolean;
+let hudOverlayState: "enabled" | "disabled" | "possible" | "none";
+let stockArtSources: ContentIndex | null;
+let sourceStatus: CrosshairSourceStatus | null;
 const save = vi.fn(async (_text: string) => undefined);
 const build = vi.fn(async (..._args: unknown[]) => true);
 const deactivate = vi.fn(async () => undefined);
 const pending = vi.fn();
+const openHud = vi.fn();
+const openMods = vi.fn();
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -39,12 +44,17 @@ beforeEach(() => {
   };
   running = false;
   active = true;
+  hudOverlayState = "none";
+  stockArtSources = null;
+  sourceStatus = null;
   managed =
     'cl_crosshair_file ""\ncl_crosshair_scale 32\ncl_crosshair_red 17\ncl_crosshair_green 123\ncl_crosshair_blue 241\n';
   save.mockReset();
   build.mockReset();
   deactivate.mockReset();
   pending.mockReset();
+  openHud.mockReset();
+  openMods.mockReset();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -68,6 +78,12 @@ async function render() {
               onApply={build}
               onDeactivate={deactivate}
               onRemove={() => {}}
+              hudOverlayState={hudOverlayState}
+              hudName="Example HUD"
+              onOpenHud={openHud}
+              stockArtSources={stockArtSources}
+              sourceStatus={sourceStatus}
+              onOpenMods={openMods}
             />
           </AutosaveActivity.Provider>
         </AutosavePending.Provider>
@@ -95,6 +111,58 @@ async function elapsed() {
 }
 
 describe("0.1.4 crosshair workflow", () => {
+  it("links to HUD controls when a HUD overlay can add another crosshair", async () => {
+    hudOverlayState = "enabled";
+    await render();
+    expect(box.textContent).toContain("Example HUD has a crosshair overlay selected");
+    await click('[data-testid="crosshair-hud-overlay-notice"] button');
+    expect(openHud).toHaveBeenCalledTimes(1);
+    hudOverlayState = "possible";
+    await render();
+    expect(box.textContent).toContain("in-game state cannot be confirmed");
+  });
+
+  it("identifies a modded stock sprite without treating Valve's preview as final", async () => {
+    stockArtSources = {
+      hits: {
+        "materials/vgui/crosshairs/crosshair3.vtf": [
+          {
+            pack: "Alternate.vpk",
+            member: "materials/vgui/crosshairs/crosshair3.vtf",
+            kind: "vpk",
+          },
+        ],
+      },
+      incomplete: [],
+    };
+    await render();
+    await click('[data-testid="crosshair-mode-stock"]');
+    expect(box.textContent).toContain("Alternate.vpk also supplies");
+    expect(box.textContent).toContain("preview uses Valve's original sprite");
+    await click('[data-testid="crosshair-stock-art-notice"] button');
+    expect(openMods).toHaveBeenCalledTimes(1);
+  });
+
+  it("warns when external edits make a saved pack's record unverified", async () => {
+    if (!record) throw new Error("Expected a saved crosshair pack");
+    record = { ...record, inactive: true, sourceChanged: true };
+    await render();
+    expect(box.textContent).toContain("saved crosshair pack changed outside execs");
+    await click('[data-testid="crosshair-source-changed"] button');
+    expect(box.querySelector('[data-testid="crosshair-build"]')).not.toBeNull();
+  });
+
+  it("warns when TF2 updates the scripts used to build a saved pack", async () => {
+    sourceStatus = { state: "changed" };
+    await render();
+    expect(box.textContent).toContain("TF2's weapon scripts changed since this pack was built");
+    sourceStatus = { state: "unverified" };
+    await render();
+    expect(box.textContent).toContain(
+      "older crosshair pack has no recorded TF2 weapon-script version",
+    );
+  });
+
   it("retains an embedded design across pane visits and separates library save from pack build", async () => {
     await render();
     await click('input[value="designs"]');
@@ -127,6 +195,24 @@ describe("0.1.4 crosshair workflow", () => {
       expect.any(String),
       expect.any(Object),
     );
+  });
+  it("customizes a fixed shape into a named design without replacing the preset", async () => {
+    await render();
+    await click('[data-testid="crosshair-shape-execs-diamond"]');
+    expect(box.textContent).toContain("Customize shape");
+    await click('[data-testid="crosshair-open-designer"]');
+    expect(
+      element<HTMLInputElement>('[data-testid="crosshair-designer-style-diamond"]').checked,
+    ).toBe(true);
+    await input('input[aria-label="Design name"]', "My diamond");
+    await click('[data-testid="crosshair-designer-save"]');
+    expect(
+      element<HTMLInputElement>('[data-testid="crosshair-shape-design-my-diamond"]').checked,
+    ).toBe(true);
+    await click('[data-testid="crosshair-build"]');
+    expect(build.mock.calls.at(-1)?.[0]).toBe("design-my-diamond");
+    await click('input[value="builtin"]');
+    expect(box.querySelector('[data-testid="crosshair-shape-execs-diamond"]')).not.toBeNull();
   });
   it("retains an unbuilt shape through a color autosave and forces an explicit build", async () => {
     await render();
@@ -253,6 +339,9 @@ describe("0.1.4 crosshair workflow", () => {
     expect([canvas.width, canvas.height]).toEqual([31, 47]);
     expect(canvas.style.width).toBe(`${(62 / 1280) * 100}%`);
     expect(canvas.style.height).toBe("auto");
+    const detail = element<HTMLCanvasElement>('[data-testid="crosshair-sprite-detail"]');
+    expect([detail.width, detail.height]).toEqual([31, 47]);
+    expect([detail.style.width, detail.style.height]).toEqual(["63px", "96px"]);
   });
   it("preserves invalid hex as an editable field without saving it and accepts pasted exact RGB", async () => {
     const change = vi.fn();

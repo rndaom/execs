@@ -660,7 +660,10 @@ pub(crate) fn cfg_credential_lines(path: &str, bytes: &[u8]) -> Vec<usize> {
             let candidate = line.split("//").next().unwrap_or_default();
             if path.eq_ignore_ascii_case("tf/cfg/config.cfg") {
                 let archived = candidate.trim().to_ascii_lowercase();
-                if matches!(archived.as_str(), "password 0" | "password \"0\"" | "password \"\"") {
+                if matches!(
+                    archived.as_str(),
+                    "password 0" | "password \"0\"" | "password \"\""
+                ) {
                     return None;
                 }
             }
@@ -672,8 +675,14 @@ pub(crate) fn cfg_credential_lines(path: &str, bytes: &[u8]) -> Vec<usize> {
                 .any(|word| {
                     matches!(
                         word.to_ascii_lowercase().as_str(),
-                        "password" | "rcon" | "rcon_address" | "rcon_password" | "rcon_port"
-                            | "sv_password" | "tv_password" | "tv_relaypassword"
+                        "password"
+                            | "rcon"
+                            | "rcon_address"
+                            | "rcon_password"
+                            | "rcon_port"
+                            | "sv_password"
+                            | "tv_password"
+                            | "tv_relaypassword"
                     )
                 })
                 .then_some(index + 1)
@@ -1718,11 +1727,14 @@ mod tests {
         )
         .unwrap();
         validate_imported_cfg("tf/cfg/config.cfg", b"password real-secret").unwrap();
-        validate_imported_cfg("tf/cfg/overrides/autoexec.cfg", b"alias harmless \"password hunter2\"")
-            .unwrap();
+        validate_imported_cfg(
+            "tf/cfg/overrides/autoexec.cfg",
+            b"alias harmless \"password hunter2\"",
+        )
+        .unwrap();
         validate_exported_cfg(
             "tf/cfg/overrides/personal.cfg",
-            b"bind f \"rcon_password secret\""
+            b"bind f \"rcon_password secret\"",
         )
         .unwrap();
     }

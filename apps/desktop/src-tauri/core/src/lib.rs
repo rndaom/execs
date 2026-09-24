@@ -5,6 +5,7 @@ pub mod blob;
 mod cfg_layer;
 pub mod cfg_script;
 pub mod comfig;
+pub mod content_index;
 pub mod crosshair;
 pub mod custom_folders;
 pub mod files_workspace;

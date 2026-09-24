@@ -241,4 +241,69 @@ describe("HUD workspace interactions", () => {
     await act(async () => image?.dispatchEvent(new window.Event("error")));
     expect(element("hud-card-rayshud").textContent).toContain("Preview unavailable");
   });
+
+  it("offers HUD overlay glyphs separately and explains an unsupported Special choice", async () => {
+    running = true;
+    const schema = {
+      author: "raysfire",
+      sections: [
+        {
+          name: "Crosshair",
+          controls: [
+            {
+              name: "rh_val_xhair_style",
+              label: "Style",
+              controlType: "crosshair",
+              value: "<",
+              choices: [
+                { label: "Glyph <", value: "<" },
+                { label: "Glyph Z", value: "Z" },
+              ],
+            },
+            {
+              name: "rh_val_main_menu_bg",
+              label: "Menu Background",
+              controlType: "combo",
+              value: "1",
+              choices: [],
+              unavailableReason: "This option uses a HUD editor Special operation.",
+            },
+          ],
+        },
+      ],
+    };
+    await render({ schema });
+    await surface("installed");
+    expect(element("hud-options").textContent).toContain("HUD overlay crosshairs");
+    expect(element("hud-options").textContent).toContain("Menu Background - Unavailable");
+    expect(container.querySelector('[data-testid="hud-opt-rh_val_main_menu_bg"]')).toBeNull();
+    const select = element("hud-opt-rh_val_xhair_style") as HTMLSelectElement;
+    await act(async () => {
+      select.value = "Z";
+      select.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+    expect((element("hud-opt-rh_val_xhair_style") as HTMLSelectElement).value).toBe("Z");
+    expect(props.onApplyOptions).not.toHaveBeenCalled();
+  });
+
+  it("refreshes an author's album explicitly and replaces stale pictures", async () => {
+    const getHudAlbum = vi.fn(async (_id: string, refresh = false) => [
+      {
+        url: refresh ? "https://example.com/new.png" : "https://example.com/old.png",
+        thumb: null,
+        width: 10,
+        height: 10,
+      },
+    ]);
+    await render({
+      api: { getHudAlbum } as unknown as Api,
+      catalog: [{ ...PREVIEW_HUD_CATALOG[0], album: "https://imgur.com/a/fixture" }],
+    });
+    await click("hud-screenshots-rayshud");
+    expect(getHudAlbum).toHaveBeenCalledWith("rayshud");
+    expect(element("hud-lightbox").textContent).toContain("1 from the author's album");
+    await click("hud-lightbox-refresh");
+    expect(getHudAlbum).toHaveBeenCalledWith("rayshud", true);
+    expect(container.querySelector('img[src="https://example.com/new.png"]')).not.toBeNull();
+  });
 });

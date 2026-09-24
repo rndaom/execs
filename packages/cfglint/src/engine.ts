@@ -718,7 +718,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     .filter((path) => parsed.has(path) && !isModulesData(path));
   const execution: ReturnType<typeof evaluateStartup> =
     workExhausted || search.problem
-      ? { effective: new Map(), binds: new Map(), executionComplete: false }
+      ? { effective: new Map(), binds: new Map(), bindSources: new Map(), executionComplete: false }
       : evaluateStartup({
           files: parsed,
           entryPoints,
@@ -729,7 +729,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
           incomplete: (rule, message, at) => report("warn", rule, message, at),
           allowMalformedBinds: trust === "self",
         });
-  const { effective, binds, executionComplete } = execution;
+  const { effective, binds, bindSources, executionComplete } = execution;
 
   // ---- metadata -------------------------------------------------------------
   const classesTouched = [
@@ -760,6 +760,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     findings,
     effective,
     binds,
+    bindSources,
     executionComplete,
     moduleLevels,
     classesTouched,

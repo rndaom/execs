@@ -112,6 +112,8 @@ pub enum ProfileError {
     HudReviewRequired,
     HudLiveReviewRequired,
     HudImportRequired(String),
+    KeptPackHandoff(Vec<String>),
+    PendingLiveHandoff,
     Io(String),
 }
 
@@ -142,6 +144,8 @@ impl ProfileError {
             Self::HudReviewRequired => "HudReviewRequired",
             Self::HudLiveReviewRequired => "HudLiveReviewRequired",
             Self::HudImportRequired(_) => "HudImportRequired",
+            Self::KeptPackHandoff(_) => "KeptPackHandoff",
+            Self::PendingLiveHandoff => "PendingLiveHandoff",
             Self::Io(_) => "Io",
         }
     }
@@ -186,6 +190,11 @@ impl ProfileError {
             ),
             Self::HudReviewRequired | Self::HudLiveReviewRequired => "This setup contains more than one HUD. Review which HUD to keep before continuing. Original files will be preserved outside mounted HUD folders.".into(),
             Self::HudImportRequired(message) => message.clone(),
+            Self::KeptPackHandoff(packs) => format!(
+                "These kept packs are still installed: {}. Capture them in this profile before switching, or remove them from TF2 yourself.",
+                packs.join(", ")
+            ),
+            Self::PendingLiveHandoff => "The deleted profile's setup is still installed. Use Save current as… to capture it before switching profiles.".into(),
             Self::Io(err) => format!("Could not update the profile library: {err}"),
         }
     }
@@ -222,6 +231,11 @@ pub struct LibraryIndex {
     /// retry. Additive so schema-1 libraries remain compatible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_switch: Option<SwitchJournal>,
+    /// Deleting the active profile with Keep installed leaves live bytes that
+    /// no remaining manifest owns. A switch must wait for an explicit snapshot
+    /// of that setup; otherwise it can leak into or be replaced by the target.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pending_live_handoff: bool,
     pub profiles: Vec<ProfileSummary>,
 }
 
@@ -282,6 +296,14 @@ pub struct HudRecord {
 #[serde(rename_all = "camelCase")]
 pub struct CrosshairRecord {
     pub id: String,
+    /// Accepted external changes to this pack make the saved design/source
+    /// identity unverified until the player builds or removes it again.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub source_changed: bool,
+    /// Digest of the installed TF2 weapon-script source used at Build time.
+    /// Legacy records have no source identity and require a fresh Build.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_scripts_sha256: Option<String>,
     /// Missing on old profiles means the custom pack is active.
     #[serde(default)]
     pub inactive: bool,
@@ -325,6 +347,8 @@ pub enum ViewmodelSource {
 #[serde(rename_all = "camelCase")]
 pub struct ViewmodelRecord {
     pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub source_changed: bool,
     pub source: ViewmodelSource,
     #[serde(default)]
     pub preload: bool,
@@ -1426,10 +1450,11 @@ where
             },
             None,
         )?;
+        clear_live_handoff_after_snapshot_to(profiles_dir, tf2_root, &profile_id, &running)?;
         return load_library_from(profiles_dir, Some(tf2_root));
     }
 
-    create_populated_profile_to(
+    let library = create_populated_profile_to(
         profiles_dir,
         tf2_root,
         &name,
@@ -1442,7 +1467,30 @@ where
             manifest.launch_sync_pending = false;
             Ok(())
         },
-    )
+    )?;
+    let snapshot_id = &library
+        .profiles
+        .last()
+        .ok_or(ProfileError::UnknownProfile)?
+        .id;
+    clear_live_handoff_after_snapshot_to(profiles_dir, tf2_root, snapshot_id, &running)?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
+fn clear_live_handoff_after_snapshot_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    snapshot_id: &str,
+    running_names: &[String],
+) -> Result<(), ProfileError> {
+    let index = usable_index(profiles_dir, tf2_root)?;
+    if index.pending_live_handoff {
+        // A new-profile wizard may have temporarily claimed the active id
+        // after deletion. The reviewed Save current as… snapshot must own the
+        // retained live setup before releasing the handoff gate.
+        set_active_profile_to(profiles_dir, tf2_root, snapshot_id, running_names)?;
+    }
+    Ok(())
 }
 
 pub fn put_exclusive_file_to<I, S>(
@@ -2111,7 +2159,8 @@ fn mutation_committed_as_requested(
     Ok(current_summary == expected_summary
         && current_index.active_profile_id == expected_index.active_profile_id
         && current_index.interrupted_profile_id == expected_index.interrupted_profile_id
-        && current_index.pending_switch == expected_index.pending_switch)
+        && current_index.pending_switch == expected_index.pending_switch
+        && current_index.pending_live_handoff == expected_index.pending_live_handoff)
 }
 
 fn merge_profile_index_delta(
@@ -2162,6 +2211,7 @@ fn merge_profile_index_delta(
     merge_field!(active_profile_id);
     merge_field!(interrupted_profile_id);
     merge_field!(pending_switch);
+    merge_field!(pending_live_handoff);
     Ok(changed)
 }
 
@@ -3233,6 +3283,7 @@ where
     // A completed switch has finished any Remove step a failed one left.
     index.interrupted_profile_id = None;
     index.pending_switch = None;
+    index.pending_live_handoff = false;
     write_json_within(profiles_dir, &index_file(profiles_dir), &index)?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
@@ -3268,6 +3319,13 @@ pub(crate) fn pending_switch_to(
     tf2_root: &Path,
 ) -> Result<Option<SwitchJournal>, ProfileError> {
     Ok(usable_index(profiles_dir, tf2_root)?.pending_switch)
+}
+
+pub(crate) fn pending_live_handoff_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+) -> Result<bool, ProfileError> {
+    Ok(usable_index(profiles_dir, tf2_root)?.pending_live_handoff)
 }
 
 /// Publish recovery state before the first destructive switch operation.
@@ -4432,6 +4490,7 @@ fn init_unlocked(profiles_dir: &Path, tf2_root: &Path) -> Result<LibraryIndex, P
                 active_profile_id: None,
                 interrupted_profile_id: None,
                 pending_switch: None,
+                pending_live_handoff: false,
                 profiles: Vec::new(),
             };
             write_json_within(profiles_dir, &index_file(profiles_dir), &index)?;

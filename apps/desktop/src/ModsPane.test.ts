@@ -123,6 +123,7 @@ describe("ModsPane profile particle containment", () => {
 
     const browse = document.getElementById("mods-task-browse") as HTMLButtonElement;
     const installed = document.getElementById("mods-task-installed") as HTMLButtonElement;
+    expect(installed.textContent).toContain("Custom packs");
     const casual = document.getElementById("mods-task-casual") as HTMLButtonElement;
     expect(browse.getAttribute("aria-selected")).toBe("true");
     expect(document.querySelector('[data-testid="mods-yours-list"]')).not.toBeNull();
@@ -134,6 +135,16 @@ describe("ModsPane profile particle containment", () => {
     await act(async () => casual.click());
     expect(casual.getAttribute("aria-selected")).toBe("true");
     expect(button("mods-apply").disabled).toBe(false);
+  });
+
+  it("opens the shared Casual preload setting from Viewmodels", async () => {
+    const initial = props({ casualOpenRequest: 0 });
+    await act(async () => root.render(createElement(ModsPane, initial)));
+    expect(document.getElementById("mods-task-browse")?.getAttribute("aria-selected")).toBe("true");
+    await act(async () =>
+      root.render(createElement(ModsPane, { ...initial, casualOpenRequest: 1 })),
+    );
+    expect(document.getElementById("mods-task-casual")?.getAttribute("aria-selected")).toBe("true");
   });
 
   it("never applies a previous profile's hidden particle ID even with stale status", async () => {

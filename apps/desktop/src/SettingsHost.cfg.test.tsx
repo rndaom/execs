@@ -37,7 +37,11 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "vanilla") {
+function fixture(
+  files: Record<string, string>,
+  layer: "vanilla" | "comfig" = "vanilla",
+  launchOptions = "-novid",
+) {
   const onNavigate = vi.fn();
   const writeManagedCfg = vi.fn(async (path: string, text: string) => {
     files[path] = text;
@@ -48,11 +52,11 @@ function fixture(files: Record<string, string>, layer: "vanilla" | "comfig" = "v
       id: "A",
       layer,
       files: Object.keys(files).map((path) => ({ path })),
-      launchOptions: "-novid",
+      launchOptions,
     })),
     readProfileFile: vi.fn(async (path: string) => ({ path, text: files[path] })),
     getComfigState: vi.fn(async () => null),
-    getProfileLaunchOptions: vi.fn(async () => "-novid"),
+    getProfileLaunchOptions: vi.fn(async () => launchOptions),
     getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
     getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
     getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),
@@ -91,6 +95,54 @@ function control<T extends HTMLElement>(selector: string): T {
 }
 
 describe("real Gameplay save preserves cfg settings", () => {
+  it("discloses Launch and class CFG overrides without blocking Gameplay edits", async () => {
+    const { render, onNavigate, writeManagedCfg } = fixture(
+      {
+        "tf/cfg/config.cfg": "viewmodel_fov 70\n",
+        "tf/cfg/scout.cfg": "viewmodel_fov 120\n",
+      },
+      "vanilla",
+      "+exec personal +viewmodel_fov 110",
+    );
+    await render();
+    const notice = control<HTMLElement>('[data-testid="conditional-cfg-sources"]');
+    expect(notice.textContent).toContain("Launch +exec personal");
+    expect(notice.textContent).toContain("Launch +viewmodel_fov");
+    expect(notice.textContent).toContain("tf/cfg/scout.cfg:1 — viewmodel_fov");
+    const buttons = [...notice.querySelectorAll<HTMLButtonElement>("button")];
+    await act(async () =>
+      buttons.find((button) => button.textContent?.includes("scout.cfg"))?.click(),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("files");
+    await act(async () => buttons.find((button) => button.textContent?.includes("+exec"))?.click());
+    expect(onNavigate).toHaveBeenCalledWith("launch");
+    expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(false);
+    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(writeManagedCfg).toHaveBeenCalledOnce();
+  });
+
+  it("clears a quiet autosave failure after its next successful Gameplay write", async () => {
+    const { render, writeManagedCfg } = fixture({ "tf/cfg/config.cfg": "viewmodel_fov 70\n" });
+    writeManagedCfg.mockRejectedValueOnce(new Error("Disk read only"));
+    await render();
+    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(node.textContent).toContain("Disk read only");
+
+    const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setValue) throw new Error("Input value setter is unavailable");
+    await act(async () => {
+      setValue.call(fov, "71");
+      fov.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(writeManagedCfg).toHaveBeenCalledTimes(2);
+    expect(node.textContent).not.toContain("Disk read only");
+    expect(node.querySelector('[data-testid="toast"]')).toBeNull();
+  });
+
   it.each(["vanilla", "comfig"] as const)(
     "preserves mounted custom cfg precedence through an unrelated %s Gameplay save",
     async (layer) => {
@@ -197,8 +249,10 @@ describe("real Gameplay save preserves cfg settings", () => {
       });
       await render();
       const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
-      expect(fov.min).toBe("0.1");
-      expect(fov.max).toBe("179.9");
+      expect(fov.min).toBe("1");
+      expect(fov.max).toBe("179");
+      expect(fov.step).toBe("1");
+      expect(fov.value).toBe(String(Math.min(179, Math.max(1, Math.round(value)))));
       expect(fov.closest("div")?.textContent).toContain(`${value}°`);
       await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
       await act(async () => vi.advanceTimersByTimeAsync(701));
@@ -206,19 +260,29 @@ describe("real Gameplay save preserves cfg settings", () => {
     },
   );
 
-  it("allows an intentional fractional viewmodel FOV edit", async () => {
-    const { render, writeManagedCfg } = fixture({ "tf/cfg/config.cfg": "viewmodel_fov 45\n" });
-    await render();
-    const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    if (!setValue) throw new Error("Input value setter is unavailable");
-    await act(async () => {
-      setValue.call(fov, "100.5");
-      fov.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => vi.advanceTimersByTimeAsync(701));
-    expect(writeManagedCfg.mock.calls[0][1]).toContain("viewmodel_fov 100.5\n");
-  });
+  it.each([
+    ["70", 70],
+    ["71", 71],
+    ["1", 1],
+    ["179", 179],
+  ])(
+    "selects whole viewmodel FOV values when the slider moves to %s",
+    async (selected, expected) => {
+      const { render, writeManagedCfg } = fixture({ "tf/cfg/config.cfg": "viewmodel_fov 45\n" });
+      await render();
+      const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
+      expect(fov.step).toBe("1");
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      if (!setValue) throw new Error("Input value setter is unavailable");
+      await act(async () => {
+        setValue.call(fov, selected);
+        fov.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(fov.closest("div")?.textContent).toContain(`${expected}°`);
+      await act(async () => vi.advanceTimersByTimeAsync(701));
+      expect(writeManagedCfg.mock.calls[0][1]).toContain(`viewmodel_fov ${expected}\n`);
+    },
+  );
 
   it.each(["vanilla", "comfig"] as const)(
     "uses override autoexec only for the %s layer",

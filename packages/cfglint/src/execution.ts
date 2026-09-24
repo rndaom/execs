@@ -23,10 +23,12 @@ type ExecutionContext = {
 export function evaluateStartup(ctx: ExecutionContext): {
   effective: Map<string, CvarValue>;
   binds: Map<string, string>;
+  bindSources: Map<string, { file: string; line: number }>;
   executionComplete: boolean;
 } {
   const effective = new Map<string, CvarValue>();
   const binds = new Map<string, string>();
+  const bindSources = new Map<string, { file: string; line: number }>();
   const aliases = new Map<string, { payload: string; site: Command; malformed: boolean }>();
   let complete = true;
 
@@ -97,17 +99,26 @@ export function evaluateStartup(ctx: ExecutionContext): {
         if (args.length >= 2) {
           const key = args[0].toLowerCase();
           const payload = args.slice(1).join(" ");
-          if (payload) binds.set(key, payload);
-          else binds.delete(key);
+          if (payload) {
+            binds.set(key, payload);
+            bindSources.set(key, { file: cmd.file, line: cmd.line });
+          } else {
+            binds.delete(key);
+            bindSources.delete(key);
+          }
         }
         continue;
       }
       if (name === "unbind") {
-        if (args[0]) binds.delete(args[0].toLowerCase());
+        if (args[0]) {
+          binds.delete(args[0].toLowerCase());
+          bindSources.delete(args[0].toLowerCase());
+        }
         continue;
       }
       if (name === "unbindall") {
         binds.clear();
+        bindSources.clear();
         continue;
       }
       // These mutate settings or add commands conditionally. Do not pretend
@@ -181,6 +192,7 @@ export function evaluateStartup(ctx: ExecutionContext): {
   if (!complete) {
     effective.clear();
     binds.clear();
+    bindSources.clear();
   }
-  return { effective, binds, executionComplete: complete };
+  return { effective, binds, bindSources, executionComplete: complete };
 }

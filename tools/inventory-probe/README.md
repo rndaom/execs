@@ -1,10 +1,13 @@
 # Inventory development
 
-The development app has a read-only **Inventory** pane. Load backpack connects
-through the existing signed-in Steam client, reads an account-bound snapshot,
-and disconnects. The pane supports 50-slot pages, page jumps, search, quality
-filters, and item details. It requires Refresh backpack after trades, account
-changes, or playing TF2. It does not continuously synchronize.
+The development app has a read-only **Inventory** pane. It connects through the
+existing signed-in Steam client, reads an account-bound snapshot, and
+disconnects. The pane supports 50-slot pages, sorting, page jumps, search,
+quality filters, and item details. It refreshes on first visible, focused use,
+every two minutes while visible and focused, and after TF2 closes. Reads pause
+while the app is hidden, unfocused, busy, or in-game; failed connections back
+off from 30 seconds to five minutes. A failed read keeps the last snapshot
+marked stale and offers Retry. Refresh backpack also starts a manual read.
 
 The sidebar entry is excluded from production frontend builds. Release native
 commands and the helper entry point also refuse inventory access. No minor
@@ -29,12 +32,14 @@ release has been assigned yet.
   unique item identities, and valid non-colliding placed slots. Missing data
   fails instead of becoming an empty backpack. IDs cross JSON as strings.
 - `core/src/inventory.rs` reads the installed `items_game.txt`, English
-  localization, and bounded base artwork from `tf2_textures_dir.vpk`. Icons
-  load by visible page. Paint, wear, unusual effects, and full item attributes
-  are not previewed; unknown definitions keep their numeric identity.
+  localization, and bounded artwork from `tf2_textures_dir.vpk`. Icons load in
+  bounded batches using suitable VTF mip levels. Installed metadata and bounded
+  item attributes provide paint, wear, effect, kit, and fabricator labels where
+  available; the preview does not reproduce in-game materials, wear, or effects.
 - Inventory is account-owned and is outside profile draft boundaries. It never
   enters profile manifests, exports, or profile switching.
-- App snapshots remain in memory. Helper stdout is capped at 8 MiB and consumed
+- App snapshots remain in memory. Same-account refreshes preserve browsing state
+  and cached art; account changes reset them. Helper stdout is capped at 8 MiB and consumed
   privately by the parent; Steam SDK diagnostics are not exposed in the pane.
 
 ## Standalone diagnostic

@@ -29,7 +29,7 @@ export type InventorySnapshot = {
     InventoryDefinition & {
       details: string[];
       targetIcon?: string | null;
-      baseIcon?: string | null;
+      patternIcon?: string | null;
     }
   >;
   qualityColors?: Record<string, string>;
@@ -214,7 +214,7 @@ export type AbsorbOwnedResult = {
 
 /** Update adopts the live packs, Keep leaves the profile alone, Restore puts
  * the removed packs back from the library. */
-export type PackChoice = "update" | "keep" | "restore";
+export type PackChoice = "update" | "keep" | "restore" | "captureKept";
 
 export async function absorbOwned(): Promise<AbsorbOwnedResult> {
   return call<AbsorbOwnedResult>("absorb_owned");
@@ -371,6 +371,9 @@ export type HudRecord = {
 
 export type CrosshairRecord = {
   id: string;
+  /** Accepted external pack changes mean the saved design/source is unverified. */
+  sourceChanged?: boolean;
+  sourceScriptsSha256?: string | null;
   inactive?: boolean;
   scale?: number;
   stock?: { file: string; scale: number };
@@ -384,8 +387,16 @@ export type CrosshairRecord = {
   design?: string | null;
 };
 
+export type CrosshairSourceStatus = {
+  state: "none" | "current" | "changed" | "unverified" | "unavailable";
+  reason?: string;
+};
+
 /** Where a pack in the profile came from. */
-export type ModSource = { kind: "local" } | { kind: "gamebanana"; id: number; url: string };
+export type ModSource =
+  | { kind: "local" }
+  | { kind: "external" }
+  | { kind: "gamebanana"; id: number; url: string };
 
 /** One pack the user brought into the active profile's `tf/custom`. */
 export type ModRecord = {
@@ -404,6 +415,7 @@ export type ViewmodelSource = "compiled" | "imported";
 
 export type ViewmodelRecord = {
   id: string;
+  sourceChanged?: boolean;
   source: ViewmodelSource;
   preload: boolean;
   options: Record<string, string>;
@@ -499,6 +511,10 @@ export type ProfileDetail = {
   launchOptions: string;
   layer: CfgLayer;
   files: ProfileFile[];
+  /** Retained HUD roots, including roots excluded from the live projection. */
+  hudRoots?: string[];
+  /** The exact root projected into TF2, when native can resolve one. */
+  selectedHudRoot?: string | null;
   hud?: HudRecord | null;
   crosshair?: CrosshairRecord | null;
   viewmodel?: ViewmodelRecord | null;
@@ -664,8 +680,8 @@ export async function getHudStats(refresh = false): Promise<HudStatsPayload> {
 }
 
 /** The pictures behind a HUD's Imgur album or GitHub showcase page. */
-export async function getHudAlbum(id: string): Promise<HudAlbumImage[]> {
-  return call<HudAlbumImage[]>("get_hud_album", { id });
+export async function getHudAlbum(id: string, refresh = false): Promise<HudAlbumImage[]> {
+  return call<HudAlbumImage[]>("get_hud_album", { id, refresh });
 }
 
 export async function installHud(id: string): Promise<ProfileDetail> {
@@ -774,6 +790,16 @@ export async function getStockCrosshairSprites(): Promise<Record<string, StockCr
   return call<Record<string, StockCrosshairSprite>>("get_stock_crosshair_sprites");
 }
 
+/** Installed custom-pack candidates that could replace Valve's stock art. */
+export async function getCrosshairContentSources(): Promise<ContentIndex> {
+  return call<ContentIndex>("get_crosshair_content_sources");
+}
+
+/** Whether the saved pack still matches TF2's current weapon scripts. */
+export async function getCrosshairSourceStatus(): Promise<CrosshairSourceStatus> {
+  return call<CrosshairSourceStatus>("get_crosshair_source_status");
+}
+
 export async function removeCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_crosshairs");
 }
@@ -822,10 +848,6 @@ export async function viewmodelPreviewImage(name: string): Promise<ArrayBuffer> 
   return call<ArrayBuffer>("viewmodel_preview_image", { name });
 }
 
-export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
-  return call<ProfileDetail>("set_viewmodel_preload", { enabled });
-}
-
 // ---------------------------------------------------------------------------
 // Hit and kill sounds
 // ---------------------------------------------------------------------------
@@ -846,6 +868,7 @@ export type HitsoundEntry = {
 
 /** What the profile's sound pack holds; a missing slot plays the engine's own sound. */
 export type HitsoundRecord = {
+  sourceChanged?: boolean;
   hit?: HitsoundEntry | null;
   kill?: HitsoundEntry | null;
 };
@@ -902,6 +925,17 @@ export async function listStockHitsounds(): Promise<string[]> {
   return call<string[]>("list_stock_hitsounds");
 }
 
+/** Candidate virtual-path sources in tf/custom; an incomplete scan is explicit. */
+export type ContentIndex = {
+  hits: Record<string, { pack: string; member: string; kind: "loose" | "vpk" }[]>;
+  incomplete: string[];
+};
+
+/** Other installed packs containing TF2's canonical hit or kill sound paths. */
+export async function getHitsoundSources(): Promise<ContentIndex> {
+  return call<ContentIndex>("get_hitsound_sources");
+}
+
 /** Open the file dialog for a WAV, prepare it for the engine, and stash it. */
 export async function pickHitsoundFile(): Promise<PickedHitsound | null> {
   return call<PickedHitsound | null>("pick_hitsound_file");
@@ -912,6 +946,29 @@ export async function applyHitsounds(
   kill: HitsoundSlotChange,
 ): Promise<ProfileDetail> {
   return call<ProfileDetail>("apply_hitsounds", { hit, kill });
+}
+
+/** Commit the Sounds pane's scoped CFG and WAV changes as one profile write. */
+export async function applyHitsoundsWithSettings(
+  path: string,
+  text: string,
+  expectedProfileId: string,
+  hit: HitsoundSlotChange,
+  kill: HitsoundSlotChange,
+): Promise<ProfileDetail> {
+  if (!editorPathFits(path)) {
+    throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+  }
+  if (editorTextBytes(text) === null) {
+    throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+  }
+  return call<ProfileDetail>("apply_hitsounds_with_settings", {
+    path,
+    text,
+    expectedProfileId,
+    hit,
+    kill,
+  });
 }
 
 export async function removeHitsounds(): Promise<ProfileDetail> {
@@ -960,6 +1017,9 @@ export type GameBananaMod = {
   author: string;
   category: string;
   categoryId: number;
+  subCategory: string | null;
+  /** GUI listings route to HUD or manual import, never generic Mods install. */
+  route: "mod" | "hud" | "manual";
   /** Listing metrics are absent on some index records. */
   likes: number | null;
   views: number | null;
@@ -1013,6 +1073,15 @@ export type GameBananaCategory = {
   name: string;
 };
 
+export type GameBananaDownloadVariant = {
+  id: number;
+  fileName: string;
+  description: string;
+  sizeBytes: number | null;
+  addedAt: number | null;
+  supported: boolean;
+};
+
 export type GameBananaSort = "new" | "updated" | "downloads" | "likes" | "views";
 
 /** Pick an archive or vpk and install it into the active profile. Null = cancelled. */
@@ -1057,8 +1126,12 @@ export async function gameBananaModCategories(refresh = false): Promise<GameBana
   return call<GameBananaCategory[]>("gamebanana_mod_categories", { refresh });
 }
 
-export async function installGameBananaMod(id: number): Promise<ProfileDetail> {
-  return call<ProfileDetail>("install_gamebanana_mod", { id });
+export async function gameBananaDownloadVariants(id: number): Promise<GameBananaDownloadVariant[]> {
+  return call<GameBananaDownloadVariant[]>("gamebanana_download_variants", { id });
+}
+
+export async function installGameBananaMod(id: number, fileId: number): Promise<ProfileDetail> {
+  return call<ProfileDetail>("install_gamebanana_mod", { id, fileId });
 }
 
 // ---------------------------------------------------------------------------

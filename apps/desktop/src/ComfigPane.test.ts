@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ComfigPane } from "./ComfigPane";
 import { COMFIG_MODULE_GROUPS, COMFIG_PRESETS } from "./lib/comfig-catalog";
-import { PREVIEW_COMFIG_STATE } from "./lib/comfig-ui";
+import { type ComfigUiState, OFFICIAL_ADDON_DETAILS, PREVIEW_COMFIG_STATE } from "./lib/comfig-ui";
 import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
 
 const status = vi.hoisted(() => ({ running: false, busy: false }));
@@ -30,11 +30,14 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function render(onApplyPreset = vi.fn(async () => false)) {
+function render(
+  onApplyPreset = vi.fn(async () => false),
+  state: ComfigUiState = PREVIEW_COMFIG_STATE,
+) {
   root.render(
     createElement(ComfigPane, {
       detail: null,
-      state: PREVIEW_COMFIG_STATE,
+      state,
       onApplyPreset,
       onApplyModules: async () => false,
       onToggleAddon: async () => false,
@@ -67,6 +70,7 @@ describe("ComfigPane workspaces", () => {
         document.querySelector(`[data-testid="comfig-addon-${addon.id}"]`)?.getAttribute("role"),
       ).toBe("switch");
     }
+    expect(document.body.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
   });
 
   it("keeps the committed preset and authentic preview when a selection fails", async () => {
@@ -77,13 +81,19 @@ describe("ComfigPane workspaces", () => {
     expect(apply).toHaveBeenCalledWith("high");
     expect(document.querySelector<HTMLInputElement>("#comfig-preset-medium")?.checked).toBe(true);
     expect(document.querySelector("img")?.getAttribute("src")).toBe(preview);
-    const showAll = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Show all presets",
-    );
-    await act(async () => showAll?.click());
     for (const preset of COMFIG_PRESETS) {
       expect(document.getElementById(`comfig-preset-${preset.id}`)).not.toBeNull();
     }
+    expect(document.body.textContent).not.toContain("Show all presets");
+  });
+
+  it("discloses an older selected preset while offering only current choices", async () => {
+    await act(async () => render(undefined, { ...PREVIEW_COMFIG_STATE, preset: "medium_high" }));
+    expect(document.querySelector('[data-testid="comfig-old-preset"]')?.textContent).toContain(
+      "Medium high, which current mastercomfig no longer supports",
+    );
+    expect(document.getElementById("comfig-preset-medium_high")).toBeNull();
+    expect(document.querySelector("img")).toBeNull();
   });
 
   it("retains the write lock for presets, module values and addon package writes", async () => {
@@ -100,5 +110,17 @@ describe("ComfigPane workspaces", () => {
         `[data-testid="comfig-addon-${OFFICIAL_ADDONS[0].id}"]`,
       )?.disabled,
     ).toBe(true);
+  });
+
+  it("distinguishes inheriting a preset from the literal post-processing default", async () => {
+    await act(async () => render());
+    const picker = document.querySelector('[data-testid="comfig-module-post_processing"]');
+    const labels = [...(picker?.querySelectorAll("button") ?? [])].map(
+      (button) => button.textContent,
+    );
+    expect(labels).toContain("Use preset");
+    expect(labels).toContain("Module default");
+    expect(labels.filter((label) => label === "Default")).toHaveLength(0);
+    expect(document.body.textContent).toContain("Use preset inherits its value");
   });
 });

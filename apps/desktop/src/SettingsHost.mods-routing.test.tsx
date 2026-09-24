@@ -68,6 +68,16 @@ function makeApi() {
     })),
     gameBananaModCategories: vi.fn(async () => []),
     searchGameBananaMods: vi.fn(async () => page),
+    gameBananaDownloadVariants: vi.fn(async () => [
+      {
+        id: 7_000_001,
+        fileName: "preview.zip",
+        description: "Main version",
+        sizeBytes: 1000,
+        addedAt: 100,
+        supported: true,
+      },
+    ]),
     importModArchive: vi.fn(async (): Promise<{ id: string } | null> => ({ id: profileId })),
     importModFolder: vi.fn(async (): Promise<{ id: string } | null> => ({ id: profileId })),
     installGameBananaMod: vi.fn(async () => ({ id: profileId })),
@@ -108,6 +118,13 @@ function button(label: string): HTMLButtonElement {
 }
 async function click(id: string) {
   await act(async () => element(id).click());
+}
+async function chooseGameBananaFile() {
+  await click("mods-gb-install-700000");
+  await act(async () => {
+    box.querySelector<HTMLInputElement>('input[name="gamebanana-file"]')?.click();
+  });
+  await click("mods-gb-install-selected");
 }
 async function importMod(kind: "archive" | "folder") {
   await click("mods-import");
@@ -163,7 +180,7 @@ describe("Mods HUD recovery through the real settings host", () => {
     const install = deferred<Awaited<ReturnType<typeof api.installGameBananaMod>>>();
     api.installGameBananaMod.mockReturnValueOnce(install.promise);
     await render();
-    await click("mods-gb-install-700000");
+    await chooseGameBananaFile();
     expect(element("mods-gb-install-700000").textContent).toBe("Installing…");
     await act(async () => vi.advanceTimersByTimeAsync(450));
     expect(element("toast").textContent).toBe("Saving…");
@@ -185,7 +202,7 @@ describe("Mods HUD recovery through the real settings host", () => {
       const next = deferred<Awaited<ReturnType<typeof api.importModArchive>>>();
       if (kind === "gamebanana") {
         api.installGameBananaMod.mockReturnValueOnce(next.promise as Promise<{ id: string }>);
-        await click("mods-gb-install-700000");
+        await chooseGameBananaFile();
       } else {
         api[kind === "archive" ? "importModArchive" : "importModFolder"].mockReturnValueOnce(
           next.promise,
@@ -246,7 +263,7 @@ describe("Mods HUD recovery through the real settings host", () => {
     const previous = deferred<Awaited<ReturnType<typeof api.installGameBananaMod>>>();
     api.installGameBananaMod.mockReturnValueOnce(previous.promise);
     await render();
-    await click("mods-gb-install-700000");
+    await chooseGameBananaFile();
     profileId = "B";
     refreshKey += 1;
     await render();

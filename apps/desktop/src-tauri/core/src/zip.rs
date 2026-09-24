@@ -173,7 +173,11 @@ pub fn inspect_profile_export_credentials_from(
     profile_id: &str,
 ) -> Result<Vec<String>, ProfileError> {
     let library = require_usable_library(profiles_dir, tf2_root)?;
-    if !library.profiles.iter().any(|profile| profile.id == profile_id) {
+    if !library
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id)
+    {
         return Err(ProfileError::UnknownProfile);
     }
     let manifest = load_manifest(profiles_dir, profile_id)?;
@@ -182,9 +186,15 @@ pub fn inspect_profile_export_credentials_from(
     if manifest
         .launch_options
         .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-        .any(|word| matches!(word.to_ascii_lowercase().as_str(), "password" | "rcon_password" | "sv_password"))
+        .any(|word| {
+            matches!(
+                word.to_ascii_lowercase().as_str(),
+                "password" | "rcon_password" | "sv_password"
+            )
+        })
     {
-        locations.push("Launch options may contain a saved password or remote-console setting.".into());
+        locations
+            .push("Launch options may contain a saved password or remote-console setting.".into());
     }
     for entry in validated_export_files(&manifest)? {
         if !has_extension(&entry.path, "cfg") && !has_extension(&entry.path, "vpk") {
@@ -194,18 +204,11 @@ pub fn inspect_profile_export_credentials_from(
             FileStorage::Exclusive => exclusive_file_path(profiles_dir, profile_id, &entry.path),
             FileStorage::Shared => blob_path(profiles_dir, &entry.sha256),
         };
-        let (mut source, len) = open_verified_source(
-            profiles_dir,
-            &source_path,
-            &entry.sha256,
-            &entry.path,
-        )?;
-        if let Some(bytes) = read_validated_export_cfg_source(
-            &entry.path,
-            &mut source,
-            len,
-            &entry.sha256,
-        )? {
+        let (mut source, len) =
+            open_verified_source(profiles_dir, &source_path, &entry.sha256, &entry.path)?;
+        if let Some(bytes) =
+            read_validated_export_cfg_source(&entry.path, &mut source, len, &entry.sha256)?
+        {
             for line in crate::archive::cfg_credential_lines(&entry.path, &bytes) {
                 locations.push(format!("{}:{line}", entry.path));
             }
@@ -221,10 +224,17 @@ pub fn inspect_profile_export_credentials_from(
                     &|path| has_extension(path, "cfg"),
                     MAX_IMPORTED_CFG_BYTES as u64,
                 )
-                .map_err(|err| invalid_zip(format!("invalid profile VPK {}: {}", entry.path, err.message())))?;
+                .map_err(|err| {
+                    invalid_zip(format!(
+                        "invalid profile VPK {}: {}",
+                        entry.path,
+                        err.message()
+                    ))
+                })?;
                 if !hash.eq_ignore_ascii_case(&entry.sha256) {
                     return Err(ProfileError::Io(format!(
-                        "{} changed during export review.", entry.path
+                        "{} changed during export review.",
+                        entry.path
                     )));
                 }
                 for (cfg_path, bytes) in cfgs.files {
@@ -1019,7 +1029,15 @@ fn validate_imported_metadata(
         }
         let expected_folder = record.id.as_str();
         let expected_vpk = format!("{}.vpk", record.id);
-        if record.pack != expected_folder && record.pack != expected_vpk {
+        let external_pack = !record.pack.is_empty()
+            && record.pack.len() <= 255
+            && !record.pack.contains(['/', '\\'])
+            && is_profile_ownable_rel_path(&format!("tf/custom/{}", record.pack));
+        let pack_owned = match record.source {
+            ModSource::External => external_pack,
+            _ => record.pack == expected_folder || record.pack == expected_vpk,
+        };
+        if !pack_owned {
             return Err(invalid_zip(format!(
                 "mod {} does not own its recorded pack",
                 record.id
@@ -1059,6 +1077,10 @@ fn validate_imported_metadata(
         record.bytes = bytes;
     }
 
+    // The file loop above has already checked every listed payload against its
+    // manifest hash. Feature metadata may only claim those verified files.
+    validate_feature_payloads(manifest)?;
+
     if manifest.ignored_packs.len() > MAX_PROFILE_FILES {
         return Err(invalid_zip("too many ignored packs in profile metadata"));
     }
@@ -1076,6 +1098,94 @@ fn validate_imported_metadata(
         }
     }
     make_metadata_portable(manifest);
+    Ok(())
+}
+
+fn validate_feature_payloads(manifest: &ProfileZipManifest) -> Result<(), ProfileError> {
+    let paths: HashSet<&str> = manifest
+        .files
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect();
+    if let Some(record) = &manifest.crosshair {
+        if record.id != crate::crosshair::EXECS_CROSSHAIRS_PACK {
+            return Err(invalid_zip("crosshair record names an unknown pack"));
+        }
+        let prefix = if record.inactive {
+            "tf/custom/execs-crosshairs/inactive/"
+        } else {
+            "tf/custom/execs-crosshairs/"
+        };
+        let material = |name: &str, extension: &str| {
+            paths.contains(
+                format!("{prefix}materials/vgui/replay/thumbnails/{name}.{extension}").as_str(),
+            )
+        };
+        // Old schema-1 records may omit `shape`; retain readability when the
+        // pack still has a verified material pair.
+        if record.shape.is_empty() {
+            let material_root = format!("{prefix}materials/vgui/replay/thumbnails/");
+            if !paths.iter().any(|path| {
+                path.strip_prefix(&material_root)
+                    .and_then(|name| name.strip_suffix(".vtf"))
+                    .is_some_and(|name| material(name, "vmt"))
+            }) {
+                return Err(invalid_zip(
+                    "crosshair record has no verified material pair",
+                ));
+            }
+        }
+        let names = (!record.shape.is_empty())
+            .then_some(record.shape.as_str())
+            .into_iter()
+            .chain(record.library.keys().map(String::as_str));
+        for name in names {
+            if !crate::crosshair::valid_crosshair_name(name)
+                || !material(name, "vtf")
+                || !material(name, "vmt")
+            {
+                return Err(invalid_zip(format!(
+                    "crosshair record has no verified material pair for {name}"
+                )));
+            }
+        }
+        if !paths.iter().any(|path| {
+            path.starts_with(&format!("{prefix}scripts/tf_weapon_")) && path.ends_with(".txt")
+        }) {
+            return Err(invalid_zip(
+                "crosshair record has no verified weapon scripts",
+            ));
+        }
+        for stem in record.assignments.keys() {
+            if !paths.contains(format!("{prefix}scripts/{stem}.txt").as_str()) {
+                return Err(invalid_zip(format!(
+                    "crosshair record has no verified weapon script for {stem}"
+                )));
+            }
+        }
+    }
+    if let Some(record) = &manifest.viewmodel {
+        if record.id != crate::viewmodel::EXECS_VIEWMODELS_PACK
+            || !paths.contains(crate::viewmodel::EXECS_VIEWMODELS_VPK)
+        {
+            return Err(invalid_zip("viewmodel record has no verified VPK"));
+        }
+    }
+    if let Some(record) = &manifest.hitsound {
+        if record.hit.is_none() && record.kill.is_none() {
+            return Err(invalid_zip("hitsound record has no sound slots"));
+        }
+        for (entry, path) in [
+            (&record.hit, crate::hitsound::HITSOUND_REL),
+            (&record.kill, crate::hitsound::KILLSOUND_REL),
+        ] {
+            if entry.is_some() && !paths.contains(path) {
+                return Err(invalid_zip(format!(
+                    "hitsound record has no verified {path}"
+                )));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1778,14 +1888,18 @@ mod tests {
             &root.join("tf/cfg/config_default.cfg"),
             "unbindall\nbind w +forward\n",
         );
-        let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\nconnect bad.example\n";
+        let cfg =
+            b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\nconnect bad.example\n";
         write_raw_zip(&path, &[("/", b""), ("cfg/overrides/autoexec.cfg", cfg)]);
         let refused = import_profile_from(&profiles, &root, &path, unlocked()).unwrap_err();
         assert!(refused.message().contains("connect"), "{refused:?}");
         let review =
             creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
         assert_eq!(review.warnings.len(), 2);
-        assert!(review.warnings.iter().any(|warning| warning.contains("password")));
+        assert!(review
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("password")));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
         assert_eq!(
@@ -1801,10 +1915,11 @@ mod tests {
             &profiles,
             &root,
             &imported.profiles[0].id,
-            &dir.join("export.zip")
+            &dir.join("export.zip"),
         )
         .unwrap();
-        let mut exported = ZipArchive::new(fs::File::open(dir.join("export.zip")).unwrap()).unwrap();
+        let mut exported =
+            ZipArchive::new(fs::File::open(dir.join("export.zip")).unwrap()).unwrap();
         let mut contents = Vec::new();
         exported
             .by_name("files/tf/cfg/overrides/autoexec.cfg")
@@ -3092,12 +3207,9 @@ mod tests {
         .unwrap();
         let destination = dir.join("existing.zip");
         fs::write(&destination, b"previous export").unwrap();
-        let locations = inspect_profile_export_credentials_from(
-            &profiles,
-            &root,
-            &saved.profiles[0].id,
-        )
-        .unwrap();
+        let locations =
+            inspect_profile_export_credentials_from(&profiles, &root, &saved.profiles[0].id)
+                .unwrap();
         assert_eq!(locations, ["tf/cfg/config.cfg:1"]);
         assert!(!format!("{locations:?}").contains("hunter2"));
         export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
@@ -3106,7 +3218,12 @@ mod tests {
         assert_eq!(imported.profiles.len(), 2);
         let imported_id = &imported.profiles[1].id;
         assert_eq!(
-            fs::read(exclusive_file_path(&profiles, imported_id, "tf/cfg/config.cfg")).unwrap(),
+            fs::read(exclusive_file_path(
+                &profiles,
+                imported_id,
+                "tf/cfg/config.cfg"
+            ))
+            .unwrap(),
             b"password hunter2\n"
         );
         assert!(!fs::read_dir(&dir).unwrap().flatten().any(|entry| {
@@ -3141,12 +3258,9 @@ mod tests {
             let before = snapshot_tree(&profiles);
             let destination = dir.join("existing.zip");
             fs::write(&destination, b"previous export").unwrap();
-            let locations = inspect_profile_export_credentials_from(
-                &profiles,
-                &root,
-                &saved.profiles[0].id,
-            )
-            .unwrap();
+            let locations =
+                inspect_profile_export_credentials_from(&profiles, &root, &saved.profiles[0].id)
+                    .unwrap();
             assert!(locations.iter().any(|location| {
                 location == &format!("tf/custom/{pack}/cfg/private-server.cfg:1")
             }));
@@ -3396,6 +3510,10 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         seed_live(&root);
         write_live(&root.join("tf/custom/my-mod/materials/a.vmt"), "vmt");
+        write_live(
+            &root.join(crate::hitsound::HITSOUND_REL),
+            "RIFF\u{0000}\u{0000}\u{0000}\u{0000}WAVE",
+        );
         let saved = save_current_as_to(
             &profiles,
             &root,
@@ -3425,6 +3543,7 @@ mod tests {
             profile_particle_mods: vec!["my-mod".into()],
         });
         manifest.hitsound = Some(crate::hitsound::HitsoundRecord {
+            source_changed: false,
             hit: Some(crate::hitsound::HitsoundEntry {
                 name: "My picked sound".into(),
                 source: crate::hitsound::HitsoundSource::File,
@@ -3468,6 +3587,106 @@ mod tests {
                 .and_then(|entry| entry.token.as_deref()),
             None
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn feature_records_without_verified_payloads_refuse_import() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        init_library_to(&profiles, &root, unlocked()).unwrap();
+        for (name, feature) in [
+            (
+                "crosshair",
+                serde_json::json!({
+                    "crosshair": {"id": "execs-crosshairs", "shape": "dot"}
+                }),
+            ),
+            (
+                "viewmodel",
+                serde_json::json!({
+                    "viewmodel": {"id": "execs-viewmodels", "source": "imported"}
+                }),
+            ),
+            (
+                "hitsound",
+                serde_json::json!({
+                    "hitsound": {"hit": {"name": "claimed", "source": "file"}}
+                }),
+            ),
+        ] {
+            let mut manifest = serde_json::json!({
+                "schema": ZIP_SCHEMA,
+                "name": "Missing feature payload",
+                "files": []
+            });
+            manifest
+                .as_object_mut()
+                .unwrap()
+                .extend(feature.as_object().unwrap().clone());
+            let json = serde_json::to_vec(&manifest).unwrap();
+            let zip_path = dir.join(format!("{name}.zip"));
+            write_raw_zip(&zip_path, &[("execs-profile.json", &json)]);
+            let error = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+            assert!(
+                matches!(&error, ProfileError::Io(message) if message.contains("record")),
+                "{name} had unexpected error: {error:?}"
+            );
+            assert!(load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .profiles
+                .is_empty());
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn legacy_crosshair_record_without_shape_keeps_readable_verified_pack() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        init_library_to(&profiles, &root, unlocked()).unwrap();
+        let files = [
+            (
+                "tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vtf",
+                b"vtf".as_slice(),
+            ),
+            (
+                "tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vmt",
+                b"vmt".as_slice(),
+            ),
+            (
+                "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt",
+                b"script".as_slice(),
+            ),
+        ];
+        let manifest = serde_json::json!({
+            "schema": ZIP_SCHEMA,
+            "name": "Legacy crosshair",
+            "files": files.iter().map(|(path, bytes)| serde_json::json!({
+                "path": path,
+                "sha256": sha256_hex(bytes),
+                "storage": "exclusive"
+            })).collect::<Vec<_>>(),
+            "crosshair": {"id": "execs-crosshairs"}
+        });
+        let json = serde_json::to_vec(&manifest).unwrap();
+        let zip_path = dir.join("legacy-crosshair.zip");
+        let mut entries: Vec<(String, &[u8])> = vec![("execs-profile.json".into(), &json)];
+        entries.extend(
+            files
+                .iter()
+                .map(|(path, bytes)| (format!("files/{path}"), *bytes)),
+        );
+        let borrowed: Vec<(&str, &[u8])> = entries
+            .iter()
+            .map(|(path, bytes)| (path.as_str(), *bytes))
+            .collect();
+        write_raw_zip(&zip_path, &borrowed);
+        let library = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        let imported = load_manifest(&profiles, &library.profiles[0].id).unwrap();
+        assert_eq!(imported.crosshair.unwrap().shape, "");
         cleanup(&dir);
     }
 

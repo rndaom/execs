@@ -370,6 +370,50 @@ export function isHudCheckboxOn(value: string): boolean {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
+/** HUD font overlays are a separate source from TF2's cl_crosshair_* settings.
+ * This reports the schema's intended setting, not the final mounted game file.
+ */
+export function hudOverlayCrosshairState(
+  hudId: string | null,
+  schema: HudSchemaView | null,
+  options: Record<string, string>,
+): "enabled" | "disabled" | "possible" | "none" {
+  if (!hudId || !schema) return "none";
+  const controls = schema.sections.flatMap((section) => section.controls);
+  if (!controls.some((control) => control.controlType === "crosshair")) return "none";
+  const names: Record<string, string[]> = {
+    rayshud: ["rh_toggle_xhair_enable"],
+    budhud: ["bh_toggle_xhair_enable"],
+    kbnhud: ["kbn_crosshair1", "kbn_crosshair2"],
+    flawhud: ["fh_toggle_xhair_enable"],
+    "eve-plus": ["eve_toggle_xhair_enable"],
+  };
+  const toggles = (names[hudId.toLowerCase()] ?? [])
+    .map((name) => controls.find((control) => control.name === name))
+    .filter((control) => control !== undefined);
+  if (!toggles.length || toggles.some((control) => control.unavailableReason)) return "possible";
+  return toggles.some((control) => isHudCheckboxOn(options[control.name] ?? control.value))
+    ? "enabled"
+    : "disabled";
+}
+
+export function hudSchemaUnavailableReason(hudId: string): string {
+  const pending: Record<string, string> = {
+    berryhud:
+      "BerryHUD's catalog archive has multiple HUD roots; its editor schema has not been verified against one selected root. Use the author's customization instructions.",
+    hexhud:
+      "HExHUD's editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
+    "hud-fixes":
+      "Community HUD Fixes' editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
+    sunsethud:
+      "SunsetHUD's editor schema contains an unresolved crosshair control reference in the checked catalog archive. Use the author's customization instructions.",
+  };
+  return (
+    pending[hudId.toLowerCase()] ??
+    "No in-app options for this HUD. Use the HUD author's customization instructions."
+  );
+}
+
 export function parseHudRgba(value: string): { r: number; g: number; b: number; a: number } {
   const parts = value
     .trim()

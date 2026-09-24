@@ -65,10 +65,17 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
       box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.style
         .borderColor,
     ).toBe("rgb(255, 215, 0)");
+    expect(
+      box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.style
+        .borderWidth,
+    ).toBe("");
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.click(),
     );
     expect(box.querySelector('[aria-label="Item details"]')?.textContent).toContain("Item 123");
+    expect(box.querySelector<HTMLElement>('[aria-label="Item details"]')?.style.borderColor).toBe(
+      "rgb(255, 215, 0)",
+    );
     vi.useFakeTimers();
     getInventory.mockRejectedValueOnce(new Error("Steam disconnected"));
     // Return from the game requests a fresh snapshot without a refresh button.
@@ -168,7 +175,7 @@ it("loads an unplaced item's own artwork and keeps the preview while paging", as
   }
 });
 
-it("keeps available artwork when one pattern cannot be decoded", async () => {
+it("keeps installed item artwork when an optional pattern cannot be decoded", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
@@ -193,7 +200,17 @@ it("keeps available artwork when one pattern cannot be decoded", async () => {
       ],
       definitions: {
         "1": { name: "Gun", kind: "Weapon", classes: [], icon },
-        "2": { name: "Paint", kind: "War Paint", classes: [], icon: pattern },
+        "2": { name: "Paint", kind: "War Paint", classes: [], icon },
+      },
+      itemDescriptions: {
+        paint: {
+          name: "Paint",
+          kind: "War Paint",
+          classes: [],
+          icon,
+          patternIcon: pattern,
+          details: ["Pattern swatch"],
+        },
       },
     }),
     getInventoryIcons,
@@ -208,14 +225,15 @@ it("keeps available artwork when one pattern cannot be decoded", async () => {
     expect(getInventoryIcons).toHaveBeenCalledWith([icon]);
     expect(getInventoryIcons).toHaveBeenCalledWith([pattern]);
     expect(box.querySelector('img[src="data:image/png;base64,ok"]')).not.toBeNull();
-    expect(box.textContent).toContain(
-      "Some item artwork is unavailable in the installed TF2 files.",
-    );
+    expect(box.textContent).not.toContain("Some item artwork is unavailable");
     expect(box.textContent).not.toContain("BridgeError");
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[aria-label="Paint, Decorated, slot 2"]')?.click(),
     );
     expect(getInventoryIcons.mock.calls.filter(([paths]) => paths[0] === pattern)).toHaveLength(1);
+    expect(box.querySelector('[aria-label="Item details"]')?.textContent).toContain(
+      "Pattern swatch unavailable in installed TF2 files.",
+    );
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -285,7 +303,7 @@ it("reveals the first slot only when the displayed page changes", async () => {
   }
 });
 
-it("shows kit target art and labeled illustrative paint without claiming rendered wear", async () => {
+it("shows kit target art and an installed paint swatch without claiming rendered wear", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
@@ -325,8 +343,8 @@ it("shows kit target art and labeled illustrative paint without claiming rendere
           name: "Painted Scattergun",
           kind: "Weapon",
           classes: [],
-          icon: paths.paint,
-          baseIcon: paths.base,
+          icon: paths.base,
+          patternIcon: paths.paint,
           details: ["Well-Worn"],
         },
       },
@@ -345,7 +363,9 @@ it("shows kit target art and labeled illustrative paint without claiming rendere
       root.render(<InventoryPane api={api} active running={false} busy={false} />),
     );
     expect(box.querySelector(".inventory-kit-target")).not.toBeNull();
-    expect(box.querySelector(".inventory-paint-masked")).not.toBeNull();
+    expect(box.querySelector(".inventory-paint-icon")).not.toBeNull();
+    expect(box.querySelector(".inventory-paint-swatch")).not.toBeNull();
+    expect(box.querySelector(".inventory-paint-only-swatch")).toBeNull();
     expect(box.textContent).toContain("Well-Worn");
     await act(async () =>
       box
@@ -354,7 +374,7 @@ it("shows kit target art and labeled illustrative paint without claiming rendere
     );
     expect(box.querySelector(".inventory-paint-swatch")).not.toBeNull();
     expect(box.querySelector('[aria-label="Item details"]')?.textContent).toContain(
-      "Actual weapon mapping, wear and effects are not rendered.",
+      "In-game mapping, wear and effects are not rendered.",
     );
   } finally {
     await act(async () => root.unmount());

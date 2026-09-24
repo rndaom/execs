@@ -42,6 +42,7 @@ import {
   hudInstallSourceCopy,
   hudOptionsDirty,
   hudPageLinks,
+  hudSchemaUnavailableReason,
   hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
@@ -401,6 +402,15 @@ export function HudPane({
                           {schema.author ? `Schema by ${schema.author}` : "Options"}
                         </p>
                       </div>
+                      {schema.sections.some((section) =>
+                        section.controls.some((control) => control.controlType === "crosshair"),
+                      ) ? (
+                        <p className="t-meta pt-3">
+                          HUD overlay crosshairs are drawn by the HUD and may appear alongside TF2’s
+                          crosshair. A glyph choice selects a shape in the installed HUD font; the
+                          character shown here is not a visual preview.
+                        </p>
+                      ) : null}
                       <div className="grid gap-x-6 pt-1">
                         {schema.sections.map((section) => (
                           <fieldset key={section.name} className="flex min-w-0 flex-col gap-2 py-2">
@@ -475,6 +485,35 @@ export function HudPane({
                                     htmlFor={`hud-opt-${control.name}`}
                                   >
                                     <span>{control.label}</span>
+                                    <select
+                                      id={`hud-opt-${control.name}`}
+                                      data-testid={`hud-opt-${control.name}`}
+                                      value={value}
+                                      onChange={(event) =>
+                                        setDraft((current) => ({
+                                          ...current,
+                                          [control.name]: event.target.value,
+                                        }))
+                                      }
+                                      className="field min-w-0 px-2 py-1.5 text-[13px] text-ink focus:outline-none disabled:opacity-50"
+                                    >
+                                      {control.choices.map((choice) => (
+                                        <option key={choice.value} value={choice.value}>
+                                          {choice.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                );
+                              }
+                              if (control.controlType === "crosshair") {
+                                return (
+                                  <label
+                                    key={control.name}
+                                    className="grid grid-cols-[minmax(0,1fr)_minmax(7rem,auto)] items-center gap-3 py-1 text-[13.5px] text-ink"
+                                    htmlFor={`hud-opt-${control.name}`}
+                                  >
+                                    <span>{control.label} · HUD overlay</span>
                                     <select
                                       id={`hud-opt-${control.name}`}
                                       data-testid={`hud-opt-${control.name}`}
@@ -621,7 +660,7 @@ export function HudPane({
                   </Disclosure>
                 ) : state.installed && !state.schemaSupported ? (
                   <p data-testid="hud-options-notes" className="t-meta section">
-                    No in-app options for this HUD.
+                    {hudSchemaUnavailableReason(state.installed.id)}
                   </p>
                 ) : null}
               </div>
@@ -836,7 +875,7 @@ export function HudPane({
                         }
                         disabled={!hasPictures}
                         onClick={() => setViewer({ entry, index: 0 })}
-                        className="block aspect-[16/7] w-full shrink-0 cursor-zoom-in overflow-hidden bg-panel disabled:cursor-default"
+                        className="block aspect-video w-full shrink-0 cursor-zoom-in overflow-hidden bg-panel disabled:cursor-default"
                       >
                         <HudPreview src={entry.banner} name={hudDisplayName(entry)} compact />
                       </button>
@@ -1170,7 +1209,7 @@ function HudPreview({
       alt={`${name} preview`}
       loading="lazy"
       onError={() => setFailedSource(src)}
-      className={compact ? "h-full w-full object-contain" : "aspect-video w-full object-contain"}
+      className={compact ? "h-full w-full object-cover" : "aspect-video w-full object-contain"}
     />
   ) : (
     <span
@@ -1305,10 +1344,14 @@ function HudLightbox({
   const active = useContext(AutosaveActivity);
   const [album, setAlbum] = useState<HudAlbumImage[] | null>(null);
   const [albumFailed, setAlbumFailed] = useState(false);
+  const [albumRefreshing, setAlbumRefreshing] = useState(false);
+  const albumRequest = useRef(0);
 
   useEffect(() => {
+    const request = ++albumRequest.current;
     setAlbum(null);
     setAlbumFailed(false);
+    setAlbumRefreshing(false);
     if (!entry.album) {
       return;
     }
@@ -1316,19 +1359,35 @@ function HudLightbox({
     api
       .getHudAlbum(entry.id)
       .then((images) => {
-        if (!cancelled) {
+        if (!cancelled && request === albumRequest.current) {
           setAlbum(images);
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && request === albumRequest.current) {
           setAlbumFailed(true);
         }
       });
     return () => {
       cancelled = true;
+      albumRequest.current++;
     };
   }, [api, entry.id, entry.album]);
+
+  async function refreshAlbum() {
+    if (!entry.album || albumRefreshing) return;
+    const request = ++albumRequest.current;
+    setAlbumRefreshing(true);
+    setAlbumFailed(false);
+    try {
+      const images = await api.getHudAlbum(entry.id, true);
+      if (request === albumRequest.current) setAlbum(images);
+    } catch {
+      if (request === albumRequest.current) setAlbumFailed(true);
+    } finally {
+      if (request === albumRequest.current) setAlbumRefreshing(false);
+    }
+  }
 
   // hud-db screenshots first; album pictures after, minus any that duplicate them.
   const pictures = useMemo(() => {
@@ -1368,7 +1427,9 @@ function HudLightbox({
     ? album === null && !albumFailed
       ? "Loading album…"
       : albumFailed
-        ? "Album could not load in-app."
+        ? album
+          ? "Album refresh failed; showing previous pictures."
+          : "Album could not load in-app."
         : album && album.length > 0
           ? `${album.length} from the author's album`
           : null
@@ -1387,6 +1448,18 @@ function HudLightbox({
     >
       <div className="absolute top-3 right-3">
         <div className="flex items-center gap-2">
+          {albumUrl ? (
+            <button
+              type="button"
+              data-testid="hud-lightbox-refresh"
+              disabled={albumRefreshing}
+              onClick={() => void refreshAlbum()}
+              className="btn btn-ghost"
+            >
+              <ArrowClockwise size={13} />
+              {albumRefreshing ? "Refreshing…" : "Refresh pictures"}
+            </button>
+          ) : null}
           {albumUrl && albumFailed ? (
             <button
               type="button"

@@ -4,6 +4,7 @@ import {
   failureMessage,
   SAVED_MESSAGE,
   SAVING_MESSAGE,
+  TOAST_DEFERRED_MS,
   TOAST_SAVED_MS,
   type Toast,
   toastDismissible,
@@ -63,6 +64,18 @@ describe("toastStep", () => {
     expect(first.toast).toEqual({ kind: "deferred", message: DEFERRED_MESSAGE });
     // Same object: React re-renders nothing on the next keystroke.
     expect(toastStep(first, { type: "defer" })).toBe(first);
+    const hidden = toastStep(first, { type: "hide", expected: first.toast ?? undefined });
+    expect(hidden.toast).toBeNull();
+    expect(hidden.deferred).toEqual(["default"]);
+    expect(toastStep(hidden, { type: "defer" })).toBe(hidden);
+  });
+
+  it("does not revive a faded draft notice after an unrelated save", () => {
+    const deferred = toastStep(toastInitial(), { type: "defer", source: "gameplay" });
+    const hidden = toastStep(deferred, { type: "hide", expected: deferred.toast ?? undefined });
+    const saved = toastStep(hidden, { type: "done", source: "sounds" });
+    expect(toastStep(saved, { type: "hide", expected: saved.toast ?? undefined }).toast).toBeNull();
+    expect(saved.deferred).toEqual(["gameplay"]);
   });
 
   it("replaces the draft notice with Saved once the lock lifts", () => {
@@ -99,25 +112,28 @@ describe("toastStep", () => {
     expect(toastStep(second, { type: "clear-source", source: "sounds" }).toast).toBe(first.toast);
   });
 
-  it("clears deferred feedback only after the final associated draft is resolved", () => {
+  it("tracks deferred drafts after the brief notice fades", () => {
     const first = toastStep(toastInitial(), { type: "defer", source: "hud" });
     const second = toastStep(first, { type: "defer", source: "sounds" });
-    const oneLeft = toastStep(second, { type: "resolve-draft", source: "hud" });
-    expect(oneLeft.toast?.kind).toBe("deferred");
-    expect(toastStep(oneLeft, { type: "resolve-draft", source: "sounds" }).toast).toBeNull();
+    const hidden = toastStep(second, { type: "hide", expected: second.toast ?? undefined });
+    const oneLeft = toastStep(hidden, { type: "resolve-draft", source: "hud" });
+    expect(oneLeft.deferred).toEqual(["sounds"]);
+    const resolved = toastStep(oneLeft, { type: "resolve-draft", source: "sounds" });
+    expect(resolved.deferred).toEqual([]);
+    expect(resolved.toast).toBeNull();
   });
 });
 
 describe("toastLingerMs", () => {
   it("fades Saved on its own", () => {
     expect(toastLingerMs({ kind: "saved", message: SAVED_MESSAGE })).toBe(TOAST_SAVED_MS);
+    expect(toastLingerMs({ kind: "deferred", message: DEFERRED_MESSAGE })).toBe(TOAST_DEFERRED_MS);
   });
 
-  it("leaves every other state waiting for an event", () => {
+  it("leaves saving and failures waiting for an event", () => {
     expect(toastLingerMs(null)).toBeNull();
     expect(toastLingerMs(SAVING)).toBeNull();
     expect(toastLingerMs(ERROR)).toBeNull();
-    expect(toastLingerMs({ kind: "deferred", message: DEFERRED_MESSAGE })).toBeNull();
   });
 });
 

@@ -25,6 +25,8 @@ function result(id: number, name = `Mod ${id}`, freshForMs = 600_000): GameBanan
         author: "Author",
         category: "Skins",
         categoryId: 7951,
+        subCategory: null,
+        route: "mod",
         likes: null,
         views: null,
         downloads: null,

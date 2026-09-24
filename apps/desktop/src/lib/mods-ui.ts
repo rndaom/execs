@@ -226,7 +226,8 @@ export function summarizeReport(report: PreloaderReport): string {
 // ---------------------------------------------------------------------------
 
 export function modSourceLabel(source: ModSource): string {
-  return source.kind === "gamebanana" ? "GameBanana" : "Local";
+  if (source.kind === "gamebanana") return "GameBanana";
+  return source.kind === "external" ? "External" : "Local";
 }
 
 /** The page a pack came from, when it has one. */
@@ -237,7 +238,7 @@ export function modSourceUrl(source: ModSource): string | null {
   return source.kind === "gamebanana" ? `https://gamebanana.com/mods/${source.id}` : null;
 }
 
-/** "Local · 12 MB" — where it came from, then how big it is. */
+/** Where a pack came from, then how big it is. */
 export function modMetaLine(mod: ModRecord): string {
   return `${modSourceLabel(mod.source)} · ${formatModBytes(mod.bytes)}`;
 }
@@ -331,6 +332,7 @@ export const PREVIEW_GAMEBANANA_CATEGORIES: GameBananaCategory[] = [
   { id: 1090, name: "Effects" },
   { id: 2774, name: "Game files" },
   { id: 587, name: "Textures" },
+  { id: 1644, name: "GUIs" },
 ];
 
 /** A 1×1 neutral pixel — one card in the fixtures has a picture. */
@@ -346,6 +348,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     author: "sparkplug",
     category: "Effects",
     categoryId: 1090,
+    subCategory: null,
+    route: "mod",
     likes: 1_284,
     views: 92_400,
     downloads: 41_300,
@@ -362,6 +366,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     author: "beancan",
     category: "Skins",
     categoryId: 7951,
+    subCategory: null,
+    route: "mod",
     likes: 861,
     views: 60_120,
     downloads: 22_940,
@@ -378,6 +384,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     author: "quietkid",
     category: "Sounds",
     categoryId: 2774,
+    subCategory: null,
+    route: "mod",
     likes: 402,
     views: 18_770,
     downloads: null,
@@ -394,6 +402,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     author: "sparkplug",
     category: "Effects",
     categoryId: 1090,
+    subCategory: null,
+    route: "mod",
     likes: 2_940,
     views: 210_500,
     downloads: 118_600,
@@ -410,6 +420,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     author: "oldworks",
     category: "Skins",
     categoryId: 7951,
+    subCategory: null,
+    route: "mod",
     likes: 178,
     views: 9_310,
     downloads: 4_220,
@@ -426,6 +438,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     author: "quietkid",
     category: "Sounds",
     categoryId: 2774,
+    subCategory: null,
+    route: "mod",
     likes: 96,
     views: 5_400,
     downloads: 1_870,
@@ -434,6 +448,42 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     modifiedAt: Math.floor(Date.UTC(2024, 4, 10) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/540019",
+    mature: false,
+  },
+  {
+    id: 700_100,
+    name: "Copper HUD",
+    author: "hudmaker",
+    category: "GUIs",
+    categoryId: 1644,
+    subCategory: "HUDs",
+    route: "hud",
+    likes: 155,
+    views: 9_800,
+    downloads: 1_500,
+    addedAt: Math.floor(Date.UTC(2026, 7, 14) / 1000),
+    updatedAt: null,
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/mods/700100",
+    mature: false,
+  },
+  {
+    id: 700_101,
+    name: "Class menu backgrounds",
+    author: "menuartist",
+    category: "GUIs",
+    categoryId: 1644,
+    subCategory: "Menus",
+    route: "manual",
+    likes: 70,
+    views: 3_000,
+    downloads: 540,
+    addedAt: Math.floor(Date.UTC(2026, 7, 10) / 1000),
+    updatedAt: null,
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/mods/700101",
     mature: false,
   },
   ...Array.from({ length: 18 }, (_, index): GameBananaMod => {
@@ -451,6 +501,8 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
       author: `creator${(index % 5) + 1}`,
       category: category.name,
       categoryId: category.id,
+      subCategory: null,
+      route: "mod",
       likes: index % 6 === 0 ? null : 240 - index * 7,
       views: index % 5 === 0 ? null : 8_000 - index * 113,
       downloads: index % 4 === 0 ? null : 4_000 - index * 97,

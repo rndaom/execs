@@ -1,7 +1,7 @@
 //! Regressions for incomplete inventories and case-only renames. These tests
 //! isolate both profiles and the live surface and never discover real Steam.
 use execs_core::absorb::{absorb_owned_to, absorb_packs_to, AbsorbOptions, PackChoice};
-use execs_core::mods::{install_mod_to, ModContent, ModRecord, ModSource};
+use execs_core::mods::{install_mod_to, remove_mod_to, ModContent, ModRecord, ModSource};
 use execs_core::profile::{
     create_profile_record_to, exclusive_file_path, load_manifest, save_current_as_to, ProfileError,
     SaveCurrentOptions,
@@ -48,14 +48,18 @@ impl Fixture {
         .unwrap()
     }
 
+    fn write(&self, rel: &str, bytes: &[u8]) {
+        let path = self.root.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+
     fn empty_profile(&self, current: &str) -> String {
-        create_profile_record_to(&self.profiles, &self.root, "Empty", unlocked())
-            .unwrap()
-            .profiles
-            .into_iter()
-            .find(|p| p.id != current)
-            .unwrap()
-            .id
+        let library =
+            create_profile_record_to(&self.profiles, &self.root, "Empty", unlocked()).unwrap();
+        let created = library.profiles.last().unwrap();
+        assert_ne!(created.id, current);
+        created.id.clone()
     }
 
     fn switch(&self, target: &str) {
@@ -162,6 +166,7 @@ impl Fixture {
             unlocked(),
             |next| {
                 next.hud = manifest.hud.clone();
+                next.crosshair = manifest.crosshair.clone();
                 next.hitsound = manifest.hitsound.clone();
                 next.viewmodel = manifest.viewmodel.clone();
                 Ok(())
@@ -207,6 +212,70 @@ fn accepted_mod_removal_exports_imports_and_switches_without_stale_records() {
         f.switch(&imported);
         f.switch(&id);
         assert!(!live.exists());
+        assert!(load_manifest(&f.profiles, &imported)
+            .unwrap()
+            .mods
+            .is_empty());
+    }
+}
+
+#[test]
+fn accepted_external_packs_get_stable_removable_records_through_export() {
+    for vpk in [false, true] {
+        let f = Fixture::new();
+        let id = f.save();
+        let pack = if vpk { "Outside.vpk" } else { "Outside" };
+        let rel = if vpk {
+            format!("tf/custom/{pack}")
+        } else {
+            format!("tf/custom/{pack}/materials/test.vmt")
+        };
+        let bytes = if vpk {
+            execs_core::vpk::write_vpk_v2(
+                &[("materials/test.vmt".into(), b"first".to_vec())]
+                    .into_iter()
+                    .collect(),
+            )
+        } else {
+            b"first".to_vec()
+        };
+        f.write(&rel, &bytes);
+        f.choose(PackChoice::Update);
+        let manifest = load_manifest(&f.profiles, &id).unwrap();
+        assert_eq!(manifest.mods.len(), 1);
+        let record = &manifest.mods[0];
+        assert_eq!(record.pack, pack);
+        assert_eq!(record.name, pack);
+        assert_eq!(record.source, ModSource::External);
+        assert!(record.id.starts_with("external-"));
+        assert_eq!(record.files, 1);
+        assert_eq!(record.bytes, bytes.len() as u64);
+        let stable_id = record.id.clone();
+
+        let second = if vpk {
+            execs_core::vpk::write_vpk_v2(
+                &[("materials/test.vmt".into(), b"second".to_vec())]
+                    .into_iter()
+                    .collect(),
+            )
+        } else {
+            b"second".to_vec()
+        };
+        f.write(&rel, &second);
+        f.absorb();
+        let updated = load_manifest(&f.profiles, &id).unwrap();
+        assert_eq!(updated.mods.len(), 1);
+        assert_eq!(updated.mods[0].id, stable_id);
+        assert_eq!(updated.mods[0].bytes, second.len() as u64);
+
+        let imported = f.round_trip(&id);
+        f.switch(&imported);
+        assert_eq!(
+            load_manifest(&f.profiles, &imported).unwrap().mods[0].id,
+            stable_id
+        );
+        remove_mod_to(&f.profiles, &f.root, &imported, &stable_id, unlocked()).unwrap();
+        assert!(!f.root.join(&rel).exists());
         assert!(load_manifest(&f.profiles, &imported)
             .unwrap()
             .mods
@@ -344,11 +413,13 @@ fn managed_sound_and_viewmodel_deletions_self_heal_and_keep_records() {
     let id = f.save();
     let mut before = load_manifest(&f.profiles, &id).unwrap();
     before.hitsound = Some(HitsoundRecord {
+        source_changed: false,
         hit: Some(HitsoundEntry::new("sound".into(), HitsoundSource::File)),
         kill: None,
     });
     before.viewmodel = Some(ViewmodelRecord {
         id: "execs-viewmodels".into(),
+        source_changed: false,
         source: ViewmodelSource::Imported,
         preload: false,
         options: Default::default(),
@@ -367,6 +438,81 @@ fn managed_sound_and_viewmodel_deletions_self_heal_and_keep_records() {
     assert_eq!(
         fs::read(f.root.join(EXECS_VIEWMODELS_VPK)).unwrap(),
         b"original viewmodel bytes"
+    );
+}
+
+#[test]
+fn accepted_managed_payload_drift_marks_feature_sources_unverified() {
+    use execs_core::hitsound::{HitsoundEntry, HitsoundRecord, HitsoundSource, HITSOUND_REL};
+    use execs_core::profile::{ViewmodelRecord, ViewmodelSource};
+    use execs_core::viewmodel::EXECS_VIEWMODELS_VPK;
+    let f = Fixture::new();
+    let crosshair = "tf/custom/execs-crosshairs/materials/cross.vtf";
+    f.write(crosshair, b"original crosshair");
+    f.write(HITSOUND_REL, b"original sound");
+    f.write(EXECS_VIEWMODELS_VPK, b"original viewmodel");
+    let id = f.save();
+    let mut before = load_manifest(&f.profiles, &id).unwrap();
+    before.crosshair = Some(
+        serde_json::from_str(r#"{"id":"execs-crosshairs","shape":"cross","assignments":{}}"#)
+            .unwrap(),
+    );
+    before.viewmodel = Some(ViewmodelRecord {
+        id: "execs-viewmodels".into(),
+        source_changed: false,
+        source: ViewmodelSource::Imported,
+        preload: false,
+        options: Default::default(),
+    });
+    before.hitsound = Some(HitsoundRecord {
+        source_changed: false,
+        hit: Some(HitsoundEntry::new("old".into(), HitsoundSource::File)),
+        kill: None,
+    });
+    f.save_metadata(&before);
+    f.write(crosshair, b"changed crosshair");
+    f.write(HITSOUND_REL, b"changed sound");
+    f.write(EXECS_VIEWMODELS_VPK, b"changed viewmodel");
+    f.absorb();
+    let after = load_manifest(&f.profiles, &id).unwrap();
+    assert!(after.crosshair.unwrap().source_changed);
+    assert!(after.viewmodel.unwrap().source_changed);
+    assert!(after.hitsound.unwrap().source_changed);
+    assert_eq!(
+        fs::read(exclusive_file_path(&f.profiles, &id, crosshair)).unwrap(),
+        b"changed crosshair"
+    );
+}
+
+#[test]
+fn external_gameplay_edit_marks_crosshair_only_for_relevant_cvars() {
+    let f = Fixture::new();
+    let gameplay = "tf/cfg/execs_gameplay.cfg";
+    f.write(gameplay, b"fov_desired 90\ncl_crosshair_scale 32\n");
+    let id = f.save();
+    let mut manifest = load_manifest(&f.profiles, &id).unwrap();
+    manifest.crosshair = Some(
+        serde_json::from_str(r#"{"id":"execs-crosshairs","shape":"cross","assignments":{}}"#)
+            .unwrap(),
+    );
+    f.save_metadata(&manifest);
+    f.write(gameplay, b"fov_desired 100\ncl_crosshair_scale 32\n");
+    f.absorb();
+    assert!(
+        !load_manifest(&f.profiles, &id)
+            .unwrap()
+            .crosshair
+            .unwrap()
+            .source_changed
+    );
+    f.write(gameplay, b"fov_desired 100\ncl_crosshair_scale 40\n");
+    f.absorb();
+    assert!(
+        load_manifest(&f.profiles, &id)
+            .unwrap()
+            .crosshair
+            .unwrap()
+            .source_changed
     );
 }
 
@@ -435,7 +581,10 @@ fn rename_to_dashed_peer_drops_only_old_record_and_preserves_new_bytes() {
     let renamed = f.root.join("tf/custom").join(format!("-{pack}"));
     fs::rename(f.root.join("tf/custom").join(&pack), &renamed).unwrap();
     f.choose(PackChoice::Update);
-    assert!(load_manifest(&f.profiles, &id).unwrap().mods.is_empty());
+    let manifest = load_manifest(&f.profiles, &id).unwrap();
+    assert_eq!(manifest.mods.len(), 1);
+    assert_eq!(manifest.mods[0].pack, format!("-{pack}"));
+    assert_eq!(manifest.mods[0].source, ModSource::External);
     let imported = f.round_trip(&id);
     f.switch(&imported);
     assert_eq!(

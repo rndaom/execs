@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
 import { OperationError } from "./components/ui/OperationError";
 import { OptionTile } from "./components/ui/OptionTile";
@@ -6,7 +5,7 @@ import { PaneSection } from "./components/ui/PaneSection";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { openExternal, type StartFrom, type WizardSpec } from "./lib/bridge";
-import { comfigPresetById, presetListExpanded, visibleComfigPresets } from "./lib/comfig-catalog";
+import { COMFIG_PRESETS, comfigPresetById } from "./lib/comfig-catalog";
 import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import {
   type ComfigPresetId,
@@ -44,14 +43,8 @@ export function SetupWizard({
   onCancel?: () => void;
 }) {
   const { running, busy, error, dismissError } = useAppStatus();
-  const [showAllPresets, setShowAllPresets] = useState(false);
   const canApply = canApplyWizard(draftName, running, busy);
-  const presets = visibleComfigPresets(preset, showAllPresets);
-  const expanded = presetListExpanded(preset, showAllPresets);
   const selectedPreset = comfigPresetById(preset);
-  // A preset outside the featured four forces the list open, so there is
-  // nothing to collapse back to.
-  const canCollapsePresets = !presetListExpanded(preset, false);
 
   return (
     <OnboardingFrame
@@ -156,22 +149,9 @@ export function SetupWizard({
               title="Preset"
               description="Sets the default for every module."
               first={!(startFrom && onStartFrom)}
-              meta={
-                canCollapsePresets ? (
-                  <button
-                    type="button"
-                    data-testid="wizard-show-all-presets"
-                    onClick={() => setShowAllPresets((current) => !current)}
-                    disabled={busy}
-                    className="btn btn-ghost"
-                  >
-                    {expanded ? "Show core presets" : "Show all presets"}
-                  </button>
-                ) : null
-              }
             >
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {presets.map((item) => (
+                {COMFIG_PRESETS.map((item) => (
                   <OptionTile
                     key={item.id}
                     id={`comfig-preset-${item.id}`}
@@ -214,6 +194,7 @@ export function SetupWizard({
                 />
               ))}
             </div>
+            <p className="t-meta mt-3">Manage official addons later in Comfig.</p>
           </PaneSection>
         </div>
 

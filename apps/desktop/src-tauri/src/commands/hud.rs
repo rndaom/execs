@@ -82,13 +82,19 @@ pub async fn get_hud_stats(
 /// The pictures behind a HUD's external album (Imgur, or a GitHub showcase
 /// page), so the lightbox can show them in-app instead of linking out.
 #[tauri::command]
-pub async fn get_hud_album(id: String) -> Result<Vec<crate::hud_fetch::AlbumImage>, CommandError> {
+pub async fn get_hud_album(
+    id: String,
+    refresh: Option<bool>,
+) -> Result<Vec<crate::hud_fetch::AlbumImage>, CommandError> {
     blocking(move || {
         let entry = crate::hud_fetch::catalog_entry(&id)?;
         let Some(album) = entry.album else {
             return Ok(Vec::new());
         };
-        Ok(crate::hud_fetch::fetch_hud_album(&album)?)
+        Ok(crate::hud_fetch::fetch_hud_album(
+            &album,
+            refresh.unwrap_or(false),
+        )?)
     })
     .await
 }

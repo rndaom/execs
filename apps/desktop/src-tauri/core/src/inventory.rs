@@ -32,8 +32,8 @@ pub struct ItemDescription {
     #[serde(flatten)]
     pub definition: Definition,
     pub details: Vec<String>,
-    /// Installed artwork for the unpainted item, if a paint pattern replaces it.
-    pub base_icon: Option<String>,
+    /// Installed paint texture, shown only as a swatch beside the item icon.
+    pub pattern_icon: Option<String>,
     /// Installed artwork for a kit or fabricator's target weapon.
     pub target_icon: Option<String>,
 }
@@ -119,7 +119,7 @@ pub fn metadata(root: &Path, inputs: &[ItemInput<'_>]) -> Result<Metadata, Strin
         let mut description = ItemDescription {
             definition: base.clone(),
             details: Vec::new(),
-            base_icon: None,
+            pattern_icon: None,
             target_icon: None,
         };
         let attributes: Vec<_> = attributes
@@ -305,7 +305,6 @@ fn enrich(
     tokens: &VdfMap,
 ) {
     if let Some(paint) = bits(attributes, 834) {
-        description.base_icon = description.definition.icon.clone();
         let name = paint_names.get(&paint).and_then(|paint| {
             string(
                 paint_tokens,
@@ -318,10 +317,10 @@ fn enrich(
                 .unwrap_or_else(|| format!("Pattern {paint}")),
             description.definition.name
         );
-        description.definition.icon = paint_names.get(&paint).and_then(|paint| paint.icon.clone());
+        description.pattern_icon = paint_names.get(&paint).and_then(|paint| paint.icon.clone());
         description.details.push(
-            if description.definition.icon.is_some() {
-                "Pattern swatch · wear not shown"
+            if description.pattern_icon.is_some() {
+                "Installed pattern swatch · wear not shown"
             } else {
                 "Pattern preview unavailable"
             }
@@ -578,7 +577,7 @@ mod tests {
                 icon: Some("materials/backpack/base.vtf".into()),
             },
             details: vec![],
-            base_icon: None,
+            pattern_icon: None,
             target_icon: None,
         }
     }
@@ -601,7 +600,7 @@ mod tests {
             42,
             paintkits::Paint {
                 name: "#PaintName".into(),
-                icon: None,
+                icon: Some("materials/patterns/wood.vtf".into()),
             },
         )]
         .into_iter()
@@ -616,8 +615,14 @@ mod tests {
             &tokens,
         );
         assert_eq!(painted.definition.name, "Woodland War Paint");
-        assert!(painted.definition.icon.is_none());
-        assert_eq!(painted.base_icon.as_deref(), Some("materials/backpack/base.vtf"));
+        assert_eq!(
+            painted.definition.icon.as_deref(),
+            Some("materials/backpack/base.vtf")
+        );
+        assert_eq!(
+            painted.pattern_icon.as_deref(),
+            Some("materials/patterns/wood.vtf")
+        );
         assert!(painted.details.contains(&"Minimal Wear".into()));
         let mut kit = description("Kit");
         enrich(
@@ -633,7 +638,10 @@ mod tests {
             "Professional Killstreak Kit · Rocket Launcher"
         );
         assert!(kit.details.contains(&"Sheen: Hot Rod".into()));
-        assert_eq!(kit.target_icon.as_deref(), Some("materials/backpack/base.vtf"));
+        assert_eq!(
+            kit.target_icon.as_deref(),
+            Some("materials/backpack/base.vtf")
+        );
         assert!(float_id(&[(2012, &f32::NAN.to_le_bytes())], 2012).is_none());
         assert!(float_id(&[(2012, &18.5f32.to_le_bytes())], 2012).is_none());
         assert!(bits(&[(834, &paint), (834, &paint)], 834).is_none());

@@ -11,6 +11,7 @@ import {
   type CrosshairFile,
   clampGameplay,
   type GameplaySettings,
+  isStockCrosshairFile,
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
@@ -97,6 +98,10 @@ export function CrosshairControls({
   // logs it as an unknown command.
   const color = `rgb(${draft.cl_crosshair_red}, ${draft.cl_crosshair_green}, ${draft.cl_crosshair_blue})`;
   const primitives = stockCrosshairPrimitives(draft.cl_crosshair_file);
+  const externalFile = !isStockCrosshairFile(draft.cl_crosshair_file);
+  const fileLabel = isStockCrosshairFile(draft.cl_crosshair_file)
+    ? STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]
+    : `External: ${draft.cl_crosshair_file}`;
   const sprite =
     draft.cl_crosshair_file === "" ? null : (sprites?.[draft.cl_crosshair_file] ?? null);
   const renderedSize = stockCrosshairRenderedSize(draft.cl_crosshair_scale);
@@ -171,8 +176,28 @@ export function CrosshairControls({
                       </label>
                     );
                   })}
+                  {externalFile ? (
+                    <label className="thumb thumb-selected col-span-2" title={fileLabel}>
+                      <input
+                        aria-label={fileLabel}
+                        type="radio"
+                        name="stock-crosshair-file"
+                        data-testid="stock-crosshair-external"
+                        checked
+                        readOnly
+                        className="sr-only"
+                      />
+                      <span
+                        className="thumb-art grid place-items-center text-[11px] text-ink-faint"
+                        aria-hidden="true"
+                      >
+                        External material
+                      </span>
+                      <span className="thumb-label truncate">{fileLabel}</span>
+                    </label>
+                  ) : null}
                 </div>
-                <p className="t-meta mt-2">{STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}</p>
+                <p className="t-meta mt-2">{fileLabel}</p>
               </fieldset>
             ) : null}
 
@@ -200,7 +225,7 @@ export function CrosshairControls({
             <div
               data-testid="stock-crosshair-preview"
               role="img"
-              aria-label={`Preview of ${STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]} at scale ${draft.cl_crosshair_scale}`}
+              aria-label={`Preview of ${fileLabel} at scale ${draft.cl_crosshair_scale}`}
               className="surface relative grid aspect-video w-full place-items-center overflow-hidden bg-bg"
               style={{ containerType: "inline-size" }}
             >
@@ -227,7 +252,9 @@ export function CrosshairControls({
                 />
               ) : (
                 <p className="t-meta relative max-w-48 rounded-md bg-bg/80 px-3 py-2 text-center">
-                  Each weapon draws its own crosshair.
+                  {externalFile
+                    ? "External material preview unavailable. Your selection is preserved."
+                    : "Each weapon draws its own crosshair."}
                 </p>
               )}
               <span className="eyebrow absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5">
@@ -236,11 +263,7 @@ export function CrosshairControls({
             </div>
           )}
           <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-ink-faint">
-            <span>
-              {custom
-                ? "Custom · size applies to every weapon"
-                : STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}
-            </span>
+            <span>{custom ? "Custom · size applies to every weapon" : fileLabel}</span>
           </div>
           {previewActions}
         </div>

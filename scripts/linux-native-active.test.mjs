@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
+import { isClosedWindowClickResponseLoss } from "./linux-native-active.mjs";
 import {
   parseOwnedProcessRows,
   selectOwnedMainWindow,
@@ -20,6 +21,33 @@ import {
   waitForEditorRetention,
 } from "./linux-native-active-input.mjs";
 import { activeCaptureSettled, activeRuntimePreflight } from "./linux-native-active-runtime.mjs";
+
+test("close click accepts bounded response loss only after separate process exit proof", () => {
+  assert.equal(
+    isClosedWindowClickResponseLoss(
+      new Error("POST /session/5375/element/node-0/click: unknown error: "),
+    ),
+    true,
+  );
+  assert.equal(isClosedWindowClickResponseLoss(new Error("no such window")), true);
+  assert.equal(isClosedWindowClickResponseLoss(new Error("invalid session id")), true);
+  assert.equal(
+    isClosedWindowClickResponseLoss(
+      new Error("POST /session/5375/element/node-0/click: unknown error: still open"),
+    ),
+    false,
+  );
+  assert.equal(
+    isClosedWindowClickResponseLoss(new Error("GET /session/5375/screenshot: unknown error: ")),
+    false,
+  );
+  assert.equal(
+    isClosedWindowClickResponseLoss(
+      new Error("POST /session/5375/element/node-0/click: element not interactable"),
+    ),
+    false,
+  );
+});
 
 test("native key chords release modifiers after bounded repeated selection input", async () => {
   const calls = [];

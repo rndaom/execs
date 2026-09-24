@@ -76,11 +76,13 @@ export type ModsPaneProps = {
   onImportFolder: () => void;
   onRemoveMod: (id: string) => void;
   /** Resolves once the install and the profile reload behind it finished. */
-  onInstallGameBananaMod: (id: number) => Promise<ModInstallResult>;
+  onInstallGameBananaMod: (id: number, fileId: number) => Promise<ModInstallResult>;
   /** A refused mod payload that must use the HUD replacement review. */
   hudImportRequired?: string | null;
   onReviewHudImport?: () => void;
   onDismissHudImport?: () => void;
+  /** Navigate from Viewmodels directly to the shared Casual preload control. */
+  casualOpenRequest?: number;
 };
 
 type ModsTask = "browse" | "installed" | "casual";
@@ -113,6 +115,7 @@ export function ModsPane({
   hudImportRequired,
   onReviewHudImport,
   onDismissHudImport,
+  casualOpenRequest,
 }: ModsPaneProps) {
   const { running, busy } = useAppStatus();
   const canWrite = useCanWrite();
@@ -140,6 +143,9 @@ export function ModsPane({
   const selection = visibleModSelection(draft, particleSources);
   const { addons, particleMods, profileParticleMods } = selection;
   const [task, setTask] = useState<ModsTask>("browse");
+  useEffect(() => {
+    if (casualOpenRequest) setTask("casual");
+  }, [casualOpenRequest]);
   const [confirmRestore, setConfirmRestore] = useState(false);
   // Steam's verify runs outside the app; while it does, poll the status and,
   // once every stale file reads as stock again, put the selection back.
@@ -272,7 +278,7 @@ export function ModsPane({
         <ClassTabs
           tabs={[
             { id: "browse", label: "Browse" },
-            { id: "installed", label: "Installed", meta: mods.length },
+            { id: "installed", label: "Custom packs", meta: mods.length },
             { id: "casual", label: "Casual setup", meta: dirty ? "Draft" : undefined },
           ]}
           selected={task}
@@ -450,6 +456,8 @@ export function ModsPane({
             running={running}
             previewData={previewData}
             onInstall={onInstallGameBananaMod}
+            onOpenHud={onReviewHudImport}
+            onManualImport={onImportArchive}
             onManageInstalled={() => setTask("installed")}
           />
         </div>

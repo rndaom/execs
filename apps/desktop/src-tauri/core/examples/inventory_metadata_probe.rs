@@ -53,7 +53,7 @@ fn main() {
             .icon
             .as_ref()
             .is_some_and(|path| variant_icons.contains_key(path)),
-        "installed paint swatch must decode"
+        "installed war paint icon must decode"
     );
     for description in variants.item_descriptions.values() {
         println!(

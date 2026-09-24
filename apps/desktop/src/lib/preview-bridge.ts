@@ -13,6 +13,7 @@ import {
   BridgeError,
   type ComfigState,
   type FilesSource,
+  type GameBananaDownloadVariant,
   type GameBananaMod,
   type GameBananaSort,
   type HitsoundRecord,
@@ -190,6 +191,8 @@ export function createPreviewApi(state: PreviewState): Api {
         storage: "exclusive" as const,
       })),
       hud: hudState.installed,
+      hudRoots: hudState.installed ? [hudState.installed.id] : [],
+      selectedHudRoot: hudState.installed?.id ?? null,
       crosshair,
       viewmodel,
       hitsound,
@@ -691,7 +694,7 @@ export function createPreviewApi(state: PreviewState): Api {
     async getHudState() {
       return { ...hudState, profileId: requireDetail().id };
     },
-    async getHudAlbum() {
+    async getHudAlbum(_id, _refresh = false) {
       return [];
     },
     async getHudStats() {
@@ -806,6 +809,12 @@ export function createPreviewApi(state: PreviewState): Api {
     async getStockCrosshairSprites() {
       throw notInPreview("Stock crosshair sprites");
     },
+    async getCrosshairContentSources() {
+      return { hits: {}, incomplete: [] };
+    },
+    async getCrosshairSourceStatus() {
+      return { state: crosshair ? ("unverified" as const) : ("none" as const) };
+    },
     async removeCrosshairs() {
       crosshair = null;
       return requireDetail();
@@ -850,13 +859,6 @@ export function createPreviewApi(state: PreviewState): Api {
     async viewmodelBuildAvailable() {
       return true;
     },
-    async setViewmodelPreload(enabled: boolean) {
-      if (viewmodel) {
-        viewmodel = { ...viewmodel, preload: enabled };
-      }
-      return requireDetail();
-    },
-
     // --- hit and kill sounds ------------------------------------------------
     async hitsoundBytes() {
       throw notInPreview("Auditioning sounds");
@@ -871,6 +873,9 @@ export function createPreviewApi(state: PreviewState): Api {
       // Every stock effect is "present" in preview; nothing can play anyway.
       const { STOCK_HITSOUND_EFFECTS } = await import("./hitsound-ui");
       return STOCK_HITSOUND_EFFECTS.flatMap((effect) => [effect.hit, effect.kill]);
+    },
+    async getHitsoundSources() {
+      return { hits: {}, incomplete: [] };
     },
     async pickHitsoundFile() {
       throw notInPreview("Picking a sound file");
@@ -899,6 +904,10 @@ export function createPreviewApi(state: PreviewState): Api {
       apply("kill", kill);
       hitsound = next.hit || next.kill ? next : null;
       return requireDetail();
+    },
+    async applyHitsoundsWithSettings(path, text, expectedProfileId, hit, kill) {
+      await api.writeManagedCfg(path, text, expectedProfileId, "sounds");
+      return api.applyHitsounds(hit, kill);
     },
     async removeHitsounds() {
       hitsound = null;
@@ -971,9 +980,37 @@ export function createPreviewApi(state: PreviewState): Api {
     async gameBananaModCategories() {
       return PREVIEW_GAMEBANANA_CATEGORIES;
     },
-    async installGameBananaMod(id: number) {
+    async gameBananaDownloadVariants(id: number): Promise<GameBananaDownloadVariant[]> {
       const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
-      if (!listing) {
+      if (listing?.route !== "mod") {
+        throw notInPreview(`GameBanana files for ${id}`);
+      }
+      const files: GameBananaDownloadVariant[] = [
+        {
+          id: id * 10 + 1,
+          fileName: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.zip`,
+          description: "Main version from the author",
+          sizeBytes: 4_200_000,
+          addedAt: listing.addedAt,
+          supported: true,
+        },
+      ];
+      if (id === 700_000) {
+        files.push({
+          id: id * 10 + 2,
+          fileName: "alternate-layout.7z",
+          description: "Alternate layout from the author",
+          sizeBytes: 3_100_000,
+          addedAt: listing.addedAt,
+          supported: true,
+        });
+      }
+      return files;
+    },
+    async installGameBananaMod(id: number, fileId: number) {
+      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
+      const variants = await this.gameBananaDownloadVariants(id);
+      if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
         throw notInPreview(`Installing mod ${id}`);
       }
       if (!mods.some((mod) => mod.source.kind === "gamebanana" && mod.source.id === id)) {

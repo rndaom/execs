@@ -2,7 +2,7 @@ import { ArrowClockwise, MagnifyingGlass, Package, SlidersHorizontal } from "@ph
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameBananaBrowser } from "../hooks/useGameBananaBrowser";
 import type { Api } from "../lib/api";
-import type { ModRecord } from "../lib/bridge";
+import type { GameBananaDownloadVariant, GameBananaMod, ModRecord } from "../lib/bridge";
 import { openExternal } from "../lib/bridge";
 import {
   GAMEBANANA_SORTS,
@@ -13,6 +13,7 @@ import {
 } from "../lib/gamebanana-browser-ui";
 import {
   foldCategories,
+  formatModBytes,
   isGameBananaInstalled,
   type ModInstallResult,
   modMetaLine,
@@ -20,6 +21,7 @@ import {
 import { GameBananaCard, type GameBananaInstallState } from "./GameBananaCard";
 import { GameBananaPagination } from "./GameBananaPagination";
 import { Alert } from "./ui/Alert";
+import { Modal } from "./ui/Modal";
 import { Segmented } from "./ui/Segmented";
 import { Switch } from "./ui/Switch";
 
@@ -35,6 +37,8 @@ export function GameBananaBrowser({
   running,
   previewData = false,
   onInstall,
+  onOpenHud,
+  onManualImport,
   onManageInstalled,
 }: {
   api: Api;
@@ -46,7 +50,9 @@ export function GameBananaBrowser({
   running: boolean;
   previewData?: boolean;
   /** Resolves after both the install and profile reload complete. */
-  onInstall: (id: number) => Promise<ModInstallResult>;
+  onInstall: (id: number, fileId: number) => Promise<ModInstallResult>;
+  onOpenHud?: () => void;
+  onManualImport?: () => void;
   onManageInstalled?: () => void;
 }) {
   const browser = useGameBananaBrowser({ api, active });
@@ -57,6 +63,12 @@ export function GameBananaBrowser({
     state: GameBananaInstallState;
   } | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [chooser, setChooser] = useState<{
+    mod: GameBananaMod;
+    variants: GameBananaDownloadVariant[];
+    selectedId: number | null;
+  } | null>(null);
+  const choiceToken = useRef(0);
   const focusAfterPage = useRef(false);
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
@@ -65,12 +77,30 @@ export function GameBananaBrowser({
     browser.goToPage(next);
   }
 
-  async function installMod(id: number, name: string) {
+  async function prepareInstall(mod: GameBananaMod) {
+    const token = ++choiceToken.current;
+    setInstall({ id: mod.id, state: "loading" });
+    setAnnouncement(`Loading files for ${mod.name}.`);
+    try {
+      const variants = await api.gameBananaDownloadVariants(mod.id);
+      if (token !== choiceToken.current) return;
+      setChooser({ mod, variants, selectedId: null });
+      setInstall(null);
+      setAnnouncement(`Choose a file for ${mod.name}.`);
+    } catch {
+      if (token !== choiceToken.current) return;
+      setInstall({ id: mod.id, state: "failed" });
+      setAnnouncement(`Could not load files for ${mod.name}. Retry is available on its card.`);
+    }
+  }
+
+  async function installMod(id: number, name: string, fileId: number) {
+    setChooser(null);
     setInstall({ id, state: "installing" });
     setAnnouncement(`Installing ${name}.`);
     let result: ModInstallResult = false;
     try {
-      result = await onInstall(id);
+      result = await onInstall(id, fileId);
     } catch {
       result = false;
     }
@@ -85,6 +115,13 @@ export function GameBananaBrowser({
       setAnnouncement(`${name} could not be installed. Retry is available on its card.`);
     }
   }
+
+  useEffect(() => {
+    if (active) return;
+    choiceToken.current += 1;
+    setChooser(null);
+    setInstall(null);
+  }, [active]);
 
   // Only paging moves focus. Search, sort, category and mature filters leave the
   // user's current control alone so typing is never interrupted.
@@ -349,18 +386,22 @@ export function GameBananaBrowser({
                 running={running}
                 installState={install?.id === mod.id ? install.state : "idle"}
                 onView={() => void openExternal(mod.url)}
-                onInstall={() => void installMod(mod.id, mod.name)}
+                onInstall={() => void prepareInstall(mod)}
+                onRoute={() => {
+                  if (mod.route === "hud") onOpenHud?.();
+                  else onManualImport?.();
+                }}
               />
             ))}
           </div>
           {onManageInstalled ? (
             <aside
               className="surface hidden min-w-0 p-3 xl:block"
-              aria-label="Installed mods summary"
+              aria-label="Custom packs summary"
             >
               <div className="flex items-center justify-between gap-2 border-b border-edge pb-3">
                 <h3 className="t-row">
-                  Installed <span className="t-meta tnum ml-1">{installed.length}</span>
+                  Custom packs <span className="t-meta tnum ml-1">{installed.length}</span>
                 </h3>
                 <button type="button" className="btn btn-quiet px-2" onClick={onManageInstalled}>
                   Manage
@@ -408,6 +449,77 @@ export function GameBananaBrowser({
           loading={browser.loading}
           onPage={goToPage}
         />
+      ) : null}
+
+      {chooser ? (
+        <Modal
+          open
+          title={`Choose a file for ${chooser.mod.name}`}
+          description="GameBanana authors may offer separate versions or optional addons. Choose the intended VPK, ZIP, or 7z before downloading."
+          testId="mods-gb-file-choice"
+          onClose={() => setChooser(null)}
+        >
+          <div className="max-h-[55vh] space-y-2 overflow-y-auto py-4">
+            {chooser.variants.map((variant) => (
+              <label
+                key={variant.id}
+                className="flex cursor-pointer items-start gap-3 rounded border border-edge p-3"
+              >
+                <input
+                  type="radio"
+                  name="gamebanana-file"
+                  value={variant.id}
+                  checked={chooser.selectedId === variant.id}
+                  disabled={!variant.supported}
+                  onChange={() =>
+                    setChooser((current) =>
+                      current ? { ...current, selectedId: variant.id } : current,
+                    )
+                  }
+                />
+                <span className="min-w-0">
+                  <span className="block break-all text-sm text-ink">{variant.fileName}</span>
+                  {variant.description ? (
+                    <span className="t-meta mt-1 block whitespace-pre-wrap break-words">
+                      {variant.description}
+                    </span>
+                  ) : null}
+                  <span className="t-meta mt-1 block">
+                    {variant.sizeBytes === null
+                      ? "Size unknown"
+                      : formatModBytes(variant.sizeBytes)}
+                    {!variant.supported ? " · Not supported for Mods" : ""}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-edge pt-3">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => void openExternal(chooser.mod.url)}
+            >
+              Author’s page
+            </button>
+            <button type="button" className="btn btn-quiet" onClick={() => setChooser(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="mods-gb-install-selected"
+              disabled={chooser.selectedId === null || locked}
+              onClick={() => {
+                if (chooser.selectedId !== null) {
+                  void installMod(chooser.mod.id, chooser.mod.name, chooser.selectedId);
+                }
+              }}
+            >
+              Download and install
+            </button>
+          </div>
+        </Modal>
       ) : null}
 
       <p className="t-meta mt-6 text-ink-faint">

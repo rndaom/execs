@@ -1,4 +1,4 @@
-import type { CrosshairFile } from "./gameplay-ui";
+import type { StockCrosshairFile } from "./gameplay-ui";
 
 /**
  * Frame-0 geometry of Valve's stock crosshair sprites, extracted from
@@ -18,7 +18,7 @@ const ARM_LEFT: StockShapePrimitive = { kind: "rect", x: 17, y: 31, w: 10, h: 2 
 const ARM_RIGHT: StockShapePrimitive = { kind: "rect", x: 37, y: 31, w: 10, h: 2 };
 const CENTER_DOT: StockShapePrimitive = { kind: "rect", x: 31, y: 31, w: 2, h: 2 };
 
-const STOCK_CROSSHAIR_SHAPES: Record<Exclude<CrosshairFile, "">, StockShapePrimitive[]> = {
+const STOCK_CROSSHAIR_SHAPES: Record<Exclude<StockCrosshairFile, "">, StockShapePrimitive[]> = {
   crosshair1: [ARM_TOP, ARM_BOTTOM, ARM_LEFT, ARM_RIGHT, CENTER_DOT],
   crosshair2: [ARM_BOTTOM, ARM_LEFT, ARM_RIGHT, CENTER_DOT],
   crosshair3: [{ kind: "ring", cx: 32, cy: 32, r: 5.5, stroke: 2 }],
@@ -35,11 +35,11 @@ const STOCK_CROSSHAIR_SHAPES: Record<Exclude<CrosshairFile, "">, StockShapePrimi
 };
 
 /** null means "Weapon default": each weapon draws its own sprite crosshair. */
-export function stockCrosshairPrimitives(file: CrosshairFile): StockShapePrimitive[] | null {
+export function stockCrosshairPrimitives(file: string): StockShapePrimitive[] | null {
   if (file === "") {
     return null;
   }
-  return STOCK_CROSSHAIR_SHAPES[file];
+  return STOCK_CROSSHAIR_SHAPES[file as Exclude<StockCrosshairFile, "">] ?? null;
 }
 
 /**
@@ -50,7 +50,7 @@ export function stockCrosshairRenderedSize(scale: number, spriteSize = 64): numb
   return Math.round((spriteSize * scale) / 32);
 }
 
-export const STOCK_CROSSHAIR_LABELS: Record<CrosshairFile, string> = {
+export const STOCK_CROSSHAIR_LABELS: Record<StockCrosshairFile, string> = {
   "": "Weapon default",
   crosshair1: "Cross with gaps + dot",
   crosshair2: "Three-arm cross + dot",

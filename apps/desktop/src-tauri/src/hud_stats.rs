@@ -793,6 +793,7 @@ mod tests {
                     "name": id, "author": "author", "repo": repository, "hash": ""
                 })
                 .to_string(),
+                "1111111111111111111111111111111111111111",
             )
             .unwrap()
         };

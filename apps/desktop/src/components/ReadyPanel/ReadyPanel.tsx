@@ -275,6 +275,7 @@ export function ReadyPanel({
           running ||
           profiles.importing ||
           profiles.importStage === "done" ||
+          profiles.switchHandoff !== null ||
           profiles.packPromptDeferred
             ? null
             : profiles.packPrompt
@@ -283,6 +284,51 @@ export function ReadyPanel({
         onChoice={(choice) => void profiles.answerPackPrompt(choice)}
         onDefer={profiles.deferPackPrompt}
       />
+
+      <Modal
+        open={profiles.switchHandoff !== null}
+        role="alertdialog"
+        testId="switch-handoff-prompt"
+        title={
+          profiles.switchHandoff?.kind === "kept"
+            ? "Capture kept packs before switching"
+            : "Save the retained setup before switching"
+        }
+        description={profiles.switchHandoff?.message ?? ""}
+        onClose={profiles.dismissSwitchHandoff}
+      >
+        <p className="t-body text-ink-muted">
+          {profiles.switchHandoff?.kind === "kept"
+            ? "Capture copies these installed packs into the current profile. Choose the target profile again after the copy finishes."
+            : "The deleted profile no longer owns the installed files. Save current as… in Profiles to keep a copy, then choose the target profile."}
+        </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {profiles.switchHandoff?.kind === "kept" ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || running}
+              onClick={() => void profiles.captureKeptPacks()}
+            >
+              Capture kept packs
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                profiles.dismissSwitchHandoff();
+                setProfileMenuRequest((request) => request + 1);
+              }}
+            >
+              Open profiles
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={profiles.dismissSwitchHandoff}>
+            Cancel
+          </button>
+        </div>
+      </Modal>
 
       {settings ?? (
         <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">

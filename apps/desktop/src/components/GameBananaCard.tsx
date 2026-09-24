@@ -2,7 +2,7 @@ import { ArrowClockwise, ArrowSquareOut, Image, Plus } from "@phosphor-icons/rea
 import { useState } from "react";
 import type { GameBananaMod } from "../lib/bridge";
 
-export type GameBananaInstallState = "idle" | "installing" | "failed";
+export type GameBananaInstallState = "idle" | "loading" | "installing" | "failed";
 
 export function GameBananaCard({
   mod,
@@ -13,6 +13,7 @@ export function GameBananaCard({
   installState,
   onView,
   onInstall,
+  onRoute,
 }: {
   mod: GameBananaMod;
   meta: string;
@@ -22,20 +23,24 @@ export function GameBananaCard({
   installState: GameBananaInstallState;
   onView: () => void;
   onInstall: () => void;
+  onRoute: () => void;
 }) {
   const titleId = `mods-gb-title-${mod.id}`;
   const failureId = `mods-gb-failure-${mod.id}`;
   const failed = installState === "failed";
   const installing = installState === "installing";
+  const loading = installState === "loading";
   const installLabel = installed
     ? "Installed"
     : installing
       ? "Installing…"
-      : failed
-        ? "Retry"
-        : running
-          ? "Close TF2 to install"
-          : "Install";
+      : loading
+        ? "Loading files…"
+        : failed
+          ? "Retry"
+          : running
+            ? "Close TF2 to install"
+            : "Install";
 
   return (
     <article
@@ -53,9 +58,19 @@ export function GameBananaCard({
           <GameBananaThumbnail mod={mod} />
         </button>
         <span className="badge pointer-events-none absolute bottom-2 left-2 bg-panel">
-          {mod.category}
+          {mod.subCategory ? `${mod.category} · ${mod.subCategory}` : mod.category}
         </span>
-        {installed ? (
+        {mod.route !== "mod" ? (
+          <button
+            type="button"
+            data-testid={`mods-gb-route-${mod.id}`}
+            className="btn btn-ghost absolute top-2 right-2 min-h-8 bg-panel px-2"
+            disabled={mod.route === "manual" && locked}
+            onClick={onRoute}
+          >
+            {mod.route === "hud" ? "Open HUD" : "Import mod"}
+          </button>
+        ) : installed ? (
           <span className="badge pointer-events-none absolute top-2 right-2 bg-panel">
             Installed
           </span>
@@ -67,11 +82,15 @@ export function GameBananaCard({
             aria-label={`${installLabel} ${mod.name}`}
             title={`${installLabel} ${mod.name}`}
             aria-describedby={failed ? failureId : undefined}
-            disabled={installing || locked}
+            disabled={loading || installing || locked}
             onClick={onInstall}
           >
-            {installing ? (
-              "Installing…"
+            {installing || loading ? (
+              installing ? (
+                "Installing…"
+              ) : (
+                "Loading files…"
+              )
             ) : failed ? (
               <>
                 <ArrowClockwise size={16} /> Retry
@@ -101,6 +120,13 @@ export function GameBananaCard({
           <p className="t-meta mt-0.5 break-words">by {mod.author} · GameBanana</p>
         </div>
         <p className="t-meta tnum">{meta}</p>
+        {mod.route === "hud" ? (
+          <p className="t-meta">
+            Review the author’s files, then import the chosen archive in HUD.
+          </p>
+        ) : mod.route === "manual" ? (
+          <p className="t-meta">Follow the author’s instructions, then import the intended file.</p>
+        ) : null}
         {failed ? (
           <p id={failureId} role="alert" className="t-meta text-error">
             Install failed. Retry this mod.

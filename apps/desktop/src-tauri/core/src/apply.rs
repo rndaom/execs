@@ -30,6 +30,11 @@ pub struct ProfileDetail {
     pub launch_options: String,
     pub layer: CfgLayer,
     pub files: Vec<ProfileFile>,
+    /// Validated HUD roots retained in the library; only selected_hud_root is projected.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hud_roots: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_hud_root: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hud: Option<HudRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -70,6 +75,8 @@ pub fn detail_from_manifest(
         launch_options: manifest.launch_options.clone(),
         layer: cfg_layer_from_manifest(profiles_dir, manifest)?,
         files: manifest.files.clone(),
+        hud_roots: crate::hud::manifest_hud_packs(manifest),
+        selected_hud_root: crate::hud::selected_hud_pack(manifest),
         hud: manifest.hud.clone(),
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
@@ -222,6 +229,22 @@ where
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     let active = library.active_profile_id.as_deref() == Some(profile_id);
     let config_needs_cloud = active && path == CONFIG_CFG;
+    let crosshair_cfg_edit = if path.eq_ignore_ascii_case("tf/cfg/execs_gameplay.cfg")
+        || path.eq_ignore_ascii_case("tf/cfg/overrides/execs_gameplay.cfg")
+    {
+        let manifest = load_manifest(profiles_dir, profile_id)?;
+        let old = match manifest.files.iter().find(|file| file.path == path) {
+            Some(file) => read_small_file_bounded(
+                &manifest_source_path(profiles_dir, profile_id, file)?,
+                MAX_CFG_FILE_BYTES,
+            )
+            .map_err(|error| ProfileError::Io(error.to_string()))?,
+            None => Vec::new(),
+        };
+        gameplay_crosshair_values_changed(&old, bytes)
+    } else {
+        false
+    };
     let puts = [(path, FileSource::Bytes(bytes))];
     let manifest = crate::profile::mutate_profile_files_checked_to(
         profiles_dir,
@@ -234,6 +257,11 @@ where
         |manifest| {
             if config_needs_cloud {
                 manifest.cloud_sync_pending = true;
+            }
+            if crosshair_cfg_edit {
+                if let Some(record) = manifest.crosshair.as_mut() {
+                    record.source_changed = true;
+                }
             }
             Ok(())
         },
@@ -260,6 +288,18 @@ where
         return profile_detail_from(profiles_dir, profile_id);
     }
     detail_from_manifest(profiles_dir, &manifest)
+}
+
+pub(crate) fn gameplay_crosshair_values_changed(old: &[u8], new: &[u8]) -> bool {
+    [
+        "cl_crosshair_file",
+        "cl_crosshair_scale",
+        "cl_crosshair_red",
+        "cl_crosshair_green",
+        "cl_crosshair_blue",
+    ]
+    .into_iter()
+    .any(|key| crate::managed_cfg::scalar(old, key) != crate::managed_cfg::scalar(new, key))
 }
 
 pub fn write_managed_cfg(
@@ -322,6 +362,72 @@ where
         .map(|s| s.as_ref().to_owned())
         .collect();
     refuse_if_running_among(&running)?;
+    let prepared =
+        prepare_managed_cfg_to(profiles_dir, tf2_root, profile_id, rel_path, bytes, scope)?;
+    let cfg = prepared.cfg;
+    let puts = [
+        (rel_path.to_owned(), FileSource::Bytes(&cfg)),
+        (prepared.auto_path, FileSource::Bytes(&prepared.auto)),
+    ];
+    let manifest = mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &puts,
+        &[],
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |manifest| {
+            if matches!(scope, Some(ManagedCfgScope::Crosshair)) {
+                if let Some(record) = &mut manifest.crosshair {
+                    let scale = crate::managed_cfg::scalar(&cfg, "cl_crosshair_scale")
+                        .and_then(|v| v.parse().ok());
+                    if record.inactive {
+                        record.stock = Some(crate::profile::CrosshairStockSettings {
+                            file: crate::managed_cfg::scalar(&cfg, "cl_crosshair_file")
+                                .unwrap_or_default(),
+                            scale: scale.unwrap_or(32),
+                        });
+                    } else {
+                        record.scale = scale;
+                        let rgb: Option<Vec<u8>> = [
+                            "cl_crosshair_red",
+                            "cl_crosshair_green",
+                            "cl_crosshair_blue",
+                        ]
+                        .into_iter()
+                        .map(|key| {
+                            crate::managed_cfg::scalar(&cfg, key).and_then(|v| v.parse().ok())
+                        })
+                        .collect();
+                        if let Some(rgb) = rgb {
+                            record.color = Some([rgb[0], rgb[1], rgb[2]]);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        },
+    )?;
+    detail_from_manifest(profiles_dir, &manifest)
+}
+
+pub(crate) struct PreparedManagedCfg {
+    pub cfg: Vec<u8>,
+    pub auto_path: String,
+    pub auto: Vec<u8>,
+}
+
+/// Validate and merge a scoped settings write without publishing it. Related
+/// files (such as the Sounds pane's WAVs) can join the same profile journal.
+pub(crate) fn prepare_managed_cfg_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    bytes: &[u8],
+    scope: Option<ManagedCfgScope>,
+) -> Result<PreparedManagedCfg, ProfileError> {
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     if library.active_profile_id.as_deref() != Some(profile_id) {
         return Err(ProfileError::UnknownProfile);
@@ -385,51 +491,11 @@ where
             "Managed cfg exceeds the cfg size limit.".into(),
         ));
     }
-    let puts = [
-        (rel_path.to_owned(), FileSource::Bytes(&cfg)),
-        (auto_path, FileSource::Bytes(&merged)),
-    ];
-    let manifest = mutate_profile_files_to(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &puts,
-        &[],
-        ProfileLiveProjection::MirrorIfActive,
-        &running,
-        |manifest| {
-            if matches!(scope, Some(ManagedCfgScope::Crosshair)) {
-                if let Some(record) = &mut manifest.crosshair {
-                    let scale = crate::managed_cfg::scalar(&cfg, "cl_crosshair_scale")
-                        .and_then(|v| v.parse().ok());
-                    if record.inactive {
-                        record.stock = Some(crate::profile::CrosshairStockSettings {
-                            file: crate::managed_cfg::scalar(&cfg, "cl_crosshair_file")
-                                .unwrap_or_default(),
-                            scale: scale.unwrap_or(32),
-                        });
-                    } else {
-                        record.scale = scale;
-                        let rgb: Option<Vec<u8>> = [
-                            "cl_crosshair_red",
-                            "cl_crosshair_green",
-                            "cl_crosshair_blue",
-                        ]
-                        .into_iter()
-                        .map(|key| {
-                            crate::managed_cfg::scalar(&cfg, key).and_then(|v| v.parse().ok())
-                        })
-                        .collect();
-                        if let Some(rgb) = rgb {
-                            record.color = Some([rgb[0], rgb[1], rgb[2]]);
-                        }
-                    }
-                }
-            }
-            Ok(())
-        },
-    )?;
-    detail_from_manifest(profiles_dir, &manifest)
+    Ok(PreparedManagedCfg {
+        cfg,
+        auto_path,
+        auto: merged,
+    })
 }
 
 pub(crate) fn current_managed_bytes(
@@ -527,6 +593,69 @@ mod tests {
         fs::create_dir_all(root.join("tf").join("custom")).unwrap();
         fs::write(root.join("tf/steam.inf"), "appID=440\n").unwrap();
         root
+    }
+
+    #[test]
+    fn files_gameplay_edit_marks_crosshair_source_only_when_crosshair_values_change() {
+        let dir = test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = tf2_root(&dir);
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+        set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+        let path = "tf/cfg/execs_gameplay.cfg";
+        write_owned_file_to(
+            &profiles,
+            &root,
+            id,
+            path,
+            b"fov_desired 90\ncl_crosshair_scale 32\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        crate::profile::mutate_profile_files_to(
+            &profiles,
+            &root,
+            id,
+            &[],
+            &[],
+            ProfileLiveProjection::LibraryOnly,
+            unlocked(),
+            |manifest| {
+                manifest.crosshair = Some(
+                    serde_json::from_str(
+                        r#"{"id":"execs-crosshairs","shape":"cross","assignments":{}}"#,
+                    )
+                    .unwrap(),
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+        let unchanged = write_owned_file_to(
+            &profiles,
+            &root,
+            id,
+            path,
+            b"fov_desired 100\ncl_crosshair_scale 32\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        assert!(!unchanged.crosshair.unwrap().source_changed);
+        let changed = write_owned_file_to(
+            &profiles,
+            &root,
+            id,
+            path,
+            b"fov_desired 100\ncl_crosshair_scale 40\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        assert!(changed.crosshair.unwrap().source_changed);
+        cleanup(&dir);
     }
 
     #[test]

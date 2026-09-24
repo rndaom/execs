@@ -103,6 +103,25 @@ describe("gameplay serialize and parse", () => {
     expect(serializeGameplay(defaultGameplay())).toContain('cl_crosshair_file ""');
   });
 
+  it("preserves an external crosshair material when changing color or gameplay", () => {
+    for (const seeded of [
+      seedGameplay("cl_crosshair_file myreticle\n", {}),
+      seedGameplay("", { cl_crosshair_file: "myreticle" }),
+    ]) {
+      expect(seeded.cl_crosshair_file).toBe("myreticle");
+      const changed = { ...seeded, cl_crosshair_red: 17, fov_desired: 80 };
+      const saved = serializeGameplay(changed);
+      expect(saved).toContain("cl_crosshair_file myreticle\n");
+      expect(seedGameplay(saved, {}).cl_crosshair_file).toBe("myreticle");
+    }
+  });
+
+  it("quotes external material values that contain whitespace", () => {
+    const seeded = seedGameplay('cl_crosshair_file "my reticle"\n', {});
+    expect(seeded.cl_crosshair_file).toBe("my reticle");
+    expect(seedGameplay(serializeGameplay(seeded), {}).cl_crosshair_file).toBe("my reticle");
+  });
+
   it("uses sensible defaults including fov 90", () => {
     const defaults = defaultGameplay();
     expect(defaults.fov_desired).toBe(90);

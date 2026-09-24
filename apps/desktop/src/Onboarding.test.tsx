@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FinderPanel } from "./components/FinderPanel";
 import { FirstRunExisting } from "./FirstRunExisting";
 import { COMFIG_PRESETS } from "./lib/comfig-catalog";
+import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { SetupWizard } from "./SetupWizard";
 
@@ -164,14 +165,15 @@ describe("Onboarding", () => {
     const props = wizardProps({ onStartFrom: vi.fn() });
     await act(async () => root.render(<SetupWizard {...props} />));
     expect(host.querySelector('[data-testid="wizard-start-from"]')).toBeNull();
-    expect(host.querySelectorAll('input[name="comfig-preset"]')).toHaveLength(4);
-    await act(async () => button("Show all presets").click());
     expect(
       [...host.querySelectorAll<HTMLInputElement>('input[name="comfig-preset"]')].map(
         (node) => node.value,
       ),
     ).toEqual(COMFIG_PRESETS.map((preset) => preset.id));
+    expect(host.querySelector('[data-testid="wizard-show-all-presets"]')).toBeNull();
     expect(host.querySelectorAll('[role="switch"]')).toHaveLength(OFFICIAL_ADDONS.length);
+    expect(host.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
+    expect(host.textContent).toContain("Manage official addons later in Comfig.");
     await act(async () =>
       host.querySelector<HTMLButtonElement>('[data-testid="wizard-addon-no-tutorial"]')?.click(),
     );

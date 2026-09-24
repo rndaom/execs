@@ -34,6 +34,14 @@ import { waitUntil } from "./linux-native-webdriver.mjs";
 
 const EXIT_DIALOG = '[data-testid="files-exit-guard"]';
 
+export function isClosedWindowClickResponseLoss(error) {
+  const message = String(error);
+  return (
+    /no such window|invalid session id/i.test(message) ||
+    /^Error: POST \/session\/[^/\s]+\/element\/[^/\s]+\/click: unknown error: $/.test(message)
+  );
+}
+
 export async function main() {
   const runtime = activeRuntimePreflight();
   const fixture = seedLinuxNativeActiveFixture(process.env.RUNNER_TEMP);
@@ -170,24 +178,35 @@ export async function main() {
         "xpath",
       );
     } catch (error) {
-      // Some native drivers lose their response context when the accepted UI
-      // action closes the window. It is valid only with verified process exit.
-      assert.match(String(error), /no such window|invalid session id/i);
       responseError = String(error);
     }
-    await waitUntil(
-      "native process exits after its explicit close decision",
-      () => ownedNativeProcessExited(session.nativeProcess),
-      15_000,
-    );
-    report.checks.push({
+    const result = {
       label: `native-close-${label}`,
       process: session.nativeProcess,
-      processExitedBeforeCleanup: true,
+      processExitedBeforeCleanup: false,
       nativeExitCode: null,
       nativeExitStatus: "not observed; tauri-driver owns the child",
       ...(responseError ? { responseError } : {}),
-    });
+    };
+    report.checks.push(result);
+    saveReport();
+    try {
+      await waitUntil(
+        "native process exits after its explicit close decision",
+        () => ownedNativeProcessExited(session.nativeProcess),
+        15_000,
+      );
+    } catch (error) {
+      result.exitObservationError = String(error);
+      saveReport();
+      throw error;
+    }
+    result.processExitedBeforeCleanup = true;
+    if (responseError && !isClosedWindowClickResponseLoss(responseError)) {
+      result.responseRejectedAfterExit = true;
+      saveReport();
+      throw new Error(`Unrelated native close click error after process exit: ${responseError}`);
+    }
     saveReport();
   }
 

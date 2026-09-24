@@ -7,10 +7,10 @@ export type FirstRunSurface = "ready" | "first-existing" | "first-unused" | "loa
 export type ComfigPresetId = ComfigPreset;
 
 /**
- * "Start from": the Create-new wizard's two tiles. `current` keeps the active
- * profile's binds, audio, console preferences and tutorial "already shown"
- * flags; `fresh` is Valve's `config_default.cfg`. First run has no active
- * profile to copy, so it is always Fresh TF2.
+ * "Start from": the Create-new wizard's two tiles. `current` copies the
+ * active install's live `config.cfg`, including changes made since the last
+ * profile save; `fresh` is Valve's `config_default.cfg`. First run has no
+ * active profile to copy, so it is always Fresh TF2.
  */
 export const START_FROM_OPTIONS: {
   id: StartFrom;
@@ -20,7 +20,8 @@ export const START_FROM_OPTIONS: {
   {
     id: "current",
     label: "Current setup",
-    description: "Keeps your binds, audio and console options; no tutorial pop-ups.",
+    description:
+      "Copies your current in-game binds, audio and console options, including recent edits; no tutorial pop-ups.",
   },
   {
     id: "fresh",

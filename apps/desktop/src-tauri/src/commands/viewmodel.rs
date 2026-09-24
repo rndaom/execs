@@ -170,19 +170,3 @@ pub async fn remove_viewmodels(
     let _guard = gate.lock_for_write().await?;
     with_profile(|root, profile_id| Ok(execs_core::remove_viewmodels(&root, &profile_id)?)).await
 }
-
-#[tauri::command]
-pub async fn set_viewmodel_preload(
-    gate: tauri::State<'_, WriteGate>,
-    enabled: bool,
-) -> Result<ProfileDetail, CommandError> {
-    let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| {
-        Ok(execs_core::set_viewmodel_preload(
-            &root,
-            &profile_id,
-            enabled,
-        )?)
-    })
-    .await
-}

@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BindsPane } from "./BindsPane";
-import { BIND_ACTIONS } from "./lib/binds-ui";
+import { BIND_ACTIONS, MANAGED_BINDS_HEADER } from "./lib/binds-ui";
 
 const status = vi.hoisted(() => ({ running: false, busy: false }));
 vi.mock("./hooks/useAppStatus", () => ({ useAppStatus: () => status }));
@@ -40,6 +40,115 @@ async function pressKey(key: string, code: string) {
 }
 
 describe("BindsPane autosave", () => {
+  it("lists two startup keys with their sources, then adds and removes only an execs key", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    const managedText = `${MANAGED_BINDS_HEADER}\nbind x +jump\n`;
+    const startupFiles = [
+      { path: "tf/cfg/config.cfg", text: "bind space +jump\n" },
+      { path: "tf/cfg/autoexec.cfg", text: "exec execs_binds\n" },
+      { path: "tf/cfg/execs_binds.cfg", text: managedText },
+    ];
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: { space: "+jump", x: "+jump" },
+          startupFiles,
+          managedText,
+          onSave: save,
+        }),
+      ),
+    );
+    const known = () => document.querySelector('[data-testid="bind-keys-jump"]')?.textContent ?? "";
+    expect(known()).toContain("space tf/cfg/config.cfg:1");
+    expect(known()).toContain("x tf/cfg/execs_binds.cfg:2");
+    expect(document.querySelector('[data-testid="bind-remove-jump-space"]')).toBeNull();
+
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await pressKey("y", "KeyY");
+    expect(known()).toContain("space tf/cfg/config.cfg:1");
+    expect(known()).toContain("x tf/cfg/execs_binds.cfg:2");
+    expect(known()).toContain("y tf/cfg/execs_binds.cfg:3");
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-remove-jump-x"]')?.click(),
+    );
+    expect(known()).not.toContain("x tf/cfg/execs_binds.cfg:2");
+    expect(known()).toContain("space tf/cfg/config.cfg:1");
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save.mock.calls.at(-1)?.[0]).toContain("bind y +jump");
+    expect(save.mock.calls.at(-1)?.[0]).not.toContain("bind x +jump");
+  });
+
+  it("reviews a conflicting startup key before overriding its command", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    const startupFiles = [
+      { path: "tf/cfg/config.cfg", text: "bind r +reload\n" },
+      { path: "tf/cfg/autoexec.cfg", text: "exec execs_binds\n" },
+      { path: "tf/cfg/execs_binds.cfg", text: "" },
+    ];
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: { r: "+reload" },
+          startupFiles,
+          managedText: "",
+          onSave: save,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await pressKey("r", "KeyR");
+    expect(document.querySelector('[data-testid="bind-conflict-jump"]')?.textContent).toContain(
+      "r currently runs +reload from tf/cfg/config.cfg:1",
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save).not.toHaveBeenCalled();
+    await act(async () =>
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="bind-conflict-jump"] button')
+        ?.click(),
+    );
+    expect(startupFiles[0].text).toBe("bind r +reload\n");
+    expect(document.querySelector('[data-testid="bind-keys-jump"]')?.textContent).toContain(
+      "r tf/cfg/execs_binds.cfg:2",
+    );
+  });
+
+  it("drops an unfinished key conflict when the profile changes", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    const render = (profileId: string) =>
+      root.render(
+        createElement(BindsPane, {
+          profileId,
+          layer: "vanilla",
+          effectiveBinds: { r: "+reload" },
+          startupFiles: [
+            { path: "tf/cfg/config.cfg", text: "bind r +reload\n" },
+            { path: "tf/cfg/autoexec.cfg", text: "exec execs_binds\n" },
+            { path: "tf/cfg/execs_binds.cfg", text: "" },
+          ],
+          managedText: "",
+          onSave: save,
+        }),
+      );
+    await act(async () => render("profile-a"));
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await pressKey("r", "KeyR");
+    expect(document.querySelector('[data-testid="bind-conflict-jump"]')).not.toBeNull();
+    await act(async () => render("profile-b"));
+    expect(document.querySelector('[data-testid="bind-conflict-jump"]')).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("makes every bind action reachable through categories without writing", async () => {
     const save = vi.fn(async (_text: string) => undefined);
     await act(async () =>
@@ -95,6 +204,36 @@ describe("BindsPane autosave", () => {
     ).toBe("false");
     await act(async () => vi.runAllTimersAsync());
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("lets a remove button cancel capture before its click", async () => {
+    const managedText = `${MANAGED_BINDS_HEADER}\nbind x +jump\n`;
+    const save = vi.fn(async (_text: string) => undefined);
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: { x: "+jump" },
+          managedText,
+          onSave: save,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    const remove = document.querySelector<HTMLButtonElement>('[data-testid="bind-remove-jump-x"]');
+    await act(async () => {
+      remove?.dispatchEvent(
+        new dom.window.MouseEvent("mousedown", { button: 0, bubbles: true, cancelable: true }),
+      );
+      remove?.click();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save.mock.calls.at(-1)?.[0]).not.toContain("bind mouse1 +jump");
+    expect(save.mock.calls.at(-1)?.[0]).not.toContain("bind x +jump");
   });
 
   it("keeps the recording notice beside its action and Escape leaves the binding intact", async () => {
@@ -171,6 +310,52 @@ describe("BindsPane autosave", () => {
       document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.disabled,
     ).toBe(true);
     expect(document.body.textContent).not.toContain("Close TF2 to change binds");
+  });
+
+  it("accepts another key immediately while the previous bind is saving", async () => {
+    let finishFirstSave: (() => void) | undefined;
+    const firstSave = new Promise<void>((resolve) => {
+      finishFirstSave = resolve;
+    });
+    const save = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockImplementationOnce(() => firstSave)
+      .mockResolvedValue(undefined);
+    const render = () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: {},
+          managedText: "",
+          blocked: false,
+          onSave: save,
+        }),
+      );
+
+    await act(async () => render());
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await pressKey("x", "KeyX");
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save).toHaveBeenCalledTimes(1);
+
+    status.busy = true;
+    await act(async () => render());
+    expect(document.body.textContent).not.toContain("Finish the current task first");
+    await act(async () => document.getElementById("bind-category-combat")?.click());
+    const reload = document.querySelector<HTMLButtonElement>('[data-testid="bind-record-reload"]');
+    expect(reload?.disabled).toBe(false);
+    await act(async () => reload?.click());
+    await pressKey("r", "KeyR");
+    expect(document.querySelector('[data-testid="bind-key-reload"]')?.textContent).toBe("r");
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await act(async () => finishFirstSave?.());
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1][0]).toContain("bind r +reload");
   });
 
   it("discards one profile's draft when the profile key changes", async () => {

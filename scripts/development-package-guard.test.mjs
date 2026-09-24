@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
 import {
+  assertDebianBundledBinary,
   assertDevelopmentHost,
   developmentVersions,
   prepareUnsignedConfig,
@@ -24,6 +25,7 @@ import {
   unsignedConfig,
   verifyPublicPackage,
 } from "./development-package-guard.mjs";
+
 import {
   DevelopmentPackageSession,
   ownedDialogDismissal,
@@ -37,6 +39,34 @@ import {
   finishPackageCase,
 } from "./development-package-smoke.mjs";
 import { publicProfileFixture } from "./package-smoke-fixture.mjs";
+
+test("Debian package identity accepts only Tauri's bundle marker patch", () => {
+  const build = Buffer.from("ELF:before:__TAURI_BUNDLE_TYPE_VAR_UNK:after");
+  const packaged = Buffer.from("ELF:before:__TAURI_BUNDLE_TYPE_VAR_DEB:after");
+  const proof = assertDebianBundledBinary(build, packaged);
+  assert.equal(proof.buildSha256, sha256(build));
+  assert.equal(proof.packagedSha256, sha256(packaged));
+  assert.equal(proof.markerOffset, "ELF:before:".length);
+  assert.throws(() => assertDebianBundledBinary(build, build), /bundle-kind marker/);
+  assert.throws(
+    () =>
+      assertDebianBundledBinary(build, Buffer.from("ELF:before:__TAURI_BUNDLE_TYPE_VAR_APP:after")),
+    /bundle-kind marker/,
+  );
+  const unrelated = Buffer.from(packaged);
+  unrelated[0] ^= 1;
+  assert.throws(() => assertDebianBundledBinary(build, unrelated), /bundle-kind marker/);
+  assert.throws(() => assertDebianBundledBinary(build, packaged.subarray(1)), /size changed/);
+  assert.throws(
+    () => assertDebianBundledBinary(Buffer.alloc(build.length), packaged),
+    /lacks Tauri/,
+  );
+  const duplicate = Buffer.concat([build, build]);
+  assert.throws(
+    () => assertDebianBundledBinary(duplicate, Buffer.concat([packaged, packaged])),
+    /Ambiguous/,
+  );
+});
 
 function fixture(fn) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "execs-development-guard-test-")));

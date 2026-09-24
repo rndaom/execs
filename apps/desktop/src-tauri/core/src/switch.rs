@@ -1,5 +1,6 @@
 //! Exact-replace profile switch with real progress steps (RND-149).
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,6 +11,7 @@ use crate::absorb::{
     AbsorbOptions,
 };
 use crate::blob::blob_path;
+use crate::content_index::normalize_virtual_path;
 use crate::hash::{
     copy_verified_atomic_within, read_small_file_bounded, remove_dir_within,
     remove_file_force_within, sha256_file, validate_dir_within, validate_file_within,
@@ -22,11 +24,12 @@ use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
     begin_switch_to, clear_launch_sync_pending_if_matches, exclusive_file_path,
     is_profile_ownable_rel_path, is_shared_rel_path, load_library_from, load_manifest,
-    mark_launch_sync_pending, pending_switch_to, portable_path_key, profiles_dir,
-    recover_profile_mutation_to, set_active_profile_to, FileStorage, ProfileError, ProfileFile,
-    ProfileLibrary, ProfileManifest, SwitchCleanupFile,
+    mark_launch_sync_pending, pending_live_handoff_to, pending_switch_to, portable_path_key,
+    profiles_dir, recover_profile_mutation_to, set_active_profile_to, FileStorage, ProfileError,
+    ProfileFile, ProfileLibrary, ProfileManifest, SwitchCleanupFile,
 };
 use crate::surface::is_stock_custom_entry;
+use crate::vpk::list_vpk_member_paths_filtered;
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
 
@@ -173,6 +176,9 @@ where
     {
         return Err(ProfileError::UnknownProfile);
     }
+    if pending_live_handoff_to(profiles_dir, tf2_root)? {
+        return Err(ProfileError::PendingLiveHandoff);
+    }
     let pending = pending_switch_to(profiles_dir, tf2_root)?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
     if pending.is_none() {
@@ -230,6 +236,12 @@ where
             tf2_root,
             &running,
             clone_options(&options),
+        )?;
+        refuse_kept_live_packs(
+            profiles_dir,
+            tf2_root,
+            previous.as_deref().unwrap(),
+            &live_hud_folders,
         )?;
     }
 
@@ -326,6 +338,53 @@ where
         steam_write,
         steam_write_error,
     })
+}
+
+/// A Keep answer applies while the current profile remains installed. Once
+/// switching away, that pack has no owner in the target and must either be
+/// captured with Update or removed explicitly. Valid HUD folders have their
+/// separate reviewed backup handoff in `preserve_live_huds_for_switch`.
+fn refuse_kept_live_packs(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    previous_id: &str,
+    live_hud_folders: &[String],
+) -> Result<(), ProfileError> {
+    let manifest = load_manifest(profiles_dir, previous_id)?;
+    if manifest.ignored_packs.is_empty() {
+        return Ok(());
+    }
+    let owned: BTreeSet<String> = manifest
+        .files
+        .iter()
+        .filter_map(|file| pack_key(&file.path))
+        .collect();
+    let inventory = crate::surface::inventory_live_surface_for_absorb(tf2_root, None)?;
+    let live_packs: BTreeSet<String> = inventory
+        .entries
+        .iter()
+        .filter_map(|entry| pack_key(&entry.dest_rel))
+        .collect();
+    let huds: BTreeSet<String> = live_hud_folders
+        .iter()
+        .filter_map(|name| pack_key(&format!("tf/custom/{name}")))
+        .collect();
+    let mut kept: Vec<String> = manifest
+        .ignored_packs
+        .iter()
+        .filter_map(|pack| {
+            let key = pack_key(&format!("tf/custom/{pack}"))?;
+            (live_packs.contains(&key) && !owned.contains(&key) && !huds.contains(&key))
+                .then_some(pack.clone())
+        })
+        .collect();
+    kept.sort();
+    kept.dedup();
+    if kept.is_empty() {
+        Ok(())
+    } else {
+        Err(ProfileError::KeptPackHandoff(kept))
+    }
 }
 
 fn sync_switch_launch_options(
@@ -479,6 +538,91 @@ fn preflight_target(
             return Err(ProfileError::Io(format!(
                 "Profile file failed integrity verification: {}",
                 file.path
+            )));
+        }
+    }
+    refuse_target_crosshair_script_collisions(profiles_dir, target)?;
+    Ok(())
+}
+
+/// A target profile can contain script collisions even when Build and Mod
+/// import are guarded: older profiles and external pack absorption can add
+/// another supplier while the profile is inactive. Check the bytes that would
+/// actually be mounted, before the switch removes anything live.
+fn refuse_target_crosshair_script_collisions(
+    profiles_dir: &Path,
+    target: &ProfileManifest,
+) -> Result<(), ProfileError> {
+    if target
+        .crosshair
+        .as_ref()
+        .is_none_or(|record| record.inactive)
+    {
+        return Ok(());
+    }
+    let scripts: BTreeSet<String> = target
+        .files
+        .iter()
+        .filter_map(|file| {
+            normalize_virtual_path(&file.path)
+                .strip_prefix("tf/custom/execs-crosshairs/")
+                .filter(|member| {
+                    member.starts_with("scripts/tf_weapon_") && member.ends_with(".txt")
+                })
+                .map(str::to_string)
+        })
+        .collect();
+    if scripts.is_empty() {
+        return Ok(());
+    }
+    let inactive_huds: BTreeSet<String> = inactive_hud_packs(target)
+        .into_iter()
+        .map(|pack| pack.to_lowercase())
+        .collect();
+    let mut vpks = 0usize;
+    for file in &target.files {
+        let path = normalize_virtual_path(&file.path);
+        let Some(rest) = path.strip_prefix("tf/custom/") else {
+            continue;
+        };
+        let pack = rest.split('/').next().unwrap_or_default();
+        if pack == "execs-crosshairs" || inactive_huds.contains(pack) {
+            continue;
+        }
+        if let Some((_, member)) = rest.split_once('/') {
+            if scripts.contains(member) {
+                return Err(ProfileError::Io(format!(
+                    "Profile {} contains {member} in both execs-crosshairs and {pack}. Remove or deactivate the conflicting pack before switching.",
+                    target.name
+                )));
+            }
+            continue;
+        }
+        if !pack.ends_with(".vpk") {
+            continue;
+        }
+        vpks += 1;
+        if vpks > 256 {
+            return Err(ProfileError::Io(
+                "Too many target custom VPKs to check crosshair script conflicts.".into(),
+            ));
+        }
+        let source = target_source(profiles_dir, target, file)?;
+        let members = list_vpk_member_paths_filtered(
+            &source,
+            &|member| scripts.contains(&normalize_virtual_path(member)),
+            1024,
+        )
+        .map_err(|err| {
+            ProfileError::Io(format!(
+                "Could not inspect {pack} for crosshair script conflicts: {}",
+                err.message()
+            ))
+        })?;
+        if let Some(member) = members.first() {
+            return Err(ProfileError::Io(format!(
+                "Profile {} contains {} in both execs-crosshairs and {pack}. Remove or deactivate the conflicting pack before switching.",
+                target.name, member
             )));
         }
     }
@@ -737,7 +881,8 @@ pub(crate) fn prune_empty_parents(start: &Path, tf2_root: &Path) {
 mod tests {
     use super::*;
     use crate::profile::{
-        create_profile_record_to, put_exclusive_file_to, save_current_as_to, SaveCurrentOptions,
+        create_profile_record_to, delete_profile_to, put_exclusive_file_to, save_current_as_to,
+        SaveCurrentOptions,
     };
     use std::io::Write;
 
@@ -1585,6 +1730,243 @@ mod tests {
         cleanup(&dir);
     }
 
+    #[test]
+    fn kept_external_pack_requires_handoff_before_switching_unique_or_conflicting_paths() {
+        for conflict in [false, true] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("execs/profiles");
+            let root = dir.join("Team Fortress 2");
+            write_live(&root.join("tf/cfg/config.cfg"), "a\n");
+            let a = save(&profiles, &root, "A");
+            let mut target: Vec<(&str, &[u8])> = vec![("tf/cfg/config.cfg", b"b\n")];
+            if conflict {
+                target.push(("tf/custom/shared.vpk", b"target pack"));
+            }
+            let b = library_profile(&profiles, &root, "B", &target);
+            write_live(&root.join("tf/custom/shared.vpk"), "external pack");
+            crate::absorb::absorb_packs_to(
+                &profiles,
+                &root,
+                crate::absorb::PackChoice::Keep,
+                unlocked(),
+                no_steam(),
+            )
+            .unwrap();
+            let before_index = fs::read(crate::profile::index_file(&profiles)).unwrap();
+
+            assert_eq!(
+                switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {})
+                    .unwrap_err(),
+                ProfileError::KeptPackHandoff(vec!["shared.vpk".into()])
+            );
+            assert_eq!(
+                fs::read(root.join("tf/custom/shared.vpk")).unwrap(),
+                b"external pack"
+            );
+            assert_eq!(fs::read(root.join("tf/cfg/config.cfg")).unwrap(), b"a\n");
+            assert_eq!(
+                fs::read(crate::profile::index_file(&profiles)).unwrap(),
+                before_index
+            );
+
+            // CaptureKept is the explicit capture decision. The original bytes now
+            // survive in A even when B has a same-path replacement.
+            crate::absorb::absorb_packs_to(
+                &profiles,
+                &root,
+                crate::absorb::PackChoice::CaptureKept,
+                unlocked(),
+                no_steam(),
+            )
+            .unwrap();
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap();
+            assert_eq!(
+                fs::read(exclusive_file_path(&profiles, &a, "tf/custom/shared.vpk")).unwrap(),
+                b"external pack"
+            );
+            if conflict {
+                assert_eq!(
+                    fs::read(root.join("tf/custom/shared.vpk")).unwrap(),
+                    b"target pack"
+                );
+            } else {
+                assert!(!root.join("tf/custom/shared.vpk").exists());
+            }
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn target_crosshair_script_collision_refuses_switch_before_remove() {
+        for vpk in [false, true] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("execs/profiles");
+            let root = dir.join("Team Fortress 2");
+            write_live(&root.join("tf/cfg/config.cfg"), "a\n");
+            let a = save(&profiles, &root, "A");
+            let b = library_profile(
+                &profiles,
+                &root,
+                "B",
+                &[
+                    ("tf/cfg/config.cfg", b"b\n"),
+                    (
+                        "tf/custom/execs-crosshairs/scripts/tf_weapon_bat.txt",
+                        b"crosshair script",
+                    ),
+                ],
+            );
+            crate::profile::mutate_profile_files_to(
+                &profiles,
+                &root,
+                &b,
+                &[],
+                &[],
+                crate::profile::ProfileLiveProjection::LibraryOnly,
+                unlocked(),
+                |manifest| {
+                    manifest.crosshair = Some(
+                        serde_json::from_value(serde_json::json!({"id":"execs-crosshairs"}))
+                            .unwrap(),
+                    );
+                    Ok(())
+                },
+            )
+            .unwrap();
+            if vpk {
+                let bytes = crate::vpk::write_vpk_v1(&std::collections::BTreeMap::from([(
+                    "Scripts/TF_WEAPON_BAT.TXT".into(),
+                    b"mod script".to_vec(),
+                )]));
+                put_exclusive_file_to(
+                    &profiles,
+                    &root,
+                    &b,
+                    "tf/custom/other.vpk",
+                    &bytes,
+                    unlocked(),
+                )
+                .unwrap();
+            } else {
+                put_exclusive_file_to(
+                    &profiles,
+                    &root,
+                    &b,
+                    "tf/custom/other/Scripts/TF_WEAPON_BAT.TXT",
+                    b"mod script",
+                    unlocked(),
+                )
+                .unwrap();
+            }
+            let before = fs::read(crate::profile::index_file(&profiles)).unwrap();
+            let err = switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {})
+                .unwrap_err();
+            assert!(err.message().contains("tf_weapon_bat"), "{err:?}");
+            assert!(err.message().contains("other"), "{err:?}");
+            assert_eq!(
+                fs::read(crate::profile::index_file(&profiles)).unwrap(),
+                before
+            );
+            assert_eq!(fs::read(root.join("tf/cfg/config.cfg")).unwrap(), b"a\n");
+            assert_eq!(
+                load_library_from(&profiles, Some(&root))
+                    .unwrap()
+                    .active_profile_id
+                    .as_deref(),
+                Some(a.as_str())
+            );
+            assert!(!root.join("tf/custom/execs-crosshairs").exists());
+            let conflict_path = if vpk {
+                "tf/custom/other.vpk"
+            } else {
+                "tf/custom/other/Scripts/TF_WEAPON_BAT.TXT"
+            };
+            crate::profile::mutate_profile_files_to(
+                &profiles,
+                &root,
+                &b,
+                &[],
+                &[conflict_path.to_string()],
+                crate::profile::ProfileLiveProjection::LibraryOnly,
+                unlocked(),
+                |_| Ok(()),
+            )
+            .unwrap();
+            let unrelated = crate::vpk::write_vpk_v1(&std::collections::BTreeMap::from([(
+                "scripts/tf_weapon_shotgun.txt".into(),
+                b"unrelated script".to_vec(),
+            )]));
+            put_exclusive_file_to(
+                &profiles,
+                &root,
+                &b,
+                "tf/custom/other.vpk",
+                &unrelated,
+                unlocked(),
+            )
+            .unwrap();
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap();
+            assert!(root
+                .join("tf/custom/execs-crosshairs/scripts/tf_weapon_bat.txt")
+                .exists());
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn deleted_active_profile_blocks_switch_until_live_setup_is_captured() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "a\n");
+        write_live(&root.join("tf/custom/old.vpk"), "old pack");
+        let a = save(&profiles, &root, "A");
+        let b = library_profile(
+            &profiles,
+            &root,
+            "B",
+            &[
+                ("tf/cfg/config.cfg", b"b\n"),
+                ("tf/custom/new.vpk", b"new pack"),
+            ],
+        );
+        delete_profile_to(&profiles, &root, &a, true, unlocked()).unwrap();
+        assert!(pending_live_handoff_to(&profiles, &root).unwrap());
+        let before_index = fs::read(crate::profile::index_file(&profiles)).unwrap();
+        assert_eq!(
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap_err(),
+            ProfileError::PendingLiveHandoff
+        );
+        assert_eq!(
+            fs::read(crate::profile::index_file(&profiles)).unwrap(),
+            before_index
+        );
+        assert_eq!(
+            fs::read(root.join("tf/custom/old.vpk")).unwrap(),
+            b"old pack"
+        );
+        assert!(!root.join("tf/custom/new.vpk").exists());
+
+        let snapshot = save(&profiles, &root, "Retained setup");
+        assert!(!pending_live_handoff_to(&profiles, &root).unwrap());
+        switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap();
+        assert!(!root.join("tf/custom/old.vpk").exists());
+        assert_eq!(
+            fs::read(root.join("tf/custom/new.vpk")).unwrap(),
+            b"new pack"
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &snapshot,
+                "tf/custom/old.vpk"
+            ))
+            .unwrap(),
+            b"old pack"
+        );
+        cleanup(&dir);
+    }
+
     /// A switch used to answer Update to a prompt the user never saw: a pack
     /// missing from the live tree was deleted from the old profile's library
     /// and its Keep list was wiped. The pack step now takes only what was
@@ -1617,6 +1999,14 @@ mod tests {
         fs::remove_dir_all(root.join("tf/custom/old")).unwrap();
         write_live(&root.join("tf/custom/new/pack.txt"), "new\n");
 
+        assert_eq!(
+            switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap_err(),
+            ProfileError::KeptPackHandoff(vec!["extra".into()])
+        );
+        assert!(root.join("tf/custom/extra/note.txt").is_file());
+        // Explicitly taking the kept pack out of the live tree resolves the
+        // handoff without silently changing the old profile's Keep answer.
+        fs::remove_dir_all(root.join("tf/custom/extra")).unwrap();
         switch_profile_to(&profiles, &root, &b, unlocked(), no_steam(), |_| {}).unwrap();
 
         let manifest = load_manifest(&profiles, &a).unwrap();
@@ -1643,10 +2033,7 @@ mod tests {
             "and then removed from the live tree"
         );
         assert_eq!(manifest.ignored_packs, vec!["extra".to_string()]);
-        assert!(
-            root.join("tf/custom/extra/note.txt").is_file(),
-            "Keep means keep"
-        );
+        assert!(!root.join("tf/custom/extra").exists());
 
         // Switching back writes the removed pack out again: exact replace.
         switch_profile_to(&profiles, &root, &a, unlocked(), no_steam(), |_| {}).unwrap();

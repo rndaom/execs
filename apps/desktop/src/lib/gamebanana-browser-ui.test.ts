@@ -21,6 +21,8 @@ const mod = (over: Partial<GameBananaMod> = {}): GameBananaMod => ({
   author: "Author",
   category: "Skins",
   categoryId: 7951,
+  subCategory: null,
+  route: "mod",
   likes: null,
   views: null,
   downloads: null,

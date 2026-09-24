@@ -206,7 +206,7 @@ export function choiceLabel(choice: SoundChoice): string {
 export function choiceSourceLabel(choice: SoundChoice): string {
   switch (choice.kind) {
     case "stock":
-      return "Built into TF2";
+      return choice.effect === 0 ? "TF2 default sound path" : "Built into TF2";
     case "community":
       return "Community pack";
     case "file":
@@ -215,10 +215,10 @@ export function choiceSourceLabel(choice: SoundChoice): string {
       return "comfig.app";
     default:
       return choice.entry.source === "community"
-        ? "Community pack · installed"
+        ? "Community pack · saved by execs"
         : choice.entry.source === "comfig"
-          ? "comfig.app · installed"
-          : "Your file · installed";
+          ? "comfig.app · saved by execs"
+          : "Your file · saved by execs";
   }
 }
 

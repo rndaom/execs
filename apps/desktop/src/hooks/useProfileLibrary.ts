@@ -51,6 +51,9 @@ export type ProfileLibraryState = {
   dismissImport: () => void;
   exportProfile: (id: string) => Promise<void>;
   switchProfile: (id: string) => Promise<void>;
+  switchHandoff: { kind: "kept" | "retained"; message: string; ownerId: string | null } | null;
+  captureKeptPacks: () => Promise<void>;
+  dismissSwitchHandoff: () => void;
   deleteTarget: ProfileSummary | null;
   deleting: boolean;
   deleteError: string | null;
@@ -90,6 +93,7 @@ export function useProfileLibrary(
 ): ProfileLibraryState {
   const [library, setLibrary] = useState<ProfileLibrary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProfileSummary | null>(null);
+  const [switchHandoff, setSwitchHandoff] = useState<ProfileLibraryState["switchHandoff"]>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const deleteInFlight = useRef(false);
@@ -272,6 +276,7 @@ export function useProfileLibrary(
       setBusy(true);
       try {
         setLibrary(await api.saveCurrentAs(name));
+        setSwitchHandoff(null);
         setError(null, "profiles:save-current");
         return true;
       } catch (err) {
@@ -403,6 +408,7 @@ export function useProfileLibrary(
       let reviewId: string | null = null;
       try {
         setLibrary(await api.switchProfile(id));
+        setSwitchHandoff(null);
         setImportedProfile(null);
         setImportStage(null);
         setImportReview(null);
@@ -412,7 +418,15 @@ export function useProfileLibrary(
         setPackPromptDeferred(false);
       } catch (err) {
         reviewId = hudReviewProfile(err, id, library.activeProfileId);
-        if (reviewId && onHudReviewRequired) setError(null, "profiles:switch");
+        const { code, message } = parseInvokeError(err);
+        if (code === "KeptPackHandoff" || code === "PendingLiveHandoff") {
+          setSwitchHandoff({
+            kind: code === "KeptPackHandoff" ? "kept" : "retained",
+            message,
+            ownerId: library.activeProfileId,
+          });
+          setError(null, "profiles:switch");
+        } else if (reviewId && onHudReviewRequired) setError(null, "profiles:switch");
         else
           setError(
             err instanceof Error ? err.message : "Could not switch profiles.",
@@ -434,6 +448,32 @@ export function useProfileLibrary(
     },
     [api, library, running, busy, progress, setError, setBusy, onHudReviewRequired],
   );
+
+  const captureKeptPacks = useCallback(async () => {
+    if (switchHandoff?.kind !== "kept" || running || busy) return;
+    if (library?.activeProfileId !== switchHandoff.ownerId) {
+      setSwitchHandoff(null);
+      setError(
+        "The active profile changed. Choose the profile to switch to again.",
+        "profiles:switch",
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      setLibrary(await api.absorbPacks("captureKept"));
+      setSwitchHandoff(null);
+      setAbsorbNonce((value) => value + 1);
+      setError(null, "profiles:switch");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not capture kept packs.",
+        "profiles:switch",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [api, switchHandoff, library, running, busy, setBusy, setError]);
 
   const reviewDelete = useCallback(
     (id: string) => {
@@ -493,6 +533,7 @@ export function useProfileLibrary(
         }
         const next = await api.deleteProfile(target.id, active && keepInstalled);
         setLibrary(next);
+        setSwitchHandoff(null);
         setDeleteTarget(null);
         setPackPrompt(null);
         setPackPromptDeferred(false);
@@ -618,6 +659,7 @@ export function useProfileLibrary(
 
   const reset = useCallback(() => {
     setLibrary(null);
+    setSwitchHandoff(null);
     setDeleteTarget(null);
     setDeleteError(null);
     setFolderRepair(null);
@@ -663,6 +705,9 @@ export function useProfileLibrary(
     },
     exportProfile,
     switchProfile,
+    switchHandoff,
+    captureKeptPacks,
+    dismissSwitchHandoff: () => setSwitchHandoff(null),
     deleteTarget,
     deleting,
     deleteError,

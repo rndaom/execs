@@ -233,6 +233,10 @@ where
     index.profiles.retain(|profile| profile.id != id);
     if index.active_profile_id.as_deref() == Some(id) {
         index.active_profile_id = None;
+        // Keep installed leaves the exact live setup in TF2 after its owner
+        // disappears. Preserve that fact across restarts until Save current
+        // as… has captured the retained bytes in a new profile.
+        index.pending_live_handoff = true;
     }
     let after_bytes = format!(
         "{}\n",

@@ -236,8 +236,10 @@ describe("your mods", () => {
   it("names the source and the size", () => {
     expect(modSourceLabel(local.source)).toBe("Local");
     expect(modSourceLabel(gb.source)).toBe("GameBanana");
+    expect(modSourceLabel({ kind: "external" })).toBe("External");
     expect(modMetaLine(local)).toBe("Local · 12.0 MB");
     expect(modMetaLine(gb)).toBe("GameBanana · 58.9 MB");
+    expect(modMetaLine({ ...local, source: { kind: "external" } })).toBe("External · 12.0 MB");
   });
 
   it("only offers a link for a pack that has a page", () => {

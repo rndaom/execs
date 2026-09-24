@@ -43,7 +43,9 @@ export const CROSSHAIR_FILES = [
   "crosshair7",
 ] as const;
 
-export type CrosshairFile = (typeof CROSSHAIR_FILES)[number];
+export type StockCrosshairFile = (typeof CROSSHAIR_FILES)[number];
+/** TF2 also accepts material names supplied by HUDs and other custom packs. */
+export type CrosshairFile = string;
 
 export type GameplayLayer = "comfig" | "vanilla";
 
@@ -82,6 +84,10 @@ export type GameplaySettings = {
 };
 
 const CROSSHAIR_FILE_SET = new Set<string>(CROSSHAIR_FILES);
+
+export function isStockCrosshairFile(file: string): file is StockCrosshairFile {
+  return CROSSHAIR_FILE_SET.has(file);
+}
 
 function corpusNumber(name: string, fallback: number): number {
   const raw = lookupCvar(name)?.d;
@@ -233,7 +239,12 @@ export function seedGameplay(
 
 export function serializeGameplay(settings: GameplaySettings): string {
   const next = clampGameplay(settings);
-  const file = next.cl_crosshair_file === "" ? '""' : next.cl_crosshair_file;
+  const file =
+    next.cl_crosshair_file === ""
+      ? '""'
+      : /^[a-zA-Z0-9_./-]+$/.test(next.cl_crosshair_file)
+        ? next.cl_crosshair_file
+        : JSON.stringify(next.cl_crosshair_file);
   return [
     GAMEPLAY_HEADER,
     `fov_desired ${next.fov_desired}`,
@@ -431,15 +442,16 @@ function parseToggle(raw: string, fallback: GameplayToggle): GameplayToggle {
 }
 
 function parseCrosshairFile(raw: string): CrosshairFile {
-  const value = String(raw)
+  const value = String(raw);
+  const normalized = value
     .trim()
     .toLowerCase()
     .replace(/\.vtf$/i, "");
-  if (value === "" || value === "0" || value === "default") {
+  if (normalized === "" || normalized === "0" || normalized === "default") {
     return "";
   }
-  if (CROSSHAIR_FILE_SET.has(value)) {
-    return value as CrosshairFile;
+  if (isStockCrosshairFile(normalized)) {
+    return normalized;
   }
-  return "";
+  return value;
 }

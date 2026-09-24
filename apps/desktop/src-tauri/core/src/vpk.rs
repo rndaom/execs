@@ -537,6 +537,16 @@ fn ensure_same_archive_parent(dir_path: &Path, data_path: &Path) -> Result<(), V
 /// split-archive references, and no more overlap between entries than a full
 /// read would tolerate. The cheap gate for a pack the user is importing.
 pub fn validate_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkSummary, VpkError> {
+    validate_vpk_dir_bytes_with_paths(bytes, &mut |_| Ok(()))
+}
+
+/// Validate a single-file VPK and inspect each normalized virtual path without
+/// materializing entry bodies. The imported-pack entry, tree, path-metadata,
+/// entry-size, and aggregate-byte limits also apply to the callback.
+pub fn validate_vpk_dir_bytes_with_paths(
+    bytes: &[u8],
+    visit_path: &mut dyn FnMut(&str) -> Result<(), VpkError>,
+) -> Result<VpkSummary, VpkError> {
     let mut summary = VpkSummary::default();
     let budget = materialize_budget(bytes.len() as u64);
     walk_vpk_tree(bytes, bytes.len() as u64, IMPORT_LIMITS, &mut |entry| {
@@ -574,6 +584,7 @@ pub fn validate_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkSummary, VpkError> {
         }
         summary.files += 1;
         charge(&mut summary.bytes, budget, total_len)?;
+        visit_path(&entry.rel)?;
         Ok(())
     })?;
     Ok(summary)
@@ -984,6 +995,28 @@ pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>
         Ok(())
     })?;
     Ok(entries)
+}
+
+/// Inspect selected virtual member paths without reading their payloads or
+/// allocating a map of every member in a large directory VPK.
+pub fn list_vpk_member_paths_filtered(
+    path: &Path,
+    keep: &dyn Fn(&str) -> bool,
+    max_matches: usize,
+) -> Result<Vec<String>, VpkError> {
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    let mut matches = Vec::new();
+    walk_vpk_tree(&tree, on_disk_len, limits, &mut |entry| {
+        if keep(&entry.rel) {
+            if matches.len() >= max_matches {
+                return Err(VpkError("Too many matching VPK members.".into()));
+            }
+            matches.push(entry.rel);
+        }
+        Ok(())
+    })?;
+    Ok(matches)
 }
 
 /// Read one entry's bytes via its location (no full-archive materialization).

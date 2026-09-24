@@ -50,9 +50,11 @@ type ScrollRegionProps = {
 class PaneScrollRegion extends Component<ScrollRegionProps> {
   private viewport = createRef<HTMLElement>();
   private content = createRef<HTMLDivElement>();
+  private pane = createRef<HTMLDivElement>();
   private positions = new Map<WorkspaceTab, number>();
   private pendingRestore: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private transitionPhase = 0;
 
   componentDidMount() {
     if (typeof ResizeObserver === "undefined" || !this.content.current) return;
@@ -83,6 +85,15 @@ class PaneScrollRegion extends Component<ScrollRegionProps> {
     }
     this.pendingRestore = this.positions.get(this.props.tab) ?? 0;
     this.restorePending();
+    if (previous.tab !== this.props.tab) {
+      // Alternate identical animations so a rapid second tab switch starts a
+      // fresh entrance without remounting the pane or losing its drafts.
+      this.transitionPhase += 1;
+      this.pane.current?.setAttribute(
+        "data-switch",
+        this.transitionPhase % 2 === 1 ? "odd" : "even",
+      );
+    }
   }
 
   componentWillUnmount() {
@@ -122,7 +133,7 @@ class PaneScrollRegion extends Component<ScrollRegionProps> {
         onKeyDownCapture={this.takeScrollControl}
       >
         <div ref={this.content} className="settings-content" data-pane={tab}>
-          <div data-testid={`settings-pane-${tab}`} className="settings-pane">
+          <div ref={this.pane} data-testid={`settings-pane-${tab}`} className="settings-pane">
             {children ?? <p className="t-meta">{workspaceLabel(tab)}</p>}
           </div>
         </div>

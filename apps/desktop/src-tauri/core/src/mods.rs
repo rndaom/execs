@@ -18,6 +18,7 @@ use crate::archive::{
     extract_archive, read_dir_entries, read_regular_file_bounded, read_regular_file_bounded_within,
     validate_imported_cfg, ArchiveLimits,
 };
+use crate::content_index::normalize_virtual_path;
 use crate::pcf::MAX_PCF_BYTES;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -28,7 +29,7 @@ use crate::profile::{
 use crate::switch::{live_path, prune_empty_parents};
 use crate::vpk::{
     map_vpk_entries, read_vpk_dir_bytes_filtered, read_vpk_dir_file_filtered_bounded,
-    validate_vpk_dir_bytes,
+    validate_vpk_dir_bytes, validate_vpk_dir_bytes_with_paths, VpkError,
 };
 
 /// One pack's ceiling, and the ceiling on a whole archive: a mod is held in
@@ -67,6 +68,8 @@ const RESERVED_PACK_PREFIXES: [&str; 2] = ["execs-", "mastercomfig"];
 pub enum ModSource {
     /// A file or folder the user picked on their own disk.
     Local,
+    /// A pack found in tf/custom and accepted through profile absorb.
+    External,
     /// Installed from GameBanana; `url` is the mod's profile page, so the UI
     /// can always send the user back to the author.
     Gamebanana { id: u64, url: String },
@@ -75,7 +78,7 @@ pub enum ModSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModRecord {
-    /// Sanitized id, unique within the profile; also the pack's folder name.
+    /// Stable id, unique within the profile. Imports also use it as the pack name.
     pub id: String,
     /// What the user called it — the archive, folder or GameBanana title.
     pub name: String,
@@ -614,6 +617,57 @@ struct PlannedMod {
     files: Vec<(String, Vec<u8>)>,
 }
 
+fn active_crosshair_script_targets(manifest: &ProfileManifest) -> BTreeSet<String> {
+    if manifest
+        .crosshair
+        .as_ref()
+        .is_none_or(|record| record.inactive)
+    {
+        return BTreeSet::new();
+    }
+    manifest
+        .files
+        .iter()
+        .filter_map(|file| {
+            let key = normalize_virtual_path(&file.path);
+            let member = key.strip_prefix("tf/custom/execs-crosshairs/")?;
+            (member.starts_with("scripts/tf_weapon_") && member.ends_with(".txt"))
+                .then(|| member.to_string())
+        })
+        .collect()
+}
+
+fn refuse_crosshair_script_collision(
+    content: &ModContent,
+    targets: &BTreeSet<String>,
+) -> Result<(), ProfileError> {
+    let conflict = |member: &str| {
+        let key = normalize_virtual_path(member);
+        targets.contains(&key).then_some(key)
+    };
+    match content {
+        ModContent::Vpk(bytes) => {
+            validate_vpk_dir_bytes_with_paths(bytes, &mut |member| {
+                if let Some(path) = conflict(member) {
+                    return Err(VpkError(format!(
+                        "This mod supplies {path}, which is also in the active execs-crosshairs pack. Remove or deactivate that pack before importing this mod."
+                    )));
+                }
+                Ok(())
+            })
+            .map_err(|err| ProfileError::Io(err.message()))?;
+        }
+        ModContent::Tree(entries) => {
+            if let Some(path) = entries.iter().find_map(|(member, _)| conflict(member)) {
+                return Err(ProfileError::Io(format!(
+                    "This mod supplies {path}, which is also in the active execs-crosshairs pack. Remove or deactivate that pack before importing this mod."
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Testable/custom-library form of [`install_mods`]. The aggregate ceiling is
 /// deliberately the same as one archive: the command holds all selected packs
 /// in memory at once, so applying the limit independently to each file picker
@@ -646,6 +700,7 @@ where
     }
 
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let crosshair_scripts = active_crosshair_script_targets(&manifest);
     let mut taken = taken_pack_identities(tf2_root, &manifest);
     let mut planned = Vec::with_capacity(packs.len());
     let mut selection_budget = ModBatchBudget::default();
@@ -654,6 +709,7 @@ where
     for (name, content) in packs {
         selection_budget.add(&content)?;
         refuse_hud_mod(&content)?;
+        refuse_crosshair_script_collision(&content, &crosshair_scripts)?;
 
         let display = display_name(&name);
         let mut base = mod_id_from_name(&display);
@@ -667,7 +723,6 @@ where
 
         let (pack, files) = match content {
             ModContent::Vpk(bytes) => {
-                validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
                 let cfgs = read_vpk_dir_bytes_filtered(&bytes, &|path| has_extension(path, "cfg"))
                     .map_err(|err| ProfileError::Io(err.message()))?;
                 for (path, cfg) in cfgs.files {
@@ -1063,6 +1118,76 @@ mod tests {
             .clone();
         set_active_profile_to(&profiles, &tf2, &id, unlocked()).unwrap();
         (root, profiles, tf2, id)
+    }
+
+    #[test]
+    fn importing_a_weapon_script_cannot_collide_with_active_crosshair_pack() {
+        let (root, profiles, tf2, id) = setup();
+        let crosshair_path = "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt";
+        mutate_profile_files_to(
+            &profiles,
+            &tf2,
+            &id,
+            &[(
+                crosshair_path.into(),
+                FileSource::Bytes(b"generated script"),
+            )],
+            &[],
+            ProfileLiveProjection::MirrorIfActive,
+            unlocked(),
+            |manifest| {
+                manifest.crosshair = Some(crate::profile::CrosshairRecord {
+                    id: "execs-crosshairs".into(),
+                    inactive: false,
+                    source_changed: false,
+                    source_scripts_sha256: None,
+                    scale: None,
+                    stock: None,
+                    shape: "cross".into(),
+                    assignments: BTreeMap::new(),
+                    color: None,
+                    library: BTreeMap::new(),
+                    design: None,
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let member = "SCRIPTS/TF_WEAPON_SCATTERGUN.TXT";
+        for (name, content) in [
+            (
+                "loose",
+                ModContent::Tree(vec![(member.into(), b"other script".to_vec())]),
+            ),
+            (
+                "packed",
+                ModContent::Vpk(write_vpk_v1(&BTreeMap::from([(
+                    member.into(),
+                    b"other script".to_vec(),
+                )]))),
+            ),
+        ] {
+            let err = install_mod_to(
+                &profiles,
+                &tf2,
+                &id,
+                name,
+                content,
+                ModSource::Local,
+                unlocked(),
+            )
+            .unwrap_err();
+            assert!(err.message().contains("scripts/tf_weapon_scattergun.txt"));
+            assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+            assert!(!tf2.join(format!("tf/custom/{name}")).exists());
+            assert!(!tf2.join(format!("tf/custom/{name}.vpk")).exists());
+            assert_eq!(
+                fs::read(tf2.join(crosshair_path)).unwrap(),
+                b"generated script"
+            );
+        }
+        let _ = fs::remove_dir_all(root);
     }
 
     fn save_selected_profile_mods(profiles: &Path, tf2: &Path, profile_id: &str, ids: &[&str]) {

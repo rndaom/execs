@@ -22,9 +22,9 @@ use crate::profile::{
     ViewmodelRecord, ViewmodelSource,
 };
 use crate::surface::CfgLayer;
-use crate::vpk::validate_vpk_dir_bytes;
 #[cfg(test)]
 use crate::vpk::write_vpk_v1;
+use crate::vpk::{validate_vpk_dir_bytes_with_paths, VpkError};
 
 pub const EXECS_VIEWMODELS_PACK: &str = "execs-viewmodels";
 pub const EXECS_VIEWMODELS_VPK: &str = "tf/custom/execs-viewmodels.vpk";
@@ -231,7 +231,7 @@ where
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     validate_viewmodel_import_metadata(vpk_bytes.len(), &options)?;
-    validate_vpk_dir_bytes(vpk_bytes).map_err(|err| ProfileError::Io(err.message()))?;
+    validate_viewmodel_vpk(vpk_bytes)?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
     refuse_untracked_live_viewmodel_files(profiles_dir, tf2_root, profile_id, &manifest)?;
     // Importing without preload must not strip the shared cfg and launch
@@ -267,6 +267,7 @@ where
     )?;
 
     let record = ViewmodelRecord {
+        source_changed: false,
         id: EXECS_VIEWMODELS_PACK.into(),
         source,
         preload,
@@ -829,6 +830,54 @@ fn validate_viewmodel_import_metadata(
     Ok(())
 }
 
+/// A custom VPK mounts every member as game content. Keep the Viewmodels
+/// shortcut limited to compiled first-person weapon models; mixed packs belong
+/// in Mods, where CFG members receive their separate trust review.
+fn validate_viewmodel_vpk(bytes: &[u8]) -> Result<(), ProfileError> {
+    let mut model_files = 0usize;
+    validate_vpk_dir_bytes_with_paths(bytes, &mut |path| {
+        if !is_viewmodel_member(path) {
+            return Err(VpkError(format!(
+                "Viewmodel VPK contains unrelated content: {path}. Import mixed-content packs through Mods."
+            )));
+        }
+        if path.to_ascii_lowercase().ends_with(".mdl") {
+            model_files += 1;
+        }
+        Ok(())
+    })
+    .map_err(|err| ProfileError::Io(err.message()))?;
+    if model_files == 0 {
+        return Err(ProfileError::Io(
+            "Viewmodel VPK must contain a compiled weapon viewmodel (.mdl).".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_viewmodel_member(path: &str) -> bool {
+    if path.chars().any(char::is_control) || path.contains(':') {
+        return false;
+    }
+    let lower = path.to_ascii_lowercase();
+    let Some(member) = [
+        "models/weapons/c_models/",
+        "models/weapons/v_models/",
+        "models/workshop/weapons/c_models/",
+    ]
+    .into_iter()
+    .find_map(|prefix| lower.strip_prefix(prefix)) else {
+        return false;
+    };
+    !member.is_empty()
+        && member
+            .split('/')
+            .all(|part| !part.is_empty() && part != ".")
+        && [".mdl", ".vvd", ".vtx", ".phy", ".ani"]
+            .into_iter()
+            .any(|suffix| member.ends_with(suffix))
+}
+
 /// The fixed legacy folder is still on TF2's search path beside the generated
 /// VPK. A transaction can safely replace tracked entries, but silently leaving
 /// unknown files there would mount customization the profile does not own.
@@ -1182,6 +1231,83 @@ mod tests {
     }
 
     #[test]
+    fn viewmodel_vpk_members_are_limited_to_compiled_weapon_models() {
+        for path in [
+            "models/weapons/c_models/c_scout_animations.mdl",
+            "MODELS/WEAPONS/C_MODELS/c_scout_animations.dx90.vtx",
+            "models/weapons/v_models/v_pistol.vvd",
+            "models/workshop/weapons/c_models/custom/c_custom.ani",
+        ] {
+            assert!(is_viewmodel_member(path), "{path}");
+        }
+        for path in [
+            "cfg/autoexec.cfg",
+            "scripts/game_sounds.txt",
+            "models/player/scout.mdl",
+            "models/weapons/w_models/w_rocket.mdl",
+            "materials/models/weapons/c_models/skin.vmt",
+            "models/weapons/c_models/readme.txt",
+            "models/weapons/c_models//c_scout_animations.mdl",
+            "models/weapons/c_models/./c_scout_animations.mdl",
+        ] {
+            assert!(!is_viewmodel_member(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn viewmodel_import_refuses_a_vpk_with_cfg_without_touching_live_files() {
+        let (root, profiles, tf2, id) = setup();
+        let old_vpk = write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"original model".to_vec(),
+        )]));
+        import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &old_vpk,
+            false,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let live = tf2.join(EXECS_VIEWMODELS_VPK);
+        let library = exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK);
+        let before_live = std::fs::read(&live).unwrap();
+        let before_library = std::fs::read(&library).unwrap();
+        let mixed_vpk = write_vpk_v1(&BTreeMap::from([
+            ("cfg/autoexec.cfg".into(), b"echo unexpected\n".to_vec()),
+            (
+                "models/weapons/c_models/c_scout_animations.mdl".into(),
+                b"replacement model".to_vec(),
+            ),
+        ]));
+
+        let err = import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &mixed_vpk,
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("cfg/autoexec.cfg"), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(&live).unwrap(), before_live);
+        assert_eq!(std::fs::read(&library).unwrap(), before_library);
+        assert!(!tf2.join(EXECS_PRELOAD_VANILLA_PATH).exists());
+        assert!(!tf2.join("tf/cfg/autoexec.cfg").exists());
+        cleanup(&root);
+    }
+
+    #[test]
     fn enabling_preload_without_viewmodels_is_side_effect_free() {
         let (root, profiles, tf2, id) = setup();
         let before = load_manifest(&profiles, &id).unwrap();
@@ -1200,7 +1326,7 @@ mod tests {
     fn disabling_preload_removes_the_managed_cfg_and_launch_token() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1243,7 +1369,7 @@ mod tests {
         )
         .unwrap();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         let detail = import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1270,7 +1396,7 @@ mod tests {
         let steam = root.join("Steam");
         let localconfig = write_steam_account(&steam, "-novid");
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to_with_launch(
             &profiles,
             &no_mods(&root),
@@ -1296,7 +1422,7 @@ mod tests {
     fn malformed_localconfig_leaves_the_committed_change_pending_for_retry() {
         let (root, profiles, tf2, id) = setup();
         let mut old_files = BTreeMap::new();
-        old_files.insert("models/old.mdl".into(), b"old".to_vec());
+        old_files.insert("models/weapons/c_models/old.mdl".into(), b"old".to_vec());
         let old_vpk = write_vpk_v1(&old_files);
         import_viewmodel_vpk_to(
             &profiles,
@@ -1317,7 +1443,7 @@ mod tests {
         let localconfig = write_steam_account(&steam, "-novid");
         std::fs::write(&localconfig, "{{{ malformed").unwrap();
         let mut new_files = BTreeMap::new();
-        new_files.insert("models/new.mdl".into(), b"new".to_vec());
+        new_files.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let new_vpk = write_vpk_v1(&new_files);
         let err = import_viewmodel_vpk_to_with_launch(
             &profiles,
@@ -1360,7 +1486,7 @@ mod tests {
     fn import_transaction_rolls_back_pack_preload_record_and_launch_together() {
         let (root, profiles, tf2, id) = setup();
         let mut old_files = BTreeMap::new();
-        old_files.insert("models/old.mdl".into(), b"old".to_vec());
+        old_files.insert("models/weapons/c_models/old.mdl".into(), b"old".to_vec());
         let old_vpk = write_vpk_v1(&old_files);
         let mut old_options = BTreeMap::new();
         old_options.insert("generation".into(), "old".into());
@@ -1391,7 +1517,7 @@ mod tests {
         let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
         std::fs::create_dir_all(&blocker).unwrap();
         let mut new_files = BTreeMap::new();
-        new_files.insert("models/new.mdl".into(), b"new".to_vec());
+        new_files.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let new_vpk = write_vpk_v1(&new_files);
         let mut new_options = BTreeMap::new();
         new_options.insert("generation".into(), "new".into());
@@ -1457,7 +1583,7 @@ mod tests {
     fn oversized_prior_live_pack_is_rejected_without_materializing_a_snapshot() {
         let (root, profiles, tf2, id) = setup();
         let mut old_files = BTreeMap::new();
-        old_files.insert("models/old.mdl".into(), b"old".to_vec());
+        old_files.insert("models/weapons/c_models/old.mdl".into(), b"old".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1480,7 +1606,7 @@ mod tests {
             .unwrap();
 
         let mut replacement = BTreeMap::new();
-        replacement.insert("models/new.mdl".into(), b"new".to_vec());
+        replacement.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let err = import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1506,7 +1632,7 @@ mod tests {
     fn remove_preserves_drifted_live_viewmodel_files() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1555,7 +1681,7 @@ mod tests {
         let (root, profiles, tf2, id) = setup();
         let data = mods_installed(&tf2);
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &data,
@@ -1666,7 +1792,7 @@ mod tests {
         std::fs::write(&untracked, b"echo user-owned\n").unwrap();
         let before = load_manifest(&profiles, &id).unwrap();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
 
         let err = import_viewmodel_vpk_to(
             &profiles,
@@ -1691,7 +1817,10 @@ mod tests {
     fn remove_refuses_an_untracked_canonical_viewmodel_vpk_without_mutating() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/orphan.mdl".into(), b"user-owned".to_vec());
+        files.insert(
+            "models/weapons/c_models/orphan.mdl".into(),
+            b"user-owned".to_vec(),
+        );
         let orphan = write_vpk_v1(&files);
         let live_vpk = tf2.join(EXECS_VIEWMODELS_VPK);
         std::fs::write(&live_vpk, &orphan).unwrap();
@@ -1709,7 +1838,7 @@ mod tests {
     fn remove_refuses_untracked_legacy_viewmodel_content_without_mutating() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1785,7 +1914,7 @@ mod tests {
     fn refuses_while_tf2_is_running() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         let err = import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),

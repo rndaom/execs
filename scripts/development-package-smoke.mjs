@@ -25,6 +25,7 @@ import {
   seedDevelopmentPackageFixture,
 } from "./development-package-fixture.mjs";
 import {
+  assertDebianBundledBinary,
   assertDevelopmentHost,
   DEVELOPMENT_CONFIG,
   developmentVersions,
@@ -282,9 +283,8 @@ export async function main() {
       );
       regularFile(candidate[kind]);
     }
-    const expectedBinary = sha256(
-      regularFile(resolve("apps/desktop/src-tauri/target/release/execs")),
-    );
+    const buildBinary = regularFile(resolve("apps/desktop/src-tauri/target/release/execs"));
+    const expectedBinary = sha256(buildBinary);
     report.buildTreeBinarySha256 = expectedBinary;
     for (const [kind, upgrade] of [
       ["appimage", true],
@@ -362,14 +362,15 @@ export async function main() {
           versions.version,
           true,
         );
-        // Tauri's Debian bundler copies the ELF. linuxdeploy strips/patches its
-        // AppImage copy; both running binaries must match their inspected package.
-        if (kind === "deb")
-          assert.equal(
-            inspectedCandidate.binarySha256,
-            expectedBinary,
-            "Debian bundle differs from the built production ELF",
+        // Tauri patches the package kind into a copy for each bundle, then
+        // restores the build ELF. Require precisely that Debian marker change.
+        if (kind === "deb") {
+          const bundledBinary = regularFile(
+            join(fixture.scratch, "candidate-inspection", "usr/bin/execs"),
           );
+          row.debianBundleIdentity = assertDebianBundledBinary(buildBinary, bundledBinary);
+          assert.equal(row.debianBundleIdentity.packagedSha256, inspectedCandidate.binarySha256);
+        }
         row.candidate = inspectedCandidate;
         if (upgrade) {
           const old = inspectPackage(

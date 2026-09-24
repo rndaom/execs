@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionBindings,
   applyRecordedBind,
   autoexecFilePath,
   autoexecHasExecLine,
+  BIND_ACTIONS,
   bindsFilePath,
   canRecordBinds,
   configBindsFromFiles,
-  displayedKeyForAction,
   ensureAutoexecExecLine,
-  keyForAction,
-  lastKeyForCommand,
   MANAGED_BINDS_HEADER,
-  parseManagedBinds,
+  ownedManagedBindKeys,
   recorderOutcomeForKey,
+  removeOwnedManagedBind,
   serializeManagedBinds,
   shouldSyncTrackedBinds,
   sourceKeyFromCode,
@@ -22,6 +22,15 @@ import {
   syncTrackedBindsFromConfig,
   UNBINDABLE_KEY_MESSAGE,
 } from "./binds-ui";
+
+function managedKeysByAction(text: string): Record<string, string[]> {
+  const keys: Record<string, string[]> = {};
+  for (const { actionId, key } of ownedManagedBindKeys(text)) {
+    if (!keys[actionId]) keys[actionId] = [];
+    keys[actionId].push(key);
+  }
+  return keys;
+}
 
 describe("source key mapping", () => {
   it("maps Space, KeyW, Mouse0, and ShiftLeft", () => {
@@ -80,6 +89,39 @@ describe("source key mapping", () => {
 });
 
 describe("managed execs_binds.cfg", () => {
+  it("tracks common TF2 weapon, communication, and utility actions", () => {
+    const actionIds = new Set<string>(BIND_ACTIONS.map((action) => action.id));
+    for (const id of [
+      "invnext",
+      "lastinv",
+      "slot1",
+      "slot3",
+      "showscores",
+      "voicemenu1",
+      "teamchat",
+      "actionslot",
+      "taunt",
+      "backpack",
+    ]) {
+      expect(actionIds.has(id)).toBe(true);
+    }
+    const text = serializeManagedBinds({
+      slot1: "1",
+      showscores: "tab",
+      spray: "t",
+      voicemenu1: "z",
+    });
+    expect(text).toContain("bind 1 slot1");
+    expect(text).toContain("bind tab +showscores");
+    expect(text).toContain('bind t "impulse 201"');
+    expect(managedKeysByAction(text)).toEqual({
+      slot1: ["1"],
+      showscores: ["tab"],
+      spray: ["t"],
+      voicemenu1: ["z"],
+    });
+  });
+
   it("serializes and parses tracked binds", () => {
     const text = serializeManagedBinds({
       forward: "w",
@@ -90,14 +132,14 @@ describe("managed execs_binds.cfg", () => {
     expect(text).toContain("bind w +forward");
     expect(text).toContain("bind s +back");
     expect(text).toContain('bind e "voicemenu 0 0"');
-    expect(parseManagedBinds(text)).toEqual({
-      forward: "w",
-      back: "s",
-      medic: "e",
+    expect(managedKeysByAction(text)).toEqual({
+      forward: ["w"],
+      back: ["s"],
+      medic: ["e"],
     });
   });
 
-  it("never contains unbindall", () => {
+  it("never generates unbindall and retains a line supplied through Files", () => {
     const written = serializeManagedBinds({
       forward: "w",
       jump: "space",
@@ -110,9 +152,10 @@ describe("managed execs_binds.cfg", () => {
       h: "voicemenu 0 0",
       w: "+forward",
     });
-    for (const text of [written, recorded, synced]) {
+    for (const text of [written, recorded]) {
       expect(text.toLowerCase()).not.toContain("unbindall");
     }
+    expect(synced).toContain("unbindall\n");
   });
 });
 
@@ -149,13 +192,53 @@ describe("ensureAutoexecExecLine", () => {
 });
 
 describe("syncTrackedBindsFromConfig", () => {
+  it("preserves unrelated managed-file lines byte-for-byte across a config drift", () => {
+    const current = [
+      MANAGED_BINDS_HEADER,
+      "bind w +forward",
+      "// user note: leave this alone",
+      'alias customjump "+jump; +duck"',
+      "echo custom startup command",
+      'bind q "customjump"',
+      "",
+    ].join("\n");
+    const next = syncTrackedBindsFromConfig(current, {
+      w: "+back",
+      h: "voicemenu 0 0",
+    });
+    expect(next).toContain("bind w +back\n");
+    expect(next).toContain('bind h "voicemenu 0 0"\n');
+    expect(next).not.toContain("bind w +forward\n");
+    expect(next).toContain(
+      '// user note: leave this alone\nalias customjump "+jump; +duck"\necho custom startup command\nbind q "customjump"\n',
+    );
+    const recorded = applyRecordedBind(next, "jump", "mouse3");
+    expect(recorded).toContain(
+      '// user note: leave this alone\nalias customjump "+jump; +duck"\necho custom startup command\nbind q "customjump"\n',
+    );
+    expect(recorded.endsWith("bind mouse3 +jump\n")).toBe(true);
+  });
+
+  it("preserves inline-comment bind lines as user-owned and tracks both config keys", () => {
+    const current = `bind w +forward // deliberate note\r\n// separate note\r\n`;
+    const next = syncTrackedBindsFromConfig(current, {
+      w: "+forward",
+      up: "+forward",
+    });
+    expect(next.startsWith(current)).toBe(true);
+    expect(next).toContain("bind up +forward\r\n");
+    expect(ownedManagedBindKeys(next)).toEqual([
+      { actionId: "forward", key: "w" },
+      { actionId: "forward", key: "up" },
+    ]);
+  });
   it("updates the medic key when config.cfg moved it", () => {
     const current = serializeManagedBinds({ medic: "e", forward: "w" });
     const next = syncTrackedBindsFromConfig(current, {
       w: "+forward",
       h: "voicemenu 0 0",
     });
-    expect(parseManagedBinds(next)).toEqual({ medic: "h", forward: "w" });
+    expect(managedKeysByAction(next)).toEqual({ medic: ["h"], forward: ["w"] });
 
     const fromMap = syncTrackedBindsFromConfig(
       current,
@@ -164,7 +247,7 @@ describe("syncTrackedBindsFromConfig", () => {
         ["mouse3", "voicemenu 0 0"],
       ]),
     );
-    expect(parseManagedBinds(fromMap).medic).toBe("mouse3");
+    expect(managedKeysByAction(fromMap).medic).toEqual(["mouse3"]);
   });
 
   it("removes managed assignments that are absent from the complete config map", () => {
@@ -175,7 +258,11 @@ describe("syncTrackedBindsFromConfig", () => {
       mouse1: "+attack",
     });
 
-    expect(parseManagedBinds(next)).toEqual({ forward: "w", use: "e", attack: "mouse1" });
+    expect(managedKeysByAction(next)).toEqual({
+      forward: ["w"],
+      use: ["e"],
+      attack: ["mouse1"],
+    });
   });
 
   it("clears every tracked assignment when the complete config map is empty", () => {
@@ -204,13 +291,13 @@ describe("syncTrackedBindsFromConfig", () => {
       ]),
     );
 
-    expect(parseManagedBinds(next)).toEqual({
-      forward: "s",
-      back: "w",
-      duck: "ctrl",
-      medic: "j",
-      use: "e",
-      attack: "mouse1",
+    expect(managedKeysByAction(next)).toEqual({
+      forward: ["s"],
+      back: ["w"],
+      duck: ["ctrl"],
+      medic: ["h", "j"],
+      use: ["e"],
+      attack: ["mouse1"],
     });
   });
 
@@ -260,46 +347,54 @@ describe("canRecordBinds", () => {
 });
 
 describe("display and paths", () => {
+  it("keeps both keys on add and removes only a selected execs-owned key", () => {
+    const original = `${MANAGED_BINDS_HEADER}\nbind space +jump\n// retain this\n`;
+    const withSecond = applyRecordedBind(original, "jump", "mouse3");
+    expect(ownedManagedBindKeys(withSecond)).toEqual([
+      { actionId: "jump", key: "space" },
+      { actionId: "jump", key: "mouse3" },
+    ]);
+    expect(
+      actionBindings(
+        { space: "+jump", mouse3: "+jump", w: "+forward" },
+        {
+          space: { file: "tf/cfg/config.cfg", line: 5 },
+          mouse3: { file: "tf/cfg/execs_binds.cfg", line: 4 },
+        },
+        withSecond,
+        "tf/cfg/execs_binds.cfg",
+        "jump",
+      ),
+    ).toEqual([
+      { key: "space", source: { file: "tf/cfg/config.cfg", line: 5 }, owned: false },
+      { key: "mouse3", source: { file: "tf/cfg/execs_binds.cfg", line: 4 }, owned: true },
+    ]);
+    expect(removeOwnedManagedBind(withSecond, "jump", "mouse3")).toBe(original);
+  });
+
   it("records combat actions while retaining other managed bindings", () => {
     let text = serializeManagedBinds({ forward: "w", medic: "e", loadout2: "f3" });
     text = applyRecordedBind(text, "attack", "mouse1");
     text = applyRecordedBind(text, "attack2", "mouse2");
     text = applyRecordedBind(text, "reload", "r");
-    expect(parseManagedBinds(text)).toEqual({
-      forward: "w",
-      medic: "e",
-      loadout2: "f3",
-      attack: "mouse1",
-      attack2: "mouse2",
-      reload: "r",
+    expect(managedKeysByAction(text)).toEqual({
+      forward: ["w"],
+      medic: ["e"],
+      loadout2: ["f3"],
+      attack: ["mouse1"],
+      attack2: ["mouse2"],
+      reload: ["r"],
     });
     expect(text).not.toContain("unbind");
-    expect(keyForAction({ mouse1: "+attack; say_team pushing" }, "attack")).toBeNull();
-  });
-
-  it("maps command to the last matching key", () => {
-    const binds = {
-      e: "voicemenu 0 0",
-      h: "voicemenu 0 0",
-      w: "+forward",
-    };
-    expect(lastKeyForCommand(binds, "voicemenu 0 0")).toBe("h");
-    expect(keyForAction(binds, "medic")).toBe("h");
-    expect(keyForAction(binds, "forward")).toBe("w");
-  });
-
-  it("shows a newly recorded managed bind over stale config.cfg data", () => {
-    const effective = { ctrl: "+duck" };
-    const managed = parseManagedBinds(applyRecordedBind("", "duck", "shift"));
-    expect(displayedKeyForAction(effective, managed, "duck")).toBe("shift");
-  });
-
-  it("masks keys claimed by another managed action from stale effective data", () => {
-    const effective = { shift: "+duck", ctrl: "+duck" };
-    const managed = parseManagedBinds(applyRecordedBind("", "voice", "shift"));
-    expect(displayedKeyForAction(effective, managed, "voice")).toBe("shift");
-    expect(displayedKeyForAction(effective, managed, "duck")).toBe("ctrl");
-    expect(displayedKeyForAction({ shift: "+duck" }, managed, "duck")).toBeNull();
+    expect(
+      actionBindings(
+        { mouse1: "+attack; say_team pushing" },
+        {},
+        "",
+        "tf/cfg/execs_binds.cfg",
+        "attack",
+      ),
+    ).toEqual([]);
   });
 
   it("places the owned file on the comfig or vanilla layer", () => {

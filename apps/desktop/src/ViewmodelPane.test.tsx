@@ -14,6 +14,8 @@ let running: boolean;
 let record: ViewmodelRecord | null;
 const pending = vi.fn();
 const build = vi.fn();
+const openGameplay = vi.fn();
+const openCasual = vi.fn();
 const api = {} as Api;
 
 beforeEach(() => {
@@ -26,6 +28,8 @@ beforeEach(() => {
   record = null;
   pending.mockReset();
   build.mockReset();
+  openGameplay.mockReset();
+  openCasual.mockReset();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -33,7 +37,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(profileId = "A") {
+async function render(profileId = "A", profilePreload: boolean | null = true, globalShown = true) {
   await act(async () =>
     root.render(
       <AppStatusProvider value={{ running, busy: false, error: null, setError: () => {} }}>
@@ -42,6 +46,10 @@ async function render(profileId = "A") {
             api={api}
             profileId={profileId}
             record={record}
+            globalViewmodelsShown={globalShown}
+            profilePreload={profilePreload}
+            onOpenGameplay={openGameplay}
+            onOpenCasualSetup={openCasual}
             onBuild={build}
             onImport={() => {}}
             onRemove={() => {}}
@@ -61,6 +69,38 @@ async function click(selector: string) {
 }
 
 describe("Viewmodels workspace", () => {
+  it("warns when accepted external bytes make a saved viewmodel pack unverified", async () => {
+    record = {
+      id: "execs-viewmodels",
+      source: "imported",
+      preload: false,
+      sourceChanged: true,
+      options: {},
+    };
+    await render();
+    expect(element('[data-testid="viewmodel-source-changed"]').textContent).toContain(
+      "saved viewmodel VPK changed outside execs",
+    );
+    expect(box.textContent).toContain("Replace the model-only VPK");
+  });
+
+  it("shows global Draw status and uses the shared preload value for builds", async () => {
+    await render("A", false, false);
+    expect(box.textContent).toContain("Global Draw viewmodel: Off");
+    expect(box.textContent).toContain("including groups set to Show");
+    expect(box.textContent).toContain("Casual preload: Off");
+    await click('[data-testid="viewmodel-global-status"] button');
+    await click('[data-testid="viewmodel-preload-status"] button');
+    expect(openGameplay).toHaveBeenCalledOnce();
+    expect(openCasual).toHaveBeenCalledOnce();
+    await click('[data-testid="viewmodel-group-scout/scatterguns"]');
+    await click('[data-testid="viewmodel-build"]');
+    expect(build).toHaveBeenCalledWith(["scout/scatterguns"], false, "full");
+    await render("A", null, false);
+    expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
+    expect(element<HTMLButtonElement>('[data-testid="viewmodel-import"]').disabled).toBe(true);
+  });
+
   it("keeps class drafts editable during a game and requires a later explicit build", async () => {
     running = true;
     await render();
@@ -106,18 +146,23 @@ describe("Viewmodels workspace", () => {
     ).toBe("false");
   });
 
-  it("distinguishes the weapon-only result from its stock reference image", async () => {
+  it("explains Hide weapon without showing an inaccurate image", async () => {
     await render();
     await click('[data-testid="viewmodel-visibility-weapon"]');
     expect(box.textContent).toContain("Weapon hidden · hands visible");
-    expect(box.textContent).toContain("Stock image shown for reference");
-    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-reference")).toBe("true");
-    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-stem")).toBe(
-      "scout_scattergun",
+    expect(box.textContent).toContain("A hands-only preview is not available.");
+    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-preview-kind")).toBe(
+      "unavailable",
     );
+    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-stem")).toBe("");
+    expect(box.querySelector('[data-testid="viewmodel-preview-image"]')).toBeNull();
+    const caption = element('[data-testid="viewmodel-stage"] figcaption');
+    expect(caption.className).not.toContain("absolute");
     await click('[data-testid="viewmodel-visibility-full"]');
     expect(box.textContent).toContain("Weapon and hands hidden");
-    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-reference")).toBe("false");
+    expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-preview-kind")).toBe(
+      "capture",
+    );
     expect(element('[data-testid="viewmodel-stage"]').getAttribute("data-stem")).toBe(
       "scout_blank",
     );

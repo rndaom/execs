@@ -149,7 +149,7 @@ export function ProfileMenu({
         <strong className="max-w-40 truncate font-medium text-ink">
           {activeProfile?.name ?? "Profiles"}
         </strong>
-        <CaretDown size={13} className="text-ink-faint" />
+        <CaretDown size={13} className="profile-menu-caret text-ink-faint" />
         {activeProfile ? (
           <span data-testid="profile-active" className="badge hidden md:inline-flex">
             Active

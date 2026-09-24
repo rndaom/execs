@@ -4,7 +4,7 @@ import { viewmodelGroupsForClass } from "./viewmodel-groups";
 export const EXECS_VIEWMODELS_PACK = "execs-viewmodels";
 
 export const VIEWMODEL_CASUAL_COPY =
-  "Packs need the preload on Valve Casual; community and listen servers work without it. A hidden weapon is also hidden in third person. FOV and min viewmodels live on the Gameplay pane.";
+  "Packs need Casual preload, managed in Mods → Casual setup, on Valve Casual; community and listen servers work without it. A hidden weapon is also hidden in third person. FOV and min viewmodels live on the Gameplay pane.";
 
 /** Upstream (and our) rule: hiding any Soldier group also hides the Original. */
 export const SOLDIER_ORIGINAL_NOTE =
@@ -24,10 +24,9 @@ export const VIEWMODEL_CLASSES = [
 
 export type ViewmodelClass = (typeof VIEWMODEL_CLASSES)[number];
 
-/** What the pane edits: preload, the hidden group ids, and how much of the
- * viewmodel a hidden group removes. */
+/** The pane edits hidden groups and how much of each hidden model to remove.
+ * Casual preload belongs to the shared Mods setting. */
 export type ViewmodelDraft = {
-  preload: boolean;
   hidden: string[];
   hideMode: ViewmodelHideMode;
 };
@@ -61,7 +60,6 @@ export function parseHiddenGroups(raw: string | undefined | null): string[] {
 
 export function seedViewmodelDraft(record: ViewmodelRecord | null | undefined): ViewmodelDraft {
   return {
-    preload: record?.preload ?? true,
     // Legacy compiled-era records stored per-weapon JSON blobs under other
     // keys; only the hidden list matters now and unknown keys are ignored.
     hidden: parseHiddenGroups(record?.options?.hidden),

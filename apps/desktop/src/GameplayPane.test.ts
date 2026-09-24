@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameplayPane, type GameplayPaneProps } from "./GameplayPane";
+import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 
 const status = vi.hoisted(() => ({ running: false, busy: false }));
 vi.mock("./hooks/useAppStatus", () => ({ useAppStatus: () => status }));
@@ -64,7 +65,8 @@ describe("GameplayPane weapon controls", () => {
     expect(document.body.textContent).toContain("weapon selection mode 2");
     expect(
       document.querySelector<HTMLInputElement>('[data-testid="gameplay-viewmodel-fov"]')?.value,
-    ).toBe("54.12345");
+    ).toBe("54");
+    expect(document.body.textContent).toContain("54.12345°");
     await act(async () => control("gameplay-autoreload")?.click());
     expect(control("gameplay-autoreload")?.getAttribute("aria-checked")).toBe("true");
     await act(async () => vi.runAllTimersAsync());
@@ -103,5 +105,16 @@ describe("GameplayPane weapon controls", () => {
     await act(async () => control("gameplay-transparent-viewmodels")?.click());
     expect(toggleAddon).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("not a live FOV preview");
+  });
+
+  it("shares transparent addon guidance and routes to its Comfig owner", async () => {
+    const onOpenComfig = vi.fn();
+    await act(async () => render({ onOpenComfig }));
+    expect(document.body.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
+    const link = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Open Comfig addons",
+    );
+    await act(async () => link?.click());
+    expect(onOpenComfig).toHaveBeenCalledOnce();
   });
 });
