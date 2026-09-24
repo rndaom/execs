@@ -34,6 +34,7 @@ pub mod surface;
 pub mod switch;
 pub mod vdf;
 pub mod viewmodel;
+pub mod viewmodel_activity;
 pub mod viewmodel_items;
 pub mod viewmodel_scripts;
 pub mod viewmodel_source;
