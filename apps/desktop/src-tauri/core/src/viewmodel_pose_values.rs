@@ -5,15 +5,27 @@
 //! for the rest of the run. This module only reads those integer samples; bone
 //! scale, base pose, blending and model writes belong to later builder work.
 
+use crate::hash::sha256_hex;
 use crate::viewmodel_pose::parse_stock_pose_mdl;
-use crate::viewmodel_source::{StockAnimationModel, StockBoneModel, StockSourceError};
+use crate::viewmodel_source::{
+    parse_stock_bone_mdl, StockAnimationModel, StockBoneModel, StockSourceError,
+};
 
 const ANIM_DESC_BYTES: usize = 100;
+const BONE_DESC_BYTES: usize = 216;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BonePositionBasis {
+    pub base: [f32; 3],
+    pub scale: [f32; 3],
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PositionValueAudit {
     pub bounded_records: usize,
     pub unbounded_records: usize,
+    pub bounded_raw_records: usize,
+    pub unbounded_raw_records: usize,
     pub decoded_channels: usize,
     pub decoded_frames: usize,
     pub repeated_frames: usize,
@@ -134,6 +146,96 @@ pub fn decode_compressed_position_record(
     Ok(axes)
 }
 
+/// Source's `float16` decoder used by `Vector48`. Its infinity and NaN cases
+/// intentionally match Valve's finite 65504/zero behavior instead of IEEE
+/// `f32` infinity or NaN propagation.
+pub fn source_float16_to_f32(bits: u16) -> f32 {
+    let negative = bits & 0x8000 != 0;
+    let exponent = u32::from((bits >> 10) & 0x1f);
+    let mantissa = u32::from(bits & 0x03ff);
+    let sign = if negative { -1.0 } else { 1.0 };
+    match exponent {
+        0 if mantissa == 0 => f32::from_bits(u32::from(bits & 0x8000) << 16),
+        0 => sign * (mantissa as f32 / 1024.0) * (1.0 / 16384.0),
+        31 if mantissa == 0 => sign * 65504.0,
+        31 => 0.0,
+        _ => f32::from_bits(
+            (u32::from(bits & 0x8000) << 16) | ((exponent + 112) << 23) | (mantissa << 13),
+        ),
+    }
+}
+
+/// Decode the whole-frame local position of one bounded Source bone record.
+/// `base_position` and `position_scale` must come from the same verified MDL
+/// bone (or its linear-bone table). Rotation, sequence weights, blending,
+/// section interpolation and model writing are outside this reader.
+pub fn decode_position_frames(
+    record: &[u8],
+    frame_count: u16,
+    base_position: [f32; 3],
+    position_scale: [f32; 3],
+) -> Result<Vec<[f32; 3]>, StockSourceError> {
+    if frame_count == 0
+        || !base_position
+            .iter()
+            .chain(&position_scale)
+            .all(|x| x.is_finite())
+    {
+        return Err(invalid("position basis or frame count is invalid"));
+    }
+    let header = record
+        .get(..4)
+        .ok_or_else(|| invalid("bone record header is truncated"))?;
+    let flags = header[1];
+    let next = i16::from_le_bytes([header[2], header[3]]);
+    if usize::try_from(next).ok() != Some(record.len()) {
+        return Err(invalid("position bone record is not bounded by nextoffset"));
+    }
+    if flags & 0x01 != 0 && flags & 0x04 != 0 {
+        return Err(invalid("bone record mixes raw and compressed position"));
+    }
+    if flags & 0x01 != 0 {
+        if flags & 0x02 != 0 && flags & 0x20 != 0 {
+            return Err(invalid("bone record has two raw rotation encodings"));
+        }
+        let position_start =
+            4 + if flags & 0x02 != 0 { 6 } else { 0 } + if flags & 0x20 != 0 { 8 } else { 0 };
+        let payload = record
+            .get(position_start..position_start + 6)
+            .ok_or_else(|| invalid("raw Vector48 position is truncated"))?;
+        let mut position = [0.0; 3];
+        for axis in 0..3 {
+            position[axis] = source_float16_to_f32(u16::from_le_bytes([
+                payload[axis * 2],
+                payload[axis * 2 + 1],
+            ]));
+        }
+        return Ok(vec![position; usize::from(frame_count)]);
+    }
+    let mut frames = vec![
+        if flags & 0x10 != 0 {
+            [0.0; 3]
+        } else {
+            base_position
+        };
+        usize::from(frame_count)
+    ];
+    if flags & 0x04 != 0 {
+        let axes = decode_compressed_position_record(record, frame_count)?;
+        for (axis, samples) in axes.into_iter().enumerate() {
+            if let Some(samples) = samples {
+                for (frame, sample) in samples.samples.into_iter().enumerate() {
+                    frames[frame][axis] += f32::from(sample) * position_scale[axis];
+                    if !frames[frame][axis].is_finite() {
+                        return Err(invalid("decoded bone position is not finite"));
+                    }
+                }
+            }
+        }
+    }
+    Ok(frames)
+}
+
 fn i32_at(bytes: &[u8], offset: usize, name: &str) -> Result<i32, StockSourceError> {
     let value = bytes
         .get(offset..offset.saturating_add(4))
@@ -150,6 +252,78 @@ fn local_offset(base: usize, offset: i32, name: &str) -> Result<usize, StockSour
         .ok_or_else(|| invalid(format!("{name} offset overflows")))
 }
 
+fn vector3_at(bytes: &[u8], offset: usize, name: &str) -> Result<[f32; 3], StockSourceError> {
+    let value = bytes
+        .get(offset..offset.saturating_add(12))
+        .ok_or_else(|| invalid(format!("{name} extends outside the MDL")))?;
+    let mut result = [0.0; 3];
+    for (axis, component) in result.iter_mut().enumerate() {
+        let at = axis * 4;
+        *component = f32::from_le_bytes(value[at..at + 4].try_into().unwrap());
+        if !component.is_finite() {
+            return Err(invalid(format!("{name} has a non-finite value")));
+        }
+    }
+    Ok(result)
+}
+
+/// Read position bases from ordinary `mstudiobone_t` entries, or the MDL's
+/// `mstudiolinearbone_t` table when present. The verified bone index and these
+/// bytes must have the same fingerprint before any basis is returned.
+pub fn parse_bone_position_bases(
+    bytes: &[u8],
+    bone_model: &StockBoneModel,
+) -> Result<Vec<BonePositionBasis>, StockSourceError> {
+    if sha256_hex(bytes) != bone_model.sha256 || parse_stock_bone_mdl(bytes)? != *bone_model {
+        return Err(invalid(
+            "position basis differs from the verified bone index",
+        ));
+    }
+    let count = bone_model.bones.len();
+    let ordinary_table = usize::try_from(i32_at(bytes, 160, "bone table")?)
+        .map_err(|_| invalid("bone table offset is invalid"))?;
+    let header2_offset = i32_at(bytes, 400, "studiohdr2 index")?;
+    let linear_table = if header2_offset == 0 {
+        None
+    } else {
+        let header2 = local_offset(0, header2_offset, "studiohdr2")?;
+        let linear_offset = i32_at(bytes, header2 + 16, "linear bone index")?;
+        if linear_offset == 0 {
+            None
+        } else {
+            let table = local_offset(header2, linear_offset, "linear bone table")?;
+            if usize::try_from(i32_at(bytes, table, "linear bone count")?).ok() != Some(count) {
+                return Err(invalid("linear bone count differs from the bone index"));
+            }
+            Some(table)
+        }
+    };
+    let mut bases = Vec::with_capacity(count);
+    for bone in 0..count {
+        let (base_offset, scale_offset) = if let Some(table) = linear_table {
+            let positions = local_offset(
+                table,
+                i32_at(bytes, table + 12, "linear positions")?,
+                "linear positions",
+            )?;
+            let scales = local_offset(
+                table,
+                i32_at(bytes, table + 28, "linear position scales")?,
+                "linear position scales",
+            )?;
+            (positions + bone * 12, scales + bone * 12)
+        } else {
+            let entry = ordinary_table + bone * BONE_DESC_BYTES;
+            (entry + 32, entry + 72)
+        };
+        bases.push(BonePositionBasis {
+            base: vector3_at(bytes, base_offset, "bone base position")?,
+            scale: vector3_at(bytes, scale_offset, "bone position scale")?,
+        });
+    }
+    Ok(bases)
+}
+
 /// Audit compressed position channels in the same locally verified MDL that
 /// produced the animation and bone indexes. The pose inventory validates the
 /// full record graph first; this then decodes only records with a bounded
@@ -160,6 +334,7 @@ pub fn audit_stock_position_values_mdl(
     bone_model: &StockBoneModel,
 ) -> Result<PositionValueAudit, StockSourceError> {
     let pose = parse_stock_pose_mdl(bytes, animation_model, bone_model)?;
+    let bases = parse_bone_position_bases(bytes, bone_model)?;
     let table = usize::try_from(i32_at(bytes, 184, "animation table")?)
         .map_err(|_| invalid("animation table offset is invalid"))?;
     let mut audit = PositionValueAudit::default();
@@ -217,6 +392,21 @@ pub fn audit_stock_position_values_mdl(
                     break;
                 }
                 let next = i16::from_le_bytes([header[2], header[3]]);
+                if header[1] & 0x01 != 0 {
+                    if next == 0 {
+                        audit.unbounded_raw_records += 1;
+                    } else {
+                        let end = at
+                            + usize::try_from(next)
+                                .map_err(|_| invalid("bone record offset is invalid"))?;
+                        let record = bytes
+                            .get(at..end)
+                            .ok_or_else(|| invalid("raw position record exceeds MDL"))?;
+                        let basis = &bases[usize::from(header[0])];
+                        decode_position_frames(record, frames, basis.base, basis.scale)?;
+                        audit.bounded_raw_records += 1;
+                    }
+                }
                 if header[1] & 0x04 != 0 {
                     if next == 0 {
                         audit.unbounded_records += 1;
@@ -234,6 +424,8 @@ pub fn audit_stock_position_values_mdl(
                                     source_animation.name, header[0]
                                 ))
                             })?;
+                        let basis = &bases[usize::from(header[0])];
+                        decode_position_frames(record, frames, basis.base, basis.scale)?;
                         audit.bounded_records += 1;
                         for channel in axes.into_iter().flatten() {
                             audit.decoded_channels += 1;
@@ -300,5 +492,66 @@ mod tests {
         assert_eq!(axes[2].as_ref().unwrap().samples, [-5, -5]);
         record[2] = 0;
         assert!(decode_compressed_position_record(&record, 2).is_err());
+    }
+
+    #[test]
+    fn raw_vector48_ignores_base_pose_and_preserves_signed_values() {
+        let mut record = [0u8; 18];
+        record[..4].copy_from_slice(&[0, 0x21, 18, 0]);
+        record[12..18].copy_from_slice(&[0, 0x3c, 0, 0xc0, 0, 0x38]);
+        let positions = decode_position_frames(&record, 2, [10.0; 3], [2.0; 3]).unwrap();
+        assert_eq!(positions, [[1.0, -2.0, 0.5]; 2]);
+        assert_eq!(source_float16_to_f32(0x7c00), 65504.0);
+        assert_eq!(source_float16_to_f32(0x7e00), 0.0);
+        assert_eq!(source_float16_to_f32(0x0001), 2f32.powi(-24));
+    }
+
+    #[test]
+    fn compressed_position_uses_base_and_scale_and_delta_uses_zero() {
+        let mut record = [0u8; 24];
+        record[..4].copy_from_slice(&[3, 0x0c, 24, 0]);
+        record[10..16].copy_from_slice(&[6, 0, 0, 0, 10, 0]);
+        record[16..20].copy_from_slice(&[1, 2, 5, 0]);
+        record[20..24].copy_from_slice(&[1, 2, 251, 255]);
+        let position =
+            decode_position_frames(&record, 2, [10.0, 20.0, 30.0], [2.0, 3.0, 4.0]).unwrap();
+        assert_eq!(position, [[20.0, 20.0, 10.0]; 2]);
+        record[1] |= 0x10;
+        let delta =
+            decode_position_frames(&record, 2, [10.0, 20.0, 30.0], [2.0, 3.0, 4.0]).unwrap();
+        assert_eq!(delta, [[10.0, 0.0, -20.0]; 2]);
+    }
+
+    #[test]
+    fn verified_ordinary_and_linear_bone_bases_are_distinct() {
+        let mut bytes = vec![0u8; 800];
+        bytes[..4].copy_from_slice(b"IDST");
+        bytes[4..8].copy_from_slice(&48i32.to_le_bytes());
+        bytes[12..20].copy_from_slice(b"fixture\0");
+        bytes[76..80].copy_from_slice(&800i32.to_le_bytes());
+        bytes[156..160].copy_from_slice(&1i32.to_le_bytes());
+        bytes[160..164].copy_from_slice(&408i32.to_le_bytes());
+        bytes[408..412].copy_from_slice(&216i32.to_le_bytes());
+        bytes[412..416].copy_from_slice(&(-1i32).to_le_bytes());
+        bytes[624..629].copy_from_slice(b"root\0");
+        bytes[440..444].copy_from_slice(&10f32.to_le_bytes());
+        bytes[480..484].copy_from_slice(&0.5f32.to_le_bytes());
+        let bone = parse_stock_bone_mdl(&bytes).unwrap();
+        let ordinary = parse_bone_position_bases(&bytes, &bone).unwrap();
+        assert_eq!(ordinary[0].base[0], 10.0);
+        assert_eq!(ordinary[0].scale[0], 0.5);
+
+        bytes[400..404].copy_from_slice(&640i32.to_le_bytes());
+        bytes[656..660].copy_from_slice(&64i32.to_le_bytes());
+        bytes[704..708].copy_from_slice(&1i32.to_le_bytes());
+        bytes[716..720].copy_from_slice(&64i32.to_le_bytes());
+        bytes[732..736].copy_from_slice(&76i32.to_le_bytes());
+        bytes[768..772].copy_from_slice(&25f32.to_le_bytes());
+        bytes[780..784].copy_from_slice(&2f32.to_le_bytes());
+        assert!(parse_bone_position_bases(&bytes, &bone).is_err());
+        let bone = parse_stock_bone_mdl(&bytes).unwrap();
+        let linear = parse_bone_position_bases(&bytes, &bone).unwrap();
+        assert_eq!(linear[0].base[0], 25.0);
+        assert_eq!(linear[0].scale[0], 2.0);
     }
 }
