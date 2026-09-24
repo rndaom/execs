@@ -40,6 +40,14 @@ public static class WindowsPackageNative {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr window, uint command);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", SetLastError=true)]
+    static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+    public static long DialogDefaultButtonResult(IntPtr window) {
+        IntPtr result;
+        if (SendMessageTimeout(window, 0x0400, IntPtr.Zero, IntPtr.Zero, 0x0002, 1000, out result) == IntPtr.Zero)
+            throw new Exception("Dialog default button query failed");
+        return result.ToInt64();
+    }
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
     public static uint WindowPid(IntPtr window) { uint pid; GetWindowThreadProcessId(window, out pid); return pid; }
 }
@@ -351,9 +359,9 @@ $destination = Assert-Contained $r.root $r.destination $true
 if (Test-Path -LiteralPath $destination) { throw 'Export destination already exists.' }
 $evidenceRoot = Assert-Contained $r.root (Join-Path $r.root 'evidence')
 $observationPath = Assert-Contained $evidenceRoot $r.observation $true
-function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null, $OwnershipRoute = $null) {
+function Save-Observation($Stage, $Windows, $Controls = @(), $FieldValue = $null, $OwnershipRoute = $null, $DefaultButtonResult = $null) {
     $observation = @{ stage = $Stage; at = [DateTime]::UtcNow.ToString('o'); requestedPath = $destination; fieldValue = $FieldValue
-        ownershipRoute = $OwnershipRoute
+        ownershipRoute = $OwnershipRoute; defaultButtonResult = $DefaultButtonResult
         windows = @($Windows | ForEach-Object { Window-Record $_ })
         controls = @($Controls | Select-Object -First 500 | ForEach-Object { @{ name = $_.Current.Name; type = $_.Current.ControlType.ProgrammaticName
             id = $_.Current.AutomationId; enabled = $_.Current.IsEnabled; offscreen = $_.Current.IsOffscreen } }) }
@@ -414,15 +422,25 @@ $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows
 if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before Save.' }
 $null = Assert-Contained $r.root $destination $true
 if ($value.Current.Value -cne $destination) { throw 'Native filename changed before Save.' }
-$buttons[0].SetFocus()
-if (-not $buttons[0].Current.HasKeyboardFocus) { throw 'Native Save button did not receive keyboard focus.' }
-Save-Observation 'invoking-save' $windows $controls $acceptedValue $ownershipRoute
+$edit.SetFocus()
+if (-not $edit.Current.HasKeyboardFocus) { throw 'Native filename did not regain keyboard focus.' }
 $null = Owned-Process $r.process
 $windows = @(Windows-ForOwner)
 $ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
-if (-not $buttons[0].Current.IsEnabled -or -not $buttons[0].Current.HasKeyboardFocus) { throw 'Native Save button lost readiness.' }
-if ($value.Current.Value -cne $destination) { throw 'Native filename changed before focused Save.' }
-if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before focused Save.' }
+$defaultButtonResult = [WindowsPackageNative]::DialogDefaultButtonResult([IntPtr]$dialog.Current.NativeWindowHandle)
+Save-Observation 'filename-focused-before-enter' $windows $controls $acceptedValue $ownershipRoute $defaultButtonResult
+$null = Owned-Process $r.process
+$windows = @(Windows-ForOwner)
+$ownershipRoute = Assert-ExportDialogIdentity (Window-Record $dialog) @($windows | ForEach-Object { Window-Record $_ }) $owned.pid ([WindowsPackageNative]::GetForegroundWindow().ToInt64())
+if (Test-Path -LiteralPath $destination) { throw 'Export destination appeared before Enter.' }
+$null = Assert-Contained $r.root $destination $true
+$defaultButtonResult = [WindowsPackageNative]::DialogDefaultButtonResult([IntPtr]$dialog.Current.NativeWindowHandle)
+$filenameFocused = $edit.Current.HasKeyboardFocus
+$saveEnabled = $buttons[0].Current.IsEnabled
+$saveVisible = -not $buttons[0].Current.IsOffscreen
+if (-not (Test-SaveEnterReadiness $value.Current.Value $destination $filenameFocused $saveEnabled $saveVisible $defaultButtonResult)) {
+    throw "Native filename or default Save button is not ready for Enter ($defaultButtonResult)."
+}
 [Windows.Forms.SendKeys]::SendWait('{ENTER}')
 @{ dialog = $record; ownershipRoute = $ownershipRoute; requestedPath = $destination; acceptedFieldValue = $acceptedValue
-    input = 'Physical filename keystrokes, Tab, and focused Save Enter'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8
+    defaultButtonResult = $defaultButtonResult; input = 'Physical filename keystrokes, Tab, focused filename Enter with default Save'; controls = $tree; capture = $capture } | ConvertTo-Json -Depth 8

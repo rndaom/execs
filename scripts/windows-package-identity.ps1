@@ -30,6 +30,14 @@ function Test-SendKeysLiteralPath([string]$Path) {
     return $true
 }
 
+function Test-SaveEnterReadiness([string]$FieldValue, [string]$Destination, [bool]$FilenameFocused,
+    [bool]$SaveEnabled, [bool]$SaveVisible, [long]$DefaultButtonResult) {
+    if ($FieldValue -cne $Destination -or -not $FilenameFocused -or -not $SaveEnabled -or -not $SaveVisible) { return $false }
+    # DM_GETDEFID: high word DC_HASDEFID (0x534b), low word IDOK/Save (1).
+    return ((($DefaultButtonResult -shr 16) -band 0xffff) -eq 0x534b -and
+        ($DefaultButtonResult -band 0xffff) -eq 1)
+}
+
 function Assert-Contained([string]$Root, [string]$Path, [bool]$MissingLeaf = $false) {
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
     $full = [IO.Path]::GetFullPath($Path)

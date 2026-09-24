@@ -154,6 +154,44 @@ $rejected = @($special | ForEach-Object { -not (Test-SendKeysLiteralPath ($env:E
   }
 });
 
+test("native Enter requires the exact filename, focused edit and default Save control", {
+  skip: process.platform !== "win32",
+}, () => {
+  const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
+  const script = `
+. '${helper}'
+$path = 'D:\\a\\_temp\\fixture\\exports\\previous-ui-export.zip'
+$save = 0x534b0001
+[pscustomobject]@{
+  ready = Test-SaveEnterReadiness $path $path $true $true $true $save
+  wrongPathRefused = -not (Test-SaveEnterReadiness ($path + '.zip') $path $true $true $true $save)
+  unfocusedRefused = -not (Test-SaveEnterReadiness $path $path $false $true $true $save)
+  disabledRefused = -not (Test-SaveEnterReadiness $path $path $true $false $true $save)
+  hiddenRefused = -not (Test-SaveEnterReadiness $path $path $true $true $false $save)
+  cancelDefaultRefused = -not (Test-SaveEnterReadiness $path $path $true $true $true 0x534b0002)
+  noDefaultRefused = -not (Test-SaveEnterReadiness $path $path $true $true $true 0)
+  missingMarkerRefused = -not (Test-SaveEnterReadiness $path $path $true $true $true 1)
+} | ConvertTo-Json -Depth 3 -Compress
+`;
+  for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+    const result = spawnSync(
+      command,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        ...(command === "pwsh" ? [] : ["-ExecutionPolicy", "RemoteSigned"]),
+        "-Command",
+        script,
+      ],
+      { encoding: "utf8", timeout: 10_000, windowsHide: true },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
+    for (const [name, passed] of Object.entries(actual)) assert.equal(passed, true, name);
+  }
+});
+
 test(
   "export diagnostics inspect only five exact names and keep alternates distinct",
   {
