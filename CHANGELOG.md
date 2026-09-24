@@ -76,7 +76,7 @@ User-facing changes only. The release workflow publishes the matching
 - Profiles now stop a switch that would carry over a kept external pack or replace its bytes,
   and offer to capture the pack first. After deleting an active profile while keeping its
   installed setup, Save current as… captures that setup before switching elsewhere.
-- Accepted external custom packs appear in Mods Installed with a removable record that
+- Accepted external custom packs appear under Mods → Custom packs with a removable record that
   survives profile switches and export/import. Externally changed crosshair, viewmodel and
   sound files show a source warning until repaired or replaced.
 - Creating a profile from Current setup includes recent live `config.cfg` edits. Imported

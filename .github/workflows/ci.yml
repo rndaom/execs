@@ -49,7 +49,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev zlib1g-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev zlib1g-dev patchelf curl python3-cryptography
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -62,6 +62,9 @@ jobs:
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked
+      - name: Product proxy binding loopback probe
+        timeout-minutes: 5
+        run: /usr/bin/python3 tools/d8-product-proxy-probe.py
       - uses: actions/setup-node@v4
         with:
           node-version: 24

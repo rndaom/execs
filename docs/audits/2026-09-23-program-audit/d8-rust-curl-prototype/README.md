@@ -1,6 +1,6 @@
 # D8 Rust curl-binding probe
 
-This standalone crate tests whether the Rust `curl` binding preserves the original HTTPS hostname while directing a proxy `CONNECT` to a numeric address. It is **audit evidence only**: the app still uses reqwest, and this crate is not a product or release dependency. The pinned `Cargo.lock` uses `curl` 0.4.50 and `curl-sys` 0.4.90 with bundled libcurl 8.21.0 on the tested Windows build.
+This standalone crate tested whether the Rust `curl` binding preserves the original HTTPS hostname while directing a proxy `CONNECT` to a numeric address. It remains **audit evidence only** and is not a product or release dependency. At the time of this probe, the app used reqwest; the later draft product migration is recorded in the [D8 design](../d8-proxy-binding-design.md). The pinned `Cargo.lock` uses `curl` 0.4.50 and `curl-sys` 0.4.90 with bundled libcurl 8.21.0 on the tested Windows build.
 
 From the repository root in PowerShell, with Rust, Python 3 and the Python `cryptography` package available:
 

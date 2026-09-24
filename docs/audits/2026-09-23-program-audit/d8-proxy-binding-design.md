@@ -1,6 +1,6 @@
 # D8 proxy destination binding: implementation design
 
-**Status:** Open. This is a design and acceptance plan, not evidence that proxied downloads are bound to a validated address. The direct connection resolver in `apps/desktop/src-tauri/src/net.rs` already rechecks public addresses at socket resolution. The current reqwest proxy path still sends a hostname in `CONNECT`, which the proxy can resolve independently.
+**Status:** Open for hosted qualification. Draft product commits `fbc17f2` and `b2cce06` implement and probe the numeric destination transport with passing Windows loopback fixtures. The reqwest analysis and candidate plan below record why that implementation was chosen; they describe the state before the curl migration.
 
 ## Required invariant
 
@@ -10,9 +10,9 @@ The proxy case needs two independent names: a validated numeric `CONNECT` target
 
 The [newer reqwest 0.13.5 source](https://github.com/seanmonstar/reqwest/blob/v0.13.5/src/connect.rs#L819-L827) still passes `dst.clone()` to the tunnel and derives the rustls server name from `dst.host()`. Its [public builder](https://docs.rs/reqwest/0.13.5/reqwest/blocking/struct.ClientBuilder.html) still exposes DNS overrides and the opaque connector layer, rather than an independent CONNECT authority. A routine 0.12-to-0.13 upgrade does not supply the needed hook.
 
-## Candidate transport
+## Original candidate transport
 
-The [libcurl `CURLOPT_CONNECT_TO` contract](https://curl.se/libcurl/c/CURLOPT_CONNECT_TO.html) is a fit worth testing: it changes the connection host/port, including an HTTP proxy tunnel destination, while retaining the URL's host for TLS SNI, certificate validation and application protocols. Its [Rust binding](https://docs.rs/curl/0.4.50/curl/easy/struct.Easy2.html#method.connect_to) exposes this option. This is a proposed migration, not a verified replacement for the present client.
+The [libcurl `CURLOPT_CONNECT_TO` contract](https://curl.se/libcurl/c/CURLOPT_CONNECT_TO.html) changes the connection host/port, including an HTTP proxy tunnel destination, while retaining the URL's host for TLS SNI, certificate validation and application protocols. Its [Rust binding](https://docs.rs/curl/0.4.50/curl/easy/struct.Easy2.html#method.connect_to) exposes this option. This was the migration candidate before the product implementation below.
 
 1. Retain the source-specific URL/host/path rules in `net.rs`. For each hop, resolve the original hostname under the bounded DNS deadline. Reject empty or mixed public/non-public results. Select a public address and configure `connect_to` for that host and port only, using `[IPv6]` syntax for IPv6 addresses. Preserve an explicit port (currently only default HTTPS/443 is admitted). A connection failure may try the other checked public addresses; it must never fall back to proxy-side hostname resolution.
 2. Keep the original HTTPS URL on the transfer. Enable peer and hostname verification for both the origin and an HTTPS proxy. Never set a numeric IP as the URL host. Disable automatic redirects and validate each `Location` before resolving and binding its next hop. Do not reuse a connection when its binding would differ from the new hop.
@@ -29,7 +29,7 @@ This is broader than a `net.rs` option change. `hud_fetch.rs`, `hud_stats.rs` an
 - A redirect fixture tries an allowed first hop followed by a private DNS answer, a disallowed host, non-HTTPS URL and unexpected port. Each is refused before a second network connection. A valid multi-hop redirect binds each hop independently; a changed DNS answer cannot make the proxy choose a private destination.
 - Connection stalls, proxy tunnel stalls, origin body stalls, oversized `Content-Length` and streaming overflow honor existing time and byte limits. Cache verification still rejects bad bytes and failed writes. Existing native network tests, workspace fmt/Clippy/tests, and the packaged Windows/Linux smoke matrices pass.
 
-**Current conclusion:** The current reqwest client has no supported hook for independent CONNECT target and origin TLS name. The libcurl route is source-backed but remains unimplemented and unqualified here. Keep D8 unchecked until the transport and acceptance evidence above exist.
+**Design conclusion at this checkpoint:** The former reqwest client had no supported hook for independent CONNECT target and origin TLS name. The later product implementation uses libcurl; keep D8 unchecked until its remaining acceptance evidence exists.
 
 ## Bounded transport probe — September 24, 2026
 
@@ -37,4 +37,12 @@ The [loopback-only fixture](d8-curl-probe.py) used the Windows **`curl.exe` CLI*
 
 The [audit-local Rust curl-binding prototype](d8-rust-curl-prototype/README.md), with pinned `curl` 0.4.50 and bundled `curl-sys` 0.4.90/libcurl 8.21.0, then built on Windows with `cargo build --locked` and passed the same loopback fixture through `--rust-client`: numeric IPv4 and bracketed IPv6 CONNECT, Basic auth, original SNI/Host, matching TLS certificate, and wrong-name certificate rejection. The prototype is standalone and does not change product dependencies or code.
 
-These runs demonstrate the CLI and Rust binding's local transport semantics, not product integration, live proxy selection, `NO_PROXY`, HTTPS proxy TLS, redirect-by-redirect validation, timeout or cap behavior, Linux operation, or packaged NSIS/AppImage/`.deb` support. Those remain D8 acceptance work.
+These standalone runs demonstrated the CLI and Rust binding's local transport semantics before product integration. The product fixture below covers additional Windows behavior; Linux operation and packaged NSIS/AppImage/`.deb` support remain D8 acceptance work.
+
+## Product implementation checkpoint — September 24, 2026
+
+Draft commit `fbc17f2` moves native downloads to an owned curl client in `net.rs`. Each approved HTTPS hop resolves a bounded set of addresses and refuses any non-global answer, then uses `CONNECT_TO` to bind a direct socket or proxy tunnel to one vetted numeric address. The URL hostname remains the TLS server name and HTTP `Host`. Manual redirects repeat URL and address validation. A small pool reuses an Easy handle only for the same hostname, vetted socket address, port and proxy environment; every checkout resets request options. Connection-only failures may try another vetted address, while certificate, header and size failures stop immediately. The curl and zlib bundled C notices are pinned and included in generated package credits.
+
+The [product loopback fixture](../../../tools/d8-product-proxy-probe.py) passed 18 cases on Windows/Schannel after this change and follow-up `b2cce06`: IPv4 and IPv6 numeric HTTP `CONNECT` with Basic auth; original SNI/Host and wrong-name rejection; declared and streamed size caps; `HTTPS_PROXY` with an inactive SOCKS setting; approved and refused redirects, including a next-hop private DNS answer rejected before a second tunnel; `NO_PROXY` direct numeric binding; HTTPS proxy TLS and 407 failure; same-vetted-origin tunnel reuse; numeric SOCKS5h IPv4/IPv6 targets; and proxy CONNECT/origin-body stalls bounded by test-only deadlines. The full Rust workspace tests, workspace Clippy with warnings denied, formatting, generated notice check and Biome passed locally. An independent read-only review found no unresolved high-severity binding flaw. These fixtures do not dial the claimed public targets.
+
+**Remaining before D8 closure:** run exact-head hosted Windows/Linux native and package workflows, verify the Linux proxy path and actual AppImage/`.deb` dependency inventories. Live CDN redirect smoke belongs to release qualification separately. No release is authorized by this transport change.
