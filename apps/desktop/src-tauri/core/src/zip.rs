@@ -3666,8 +3666,14 @@ mod tests {
             .unwrap()
             .id
             .clone();
-        assert_eq!(imported.active_profile_id.as_deref(), Some(source_id.as_str()));
-        assert_eq!(load_manifest(&profiles, &imported_id).unwrap().hitsound, source_record);
+        assert_eq!(
+            imported.active_profile_id.as_deref(),
+            Some(source_id.as_str())
+        );
+        assert_eq!(
+            load_manifest(&profiles, &imported_id).unwrap().hitsound,
+            source_record
+        );
         assert_eq!(
             stored_hitsound(&profiles, &imported_id, HitsoundKind::Hit),
             Some(hit_wav.clone())
@@ -3705,7 +3711,10 @@ mod tests {
         .unwrap();
         assert_eq!(fs::read(root.join(HITSOUND_REL)).unwrap(), hit_wav);
         assert_eq!(fs::read(root.join(KILLSOUND_REL)).unwrap(), kill_wav);
-        assert_eq!(load_manifest(&profiles, &imported_id).unwrap().hitsound, source_record);
+        assert_eq!(
+            load_manifest(&profiles, &imported_id).unwrap().hitsound,
+            source_record
+        );
         cleanup(&dir);
     }
 
