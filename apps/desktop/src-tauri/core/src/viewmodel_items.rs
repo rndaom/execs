@@ -78,6 +78,39 @@ pub struct ReplacementCandidate {
     pub sequences: Vec<CandidateSequence>,
 }
 
+pub(crate) fn matching_local_sequences(
+    model: &StockAnimationModel,
+    target_activity: &str,
+) -> Result<Vec<CandidateSequence>, StockSourceError> {
+    model
+        .sequences
+        .iter()
+        .filter(|sequence| {
+            sequence
+                .activity
+                .as_deref()
+                .is_some_and(|activity| activity.eq_ignore_ascii_case(target_activity))
+        })
+        .map(|sequence| {
+            let animations = sequence
+                .animation_indexes
+                .iter()
+                .map(|index| {
+                    model
+                        .animations
+                        .get(*index)
+                        .map(|animation| animation.name.clone())
+                        .ok_or_else(|| invalid("stock sequence references an invalid animation"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(CandidateSequence {
+                label: sequence.label.clone(),
+                animations,
+            })
+        })
+        .collect()
+}
+
 fn replacement_candidates_for(
     out: &mut Vec<ReplacementCandidate>,
     item_id: u32,
@@ -87,35 +120,7 @@ fn replacement_candidates_for(
     model: &StockAnimationModel,
 ) -> Result<(), StockSourceError> {
     for (base_activity, target_activity) in replacements {
-        let sequences = model
-            .sequences
-            .iter()
-            .filter(|sequence| {
-                sequence
-                    .activity
-                    .as_deref()
-                    .is_some_and(|activity| activity.eq_ignore_ascii_case(target_activity))
-            })
-            .map(|sequence| {
-                let animations = sequence
-                    .animation_indexes
-                    .iter()
-                    .map(|index| {
-                        model
-                            .animations
-                            .get(*index)
-                            .map(|animation| animation.name.clone())
-                            .ok_or_else(|| {
-                                invalid("stock sequence references an invalid animation")
-                            })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(CandidateSequence {
-                    label: sequence.label.clone(),
-                    animations,
-                })
-            })
-            .collect::<Result<Vec<_>, StockSourceError>>()?;
+        let sequences = matching_local_sequences(model, target_activity)?;
         out.push(ReplacementCandidate {
             item_id,
             class: class.to_string(),
