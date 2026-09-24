@@ -338,6 +338,7 @@ mod tests {
             name: "fixture".into(),
             item_class: "tf_weapon_example".into(),
             loadout_slot: Some("secondary".into()),
+            class_loadout_slots: BTreeMap::from([("scout".into(), Some("secondary".into()))]),
             animation_slot: None,
             classes: vec!["scout".into()],
             common_replacements: BTreeMap::new(),

@@ -29,7 +29,11 @@ pub struct StockItem {
     /// Installed schema identifier, not a localized display label.
     pub name: String,
     pub item_class: String,
+    /// Default `item_slot`; TF2 can override it inside `used_by_classes`.
     pub loadout_slot: Option<String>,
+    /// Effective loadout slot for each eligible class. `None` means the item
+    /// has no known slot, not that its animation role matches another slot.
+    pub class_loadout_slots: BTreeMap<String, Option<String>>,
     /// None means the weapon-script role remains unresolved.
     pub animation_slot: Option<String>,
     pub classes: Vec<String>,
@@ -177,6 +181,31 @@ fn optional_string<'a>(map: &'a VdfMap, key: &str) -> Result<Option<&'a str>, St
     }
 }
 
+fn normalize_loadout_slot(value: &str) -> String {
+    if value.eq_ignore_ascii_case("head") {
+        "misc".into()
+    } else {
+        value.to_ascii_lowercase()
+    }
+}
+
+fn known_class_slot(value: &str) -> bool {
+    matches!(
+        value,
+        "primary"
+            | "secondary"
+            | "melee"
+            | "utility"
+            | "building"
+            | "pda"
+            | "pda2"
+            | "head"
+            | "misc"
+            | "action"
+            | "taunt"
+    )
+}
+
 fn inherited(
     node: &VdfMap,
     prefabs: &VdfMap,
@@ -285,13 +314,23 @@ pub fn parse_stock_item_schema(
         let item = inherited(raw, prefabs, &mut BTreeSet::new(), 0)
             .map_err(|error| invalid(format!("item {id}: {error}")))?;
         let class_map = optional_object(&item, "used_by_classes")?;
+        let loadout_slot = optional_string(&item, "item_slot")?.map(normalize_loadout_slot);
         let mut classes = Vec::new();
+        let mut class_loadout_slots = BTreeMap::new();
         if let Some(class_map) = class_map {
             for class in CLASSES {
                 if let Some(value) = optional_string(class_map, class)? {
-                    if value != "0" {
-                        classes.push(class.to_string());
-                    }
+                    // Valve marks a class usable when its key exists. `1` uses
+                    // the default; a recognized name selects a class slot.
+                    // An unknown name leaves the default slot in place.
+                    let override_slot = value.to_ascii_lowercase();
+                    let slot = if value.starts_with('1') || !known_class_slot(&override_slot) {
+                        loadout_slot.clone()
+                    } else {
+                        Some(override_slot)
+                    };
+                    classes.push(class.to_string());
+                    class_loadout_slots.insert(class.to_string(), slot);
                 }
             }
         }
@@ -321,7 +360,8 @@ pub fn parse_stock_item_schema(
             item_class: optional_string(&item, "item_class")?
                 .unwrap_or("")
                 .to_string(),
-            loadout_slot: optional_string(&item, "item_slot")?.map(str::to_ascii_lowercase),
+            loadout_slot,
+            class_loadout_slots,
             animation_slot: optional_string(&item, "anim_slot")?.map(str::to_ascii_uppercase),
             classes,
             common_replacements,
@@ -420,7 +460,7 @@ mod tests {
                 {
                     "item_class" "tf_weapon_pistol"
                     "item_slot" "secondary"
-                    "used_by_classes" { "scout" "1" "soldier" "0" }
+                    "used_by_classes" { "scout" "1" }
                     "visuals"
                     {
                         "animation_replacement"
@@ -485,6 +525,10 @@ mod tests {
         let shortstop = &catalog.items[&220];
         assert_eq!(shortstop.classes, ["scout"]);
         assert_eq!(shortstop.loadout_slot.as_deref(), Some("primary"));
+        assert_eq!(
+            shortstop.class_loadout_slots["scout"].as_deref(),
+            Some("primary")
+        );
         assert_eq!(shortstop.animation_slot.as_deref(), Some("SECONDARY"));
         assert_eq!(
             shortstop.common_replacements["ACT_VM_DRAW"],
@@ -521,6 +565,42 @@ mod tests {
         assert_eq!(
             inherited.blu_replacements["ACT_VM_DRAW"],
             "ACT_SECONDARY_VM_DRAW"
+        );
+    }
+
+    #[test]
+    fn keeps_class_usability_and_per_class_slots_separate_from_the_default() {
+        let per_class = SCHEMA.replace(
+            "\"scout\" \"1\"",
+            "\"scout\" \"secondary\" \"soldier\" \"0\"",
+        );
+        let catalog = parse_stock_item_schema(per_class.as_bytes(), "fixture".into()).unwrap();
+        let item = &catalog.items[&220];
+        assert_eq!(item.classes, ["scout", "soldier"]);
+        assert_eq!(item.loadout_slot.as_deref(), Some("primary"));
+        assert_eq!(
+            item.class_loadout_slots["scout"].as_deref(),
+            Some("secondary")
+        );
+        // A class key marks usability even when its value does not name a slot.
+        assert_eq!(
+            item.class_loadout_slots["soldier"].as_deref(),
+            Some("primary")
+        );
+
+        let head = SCHEMA.replace("\"item_slot\" \"primary\"", "\"item_slot\" \"head\"");
+        let catalog = parse_stock_item_schema(head.as_bytes(), "fixture".into()).unwrap();
+        assert_eq!(catalog.items[&220].loadout_slot.as_deref(), Some("misc"));
+        assert_eq!(
+            catalog.items[&220].class_loadout_slots["scout"].as_deref(),
+            Some("misc")
+        );
+
+        let class_head = SCHEMA.replace("\"scout\" \"1\"", "\"scout\" \"head\"");
+        let catalog = parse_stock_item_schema(class_head.as_bytes(), "fixture".into()).unwrap();
+        assert_eq!(
+            catalog.items[&220].class_loadout_slots["scout"].as_deref(),
+            Some("head")
         );
     }
 
