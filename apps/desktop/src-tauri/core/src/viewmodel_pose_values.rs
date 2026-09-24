@@ -277,14 +277,18 @@ pub fn decode_position_frames(
     Ok(frames)
 }
 
-fn i32_at(bytes: &[u8], offset: usize, name: &str) -> Result<i32, StockSourceError> {
+pub(crate) fn i32_at(bytes: &[u8], offset: usize, name: &str) -> Result<i32, StockSourceError> {
     let value = bytes
         .get(offset..offset.saturating_add(4))
         .ok_or_else(|| invalid(format!("{name} extends outside the MDL")))?;
     Ok(i32::from_le_bytes(value.try_into().unwrap()))
 }
 
-fn local_offset(base: usize, offset: i32, name: &str) -> Result<usize, StockSourceError> {
+pub(crate) fn local_offset(
+    base: usize,
+    offset: i32,
+    name: &str,
+) -> Result<usize, StockSourceError> {
     let offset = usize::try_from(offset)
         .ok()
         .filter(|offset| *offset > 0)
@@ -293,7 +297,11 @@ fn local_offset(base: usize, offset: i32, name: &str) -> Result<usize, StockSour
         .ok_or_else(|| invalid(format!("{name} offset overflows")))
 }
 
-fn vector3_at(bytes: &[u8], offset: usize, name: &str) -> Result<[f32; 3], StockSourceError> {
+pub(crate) fn vector3_at(
+    bytes: &[u8],
+    offset: usize,
+    name: &str,
+) -> Result<[f32; 3], StockSourceError> {
     let value = bytes
         .get(offset..offset.saturating_add(12))
         .ok_or_else(|| invalid(format!("{name} extends outside the MDL")))?;
@@ -308,17 +316,19 @@ fn vector3_at(bytes: &[u8], offset: usize, name: &str) -> Result<[f32; 3], Stock
     Ok(result)
 }
 
-/// Read position bases from ordinary `mstudiobone_t` entries, or the MDL's
-/// `mstudiolinearbone_t` table when present. The verified bone index and these
-/// bytes must have the same fingerprint before any basis is returned.
-pub fn parse_bone_position_bases(
+pub(crate) struct VerifiedBoneTables {
+    pub ordinary: usize,
+    pub linear: Option<usize>,
+}
+
+/// Locate ordinary and optional linear bone tables against an exact verified
+/// MDL fingerprint. Position and rotation readers share this validation.
+pub(crate) fn verified_bone_tables(
     bytes: &[u8],
     bone_model: &StockBoneModel,
-) -> Result<Vec<BonePositionBasis>, StockSourceError> {
+) -> Result<VerifiedBoneTables, StockSourceError> {
     if sha256_hex(bytes) != bone_model.sha256 || parse_stock_bone_mdl(bytes)? != *bone_model {
-        return Err(invalid(
-            "position basis differs from the verified bone index",
-        ));
+        return Err(invalid("bone basis differs from the verified bone index"));
     }
     let count = bone_model.bones.len();
     let ordinary_table = usize::try_from(i32_at(bytes, 160, "bone table")?)
@@ -339,9 +349,24 @@ pub fn parse_bone_position_bases(
             Some(table)
         }
     };
+    Ok(VerifiedBoneTables {
+        ordinary: ordinary_table,
+        linear: linear_table,
+    })
+}
+
+/// Read position bases from ordinary `mstudiobone_t` entries, or the MDL's
+/// `mstudiolinearbone_t` table when present. The verified bone index and these
+/// bytes must have the same fingerprint before any basis is returned.
+pub fn parse_bone_position_bases(
+    bytes: &[u8],
+    bone_model: &StockBoneModel,
+) -> Result<Vec<BonePositionBasis>, StockSourceError> {
+    let tables = verified_bone_tables(bytes, bone_model)?;
+    let count = bone_model.bones.len();
     let mut bases = Vec::with_capacity(count);
     for bone in 0..count {
-        let (base_offset, scale_offset) = if let Some(table) = linear_table {
+        let (base_offset, scale_offset) = if let Some(table) = tables.linear {
             let positions = local_offset(
                 table,
                 i32_at(bytes, table + 12, "linear positions")?,
@@ -354,7 +379,7 @@ pub fn parse_bone_position_bases(
             )?;
             (positions + bone * 12, scales + bone * 12)
         } else {
-            let entry = ordinary_table + bone * BONE_DESC_BYTES;
+            let entry = tables.ordinary + bone * BONE_DESC_BYTES;
             (entry + 32, entry + 72)
         };
         bases.push(BonePositionBasis {

@@ -4,11 +4,75 @@
 //! local animation record. Animated angle channels, section interpolation,
 //! bone weights, and model writes remain separate builder work.
 
-use crate::viewmodel_pose_values::decode_anim_values;
-use crate::viewmodel_source::StockSourceError;
+use crate::viewmodel_pose_values::{
+    decode_anim_values, i32_at, local_offset, vector3_at, verified_bone_tables,
+};
+use crate::viewmodel_source::{StockBoneModel, StockSourceError};
+
+const BONE_DESC_BYTES: usize = 216;
+const BONE_FIXED_ALIGNMENT: i32 = 0x0010_0000;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoneRotationBasis {
+    pub base_quaternion: [f32; 4],
+    pub base_angles: [f32; 3],
+    pub scale: [f32; 3],
+    pub alignment: [f32; 4],
+    pub fixed_alignment: bool,
+}
 
 fn invalid(message: &str) -> StockSourceError {
     StockSourceError(message.into())
+}
+
+fn quaternion_at(bytes: &[u8], offset: usize, name: &str) -> Result<[f32; 4], StockSourceError> {
+    let value = bytes
+        .get(offset..offset.saturating_add(16))
+        .ok_or_else(|| StockSourceError(format!("{name} extends outside the MDL")))?;
+    let mut quaternion = [0.0; 4];
+    for (axis, component) in quaternion.iter_mut().enumerate() {
+        let at = axis * 4;
+        *component = f32::from_le_bytes(value[at..at + 4].try_into().unwrap());
+        if !component.is_finite() {
+            return Err(StockSourceError(format!("{name} is not finite")));
+        }
+    }
+    Ok(quaternion)
+}
+
+/// Extract rotation bases from the verified ordinary or linear-bone table of
+/// an installed class MDL. The caller must use these with the same MDL bytes
+/// and animation index; no game bytes are copied into the output.
+pub fn parse_bone_rotation_bases(
+    bytes: &[u8],
+    bone_model: &StockBoneModel,
+) -> Result<Vec<BoneRotationBasis>, StockSourceError> {
+    let tables = verified_bone_tables(bytes, bone_model)?;
+    let mut bases = Vec::with_capacity(bone_model.bones.len());
+    for bone in 0..bone_model.bones.len() {
+        let (quat, rot, scale, alignment, flags) = if let Some(table) = tables.linear {
+            let column =
+                |at: usize, name: &str| local_offset(table, i32_at(bytes, table + at, name)?, name);
+            (
+                column(16, "linear quaternions")? + bone * 16,
+                column(20, "linear rotations")? + bone * 12,
+                column(32, "linear rotation scales")? + bone * 12,
+                column(36, "linear alignments")? + bone * 16,
+                column(4, "linear flags")? + bone * 4,
+            )
+        } else {
+            let entry = tables.ordinary + bone * BONE_DESC_BYTES;
+            (entry + 44, entry + 60, entry + 84, entry + 144, entry + 160)
+        };
+        bases.push(BoneRotationBasis {
+            base_quaternion: quaternion_at(bytes, quat, "bone base quaternion")?,
+            base_angles: vector3_at(bytes, rot, "bone base rotation")?,
+            scale: vector3_at(bytes, scale, "bone rotation scale")?,
+            alignment: quaternion_at(bytes, alignment, "bone alignment")?,
+            fixed_alignment: i32_at(bytes, flags, "bone flags")? & BONE_FIXED_ALIGNMENT != 0,
+        });
+    }
+    Ok(bases)
 }
 
 fn complete_quaternion(
@@ -239,6 +303,49 @@ pub fn decode_animated_rotation_frames(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::viewmodel_source::parse_stock_bone_mdl;
+
+    #[test]
+    fn verified_ordinary_and_linear_rotation_bases_are_distinct() {
+        let mut bytes = vec![0u8; 900];
+        bytes[..4].copy_from_slice(b"IDST");
+        bytes[4..8].copy_from_slice(&48i32.to_le_bytes());
+        bytes[12..20].copy_from_slice(b"fixture\0");
+        bytes[76..80].copy_from_slice(&900i32.to_le_bytes());
+        bytes[156..160].copy_from_slice(&1i32.to_le_bytes());
+        bytes[160..164].copy_from_slice(&408i32.to_le_bytes());
+        bytes[408..412].copy_from_slice(&216i32.to_le_bytes());
+        bytes[412..416].copy_from_slice(&(-1i32).to_le_bytes());
+        bytes[624..629].copy_from_slice(b"root\0");
+        bytes[464..468].copy_from_slice(&1f32.to_le_bytes());
+        bytes[468..472].copy_from_slice(&0.5f32.to_le_bytes());
+        bytes[492..496].copy_from_slice(&0.25f32.to_le_bytes());
+        bytes[564..568].copy_from_slice(&1f32.to_le_bytes());
+        bytes[568..572].copy_from_slice(&BONE_FIXED_ALIGNMENT.to_le_bytes());
+        let bone = parse_stock_bone_mdl(&bytes).unwrap();
+        let ordinary = parse_bone_rotation_bases(&bytes, &bone).unwrap();
+        assert_eq!(ordinary[0].base_quaternion, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(ordinary[0].base_angles[0], 0.5);
+        assert_eq!(ordinary[0].scale[0], 0.25);
+        assert!(ordinary[0].fixed_alignment);
+
+        bytes[400..404].copy_from_slice(&640i32.to_le_bytes());
+        bytes[656..660].copy_from_slice(&64i32.to_le_bytes());
+        bytes[704..708].copy_from_slice(&1i32.to_le_bytes());
+        for (field, offset) in [(708, 96i32), (720, 100), (724, 116), (736, 128), (740, 140)] {
+            bytes[field..field + 4].copy_from_slice(&offset.to_le_bytes());
+        }
+        bytes[816..820].copy_from_slice(&1f32.to_le_bytes());
+        bytes[820..824].copy_from_slice(&1.5f32.to_le_bytes());
+        bytes[832..836].copy_from_slice(&2f32.to_le_bytes());
+        bytes[856..860].copy_from_slice(&1f32.to_le_bytes());
+        let bone = parse_stock_bone_mdl(&bytes).unwrap();
+        let linear = parse_bone_rotation_bases(&bytes, &bone).unwrap();
+        assert_eq!(linear[0].base_quaternion, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(linear[0].base_angles[0], 1.5);
+        assert_eq!(linear[0].scale[0], 2.0);
+        assert!(!linear[0].fixed_alignment);
+    }
 
     #[test]
     fn quaternion48_center_and_negative_w() {
