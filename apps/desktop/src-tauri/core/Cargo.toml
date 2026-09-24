@@ -40,6 +40,10 @@ name = "viewmodel_source_probe"
 required-features = ["probes"]
 
 [[example]]
+name = "viewmodel_items_probe"
+required-features = ["probes"]
+
+[[example]]
 name = "pack_probe"
 required-features = ["probes"]
 
