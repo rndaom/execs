@@ -222,11 +222,33 @@ if ($Action -eq 'Cleanup') {
         } elseif ([IO.Path]::GetFileName($record.executable) -ine 'msedgewebview2.exe' -or
             -not $record.commandLine.Contains($r.userData, [StringComparison]::OrdinalIgnoreCase) -or
             $expected.parent -notin @($r.processes.pid)) { throw 'Cleanup target is outside the owned app/driver/browser tree.' }
-        $process = Get-Process -Id $record.pid
-        if ([Math]::Abs($process.StartTime.ToUniversalTime().Ticks - (ConvertTo-ProcessUtcTicks $record.created)) -ge 10000) { throw 'Cleanup start time changed.' }
-        $process.Kill()
-        if (-not $process.WaitForExit(5000)) { throw 'Owned cleanup did not exit.' }
-        $stopped += $record
+        try {
+            $process = Get-Process -Id $record.pid -ErrorAction Stop
+        } catch {
+            if ($_.FullyQualifiedErrorId -cne 'NoProcessFoundForGivenId,Microsoft.PowerShell.Commands.GetProcessCommand') { throw }
+            $absent += $record.pid
+            continue
+        }
+        try {
+            try {
+                # Keep one handle for the identity check and termination; a PID can be reused after the CIM read.
+                $null = $process.SafeHandle
+            } catch [InvalidOperationException] {
+                if (-not $process.HasExited) { throw }
+                $absent += $record.pid
+                continue
+            }
+            if ([Math]::Abs($process.StartTime.ToUniversalTime().Ticks - (ConvertTo-ProcessUtcTicks $record.created)) -ge 10000) { throw 'Cleanup start time changed.' }
+            if ($process.HasExited) { $absent += $record.pid; continue }
+            try { $process.Kill() }
+            catch {
+                if (-not $process.HasExited) { throw }
+                $absent += $record.pid
+                continue
+            }
+            if (-not $process.WaitForExit(5000)) { throw 'Owned cleanup did not exit.' }
+            $stopped += $record
+        } finally { $process.Dispose() }
     }
     @{ forcedCleanup = $stopped; alreadyExited = $absent } | ConvertTo-Json -Depth 8
     exit
