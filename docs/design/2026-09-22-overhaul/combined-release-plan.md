@@ -1,5 +1,7 @@
 # 0.2.0 combined release plan
 
+> **Historical record (September 25, 2026).** This plan and its qualification chronology are kept as evidence; its scope and open-item statements (14 selected issues, unselected candidates, D7 open, import-only Viewmodels) are superseded. For the current state and remaining work, read [docs/STATUS.md](../../STATUS.md). Status claims below reflect the date they were written.
+
 **Design direction revised — September 23, 2026. Implementation underway; no release authorized.** The owner requested dark neutral surfaces with a restrained warm-brown cast and warm off-white text, retaining TF2 orange for selections and necessary highlights. Important warnings use orange/red and success uses green; yellow warnings are removed. The current work is called the overhaul. Decorative or redundant helper text is removed. The earlier Foundry exploration and its captures remain dated design history, not the active visual specification. The combined scope remains all 14 selected existing issues plus the whole-app overhaul. Do not bump product versions, tag or publish. See the [implementation plan](foundry-implementation-plan.md) and [planning status](planning-status.json) for the original acceptance and open native/platform checks; the revised direction takes precedence over their historical color and naming references.
 
 ## Cleanup and review delivery

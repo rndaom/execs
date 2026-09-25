@@ -1,5 +1,7 @@
 # Foundry implementation plan
 
+> **Historical record (September 25, 2026).** This Foundry implementation plan is superseded. For the current state and remaining work, read [docs/STATUS.md](../../STATUS.md). Status claims below reflect the date they were written.
+
 **September 22, 2026 — Foundry selected; implementation authorized; no release.**
 
 The owner chose **Foundry only** and authorized the whole application and all selected features to be implemented, tested and visually verified with multiple agents. The prior visual-selection gate is satisfied. The task ends with an implemented, reviewable and evidence-backed development candidate; it does not authorize a version bump, release tag or publication. No issue is made Done by selecting a visual direction or writing this plan.

@@ -76,4 +76,5 @@ Work top to bottom, one issue per branch and PR. Before starting an issue, read 
 - **Dev app:** don't edit Rust while `pnpm desktop:dev` is running; a rebuild restart can interrupt a profile switch. If a switch is interrupted, the app offers recovery: switch to the named profile.
 - **Casual content** (custom viewmodels, particles) needs the profile's `+exec` preload launch option in Steam. Launch TF2 now writes it; if content doesn't load, check Steam's launch options first.
 - **Linear:** the workspace is at the free-plan issue limit. Record new work as comments on the closest issue until issues are archived or the plan changes.
-- **Backups:** deleted branches from the September 25 cleanup are bundled in `G:\Projects\execs-archive-2026-09-25\` (`git fetch <bundle> <ref>:<branch>` restores one).
+- **Backups:** deleted branches from the September 25 cleanup are bundled in `G:\Projects\execs-archive-2026-09-25\` (`git fetch <bundle> <ref>:<branch>` restores one). Its `local-only` folder holds the untracked `.artifacts` scratch and four never-pushed September 13–20 audit folders moved out of `docs/audits`.
+- **History versus current:** everything under `docs/design/` and `docs/audits/`, and the `docs/release-*.md` files, are dated records. Where they conflict with this page or AGENTS.md, this page and AGENTS.md win.

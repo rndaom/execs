@@ -1,5 +1,7 @@
 # Viewmodels builder and preview release gate
 
+> **Historical record (September 25, 2026).** The Viewmodels builder shipped in rndaom/execs#106 and #108; the owner signed off on the retail TF2 result without rendered previews. For the current state and remaining work, read [docs/STATUS.md](../../../STATUS.md). Status claims below reflect the date they were written.
+
 The owner confirmed on September 24 that the Viewmodels builder remains in the approved 0.2.0 scope. The current development branch temporarily refuses builds after removing the CompVMInstaller animation ZIP, group table and screenshots. This is a release-blocking implementation gap, not approval to ship import-only Viewmodels. Previously built VPK bytes and recorded choices remain intact through switch and export/import.
 
 ## Replacement boundary

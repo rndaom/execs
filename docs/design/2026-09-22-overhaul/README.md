@@ -1,5 +1,7 @@
 # execs overhaul review
 
+> **Historical record (September 25, 2026).** This folder preserves the overhaul's design history and evidence. For the current state and remaining work, read [docs/STATUS.md](../../STATUS.md). Status claims below reflect the date they were written.
+
 The current development direction uses dark neutrals with a restrained warm-brown cast, warm off-white text, and TF2 orange selections and necessary highlights, and removes decorative text. The earlier Foundry concept gallery and its **85 accepted captures across 15 pages and flows** document the previous candidate; they are retained as historical evidence and do not verify the revised appearance. The [integrated QA report](design-qa.md) records that earlier implementation and its platform limits. The [combined plan](combined-release-plan.md) records the current direction, and the [September 23 program audit](../../audits/2026-09-23-program-audit/README.md) tracks the current remediation work.
 
 The review is a local screenshot artifact. It makes no native calls, saves no product settings and uses no external dependencies. Its interactive-fixture link opens the separate development app at `http://127.0.0.1:1422/?preview=settings-comfig`; the screenshots show production UI running browser fixture data, not a packaged native session. Inventory remains development-only. No release or deployment is part of this review.
