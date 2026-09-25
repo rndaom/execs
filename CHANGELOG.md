@@ -7,6 +7,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Binds has a cleaner layout: every action on one page grouped by task, a search that also finds
+  actions by the key bound to them, and readable key caps such as Mouse 4 and Num 1. New actions
+  cover common voice commands (Thanks, Help, Incoming, Spy, Sentry ahead, Activate charge,
+  Battle cry) and Screenshot.
 - Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
   patches and preloader pack are prepared once, before any files change, instead of being
   rebuilt during the switch.
