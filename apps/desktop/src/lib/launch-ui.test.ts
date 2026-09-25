@@ -11,12 +11,13 @@ import {
   launchOptionGroups,
   launchPresetConflict,
   launchPresetPresent,
+  launchSteamCopy,
+  launchSteamState,
   launchSyncAction,
   launchSyncWarning,
   recommendedLaunchOptions,
   removeLaunchOption,
   searchLaunchPresets,
-  steamWriteCopy,
   strippedLaunchNotice,
   strippedLaunchTokens,
 } from "./launch-ui";
@@ -35,17 +36,21 @@ describe("launch UI helpers", () => {
     expect(recommendedLaunchOptions()).toBe(RECOMMENDED);
   });
 
-  it("explains Steam write without asking them to quit", () => {
-    expect(steamWriteCopy("written")).toBe("Wrote Steam launch options.");
-    expect(steamWriteCopy("steam_open")).toBe(
-      "Saved. Steam is open — copy into TF2 Properties yourself.",
-    );
-    expect(steamWriteCopy("no_account")).toBe("Saved. No Steam userdata folder found.");
-    expect(steamWriteCopy("write_failed")).toBe(
-      "Saved to the profile. Steam could not be updated yet.",
-    );
-    expect(steamWriteCopy("steam_open")).not.toMatch(/quit Steam/i);
-    expect(steamWriteCopy("no_account")).not.toMatch(/quit Steam/i);
+  it("explains each Steam state without asking the player to quit Steam", () => {
+    const states = [
+      "unsaved",
+      "in-steam",
+      "steam-open",
+      "steam-closed",
+      "write-failed",
+      "no-account",
+      "unknown",
+    ] as const;
+    for (const state of states) {
+      expect(launchSteamCopy(state, false)).not.toMatch(/quit Steam/i);
+    }
+    expect(launchSteamCopy("in-steam", false)).toBe("Saved to this profile and in Steam.");
+    expect(launchSteamCopy("unsaved", true)).toContain("after TF2 closes");
   });
 });
 
@@ -204,5 +209,55 @@ describe("launch sync", () => {
   it("asks before closing a running Steam", () => {
     expect(launchSyncAction(status(false, true))).toBe("ask");
     expect(launchSyncWarning(status(false, true))).toBe("Launch options not in Steam");
+  });
+});
+
+describe("Launch pane Steam state", () => {
+  const sync = (
+    profileOptions: string,
+    inSync: boolean,
+    steamRunning: boolean,
+    steamOptions: string | null = "-novid",
+  ) => ({ profileOptions, inSync, steamRunning, steamOptions });
+
+  it("reports an unsaved draft before anything about Steam", () => {
+    expect(launchSteamState("-nojoy", "-novid", sync("-novid", true, false), "written")).toBe(
+      "unsaved",
+    );
+  });
+
+  it("claims Steam has the options only from the backend comparison or a confirmed write", () => {
+    expect(launchSteamState("-novid", "-novid", sync("-novid", true, true), null)).toBe("in-steam");
+    expect(launchSteamState("-novid", "-novid", null, "written")).toBe("in-steam");
+    expect(launchSteamState("-novid", "-novid", null, null)).toBe("unknown");
+  });
+
+  it("separates a running Steam, a closed Steam, a failed write and no account", () => {
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-nojoy", false, true), null)).toBe(
+      "steam-open",
+    );
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-nojoy", false, false), null)).toBe(
+      "steam-closed",
+    );
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-nojoy", false, false), "write_failed")).toBe(
+      "write-failed",
+    );
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-nojoy", false, false, null), null)).toBe(
+      "no-account",
+    );
+  });
+
+  it("prefers a current comparison over an older write result", () => {
+    // Steam replaced its copy after execs wrote it.
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-nojoy", false, true), "written")).toBe(
+      "steam-open",
+    );
+  });
+
+  it("ignores a comparison made for other profile options", () => {
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-novid", true, false), "steam_open")).toBe(
+      "steam-open",
+    );
+    expect(launchSteamState("-nojoy", "-nojoy", sync("-novid", true, false), null)).toBe("unknown");
   });
 });

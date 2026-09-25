@@ -21,6 +21,7 @@ import {
   type FilesContext,
   type FilesSource,
   isTauri,
+  type LaunchSyncStatus,
   type ModsCatalog,
   type PreloaderReport,
   type PreloaderStatusPayload,
@@ -85,6 +86,8 @@ export function SettingsHost({
   onError,
   onNavigate,
   onHudReviewRequired,
+  launchSync = null,
+  onLaunchOptionsSaved,
 }: {
   api: Api;
   filesDraftStore?: FilesDraftStore;
@@ -109,6 +112,10 @@ export function SettingsHost({
   onError: SetOperationError;
   onNavigate?: (tab: SettingsTab) => void;
   onHudReviewRequired?: (profileId: string) => void;
+  /** App's comparison of the active profile with Steam's saved launch options. */
+  launchSync?: LaunchSyncStatus | null;
+  /** Re-read that comparison after a launch options save or Steam write. */
+  onLaunchOptionsSaved?: () => void;
 }) {
   const { error, dismissError } = useAppStatus();
   const toast = useToast();
@@ -1353,6 +1360,7 @@ export function SettingsHost({
         value={launch}
         saved={launchSeed}
         steamWrite={steamWrite}
+        steamSync={launchSync}
         lastSave={launchSaved}
         onChange={(next) => {
           launchRef.current = next;
@@ -1372,6 +1380,7 @@ export function SettingsHost({
             setLaunchSeed(result.launchOptions);
             setLaunchSaved({ sent, saved: result.launchOptions });
             setSteamWrite(result.steamWrite);
+            onLaunchOptionsSaved?.();
           });
         }}
       />
