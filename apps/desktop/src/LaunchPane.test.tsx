@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import { AutosaveActivity, AutosaveDiscard, AutosavePending } from "./hooks/useAutosave";
 import { LaunchPane } from "./LaunchPane";
-import type { SteamWriteStatus } from "./lib/launch-ui";
+import type { LaunchSteamSync, SteamWriteStatus } from "./lib/launch-ui";
 
 let root: Root;
 let box: HTMLDivElement;
@@ -15,6 +15,7 @@ let profileId: string;
 let running: boolean;
 let active: boolean;
 let status: SteamWriteStatus | null;
+let sync: LaunchSteamSync | null;
 let discard: { current: boolean };
 const pending = new Map<string, boolean>();
 const reportPending = (id: string, value: boolean) => {
@@ -35,6 +36,7 @@ beforeEach(() => {
   running = false;
   active = true;
   status = null;
+  sync = null;
   discard = { current: false };
   pending.clear();
   box = document.createElement("div");
@@ -61,6 +63,7 @@ function renderPane() {
               value={draft}
               saved={saved}
               steamWrite={status}
+              steamSync={sync}
               onChange={(next) => {
                 draft = next;
                 renderPane();
@@ -176,8 +179,11 @@ describe("Launch workspace", () => {
           settle = resolve;
         }),
     );
-    status = "written";
+    sync = { profileOptions: saved, steamOptions: "-novid", inSync: false, steamRunning: false };
     await render();
+    expect(element('[data-testid="launch-steam-status"]').textContent).toContain(
+      "different options",
+    );
     await click('[data-testid="launch-steam-retry"]');
     expect(save).toHaveBeenCalledTimes(1);
     expect(element<HTMLButtonElement>('[data-testid="launch-steam-retry"]').disabled).toBe(true);
@@ -190,11 +196,45 @@ describe("Launch workspace", () => {
       "Could not confirm",
     );
     expect(box.querySelector('[role="alert"]')).toBeNull();
+    sync = { ...sync, steamRunning: true };
     status = "steam_open";
     await render();
     await click('[data-testid="launch-steam-retry"]');
     expect(save).toHaveBeenCalledTimes(2);
-    expect(element('[data-testid="launch-steam-status"]').textContent).toContain("Steam is open");
+    expect(element('[data-testid="launch-steam-status"]').textContent).toContain(
+      "Steam is open with different options",
+    );
+    sync = { ...sync, inSync: true, steamRunning: false };
+    status = "written";
+    await render();
+    expect(element('[data-testid="launch-steam-status"]').textContent).toBe(
+      "Saved to this profile and in Steam.",
+    );
+    expect(box.querySelector('[data-testid="launch-steam-retry"]')).toBeNull();
+  });
+
+  it("never reports Steam as updated because the options were copied", async () => {
+    sync = { profileOptions: saved, steamOptions: "-novid", inSync: false, steamRunning: true };
+    await render();
+    await click('[data-testid="launch-copy"]');
+    expect(element('[data-testid="launch-copy"]').textContent).toContain("Copied");
+    expect(element('[data-testid="launch-steam-status"]').textContent).toContain(
+      "different options",
+    );
+    expect(element("#launch-steam-guide").textContent).toBe("Apply through Steam");
+  });
+
+  it("reports an unsaved draft and ignores a comparison made for other options", async () => {
+    sync = { profileOptions: saved, steamOptions: saved, inSync: true, steamRunning: false };
+    running = true;
+    await render();
+    await input("textarea", "-novid");
+    expect(element('[data-testid="launch-steam-status"]').textContent).toBe(
+      "Not saved yet. Saves to this profile after TF2 closes.",
+    );
+    saved = "-novid";
+    await render();
+    expect(element('[data-testid="launch-steam-status"]').textContent).not.toContain("in Steam");
   });
 
   it("copies the exact raw sequence and leaves ambiguous commands to raw editing", async () => {
@@ -215,6 +255,12 @@ describe("Launch workspace", () => {
     status = "steam_open";
     await render();
     expect(element("#launch-steam-guide").textContent).toBe("Apply through Steam");
+    status = null;
+    sync = { profileOptions: saved, steamOptions: null, inSync: false, steamRunning: false };
+    await render();
+    expect(element("#launch-steam-guide").textContent).toBe("Apply through Steam");
+    expect(box.querySelector('[data-testid="launch-steam-retry"]')).toBeNull();
+    sync = null;
     status = "written";
     await render();
     expect(box.querySelector("#launch-steam-guide")).toBeNull();

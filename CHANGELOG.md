@@ -12,6 +12,9 @@ User-facing changes only. The release workflow publishes the matching
   rebuilt during the switch.
 - Launch TF2: flag a profile whose launch options are not in Steam yet, and write them before
   launching. When Steam is open, execs asks before restarting it to apply them.
+- Launch options say whether they are only saved to the profile or also in Steam, based on
+  Steam's saved copy rather than the last save. Write to Steam retries from the Launch pane, and
+  copying the options never counts as updating Steam.
 - Files keeps saved password and remote-console cfg commands through local saves, imports and
   exports. Export review names possible credential locations, lists the included custom packs,
   and flags Crosshair scripts and Viewmodels VPKs before creating a ZIP, without displaying

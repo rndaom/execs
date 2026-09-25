@@ -19,13 +19,15 @@ import {
   LAUNCH_PRESETS,
   type LaunchPresetId,
   type LaunchPresetValues,
+  type LaunchSteamSync,
   launchOptionGroups,
   launchPresetConflict,
   launchPresetPresent,
+  launchSteamCopy,
+  launchSteamState,
   removeLaunchOption,
   type SteamWriteStatus,
   searchLaunchPresets,
-  steamWriteCopy,
   strippedLaunchNotice,
   strippedLaunchTokens,
 } from "./lib/launch-ui";
@@ -35,6 +37,7 @@ export function LaunchPane({
   value,
   saved,
   steamWrite,
+  steamSync = null,
   lastSave,
   onChange,
   onSave,
@@ -44,6 +47,8 @@ export function LaunchPane({
   /** What the profile holds; the field is a draft of it. */
   saved: string;
   steamWrite?: SteamWriteStatus | null;
+  /** The backend's comparison of the active profile with Steam's saved copy. */
+  steamSync?: LaunchSteamSync | null;
   /** What was sent to the backend last save and what came back. */
   lastSave?: { sent: string; saved: string } | null;
   onChange: (value: string) => void;
@@ -101,7 +106,8 @@ export function LaunchPane({
     focusAfterRemove.current = null;
     next?.focus();
   });
-  const status = steamWrite ? steamWriteCopy(steamWrite) : "";
+  const steamState = launchSteamState(value, saved, steamSync, steamWrite ?? null);
+  const steamSettled = steamState === "in-steam" || steamState === "no-account";
   const { feedback, copy } = useCopyFeedback();
   // Typing is a draft: the lock defers the write, it does not lock the field.
   const { flush } = useAutosave({
@@ -452,45 +458,48 @@ export function LaunchPane({
             <p
               data-testid="launch-steam-status"
               aria-live="polite"
-              className="t-meta flex items-center gap-2"
+              className="t-meta flex min-w-60 flex-1 items-center gap-2"
             >
-              {retryFailed ? (
-                <WarningCircle size={16} className="shrink-0 text-warn" aria-hidden="true" />
-              ) : retrying ? (
+              {retrying ? (
                 <Spinner size={16} />
-              ) : steamWrite === "written" && value === saved ? (
-                <CheckCircle size={16} className="text-ok" weight="fill" />
+              ) : retryFailed || steamState === "write-failed" ? (
+                <WarningCircle size={16} className="shrink-0 text-warn" aria-hidden="true" />
+              ) : steamState === "in-steam" ? (
+                <CheckCircle size={16} className="shrink-0 text-ok" weight="fill" />
               ) : (
-                <Info size={16} aria-hidden="true" />
+                <Info size={16} aria-hidden="true" className="shrink-0" />
               )}
               {retrying
                 ? "Checking whether Steam can be updated…"
                 : retryFailed
                   ? "Could not confirm the Steam update. Copy the launch options or retry."
-                  : (value === saved && status) ||
-                    "Options save with this profile. Steam updates only while it is closed."}
+                  : launchSteamCopy(steamState, running)}
             </p>
-            <button
-              type="button"
-              data-testid="launch-steam-retry"
-              disabled={running || busy || retrying || value !== saved || composerPending}
-              title={
-                running
-                  ? "Available after TF2 closes."
-                  : composerPending
-                    ? "Add or cancel the option first."
-                    : value !== saved
-                      ? "Wait for the profile save to finish."
-                      : "Checks Steam again and writes only when it is closed."
-              }
-              onClick={() => void retrySteamWrite()}
-              className="btn btn-ghost"
-            >
-              {retrying ? <Loading>Checking Steam…</Loading> : "Write to Steam"}
-            </button>
+            {steamSettled && !retryFailed ? null : (
+              <button
+                type="button"
+                data-testid="launch-steam-retry"
+                disabled={running || busy || retrying || value !== saved || composerPending}
+                title={
+                  running
+                    ? "Available after TF2 closes."
+                    : composerPending
+                      ? "Add or cancel the option first."
+                      : value !== saved
+                        ? "Wait for the profile save to finish."
+                        : "Checks Steam again and writes only when it is closed."
+                }
+                onClick={() => void retrySteamWrite()}
+                className="btn btn-ghost shrink-0"
+              >
+                {retrying ? <Loading>Checking Steam…</Loading> : "Write to Steam"}
+              </button>
+            )}
           </div>
         </section>
-        {steamWrite && steamWrite !== "written" ? (
+        {steamState === "steam-open" ||
+        steamState === "write-failed" ||
+        steamState === "no-account" ? (
           <section
             className="surface mt-4 flex items-start gap-3 p-4"
             aria-labelledby="launch-steam-guide"
