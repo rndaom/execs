@@ -157,6 +157,13 @@ where
     let sha256 = sha256_file(zip_path).map_err(io_err)?;
     let staging = StagingDir::create(profiles)?;
     let mut payload = read_profile_zip(zip_path, profiles, &staging.path)?;
+    prepare_stock_built_payload(
+        &mut payload,
+        tf2_root,
+        profiles,
+        &staging.path,
+        &prototype_selected_group_vpk_from_install,
+    )?;
     seed_default_config(&mut payload, tf2_root, profiles, &staging.path)?;
     // Trust can waive command-policy findings, never paths, parser
     // limits or corrupt archives.
@@ -368,6 +375,7 @@ pub(super) fn read_creator_zip(
             hud_review_pending: false,
             crosshair: None,
             viewmodel: None,
+            viewmodel_output_sha256: None,
             hitsound: None,
             mods: Vec::new(),
             preloader: Some(crate::preloader::PreloaderSelection::default()),
@@ -375,6 +383,7 @@ pub(super) fn read_creator_zip(
         },
         exclusive: HashMap::new(),
         blobs: HashMap::new(),
+        zip_uncompressed_bytes: 0, // Creator archives always use schema 1.
         creator: true,
         skipped_files: 0,
         import_notes: Vec::new(),

@@ -292,7 +292,7 @@ fn viewmodel_build_error(error: StockSourceError) -> ProfileError {
     ))
 }
 
-fn selected_candidate_recipe(
+pub(crate) fn selected_candidate_recipe(
     candidate: &InstalledGroupVpkCandidate,
     request: &ProvisionalGroupRequest,
 ) -> Result<ViewmodelBuildRecipe, ProfileError> {
@@ -1473,13 +1473,12 @@ mod tests {
         );
         let export = root.join("existing-export.zip");
         std::fs::write(&export, b"keep previous archive").unwrap();
-        let review_error =
-            crate::zip::inspect_profile_export_from(&profiles, &tf2, &id).unwrap_err();
-        assert!(review_error.message().contains("recipe-only export"));
-        let export_error =
-            crate::zip::export_profile_to(&profiles, &tf2, &id, &export).unwrap_err();
-        assert!(export_error.message().contains("recipe-only export"));
-        assert_eq!(std::fs::read(&export).unwrap(), b"keep previous archive");
+        crate::zip::inspect_profile_export_from(&profiles, &tf2, &id).unwrap();
+        crate::zip::export_profile_to(&profiles, &tf2, &id, &export).unwrap();
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&export).unwrap()).unwrap();
+        assert!(archive
+            .by_name("files/tf/custom/execs-viewmodels.vpk")
+            .is_err());
         cleanup(&root);
     }
 
