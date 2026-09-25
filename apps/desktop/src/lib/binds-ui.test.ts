@@ -5,14 +5,19 @@ import {
   autoexecFilePath,
   autoexecHasExecLine,
   BIND_ACTIONS,
+  BIND_GROUPS,
+  bindActionForCommand,
+  bindKeyLabel,
   bindsFilePath,
   canRecordBinds,
   configBindsFromFiles,
   ensureAutoexecExecLine,
   MANAGED_BINDS_HEADER,
+  normalizeBindCommand,
   ownedManagedBindKeys,
   recorderOutcomeForKey,
   removeOwnedManagedBind,
+  searchBindActions,
   serializeManagedBinds,
   shouldSyncTrackedBinds,
   sourceKeyFromCode,
@@ -423,5 +428,70 @@ describe("recorderOutcomeForKey", () => {
 
   it("binds any other resolved key", () => {
     expect(recorderOutcomeForKey("mouse5")).toEqual({ kind: "bind", key: "mouse5" });
+  });
+});
+
+describe("bind action catalog", () => {
+  it("places every action in exactly one group", () => {
+    const grouped = BIND_GROUPS.flatMap((group) => group.ids);
+    expect(new Set(grouped).size).toBe(grouped.length);
+    expect([...grouped].sort()).toEqual(BIND_ACTIONS.map((action) => action.id).sort());
+  });
+
+  it("gives every action a distinct command so saved lines map back to one action", () => {
+    const commands = BIND_ACTIONS.map((action) => normalizeBindCommand(action.command));
+    expect(new Set(commands).size).toBe(commands.length);
+    expect(bindActionForCommand("VoiceMenu 1  1")?.id).toBe("spy");
+    expect(bindActionForCommand("+showscores")?.label).toBe("Scoreboard");
+    expect(bindActionForCommand("echo hi")).toBeUndefined();
+  });
+
+  it("records the new voice commands and screenshot as standalone managed lines", () => {
+    let text = applyRecordedBind("", "thanks", "kp_end");
+    text = applyRecordedBind(text, "screenshot", "f5");
+    expect(text).toContain('bind kp_end "voicemenu 0 1"');
+    expect(text).toContain("bind f5 screenshot");
+    expect(ownedManagedBindKeys(text)).toEqual([
+      { actionId: "thanks", key: "kp_end" },
+      { actionId: "screenshot", key: "f5" },
+    ]);
+  });
+});
+
+describe("bind key labels", () => {
+  it("names keys the way they read on a keyboard and mouse", () => {
+    expect(bindKeyLabel("space")).toBe("Space");
+    expect(bindKeyLabel("w")).toBe("W");
+    expect(bindKeyLabel("f12")).toBe("F12");
+    expect(bindKeyLabel("mouse4")).toBe("Mouse 4");
+    expect(bindKeyLabel("MWHEELDOWN")).toBe("Wheel down");
+    expect(bindKeyLabel("kp_end")).toBe("Num 1");
+    expect(bindKeyLabel("kp_enter")).toBe("Num Enter");
+    expect(bindKeyLabel("semicolin")).toBe(";");
+    expect(bindKeyLabel("backslash")).toBe("\\");
+    // Unknown engine names stay readable rather than disappearing.
+    expect(bindKeyLabel("joy1")).toBe("joy1");
+  });
+});
+
+describe("bind search", () => {
+  const none = () => [] as string[];
+
+  it("matches names, groups, commands and player words", () => {
+    expect([...searchBindActions("scoreboard", none)]).toEqual(["showscores"]);
+    expect([...searchBindActions("uber", none)]).toEqual(["activatecharge"]);
+    expect(searchBindActions("voice", none).has("battlecry")).toBe(true);
+    expect([...searchBindActions("load_itempreset 2", none)]).toEqual(["loadout2"]);
+  });
+
+  it("finds an action by the key bound to it, by engine name or label", () => {
+    const keys = (id: string) => (id === "reload" ? ["kp_end"] : []);
+    expect([...searchBindActions("kp_end", keys)]).toEqual(["reload"]);
+    expect([...searchBindActions("num 1", keys)]).toEqual(["reload"]);
+  });
+
+  it("requires every word and matches nothing for an unrelated search", () => {
+    expect([...searchBindActions("weapon slot 3", none)]).toEqual(["slot3"]);
+    expect(searchBindActions("zzz", none).size).toBe(0);
   });
 });

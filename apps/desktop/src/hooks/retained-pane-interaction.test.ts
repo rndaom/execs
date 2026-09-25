@@ -120,7 +120,7 @@ describe("retained pane interactions", () => {
     expect(save).not.toHaveBeenCalled();
 
     await act(async () => render(true));
-    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("x");
+    expect(document.querySelector('[data-testid="bind-cap-jump-x"]')?.textContent).toBe("X");
     appStatus.running = false;
     await act(async () => render(true));
     await act(async () => Promise.resolve());

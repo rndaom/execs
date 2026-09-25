@@ -39,6 +39,20 @@ async function pressKey(key: string, code: string) {
   });
 }
 
+/** Key caps shown for an action, as the player reads them. */
+function caps(actionId: string): string[] {
+  return [...document.querySelectorAll<HTMLElement>(`[data-testid^="bind-cap-${actionId}-"]`)].map(
+    (cap) => cap.textContent ?? "",
+  );
+}
+
+function capSource(actionId: string, key: string): string {
+  return (
+    document.querySelector(`[data-testid="bind-cap-${actionId}-${key}"]`)?.getAttribute("title") ??
+    ""
+  );
+}
+
 describe("BindsPane autosave", () => {
   it("lists two startup keys with their sources, then adds and removes only an execs key", async () => {
     const save = vi.fn(async (_text: string) => undefined);
@@ -60,23 +74,21 @@ describe("BindsPane autosave", () => {
         }),
       ),
     );
-    const known = () => document.querySelector('[data-testid="bind-keys-jump"]')?.textContent ?? "";
-    expect(known()).toContain("space tf/cfg/config.cfg:1");
-    expect(known()).toContain("x tf/cfg/execs_binds.cfg:2");
+    expect(caps("jump")).toEqual(["Space", "X"]);
+    expect(capSource("jump", "space")).toBe("Set in tf/cfg/config.cfg, line 1");
+    expect(capSource("jump", "x")).toBe("Added in execs (tf/cfg/execs_binds.cfg, line 2)");
     expect(document.querySelector('[data-testid="bind-remove-jump-space"]')).toBeNull();
 
     await act(async () =>
       document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
     );
     await pressKey("y", "KeyY");
-    expect(known()).toContain("space tf/cfg/config.cfg:1");
-    expect(known()).toContain("x tf/cfg/execs_binds.cfg:2");
-    expect(known()).toContain("y tf/cfg/execs_binds.cfg:3");
+    expect(caps("jump")).toEqual(["Space", "X", "Y"]);
+    expect(capSource("jump", "y")).toBe("Added in execs (tf/cfg/execs_binds.cfg, line 3)");
     await act(async () =>
       document.querySelector<HTMLButtonElement>('[data-testid="bind-remove-jump-x"]')?.click(),
     );
-    expect(known()).not.toContain("x tf/cfg/execs_binds.cfg:2");
-    expect(known()).toContain("space tf/cfg/config.cfg:1");
+    expect(caps("jump")).toEqual(["Space", "Y"]);
     await act(async () => vi.advanceTimersByTimeAsync(700));
     expect(save.mock.calls.at(-1)?.[0]).toContain("bind y +jump");
     expect(save.mock.calls.at(-1)?.[0]).not.toContain("bind x +jump");
@@ -105,9 +117,9 @@ describe("BindsPane autosave", () => {
       document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
     );
     await pressKey("r", "KeyR");
-    expect(document.querySelector('[data-testid="bind-conflict-jump"]')?.textContent).toContain(
-      "r currently runs +reload from tf/cfg/config.cfg:1",
-    );
+    const conflict = document.querySelector('[data-testid="bind-conflict-jump"]');
+    expect(conflict?.textContent).toContain("R is bound to Reload.");
+    expect(conflict?.querySelector("p")?.getAttribute("title")).toBe("Set in tf/cfg/config.cfg:1");
     await act(async () => vi.advanceTimersByTimeAsync(700));
     expect(save).not.toHaveBeenCalled();
     await act(async () =>
@@ -116,9 +128,8 @@ describe("BindsPane autosave", () => {
         ?.click(),
     );
     expect(startupFiles[0].text).toBe("bind r +reload\n");
-    expect(document.querySelector('[data-testid="bind-keys-jump"]')?.textContent).toContain(
-      "r tf/cfg/execs_binds.cfg:2",
-    );
+    expect(caps("jump")).toEqual(["R"]);
+    expect(capSource("jump", "r")).toBe("Added in execs (tf/cfg/execs_binds.cfg, line 2)");
   });
 
   it("drops an unfinished key conflict when the profile changes", async () => {
@@ -198,7 +209,7 @@ describe("BindsPane autosave", () => {
       combat.click();
     });
     await act(async () => document.getElementById("bind-category-movement")?.click());
-    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("space");
+    expect(caps("jump")).toEqual(["Space"]);
     expect(
       document.querySelector('[data-testid="bind-row-jump"]')?.getAttribute("data-recording"),
     ).toBe("false");
@@ -257,7 +268,7 @@ describe("BindsPane autosave", () => {
     expect(notice?.closest('[data-testid="bind-row-jump"]')).not.toBeNull();
     expect(notice?.textContent).toContain("can't be bound");
     await pressKey("Escape", "Escape");
-    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("space");
+    expect(caps("jump")).toEqual(["Space"]);
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -280,7 +291,7 @@ describe("BindsPane autosave", () => {
     expect(record?.disabled).toBe(false);
     await act(async () => record?.click());
     await pressKey("x", "KeyX");
-    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("x");
+    expect(caps("jump")).toEqual(["X"]);
     await act(async () => vi.runAllTimersAsync());
     expect(save).not.toHaveBeenCalled();
 
@@ -349,7 +360,7 @@ describe("BindsPane autosave", () => {
     expect(reload?.disabled).toBe(false);
     await act(async () => reload?.click());
     await pressKey("r", "KeyR");
-    expect(document.querySelector('[data-testid="bind-key-reload"]')?.textContent).toBe("r");
+    expect(caps("reload")).toEqual(["R"]);
     await act(async () => vi.advanceTimersByTimeAsync(700));
     expect(save).toHaveBeenCalledTimes(1);
 
@@ -377,10 +388,10 @@ describe("BindsPane autosave", () => {
       document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
     );
     await pressKey("x", "KeyX");
-    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("x");
+    expect(caps("jump")).toEqual(["X"]);
 
     await act(async () => render("profile-b", "bind space +jump\n"));
-    expect(document.querySelector('[data-testid="bind-key-jump"]')?.textContent).toBe("space");
+    expect(caps("jump")).toEqual(["Space"]);
     expect(save).not.toHaveBeenCalled();
   });
 });
