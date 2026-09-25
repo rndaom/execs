@@ -13,6 +13,7 @@ packages/cfglint/        Source cfg parser/linter (TS), used by the Files pane
 tools/promo/             Text-only Remotion promo; outside the pnpm workspace (`pnpm install --ignore-workspace`)
 docs/media/              Development preview screenshots and the text-only promo GIF
 docs/RELEASE.md          Public vs dev, versioning, cadence, ship checklist
+docs/STATUS.md           Current 0.2.0 state and work order; read first, update at session end
 CHANGELOG.md             User-facing notes; the release workflow reads this
 .github/workflows/       ci.yml (frontend, rust-linux, rust-windows), release.yml (tag → draft → verify → publish)
 ```
@@ -111,7 +112,7 @@ Runtime sources and packaged exceptions are credited in the UI, the README and `
 
 Playbook: `docs/RELEASE.md`. Users install published GitHub Releases only. `main`, Linear, and draft / `workflow_dispatch` builds are private development. No nightlies, no public prereleases, no "try this build."
 
-The owner combines the selected 0.1.9 and 0.2.0 work into one 0.2.0 release with a whole-application visual overhaul. The current visual direction uses dark neutrals with a restrained warm-brown cast, warm off-white text, and TF2 orange for selections and necessary highlights; the earlier Foundry concept is design history, not a product name or active style target. Implementation and verification are authorized; publishing a release is not. The 25 optional `execs-candidate` items remain unselected; Inventory remains development-only and outside this release commitment. Scope, evidence and concepts live in `docs/design/2026-09-22-overhaul/`; the consolidated Linear milestone has no fixed ship date while native qualification remains open.
+The owner combines the selected 0.1.9 and 0.2.0 work into one 0.2.0 release with a whole-application visual overhaul. The current visual direction uses dark neutrals with a restrained warm-brown cast, warm off-white text, and TF2 orange for selections and necessary highlights; the earlier Foundry concept is design history, not a product name or active style target. Implementation and verification are authorized; publishing a release is not. On September 25, 2026 the owner selected every `execs-candidate` issue in the Linear 0.2.0 milestone for this release; `docs/STATUS.md` records what is done and the order for the rest. Inventory remains development-only and outside this release commitment. Scope, evidence and concepts live in `docs/design/2026-09-22-overhaul/`; the consolidated Linear milestone has no fixed ship date while native qualification remains open.
 
 In-app updater (Tauri updater plugin) against `https://github.com/rndaom/execs/releases/latest/download/latest.json`; check on launch and via the footer, install only on click, no telemetry. Windows NSIS per-user with `installMode: passive`, static MSVC CRT, `longPathAware` manifest; Linux AppImage (GStreamer bundled, self-updates) and `.deb` (first install only; the publish job strips it from `latest.json`). Signing: updater minisign key in CI secrets; installers are not Authenticode-signed yet (SignPath planned). Footer has Report a bug (issue forms) and Copy diagnostics (`get_diagnostics`).
 
@@ -142,6 +143,9 @@ Pending-change dialogs wrap complete cfg paths. Their Open pane actions move key
 The main window enables native page zoom with Ctrl + Plus / Minus and Ctrl + 0. Linux uses Tauri's zoom handler and the main-window-only webview zoom capability. Enlarged layouts retain keyboard access; browser viewport reflow alone does not prove native zoom behavior.
 
 ## Gotchas worth remembering
+
+- Worktrees need short paths (for example `G:wt<name>`) and `core.longpaths true`: archived evidence under `docs/` exceeds the default Windows path limit.
+- Rust tests that touch profiles fail with `GameRunning` while TF2 is open on the machine; that is the write lock working, not a regression.
 
 - On Windows, launching the dev executable directly from packaged Codex can inherit its MSIX AppData virtualization and mix real profiles with `OpenAI.Codex_*/LocalCache/Roaming/execs` copies. Launch through the existing Explorer desktop's `Document.Application.ShellExecute` instead; confirm `GetPackageFullName` returns `APPMODEL_ERROR_NO_PACKAGE` (15700). Keep profile containment checks intact and do not merge or delete either library to work around this launch-context problem.
 - Windows atomic file replacements and HUD backup moves pass absolute verbatim paths to `MoveFileExW`; `longPathAware` alone does not lift MAX_PATH when the system long-path policy is disabled. Preserve containment checks and resolve only endpoint parents so absent destinations and leaf rename semantics remain supported.
