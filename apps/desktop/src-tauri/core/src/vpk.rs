@@ -974,11 +974,92 @@ impl VpkEntryLocation {
     }
 }
 
+/// A directory walk, kept only inside [`with_directory_memo`].
+struct MappedTree {
+    on_disk_len: u64,
+    tree: Vec<u8>,
+    entries: std::rc::Rc<BTreeMap<String, VpkEntryLocation>>,
+}
+
+/// Enough for the misc, textures and sound directories one apply consults.
+const DIRECTORY_MEMO_TREES: usize = 4;
+
+thread_local! {
+    /// `None` outside a memo scope; the most recent walks inside one.
+    static DIRECTORY_MEMO: std::cell::RefCell<Option<Vec<MappedTree>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Walking `tf2_misc_dir.vpk` (about 100k entries) costs roughly 100 ms, and
+/// particle patching confirms the directory before every single write. Inside
+/// this scope every call still re-reads the tree from disk under the usual
+/// identity checks, but a tree whose bytes and on-disk length are identical to
+/// the previous walk maps identically, so that walk is reused. Nothing is kept
+/// once `f` returns; nested scopes share the outermost one.
+pub fn with_directory_memo<R>(f: impl FnOnce() -> R) -> R {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            DIRECTORY_MEMO.with(|memo| memo.borrow_mut().take());
+        }
+    }
+    let outermost = DIRECTORY_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        let outermost = memo.is_none();
+        if outermost {
+            *memo = Some(Vec::new());
+        }
+        outermost
+    });
+    // Only the outermost scope owns the reset; a nested scope must not
+    // construct one, because dropping it would end the shared memo early.
+    let _reset = if outermost { Some(Reset) } else { None };
+    f()
+}
+
+fn mapped_vpk_entries(
+    path: &Path,
+) -> Result<std::rc::Rc<BTreeMap<String, VpkEntryLocation>>, VpkError> {
+    let (tree, on_disk_len) = read_tree_from_path(path, DIRECTORY_LIMITS)?;
+    let reused = DIRECTORY_MEMO.with(|memo| {
+        memo.borrow().as_ref().and_then(|scope| {
+            scope
+                .iter()
+                .find(|mapped| mapped.on_disk_len == on_disk_len && mapped.tree == tree)
+                .map(|mapped| mapped.entries.clone())
+        })
+    });
+    if let Some(entries) = reused {
+        return Ok(entries);
+    }
+    let entries = std::rc::Rc::new(walk_vpk_entries(&tree, on_disk_len)?);
+    DIRECTORY_MEMO.with(|memo| {
+        if let Some(scope) = memo.borrow_mut().as_mut() {
+            if scope.len() == DIRECTORY_MEMO_TREES {
+                scope.remove(0);
+            }
+            scope.push(MappedTree {
+                on_disk_len,
+                tree,
+                entries: entries.clone(),
+            });
+        }
+    });
+    Ok(entries)
+}
+
 /// Map every entry to its physical location without reading any file bodies.
 pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
-    let (bytes, on_disk_len) = read_tree_from_path(path, DIRECTORY_LIMITS)?;
+    let entries = mapped_vpk_entries(path)?;
+    Ok(std::rc::Rc::try_unwrap(entries).unwrap_or_else(|shared| (*shared).clone()))
+}
+
+fn walk_vpk_entries(
+    bytes: &[u8],
+    on_disk_len: u64,
+) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
     let mut entries = BTreeMap::new();
-    walk_vpk_tree(&bytes, on_disk_len, DIRECTORY_LIMITS, &mut |entry| {
+    walk_vpk_tree(bytes, on_disk_len, DIRECTORY_LIMITS, &mut |entry| {
         entries.insert(
             entry.rel.clone(),
             VpkEntryLocation {
@@ -1136,8 +1217,9 @@ where
     // Steam verification and game updates can replace the directory and data
     // archives independently. Never use an offset mapped before lengthy PCF
     // processing without confirming that the directory still says exactly the
-    // same thing about this entry.
-    let remapped = map_vpk_entries(dir_path)?;
+    // same thing about this entry. The directory is re-read here every time;
+    // inside a directory memo only an identical tree skips the re-walk.
+    let remapped = mapped_vpk_entries(dir_path)?;
     let current_entry = remapped.get(&expected_entry.rel).ok_or_else(|| {
         VpkError(format!(
             "{} disappeared while the VPK was being prepared; retry after Steam finishes.",
@@ -1421,21 +1503,43 @@ fn write_cstring(out: &mut Vec<u8>, s: &str) {
     out.push(0);
 }
 
+/// The CRC-32 (IEEE) Valve stores per VPK entry.
 pub(crate) fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in data {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = if crc & 1 != 0 { 0xffff_ffff } else { 0 };
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
+    crc32fast::hash(data)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn crc32_matches_the_bitwise_ieee_reference() {
+        fn reference(data: &[u8]) -> u32 {
+            let mut crc = 0xffff_ffffu32;
+            for byte in data {
+                crc ^= u32::from(*byte);
+                for _ in 0..8 {
+                    let mask = if crc & 1 != 0 { 0xffff_ffff } else { 0 };
+                    crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+                }
+            }
+            !crc
+        }
+        assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
+        assert_eq!(crc32(b""), 0);
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let bytes: Vec<u8> = (0..70_001)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                seed as u8
+            })
+            .collect();
+        for len in [1, 7, 16, 63, 64, 65, 4096, bytes.len()] {
+            assert_eq!(crc32(&bytes[..len]), reference(&bytes[..len]), "{len}");
+        }
+    }
 
     #[test]
     fn v2_header_matches_the_layout_the_game_ships() {

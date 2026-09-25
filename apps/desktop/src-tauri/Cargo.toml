@@ -62,3 +62,22 @@ opt-level = 3
 # background thread (lock poller, hud fetch workers, tokio tasks) kills the
 # whole app with no UI and no log. Unwinding keeps a stray panic survivable.
 strip = true
+
+# `pnpm desktop:dev` and `cargo test` use the dev profile. Profile switches,
+# absorb and imports hash, CRC and inflate hundreds of megabytes; unoptimized,
+# these leaf crates made a dev-build switch several times slower than release.
+# execs code itself stays unoptimized and debuggable.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.adler2]
+opt-level = 3
+
+[profile.dev.package.lzma-rust2]
+opt-level = 3

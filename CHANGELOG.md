@@ -7,6 +7,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
+  patches and preloader pack are prepared once, before any files change, instead of being
+  rebuilt during the switch.
 - Launch TF2: flag a profile whose launch options are not in Steam yet, and write them before
   launching. When Steam is open, execs asks before restarting it to apply them.
 - Files keeps saved password and remote-console cfg commands through local saves, imports and
