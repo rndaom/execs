@@ -431,8 +431,12 @@ impl ViewmodelRecord {
     pub fn validate_build_recipe(&self) -> Result<(), &'static str> {
         let recipe = match (self.source, self.build_recipe.as_ref()) {
             (ViewmodelSource::StockBuilt, Some(recipe)) => recipe,
-            (ViewmodelSource::StockBuilt, None) => return Err("stock-built Viewmodels record has no build recipe"),
-            (_, Some(_)) => return Err("legacy Viewmodels record must not claim a stock build recipe"),
+            (ViewmodelSource::StockBuilt, None) => {
+                return Err("stock-built Viewmodels record has no build recipe")
+            }
+            (_, Some(_)) => {
+                return Err("legacy Viewmodels record must not claim a stock build recipe")
+            }
             (_, None) => return Ok(()),
         };
         if recipe.schema != VIEWMODEL_BUILD_RECIPE_SCHEMA {
@@ -440,9 +444,11 @@ impl ViewmodelRecord {
         }
         if recipe.catalog.patch_version.is_empty()
             || recipe.catalog.patch_version.len() > 128
-            || !recipe.catalog.patch_version.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
-            })
+            || !recipe
+                .catalog
+                .patch_version
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
             || !is_lower_sha256(&recipe.catalog.catalog_sha256)
         {
             return Err("invalid Viewmodels build catalog identity");
@@ -4952,7 +4958,8 @@ mod tests {
         assert!(record.validate_build_recipe().is_ok());
         assert_eq!(serde_json::to_string(&record).unwrap(), compiled);
 
-        let imported = r#"{"id":"execs-viewmodels","source":"imported","preload":false,"options":{}}"#;
+        let imported =
+            r#"{"id":"execs-viewmodels","source":"imported","preload":false,"options":{}}"#;
         let record: ViewmodelRecord = serde_json::from_str(imported).unwrap();
         assert_eq!(record.source, ViewmodelSource::Imported);
         assert_eq!(record.build_recipe, None);
@@ -4986,7 +4993,12 @@ mod tests {
         assert!(invalid.validate_build_recipe().is_err());
 
         let mut invalid = record.clone();
-        invalid.build_recipe.as_mut().unwrap().catalog.catalog_sha256 = "A".repeat(64);
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .catalog
+            .catalog_sha256 = "A".repeat(64);
         assert!(invalid.validate_build_recipe().is_err());
 
         let mut invalid = record.clone();
@@ -4999,7 +5011,12 @@ mod tests {
         assert!(invalid.validate_build_recipe().is_err());
 
         let mut invalid = record.clone();
-        invalid.build_recipe.as_mut().unwrap().source_fingerprints.clear();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .source_fingerprints
+            .clear();
         assert!(invalid.validate_build_recipe().is_err());
 
         let mut invalid = record.clone();
@@ -5013,10 +5030,11 @@ mod tests {
         assert!(invalid.validate_build_recipe().is_err());
 
         let mut invalid = record.clone();
-        invalid.build_recipe.as_mut().unwrap().choices = vec![
-            record.build_recipe.as_ref().unwrap().choices[0].clone();
-            MAX_VIEWMODEL_RECIPE_CHOICES + 1
-        ];
+        invalid.build_recipe.as_mut().unwrap().choices =
+            vec![
+                record.build_recipe.as_ref().unwrap().choices[0].clone();
+                MAX_VIEWMODEL_RECIPE_CHOICES + 1
+            ];
         assert!(invalid.validate_build_recipe().is_err());
 
         let mut unknown = json;

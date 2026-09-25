@@ -1290,9 +1290,7 @@ fn validate_feature_payloads(manifest: &ProfileZipManifest) -> Result<(), Profil
         }
     }
     if let Some(record) = &manifest.viewmodel {
-        record
-            .validate_build_recipe()
-            .map_err(invalid_zip)?;
+        record.validate_build_recipe().map_err(invalid_zip)?;
         if record.id != crate::viewmodel::EXECS_VIEWMODELS_PACK
             || !paths.contains(crate::viewmodel::EXECS_VIEWMODELS_VPK)
         {
@@ -1756,19 +1754,22 @@ mod tests {
             &zip_path,
             &[
                 (ZIP_MANIFEST_NAME, &manifest_bytes),
-                (
-                    "files/tf/custom/execs-viewmodels.vpk",
-                    &vpk,
-                ),
+                ("files/tf/custom/execs-viewmodels.vpk", &vpk),
             ],
         );
         let before = snapshot_tree(&profiles);
         let error = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
-        assert!(error.message().contains("rebuilt and verified"), "{error:?}");
+        assert!(
+            error.message().contains("rebuilt and verified"),
+            "{error:?}"
+        );
         assert_eq!(snapshot_tree(&profiles), before);
 
         manifest["viewmodel"]["source"] = serde_json::json!("compiled");
-        manifest["viewmodel"].as_object_mut().unwrap().remove("buildRecipe");
+        manifest["viewmodel"]
+            .as_object_mut()
+            .unwrap()
+            .remove("buildRecipe");
         let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
         write_raw_zip(
             &zip_path,
