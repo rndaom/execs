@@ -6,14 +6,15 @@ import type { GameBananaDownloadVariant, GameBananaMod, ModRecord } from "../lib
 import { openExternal } from "../lib/bridge";
 import {
   GAMEBANANA_SORTS,
+  gameBananaDefaultVariant,
   gameBananaMetaLine,
   gameBananaPager,
   gameBananaPageScopeNote,
   gameBananaTotalLabel,
+  gameBananaVariantFacts,
 } from "../lib/gamebanana-browser-ui";
 import {
   foldCategories,
-  formatModBytes,
   isGameBananaInstalled,
   type ModInstallResult,
   modMetaLine,
@@ -85,7 +86,7 @@ export function GameBananaBrowser({
     try {
       const variants = await api.gameBananaDownloadVariants(mod.id);
       if (token !== choiceToken.current) return;
-      setChooser({ mod, variants, selectedId: null });
+      setChooser({ mod, variants, selectedId: gameBananaDefaultVariant(variants) });
       setInstall(null);
       setAnnouncement(`Choose a file for ${mod.name}.`);
     } catch {
@@ -460,6 +461,12 @@ export function GameBananaBrowser({
           testId="mods-gb-file-choice"
           onClose={() => setChooser(null)}
         >
+          {chooser.variants.some((variant) => variant.splitPart) ? (
+            <Alert tone="info" testId="mods-gb-split-notice" className="mt-4 py-2">
+              This mod is split into parts. execs can't combine them. Follow the author's
+              instructions, then use Import mod.
+            </Alert>
+          ) : null}
           <div className="max-h-[55vh] space-y-2 overflow-y-auto py-4">
             {chooser.variants.map((variant) => (
               <label
@@ -485,12 +492,7 @@ export function GameBananaBrowser({
                       {variant.description}
                     </span>
                   ) : null}
-                  <span className="t-meta mt-1 block">
-                    {variant.sizeBytes === null
-                      ? "Size unknown"
-                      : formatModBytes(variant.sizeBytes)}
-                    {!variant.supported ? " · Not supported for Mods" : ""}
-                  </span>
+                  <span className="t-meta mt-1 block">{gameBananaVariantFacts(variant)}</span>
                 </span>
               </label>
             ))}

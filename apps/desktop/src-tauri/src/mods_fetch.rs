@@ -204,6 +204,7 @@ mod tests {
             size_bytes: Some(flat_textures::ZIP_BYTES),
             added_at: None,
             supported: true,
+            split_part: false,
         };
         assert!(pinned_flat_file_listed(std::slice::from_ref(&exact)));
         let mut changed = exact.clone();
@@ -229,6 +230,7 @@ mod tests {
             size_bytes: Some(developer_textures::ARCHIVE_BYTES),
             added_at: None,
             supported: true,
+            split_part: false,
         };
         assert!(pinned_developer_file_listed(std::slice::from_ref(&exact)));
         let mut changed = exact.clone();
@@ -254,6 +256,7 @@ mod tests {
             size_bytes: Some(square_overlays::ARCHIVE_BYTES),
             added_at: None,
             supported: true,
+            split_part: false,
         };
         assert!(pinned_square_file_listed(std::slice::from_ref(&exact)));
         let mut changed = exact.clone();

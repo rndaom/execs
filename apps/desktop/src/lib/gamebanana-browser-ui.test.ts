@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { GameBananaMod, GameBananaPage } from "./bridge";
+import type { GameBananaDownloadVariant, GameBananaMod, GameBananaPage } from "./bridge";
 import {
   GAMEBANANA_PAGE_CACHE_MAX_ENTRIES,
   GAMEBANANA_PAGE_CACHE_STALE_GRACE_MS,
+  gameBananaDefaultVariant,
   gameBananaMetaLine,
   gameBananaPager,
   gameBananaPageScopeNote,
   gameBananaQueryError,
   gameBananaRequestKey,
   gameBananaTotalLabel,
+  gameBananaVariantFacts,
   normalizeGameBananaQuery,
   readGameBananaPageCache,
   relativeDate,
@@ -159,5 +161,45 @@ describe("GameBanana browser UI model", () => {
     expect(cache).toHaveLength(GAMEBANANA_PAGE_CACHE_MAX_ENTRIES);
     expect(cache.has("0")).toBe(true);
     expect(cache.has("1")).toBe(false);
+  });
+});
+
+describe("GameBanana file chooser facts", () => {
+  const utc = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
+  const file = (overrides: Partial<GameBananaDownloadVariant> = {}): GameBananaDownloadVariant => ({
+    id: 1,
+    fileName: "mod.zip",
+    description: "",
+    sizeBytes: 5_129_625,
+    addedAt: 1_762_905_600,
+    supported: true,
+    splitPart: false,
+    ...overrides,
+  });
+
+  it("shows size and the exact upload date so versions can be told apart", () => {
+    expect(gameBananaVariantFacts(file(), utc)).toBe("4.9 MB · Added Nov 12, 2025");
+    expect(gameBananaVariantFacts(file({ sizeBytes: null, addedAt: null }), utc)).toBe(
+      "Size unknown",
+    );
+  });
+
+  it("names why a file cannot be chosen", () => {
+    expect(gameBananaVariantFacts(file({ supported: false, splitPart: true }), utc)).toContain(
+      "Part of a split download",
+    );
+    expect(gameBananaVariantFacts(file({ supported: false }), utc)).toContain(
+      "Not supported for Mods",
+    );
+  });
+
+  it("preselects only a lone installable file with no split parts beside it", () => {
+    expect(gameBananaDefaultVariant([file()])).toBe(1);
+    expect(gameBananaDefaultVariant([file(), file({ id: 2, supported: false })])).toBe(1);
+    expect(gameBananaDefaultVariant([file(), file({ id: 2 })])).toBeNull();
+    expect(
+      gameBananaDefaultVariant([file(), file({ id: 2, supported: false, splitPart: true })]),
+    ).toBeNull();
+    expect(gameBananaDefaultVariant([])).toBeNull();
   });
 });
