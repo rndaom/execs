@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use execs_core::viewmodel_graph::candidate_activity_graph;
+use execs_core::viewmodel_group_selection::provisional_group_catalog_identity;
 use execs_core::viewmodel_groups::derive_group_candidates;
 use execs_core::viewmodel_items::read_stock_item_catalog;
 use execs_core::viewmodel_scripts::read_stock_weapon_scripts;
@@ -20,6 +21,7 @@ fn main() {
     let models = read_stock_animation_index(root).expect("stock animation index");
     let graph = candidate_activity_graph(&items, &scripts, &models).expect("activity candidates");
     let candidates = derive_group_candidates(&graph).expect("bounded provisional groups");
+    let identity = provisional_group_catalog_identity(&candidates).expect("catalog identity");
     println!(
         "TF2 patch {}: {} provisional groups, {} unresolved item/class pairs",
         candidates.patch_version,
@@ -30,6 +32,7 @@ fn main() {
         "unresolved item/class pairs: {:?}",
         candidates.unresolved_items
     );
+    println!("provisional catalog SHA-256: {}", identity.catalog_sha256);
     let mut by_class = BTreeMap::<&str, (usize, usize, usize)>::new();
     for group in &candidates.groups {
         let count = by_class.entry(&group.class).or_default();

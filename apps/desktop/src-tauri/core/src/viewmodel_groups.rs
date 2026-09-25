@@ -10,8 +10,8 @@ use crate::hash::sha256_hex;
 use crate::viewmodel_graph::{ActivityRoute, StockActivityGraph};
 use crate::viewmodel_source::StockSourceError;
 
-const MAX_GROUPS: usize = 1024;
-const MAX_ANIMATIONS_PER_GROUP: usize = 256;
+pub(crate) const MAX_GROUPS: usize = 1024;
+pub(crate) const MAX_ANIMATIONS_PER_GROUP: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewmodelGroupCandidate {
@@ -34,7 +34,7 @@ pub struct ViewmodelGroupCandidates {
     pub unresolved_items: Vec<(String, u32)>,
 }
 
-fn group_id(class: &str, animations: &[String]) -> String {
+pub(crate) fn group_id(class: &str, animations: &[String]) -> String {
     let mut identity = Vec::new();
     identity.extend_from_slice(class.as_bytes());
     identity.push(0);
