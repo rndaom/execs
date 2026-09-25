@@ -27,7 +27,7 @@ pin is not a rights grant.
 | [Valve Source SDK](https://github.com/ValveSoftware/source-sdk-2013) | Independently described command argument and bound facts with source provenance supplement the offline catalog; no SDK implementation is copied or vendored. | Source SDK license (upstream); metadata only. See `packages/cfglint/CATALOG.md`. |
 | ICE cipher by Matthew Kwan | `core/src/ice.rs` is a port of the reference implementation, used to read weapon scripts from the user's own game files. | Public domain |
 
-The [D7 asset-rights register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md) records the pinned files, historical and current local uses, and unresolved permission evidence for CompVMInstaller, Venom Crosshairs, TF2Hitsounds, comfig.app hosted sounds and cueki's default mod library. It does not treat repository visibility or attribution as a grant.
+The [D7 asset-rights register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md) records the owner's September 25, 2026 containment decision, the pinned files, and historical and current local uses of CompVMInstaller, Venom Crosshairs, TF2Hitsounds, comfig.app hosted sounds and cueki's default mod library. It does not treat repository visibility or attribution as a grant.
 
 The Mods pane browses and downloads from [GameBanana](https://gamebanana.com) through its public API; each mod
 belongs to its author. The app also talks to GameBanana, teamfortress.tv and Dropbox to resolve HUD
