@@ -261,6 +261,15 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     surface === "ready" &&
     !creating &&
     showSettingsChrome(profiles.library);
+  // The ready shell (header + library status) fills the window even before a
+  // profile is active, so the empty library view is not an inset card.
+  const readyShellOpen =
+    settingsOpen ||
+    (install.screen === "ready" &&
+      install.confirmed !== null &&
+      surface === "ready" &&
+      !creating &&
+      !appSettingsOpen);
 
   function renderAppPreferences() {
     return (
@@ -593,7 +602,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
 
           <main
             className={`flex min-h-0 w-full flex-1 flex-col ${
-              settingsOpen
+              readyShellOpen
                 ? "items-stretch overflow-hidden"
                 : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
@@ -625,7 +634,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   filesExit.request(update.install);
                 },
               }}
-              pinned={settingsOpen}
+              pinned={readyShellOpen}
               onSettings={settingsOpen ? undefined : openAppSettings}
             />
           </main>
