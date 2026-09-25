@@ -12,6 +12,7 @@ import {
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
+  duplicateProfileName,
   libraryStatusCopy,
   PROFILE_NAME_MAX,
   profileNameProblem,
@@ -36,6 +37,7 @@ export function ProfileMenu({
   onExport,
   onDelete,
   onRename,
+  onDuplicate,
   onImport,
   onRepair,
   onCreateNew,
@@ -55,6 +57,8 @@ export function ProfileMenu({
   onDelete: (id: string) => void;
   /** Resolves true when saved; the menu keeps the editor open on failure. */
   onRename: (id: string, name: string) => Promise<boolean>;
+  /** Resolves true when the copy exists; the menu keeps the editor open on failure. */
+  onDuplicate: (id: string, name: string) => Promise<boolean>;
   onImport: () => void;
   onRepair: (id: string) => void;
   onCreateNew: () => void;
@@ -64,9 +68,13 @@ export function ProfileMenu({
   const summaryRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [actions, setActions] = useState<{ id: string; x: number; y: number } | null>(null);
-  const [renaming, setRenaming] = useState<{ id: string; name: string; saving: boolean } | null>(
-    null,
-  );
+  // One inline name editor serves Rename and Duplicate.
+  const [renaming, setRenaming] = useState<{
+    id: string;
+    name: string;
+    saving: boolean;
+    mode: "rename" | "duplicate";
+  } | null>(null);
 
   const positionMenu = useCallback(() => {
     const panel = panelRef.current;
@@ -224,6 +232,7 @@ export function ProfileMenu({
                   {renaming?.id === profile.id ? (
                     <RenameForm
                       current={profile.name}
+                      mode={renaming.mode}
                       value={renaming.name}
                       saving={renaming.saving}
                       locked={running || recoveryPending}
@@ -231,12 +240,15 @@ export function ProfileMenu({
                       onCancel={() => setRenaming(null)}
                       onSubmit={async () => {
                         const name = renaming.name.trim();
-                        if (name === profile.name) {
+                        if (renaming.mode === "rename" && name === profile.name) {
                           setRenaming(null);
                           return;
                         }
                         setRenaming({ ...renaming, saving: true });
-                        const saved = await onRename(profile.id, name);
+                        const saved =
+                          renaming.mode === "rename"
+                            ? await onRename(profile.id, name)
+                            : await onDuplicate(profile.id, name);
                         setRenaming((current) =>
                           current?.id !== profile.id
                             ? current
@@ -369,10 +381,32 @@ export function ProfileMenu({
               const id = actions.id;
               const name = library?.profiles.find((profile) => profile.id === id)?.name ?? "";
               setActions(null);
-              setRenaming({ id, name, saving: false });
+              setRenaming({ id, name, saving: false, mode: "rename" });
             }}
           >
             Rename…
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={
+              running ||
+              controlsBusy ||
+              recoveryPending ||
+              (library?.profiles.find((profile) => profile.id === actions.id)?.unsafeCustomFolders
+                ?.length ?? 0) > 0
+            }
+            onSelect={() => {
+              const id = actions.id;
+              const name = library?.profiles.find((profile) => profile.id === id)?.name ?? "";
+              setActions(null);
+              setRenaming({
+                id,
+                name: duplicateProfileName(name),
+                saving: false,
+                mode: "duplicate",
+              });
+            }}
+          >
+            Duplicate…
           </ContextMenuItem>
           <ContextMenuItem
             disabled={controlsBusy || recoveryPending}
@@ -405,6 +439,7 @@ export function ProfileMenu({
 
 function RenameForm({
   current,
+  mode,
   value,
   saving,
   locked,
@@ -413,6 +448,7 @@ function RenameForm({
   onSubmit,
 }: {
   current: string;
+  mode: "rename" | "duplicate";
   value: string;
   saving: boolean;
   locked: boolean;
@@ -445,7 +481,7 @@ function RenameForm({
     >
       <div className="flex min-w-0 items-center gap-2">
         <label className="sr-only" htmlFor="profile-rename-input">
-          New name for {current}
+          {mode === "rename" ? `New name for ${current}` : `Name for the copy of ${current}`}
         </label>
         <input
           ref={input}
@@ -463,7 +499,13 @@ function RenameForm({
           disabled={problem !== null || saving || locked}
           className="btn btn-primary"
         >
-          {saving ? <Loading>Saving…</Loading> : "Save"}
+          {saving ? (
+            <Loading>{mode === "rename" ? "Saving…" : "Duplicating…"}</Loading>
+          ) : mode === "rename" ? (
+            "Save"
+          ) : (
+            "Duplicate"
+          )}
         </button>
         <button type="button" className="btn btn-quiet" disabled={saving} onClick={onCancel}>
           Cancel

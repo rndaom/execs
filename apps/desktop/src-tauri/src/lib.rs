@@ -666,6 +666,7 @@ pub fn run() {
             commands::library::init_profile_library,
             commands::library::save_current_as,
             commands::library::rename_profile,
+            commands::library::duplicate_profile,
             commands::library::delete_profile,
             commands::app_settings::get_app_settings,
             commands::app_settings::set_app_preferences,
