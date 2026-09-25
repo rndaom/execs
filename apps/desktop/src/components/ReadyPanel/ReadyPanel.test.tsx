@@ -465,10 +465,13 @@ it("duplicates a profile inline with a suggested name and leaves it inactive", a
     box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]')?.click(),
   );
   await act(async () => {
-    [...document.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "Duplicate…")
-      ?.click();
+    const item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Duplicate…",
+    );
+    item?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    item?.click();
   });
+  expect(menu()?.open).toBe(true);
   const input = box.querySelector<HTMLInputElement>("#profile-rename-input");
   expect(input?.value).toBe(`${first.name} copy`);
   expect(
