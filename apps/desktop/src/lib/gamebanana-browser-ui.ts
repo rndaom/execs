@@ -1,5 +1,12 @@
-import type { GameBananaMod, GameBananaPage, GameBananaSort, GameBananaTotal } from "./bridge";
+import type {
+  GameBananaDownloadVariant,
+  GameBananaMod,
+  GameBananaPage,
+  GameBananaSort,
+  GameBananaTotal,
+} from "./bridge";
 import { compactCount } from "./hud-ui";
+import { formatModBytes } from "./mods-ui";
 
 export const GAMEBANANA_SORTS: { id: GameBananaSort; label: string }[] = [
   { id: "new", label: "New" },
@@ -213,4 +220,31 @@ export function writeGameBananaPageCache(
   cache.set(key, snapshot);
   pruneGameBananaPageCache(cache, now);
   return snapshot;
+}
+
+const FILE_DATE = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+/** Size, upload date and why a file cannot be chosen, for the file chooser. */
+export function gameBananaVariantFacts(
+  variant: GameBananaDownloadVariant,
+  dates: Intl.DateTimeFormat = FILE_DATE,
+): string {
+  const facts = [variant.sizeBytes === null ? "Size unknown" : formatModBytes(variant.sizeBytes)];
+  // Absolute dates tell an old version from a current one; relative ones blur.
+  if (validTimestamp(variant.addedAt)) {
+    facts.push(`Added ${dates.format(new Date(variant.addedAt * 1000))}`);
+  }
+  if (variant.splitPart) facts.push("Part of a split download");
+  else if (!variant.supported) facts.push("Not supported for Mods");
+  return facts.join(" · ");
+}
+
+/**
+ * The only installable file is chosen up front. Next to split parts, the one
+ * whole file is often an optional addon, so nothing is chosen for the player.
+ */
+export function gameBananaDefaultVariant(variants: GameBananaDownloadVariant[]): number | null {
+  if (variants.some((variant) => variant.splitPart)) return null;
+  const supported = variants.filter((variant) => variant.supported);
+  return supported.length === 1 ? supported[0].id : null;
 }

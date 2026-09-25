@@ -1007,8 +1007,43 @@ export function createPreviewApi(state: PreviewState): Api {
           sizeBytes: 4_200_000,
           addedAt: listing.addedAt,
           supported: true,
+          splitPart: false,
         },
       ];
+      if (id === 700_001) {
+        // A split upload: two parts that only work together, plus an addon.
+        const added = listing.addedAt ?? 1_760_000_000;
+        const day = 86_400;
+        return [
+          {
+            id: id * 10 + 1,
+            fileName: "vintage_sniper_-_part_1.zip",
+            description: "PART 1",
+            sizeBytes: 48_000_000,
+            addedAt: added,
+            supported: false,
+            splitPart: true,
+          },
+          {
+            id: id * 10 + 2,
+            fileName: "vintage_sniper_-_part_2.zip",
+            description: "PART 2",
+            sizeBytes: 31_500_000,
+            addedAt: added - day,
+            supported: false,
+            splitPart: true,
+          },
+          {
+            id: id * 10 + 3,
+            fileName: "vintage_sniper_scope_overlay.7z",
+            description: "Optional scope overlay",
+            sizeBytes: 820_000,
+            addedAt: added - 400 * day,
+            supported: true,
+            splitPart: false,
+          },
+        ];
+      }
       if (id === 700_000) {
         files.push({
           id: id * 10 + 2,
@@ -1017,6 +1052,7 @@ export function createPreviewApi(state: PreviewState): Api {
           sizeBytes: 3_100_000,
           addedAt: listing.addedAt,
           supported: true,
+          splitPart: false,
         });
       }
       return files;

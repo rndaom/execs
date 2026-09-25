@@ -991,6 +991,24 @@ pub fn download_bytes(url: &str, max_bytes: u64) -> Result<Vec<u8>, String> {
     download_bytes_for(url, max_bytes, source)
 }
 
+/// Like `download_bytes`, but a completed non-success response comes back as
+/// its status so the caller can explain it (a file its host no longer has).
+pub fn download_bytes_or_status(
+    url: &str,
+    max_bytes: u64,
+) -> Result<Result<Vec<u8>, reqwest::StatusCode>, String> {
+    let parsed = reqwest::Url::parse(url.trim())
+        .map_err(|_| "The download URL is not valid.".to_string())?;
+    let source = source_for_url(&parsed)
+        .ok_or_else(|| "The download host is not on the app's allowlist.".to_string())?;
+    let response = send_get(&client()?, url, source, Some(DOWNLOAD_TIMEOUT), max_bytes)?;
+    Ok(if response.status.is_success() {
+        Ok(response.body)
+    } else {
+        Err(response.status)
+    })
+}
+
 pub fn download_bytes_for(
     url: &str,
     max_bytes: u64,

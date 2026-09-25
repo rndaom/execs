@@ -263,7 +263,7 @@ fn fetch_gamebanana_mod(
 ) -> Result<(GameBananaProfile, Vec<(String, ModContent)>), CommandError> {
     let profile = gamebanana::mod_profile(id)?;
     let pick = gamebanana::download_file(id, file_id)?;
-    let bytes = crate::net::download_bytes(&pick.url, gamebanana::MOD_MAX_BYTES)?;
+    let bytes = gamebanana::download_pick(&pick)?;
     let packs = packs_from_download(&profile.name, &pick.file_name, bytes)?;
     Ok((profile, packs))
 }
