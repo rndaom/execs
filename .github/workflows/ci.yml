@@ -146,9 +146,6 @@ jobs:
       - name: Linux advisory disposition
         if: needs.classify.outputs.docs_only != 'true'
         run: node scripts/check-glib-disposition.mjs
-      - name: Pinned HUD installation and option semantics
-        if: needs.classify.outputs.docs_only != 'true'
-        run: node scripts/verify-pinned-huds.mjs
 
   rust-windows:
     needs: classify
@@ -175,6 +172,57 @@ jobs:
       - name: Tests
         if: needs.classify.outputs.docs_only != 'true'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked
+
+  pinned-huds-linux:
+    needs: classify
+    if: always() && !cancelled()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Documentation-only PR
+        if: needs.classify.outputs.docs_only == 'true'
+        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+      - uses: actions/checkout@v4
+        if: needs.classify.outputs.docs_only != 'true'
+      - uses: dtolnay/rust-toolchain@stable
+        if: needs.classify.outputs.docs_only != 'true'
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        if: needs.classify.outputs.docs_only != 'true'
+        with:
+          workspaces: apps/desktop/src-tauri
+          # Restore the base cache written by rust-linux; never race its save.
+          shared-key: rust-linux
+          save-if: false
+      - uses: actions/setup-node@v4
+        if: needs.classify.outputs.docs_only != 'true'
+        with:
+          node-version: 24
+      - name: Pinned HUD installation and option semantics
+        if: needs.classify.outputs.docs_only != 'true'
+        run: node scripts/verify-pinned-huds.mjs
+
+  pinned-huds-windows:
+    needs: classify
+    if: always() && !cancelled()
+    runs-on: windows-latest
+    steps:
+      - name: Documentation-only PR
+        if: needs.classify.outputs.docs_only == 'true'
+        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+      - uses: actions/checkout@v4
+        if: needs.classify.outputs.docs_only != 'true'
+      - uses: dtolnay/rust-toolchain@stable
+        if: needs.classify.outputs.docs_only != 'true'
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        if: needs.classify.outputs.docs_only != 'true'
+        with:
+          workspaces: apps/desktop/src-tauri
+          # Restore the base cache written by rust-windows; never race its save.
+          shared-key: rust-windows
+          save-if: false
       - uses: actions/setup-node@v4
         if: needs.classify.outputs.docs_only != 'true'
         with:
@@ -185,7 +233,7 @@ jobs:
 
   ci-gate:
     name: CI gate
-    needs: [classify, inventory-probe, frontend, rust-linux, rust-windows]
+    needs: [classify, inventory-probe, frontend, rust-linux, rust-windows, pinned-huds-linux, pinned-huds-windows]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -196,7 +244,9 @@ jobs:
           FRONTEND: ${{ needs.frontend.result }}
           RUST_LINUX: ${{ needs.rust-linux.result }}
           RUST_WINDOWS: ${{ needs.rust-windows.result }}
+          PINNED_HUDS_LINUX: ${{ needs.pinned-huds-linux.result }}
+          PINNED_HUDS_WINDOWS: ${{ needs.pinned-huds-windows.result }}
         run: |
-          for result in "$CLASSIFY" "$INVENTORY" "$FRONTEND" "$RUST_LINUX" "$RUST_WINDOWS"; do
+          for result in "$CLASSIFY" "$INVENTORY" "$FRONTEND" "$RUST_LINUX" "$RUST_WINDOWS" "$PINNED_HUDS_LINUX" "$PINNED_HUDS_WINDOWS"; do
             test "$result" = success || exit 1
           done
