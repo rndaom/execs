@@ -3,6 +3,7 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
+import { Loading } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
@@ -53,6 +54,7 @@ import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { type CfgText, readSettingsSnapshot } from "./lib/settings-loading";
 import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
+import { prefetchViewmodelCatalog } from "./lib/viewmodel-catalog-cache";
 import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
@@ -158,7 +160,6 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
-  const [casualOpenRequest, setCasualOpenRequest] = useState(0);
   const [drawViewmodelDraft, setDrawViewmodelDraft] = useState<{
     profileId: string;
     shown: boolean;
@@ -190,6 +191,12 @@ export function SettingsHost({
       onPendingChange?.(false);
     };
   }, [settingsDraftStore, onPendingChange]);
+
+  // Read the installed Viewmodels catalog in the background so the pane opens ready.
+  // It waits while TF2 runs, keeping the extra disk work away from the game.
+  useEffect(() => {
+    if (activeProfileId && !running) prefetchViewmodelCatalog(api.getViewmodelSourceCatalog);
+  }, [api, activeProfileId, running]);
 
   const repairBusy = modsPayload?.repairInProgress === true;
   useEffect(() => {
@@ -1028,10 +1035,7 @@ export function SettingsHost({
           globalViewmodelsShown={globalViewmodelsShown}
           profilePreload={modsPayload?.profilePreload ?? null}
           onOpenGameplay={() => onNavigate?.("gameplay")}
-          onOpenCasualSetup={() => {
-            setCasualOpenRequest((current) => current + 1);
-            onNavigate?.("mods");
-          }}
+          loadCatalog={api.getViewmodelSourceCatalog}
           onImport={(preload) => {
             return write(
               async () => {
@@ -1041,6 +1045,18 @@ export function SettingsHost({
               { picker: true },
             );
           }}
+          onBuild={
+            // Development only: the native command also refuses release builds.
+            import.meta.env.DEV
+              ? (request) =>
+                  write(
+                    async () => {
+                      await api.buildSelectedViewmodelPack(request);
+                    },
+                    { success: "Pack built", failure: "Could not build" },
+                  )
+              : undefined
+          }
           onRemove={() => {
             void write(
               async () => {
@@ -1101,7 +1117,6 @@ export function SettingsHost({
       return (
         <ModsPane
           api={api}
-          casualOpenRequest={casualOpenRequest}
           active={paneActive}
           previewData={import.meta.env.DEV && !isTauri()}
           profileId={profileId}
@@ -1302,7 +1317,13 @@ export function SettingsHost({
 
     if (tab === "files") {
       return (
-        <Suspense fallback={<p className="t-meta">Loading cfg workspace…</p>}>
+        <Suspense
+          fallback={
+            <p className="t-meta">
+              <Loading>Loading cfg workspace…</Loading>
+            </p>
+          }
+        >
           <FilesPane
             profileId={filesInspection?.detail.id ?? profileId}
             files={filesInspection?.files ?? files}
@@ -1439,7 +1460,11 @@ export function SettingsHost({
           Loading settings for {activeProfileName ?? "the selected profile"}…
         </p>
       ) : null}
-      {!profileId && loading && !identityPending ? <p>Loading settings…</p> : null}
+      {!profileId && loading && !identityPending ? (
+        <p>
+          <Loading>Loading settings…</Loading>
+        </p>
+      ) : null}
       {!identityPending && !filesLimited && !maps.complete && usesCfgState(tab) ? (
         <div role="alert" className="mb-4 text-warn">
           <p>{maps.reason ?? CFG_INCOMPLETE_MESSAGE}</p>

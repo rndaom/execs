@@ -101,8 +101,9 @@ pub use hud_apply::{
     schema_view, HudSchema, HudSchemaView, HUD_CFG_PREFIX,
 };
 pub use launch::{
-    get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
-    LaunchWriteReason, SetLaunchResult,
+    get_profile_launch_options, launch_sync_status, recommended_launch_options,
+    set_profile_launch_options, sync_profile_launch_options, LaunchSyncStatus, LaunchWriteReason,
+    SetLaunchResult,
 };
 pub use mods::{
     install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,

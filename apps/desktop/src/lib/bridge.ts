@@ -471,8 +471,11 @@ export type ViewmodelSourceCatalog = {
   groups: {
     id: string;
     class: string;
-    items: { id: number; schemaName: string }[];
+    /** `slot` is the item's loadout slot for this group's class, when the schema names one. */
+    items: { id: number; schemaName: string; itemClass?: string; slot?: string | null }[];
     animations: string[];
+    /** Inspect animations are grouped separately from the weapon's ordinary actions. */
+    inspect?: boolean;
     overlaps: string[];
     teamVariantsDiffer: boolean;
   }[];
@@ -700,6 +703,19 @@ export type SetLaunchResult = {
   launchOptions: string;
   steamWrite: SteamWriteStatus;
 };
+
+/** How the active profile's launch options compare with Steam's saved copy. */
+export type LaunchSyncStatus = {
+  profileOptions: string;
+  /** `null` when no Steam account was found, so there is nothing to sync. */
+  steamOptions: string | null;
+  inSync: boolean;
+  steamRunning: boolean;
+};
+
+export async function getLaunchSyncStatus(): Promise<LaunchSyncStatus> {
+  return call<LaunchSyncStatus>("get_launch_sync_status");
+}
 
 export async function recommendedLaunchOptions(): Promise<string> {
   return call<string>("recommended_launch_options");
@@ -1294,9 +1310,13 @@ export async function cancelGameFileRepair(): Promise<boolean> {
   return call<boolean>("cancel_game_file_repair");
 }
 
-/** Start TF2 through Steam (`steam://rungameid/440`). */
-export async function launchTf2(): Promise<void> {
-  return call<void>("launch_tf2");
+/**
+ * Start TF2 through Steam (`steam://rungameid/440`). With `syncSteam`, the
+ * player agreed to close Steam first so the profile's launch options can be
+ * written; the launch then starts Steam again.
+ */
+export async function launchTf2(syncSteam = false): Promise<void> {
+  return call<void>("launch_tf2", { syncSteam });
 }
 
 /** Release a pending launch after the user has cancelled it in Steam. */

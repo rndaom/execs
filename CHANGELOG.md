@@ -10,6 +10,8 @@ User-facing changes only. The release workflow publishes the matching
 - Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
   patches and preloader pack are prepared once, before any files change, instead of being
   rebuilt during the switch.
+- Launch TF2: flag a profile whose launch options are not in Steam yet, and write them before
+  launching. When Steam is open, execs asks before restarting it to apply them.
 - Files keeps saved password and remote-console cfg commands through local saves, imports and
   exports. Export review names possible credential locations, lists the included custom packs,
   and flags Crosshair scripts and Viewmodels VPKs before creating a ZIP, without displaying
@@ -40,9 +42,16 @@ User-facing changes only. The release workflow publishes the matching
   inventing names, and refresh older catalog and statistics caches for accurate metadata.
 - Viewmodels: import, replace or remove a compatible VPK, with saved packs from earlier builds
   still available through profile switching and export/import.
-- Viewmodels: explore provisional class and item groups derived from the installed TF2 files,
-  compare Full and Weapon hide choices, and refresh changed sources. These draft choices do not
-  build a pack until rendered previews and retail behavior are verified.
+- Viewmodels: choose Shown, Hidden or Hands only for each weapon, organized by class into
+  Primary, Secondary, Melee and Inspect with readable weapon names from your TF2 files. Inspect
+  animations have their own choices, and bread reskins such as Mutated Milk share their base
+  weapon's choice. execs reads these weapons in the background when it opens, so the pane is
+  ready without waiting. These choices do not build a pack until rendered previews and retail
+  behavior are verified.
+- Show a turning cog wherever execs is loading, checking or saving. It stays still when reduced
+  motion is on.
+- Keep the full-window header and library status when no profile is active yet, instead of an
+  inset card.
 - Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
   controls and clearer source retry feedback.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum

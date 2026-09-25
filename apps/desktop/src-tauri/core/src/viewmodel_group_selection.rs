@@ -84,7 +84,7 @@ fn validate_group(group: &ViewmodelGroupCandidate) -> Result<(), StockSourceErro
             group.id
         )));
     }
-    if group.id != group_id(&group.class, &group.animations) {
+    if group.id != group_id(&group.class, group.inspect, &group.animations) {
         return Err(invalid(format!(
             "provisional Viewmodels group {} has a stale ID",
             group.id
@@ -133,6 +133,7 @@ pub fn provisional_group_catalog_identity(
     for group in groups.values() {
         push_str(&mut bytes, &group.id);
         push_str(&mut bytes, &group.class);
+        bytes.push(u8::from(group.inspect));
         push_len(&mut bytes, group.item_ids.len());
         for item_id in &group.item_ids {
             bytes.extend_from_slice(&item_id.to_le_bytes());
@@ -239,10 +240,11 @@ mod tests {
     fn group(class: &str, item_ids: &[u32], animations: &[&str]) -> ViewmodelGroupCandidate {
         let animations: Vec<String> = animations.iter().map(|name| (*name).into()).collect();
         ViewmodelGroupCandidate {
-            id: group_id(class, &animations),
+            id: group_id(class, false, &animations),
             class: class.into(),
             item_ids: item_ids.to_vec(),
             animations,
+            inspect: false,
             overlaps: Vec::new(),
             team_variants_differ: false,
         }

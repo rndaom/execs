@@ -698,6 +698,16 @@ export function createPreviewApi(state: PreviewState): Api {
     async getProfileLaunchOptions() {
       return launchOptions;
     },
+    async getLaunchSyncStatus() {
+      // Preview data: Steam still has the options from before the last switch.
+      const steamOptions = "-novid";
+      return {
+        profileOptions: launchOptions,
+        steamOptions,
+        inSync: launchOptions === steamOptions,
+        steamRunning: true,
+      };
+    },
     async setProfileLaunchOptions(options: string) {
       launchOptions = options;
       return { launchOptions: options, steamWrite: "steam_open" as const };
@@ -846,7 +856,8 @@ export function createPreviewApi(state: PreviewState): Api {
 
     // --- viewmodels ---------------------------------------------------------
     async getViewmodelSourceCatalog() {
-      throw notInPreview("The installed Viewmodels source catalog");
+      const { PREVIEW_VIEWMODEL_CATALOG } = await import("./preview-viewmodels");
+      return PREVIEW_VIEWMODEL_CATALOG;
     },
     async buildSelectedViewmodelPack() {
       throw notInPreview("Building a Viewmodels pack from installed TF2 sources");
@@ -1086,7 +1097,7 @@ export function createPreviewApi(state: PreviewState): Api {
       }
       return modsPayload;
     },
-    async launchTf2() {
+    async launchTf2(_syncSteam?: boolean) {
       // Steam is not reachable from the preview; the button is a no-op here.
     },
     async cancelTf2Launch() {

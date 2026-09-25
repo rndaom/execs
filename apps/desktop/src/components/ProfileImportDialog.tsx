@@ -2,6 +2,7 @@ import { Check } from "@phosphor-icons/react";
 import type { ProfileLibraryState } from "../hooks/useProfileLibrary";
 import { Modal } from "./ui/Modal";
 import { OptionTile } from "./ui/OptionTile";
+import { Loading } from "./ui/Spinner";
 
 const STAGES = ["Read ZIP", "Review files", "Save profile"];
 
@@ -59,13 +60,15 @@ export function ProfileImportDialog({
     >
       <div role="status" aria-live="polite" aria-busy={working} className="mt-5">
         <p className="t-meta text-ink">
-          {stage === "reading"
-            ? "Reading files and checking the archive…"
-            : stage === "saving"
-              ? "Verifying the ZIP and saving your new profile…"
-              : complete
-                ? "All steps done"
-                : "Ready for your review"}
+          {stage === "reading" ? (
+            <Loading>Reading files and checking the archive…</Loading>
+          ) : stage === "saving" ? (
+            <Loading>Verifying the ZIP and saving your new profile…</Loading>
+          ) : complete ? (
+            "All steps done"
+          ) : (
+            "Ready for your review"
+          )}
         </p>
         <div
           role="progressbar"
@@ -77,7 +80,7 @@ export function ProfileImportDialog({
           className="mt-3 h-1 overflow-hidden rounded-pill bg-bg"
         >
           <div
-            className={`h-full rounded-pill bg-ink-muted transition-[width] duration-200 motion-reduce:transition-none ${stage === "reading" ? "animate-pulse motion-reduce:animate-none" : ""}`}
+            className={`h-full rounded-pill bg-ink-muted transition-[width] duration-200 motion-reduce:transition-none`}
             style={{
               width: stage === "reading" ? "25%" : `${((complete ? 3 : index) / 3) * 100}%`,
             }}

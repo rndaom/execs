@@ -382,3 +382,28 @@ export function steamWriteCopy(status: SteamWriteStatus): string {
       return "Saved to the profile. Steam could not be updated yet.";
   }
 }
+
+/** The launch-time comparison of profile and Steam launch options. */
+export type LaunchSync = {
+  steamOptions: string | null;
+  inSync: boolean;
+  steamRunning: boolean;
+};
+
+/**
+ * What Launch TF2 does about Steam's launch options. Steam has to be closed to
+ * write them, so a running Steam needs the player's consent before it closes.
+ */
+export type LaunchSyncAction = "launch" | "write-then-launch" | "ask";
+
+export function launchSyncAction(sync: LaunchSync | null): LaunchSyncAction {
+  if (!sync || sync.inSync || sync.steamOptions === null) {
+    return "launch";
+  }
+  return sync.steamRunning ? "ask" : "write-then-launch";
+}
+
+/** Header flag for a profile whose launch options are not in Steam yet. */
+export function launchSyncWarning(sync: LaunchSync | null): string | null {
+  return launchSyncAction(sync) === "launch" ? null : "Launch options not in Steam";
+}

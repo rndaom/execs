@@ -696,6 +696,7 @@ pub fn run() {
             commands::comfig::import_comfig_custom,
             commands::launch::recommended_launch_options,
             commands::launch::launch_tf2,
+            commands::launch::get_launch_sync_status,
             commands::launch::cancel_tf2_launch,
             commands::launch::get_profile_launch_options,
             commands::launch::set_profile_launch_options,

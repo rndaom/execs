@@ -11,6 +11,8 @@ import {
   launchOptionGroups,
   launchPresetConflict,
   launchPresetPresent,
+  launchSyncAction,
+  launchSyncWarning,
   recommendedLaunchOptions,
   removeLaunchOption,
   searchLaunchPresets,
@@ -173,5 +175,34 @@ describe("the shared write gate", () => {
     expect(canWrite(true, false)).toBe(false);
     expect(canWrite(false, true)).toBe(false);
     expect(canWrite(true, true)).toBe(false);
+  });
+});
+
+describe("launch sync", () => {
+  const status = (inSync: boolean, steamRunning: boolean, steamOptions: string | null = "") => ({
+    inSync,
+    steamRunning,
+    steamOptions,
+  });
+
+  it("launches directly when Steam already has the profile's options", () => {
+    expect(launchSyncAction(status(true, true))).toBe("launch");
+    expect(launchSyncWarning(status(true, true))).toBeNull();
+  });
+
+  it("launches directly when the comparison is unavailable or there is no Steam account", () => {
+    expect(launchSyncAction(null)).toBe("launch");
+    expect(launchSyncAction(status(false, true, null))).toBe("launch");
+    expect(launchSyncWarning(status(false, true, null))).toBeNull();
+  });
+
+  it("writes without asking when Steam is closed", () => {
+    expect(launchSyncAction(status(false, false))).toBe("write-then-launch");
+    expect(launchSyncWarning(status(false, false))).toBe("Launch options not in Steam");
+  });
+
+  it("asks before closing a running Steam", () => {
+    expect(launchSyncAction(status(false, true))).toBe("ask");
+    expect(launchSyncWarning(status(false, true))).toBe("Launch options not in Steam");
   });
 });
