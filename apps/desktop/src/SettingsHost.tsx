@@ -1045,17 +1045,13 @@ export function SettingsHost({
               { picker: true },
             );
           }}
-          onBuild={
-            // Development only: the native command also refuses release builds.
-            import.meta.env.DEV
-              ? (request) =>
-                  write(
-                    async () => {
-                      await api.buildSelectedViewmodelPack(request);
-                    },
-                    { success: "Pack built", failure: "Could not build" },
-                  )
-              : undefined
+          onBuild={(request) =>
+            write(
+              async () => {
+                await api.buildSelectedViewmodelPack(request);
+              },
+              { success: "Pack built", failure: "Could not build" },
+            )
           }
           onRemove={() => {
             void write(

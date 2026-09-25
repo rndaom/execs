@@ -45,9 +45,9 @@ User-facing changes only. The release workflow publishes the matching
 - Viewmodels: choose Shown, Hidden or Hands only for each weapon, organized by class into
   Primary, Secondary, Melee and Inspect with readable weapon names from your TF2 files. Inspect
   animations have their own choices, and bread reskins such as Mutated Milk share their base
-  weapon's choice. execs reads these weapons in the background when it opens, so the pane is
-  ready without waiting. These choices do not build a pack until rendered previews and retail
-  behavior are verified.
+  weapon's choice. Build pack creates the viewmodel pack from your own TF2 files, and profile
+  exports carry the recipe so the recipient's copy is rebuilt from their install. execs reads
+  these weapons in the background when it opens, so the pane is ready without waiting.
 - Show a turning cog wherever execs is loading, checking or saving. It stays still when reduced
   motion is on.
 - Keep the full-window header and library status when no profile is active yet, instead of an
