@@ -478,7 +478,7 @@ function ViewmodelCatalogChoices({
         open={reviewOpen && active && editable}
         title="Build viewmodels"
         testId="viewmodel-build-review"
-        className="w-[min(520px,calc(100vw-2rem))]"
+        className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(520px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
         onClose={() => {
           if (!building) setReviewOpen(false);
         }}
