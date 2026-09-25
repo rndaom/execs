@@ -848,6 +848,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getViewmodelSourceCatalog() {
       throw notInPreview("The installed Viewmodels source catalog");
     },
+    async buildSelectedViewmodelPack() {
+      throw notInPreview("Building a Viewmodels pack from installed TF2 sources");
+    },
     async importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
       viewmodel = { id: "preview", source: "imported", preload, options: {} };
       return requireDetail();

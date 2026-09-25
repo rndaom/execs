@@ -483,6 +483,14 @@ export type ViewmodelSourceCatalog = {
   candidateRoleCount: number;
 };
 
+/** Bind Build to the exact provisional catalog and installed source bytes. */
+export type ViewmodelBuildRequest = {
+  catalog: ViewmodelSourceCatalog["catalog"];
+  sourceFingerprints: ViewmodelSourceCatalog["sourceFingerprints"];
+  choices: { groupId: string; mode: "full" | "weapon" }[];
+  preload: boolean;
+};
+
 /**
  * How the app can fetch a HUD's files, derived from its hud-db `repo` host:
  * a pinned GitHub zip, a direct (Dropbox) archive, a GameBanana listing, a
@@ -847,6 +855,12 @@ export async function deactivateCrosshairs(): Promise<ProfileDetail> {
 
 export async function getViewmodelSourceCatalog(): Promise<ViewmodelSourceCatalog> {
   return call<ViewmodelSourceCatalog>("get_viewmodel_source_catalog");
+}
+
+export async function buildSelectedViewmodelPack(
+  request: ViewmodelBuildRequest,
+): Promise<ProfileDetail> {
+  return call<ProfileDetail>("build_selected_viewmodel_pack", { request });
 }
 
 export async function importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
