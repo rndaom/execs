@@ -14,7 +14,7 @@ use crate::viewmodel_group_selection::{
 };
 use crate::viewmodel_groups::{derive_group_candidates, ViewmodelGroupCandidates};
 use crate::viewmodel_items::read_stock_item_catalog;
-use crate::viewmodel_scripts::read_stock_weapon_scripts;
+use crate::viewmodel_scripts::{read_stock_weapon_scripts, StockWeaponScriptIndex};
 use crate::viewmodel_source::{
     read_stock_animation_index, read_stock_bone_index, StockAnimationIndex, StockBoneIndex,
     StockSourceError,
@@ -34,6 +34,27 @@ fn model_key(class: &str) -> &str {
     } else {
         class
     }
+}
+
+fn canonical_weapon_script_fingerprints(
+    scripts: &StockWeaponScriptIndex,
+) -> Result<BTreeMap<String, String>, StockSourceError> {
+    let mut fingerprints = BTreeMap::new();
+    for script in scripts.scripts.values() {
+        // VPK member paths use '/' already. Recipe source IDs use the same
+        // portable lowercase spelling as catalog IDs, while the digest still
+        // names the exact installed bytes.
+        let id = script.path.to_ascii_lowercase();
+        if fingerprints
+            .insert(id.clone(), script.sha256.clone())
+            .is_some()
+        {
+            return Err(invalid(format!(
+                "Viewmodels weapon scripts collide under portable case: {id}"
+            )));
+        }
+    }
+    Ok(fingerprints)
 }
 
 /// Exact source digests inspected to form the catalog and the candidate.
@@ -139,11 +160,7 @@ pub fn prototype_selected_group_vpk_from_install(
     let sources = InstalledViewmodelSourceFingerprints {
         patch_version: catalog.patch_version.clone(),
         item_schema_sha256: items.schema_sha256.clone(),
-        weapon_script_sha256: scripts
-            .scripts
-            .values()
-            .map(|script| (script.path.clone(), script.sha256.clone()))
-            .collect(),
+        weapon_script_sha256: canonical_weapon_script_fingerprints(&scripts)?,
         class_model_sha256: source_models,
     };
     let root = normalize_tf2_root(tf2_root).map_err(|error| invalid(error.message()))?;
@@ -221,6 +238,7 @@ mod tests {
     };
     use crate::viewmodel_groups::{group_id, ViewmodelGroupCandidate};
     use crate::viewmodel_pose::parse_stock_pose_mdl;
+    use crate::viewmodel_scripts::StockWeaponScript;
     use crate::viewmodel_source::{parse_stock_animation_mdl, parse_stock_bone_mdl};
     use crate::vpk::read_vpk_dir_bytes;
 
@@ -331,6 +349,49 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn weapon_script_source_ids_fold_case_without_overwriting_collisions() {
+        let mut scripts = StockWeaponScriptIndex {
+            patch_version: "fixture".into(),
+            scripts: BTreeMap::from([
+                (
+                    "scout_pistol".into(),
+                    StockWeaponScript {
+                        path: "Scripts/TF_Weapon_Scout_Pistol.CTX".into(),
+                        sha256: "a".repeat(64),
+                        weapon_type: Some("SECONDARY".into()),
+                    },
+                ),
+                (
+                    "scattergun".into(),
+                    StockWeaponScript {
+                        path: "scripts/tf_weapon_scattergun.ctx".into(),
+                        sha256: "b".repeat(64),
+                        weapon_type: Some("PRIMARY".into()),
+                    },
+                ),
+            ]),
+        };
+        let fingerprints = canonical_weapon_script_fingerprints(&scripts).unwrap();
+        assert_eq!(
+            fingerprints["scripts/tf_weapon_scout_pistol.ctx"],
+            "a".repeat(64)
+        );
+        assert_eq!(fingerprints.len(), 2);
+        scripts.scripts.insert(
+            "colliding_second_stem".into(),
+            StockWeaponScript {
+                path: "scripts/tf_weapon_scout_pistol.ctx".into(),
+                sha256: "c".repeat(64),
+                weapon_type: None,
+            },
+        );
+        assert!(canonical_weapon_script_fingerprints(&scripts)
+            .unwrap_err()
+            .0
+            .contains("collide under portable case"));
     }
 
     #[test]

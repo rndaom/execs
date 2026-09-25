@@ -63,6 +63,11 @@ fn main() {
         .expect("installed-source group VPK candidate");
     assert_eq!(candidate.catalog, request.catalog);
     assert_eq!(candidate.sources.class_model_sha256.len(), 9);
+    assert!(candidate
+        .sources
+        .weapon_script_sha256
+        .keys()
+        .all(|id| *id == id.to_ascii_lowercase()));
     println!(
         "TF2 patch {}: group {} with {} animations produced {} in-memory VPK bytes",
         candidate.sources.patch_version,
