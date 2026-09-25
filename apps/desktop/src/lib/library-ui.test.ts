@@ -12,6 +12,7 @@ import {
   previewPackDelta,
   previewSavedLibrary,
   previewSwitchLibrary,
+  profileNameProblem,
   shouldAbsorbOnLockChange,
   switchStepIndex,
 } from "./library-ui";
@@ -132,5 +133,17 @@ describe("shouldAbsorbOnLockChange", () => {
     expect(shouldAbsorbOnLockChange(null, true)).toBe(false);
     expect(shouldAbsorbOnLockChange(false, true)).toBe(false);
     expect(shouldAbsorbOnLockChange(true, true)).toBe(false);
+  });
+});
+
+describe("profile name rules", () => {
+  it("matches native rename validation", () => {
+    expect(profileNameProblem("Main")).toBeNull();
+    expect(profileNameProblem("  Casual ✨ 日本  ")).toBeNull();
+    expect(profileNameProblem("é".repeat(80))).toBeNull();
+    expect(profileNameProblem("")).toBe("Enter a name.");
+    expect(profileNameProblem("   ")).toBe("Enter a name.");
+    expect(profileNameProblem("x".repeat(81))).toBe("Use 80 characters or fewer.");
+    expect(profileNameProblem("tab\there")).toBe("Remove tabs and line breaks.");
   });
 });

@@ -184,6 +184,11 @@ export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("save_current_as", { name });
 }
 
+/** Changes only the display name; files, records and active tracking stay put. */
+export async function renameProfile(id: string, name: string): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("rename_profile", { id, name });
+}
+
 export function deleteProfile(id: string, keepInstalled: boolean): Promise<ProfileLibrary> {
   return call("delete_profile", { id, keepInstalled });
 }

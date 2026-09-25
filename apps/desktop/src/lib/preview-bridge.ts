@@ -48,6 +48,7 @@ import {
   emptyLibrary,
   previewPackDelta,
   previewSavedProfile,
+  profileNameProblem,
   SWITCH_STEPS,
 } from "./library-ui";
 import {
@@ -362,6 +363,23 @@ export function createPreviewApi(state: PreviewState): Api {
     },
     async saveCurrentAs(name: string) {
       return addProfile(name, library?.activeProfileId === null);
+    },
+    async renameProfile(id: string, name: string) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before renaming a profile.", "GameRunning");
+      const trimmed = name.trim();
+      if (profileNameProblem(trimmed))
+        throw new BridgeError("Give the profile a name.", "InvalidName");
+      if (!library?.profiles.some((profile) => profile.id === id)) {
+        throw new BridgeError("This profile is no longer in the library.", "UnknownProfile");
+      }
+      library = {
+        ...library,
+        profiles: library.profiles.map((profile) =>
+          profile.id === id ? { ...profile, name: trimmed } : profile,
+        ),
+      };
+      return library;
     },
     async deleteProfile(id, keepInstalled) {
       if (previewLocked(state))
