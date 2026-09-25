@@ -1022,6 +1022,8 @@ export function SettingsHost({
           : null;
       return (
         <ViewmodelPane
+          active={paneActive}
+          profileId={profileId}
           record={detail?.viewmodel ?? null}
           globalViewmodelsShown={globalViewmodelsShown}
           profilePreload={modsPayload?.profilePreload ?? null}
