@@ -49,6 +49,10 @@ pub struct ViewmodelCatalogItem {
     id: u32,
     /// An installed schema identifier, not a localized display name.
     schema_name: String,
+    /// Installed weapon type, such as `tf_weapon_jar_milk`; reskins share it with their base.
+    item_class: String,
+    /// Effective loadout slot for the group's class, when the schema names one.
+    slot: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +62,8 @@ pub struct ViewmodelCatalogGroup {
     class: String,
     items: Vec<ViewmodelCatalogItem>,
     animations: Vec<String>,
+    /// An inspect-route group, separate from the weapon's ordinary actions.
+    inspect: bool,
     overlaps: Vec<String>,
     team_variants_differ: bool,
 }
@@ -322,6 +328,7 @@ pub async fn get_viewmodel_source_catalog() -> Result<ViewmodelSourceCatalog, Co
             .groups
             .into_iter()
             .map(|group| {
+                let class = group.class.clone();
                 let items = group
                     .item_ids
                     .into_iter()
@@ -335,6 +342,8 @@ pub async fn get_viewmodel_source_catalog() -> Result<ViewmodelSourceCatalog, Co
                         Ok(ViewmodelCatalogItem {
                             id,
                             schema_name: item.name.clone(),
+                            item_class: item.item_class.clone(),
+                            slot: item.class_loadout_slots.get(&class).cloned().flatten(),
                         })
                     })
                     .collect::<Result<Vec<_>, CommandError>>()?;
@@ -343,6 +352,7 @@ pub async fn get_viewmodel_source_catalog() -> Result<ViewmodelSourceCatalog, Co
                     class: group.class,
                     items,
                     animations: group.animations,
+                    inspect: group.inspect,
                     overlaps: group.overlaps,
                     team_variants_differ: group.team_variants_differ,
                 })

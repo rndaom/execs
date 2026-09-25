@@ -6,6 +6,7 @@ import {
   type SwitchProgressPresenterState,
   switchProgressFraction,
 } from "../lib/switch-progress-ui";
+import { Spinner } from "./ui/Spinner";
 
 /**
  * The paced switch checklist. Stages are real backend events; the bar is
@@ -51,7 +52,11 @@ export function SwitchProgressList({
     >
       <div className="flex items-center justify-between gap-3">
         <p className="t-row">{complete ? "Profile applied" : "Applying profile"}</p>
-        {complete ? <Check size={16} weight="bold" className="text-ok" /> : null}
+        {complete ? (
+          <Check size={16} weight="bold" className="text-ok" />
+        ) : active ? (
+          <Spinner size={16} />
+        ) : null}
       </div>
       <p data-testid="switch-progress-current" className="t-meta mt-1">
         {complete ? detail || "All steps done" : currentLabel}

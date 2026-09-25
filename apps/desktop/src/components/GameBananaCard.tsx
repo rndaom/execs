@@ -1,6 +1,7 @@
 import { ArrowClockwise, ArrowSquareOut, Image, Plus } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GameBananaMod } from "../lib/bridge";
+import { Loading } from "./ui/Spinner";
 
 export type GameBananaInstallState = "idle" | "loading" | "installing" | "failed";
 
@@ -86,11 +87,7 @@ export function GameBananaCard({
             onClick={onInstall}
           >
             {installing || loading ? (
-              installing ? (
-                "Installing…"
-              ) : (
-                "Loading files…"
-              )
+              <Loading>{installing ? "Installing…" : "Loading files…"}</Loading>
             ) : failed ? (
               <>
                 <ArrowClockwise size={16} /> Retry

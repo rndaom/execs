@@ -26,6 +26,7 @@ import {
   ContextMenuSeparator,
 } from "./components/ui/ContextMenu";
 import { Segmented } from "./components/ui/Segmented";
+import { Loading } from "./components/ui/Spinner";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity } from "./hooks/useAutosave";
 import { useFilesAnalysis } from "./hooks/useFilesAnalysis";
@@ -1069,7 +1070,9 @@ function ProfileFilesPane({
                       </>
                     )}
                     {!analysis.result ? (
-                      <p className="t-meta mt-3">{analysis.error ?? "Checking…"}</p>
+                      <p className="t-meta mt-3">
+                        {analysis.error ?? <Loading>Checking…</Loading>}
+                      </p>
                     ) : shownFindings.length === 0 ? (
                       <p className="mt-3 rounded-lg border border-edge bg-panel-raised p-3 text-sm">
                         {findingType === "catalog" ? "No catalog gaps here." : "No issues here."}

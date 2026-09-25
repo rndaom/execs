@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
+import { Loading, Spinner } from "./components/ui/Spinner";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
@@ -391,7 +392,9 @@ export function SoundsPane({
         <section data-testid="sounds-source-conflicts" className="surface mt-4 p-3">
           <h2 className="t-row">Sound file sources</h2>
           {sourcesLoading ? (
-            <p className="t-meta mt-1">Checking other installed sound files…</p>
+            <p className="t-meta mt-1">
+              <Loading>Checking other installed sound files…</Loading>
+            </p>
           ) : null}
           {hitSources.length || killSources.length ? (
             <p className="t-meta mt-1">
@@ -505,7 +508,11 @@ export function SoundsPane({
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
             <h2 className="t-section">Sound library</h2>
             <p className="t-meta mt-1" aria-live="polite">
-              {libraryLoading ? "Loading sources…" : `${rows.length} of ${library.length} sounds`}
+              {libraryLoading ? (
+                <Loading>Loading sources…</Loading>
+              ) : (
+                `${rows.length} of ${library.length} sounds`
+              )}
             </p>
           </div>
           <div className="pane-actions">
@@ -517,7 +524,7 @@ export function SoundsPane({
               onClick={() => void chooseFile()}
               className="btn btn-ghost"
             >
-              <UploadSimple size={14} />
+              {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
               {picking ? "Reading…" : "Add a WAV…"}
             </button>
             {record ? (

@@ -15,6 +15,7 @@ import {
   libraryStatusCopy,
 } from "../../lib/library-ui";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
+import { Loading } from "../ui/Spinner";
 /**
  * The profile popover: switch, save current, import and change install. Escape
  * and an outside click close it, and focus returns to the summary — a
@@ -162,7 +163,7 @@ export function ProfileMenu({
           <div>
             <p className="t-row">Profiles</p>
             <p data-testid="profile-library-status" className="t-meta mt-1">
-              {library ? libraryStatusCopy(library) : "Loading profiles…"}
+              {library ? libraryStatusCopy(library) : <Loading>Loading profiles…</Loading>}
             </p>
           </div>
           {showCreate ? (

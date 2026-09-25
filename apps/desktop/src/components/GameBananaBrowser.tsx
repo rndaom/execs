@@ -23,6 +23,7 @@ import { GameBananaPagination } from "./GameBananaPagination";
 import { Alert } from "./ui/Alert";
 import { Modal } from "./ui/Modal";
 import { Segmented } from "./ui/Segmented";
+import { Loading } from "./ui/Spinner";
 import { Switch } from "./ui/Switch";
 
 const ALL = "all";
@@ -302,7 +303,7 @@ export function GameBananaBrowser({
 
       {browser.loading ? (
         <p data-testid="mods-gb-loading" role="status" aria-live="polite" className="t-meta mt-4">
-          {browser.stale ? "Refreshing… showing saved results." : "Searching…"}
+          <Loading>{browser.stale ? "Refreshing… showing saved results." : "Searching…"}</Loading>
         </p>
       ) : null}
 

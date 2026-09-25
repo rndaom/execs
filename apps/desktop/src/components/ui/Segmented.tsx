@@ -21,6 +21,7 @@ export function Segmented<Id extends string>({
   value,
   disabled = false,
   size = "md",
+  neutralValue,
   testIdPrefix,
   onChange,
 }: {
@@ -29,6 +30,8 @@ export function Segmented<Id extends string>({
   value: Id;
   disabled?: boolean;
   size?: "sm" | "md";
+  /** A default choice whose selection stays neutral, so only changed choices use the accent. */
+  neutralValue?: Id;
   testIdPrefix?: string;
   onChange: (id: Id) => void;
 }) {
@@ -64,6 +67,7 @@ export function Segmented<Id extends string>({
               htmlFor={id}
               title={option.title}
               data-selected={selected ? "true" : "false"}
+              data-neutral={option.id === neutralValue ? "true" : undefined}
               className="segmented-label peer-focus-visible:ring-2 peer-focus-visible:ring-brand"
             >
               {option.label}

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
+import { Loading, Spinner } from "./components/ui/Spinner";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
 import { useCopyFeedback } from "./hooks/useCopyFeedback";
@@ -455,7 +456,9 @@ export function LaunchPane({
             >
               {retryFailed ? (
                 <WarningCircle size={16} className="shrink-0 text-warn" aria-hidden="true" />
-              ) : steamWrite === "written" && value === saved && !retrying ? (
+              ) : retrying ? (
+                <Spinner size={16} />
+              ) : steamWrite === "written" && value === saved ? (
                 <CheckCircle size={16} className="text-ok" weight="fill" />
               ) : (
                 <Info size={16} aria-hidden="true" />
@@ -483,7 +486,7 @@ export function LaunchPane({
               onClick={() => void retrySteamWrite()}
               className="btn btn-ghost"
             >
-              {retrying ? "Checking Steam…" : "Write to Steam"}
+              {retrying ? <Loading>Checking Steam…</Loading> : "Write to Steam"}
             </button>
           </div>
         </section>

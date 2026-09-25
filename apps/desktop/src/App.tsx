@@ -9,6 +9,7 @@ import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Modal } from "./components/ui/Modal";
+import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
@@ -260,6 +261,15 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     surface === "ready" &&
     !creating &&
     showSettingsChrome(profiles.library);
+  // The ready shell (header + library status) fills the window even before a
+  // profile is active, so the empty library view is not an inset card.
+  const readyShellOpen =
+    settingsOpen ||
+    (install.screen === "ready" &&
+      install.confirmed !== null &&
+      surface === "ready" &&
+      !creating &&
+      !appSettingsOpen);
 
   function renderAppPreferences() {
     return (
@@ -349,7 +359,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
             execs
           </p>
-          <p className="t-body mt-8 text-ink-muted">Checking this install…</p>
+          <p className="t-body mt-8 text-ink-muted">
+            <Loading size={16}>Checking this install…</Loading>
+          </p>
           <button
             type="button"
             onClick={() => filesExit.request(install.change)}
@@ -590,7 +602,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
 
           <main
             className={`flex min-h-0 w-full flex-1 flex-col ${
-              settingsOpen
+              readyShellOpen
                 ? "items-stretch overflow-hidden"
                 : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
@@ -622,7 +634,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   filesExit.request(update.install);
                 },
               }}
-              pinned={settingsOpen}
+              pinned={readyShellOpen}
               onSettings={settingsOpen ? undefined : openAppSettings}
             />
           </main>

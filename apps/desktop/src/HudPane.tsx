@@ -16,6 +16,7 @@ import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
+import { Loading, Spinner } from "./components/ui/Spinner";
 import { Switch } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
@@ -302,7 +303,7 @@ export function HudPane({
 
       {stateLoading ? (
         <p role="status" className="t-meta mt-3">
-          Loading installed HUD…
+          <Loading>Loading installed HUD…</Loading>
         </p>
       ) : null}
 
@@ -375,7 +376,7 @@ export function HudPane({
 
                 {schemaLoading ? (
                   <p role="status" className="t-meta section">
-                    Loading HUD options…
+                    <Loading>Loading HUD options…</Loading>
                   </p>
                 ) : null}
                 {schemaError ? (
@@ -733,14 +734,14 @@ export function HudPane({
               onClick={onRefresh}
               className="btn btn-quiet shrink-0"
             >
-              <ArrowClockwise size={15} />
+              {catalogLoading ? <Spinner size={15} /> : <ArrowClockwise size={15} />}
               {catalogLoading ? "Refreshing…" : "Refresh"}
             </button>
           </div>
 
           {statsLoading ? (
             <p data-testid="hud-stats-loading" role="status" className="t-meta mt-3">
-              Loading HUD activity and popularity…
+              <Loading>Loading HUD activity and popularity…</Loading>
             </p>
           ) : statsError ? (
             <Alert tone="warn" testId="hud-stats-error" className="mt-3 py-2">
@@ -801,9 +802,11 @@ export function HudPane({
               aria-live="polite"
               className="t-meta mt-4"
             >
-              {catalog.length === 0
-                ? "Loading catalog…"
-                : `Refreshing… showing ${catalog.length} cached HUDs.`}
+              <Loading>
+                {catalog.length === 0
+                  ? "Loading catalog…"
+                  : `Refreshing… showing ${catalog.length} cached HUDs.`}
+              </Loading>
             </p>
           ) : null}
 
@@ -839,15 +842,19 @@ export function HudPane({
             {paged.items.length === 0 ? (
               catalogLoading ? null : (
                 <p className="t-meta px-1 py-10 text-center">
-                  {sort !== "name" && matching.length > 0
-                    ? statsLoading
-                      ? `Loading ${metric}…`
-                      : `No ${metric} available for these HUDs. Choose A to Z to browse them.`
-                    : query.trim()
-                      ? "No HUDs match that search."
-                      : catalogError
-                        ? "Catalog unavailable — try Refresh."
-                        : "Catalog is empty."}
+                  {sort !== "name" && matching.length > 0 ? (
+                    statsLoading ? (
+                      <Loading>{`Loading ${metric}…`}</Loading>
+                    ) : (
+                      `No ${metric} available for these HUDs. Choose A to Z to browse them.`
+                    )
+                  ) : query.trim() ? (
+                    "No HUDs match that search."
+                  ) : catalogError ? (
+                    "Catalog unavailable — try Refresh."
+                  ) : (
+                    "Catalog is empty."
+                  )}
                 </p>
               )
             ) : (
@@ -1456,7 +1463,7 @@ function HudLightbox({
               onClick={() => void refreshAlbum()}
               className="btn btn-ghost"
             >
-              <ArrowClockwise size={13} />
+              {albumRefreshing ? <Spinner size={13} /> : <ArrowClockwise size={13} />}
               {albumRefreshing ? "Refreshing…" : "Refresh pictures"}
             </button>
           ) : null}
@@ -1503,7 +1510,11 @@ function HudLightbox({
           />
         ) : (
           <p className="t-meta">
-            {albumUrl && !albumFailed && album === null ? "Loading pictures…" : "No pictures yet."}
+            {albumUrl && !albumFailed && album === null ? (
+              <Loading>Loading pictures…</Loading>
+            ) : (
+              "No pictures yet."
+            )}
           </p>
         )}
         {count > 1 ? (
