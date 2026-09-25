@@ -76,8 +76,4 @@ execFileSync(
   ],
   options,
 );
-execFileSync(
-  "cargo",
-  [...cargo, "pinned_catalog_huds_install_update_and_preserve_payloads", "--", "--ignored"],
-  options,
-);
+execFileSync("cargo", [...cargo, "pinned_catalog_hud_", "--", "--ignored"], options);

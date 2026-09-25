@@ -2011,63 +2011,72 @@ mod tests {
     ];
 
     /// Opt-in real-package regression; see docs/hud-import-0.1.6.md.
-    #[test]
-    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
-    fn pinned_catalog_huds_install_update_and_preserve_payloads() {
+    fn verify_pinned_catalog_hud(name: &str, expected: &str) {
         let archives =
             PathBuf::from(std::env::var_os("EXECS_HUD_FIXTURES").expect("EXECS_HUD_FIXTURES"));
-        for (name, expected) in [
-            (
-                "hypnotizehud",
-                "73e8ed011c9b912eeb5bdbbae61c6539e14f9f61ddcc7171d2c542995504c241",
-            ),
-            (
-                "kinhud",
-                "6e851dd05357817f3fe1046ef1285069c71787b2bf6160ca90d4e9a1d710e9d0",
-            ),
-            (
-                "m0re-rockz",
-                "5c8a7022d73b6521dd6fd3f269644f4d0723a6db46dfd021b386dc4830c6bba9",
-            ),
-        ] {
-            let bytes = fs::read(archives.join(format!("{name}.zip"))).unwrap();
-            assert_eq!(crate::hash::sha256_hex(&bytes), expected);
-            let tree = extract_hud_archive(&bytes).unwrap().tree;
-            let dir = crate::test_temp_dir();
-            // Exercise transaction staging beyond MAX_PATH even with a short temp root.
-            let profiles = dir.join("profile-library-".repeat(8)).join("profiles");
-            let root = tf2_root(&dir);
-            let library =
-                create_profile_record_to(&profiles, &root, "Catalog fixture", unlocked()).unwrap();
-            let id = &library.profiles[0].id;
-            set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
-            let record = HudRecord {
-                id: name.into(),
-                hash: None,
-                source: HudSource::HudDb,
-                options: BTreeMap::new(),
-            };
-            for _ in 0..2 {
-                install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked())
-                    .unwrap();
-                let manifest = load_manifest(&profiles, id).unwrap();
-                for (path, payload) in &tree.files {
-                    let rel = format!("tf/custom/{name}/{path}");
-                    assert_eq!(fs::read(root.join(&rel)).unwrap(), *payload, "live {rel}");
-                    assert_eq!(
-                        fs::read(crate::profile::exclusive_file_path(&profiles, id, &rel)).unwrap(),
-                        *payload,
-                        "library {rel}"
-                    );
-                    assert!(manifest.files.iter().any(|file| file.path == rel));
-                }
-                assert!(manifest
-                    .files
-                    .iter()
-                    .all(|file| crate::profile::is_profile_ownable_rel_path(&file.path)));
+        let bytes = fs::read(archives.join(format!("{name}.zip"))).unwrap();
+        assert_eq!(crate::hash::sha256_hex(&bytes), expected);
+        let tree = extract_hud_archive(&bytes).unwrap().tree;
+        let dir = crate::test_temp_dir();
+        // Exercise transaction staging beyond MAX_PATH even with a short temp root.
+        let profiles = dir.join("profile-library-".repeat(8)).join("profiles");
+        let root = tf2_root(&dir);
+        let library =
+            create_profile_record_to(&profiles, &root, "Catalog fixture", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+        set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+        let record = HudRecord {
+            id: name.into(),
+            hash: None,
+            source: HudSource::HudDb,
+            options: BTreeMap::new(),
+        };
+        for _ in 0..2 {
+            install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked()).unwrap();
+            let manifest = load_manifest(&profiles, id).unwrap();
+            for (path, payload) in &tree.files {
+                let rel = format!("tf/custom/{name}/{path}");
+                assert_eq!(fs::read(root.join(&rel)).unwrap(), *payload, "live {rel}");
+                assert_eq!(
+                    fs::read(crate::profile::exclusive_file_path(&profiles, id, &rel)).unwrap(),
+                    *payload,
+                    "library {rel}"
+                );
+                assert!(manifest.files.iter().any(|file| file.path == rel));
             }
-            cleanup(&dir);
+            assert!(manifest
+                .files
+                .iter()
+                .all(|file| crate::profile::is_profile_ownable_rel_path(&file.path)));
         }
+        cleanup(&dir);
+    }
+
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_hud_hypnotizehud_install_update_and_preserve_payloads() {
+        verify_pinned_catalog_hud(
+            "hypnotizehud",
+            "73e8ed011c9b912eeb5bdbbae61c6539e14f9f61ddcc7171d2c542995504c241",
+        );
+    }
+
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_hud_kinhud_install_update_and_preserve_payloads() {
+        verify_pinned_catalog_hud(
+            "kinhud",
+            "6e851dd05357817f3fe1046ef1285069c71787b2bf6160ca90d4e9a1d710e9d0",
+        );
+    }
+
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_hud_m0re_rockz_install_update_and_preserve_payloads() {
+        verify_pinned_catalog_hud(
+            "m0re-rockz",
+            "5c8a7022d73b6521dd6fd3f269644f4d0723a6db46dfd021b386dc4830c6bba9",
+        );
     }
 
     #[test]
