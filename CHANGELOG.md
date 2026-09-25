@@ -37,6 +37,9 @@ User-facing changes only. The release workflow publishes the matching
   inventing names, and refresh older catalog and statistics caches for accurate metadata.
 - Viewmodels: import, replace or remove a compatible VPK, with saved packs from earlier builds
   still available through profile switching and export/import.
+- Viewmodels: explore provisional class and item groups derived from the installed TF2 files,
+  compare Full and Weapon hide choices, and refresh changed sources. These draft choices do not
+  build a pack until rendered previews and retail behavior are verified.
 - Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
   controls and clearer source retry feedback.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum

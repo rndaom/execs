@@ -3,9 +3,12 @@ import { PaneHeader } from "./components/ui/PaneHeader";
 import { useCanWrite } from "./hooks/useAppStatus";
 import type { ViewmodelRecord } from "./lib/bridge";
 import { legacyViewmodelSelectionCount, VIEWMODEL_CASUAL_COPY } from "./lib/viewmodel-ui";
+import { ViewmodelBuilder } from "./ViewmodelBuilder";
 
 /** Saved packs remain usable while the replacement builder is completed. */
 export function ViewmodelPane({
+  active,
+  profileId,
   record,
   globalViewmodelsShown,
   profilePreload,
@@ -14,6 +17,8 @@ export function ViewmodelPane({
   onImport,
   onRemove,
 }: {
+  active: boolean;
+  profileId: string | null;
   record: ViewmodelRecord | null;
   globalViewmodelsShown: boolean | null;
   profilePreload: boolean | null;
@@ -24,6 +29,7 @@ export function ViewmodelPane({
 }) {
   const locked = !useCanWrite();
   const previouslyBuilt = record?.source === "compiled";
+  const locallyBuilt = record?.source === "stockBuilt";
   const savedChoices = legacyViewmodelSelectionCount(record);
 
   return (
@@ -33,16 +39,20 @@ export function ViewmodelPane({
         actions={
           record ? (
             <span data-testid="viewmodel-pack-status" className="badge">
-              {previouslyBuilt ? "Previously built pack" : "Imported pack"}
+              {previouslyBuilt
+                ? "Previously built pack"
+                : locallyBuilt
+                  ? "Locally built pack"
+                  : "Imported pack"}
             </span>
           ) : null
         }
       />
       <div role="note" className="surface mb-4 px-4 py-3">
         <p className="t-meta">
-          The Viewmodels builder and previews are being rebuilt for 0.2.0. Building is temporarily
-          unavailable in this development build. Saved packs can still be imported, switched,
-          exported with a profile, or removed.
+          The replacement Viewmodels builder is being prepared for 0.2.0. You can explore choices
+          from your own TF2 install below. Building remains unavailable while rendered previews and
+          retail behavior are verified. Existing packs can still be switched, imported, or removed.
         </p>
       </div>
       {record?.sourceChanged ? (
@@ -85,6 +95,12 @@ export function ViewmodelPane({
         </button>
       </div>
 
+      <ViewmodelBuilder
+        key={profileId ?? "no-profile"}
+        active={active}
+        profilePreload={profilePreload}
+      />
+
       <div className="surface p-5">
         <h2 className="t-row">Saved viewmodel pack</h2>
         {record ? (
@@ -94,12 +110,19 @@ export function ViewmodelPane({
                 ? savedChoices > 0
                   ? `This pack and its ${savedChoices} recorded ${savedChoices === 1 ? "choice" : "choices"} remain in the profile. Switching profiles uses the saved VPK bytes.`
                   : "This previously built pack remains in the profile. Its original choices are not available as editable metadata; switching profiles uses the saved VPK bytes."
-                : "This imported model-only VPK remains in the profile and can be switched with it."}
+                : locallyBuilt
+                  ? `This locally built pack remains in the profile with ${record.buildRecipe?.choices.length ?? 0} recorded ${record.buildRecipe?.choices.length === 1 ? "choice" : "choices"}. Switching profiles uses its saved VPK bytes.`
+                  : "This imported model-only VPK remains in the profile and can be switched with it."}
             </p>
             {previouslyBuilt ? (
               <p className="pane-note mt-3">
                 Recorded choices are preserved while the replacement builder is completed. They are
                 temporarily read only. Replacing this VPK does not modify other profiles.
+              </p>
+            ) : null}
+            {locallyBuilt ? (
+              <p className="pane-note mt-3">
+                Saved build choices remain read only while the replacement builder is verified.
               </p>
             ) : null}
           </>
