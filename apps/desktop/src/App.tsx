@@ -9,6 +9,7 @@ import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Modal } from "./components/ui/Modal";
+import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
@@ -349,7 +350,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
             execs
           </p>
-          <p className="t-body mt-8 text-ink-muted">Checking this install…</p>
+          <p className="t-body mt-8 text-ink-muted">
+            <Loading size={16}>Checking this install…</Loading>
+          </p>
           <button
             type="button"
             onClick={() => filesExit.request(install.change)}

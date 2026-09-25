@@ -16,6 +16,7 @@ import {
   toastLingerMs,
   toastStep,
 } from "../../lib/toast-ui";
+import { Loading } from "./Spinner";
 
 export type ToastApi = {
   /** A write started: arms the delayed "Saving…" pill. */
@@ -169,7 +170,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
               data-source={toast.source}
               className="overlay enter-fade pointer-events-auto max-w-[34rem] px-4 py-2.5 text-[13.5px] leading-5 text-ink"
             >
-              {toast.message}
+              {toast.kind === "saving" ? <Loading>{toast.message}</Loading> : toast.message}
             </p>
           )
         ) : null}

@@ -4,6 +4,7 @@ import type { Api } from "../lib/api";
 import { openExternal } from "../lib/bridge";
 import { copyButtonLabel } from "../lib/copy-ui";
 import { appVersionCopy, releaseVersionCopy, updateCheckButtonLabel } from "../lib/updater-ui";
+import { Loading } from "./ui/Spinner";
 
 const ISSUES_URL = "https://github.com/rndaom/execs/issues/new/choose";
 
@@ -70,7 +71,11 @@ export function AppFooter({
           disabled={update.checking || update.progress !== null}
           className={`${LINK_CLASS} disabled:opacity-40`}
         >
-          {update.checking ? "Checking…" : updateCheckButtonLabel(update.checkMessage)}
+          {update.checking ? (
+            <Loading size={12}>Checking…</Loading>
+          ) : (
+            updateCheckButtonLabel(update.checkMessage)
+          )}
         </button>
         {" · "}
         <button

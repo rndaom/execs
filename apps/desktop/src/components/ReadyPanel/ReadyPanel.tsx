@@ -9,6 +9,7 @@ import { ProfileImportDialog } from "../ProfileImportDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
 import { Modal } from "../ui/Modal";
 import { OperationError } from "../ui/OperationError";
+import { Loading } from "../ui/Spinner";
 import { FolderRepair } from "./FolderRepair";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
@@ -225,7 +226,7 @@ export function ReadyPanel({
         </p>
         {exportReview === null && !exportReviewError ? (
           <p className="t-meta mt-4" role="status">
-            Checking this profile’s files…
+            <Loading>Checking this profile’s files…</Loading>
           </p>
         ) : null}
         {exportReviewError ? (
@@ -441,9 +442,11 @@ export function ReadyPanel({
             disabled={controlsBusy || running || profiles.retiredCasualInFlight}
             onClick={() => void profiles.confirmRetiredCasualReview()}
           >
-            {profiles.retiredCasualInFlight
-              ? "Removing saved choices…"
-              : "Remove saved choices and switch"}
+            {profiles.retiredCasualInFlight ? (
+              <Loading>Removing saved choices…</Loading>
+            ) : (
+              "Remove saved choices and switch"
+            )}
           </button>
         </div>
       </Modal>
@@ -472,7 +475,7 @@ export function ReadyPanel({
             <>
               <p className="eyebrow">Profile library</p>
               <p className="t-body mt-3 max-w-md text-ink-muted">
-                {library ? libraryStatusCopy(library) : "Loading profiles…"}
+                {library ? libraryStatusCopy(library) : <Loading>Loading profiles…</Loading>}
               </p>
               <button
                 type="button"

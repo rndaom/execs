@@ -7,6 +7,7 @@ import { Alert } from "./ui/Alert";
 import { Disclosure } from "./ui/Disclosure";
 import { Modal } from "./ui/Modal";
 import { OptionTile } from "./ui/OptionTile";
+import { Loading } from "./ui/Spinner";
 import { useToast } from "./ui/Toast";
 
 export type HudOwnershipDialogProps = {
@@ -104,7 +105,7 @@ function HudOwnershipReview({
       <div className="min-h-0 overflow-y-auto" data-testid="hud-ownership-body">
         {ownership.loading ? (
           <p role="status" className="t-body mt-5 text-ink-muted">
-            Reading HUD folders…
+            <Loading>Reading HUD folders…</Loading>
           </p>
         ) : null}
         {ownership.error ? (
@@ -207,13 +208,15 @@ function HudOwnershipReview({
           disabled={working || running || busy || (!ownership.applied && !ownership.canApply)}
           onClick={() => void confirm()}
         >
-          {ownership.applying
-            ? "Selecting HUD…"
-            : refreshing
-              ? "Refreshing profile…"
-              : ownership.applied
-                ? "Refresh profile view"
-                : "Use selected HUD"}
+          {ownership.applying ? (
+            <Loading>Selecting HUD…</Loading>
+          ) : refreshing ? (
+            <Loading>Refreshing profile…</Loading>
+          ) : ownership.applied ? (
+            "Refresh profile view"
+          ) : (
+            "Use selected HUD"
+          )}
         </button>
       </div>
     </Modal>

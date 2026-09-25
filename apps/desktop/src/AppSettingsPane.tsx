@@ -4,6 +4,7 @@ import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
+import { Loading, Spinner } from "./components/ui/Spinner";
 import { Switch } from "./components/ui/Switch";
 import { useToast } from "./components/ui/Toast";
 import type { AppPreferencesState } from "./hooks/useAppPreferences";
@@ -193,7 +194,7 @@ export function AppSettingsPane({
               disabled={update.checking || update.progress !== null}
               onClick={() => void update.check()}
             >
-              {update.checking ? "Checking for updates…" : "Check for updates"}
+              {update.checking ? <Loading>Checking for updates…</Loading> : "Check for updates"}
             </button>
             <button
               type="button"
@@ -256,9 +257,11 @@ export function AppSettingsPane({
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <p className="t-body min-w-0 break-all text-ink-muted" data-testid="app-data-location">
               {settings.data?.dataDirectory ??
-                (settings.loading
-                  ? "Reading app data location…"
-                  : "App data location unavailable.")}
+                (settings.loading ? (
+                  <Loading>Reading app data location…</Loading>
+                ) : (
+                  "App data location unavailable."
+                ))}
             </p>
             <button
               type="button"
@@ -282,7 +285,7 @@ export function AppSettingsPane({
               disabled={readingDiagnostics}
               onClick={() => void copyDiagnostics()}
             >
-              <Copy size={15} aria-hidden="true" />
+              {readingDiagnostics ? <Spinner size={15} /> : <Copy size={15} aria-hidden="true" />}
               <span aria-live="polite">
                 {readingDiagnostics
                   ? "Reading diagnostics…"

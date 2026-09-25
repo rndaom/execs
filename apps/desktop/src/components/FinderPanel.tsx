@@ -2,6 +2,7 @@ import type { Tf2Install } from "../lib/bridge";
 import { formatInstallLabel } from "../lib/finder-ui";
 import { OnboardingFrame } from "./OnboardingFrame";
 import { OperationError } from "./ui/OperationError";
+import { Loading } from "./ui/Spinner";
 
 /**
  * Find TF2. Flat rows separated by hairlines — the install list is a list, not
@@ -47,7 +48,7 @@ export function FinderPanel({
         </div>
         {scanning ? (
           <p role="status" className="t-meta py-5">
-            Scanning Steam libraries…
+            <Loading>Scanning Steam libraries…</Loading>
           </p>
         ) : installs.length === 0 ? (
           <p className="t-meta py-5">No install found. Use Browse to choose the TF2 folder.</p>

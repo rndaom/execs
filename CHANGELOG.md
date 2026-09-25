@@ -40,6 +40,8 @@ User-facing changes only. The release workflow publishes the matching
 - Viewmodels: explore provisional class and item groups derived from the installed TF2 files,
   compare Full and Weapon hide choices, and refresh changed sources. These draft choices do not
   build a pack until rendered previews and retail behavior are verified.
+- Show a turning cog wherever execs is loading, checking or saving. It stays still when reduced
+  motion is on.
 - Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
   controls and clearer source retry feedback.
 - Files: keep Find controls, new-file choices and full destination paths readable at the minimum

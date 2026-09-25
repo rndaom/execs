@@ -2,6 +2,7 @@ import { CaretLeft, CaretRight, Cube, MagnifyingGlass, User } from "@phosphor-ic
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
+import { Loading } from "./components/ui/Spinner";
 import { useInventorySnapshot } from "./hooks/useInventorySnapshot";
 import type { Api } from "./lib/api";
 import type { InventoryItem } from "./lib/bridge";
@@ -336,7 +337,11 @@ export function InventoryPane({
         }
       />
       {running ? <p className="t-meta mb-4">Close TF2 to refresh your backpack.</p> : null}
-      {loading && !snapshot ? <p role="status">Reading your backpack from Steam…</p> : null}
+      {loading && !snapshot ? (
+        <p role="status">
+          <Loading>Reading your backpack from Steam…</Loading>
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="mb-4 text-warn">
           {error}
@@ -534,9 +539,11 @@ export function InventoryPane({
                     <div className="mb-4 flex h-40 flex-col items-center justify-center gap-2 text-ink-faint">
                       <Cube size={40} aria-hidden="true" />
                       <span className="t-meta">
-                        {definition?.icon && !unavailableIcons.current.has(definition.icon)
-                          ? "Loading artwork…"
-                          : "Artwork unavailable"}
+                        {definition?.icon && !unavailableIcons.current.has(definition.icon) ? (
+                          <Loading>Loading artwork…</Loading>
+                        ) : (
+                          "Artwork unavailable"
+                        )}
                       </span>
                     </div>
                   )}

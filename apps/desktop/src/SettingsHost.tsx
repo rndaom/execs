@@ -3,6 +3,7 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
+import { Loading } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
@@ -1302,7 +1303,13 @@ export function SettingsHost({
 
     if (tab === "files") {
       return (
-        <Suspense fallback={<p className="t-meta">Loading cfg workspace…</p>}>
+        <Suspense
+          fallback={
+            <p className="t-meta">
+              <Loading>Loading cfg workspace…</Loading>
+            </p>
+          }
+        >
           <FilesPane
             profileId={filesInspection?.detail.id ?? profileId}
             files={filesInspection?.files ?? files}
@@ -1439,7 +1446,11 @@ export function SettingsHost({
           Loading settings for {activeProfileName ?? "the selected profile"}…
         </p>
       ) : null}
-      {!profileId && loading && !identityPending ? <p>Loading settings…</p> : null}
+      {!profileId && loading && !identityPending ? (
+        <p>
+          <Loading>Loading settings…</Loading>
+        </p>
+      ) : null}
       {!identityPending && !filesLimited && !maps.complete && usesCfgState(tab) ? (
         <div role="alert" className="mb-4 text-warn">
           <p>{maps.reason ?? CFG_INCOMPLETE_MESSAGE}</p>

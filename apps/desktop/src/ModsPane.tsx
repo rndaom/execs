@@ -433,7 +433,11 @@ export function ModsPane({
                   disabled={running || repair === "confirming"}
                   onClick={() => void finishRepair()}
                 >
-                  {repair === "confirming" ? "Checking…" : "Steam says it’s finished"}
+                  {repair === "confirming" ? (
+                    <Loading>Checking…</Loading>
+                  ) : (
+                    "Steam says it’s finished"
+                  )}
                 </button>
               ) : (
                 <button
@@ -448,9 +452,11 @@ export function ModsPane({
                   )}
                   onClick={() => void startRepair()}
                 >
-                  {payload?.repairInProgress || repair === "waiting"
-                    ? "Verifying…"
-                    : "Repair with Steam"}
+                  {payload?.repairInProgress || repair === "waiting" ? (
+                    <Loading>Verifying…</Loading>
+                  ) : (
+                    "Repair with Steam"
+                  )}
                 </button>
               )}
               {payload?.repairInProgress ? (
@@ -570,7 +576,7 @@ export function ModsPane({
             )}
             {loading && !catalog ? (
               <p className="t-meta mt-4" role="status">
-                Loading library…
+                <Loading>Loading library…</Loading>
               </p>
             ) : null}
 
@@ -1012,3 +1018,4 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 import { WarningCircle } from "@phosphor-icons/react";
+import { Loading } from "./components/ui/Spinner";

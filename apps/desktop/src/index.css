@@ -167,6 +167,19 @@ a:focus-visible,
   /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
 }
 
+/* The loading cog. Reduced motion stops it through the global rules above. */
+.spinner {
+  flex: none;
+  color: var(--color-brand);
+  animation: spinner-turn 1.4s linear infinite;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 @keyframes enter-fade {
   from {
     opacity: 0;
