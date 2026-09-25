@@ -76,6 +76,32 @@ pub async fn rename_profile(
 }
 
 #[tauri::command]
+pub async fn duplicate_profile(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    name: String,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        execs_core::refuse_if_running()?;
+        if super::shared::profile_recovery_required(&root)? {
+            return Err(CommandError::new(
+                "RecoveryRequired",
+                "Finish the interrupted profile operation before duplicating a profile.",
+            ));
+        }
+        Ok(execs_core::profile::duplicate_profile_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            &name,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn delete_profile(
     gate: tauri::State<'_, WriteGate>,
     id: String,

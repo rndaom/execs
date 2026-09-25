@@ -381,6 +381,16 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return library;
     },
+    async duplicateProfile(id: string, name: string) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before duplicating a profile.", "GameRunning");
+      if (profileNameProblem(name))
+        throw new BridgeError("Give the profile a name.", "InvalidName");
+      if (!library?.profiles.some((profile) => profile.id === id)) {
+        throw new BridgeError("This profile is no longer in the library.", "UnknownProfile");
+      }
+      return addProfile(name.trim(), false);
+    },
     async deleteProfile(id, keepInstalled) {
       if (previewLocked(state))
         throw new BridgeError("Close TF2 before deleting a profile.", "GameRunning");

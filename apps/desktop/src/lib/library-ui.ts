@@ -47,6 +47,13 @@ export function profileNameProblem(name: string): string | null {
   return null;
 }
 
+/** The suggested name for a copy, kept within the name limit. */
+export function duplicateProfileName(name: string): string {
+  const suffix = " copy";
+  const base = [...name.trim()].slice(0, PROFILE_NAME_MAX - suffix.length).join("");
+  return `${base}${suffix}`;
+}
+
 /** Export reads app-data, so it stays available while TF2 is running. */
 export function canExportProfile(library: ProfileLibrary, _running: boolean): boolean {
   return library.usable && !library.rootMismatch;

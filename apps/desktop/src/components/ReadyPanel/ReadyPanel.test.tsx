@@ -51,6 +51,7 @@ beforeEach(() => {
       onBindSyncHandled: vi.fn(),
       saveCurrent: vi.fn(async () => false),
       renameProfile: vi.fn(async () => true),
+      duplicateProfile: vi.fn(async () => true),
       importProfile: vi.fn(async () => {}),
       importing: false,
       importStage: null,
@@ -451,4 +452,36 @@ it("keeps the editor open with the typed name when a rename fails", async () => 
     await Promise.resolve();
   });
   expect(box.querySelector<HTMLInputElement>("#profile-rename-input")?.value).toBe("Broken");
+});
+
+it("duplicates a profile inline with a suggested name and leaves it inactive", async () => {
+  const library = props.profiles.library as ProfileLibrary;
+  const first = library.profiles[0];
+  await render();
+  await act(async () =>
+    box.querySelector<HTMLDetailsElement>('[data-testid="profile-library"] summary')?.click(),
+  );
+  await act(async () =>
+    box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]')?.click(),
+  );
+  await act(async () => {
+    const item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Duplicate…",
+    );
+    item?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    item?.click();
+  });
+  expect(menu()?.open).toBe(true);
+  const input = box.querySelector<HTMLInputElement>("#profile-rename-input");
+  expect(input?.value).toBe(`${first.name} copy`);
+  expect(
+    [...box.querySelectorAll('[data-testid="profile-rename"] button')].map((b) => b.textContent),
+  ).toContain("Duplicate");
+  await act(async () => {
+    box.querySelector<HTMLFormElement>('[data-testid="profile-rename"]')?.requestSubmit();
+    await Promise.resolve();
+  });
+  expect(props.profiles.duplicateProfile).toHaveBeenCalledWith(first.id, `${first.name} copy`);
+  expect(props.profiles.renameProfile).not.toHaveBeenCalled();
+  expect(props.profiles.switchProfile).not.toHaveBeenCalled();
 });
