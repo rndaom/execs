@@ -43,6 +43,8 @@ export type ProfileLibraryState = {
   saveCurrent: (name: string) => Promise<boolean>;
   /** Resolves true once the new name is saved; failures report and keep the old name. */
   renameProfile: (id: string, name: string) => Promise<boolean>;
+  /** Resolves true once the inactive copy exists. */
+  duplicateProfile: (id: string, name: string) => Promise<boolean>;
   importProfile: () => Promise<void>;
   importing: boolean;
   importStage: "selecting" | "reading" | "review" | "saving" | "done" | null;
@@ -292,6 +294,27 @@ export function useProfileLibrary(
         setError(
           err instanceof Error ? err.message : "Could not rename that profile.",
           "profiles:rename",
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, running, setBusy, setError],
+  );
+
+  const duplicateProfile = useCallback(
+    async (id: string, name: string) => {
+      if (running || profileNameProblem(name) !== null) return false;
+      setBusy(true);
+      try {
+        setLibrary(await api.duplicateProfile(id, name));
+        setError(null, "profiles:duplicate");
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not duplicate that profile.",
+          "profiles:duplicate",
         );
         return false;
       } finally {
@@ -780,6 +803,7 @@ export function useProfileLibrary(
     onBindSyncHandled,
     saveCurrent,
     renameProfile,
+    duplicateProfile,
     importProfile,
     importing,
     importStage,

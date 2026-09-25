@@ -189,6 +189,11 @@ export async function renameProfile(id: string, name: string): Promise<ProfileLi
   return call<ProfileLibrary>("rename_profile", { id, name });
 }
 
+/** Copies a saved profile into a new inactive one; TF2 is not touched. */
+export async function duplicateProfile(id: string, name: string): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("duplicate_profile", { id, name });
+}
+
 export function deleteProfile(id: string, keepInstalled: boolean): Promise<ProfileLibrary> {
   return call("delete_profile", { id, keepInstalled });
 }

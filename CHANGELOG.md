@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Duplicate any saved profile from its menu to experiment on a copy. The copy is not switched in
+  and TF2 is not touched.
 - Rename a profile from its menu in the profile list. Only the name changes; its files and
   settings stay exactly as they were.
 - Binds has a cleaner layout: every action on one page grouped by task, a search that also finds

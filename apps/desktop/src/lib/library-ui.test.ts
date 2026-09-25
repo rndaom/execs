@@ -4,6 +4,7 @@ import {
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
+  duplicateProfileName,
   emptyLibrary,
   hasPackChanges,
   libraryStatusCopy,
@@ -145,5 +146,15 @@ describe("profile name rules", () => {
     expect(profileNameProblem("   ")).toBe("Enter a name.");
     expect(profileNameProblem("x".repeat(81))).toBe("Use 80 characters or fewer.");
     expect(profileNameProblem("tab\there")).toBe("Remove tabs and line breaks.");
+  });
+});
+
+describe("duplicate profile names", () => {
+  it("suggests a copy name within the limit", () => {
+    expect(duplicateProfileName("Main")).toBe("Main copy");
+    expect(duplicateProfileName("  Casual  ")).toBe("Casual copy");
+    const long = duplicateProfileName("é".repeat(80));
+    expect([...long].length).toBe(80);
+    expect(long.endsWith(" copy")).toBe(true);
   });
 });

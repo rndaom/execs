@@ -27,6 +27,10 @@ use crate::surface::{inventory_live_surface_with, is_global_custom_file, is_stoc
 mod deletion;
 pub use deletion::delete_profile_to;
 
+#[path = "profile_duplicate.rs"]
+mod duplication;
+pub use duplication::duplicate_profile_to;
+
 pub const LIBRARY_SCHEMA: u32 = 1;
 pub const SHARED_VPK_NAME: &str = "mastercomfig-base.vpk";
 pub const MAX_PROFILE_REL_PATH_BYTES: usize = 4096;
@@ -6801,6 +6805,149 @@ mod tests {
             ProfileError::GameRunning
         );
         assert_eq!(load_manifest(&profiles, &id).unwrap().name, "é".repeat(80));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn duplicate_copies_a_saved_profile_without_touching_tf2_or_the_active_profile() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +forward
+",
+        );
+        write_live(
+            &root.join("tf/custom/pack/materials/a.vmt"),
+            "pack
+",
+        );
+        crate::cfg_layer::write_test_base(&root);
+        write_live(
+            &root.join("tf/steam.inf"),
+            "appID=440
+",
+        );
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: Some("-novid"),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        let source = library.profiles[0].id.clone();
+        mutate_profile_files_to(
+            &profiles,
+            &root,
+            &source,
+            &[],
+            &[],
+            ProfileLiveProjection::LibraryOnly,
+            unlocked(),
+            |manifest| {
+                manifest.ignored_packs = vec!["kept-pack".into()];
+                manifest.preloader = Some(crate::preloader::PreloaderSelection::default());
+                Ok(())
+            },
+        )
+        .unwrap();
+        // Unabsorbed live drift is not part of the saved profile.
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +jump
+",
+        );
+        let live = snapshot_tree(&root);
+        let before = load_manifest(&profiles, &source).unwrap();
+
+        let library =
+            duplicate_profile_to(&profiles, &root, &source, "Main copy", unlocked()).unwrap();
+        assert_eq!(library.profiles.len(), 2);
+        assert_eq!(library.active_profile_id.as_deref(), Some(source.as_str()));
+        let copy = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id != source)
+            .unwrap();
+        assert_eq!(copy.name, "Main copy");
+        let duplicate = load_manifest(&profiles, &copy.id).unwrap();
+        assert_eq!(duplicate.files, before.files);
+        assert_eq!(duplicate.launch_options, "-novid");
+        assert!(duplicate.launch_sync_pending);
+        assert_eq!(duplicate.ignored_packs, vec!["kept-pack".to_string()]);
+        assert_eq!(duplicate.preloader, before.preloader);
+        assert_eq!(duplicate.mods, before.mods);
+        for file in &duplicate.files {
+            if file.storage == FileStorage::Exclusive {
+                assert_eq!(
+                    fs::read(exclusive_file_path(&profiles, &copy.id, &file.path)).unwrap(),
+                    fs::read(exclusive_file_path(&profiles, &source, &file.path)).unwrap(),
+                );
+            }
+        }
+        assert_eq!(load_manifest(&profiles, &source).unwrap(), before);
+        assert_eq!(snapshot_tree(&root), live);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn duplicate_leaves_no_profile_when_a_saved_file_is_damaged_or_tf2_runs() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +forward
+",
+        );
+        crate::cfg_layer::write_test_base(&root);
+        write_live(
+            &root.join("tf/steam.inf"),
+            "appID=440
+",
+        );
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let source = library.profiles[0].id.clone();
+        assert_eq!(
+            duplicate_profile_to(&profiles, &root, &source, "Copy", [tf2_name()]).unwrap_err(),
+            ProfileError::GameRunning
+        );
+        assert_eq!(
+            duplicate_profile_to(&profiles, &root, &source, "  ", unlocked()).unwrap_err(),
+            ProfileError::InvalidName
+        );
+        fs::write(
+            exclusive_file_path(&profiles, &source, "tf/cfg/config.cfg"),
+            "tampered
+",
+        )
+        .unwrap();
+        let err = duplicate_profile_to(&profiles, &root, &source, "Copy", unlocked()).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref message) if message.contains("no longer matches"))
+        );
+        let after = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(after.profiles.len(), 1);
+        let dirs: Vec<_> = fs::read_dir(&profiles)
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != &source && !name.starts_with('.') && name != "blobs")
+            .collect();
+        assert!(dirs.is_empty(), "left behind: {dirs:?}");
         cleanup(&dir);
     }
 
