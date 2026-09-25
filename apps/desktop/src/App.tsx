@@ -519,6 +519,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   onRecoveryChange={setPreloaderRecovery}
                   onHudReviewRequired={setHudReviewId}
                   onError={setError}
+                  launchSync={launchSync}
+                  onLaunchOptionsSaved={() => void refreshLaunchSync()}
                 />
               </div>
               {appSettingsOpen ? renderAppPreferences() : null}

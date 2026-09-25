@@ -370,19 +370,6 @@ export function strippedLaunchNotice(tokens: ForbiddenLaunchToken[]): string {
   return `Removed on save: ${tokens.join(", ")}.`;
 }
 
-export function steamWriteCopy(status: SteamWriteStatus): string {
-  switch (status) {
-    case "written":
-      return "Wrote Steam launch options.";
-    case "steam_open":
-      return "Saved. Steam is open — copy into TF2 Properties yourself.";
-    case "no_account":
-      return "Saved. No Steam userdata folder found.";
-    case "write_failed":
-      return "Saved to the profile. Steam could not be updated yet.";
-  }
-}
-
 /** The launch-time comparison of profile and Steam launch options. */
 export type LaunchSync = {
   steamOptions: string | null;
@@ -406,4 +393,69 @@ export function launchSyncAction(sync: LaunchSync | null): LaunchSyncAction {
 /** Header flag for a profile whose launch options are not in Steam yet. */
 export function launchSyncWarning(sync: LaunchSync | null): string | null {
   return launchSyncAction(sync) === "launch" ? null : "Launch options not in Steam";
+}
+
+/**
+ * Where the Launch pane's options stand. "in-steam" comes only from the backend:
+ * its read of Steam's saved copy, or a confirmed write. Copying to the
+ * clipboard never changes this.
+ */
+export type LaunchSteamState =
+  | "unsaved"
+  | "in-steam"
+  | "steam-open"
+  | "steam-closed"
+  | "write-failed"
+  | "no-account"
+  | "unknown";
+
+export type LaunchSteamSync = LaunchSync & { profileOptions: string };
+
+export function launchSteamState(
+  value: string,
+  saved: string,
+  sync: LaunchSteamSync | null,
+  steamWrite: SteamWriteStatus | null,
+): LaunchSteamState {
+  if (value !== saved) return "unsaved";
+  // The comparison describes one profile string; a stale one says nothing.
+  if (sync && sync.profileOptions === saved) {
+    if (sync.steamOptions === null) return "no-account";
+    if (sync.inSync) return "in-steam";
+    if (steamWrite === "write_failed") return "write-failed";
+    return sync.steamRunning ? "steam-open" : "steam-closed";
+  }
+  switch (steamWrite) {
+    case "written":
+      return "in-steam";
+    case "steam_open":
+      return "steam-open";
+    case "no_account":
+      return "no-account";
+    case "write_failed":
+      return "write-failed";
+    default:
+      return "unknown";
+  }
+}
+
+export function launchSteamCopy(state: LaunchSteamState, running: boolean): string {
+  switch (state) {
+    case "unsaved":
+      return running
+        ? "Not saved yet. Saves to this profile after TF2 closes."
+        : "Saving to this profile…";
+    case "in-steam":
+      return "Saved to this profile and in Steam.";
+    case "steam-open":
+      return "Saved to this profile. Steam is open with different options. Copy them in, or Launch TF2 can restart Steam to write them.";
+    case "steam-closed":
+      return "Saved to this profile. Steam has different options. Write them now, or Launch TF2 writes them first.";
+    case "write-failed":
+      return "Saved to this profile. Steam could not be updated. Retry, or copy them into Steam.";
+    case "no-account":
+      return "Saved to this profile. No Steam account found, so copy them into Steam yourself.";
+    case "unknown":
+      return "Saved to this profile. Steam updates only while it is closed.";
+  }
 }

@@ -320,10 +320,20 @@ describe("settings snapshot integrity", () => {
       expect(capture.panes.comfig.onApplyModules({ lod: "high" })).resolves.toBe(true),
     );
     expect(api.setComfigModules).toHaveBeenCalledWith({ lod: "high" });
-    await render({ tab: "launch" });
+    const onLaunchOptionsSaved = vi.fn();
+    const launchSync = {
+      profileOptions: "-novid",
+      steamOptions: "",
+      inSync: false,
+      steamRunning: true,
+    };
+    await render({ tab: "launch", launchSync, onLaunchOptionsSaved });
     expect(capture.status.running).toBe(false);
+    expect(capture.panes.launch.steamSync).toBe(launchSync);
     await act(async () => expect(capture.panes.launch.onSave()).resolves.toBe(true));
     expect(api.setProfileLaunchOptions).toHaveBeenCalledOnce();
+    // Steam's copy is re-read after the save rather than inferred from it.
+    expect(onLaunchOptionsSaved).toHaveBeenCalledOnce();
   });
   it("uses the selected HUD projection in Gameplay startup inference", async () => {
     const contents: Record<string, string> = {
