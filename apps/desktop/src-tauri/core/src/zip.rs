@@ -208,6 +208,7 @@ pub fn inspect_profile_export_from(
     if let Some(selection) = crate::preloader::selection_for_export(profiles_dir, profile_id)? {
         manifest.preloader = Some(selection);
     }
+    refuse_stock_built_export(&manifest)?;
     let revision = profile_export_revision(&manifest)?;
     validate_exported_launch_options(&manifest.launch_options)?;
     let export_files = validated_export_files(&manifest)?;
@@ -547,6 +548,7 @@ fn write_profile_zip(
     manifest: &ProfileManifest,
     zip_path: &Path,
 ) -> Result<(), ProfileError> {
+    refuse_stock_built_export(manifest)?;
     if let Some(parent) = zip_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).map_err(io_err)?;
@@ -651,6 +653,20 @@ fn write_profile_zip(
     refuse_symlink_destination(zip_path)?;
     replace_file(&temp.path, zip_path).map_err(io_err)?;
     temp.persisted = true;
+    Ok(())
+}
+
+fn refuse_stock_built_export(manifest: &ProfileManifest) -> Result<(), ProfileError> {
+    if manifest
+        .viewmodel
+        .as_ref()
+        .is_some_and(|record| record.source == ViewmodelSource::StockBuilt)
+    {
+        return Err(ProfileError::Io(
+            "This profile contains a locally built Viewmodels pack. Sharing its transformed TF2 model bytes requires the future recipe-only export format."
+                .into(),
+        ));
+    }
     Ok(())
 }
 
