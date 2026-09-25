@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Rename a profile from its menu in the profile list. Only the name changes; its files and
+  settings stay exactly as they were.
 - Binds has a cleaner layout: every action on one page grouped by task, a search that also finds
   actions by the key bound to them, and readable key caps such as Mouse 4 and Num 1. New actions
   cover common voice commands (Thanks, Help, Incoming, Spy, Sentry ahead, Activate charge,

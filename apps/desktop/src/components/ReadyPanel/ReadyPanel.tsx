@@ -141,6 +141,7 @@ export function ReadyPanel({
             onSwitch={(id) => void profiles.switchProfile(id)}
             onExport={reviewExport}
             onDelete={profiles.reviewDelete}
+            onRename={profiles.renameProfile}
             onImport={() => void profiles.importProfile()}
             onRepair={(id) => void profiles.reviewFolderRepair(id)}
             onCreateNew={onCreateNew}

@@ -13,6 +13,8 @@ import {
   canImportProfile,
   canSaveCurrent,
   libraryStatusCopy,
+  PROFILE_NAME_MAX,
+  profileNameProblem,
 } from "../../lib/library-ui";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
 import { Loading } from "../ui/Spinner";
@@ -33,6 +35,7 @@ export function ProfileMenu({
   onSwitch,
   onExport,
   onDelete,
+  onRename,
   onImport,
   onRepair,
   onCreateNew,
@@ -50,6 +53,8 @@ export function ProfileMenu({
   onSwitch: (id: string) => void;
   onExport: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Resolves true when saved; the menu keeps the editor open on failure. */
+  onRename: (id: string, name: string) => Promise<boolean>;
   onImport: () => void;
   onRepair: (id: string) => void;
   onCreateNew: () => void;
@@ -59,6 +64,9 @@ export function ProfileMenu({
   const summaryRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [actions, setActions] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string; saving: boolean } | null>(
+    null,
+  );
 
   const positionMenu = useCallback(() => {
     const panel = panelRef.current;
@@ -112,9 +120,16 @@ export function ProfileMenu({
     }
     function onPointerDown(event: PointerEvent) {
       const node = detailsRef.current;
-      if (node?.open && event.target instanceof Node && !node.contains(event.target)) {
-        close(false);
+      if (!node?.open || !(event.target instanceof Node) || node.contains(event.target)) return;
+      // The row actions menu is portaled to the body but belongs to this
+      // popover; choosing Rename… or Duplicate… there must keep it open.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="menu"][aria-label="Profile actions"]')
+      ) {
+        return;
       }
+      close(false);
     }
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -206,54 +221,87 @@ export function ProfileMenu({
                     active ? "" : "hover:bg-panel"
                   }`}
                 >
-                  <button
-                    type="button"
-                    data-testid="profile-name"
-                    disabled={!canSwitch}
-                    onClick={() => onSwitch(profile.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
-                  >
-                    <span
-                      className={`size-2 shrink-0 rounded-full ${
-                        active ? "bg-brand" : "bg-edge-strong"
-                      }`}
+                  {renaming?.id === profile.id ? (
+                    <RenameForm
+                      current={profile.name}
+                      value={renaming.name}
+                      saving={renaming.saving}
+                      locked={running || recoveryPending}
+                      onChange={(name) => setRenaming({ ...renaming, name })}
+                      onCancel={() => setRenaming(null)}
+                      onSubmit={async () => {
+                        const name = renaming.name.trim();
+                        if (name === profile.name) {
+                          setRenaming(null);
+                          return;
+                        }
+                        setRenaming({ ...renaming, saving: true });
+                        const saved = await onRename(profile.id, name);
+                        setRenaming((current) =>
+                          current?.id !== profile.id
+                            ? current
+                            : saved
+                              ? null
+                              : { ...current, saving: false },
+                        );
+                      }}
                     />
-                    <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
-                    <span className="text-[12px] text-ink-faint">
-                      {unsafeFolders ? "Needs repair" : active ? "Current" : "Switch"}
-                    </span>
-                  </button>
-                  {unsafeFolders ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      disabled={running || controlsBusy || recoveryPending}
-                      onClick={() => {
-                        if (detailsRef.current) detailsRef.current.open = false;
-                        onRepair(profile.id);
-                      }}
-                    >
-                      Repair folder names
-                    </button>
-                  ) : null}
-                  {showExport ? (
-                    <button
-                      type="button"
-                      data-testid="profile-actions"
-                      title={`Actions for ${profile.name}`}
-                      aria-label={`Actions for ${profile.name}`}
-                      aria-haspopup="menu"
-                      aria-expanded={actions?.id === profile.id}
-                      onClick={(event) => {
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        setActions({ id: profile.id, x: bounds.right - 240, y: bounds.bottom + 4 });
-                      }}
-                      disabled={controlsBusy || recoveryPending}
-                      className="rounded-md p-2 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
-                    >
-                      <DotsThreeVertical size={18} weight="bold" />
-                    </button>
-                  ) : null}
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="profile-name"
+                        disabled={!canSwitch}
+                        onClick={() => onSwitch(profile.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+                      >
+                        <span
+                          className={`size-2 shrink-0 rounded-full ${
+                            active ? "bg-brand" : "bg-edge-strong"
+                          }`}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
+                        <span className="text-[12px] text-ink-faint">
+                          {unsafeFolders ? "Needs repair" : active ? "Current" : "Switch"}
+                        </span>
+                      </button>
+                      {unsafeFolders ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={running || controlsBusy || recoveryPending}
+                          onClick={() => {
+                            if (detailsRef.current) detailsRef.current.open = false;
+                            onRepair(profile.id);
+                          }}
+                        >
+                          Repair folder names
+                        </button>
+                      ) : null}
+                      {showExport ? (
+                        <button
+                          type="button"
+                          data-testid="profile-actions"
+                          title={`Actions for ${profile.name}`}
+                          aria-label={`Actions for ${profile.name}`}
+                          aria-haspopup="menu"
+                          aria-expanded={actions?.id === profile.id}
+                          onClick={(event) => {
+                            const bounds = event.currentTarget.getBoundingClientRect();
+                            setActions({
+                              id: profile.id,
+                              x: bounds.right - 240,
+                              y: bounds.bottom + 4,
+                            });
+                          }}
+                          disabled={controlsBusy || recoveryPending}
+                          className="rounded-md p-2 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
+                        >
+                          <DotsThreeVertical size={18} weight="bold" />
+                        </button>
+                      ) : null}
+                    </>
+                  )}
                 </li>
               );
             })}
@@ -316,6 +364,17 @@ export function ProfileMenu({
       {actions ? (
         <ContextMenu label="Profile actions" position={actions} onClose={() => setActions(null)}>
           <ContextMenuItem
+            disabled={running || controlsBusy || recoveryPending}
+            onSelect={() => {
+              const id = actions.id;
+              const name = library?.profiles.find((profile) => profile.id === id)?.name ?? "";
+              setActions(null);
+              setRenaming({ id, name, saving: false });
+            }}
+          >
+            Rename…
+          </ContextMenuItem>
+          <ContextMenuItem
             disabled={controlsBusy || recoveryPending}
             onSelect={() => {
               const id = actions.id;
@@ -341,5 +400,80 @@ export function ProfileMenu({
         </ContextMenu>
       ) : null}
     </details>
+  );
+}
+
+function RenameForm({
+  current,
+  value,
+  saving,
+  locked,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  current: string;
+  value: string;
+  saving: boolean;
+  locked: boolean;
+  onChange: (name: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const problem = profileNameProblem(value);
+  const input = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
+  return (
+    <form
+      data-testid="profile-rename"
+      className="flex min-w-0 flex-1 flex-col gap-1.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!problem && !saving && !locked) onSubmit();
+      }}
+      onKeyDown={(event) => {
+        // Escape leaves the editor, not the whole profile menu.
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <label className="sr-only" htmlFor="profile-rename-input">
+          New name for {current}
+        </label>
+        <input
+          ref={input}
+          id="profile-rename-input"
+          value={value}
+          maxLength={PROFILE_NAME_MAX * 2}
+          disabled={saving}
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={problem ? "profile-rename-problem" : undefined}
+          onChange={(event) => onChange(event.target.value)}
+          className="field min-w-0 flex-1 px-2.5 py-1.5 text-[13.5px] text-ink focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={problem !== null || saving || locked}
+          className="btn btn-primary"
+        >
+          {saving ? <Loading>Saving…</Loading> : "Save"}
+        </button>
+        <button type="button" className="btn btn-quiet" disabled={saving} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      {problem && value.length > 0 ? (
+        <p id="profile-rename-problem" className="t-meta text-warn">
+          {problem}
+        </p>
+      ) : null}
+    </form>
   );
 }

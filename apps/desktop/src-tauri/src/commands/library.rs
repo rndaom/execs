@@ -56,6 +56,26 @@ pub async fn save_current_as(
 }
 
 #[tauri::command]
+pub async fn rename_profile(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    name: String,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        execs_core::refuse_if_running()?;
+        Ok(execs_core::profile::rename_profile_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            &name,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn delete_profile(
     gate: tauri::State<'_, WriteGate>,
     id: String,

@@ -3397,6 +3397,43 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+/// Rename a saved profile. Only its display name changes: the id, files,
+/// shared blobs, records and active tracking stay as they are, and nothing in
+/// TF2 is touched. The ordinary profile transaction writes the manifest and
+/// the index together, so an interrupted rename recovers to one name. Names
+/// follow creation rules (trimmed, 1-80 characters, duplicates allowed) and,
+/// like imported names, may not contain control characters.
+pub fn rename_profile_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    name: &str,
+    running_names: I,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let name = normalize_name(name)?;
+    if name.chars().any(char::is_control) {
+        return Err(ProfileError::InvalidName);
+    }
+    mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &[],
+        &[],
+        ProfileLiveProjection::LibraryOnly,
+        running_names,
+        |manifest| {
+            manifest.name = name;
+            Ok(())
+        },
+    )?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
 pub fn set_active_profile_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -6671,6 +6708,99 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         let err = create_profile_record_to(&profiles, &root, "   ", unlocked()).unwrap_err();
         assert_eq!(err, ProfileError::InvalidName);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rename_changes_only_the_name_of_an_active_or_inactive_profile() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +forward
+",
+        );
+        write_live(
+            &root.join("tf/custom/pack/materials/a.vmt"),
+            "pack
+",
+        );
+        crate::cfg_layer::write_test_base(&root);
+        write_live(
+            &root.join("tf/steam.inf"),
+            "appID=440
+",
+        );
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let active = library.profiles[0].id.clone();
+        let library = create_profile_record_to(&profiles, &root, "Spare", unlocked()).unwrap();
+        let inactive = library
+            .profiles
+            .iter()
+            .find(|profile| profile.name == "Spare")
+            .unwrap()
+            .id
+            .clone();
+        let before = load_manifest(&profiles, &active).unwrap();
+        let live = snapshot_tree(&root);
+
+        let library =
+            rename_profile_to(&profiles, &root, &active, "  Casual ✨ 日本  ", unlocked()).unwrap();
+        assert_eq!(library.active_profile_id.as_deref(), Some(active.as_str()));
+        let renamed = library.profiles.iter().find(|p| p.id == active).unwrap();
+        assert_eq!(renamed.name, "Casual ✨ 日本");
+        let after = load_manifest(&profiles, &active).unwrap();
+        assert_eq!(after.name, "Casual ✨ 日本");
+        assert_eq!(after.files, before.files);
+        assert_eq!(after.launch_options, before.launch_options);
+        assert_eq!(snapshot_tree(&root), live);
+
+        // Inactive profiles rename the same way, and names may repeat as at creation.
+        let library = rename_profile_to(&profiles, &root, &inactive, "Main", unlocked()).unwrap();
+        assert_eq!(library.profiles.len(), 2);
+        assert_eq!(load_manifest(&profiles, &inactive).unwrap().name, "Main");
+        // A restart reads the same names from disk.
+        let reloaded = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(reloaded, library);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rename_refuses_bad_names_unknown_profiles_and_a_running_game() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = library.profiles[0].id.clone();
+        for bad in ["", "   ", "tab	name", &"x".repeat(81)] {
+            assert_eq!(
+                rename_profile_to(&profiles, &root, &id, bad, unlocked()).unwrap_err(),
+                ProfileError::InvalidName,
+                "{bad:?}"
+            );
+        }
+        assert!(rename_profile_to(&profiles, &root, &id, &"é".repeat(80), unlocked()).is_ok());
+        assert!(rename_profile_to(
+            &profiles,
+            &root,
+            "00000000-0000-4000-8000-000000000000",
+            "Other",
+            unlocked()
+        )
+        .is_err());
+        assert_eq!(
+            rename_profile_to(&profiles, &root, &id, "Other", [tf2_name()]).unwrap_err(),
+            ProfileError::GameRunning
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap().name, "é".repeat(80));
         cleanup(&dir);
     }
 
