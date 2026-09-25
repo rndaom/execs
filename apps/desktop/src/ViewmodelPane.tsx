@@ -26,8 +26,7 @@ export function ViewmodelPane({
   onOpenGameplay: () => void;
   loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   onImport: (preload: boolean) => void;
-  /** Present only in development builds, for retail TF2 verification. */
-  onBuild?: (request: ViewmodelBuildRequest) => Promise<boolean>;
+  onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
   onRemove: () => void;
 }) {
   const locked = !useCanWrite();

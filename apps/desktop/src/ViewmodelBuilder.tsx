@@ -51,11 +51,7 @@ const MODE_OPTIONS: { id: "shown" | ViewmodelHideMode; label: string; title: str
   { id: "weapon", label: "Hands only", title: "Hide the weapon and keep the hands" },
 ];
 
-/**
- * Per-class viewmodel choices from the player's installed TF2 files. Release
- * builds cannot write a pack before the retail and preview gates; development
- * builds pass `onBuild` so the native path can be exercised in retail TF2.
- */
+/** Per-class viewmodel choices built from the player's installed TF2 files. */
 export function ViewmodelBuilder({
   active,
   profilePreload,
@@ -70,7 +66,7 @@ export function ViewmodelBuilder({
   /** The saved locally built recipe, used to show its choices when the sources still match. */
   savedRecipe?: ViewmodelBuildRecipe;
   locked?: boolean;
-  onBuild?: (request: ViewmodelBuildRequest) => Promise<boolean>;
+  onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
 }) {
   // The app reads the catalog in the background at startup, so the pane can open ready.
   const [state, setState] = useState<CatalogState>(() => {
@@ -289,7 +285,7 @@ function ViewmodelCatalogChoices({
   profilePreload: boolean | null;
   savedRecipe?: ViewmodelBuildRecipe;
   locked: boolean;
-  onBuild?: (request: ViewmodelBuildRequest) => Promise<boolean>;
+  onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
   onRefresh: () => void;
 }) {
   const classes = viewmodelClasses(catalog);
@@ -306,7 +302,6 @@ function ViewmodelCatalogChoices({
   const conflicts = conflictingViewmodelGroupIds(catalog, choices);
   const changed = !sameChoices(choices, saved);
   const canBuild =
-    onBuild !== undefined &&
     editable &&
     !locked &&
     !building &&
@@ -331,7 +326,7 @@ function ViewmodelCatalogChoices({
   }
 
   async function build() {
-    if (!onBuild || !reviewRequest || !canBuild) return;
+    if (!reviewRequest || !canBuild) return;
     setBuilding(true);
     try {
       if (await onBuild(reviewRequest)) setReviewOpen(false);
@@ -416,7 +411,7 @@ function ViewmodelCatalogChoices({
               disabled={!editable || reviewRequest === null || selected.length === 0}
               onClick={() => setReviewOpen(true)}
             >
-              {onBuild ? "Review and build" : "Review"}
+              Review and build
             </button>
           </div>
 
@@ -501,14 +496,10 @@ function ViewmodelCatalogChoices({
         <p role="status" data-testid="viewmodel-build-progress" className="t-meta mt-3">
           {building ? (
             <Loading>Building from your TF2 files…</Loading>
-          ) : onBuild ? (
-            locked ? (
-              "Close TF2 before building."
-            ) : (
-              "Development build: replaces this profile's viewmodel pack. Not yet verified in TF2."
-            )
+          ) : locked ? (
+            "Close TF2 before building."
           ) : (
-            "Building is not available yet while the new builder is verified in TF2."
+            "Replaces this profile's viewmodel pack with one built from your TF2 files."
           )}
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">

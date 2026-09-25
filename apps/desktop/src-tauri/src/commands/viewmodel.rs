@@ -250,20 +250,6 @@ fn committed_build_error(error: ProfileError) -> CommandError {
     }
 }
 
-/// A callable IPC command is still a product surface even while its pane is
-/// disabled. Keep packaged builds read-only until the preview, retail TF2,
-/// and sharing-rights acceptance gates are complete.
-fn require_development_builder() -> Result<(), CommandError> {
-    if cfg!(debug_assertions) {
-        Ok(())
-    } else {
-        Err(CommandError::new(
-            "SourceUnavailable",
-            "Viewmodels Build is unavailable in this release while preview, retail TF2, and sharing checks are incomplete.",
-        ))
-    }
-}
-
 fn catalog_error(error: StockSourceError) -> CommandError {
     CommandError::new("SourceUnavailable", error.0)
 }
@@ -406,9 +392,6 @@ pub async fn build_selected_viewmodel_pack(
     gate: tauri::State<'_, WriteGate>,
     request: ViewmodelBuildRequest,
 ) -> Result<ProfileDetail, CommandError> {
-    // This must remain the first operation: release IPC requests never inspect
-    // a profile or installed TF2 files, let alone acquire the write gate.
-    require_development_builder()?;
     validate_build_request(&request)?;
     let preload = request.preload;
     let (context, initial_viewmodel, selection, candidate) = with_profile(move |root, profile_id| {
@@ -658,14 +641,6 @@ mod tests {
             "Installed TF2 Viewmodels sources or the selected output changed; refresh the catalog and try again.".into(),
         ));
         assert_eq!(error.code, "SourceChanged");
-    }
-
-    #[test]
-    fn selected_builder_is_available_only_in_development_builds() {
-        assert_eq!(
-            require_development_builder().is_ok(),
-            cfg!(debug_assertions)
-        );
     }
 
     #[test]

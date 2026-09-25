@@ -62,7 +62,7 @@ const getCatalog = vi.mocked(getViewmodelSourceCatalog);
 const openGameplay = vi.fn();
 const importPack = vi.fn();
 const removePack = vi.fn();
-let buildPack: ((request: ViewmodelBuildRequest) => Promise<boolean>) | undefined;
+let buildPack: (request: ViewmodelBuildRequest) => Promise<boolean>;
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -86,7 +86,7 @@ beforeEach(() => {
   openGameplay.mockReset();
   importPack.mockReset();
   removePack.mockReset();
-  buildPack = undefined;
+  buildPack = vi.fn(async () => true);
   resetViewmodelCatalogCache();
 });
 
@@ -148,8 +148,8 @@ describe("Viewmodels source-derived draft", () => {
       false,
     );
     await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Building is not available yet");
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
+    expect(box.textContent).toContain("Replaces this profile's viewmodel pack");
+    expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
     expect(box.querySelector("img")).toBeNull();
     await click('[data-testid="viewmodel-import"]');
     expect(importPack).toHaveBeenCalledWith(false);
@@ -335,7 +335,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
   });
 
-  it("builds the reviewed request only when a development build handler is present", async () => {
+  it("builds the reviewed request", async () => {
     let finish: (ok: boolean) => void = () => {};
     const handler = vi.fn(
       (_request: ViewmodelBuildRequest) =>
@@ -347,7 +347,7 @@ describe("Viewmodels source-derived draft", () => {
     await render(true);
     await click('[data-testid="viewmodel-choice-scout/a-full"]');
     await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Development build");
+    expect(box.textContent).toContain("Replaces this profile's viewmodel pack");
     const build = element<HTMLButtonElement>('[data-testid="viewmodel-build"]');
     expect(build.disabled).toBe(false);
     await act(async () => build.click());
@@ -367,7 +367,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
   });
 
-  it("keeps development Build disabled while TF2 runs or choices conflict", async () => {
+  it("keeps Build disabled while TF2 runs or choices conflict", async () => {
     buildPack = vi.fn(async () => true);
     running = true;
     await render();
