@@ -471,8 +471,11 @@ export type ViewmodelSourceCatalog = {
   groups: {
     id: string;
     class: string;
-    items: { id: number; schemaName: string }[];
+    /** `slot` is the item's loadout slot for this group's class, when the schema names one. */
+    items: { id: number; schemaName: string; itemClass?: string; slot?: string | null }[];
     animations: string[];
+    /** Inspect animations are grouped separately from the weapon's ordinary actions. */
+    inspect?: boolean;
     overlaps: string[];
     teamVariantsDiffer: boolean;
   }[];

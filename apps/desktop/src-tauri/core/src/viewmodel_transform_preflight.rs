@@ -156,6 +156,7 @@ mod tests {
                 class: "demoman".into(),
                 item_ids: vec![1],
                 animations: vec!["@raw".into(), "@compressed".into(), "@missing".into()],
+                inspect: false,
                 overlaps: Vec::new(),
                 team_variants_differ: false,
             }],

@@ -8,7 +8,14 @@ import {
   viewmodelCatalogRevision,
   viewmodelClasses,
   viewmodelDraftBuildRequest,
+  viewmodelGroupItemNames,
+  viewmodelGroupLabel,
   viewmodelGroupsForClass,
+  viewmodelItemName,
+  viewmodelRowItemNames,
+  viewmodelRowLabel,
+  viewmodelRowsForClass,
+  viewmodelSectionsForClass,
 } from "./viewmodel-ui";
 
 const catalog: ViewmodelSourceCatalog = {
@@ -101,5 +108,190 @@ describe("installed Viewmodels catalog planning", () => {
       choices: [{ groupId: "scout/two", mode: "weapon" }],
       preload: false,
     });
+  });
+});
+
+describe("loadout sections and readable names", () => {
+  type Group = ViewmodelSourceCatalog["groups"][number];
+  const group = (id: string, cls: string, items: Group["items"], inspect = false): Group => ({
+    id,
+    class: cls,
+    items,
+    animations: [id],
+    inspect,
+    overlaps: [],
+    teamVariantsDiffer: false,
+  });
+  const sectioned: ViewmodelSourceCatalog = {
+    ...catalog,
+    groups: [
+      group("scout/bat", "scout", [
+        { id: 190, schemaName: "Upgradeable TF_WEAPON_BAT", slot: "melee" },
+        { id: 44, schemaName: "The Sandman", slot: "melee" },
+        { id: 0, schemaName: "TF_WEAPON_BAT", slot: "melee" },
+      ]),
+      group("scout/milk", "scout", [
+        { id: 222, schemaName: "Mad Milk", slot: "secondary" },
+        { id: 46, schemaName: "Bonk! Atomic Punch", slot: "secondary" },
+      ]),
+      group("scout/scattergun", "scout", [
+        { id: 13, schemaName: "TF_WEAPON_SCATTERGUN", slot: "primary" },
+        { id: 15000, schemaName: "concealedkiller_scattergun_nightterror", slot: "primary" },
+        { id: 669, schemaName: "Festive Scattergun 2011", slot: "primary" },
+        { id: 1152, schemaName: "TF_WEAPON_GRAPPLINGHOOK", slot: "action" },
+        { id: 1153, schemaName: "TF_WEAPON_GRAPPLINGHOOK", slot: "action" },
+      ]),
+      group(
+        "scout/scattergun-inspect",
+        "scout",
+        [{ id: 13, schemaName: "TF_WEAPON_SCATTERGUN", slot: "primary" }],
+        true,
+      ),
+      group("spy/revolver", "spy", [
+        { id: 24, schemaName: "TF_WEAPON_REVOLVER", slot: "secondary" },
+      ]),
+      group("spy/sapper", "spy", [
+        { id: 810, schemaName: "The Red-Tape Recorder", slot: "building" },
+      ]),
+      group("engineer/pda", "engineer", [
+        { id: 25, schemaName: "TF_WEAPON_PDA_ENGINEER_BUILD", slot: "pda" },
+      ]),
+    ],
+  };
+
+  it("names stock schema identifiers and skips cosmetic or internal copies", () => {
+    expect(viewmodelItemName("TF_WEAPON_PIPEBOMBLAUNCHER")).toBe("Stickybomb Launcher");
+    expect(viewmodelItemName("Upgradeable TF_WEAPON_SHOTGUN_HWG")).toBe("Shotgun");
+    expect(viewmodelItemName("TF_WEAPON_SOMETHING_NEW")).toBe("Something New");
+    expect(viewmodelItemName("The Shortstop")).toBe("Shortstop");
+    const bat = sectioned.groups[0];
+    expect(viewmodelGroupLabel(bat)).toBe("Bat");
+    expect(viewmodelGroupItemNames(bat)).toEqual(["Bat", "Sandman"]);
+    const scattergun = sectioned.groups[2];
+    expect(viewmodelGroupItemNames(scattergun)).toEqual(["Scattergun", "Grappling Hook"]);
+    expect(viewmodelGroupLabel(sectioned.groups[3])).toBe("Scattergun inspect");
+  });
+
+  it("orders sections like the loadout, with shared action items not deciding a slot", () => {
+    const scout = viewmodelSectionsForClass(sectioned, "scout", "");
+    expect(scout.map((section) => [section.id, section.rows.map((row) => row.id)])).toEqual([
+      ["primary", ["scout/scattergun"]],
+      ["secondary", ["scout/milk"]],
+      ["melee", ["scout/bat"]],
+      ["inspect", ["scout/scattergun-inspect"]],
+    ]);
+    expect(
+      viewmodelSectionsForClass(sectioned, "spy", "").map((section) => [
+        section.id,
+        section.rows.length,
+      ]),
+    ).toEqual([
+      ["primary", 1],
+      ["secondary", 1],
+    ]);
+    expect(viewmodelSectionsForClass(sectioned, "engineer", "")[0].label).toBe("PDA and buildings");
+  });
+
+  it("searches readable names as well as schema identifiers", () => {
+    expect(viewmodelGroupsForClass(sectioned, "scout", "sandman").map((g) => g.id)).toEqual([
+      "scout/bat",
+    ]);
+    expect(viewmodelGroupsForClass(sectioned, "scout", "bonk").map((g) => g.id)).toEqual([
+      "scout/milk",
+    ]);
+  });
+
+  it("folds a bread reskin into its base weapon's row, including inspect", () => {
+    const bread: ViewmodelSourceCatalog = {
+      ...catalog,
+      groups: [
+        {
+          ...group("scout/drink", "scout", [
+            {
+              id: 46,
+              schemaName: "Bonk! Atomic Punch",
+              itemClass: "tf_weapon_lunchbox_drink",
+              slot: "secondary",
+            },
+            { id: 222, schemaName: "Mad Milk", itemClass: "tf_weapon_jar_milk", slot: "secondary" },
+          ]),
+          animations: ["@ed_draw"],
+        },
+        {
+          ...group("scout/bm", "scout", [
+            {
+              id: 1121,
+              schemaName: "Mutated Milk",
+              itemClass: "tf_weapon_jar_milk",
+              slot: "secondary",
+            },
+          ]),
+          animations: ["@bm_draw", "@melee_allclass_swing"],
+        },
+        {
+          ...group(
+            "scout/drink-inspect",
+            "scout",
+            [
+              {
+                id: 46,
+                schemaName: "Bonk! Atomic Punch",
+                itemClass: "tf_weapon_lunchbox_drink",
+                slot: "secondary",
+              },
+              {
+                id: 222,
+                schemaName: "Mad Milk",
+                itemClass: "tf_weapon_jar_milk",
+                slot: "secondary",
+              },
+            ],
+            true,
+          ),
+          animations: ["@item1_inspect_start"],
+        },
+        {
+          ...group(
+            "scout/bm-inspect",
+            "scout",
+            [
+              {
+                id: 1121,
+                schemaName: "Mutated Milk",
+                itemClass: "tf_weapon_jar_milk",
+                slot: "secondary",
+              },
+            ],
+            true,
+          ),
+          animations: ["@breadmonster_inspect_start"],
+        },
+        {
+          ...group("scout/cleaver", "scout", [
+            {
+              id: 812,
+              schemaName: "The Flying Guillotine",
+              itemClass: "tf_weapon_cleaver",
+              slot: "secondary",
+            },
+          ]),
+          animations: ["@cleave_draw"],
+        },
+      ],
+    };
+    const rows = viewmodelRowsForClass(bread, "scout");
+    // Inspect rows sort with their weapon; sections separate them for display.
+    expect(rows.map((row) => [row.id, row.groups.map((member) => member.id)])).toEqual([
+      ["scout/drink", ["scout/drink", "scout/bm"]],
+      ["scout/drink-inspect", ["scout/drink-inspect", "scout/bm-inspect"]],
+      ["scout/cleaver", ["scout/cleaver"]],
+    ]);
+    expect(viewmodelRowLabel(rows[0])).toBe("Bonk! Atomic Punch");
+    expect(viewmodelRowItemNames(rows[0])).toEqual([
+      "Bonk! Atomic Punch",
+      "Mad Milk",
+      "Mutated Milk",
+    ]);
+    expect(viewmodelRowLabel(rows[1])).toBe("Bonk! Atomic Punch inspect");
   });
 });

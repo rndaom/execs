@@ -1,19 +1,34 @@
+import { ArrowClockwise, MagnifyingGlass } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
-import { getViewmodelSourceCatalog, type ViewmodelSourceCatalog } from "./lib/bridge";
+import { Loading, Spinner } from "./components/ui/Spinner";
+import type {
+  ViewmodelBuildRecipe,
+  ViewmodelBuildRequest,
+  ViewmodelSourceCatalog,
+} from "./lib/bridge";
+import {
+  cachedViewmodelCatalog,
+  loadViewmodelCatalog,
+  subscribeViewmodelCatalog,
+  viewmodelCatalogIsFresh,
+} from "./lib/viewmodel-catalog-cache";
 import {
   conflictingViewmodelGroupIds,
   selectedViewmodelChoices,
   type ViewmodelDraftChoices,
   type ViewmodelHideMode,
+  type ViewmodelRow,
   viewmodelCatalogRevision,
   viewmodelClasses,
   viewmodelClassLabel,
   viewmodelDraftBuildRequest,
-  viewmodelGroupLabel,
-  viewmodelGroupsForClass,
+  viewmodelRowItemNames,
+  viewmodelRowLabel,
+  viewmodelRowsForClass,
+  viewmodelSectionsForClass,
 } from "./lib/viewmodel-ui";
 
 type CatalogState = {
@@ -30,15 +45,38 @@ const INITIAL_CATALOG: CatalogState = {
   changed: false,
 };
 
-/** A profile-scoped planning surface. It cannot write a pack before the retail and preview gates. */
+const MODE_OPTIONS: { id: "shown" | ViewmodelHideMode; label: string; title: string }[] = [
+  { id: "shown", label: "Shown", title: "Keep the normal viewmodel" },
+  { id: "full", label: "Hidden", title: "Hide the hands and weapon" },
+  { id: "weapon", label: "Hands only", title: "Hide the weapon and keep the hands" },
+];
+
+/**
+ * Per-class viewmodel choices from the player's installed TF2 files. Release
+ * builds cannot write a pack before the retail and preview gates; development
+ * builds pass `onBuild` so the native path can be exercised in retail TF2.
+ */
 export function ViewmodelBuilder({
   active,
   profilePreload,
+  savedRecipe,
+  locked = false,
+  loadCatalog,
+  onBuild,
 }: {
   active: boolean;
+  loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   profilePreload: boolean | null;
+  /** The saved locally built recipe, used to show its choices when the sources still match. */
+  savedRecipe?: ViewmodelBuildRecipe;
+  locked?: boolean;
+  onBuild?: (request: ViewmodelBuildRequest) => Promise<boolean>;
 }) {
-  const [state, setState] = useState<CatalogState>(INITIAL_CATALOG);
+  // The app reads the catalog in the background at startup, so the pane can open ready.
+  const [state, setState] = useState<CatalogState>(() => {
+    const catalog = cachedViewmodelCatalog();
+    return catalog ? { ...INITIAL_CATALOG, catalog, phase: "ready" } : INITIAL_CATALOG;
+  });
   const mounted = useRef(false);
   const activeRef = useRef(active);
   activeRef.current = active;
@@ -47,15 +85,24 @@ export function ViewmodelBuilder({
   const attempted = useRef(false);
   const wasPresent = useRef(false);
   const refreshRef = useRef<() => void>(() => {});
+  const loadRef = useRef(loadCatalog);
+  loadRef.current = loadCatalog;
 
   useEffect(() => {
     mounted.current = true;
+    // The startup read can finish after this pane mounts; show it without another read.
+    const stop = subscribeViewmodelCatalog((catalog) =>
+      setState((current) =>
+        current.catalog ? current : { catalog, phase: "ready", error: null, changed: false },
+      ),
+    );
     return () => {
       mounted.current = false;
+      stop();
     };
   }, []);
 
-  const refreshCatalog = useCallback(() => {
+  const refreshCatalog = useCallback((options?: { ifStale?: boolean }) => {
     if (
       !mounted.current ||
       !activeRef.current ||
@@ -68,13 +115,34 @@ export function ViewmodelBuilder({
       return;
     }
     attempted.current = true;
+    // Opening the pane trusts a recent read; the refresh button always rereads.
+    if (options?.ifStale && viewmodelCatalogIsFresh()) {
+      const catalog = cachedViewmodelCatalog();
+      if (catalog) {
+        setState((current) =>
+          current.catalog === catalog && current.phase === "ready"
+            ? current
+            : {
+                catalog,
+                phase: "ready",
+                error: null,
+                changed:
+                  current.changed ||
+                  (current.catalog !== null &&
+                    viewmodelCatalogRevision(current.catalog) !==
+                      viewmodelCatalogRevision(catalog)),
+              },
+        );
+        return;
+      }
+    }
     inFlight.current = true;
     setState((current) => ({
       ...current,
       phase: current.catalog ? "checking" : "loading",
       error: null,
     }));
-    void getViewmodelSourceCatalog()
+    void loadViewmodelCatalog(loadRef.current)
       .then((catalog) => {
         if (!mounted.current) return;
         setState((current) => ({
@@ -92,8 +160,7 @@ export function ViewmodelBuilder({
         setState((current) => ({
           ...current,
           phase: "stale",
-          error:
-            error instanceof Error ? error.message : "Could not read the installed TF2 sources.",
+          error: error instanceof Error ? error.message : "Could not read your TF2 files.",
         }));
       })
       .finally(() => {
@@ -104,7 +171,7 @@ export function ViewmodelBuilder({
         }
       });
   }, []);
-  refreshRef.current = refreshCatalog;
+  refreshRef.current = () => refreshCatalog();
 
   useEffect(() => {
     if (!active) {
@@ -114,7 +181,9 @@ export function ViewmodelBuilder({
     }
     const observePresence = () => {
       const present = document.visibilityState !== "hidden" && document.hasFocus();
-      if (present && (!attempted.current || !wasPresent.current)) refreshCatalog();
+      if (present && (!attempted.current || !wasPresent.current)) {
+        refreshCatalog({ ifStale: true });
+      }
       wasPresent.current = present;
     };
     observePresence();
@@ -129,61 +198,37 @@ export function ViewmodelBuilder({
   }, [active, refreshCatalog]);
 
   const catalog = state.catalog;
-  const editable = active && state.phase === "ready";
+  // A background recheck keeps the current choices usable until it finishes.
+  const editable =
+    active && catalog !== null && (state.phase === "ready" || state.phase === "checking");
+  const busy = state.phase === "loading" || state.phase === "checking";
   return (
-    <section data-testid="viewmodel-builder" className="surface mb-4 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="t-row">Build from your TF2 install</h2>
-          <p className="t-meta mt-2">
-            Explore class and item groups derived from your installed TF2 files. These choices are a
-            local draft and do not change the saved pack.
-          </p>
-        </div>
-        <button
-          type="button"
-          data-testid="viewmodel-catalog-refresh"
-          className="btn btn-ghost"
-          disabled={!active || state.phase === "loading" || state.phase === "checking"}
-          onClick={refreshCatalog}
-        >
-          Refresh sources
-        </button>
-      </div>
-
-      <div role="status" data-testid="viewmodel-catalog-status" className="pane-note mt-3">
-        {state.phase === "idle"
-          ? "Open Viewmodels while execs is focused to inspect installed TF2 sources."
-          : state.phase === "loading"
-            ? "Reading installed TF2 sources…"
-            : state.phase === "checking"
-              ? "Checking whether installed TF2 sources changed…"
-              : state.phase === "stale"
-                ? "Installed source data could not be verified. Refresh to continue exploring."
-                : `${catalog?.groups.length ?? 0} provisional groups from installed TF2 sources.`}
-      </div>
-      {state.error ? (
-        <p role="alert" data-testid="viewmodel-catalog-error" className="t-meta mt-2 text-warn">
-          {state.error}
+    <section data-testid="viewmodel-builder" className="mb-8">
+      {state.phase === "idle" || state.phase === "loading" ? (
+        <p role="status" data-testid="viewmodel-catalog-status" className="t-meta">
+          <Loading>Reading your TF2 files…</Loading>
         </p>
+      ) : null}
+      {state.error ? (
+        <div
+          role="alert"
+          data-testid="viewmodel-catalog-error"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 text-warn"
+        >
+          <p className="t-meta text-warn">{state.error}</p>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={() => refreshCatalog()}
+          >
+            Try again
+          </button>
+        </div>
       ) : null}
       {state.changed ? (
-        <p role="note" data-testid="viewmodel-catalog-changed" className="t-meta mt-2 text-warn">
-          TF2 source data changed. Earlier planning choices were cleared; review the new groups.
-        </p>
-      ) : null}
-      <p className="pane-note mt-3" data-testid="viewmodel-preview-status">
-        Rendered preview unavailable. Group names come from installed metadata; their appearance and
-        behavior in retail TF2 have not been verified yet.
-      </p>
-      {catalog &&
-      (catalog.unresolvedItems.length ||
-        catalog.unresolvedRoleCount ||
-        catalog.candidateRoleCount) ? (
-        <p className="pane-note mt-2" data-testid="viewmodel-catalog-coverage">
-          Coverage is still incomplete: {catalog.unresolvedItems.length} item/class entries have no
-          mapped animation, and {catalog.unresolvedRoleCount + catalog.candidateRoleCount} role
-          paths need verification. These are not offered as choices.
+        <p role="note" data-testid="viewmodel-catalog-changed" className="t-meta mb-4 text-warn">
+          TF2 was updated, so your unsaved choices were cleared.
         </p>
       ) : null}
 
@@ -193,10 +238,36 @@ export function ViewmodelBuilder({
           catalog={catalog}
           editable={editable}
           active={active}
+          busy={busy}
           profilePreload={profilePreload}
+          savedRecipe={savedRecipe}
+          locked={locked}
+          onBuild={onBuild}
+          onRefresh={() => refreshCatalog()}
         />
       ) : null}
     </section>
+  );
+}
+
+function savedChoices(
+  catalog: ViewmodelSourceCatalog,
+  recipe: ViewmodelBuildRecipe | undefined,
+): ViewmodelDraftChoices {
+  if (!recipe || recipe.catalog.catalogSha256 !== catalog.catalog.catalogSha256) return {};
+  const known = new Set(catalog.groups.map((group) => group.id));
+  return Object.fromEntries(
+    recipe.choices
+      .filter((choice) => known.has(choice.groupId))
+      .map((choice) => [choice.groupId, choice.mode]),
+  );
+}
+
+function sameChoices(left: ViewmodelDraftChoices, right: ViewmodelDraftChoices): boolean {
+  const leftKeys = Object.keys(left);
+  return (
+    leftKeys.length === Object.keys(right).length &&
+    leftKeys.every((key) => left[key] === right[key])
   );
 }
 
@@ -204,45 +275,89 @@ function ViewmodelCatalogChoices({
   catalog,
   editable,
   active,
+  busy,
   profilePreload,
+  savedRecipe,
+  locked,
+  onBuild,
+  onRefresh,
 }: {
   catalog: ViewmodelSourceCatalog;
   editable: boolean;
   active: boolean;
+  busy: boolean;
   profilePreload: boolean | null;
+  savedRecipe?: ViewmodelBuildRecipe;
+  locked: boolean;
+  onBuild?: (request: ViewmodelBuildRequest) => Promise<boolean>;
+  onRefresh: () => void;
 }) {
   const classes = viewmodelClasses(catalog);
   const [selectedClass, setSelectedClass] = useState(classes[0] ?? "");
   const [query, setQuery] = useState("");
-  const [choices, setChoices] = useState<ViewmodelDraftChoices>({});
+  const [saved] = useState(() => savedChoices(catalog, savedRecipe));
+  const [choices, setChoices] = useState<ViewmodelDraftChoices>(saved);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const visibleGroups = viewmodelGroupsForClass(catalog, selectedClass, query);
+  const [building, setBuilding] = useState(false);
+  const sections = viewmodelSectionsForClass(catalog, selectedClass, query);
   const reviewRequest =
     profilePreload === null ? null : viewmodelDraftBuildRequest(catalog, choices, profilePreload);
   const selected = reviewRequest?.choices ?? selectedViewmodelChoices(choices);
   const conflicts = conflictingViewmodelGroupIds(catalog, choices);
+  const changed = !sameChoices(choices, saved);
+  const canBuild =
+    onBuild !== undefined &&
+    editable &&
+    !locked &&
+    !building &&
+    reviewRequest !== null &&
+    selected.length > 0 &&
+    conflicts.size === 0;
 
   useEffect(() => {
     if (!active || !editable) setReviewOpen(false);
   }, [active, editable]);
 
-  function choose(groupId: string, mode: ViewmodelHideMode | "shown") {
+  // One row can cover a weapon and its reskins; every group in it follows the choice.
+  function choose(row: ViewmodelRow, mode: ViewmodelHideMode | "shown") {
     setChoices((current) => {
       const next = { ...current };
-      if (mode === "shown") delete next[groupId];
-      else next[groupId] = mode;
+      for (const group of row.groups) {
+        if (mode === "shown") delete next[group.id];
+        else next[group.id] = mode;
+      }
       return next;
     });
   }
 
+  async function build() {
+    if (!onBuild || !reviewRequest || !canBuild) return;
+    setBuilding(true);
+    try {
+      if (await onBuild(reviewRequest)) setReviewOpen(false);
+    } finally {
+      setBuilding(false);
+    }
+  }
+
+  const rowChoice = (row: ViewmodelRow): ViewmodelHideMode | "shown" =>
+    choices[row.groups[0].id] ?? "shown";
+  const rowsByClass = new Map(classes.map((name) => [name, viewmodelRowsForClass(catalog, name)]));
+  // Review in the same class and loadout order as the list.
+  const reviewRows = classes.flatMap((name) =>
+    (rowsByClass.get(name) ?? []).filter((row) => rowChoice(row) !== "shown"),
+  );
+  const hiddenIn = (className: string) =>
+    (rowsByClass.get(className) ?? []).filter((row) => rowChoice(row) !== "shown").length;
+
   return (
-    <div className="mt-5">
+    <div>
       {classes.length ? (
         <ClassTabs
           tabs={classes.map((name) => ({
             id: name,
             label: viewmodelClassLabel(name),
-            meta: catalog.groups.filter((group) => group.class === name).length,
+            meta: hiddenIn(name) || undefined,
           }))}
           selected={selectedClass}
           label="Viewmodel class"
@@ -251,7 +366,7 @@ function ViewmodelCatalogChoices({
           onSelect={setSelectedClass}
         />
       ) : (
-        <p className="t-meta">No source-derived groups were found in this TF2 install.</p>
+        <p className="t-meta">No weapons were found in this TF2 install.</p>
       )}
       {classes.length ? (
         <div
@@ -259,136 +374,160 @@ function ViewmodelCatalogChoices({
           role="tabpanel"
           aria-labelledby={`viewmodel-class-${selectedClass}`}
         >
-          <label className="mt-4 block t-meta" htmlFor="viewmodel-group-search">
-            Search {viewmodelClassLabel(selectedClass)} items
-          </label>
-          <input
-            id="viewmodel-group-search"
-            data-testid="viewmodel-group-search"
-            type="search"
-            className="input mt-2 w-full"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Item name or ID"
-          />
-          {visibleGroups.length ? (
-            <div className="mt-4">
-              {visibleGroups.map((group) => {
-                const names = [...new Set(group.items.map((item) => item.schemaName))];
-                const label = viewmodelGroupLabel(group);
-                return (
-                  <div
-                    key={group.id}
-                    data-testid="viewmodel-group"
-                    data-group-id={group.id}
-                    className="border-b border-edge py-3 last:border-b-0"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="t-row">{label}</h3>
-                        <p className="t-meta mt-1">
-                          {group.items.length} installed item{" "}
-                          {group.items.length === 1 ? "entry" : "entries"}
-                          {names.length > 1
-                            ? ` · Also ${names.slice(1, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`
-                            : ""}
-                        </p>
+          <div className="mt-4 flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <MagnifyingGlass
+                size={14}
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
+              />
+              <input
+                id="viewmodel-group-search"
+                data-testid="viewmodel-group-search"
+                type="search"
+                aria-label={`Search ${viewmodelClassLabel(selectedClass)} weapons`}
+                className="input w-full pl-8"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={`Search ${viewmodelClassLabel(selectedClass)} weapons`}
+              />
+            </div>
+            <button
+              type="button"
+              data-testid="viewmodel-catalog-refresh"
+              className="btn btn-ghost"
+              title="Reread your TF2 files"
+              aria-label="Reread your TF2 files"
+              disabled={!active || busy}
+              aria-busy={busy || undefined}
+              onClick={onRefresh}
+            >
+              {busy ? <Spinner size={15} /> : <ArrowClockwise size={15} />}
+            </button>
+            <p className="t-meta ml-2 whitespace-nowrap" data-testid="viewmodel-choice-summary">
+              {reviewRows.length
+                ? `${reviewRows.length} hidden${changed ? " · not built yet" : ""}`
+                : "Everything shown"}
+            </p>
+            <button
+              type="button"
+              data-testid="viewmodel-review-build"
+              className="btn btn-primary whitespace-nowrap"
+              disabled={!editable || reviewRequest === null || selected.length === 0}
+              onClick={() => setReviewOpen(true)}
+            >
+              {onBuild ? "Review and build" : "Review"}
+            </button>
+          </div>
+
+          {sections.length ? (
+            sections.map((section) => (
+              <div
+                key={section.id}
+                className="mt-6"
+                data-testid={`viewmodel-section-${section.id}`}
+              >
+                <h3 className="eyebrow mb-1">{section.label}</h3>
+                {section.rows.map((row) => {
+                  const others = viewmodelRowItemNames(row).slice(1);
+                  const label = viewmodelRowLabel(row);
+                  const group = row.groups[0];
+                  return (
+                    <div
+                      key={row.id}
+                      data-testid="viewmodel-group"
+                      data-group-id={row.id}
+                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge py-2.5 last:border-b-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="t-row">{label}</p>
+                        {others.length ? (
+                          <p className="t-meta truncate" title={others.join(", ")}>
+                            Also {others.slice(0, 3).join(", ")}
+                            {others.length > 3 ? ` and ${others.length - 3} more` : ""}
+                          </p>
+                        ) : null}
+                        {row.groups.some((member) => conflicts.has(member.id)) ? (
+                          <p className="t-meta text-warn">
+                            Shares animations with another choice set differently.
+                          </p>
+                        ) : null}
                       </div>
                       <Segmented<"shown" | ViewmodelHideMode>
-                        label={`${viewmodelClassLabel(group.class)} ${label} model mode`}
-                        options={[
-                          { id: "shown", label: "Keep" },
-                          { id: "full", label: "Hide full" },
-                          { id: "weapon", label: "Hide weapon" },
-                        ]}
-                        value={choices[group.id] ?? "shown"}
+                        label={`${viewmodelClassLabel(group.class)} ${label}`}
+                        size="sm"
+                        neutralValue="shown"
+                        options={MODE_OPTIONS}
+                        value={rowChoice(row)}
                         disabled={!editable}
-                        testIdPrefix={`viewmodel-choice-${group.id}`}
-                        onChange={(mode) => choose(group.id, mode)}
+                        testIdPrefix={`viewmodel-choice-${row.id}`}
+                        onChange={(mode) => choose(row, mode)}
                       />
                     </div>
-                    {group.overlaps.length || group.teamVariantsDiffer ? (
-                      <p className="pane-note mt-2">
-                        {group.overlaps.length
-                          ? `Shares animations with ${group.overlaps.length} other ${group.overlaps.length === 1 ? "group" : "groups"}. A choice here may affect those items. `
-                          : ""}
-                        {group.teamVariantsDiffer ? "RED and BLU sources differ." : ""}
-                      </p>
-                    ) : null}
-                    {conflicts.has(group.id) ? (
-                      <p className="t-meta mt-2 text-warn">
-                        This choice conflicts with a different hide mode on a shared animation.
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ))
           ) : (
-            <p className="t-meta mt-4">
-              No items match this search for {viewmodelClassLabel(selectedClass)}.
-            </p>
+            <p className="t-meta mt-6">No {viewmodelClassLabel(selectedClass)} weapons match.</p>
           )}
         </div>
       ) : null}
 
-      <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-edge pt-4">
-        <button
-          type="button"
-          data-testid="viewmodel-review-build"
-          className="btn btn-primary"
-          disabled={!editable || reviewRequest === null || selected.length === 0}
-          onClick={() => setReviewOpen(true)}
-        >
-          Review {selected.length} {selected.length === 1 ? "choice" : "choices"}
-        </button>
-        <p className="t-meta">
-          Build remains unavailable until retail and rendered-preview checks pass.
-        </p>
-      </div>
-
       <Modal
         open={reviewOpen && active && editable}
-        title="Review Viewmodels build"
-        description="These are planning choices from your installed TF2 files. No pack has been built or changed."
+        title="Build viewmodels"
         testId="viewmodel-build-review"
-        className="w-[min(560px,calc(100vw-2rem))]"
-        onClose={() => setReviewOpen(false)}
+        className="w-[min(520px,calc(100vw-2rem))]"
+        onClose={() => {
+          if (!building) setReviewOpen(false);
+        }}
       >
-        <div className="mt-4 max-h-64 overflow-y-auto">
-          <ul className="grid gap-2">
-            {selected.map(({ groupId, mode }) => {
-              const group = catalog.groups.find((candidate) => candidate.id === groupId);
-              return (
-                <li key={groupId} className="t-meta">
-                  {group
-                    ? `${viewmodelClassLabel(group.class)} · ${viewmodelGroupLabel(group)}`
-                    : groupId}
-                  : {mode === "full" ? "Hide full model" : "Hide weapon, keep hands"}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-        <p className="t-meta mt-3">
-          Casual preload: {reviewRequest?.preload ? "On" : "Off"}. Source patch:{" "}
-          {reviewRequest?.catalog.patchVersion}.
-        </p>
+        <ul className="mt-4 grid max-h-64 gap-1.5 overflow-y-auto">
+          {reviewRows.map((row) => (
+            <li key={row.id} className="flex justify-between gap-3 t-meta">
+              <span className="text-ink">
+                {viewmodelClassLabel(row.groups[0].class)} · {viewmodelRowLabel(row)}
+              </span>
+              <span>{rowChoice(row) === "full" ? "Hidden" : "Hands only"}</span>
+            </li>
+          ))}
+        </ul>
         {conflicts.size ? (
           <p role="alert" className="t-meta mt-3 text-warn">
-            Some selected groups share animations but use different hide modes. Resolve those
-            choices before a future build.
+            Some choices share animations but are set differently. Make them match to build.
           </p>
         ) : null}
-        <p role="status" data-testid="viewmodel-build-progress" className="pane-note mt-3">
-          No build started. Rendered previews and retail TF2 behavior are still being verified.
+        <p role="status" data-testid="viewmodel-build-progress" className="t-meta mt-3">
+          {building ? (
+            <Loading>Building from your TF2 files…</Loading>
+          ) : onBuild ? (
+            locked ? (
+              "Close TF2 before building."
+            ) : (
+              "Development build: replaces this profile's viewmodel pack. Not yet verified in TF2."
+            )
+          ) : (
+            "Building is not available yet while the new builder is verified in TF2."
+          )}
         </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" data-testid="viewmodel-build" disabled className="btn btn-primary">
-            Build pack
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={building}
+            onClick={() => setReviewOpen(false)}
+          >
+            Cancel
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => setReviewOpen(false)}>
-            Close review
+          <button
+            type="button"
+            data-testid="viewmodel-build"
+            disabled={!canBuild}
+            className="btn btn-primary"
+            onClick={() => void build()}
+          >
+            {building ? <Loading>Building…</Loading> : "Build pack"}
           </button>
         </div>
       </Modal>

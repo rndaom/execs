@@ -322,10 +322,11 @@ mod tests {
                 .map(|(index, animation)| {
                     let animations = vec![animation.to_string()];
                     ViewmodelGroupCandidate {
-                        id: group_id("scout", &animations),
+                        id: group_id("scout", false, &animations),
                         class: "scout".into(),
                         item_ids: vec![(index + 1) as u32],
                         animations,
+                        inspect: false,
                         overlaps: Vec::new(),
                         team_variants_differ: false,
                     }
