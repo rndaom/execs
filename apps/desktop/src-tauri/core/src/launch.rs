@@ -65,16 +65,18 @@ pub fn read_launch_options() -> String {
 }
 
 pub fn read_launch_options_from(steam_roots: &[PathBuf]) -> String {
-    let Some(account) = pick_steam_account_from(steam_roots) else {
-        return String::new();
-    };
-    let Ok(text) = read_small_text_bounded(&account.localconfig(), MAX_LOCALCONFIG_BYTES) else {
-        return String::new();
-    };
-    let Ok(vdf) = parse_vdf(&text) else {
-        return String::new();
-    };
-    sanitize_launch_options(&launch_options_from_localconfig(&vdf).unwrap_or_default())
+    read_steam_launch_options_from(steam_roots).unwrap_or_default()
+}
+
+/// Steam's saved TF2 launch options, or `None` when no account has a readable
+/// `localconfig.vdf`. An account without TF2 options reads as empty.
+fn read_steam_launch_options_from(steam_roots: &[PathBuf]) -> Option<String> {
+    let account = pick_steam_account_from(steam_roots)?;
+    let text = read_small_text_bounded(&account.localconfig(), MAX_LOCALCONFIG_BYTES).ok()?;
+    let vdf = parse_vdf(&text).ok()?;
+    Some(sanitize_launch_options(
+        &launch_options_from_localconfig(&vdf).unwrap_or_default(),
+    ))
 }
 
 /// Official mastercomfig recommended set. Same on Windows and Linux (no `gamemoderun`).
@@ -323,6 +325,107 @@ pub fn get_profile_launch_options_from(
 ) -> Result<String, ProfileError> {
     ensure_library_usable(profiles_dir, tf2_root)?;
     Ok(load_manifest(profiles_dir, profile_id)?.launch_options)
+}
+
+/// How the active profile's launch options compare with Steam's saved copy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchSyncStatus {
+    pub profile_options: String,
+    /// `None` when no Steam account was found, so there is nothing to sync.
+    pub steam_options: Option<String>,
+    pub in_sync: bool,
+    pub steam_running: bool,
+}
+
+pub fn launch_sync_status(
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<LaunchSyncStatus, ProfileError> {
+    launch_sync_status_from(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        &discover_steam_roots(),
+        live_process_names(),
+    )
+}
+
+pub fn launch_sync_status_from<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    steam_roots: &[PathBuf],
+    running_names: I,
+) -> Result<LaunchSyncStatus, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let profile_options = get_profile_launch_options_from(profiles_dir, tf2_root, profile_id)?;
+    let steam_options = read_steam_launch_options_from(steam_roots);
+    Ok(LaunchSyncStatus {
+        in_sync: steam_options
+            .as_deref()
+            .is_none_or(|steam| steam == profile_options),
+        profile_options,
+        steam_options,
+        steam_running: steam_running_among(running_names),
+    })
+}
+
+/// Write the profile's saved launch options into Steam and acknowledge the
+/// profile's pending sync. Steam must already be closed; `SteamOpen` is
+/// returned instead of writing when it is not.
+pub fn sync_profile_launch_options(
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<LaunchWriteReason, ProfileError> {
+    let running = live_process_names();
+    let steam_roots = discover_steam_roots();
+    sync_profile_launch_options_with(&profiles_dir(), tf2_root, profile_id, &running, |options| {
+        write_launch_options_to_localconfig(&steam_roots, options)
+    })
+}
+
+pub fn sync_profile_launch_options_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    steam_roots: &[PathBuf],
+    running_names: I,
+) -> Result<LaunchWriteReason, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    sync_profile_launch_options_with(profiles_dir, tf2_root, profile_id, &running, |options| {
+        write_launch_options_to_localconfig_from(steam_roots, options, &running)
+    })
+}
+
+fn sync_profile_launch_options_with(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running: &[String],
+    write_steam: impl FnOnce(&str) -> Result<LaunchWriteResult, ProfileError>,
+) -> Result<LaunchWriteReason, ProfileError> {
+    refuse_if_running_among(running)?;
+    let options = get_profile_launch_options_from(profiles_dir, tf2_root, profile_id)?;
+    Ok(sync_committed_profile_launch_options(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &options,
+        running,
+        || write_steam(&options),
+    )
+    .reason)
 }
 
 pub fn set_profile_launch_options(
@@ -1572,6 +1675,122 @@ mod tests {
         assert_eq!(manifest.launch_options, "-console");
         assert!(manifest.launch_sync_pending);
         assert_eq!(read_launch_options_from(&[steam]), "-old");
+        cleanup(&dir);
+    }
+
+    fn steam_name() -> &'static str {
+        if cfg!(windows) {
+            "steam.exe"
+        } else {
+            "steam"
+        }
+    }
+
+    fn active_profile_with_options(profiles: &Path, root: &Path, options: &str) -> String {
+        write_file(&root.join("tf/steam.inf"), "appID=440\n");
+        let library =
+            crate::profile::create_profile_record_to(profiles, root, "Main", None::<&str>).unwrap();
+        let id = library.profiles[0].id.clone();
+        crate::profile::set_active_profile_to(profiles, root, &id, None::<&str>).unwrap();
+        crate::profile::set_manifest_launch_options(profiles, root, &id, options.to_string(), &[])
+            .unwrap();
+        id
+    }
+
+    #[test]
+    fn sync_status_compares_profile_with_steam() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let profiles = dir.join("profiles");
+        let steam = dir.join("Steam");
+        let id =
+            active_profile_with_options(&profiles, &root, "-novid +exec overrides/execs_preload");
+        write_account(&steam, "111", "");
+
+        let status = launch_sync_status_from(
+            &profiles,
+            &root,
+            &id,
+            std::slice::from_ref(&steam),
+            [steam_name()],
+        )
+        .unwrap();
+        assert_eq!(
+            status.profile_options,
+            "-novid +exec overrides/execs_preload"
+        );
+        assert_eq!(status.steam_options.as_deref(), Some(""));
+        assert!(!status.in_sync);
+        assert!(status.steam_running);
+
+        write_account(&steam, "111", "-novid +exec overrides/execs_preload");
+        let status = launch_sync_status_from(
+            &profiles,
+            &root,
+            &id,
+            std::slice::from_ref(&steam),
+            None::<&str>,
+        )
+        .unwrap();
+        assert!(status.in_sync);
+        assert!(!status.steam_running);
+
+        // Without a Steam account there is nothing to sync or flag.
+        let status = launch_sync_status_from(&profiles, &root, &id, &[], None::<&str>).unwrap();
+        assert_eq!(status.steam_options, None);
+        assert!(status.in_sync);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn sync_writes_profile_options_once_steam_is_closed() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("Team Fortress 2");
+        let profiles = dir.join("profiles");
+        let steam = dir.join("Steam");
+        let id =
+            active_profile_with_options(&profiles, &root, "-novid +exec overrides/execs_preload");
+        write_account(&steam, "111", "-old");
+
+        let open = sync_profile_launch_options_to(
+            &profiles,
+            &root,
+            &id,
+            std::slice::from_ref(&steam),
+            [steam_name()],
+        )
+        .unwrap();
+        assert_eq!(open, LaunchWriteReason::SteamOpen);
+        assert_eq!(
+            read_launch_options_from(std::slice::from_ref(&steam)),
+            "-old"
+        );
+        assert!(load_manifest(&profiles, &id).unwrap().launch_sync_pending);
+
+        let written = sync_profile_launch_options_to(
+            &profiles,
+            &root,
+            &id,
+            std::slice::from_ref(&steam),
+            None::<&str>,
+        )
+        .unwrap();
+        assert_eq!(written, LaunchWriteReason::Written);
+        assert_eq!(
+            read_launch_options_from(std::slice::from_ref(&steam)),
+            "-novid +exec overrides/execs_preload"
+        );
+        assert!(!load_manifest(&profiles, &id).unwrap().launch_sync_pending);
+
+        let game = sync_profile_launch_options_to(
+            &profiles,
+            &root,
+            &id,
+            std::slice::from_ref(&steam),
+            [tf2_name()],
+        )
+        .unwrap_err();
+        assert_eq!(game, ProfileError::GameRunning);
         cleanup(&dir);
     }
 

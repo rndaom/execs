@@ -26,10 +26,11 @@ import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
 import type { Api } from "./lib/api";
-import { invokeErrorMessage } from "./lib/bridge";
+import { invokeErrorMessage, type LaunchSyncStatus } from "./lib/bridge";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
+import { launchSyncAction, launchSyncWarning } from "./lib/launch-ui";
 import { previewSwitchStep } from "./lib/library-ui";
 import {
   type PreviewState,
@@ -62,6 +63,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const [draftName, setDraftName] = useState("");
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [cancelLaunchOpen, setCancelLaunchOpen] = useState(false);
+  const [launchSync, setLaunchSync] = useState<LaunchSyncStatus | null>(null);
+  const [launchSyncPrompt, setLaunchSyncPrompt] = useState<LaunchSyncStatus | null>(null);
   const appSettingsButton = useRef<HTMLButtonElement>(null);
   const appSettingsReturnFocus = useRef<HTMLElement | null>(null);
   const profileSettings = useRef<HTMLDivElement>(null);
@@ -271,6 +274,41 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       !creating &&
       !appSettingsOpen);
 
+  const activeProfileId = profiles.library?.activeProfileId ?? null;
+  const refreshLaunchSync = useCallback(async (): Promise<LaunchSyncStatus | null> => {
+    if (!activeProfileId) {
+      setLaunchSync(null);
+      return null;
+    }
+    // A failed comparison never blocks launching; it only hides the flag.
+    const status = await api.getLaunchSyncStatus().catch(() => null);
+    setLaunchSync(status);
+    return status;
+  }, [api, activeProfileId]);
+
+  // Steam's copy changes outside execs, so re-check when the window regains
+  // focus as well as after profile, game and launch changes.
+  useEffect(() => {
+    if (lock.running || launchPending) return;
+    void refreshLaunchSync();
+    const onFocus = () => void refreshLaunchSync();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refreshLaunchSync, lock.running, launchPending]);
+
+  function startLaunch(syncSteam: boolean) {
+    setLaunching(true);
+    void api
+      .launchTf2(syncSteam)
+      .then(() => setError(null, "tf2:launch"))
+      .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
+      .finally(() => {
+        setLaunching(false);
+        void lifecycle.refresh();
+        void refreshLaunchSync();
+      });
+  }
+
   function renderAppPreferences() {
     return (
       <AppSettingsPane
@@ -409,16 +447,18 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
               ? () => navigateSettings("mods")
               : undefined
         }
+        launchWarning={launchSyncWarning(launchSync)}
         onLaunch={() => {
           setLaunching(true);
-          void api
-            .launchTf2()
-            .then(() => setError(null, "tf2:launch"))
-            .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
-            .finally(() => {
+          void refreshLaunchSync().then((status) => {
+            const action = launchSyncAction(status);
+            if (action === "ask") {
               setLaunching(false);
-              void lifecycle.refresh();
-            });
+              setLaunchSyncPrompt(status);
+              return;
+            }
+            startLaunch(action === "write-then-launch");
+          });
         }}
         onCancelLaunch={() => {
           setCancelLaunchOpen(true);
@@ -564,6 +604,64 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
               }}
             >
               Release launch lock
+            </button>
+          </div>
+        </Modal>
+        <Modal
+          open={launchSyncPrompt !== null}
+          title="Update Steam's launch options?"
+          testId="launch-sync-review"
+          className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(540px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
+          onClose={() => setLaunchSyncPrompt(null)}
+        >
+          <p className="t-body mt-2 text-ink-muted">
+            Steam has different launch options than this profile, and Steam must be closed to change
+            them. execs will close Steam, write the profile's options, then start Steam and TF2.
+            Downloads and chat pause while Steam restarts.
+          </p>
+          <dl className="t-meta mt-4 grid gap-2">
+            <div>
+              <dt>This profile</dt>
+              <dd className="mt-0.5 break-all text-ink">
+                {launchSyncPrompt?.profileOptions || "No launch options"}
+              </dd>
+            </div>
+            <div>
+              <dt>Steam now</dt>
+              <dd className="mt-0.5 break-all text-ink">
+                {launchSyncPrompt?.steamOptions || "No launch options"}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setLaunchSyncPrompt(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="launch-sync-skip"
+              className="btn btn-ghost"
+              onClick={() => {
+                setLaunchSyncPrompt(null);
+                startLaunch(false);
+              }}
+            >
+              Launch without them
+            </button>
+            <button
+              type="button"
+              data-testid="launch-sync-restart"
+              className="btn btn-primary"
+              onClick={() => {
+                setLaunchSyncPrompt(null);
+                startLaunch(true);
+              }}
+            >
+              Restart Steam and launch
             </button>
           </div>
         </Modal>

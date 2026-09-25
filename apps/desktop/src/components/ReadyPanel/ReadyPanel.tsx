@@ -25,6 +25,7 @@ export function ReadyPanel({
   recoveryTargetId,
   launchBlockReason,
   launchBlockAction,
+  launchWarning,
   onLaunchBlocked,
   settings,
   onDraftName,
@@ -44,6 +45,7 @@ export function ReadyPanel({
   recoveryTargetId: string | null;
   launchBlockReason?: string | null;
   launchBlockAction?: string;
+  launchWarning?: string | null;
   onLaunchBlocked?: () => void;
   settings?: ReactNode;
   onDraftName: (name: string) => void;
@@ -122,6 +124,7 @@ export function ReadyPanel({
                 : undefined)
         }
         blockedAction={launchBlockAction}
+        launchWarning={launchWarning}
         onBlocked={onLaunchBlocked}
         onLaunch={onLaunch}
         onCancelLaunch={onCancelLaunch}

@@ -18,6 +18,7 @@ export function ReadyHeader({
   blockedReason,
   blockedAction,
   onBlocked,
+  launchWarning,
   menu,
   onLaunch,
   onCancelLaunch,
@@ -29,6 +30,8 @@ export function ReadyHeader({
   blockedReason?: string | null;
   blockedAction?: string;
   onBlocked?: () => void;
+  /** Shown beside Launch TF2 when Steam's launch options differ from the profile. */
+  launchWarning?: string | null;
   menu: ReactNode;
   onLaunch: () => void;
   onCancelLaunch: () => void;
@@ -77,6 +80,16 @@ export function ReadyHeader({
         </div>
       ) : (
         <div className="ml-auto flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
+          {launchWarning && !launching && !disabled ? (
+            <p
+              data-testid="launch-sync-warning"
+              className="t-meta flex min-w-0 items-center gap-1.5 text-warn"
+              title="Launch TF2 will write this profile's launch options into Steam first."
+            >
+              <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warn" />
+              <span className="truncate">{launchWarning}</span>
+            </p>
+          ) : null}
           <button
             type="button"
             data-testid="launch-tf2"
