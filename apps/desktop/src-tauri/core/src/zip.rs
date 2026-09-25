@@ -26,7 +26,7 @@ use crate::profile::{
     create_populated_profile_to, exclusive_file_path, is_profile_ownable_rel_path,
     is_shared_rel_path, load_library_from, load_manifest, normalize_rel_path, portable_path_key,
     profiles_dir, CrosshairRecord, FileSource, FileStorage, HudRecord, ProfileError, ProfileFile,
-    ProfileLibrary, ProfileManifest, ViewmodelRecord,
+    ProfileLibrary, ProfileManifest, ViewmodelRecord, ViewmodelSource,
 };
 use crate::vpk::read_vpk_file_filtered_hashed;
 
@@ -1110,6 +1110,19 @@ fn validate_imported_metadata(
     exclusive: &HashMap<String, PathBuf>,
     blobs: &HashMap<String, PathBuf>,
 ) -> Result<(), ProfileError> {
+    // ZIP metadata and its VPK hash only prove what the sender packed. They
+    // cannot establish that this recipient built the pack from their own
+    // installed item schema, scripts, and MDLs. A later import path may
+    // rebuild and verify a recipe before assigning StockBuilt provenance.
+    if manifest
+        .viewmodel
+        .as_ref()
+        .is_some_and(|record| record.source == ViewmodelSource::StockBuilt)
+    {
+        return Err(invalid_zip(
+            "A locally built Viewmodels pack cannot be imported until its recipe is rebuilt and verified from this TF2 install.",
+        ));
+    }
     if let Some(selection) = &manifest.preloader {
         selection.validate()?;
     }
@@ -1277,6 +1290,9 @@ fn validate_feature_payloads(manifest: &ProfileZipManifest) -> Result<(), Profil
         }
     }
     if let Some(record) = &manifest.viewmodel {
+        record
+            .validate_build_recipe()
+            .map_err(invalid_zip)?;
         if record.id != crate::viewmodel::EXECS_VIEWMODELS_PACK
             || !paths.contains(crate::viewmodel::EXECS_VIEWMODELS_VPK)
         {
@@ -1659,6 +1675,122 @@ mod tests {
     use std::collections::BTreeMap;
     use std::io::{Cursor, Write};
     use std::path::Path;
+
+    #[test]
+    fn native_zip_requires_a_valid_stock_build_recipe_with_the_saved_vpk() {
+        let mut json = serde_json::json!({
+            "schema": ZIP_SCHEMA,
+            "name": "Built pack",
+            "files": [{
+                "path": crate::viewmodel::EXECS_VIEWMODELS_VPK,
+                "sha256": "a".repeat(64),
+                "storage": "exclusive"
+            }],
+            "viewmodel": {
+                "id": crate::viewmodel::EXECS_VIEWMODELS_PACK,
+                "source": "stockBuilt"
+            }
+        });
+        let manifest: ProfileZipManifest = serde_json::from_value(json.clone()).unwrap();
+        assert!(validate_feature_payloads(&manifest).is_err());
+
+        json["viewmodel"]["buildRecipe"] = serde_json::json!({
+            "schema": 1,
+            "catalog": {
+                "patchVersion": "10828683",
+                "catalogSha256": "a".repeat(64)
+            },
+            "choices": [{
+                "groupId": format!("scout/{}", "b".repeat(64)),
+                "mode": "full"
+            }],
+            "sourceFingerprints": [{
+                "id": "models/weapons/c_models/c_scout_animations.mdl",
+                "sha256": "c".repeat(64)
+            }]
+        });
+        let manifest: ProfileZipManifest = serde_json::from_value(json).unwrap();
+        assert!(validate_feature_payloads(&manifest).is_ok());
+    }
+
+    #[test]
+    fn native_import_refuses_forged_stock_build_provenance_but_keeps_legacy_import() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        let zip_path = dir.join("viewmodels.zip");
+        let vpk = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"synthetic model bytes".to_vec(),
+        )]));
+        let mut manifest = serde_json::json!({
+            "schema": ZIP_SCHEMA,
+            "name": "Viewmodels",
+            "files": [{
+                "path": crate::viewmodel::EXECS_VIEWMODELS_VPK,
+                "sha256": sha256_hex(&vpk),
+                "storage": "exclusive"
+            }],
+            "viewmodel": {
+                "id": crate::viewmodel::EXECS_VIEWMODELS_PACK,
+                "source": "stockBuilt",
+                "buildRecipe": {
+                    "schema": 1,
+                    "catalog": {
+                        "patchVersion": "10828683",
+                        "catalogSha256": "a".repeat(64)
+                    },
+                    "choices": [{
+                        "groupId": format!("scout/{}", "b".repeat(64)),
+                        "mode": "full"
+                    }],
+                    "sourceFingerprints": [{
+                        "id": "models/weapons/c_models/c_scout_animations.mdl",
+                        "sha256": "c".repeat(64)
+                    }]
+                }
+            }
+        });
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        write_raw_zip(
+            &zip_path,
+            &[
+                (ZIP_MANIFEST_NAME, &manifest_bytes),
+                (
+                    "files/tf/custom/execs-viewmodels.vpk",
+                    &vpk,
+                ),
+            ],
+        );
+        let before = snapshot_tree(&profiles);
+        let error = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+        assert!(error.message().contains("rebuilt and verified"), "{error:?}");
+        assert_eq!(snapshot_tree(&profiles), before);
+
+        manifest["viewmodel"]["source"] = serde_json::json!("compiled");
+        manifest["viewmodel"].as_object_mut().unwrap().remove("buildRecipe");
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        write_raw_zip(
+            &zip_path,
+            &[
+                (ZIP_MANIFEST_NAME, &manifest_bytes),
+                ("files/tf/custom/execs-viewmodels.vpk", &vpk),
+            ],
+        );
+        let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        let saved = load_manifest(&profiles, &imported.profiles[0].id).unwrap();
+        assert_eq!(saved.viewmodel.unwrap().source, ViewmodelSource::Compiled);
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &imported.profiles[0].id,
+                crate::viewmodel::EXECS_VIEWMODELS_VPK,
+            ))
+            .unwrap(),
+            vpk
+        );
+        cleanup(&dir);
+    }
 
     fn unlocked() -> [&'static str; 1] {
         ["bash"]

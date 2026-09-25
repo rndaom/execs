@@ -423,6 +423,7 @@ fn managed_sound_and_viewmodel_deletions_self_heal_and_keep_records() {
         source: ViewmodelSource::Imported,
         preload: false,
         options: Default::default(),
+        build_recipe: None,
     });
     f.save_metadata(&before);
     fs::remove_file(f.root.join(HITSOUND_REL)).unwrap();
@@ -463,6 +464,7 @@ fn accepted_managed_payload_drift_marks_feature_sources_unverified() {
         source: ViewmodelSource::Imported,
         preload: false,
         options: Default::default(),
+        build_recipe: None,
     });
     before.hitsound = Some(HitsoundRecord {
         source_changed: false,

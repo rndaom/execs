@@ -237,6 +237,7 @@ where
         source,
         preload,
         options,
+        build_recipe: None,
     };
     let expected_launch = next_launch.clone();
     let manifest = mutate_profile_files_to(

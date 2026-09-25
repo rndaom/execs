@@ -116,7 +116,8 @@ pub use profile::{
     init_library, load_library, load_manifest, profile_mutation_status_to, profiles_dir,
     recover_all_profile_mutations_to, save_current_as, CrosshairRecord, HudRecord, HudSource,
     ProfileError, ProfileFile, ProfileLibrary, ProfileMutationRecoveryState, ProfileSummary,
-    ViewmodelRecord, ViewmodelSource,
+    ViewmodelBuildCatalog, ViewmodelBuildChoice, ViewmodelBuildRecipe, ViewmodelHideMode,
+    ViewmodelRecord, ViewmodelSource, ViewmodelSourceFingerprint, VIEWMODEL_BUILD_RECIPE_SCHEMA,
 };
 pub use settings::{
     execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
