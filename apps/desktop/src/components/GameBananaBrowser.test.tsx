@@ -82,6 +82,7 @@ beforeEach(() => {
       sizeBytes: 1_000,
       addedAt: 100,
       supported: true,
+      splitPart: false,
     },
     {
       id: 112,
@@ -90,6 +91,7 @@ beforeEach(() => {
       sizeBytes: 2_000,
       addedAt: 90,
       supported: true,
+      splitPart: false,
     },
   ]);
 });
@@ -175,6 +177,82 @@ describe("GameBananaBrowser presentation", () => {
     expect(onInstall).toHaveBeenCalledWith(11, 112);
     expect(box.querySelector('[role="alert"]')?.textContent).toContain("Install failed");
     expect(install?.getAttribute("aria-label")).toBe("Retry A very descriptive rocket trail");
+  });
+
+  it("explains split uploads and chooses nothing for the player next to them", async () => {
+    variants.mockResolvedValue([
+      {
+        id: 121,
+        fileName: "bot_overhaul_-_part_1.zip",
+        description: "PART 1",
+        sizeBytes: 529,
+        addedAt: 1_762_905_600,
+        supported: false,
+        splitPart: true,
+      },
+      {
+        id: 122,
+        fileName: "bot_mod_workshop_navs_.7z",
+        description: "Community Map Navigation Meshes",
+        sizeBytes: 3_687_356,
+        addedAt: 1_624_406_400,
+        supported: true,
+        splitPart: false,
+      },
+    ]);
+    await render(vi.fn(async () => false));
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-11"]')?.click(),
+    );
+    await act(async () => Promise.resolve());
+
+    expect(box.querySelector('[data-testid="mods-gb-split-notice"]')?.textContent).toContain(
+      "split into parts",
+    );
+    expect(box.textContent).toContain("Part of a split download");
+    expect(box.querySelector<HTMLInputElement>('input[value="121"]')?.disabled).toBe(true);
+    expect(box.querySelector<HTMLInputElement>('input[value="122"]')?.checked).toBe(false);
+    expect(
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-selected"]')?.disabled,
+    ).toBe(true);
+  });
+
+  it("chooses the only installable file up front and still waits for Download", async () => {
+    const onInstall = vi.fn(async () => false);
+    variants.mockResolvedValue([
+      {
+        id: 131,
+        fileName: "engy.zip",
+        description: "V.4b",
+        sizeBytes: 1_028_292,
+        addedAt: 1_665_100_800,
+        supported: true,
+        splitPart: false,
+      },
+      {
+        id: 132,
+        fileName: "engineer-old.rar",
+        description: "OLD V.3.1 Version",
+        sizeBytes: 2_055_449,
+        addedAt: 1_520_121_600,
+        supported: false,
+        splitPart: false,
+      },
+    ]);
+    await render(onInstall);
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-11"]')?.click(),
+    );
+    await act(async () => Promise.resolve());
+
+    expect(box.querySelector('[data-testid="mods-gb-split-notice"]')).toBeNull();
+    expect(box.querySelector<HTMLInputElement>('input[value="131"]')?.checked).toBe(true);
+    expect(box.textContent).toContain("Not supported for Mods");
+    expect(onInstall).not.toHaveBeenCalled();
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-selected"]')?.click(),
+    );
+    expect(onInstall).toHaveBeenCalledWith(11, 131);
   });
 
   it("routes GUI HUDs and other GUIs without offering generic Mods install", async () => {

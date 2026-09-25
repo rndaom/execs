@@ -11,6 +11,9 @@ User-facing changes only. The release workflow publishes the matching
   actions by the key bound to them, and readable key caps such as Mouse 4 and Num 1. New actions
   cover common voice commands (Thanks, Help, Incoming, Spy, Sentry ahead, Activate charge,
   Battle cry) and Screenshot.
+- The GameBanana file chooser shows when each author file was uploaded and picks the only
+  installable file for you. Split downloads (PART 1, PART 2…) are explained instead of installed
+  half-finished, and a file GameBanana no longer has says so plainly.
 - Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
   patches and preloader pack are prepared once, before any files change, instead of being
   rebuilt during the switch.

@@ -1107,6 +1107,8 @@ export type GameBananaDownloadVariant = {
   sizeBytes: number | null;
   addedAt: number | null;
   supported: boolean;
+  /** One piece of a split upload; never installable on its own. */
+  splitPart: boolean;
 };
 
 export type GameBananaSort = "new" | "updated" | "downloads" | "likes" | "views";

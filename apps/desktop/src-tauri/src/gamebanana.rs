@@ -637,6 +637,8 @@ pub struct GameBananaDownloadVariant {
     pub size_bytes: Option<u64>,
     pub added_at: Option<u64>,
     pub supported: bool,
+    /// One piece of a split upload. execs never guesses how to join parts.
+    pub split_part: bool,
 }
 
 /// The file chosen off a mod's download page. `_sDownloadUrl` is an opaque
@@ -718,7 +720,8 @@ fn variants_from_files(
             description: file.description.trim().chars().take(1000).collect(),
             size_bytes: file.size_bytes,
             added_at: (file.added > 0).then_some(file.added),
-            supported: mod_file_is_supported(&file),
+            supported: mod_file_is_supported(&file) && !is_split_part(&file),
+            split_part: is_split_part(&file),
         })
         .collect())
 }
@@ -742,6 +745,9 @@ fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPic
         .iter()
         .find(|file| file.id == file_id && validated_download_url(file).is_some())
         .ok_or("That GameBanana file is no longer listed. Choose a file again.")?;
+    if is_split_part(chosen) {
+        return Err(SPLIT_PART_REFUSAL.into());
+    }
     if !mod_file_is_supported(chosen) {
         return Err(
             "That GameBanana file is not a supported VPK, ZIP, or 7z within the size limit.".into(),
@@ -788,6 +794,53 @@ fn validated_download_url(file: &DownloadFile) -> Option<String> {
 fn is_archive_file(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     lower.ends_with(".zip") || lower.ends_with(".7z")
+}
+
+const SPLIT_PART_REFUSAL: &str = "That file is one part of a split download. execs can't combine parts; follow the author's instructions, then use Import mod.";
+
+/// Authors split large uploads into parts: "PART 1" descriptions,
+/// `mod_part_2.zip`, `mod.part2.rar`, `mod.7z.001` or `mod.z01`.
+fn is_split_part(file: &DownloadFile) -> bool {
+    let name = file.file.to_ascii_lowercase();
+    let (stem, extension) = name.rsplit_once('.').unwrap_or((&name, ""));
+    let numbered = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+    if (extension.len() == 3 && numbered(extension))
+        || extension.strip_prefix('z').is_some_and(numbered)
+    {
+        return true;
+    }
+    let names_a_part = |text: &str| {
+        let lower = text.to_ascii_lowercase();
+        let words: Vec<&str> = lower
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .collect();
+        words.iter().enumerate().any(|(index, word)| {
+            (*word == "part" && words.get(index + 1).is_some_and(|next| numbered(next)))
+                || word
+                    .strip_prefix("part")
+                    .and_then(|rest| rest.split("of").next())
+                    .is_some_and(numbered)
+        })
+    };
+    names_a_part(stem) || names_a_part(&file.description)
+}
+
+/// Downloads the chosen file. GameBanana can keep listing a file whose storage
+/// is gone, so a missing file gets its own message instead of a bare status.
+pub fn download_pick(pick: &DownloadPick) -> Result<Vec<u8>, String> {
+    net::download_bytes_or_status(&pick.url, MOD_MAX_BYTES)?
+        .map_err(|status| download_failure(&pick.file_name, status))
+}
+
+fn download_failure(file_name: &str, status: reqwest::StatusCode) -> String {
+    if matches!(status.as_u16(), 404 | 410) {
+        format!(
+            "GameBanana no longer has {file_name}. Choose another file, or check the author's page."
+        )
+    } else {
+        format!("Could not download {file_name} from GameBanana ({status}).")
+    }
 }
 
 fn mod_file_is_supported(file: &DownloadFile) -> bool {
@@ -1258,6 +1311,60 @@ mod tests {
         ]))
         .unwrap();
         assert!(variants_from_files(hostile).is_err());
+    }
+
+    #[test]
+    fn split_uploads_are_shown_but_never_installed_as_one_part() {
+        let files: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([
+            // Mod 37013's listing: two parts plus an optional addon.
+            { "_idRow": 1559476, "_sFile": "bot_overhaul_-_part_1.zip", "_sDescription": "PART 1",
+              "_sDownloadUrl": "https://gamebanana.com/dl/1559476", "_tsDateAdded": 30 },
+            { "_idRow": 1558931, "_sFile": "bot_overhaul_-_part_2_03ece.zip", "_sDescription": "PART 2",
+              "_sDownloadUrl": "https://gamebanana.com/dl/1558931", "_tsDateAdded": 20 },
+            { "_idRow": 597824, "_sFile": "bot_mod_workshop_navs_.7z",
+              "_sDescription": "Community Map Navigation Meshes",
+              "_sDownloadUrl": "https://gamebanana.com/dl/597824", "_tsDateAdded": 10 }
+        ]))
+        .unwrap();
+        let variants = variants_from_files(files.clone()).unwrap();
+        assert!(variants[0].split_part && !variants[0].supported);
+        assert!(variants[1].split_part && !variants[1].supported);
+        assert!(!variants[2].split_part && variants[2].supported);
+        assert!(pick_file_by_id(files.clone(), 1559476)
+            .unwrap_err()
+            .contains("split download"));
+        assert!(pick_file_by_id(files, 597824).is_ok());
+
+        let named = |file: &str, description: &str| {
+            is_split_part(&DownloadFile {
+                id: 1,
+                file: file.into(),
+                download_url: String::new(),
+                added: 0,
+                size_bytes: None,
+                description: description.into(),
+            })
+        };
+        assert!(named("skin.part2.rar", ""));
+        assert!(named("skin.7z.001", ""));
+        assert!(named("skin.z01", ""));
+        assert!(named("skin.zip", "Part 1 of 2"));
+        assert!(named("skin_part1of3.zip", ""));
+        // Ordinary names and prose stay installable.
+        assert!(!named("skin.7z", ""));
+        assert!(!named("counterpart.zip", "Part of the Scout pack"));
+        assert!(!named("engy.zip", "V.4b"));
+        assert!(!named("hud-v2.zip", "Version 2"));
+    }
+
+    #[test]
+    fn a_listed_file_that_is_gone_gets_its_own_message() {
+        let gone = download_failure("mod.zip", reqwest::StatusCode::NOT_FOUND);
+        assert!(gone.contains("no longer has mod.zip"));
+        assert_eq!(download_failure("mod.zip", reqwest::StatusCode::GONE), gone);
+        assert!(
+            download_failure("mod.zip", reqwest::StatusCode::SERVICE_UNAVAILABLE).contains("503")
+        );
     }
 
     #[test]
