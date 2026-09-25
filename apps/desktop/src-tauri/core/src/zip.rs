@@ -797,8 +797,10 @@ where
     if manifest.schema != RECIPE_ZIP_SCHEMA {
         return Err(invalid_zip("unsupported profile zip schema"));
     }
-    let file = stock_built_file(manifest.viewmodel.as_ref(), &manifest.files)?
-        .ok_or_else(|| invalid_zip("schema-2 profile ZIP requires a locally built Viewmodels pack"))?;
+    let file =
+        stock_built_file(manifest.viewmodel.as_ref(), &manifest.files)?.ok_or_else(|| {
+            invalid_zip("schema-2 profile ZIP requires a locally built Viewmodels pack")
+        })?;
     if manifest.viewmodel_output_sha256.as_deref() != Some(file.sha256.as_str())
         || file.sha256 != file.sha256.to_ascii_lowercase()
     {
@@ -812,10 +814,17 @@ where
         .and_then(|record| record.build_recipe.as_ref())
         .ok_or_else(|| invalid_zip("locally built Viewmodels recipe is missing"))?;
     let request = stock_built_request(recipe);
-    let root = crate::finder::normalize_tf2_root(tf2_root)
-        .map_err(|error| invalid_zip(format!("Confirm a TF2 install before rebuilding Viewmodels: {}", error.message())))?;
-    let candidate = read_candidate(&root, &request)
-        .map_err(|error| invalid_zip(format!("Could not rebuild Viewmodels from this TF2 install: {error}")))?;
+    let root = crate::finder::normalize_tf2_root(tf2_root).map_err(|error| {
+        invalid_zip(format!(
+            "Confirm a TF2 install before rebuilding Viewmodels: {}",
+            error.message()
+        ))
+    })?;
+    let candidate = read_candidate(&root, &request).map_err(|error| {
+        invalid_zip(format!(
+            "Could not rebuild Viewmodels from this TF2 install: {error}"
+        ))
+    })?;
     let rebuilt_recipe = crate::viewmodel::selected_candidate_recipe(&candidate, &request)?;
     if &rebuilt_recipe != recipe || sha256_hex(&candidate.vpk_bytes) != file.sha256 {
         return Err(invalid_zip(
@@ -836,15 +845,18 @@ where
     R: Fn(&Path, &ProvisionalGroupRequest) -> Result<InstalledGroupVpkCandidate, StockSourceError>,
 {
     if payload.manifest.schema == RECIPE_ZIP_SCHEMA
-        && payload.exclusive.keys().any(|path| {
-            path.eq_ignore_ascii_case(crate::viewmodel::EXECS_VIEWMODELS_VPK)
-        })
+        && payload
+            .exclusive
+            .keys()
+            .any(|path| path.eq_ignore_ascii_case(crate::viewmodel::EXECS_VIEWMODELS_VPK))
     {
         return Err(invalid_zip(
             "schema-2 profile ZIP must omit the locally built Viewmodels VPK payload",
         ));
     }
-    if let Some(candidate) = verify_stock_built_rebuild(&payload.manifest, tf2_root, read_candidate)? {
+    if let Some(candidate) =
+        verify_stock_built_rebuild(&payload.manifest, tf2_root, read_candidate)?
+    {
         check_rebuilt_import_budget(
             payload.zip_uncompressed_bytes,
             candidate.vpk_bytes.len() as u64,
@@ -853,10 +865,9 @@ where
         let mut file = create_new_file_within(profiles_dir, &staged).map_err(io_err)?;
         file.write_all(&candidate.vpk_bytes).map_err(io_err)?;
         file.flush().map_err(io_err)?;
-        payload.exclusive.insert(
-            crate::viewmodel::EXECS_VIEWMODELS_VPK.to_string(),
-            staged,
-        );
+        payload
+            .exclusive
+            .insert(crate::viewmodel::EXECS_VIEWMODELS_VPK.to_string(), staged);
         payload.import_notes.push(
             "The Viewmodels pack was rebuilt from this installed TF2 copy; its recipe and output digest matched the archive."
                 .into(),
@@ -1428,9 +1439,9 @@ fn validate_imported_metadata(
     // rebuild and verify a recipe before assigning StockBuilt provenance.
     if manifest.schema == ZIP_SCHEMA
         && manifest
-        .viewmodel
-        .as_ref()
-        .is_some_and(|record| record.source == ViewmodelSource::StockBuilt)
+            .viewmodel
+            .as_ref()
+            .is_some_and(|record| record.source == ViewmodelSource::StockBuilt)
     {
         return Err(invalid_zip(
             "A locally built Viewmodels pack cannot be imported until its recipe is rebuilt and verified from this TF2 install.",
@@ -2147,10 +2158,7 @@ mod tests {
                     "scripts/tf_weapon_scout.ctx".into(),
                     sha256_hex(b"script"),
                 )]),
-                class_model_sha256: BTreeMap::from([(
-                    "scout".into(),
-                    sha256_hex(b"stock-model"),
-                )]),
+                class_model_sha256: BTreeMap::from([("scout".into(), sha256_hex(b"stock-model"))]),
             },
         };
         let record = ViewmodelRecord {
@@ -2159,7 +2167,9 @@ mod tests {
             source: ViewmodelSource::StockBuilt,
             preload: false,
             options: BTreeMap::new(),
-            build_recipe: Some(crate::viewmodel::selected_candidate_recipe(&candidate, &request).unwrap()),
+            build_recipe: Some(
+                crate::viewmodel::selected_candidate_recipe(&candidate, &request).unwrap(),
+            ),
         };
         let saved = create_populated_profile_to(
             &profiles,
@@ -2197,9 +2207,15 @@ mod tests {
         let manifest: ProfileZipManifest =
             serde_json::from_reader(zip.by_name(ZIP_MANIFEST_NAME).unwrap()).unwrap();
         assert_eq!(manifest.schema, RECIPE_ZIP_SCHEMA);
-        assert_eq!(manifest.viewmodel_output_sha256, Some(sha256_hex(&candidate.vpk_bytes)));
+        assert_eq!(
+            manifest.viewmodel_output_sha256,
+            Some(sha256_hex(&candidate.vpk_bytes))
+        );
         assert_eq!(manifest.files[0].sha256, sha256_hex(&candidate.vpk_bytes));
-        assert_eq!(manifest.viewmodel.unwrap().build_recipe.unwrap().choices[0].group_id, request.choices[0].group_id);
+        assert_eq!(
+            manifest.viewmodel.unwrap().build_recipe.unwrap().choices[0].group_id,
+            request.choices[0].group_id
+        );
 
         let imported = import_profile_with_review_and_source(
             &profiles,
@@ -2218,7 +2234,15 @@ mod tests {
         let imported_id = &imported.profiles[1].id;
         let saved = load_manifest(&profiles, imported_id).unwrap();
         assert_eq!(saved.viewmodel.unwrap().source, ViewmodelSource::StockBuilt);
-        assert_eq!(fs::read(exclusive_file_path(&profiles, imported_id, crate::viewmodel::EXECS_VIEWMODELS_VPK)).unwrap(), candidate.vpk_bytes);
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                imported_id,
+                crate::viewmodel::EXECS_VIEWMODELS_VPK
+            ))
+            .unwrap(),
+            candidate.vpk_bytes
+        );
         cleanup(&dir);
     }
 
@@ -2247,14 +2271,20 @@ mod tests {
             serde_json::from_reader(zip.by_name(ZIP_MANIFEST_NAME).unwrap()).unwrap();
         manifest["viewmodelOutputSha256"] = serde_json::json!("0".repeat(64));
         let modified = dir.join("wrong-digest.zip");
-        write_raw_zip(&modified, &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())]);
+        write_raw_zip(
+            &modified,
+            &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())],
+        );
         check(&modified, "output digest");
 
         manifest["viewmodelOutputSha256"] = serde_json::json!(sha256_hex(&candidate.vpk_bytes));
         manifest["viewmodel"]["buildRecipe"]["sourceFingerprints"][0]["sha256"] =
             serde_json::json!("1".repeat(64));
         let modified = dir.join("wrong-source.zip");
-        write_raw_zip(&modified, &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())]);
+        write_raw_zip(
+            &modified,
+            &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())],
+        );
         check(&modified, "sources or rebuilt output differ");
 
         manifest["viewmodel"]["buildRecipe"]["sourceFingerprints"][0]["sha256"] =
@@ -2310,12 +2340,13 @@ mod tests {
     fn recipe_zip_charges_manifest_bytes_and_refuses_changed_staged_output() {
         let rebuilt_bytes = 10;
         let archive_payload_without_manifest = MAX_TOTAL_UNCOMPRESSED - rebuilt_bytes;
-        assert!(check_rebuilt_import_budget(archive_payload_without_manifest, rebuilt_bytes).is_ok());
-        assert!(check_rebuilt_import_budget(
-            archive_payload_without_manifest + 1,
-            rebuilt_bytes
-        )
-        .is_err());
+        assert!(
+            check_rebuilt_import_budget(archive_payload_without_manifest, rebuilt_bytes).is_ok()
+        );
+        assert!(
+            check_rebuilt_import_budget(archive_payload_without_manifest + 1, rebuilt_bytes)
+                .is_err()
+        );
 
         let (dir, profiles, root, archive, _, candidate) = stock_built_zip_fixture();
         let before = snapshot_tree(&profiles);
@@ -2341,7 +2372,9 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(reads.get(), 2);
-        assert!(error.message().contains("changed while the imported profile was staged"));
+        assert!(error
+            .message()
+            .contains("changed while the imported profile was staged"));
         assert_eq!(snapshot_tree(&profiles), before);
         cleanup(&dir);
     }
