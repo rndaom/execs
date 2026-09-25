@@ -7,6 +7,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
+  patches and preloader pack are prepared once, before any files change, instead of being
+  rebuilt during the switch.
 - Files keeps saved password and remote-console cfg commands through local saves, imports and
   exports. Export review names possible credential locations, lists the included custom packs,
   and flags Crosshair scripts and Viewmodels VPKs before creating a ZIP, without displaying

@@ -1058,6 +1058,7 @@ dependencies = [
 name = "execs-core"
 version = "0.2.0"
 dependencies = [
+ "crc32fast",
  "same-file",
  "serde",
  "serde_json",

@@ -1360,6 +1360,7 @@ fn failed_profile_projection_restores_the_previous_owner_and_bytes() {
         &Vec::new,
         &|| Err("injected commit failure".into()),
         Some(&imported),
+        None,
     )
     .unwrap_err();
     assert_eq!(
@@ -2101,6 +2102,237 @@ fn patch_refuses_a_directory_mapping_that_changed_after_inspection() {
 
     let err = crate::vpk::patch_vpk_entry(&path, &old, &vec![0; old.length as usize]).unwrap_err();
     assert!(err.0.contains("changed location or CRC"), "{}", err.0);
+}
+
+#[test]
+fn a_directory_memo_still_refuses_a_directory_that_changed_inside_its_scope() {
+    let (root, _data) = fake_root();
+    let path = root.join("tf").join(MISC_VPK);
+    crate::vpk::with_directory_memo(|| {
+        let old = map_vpk_entries(&path).unwrap()["particles/water.pcf"].clone();
+        let mut files = BTreeMap::new();
+        let mut replacement_stock = tiny_pcf("water_effect", 11.0);
+        replacement_stock.resize(old.length as usize, b' ');
+        files.insert("particles/water.pcf".to_string(), replacement_stock);
+        write_split_vpk(&path, &files);
+
+        let remapped = map_vpk_entries(&path).unwrap()["particles/water.pcf"].clone();
+        assert_ne!(remapped.crc, old.crc);
+        let err =
+            crate::vpk::patch_vpk_entry(&path, &old, &vec![0; old.length as usize]).unwrap_err();
+        assert!(err.0.contains("changed location or CRC"), "{}", err.0);
+    });
+}
+
+fn plan_derivations() -> usize {
+    PLAN_DERIVATIONS.with(|count| count.get())
+}
+
+fn current_plan(
+    root: &Path,
+    data: &Path,
+    zip: &Path,
+    selection: &PreloaderSelection,
+    profile: &ProfileContext,
+) -> PreloaderPlan {
+    let entries = map_vpk_entries(&root.join("tf").join(MISC_VPK)).unwrap();
+    let mut state = load_state(data).unwrap();
+    discover_orphaned_snapshots_readonly(data, &mut state, Some(&entries));
+    plan_preloader_selection(root, data, zip, selection, &state, &entries, Some(profile)).unwrap()
+}
+
+fn plan_owner(data: &Path) -> ProfileContext {
+    ProfileContext {
+        profiles: data.join("profiles"),
+        id: "owner".into(),
+    }
+}
+
+fn blue_water_and_flat_look() -> PreloaderSelection {
+    PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: vec![],
+    }
+}
+
+/// Planning reads every source and decodes every particle; the write phase
+/// executes that plan instead of deriving it a second time.
+#[test]
+fn one_apply_derives_its_selection_plan_once() {
+    let (root, data) = fake_root();
+    let zip = fake_mods_zip(&root);
+    let selected = blue_water_and_flat_look();
+    let before = plan_derivations();
+    apply_preloader_selection_with_sampler(&root, &data, &zip, &selected, &[], &Vec::new).unwrap();
+    assert_eq!(plan_derivations() - before, 1);
+    let state = load_state(&data).unwrap();
+    assert_eq!(state.particle_mods, selected.particle_mods);
+    assert!(!state.patched.is_empty());
+}
+
+#[test]
+fn a_prepared_plan_is_reused_only_for_the_state_it_was_derived_from() {
+    let selected = blue_water_and_flat_look();
+    let (fresh_root, fresh_data) = fake_root();
+    let fresh_zip = fake_mods_zip(&fresh_root);
+    apply_profile_preloader(
+        &fresh_root,
+        &fresh_data,
+        &fresh_zip,
+        &selected,
+        &plan_owner(&fresh_data),
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    let expected = installed_bytes(&fresh_root, &fresh_data);
+
+    let (root, data) = fake_root();
+    let zip = fake_mods_zip(&root);
+    let stock_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let owner = plan_owner(&data);
+    let plan = current_plan(&root, &data, &zip, &selected, &owner);
+    let before = plan_derivations();
+    apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &selected,
+        &[],
+        &Vec::new,
+        &|| Ok(()),
+        Some(&owner),
+        Some(&plan),
+    )
+    .unwrap();
+    assert_eq!(
+        plan_derivations(),
+        before,
+        "a current plan runs as prepared"
+    );
+    assert_eq!(installed_bytes(&root, &data), expected);
+
+    // Another selection installed after planning changes the state the plan
+    // was derived from, so the write phase derives it again.
+    let stale = current_plan(&root, &data, &zip, &PreloaderSelection::default(), &owner);
+    apply_profile_preloader(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            ..Default::default()
+        },
+        &owner,
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    let before = plan_derivations();
+    apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &[],
+        &Vec::new,
+        &|| Ok(()),
+        Some(&owner),
+        Some(&stale),
+    )
+    .unwrap();
+    assert_eq!(plan_derivations() - before, 1, "a stale plan is re-derived");
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    assert!(load_state(&data).unwrap().patched.is_empty());
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        stock_misc
+    );
+
+    // A plan for a different selection is never executed in its place.
+    let other = current_plan(&root, &data, &zip, &selected, &owner);
+    let before = plan_derivations();
+    apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &[],
+        &Vec::new,
+        &|| Ok(()),
+        Some(&owner),
+        Some(&other),
+    )
+    .unwrap();
+    assert_eq!(plan_derivations() - before, 1);
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+}
+
+#[test]
+fn a_profile_switch_derives_the_target_preloader_plan_once() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let previous = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Previous",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .active_profile_id
+        .unwrap();
+        let target = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Target",
+            Vec::<String>::new(),
+        )
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|p| p.name == "Target")
+        .unwrap()
+        .id;
+        let zip = fake_mods_zip(&root);
+        apply_preloader_selection_with_sampler(
+            &root,
+            &data,
+            &zip,
+            &PreloaderSelection {
+                addons: vec!["Flat Look".into()],
+                ..Default::default()
+            },
+            &[],
+            &Vec::new,
+        )
+        .unwrap();
+        record_preload_profile(&data, &previous).unwrap();
+
+        let before = plan_derivations();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &target,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(plan_derivations() - before, 1);
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+        assert_eq!(
+            load_state(&data).unwrap().selection_profile.as_deref(),
+            Some(target.as_str())
+        );
+    });
 }
 
 /// An unknown id must fail before the restore pass has uninstalled the

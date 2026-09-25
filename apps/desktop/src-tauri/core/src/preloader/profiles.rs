@@ -11,8 +11,8 @@ use crate::vpk::map_vpk_entries;
 use serde::Serialize;
 
 use super::apply::{
-    apply_preloader_selection_transactional, prepare_preloader_selection, PreloaderReport,
-    PreloaderSelection,
+    apply_preloader_selection_transactional, plan_preloader_selection, PreloaderPlan,
+    PreloaderReport, PreloaderSelection,
 };
 use super::state::{app_dir_within, load_state, misc_vpk_path, PreloaderState};
 
@@ -309,6 +309,9 @@ pub struct ProfilePreloaderPlan {
     zip: PathBuf,
     profile: ProfileContext,
     selection: PreloaderSelection,
+    /// Derived while the previous profile was still installed. Apply reuses it
+    /// when the preloader state and `tf2_misc` directory are unchanged.
+    prepared: PreloaderPlan,
 }
 
 /// Validate the target while the old profile is still intact. Empty and
@@ -339,15 +342,6 @@ pub fn prepare_profile_preloader(
     {
         return Ok(None);
     }
-    if selection.uses_flat_textures() {
-        super::flat_textures::read_verified(&data).map_err(ProfileError::Io)?;
-    }
-    if selection.uses_developer_textures() {
-        super::developer_textures::read_verified(&data).map_err(ProfileError::Io)?;
-    }
-    if selection.uses_square_overlays() {
-        super::square_overlays::read_verified(&data).map_err(ProfileError::Io)?;
-    }
     let zip = if selection.needs_cueki_library() {
         let zip = data
             .join("preloader")
@@ -372,7 +366,9 @@ pub fn prepare_profile_preloader(
     let entries =
         map_vpk_entries(&misc_vpk_path(root)).map_err(|e| ProfileError::Io(e.message()))?;
     super::state::discover_orphaned_snapshots_readonly(&data, &mut state, Some(&entries));
-    prepare_preloader_selection(
+    // The plan verifies every direct author file and the complete package
+    // before the previous profile's live files are removed.
+    let prepared = plan_preloader_selection(
         root,
         &data,
         &zip,
@@ -387,12 +383,13 @@ pub fn prepare_profile_preloader(
         zip,
         profile,
         selection,
+        prepared,
     }))
 }
 
 impl ProfilePreloaderPlan {
     pub fn apply(&self, root: &Path, running: &[String]) -> Result<(), ProfileError> {
-        apply_profile_preloader(
+        apply_profile_preloader_with_plan(
             root,
             &self.data,
             &self.zip,
@@ -400,6 +397,7 @@ impl ProfilePreloaderPlan {
             &self.profile,
             running,
             &live_process_names,
+            Some(&self.prepared),
         )
         .map_err(ProfileError::Io)?;
         Ok(())
@@ -416,6 +414,20 @@ pub fn apply_profile_preloader(
     running: &[String],
     sampler: &dyn Fn() -> Vec<String>,
 ) -> Result<PreloaderReport, String> {
+    apply_profile_preloader_with_plan(root, data, zip, selection, profile, running, sampler, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_profile_preloader_with_plan(
+    root: &Path,
+    data: &Path,
+    zip: &Path,
+    selection: &PreloaderSelection,
+    profile: &ProfileContext,
+    running: &[String],
+    sampler: &dyn Fn() -> Vec<String>,
+    prepared: Option<&PreloaderPlan>,
+) -> Result<PreloaderReport, String> {
     refuse_if_running_among(running).map_err(|e| e.message().to_string())?;
     selection.validate().map_err(|e| e.message())?;
     apply_preloader_selection_transactional(
@@ -427,6 +439,7 @@ pub fn apply_profile_preloader(
         sampler,
         &|| Ok(()),
         Some(profile),
+        prepared,
     )
 }
 

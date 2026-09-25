@@ -151,7 +151,7 @@ pub fn switch_profile_to_outcome<I, S, F>(
     profile_id: &str,
     running_names: I,
     options: AbsorbOptions<'_>,
-    mut progress: F,
+    progress: F,
 ) -> Result<SwitchOutcome, ProfileError>
 where
     I: IntoIterator<Item = S>,
@@ -162,6 +162,31 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
+    // The preloader preflight and its later apply both map tf2_misc_dir.vpk;
+    // one switch reuses a byte-identical walk instead of repeating it.
+    crate::vpk::with_directory_memo(|| {
+        switch_in_directory_memo(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            running,
+            options,
+            progress,
+        )
+    })
+}
+
+fn switch_in_directory_memo<F>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running: Vec<String>,
+    options: AbsorbOptions<'_>,
+    mut progress: F,
+) -> Result<SwitchOutcome, ProfileError>
+where
+    F: FnMut(SwitchProgress),
+{
     progress(SwitchProgress::new(SwitchStep::Closed));
     refuse_if_running_among(&running)?;
 
