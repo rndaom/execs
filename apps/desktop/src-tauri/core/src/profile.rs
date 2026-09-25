@@ -341,6 +341,53 @@ pub struct CrosshairStockSettings {
 pub enum ViewmodelSource {
     Compiled,
     Imported,
+    /// Built from independently read files in the player's TF2 install.
+    StockBuilt,
+}
+
+pub const VIEWMODEL_BUILD_RECIPE_SCHEMA: u32 = 1;
+const MAX_VIEWMODEL_RECIPE_CHOICES: usize = 2048;
+const MAX_VIEWMODEL_RECIPE_FINGERPRINTS: usize = 1024;
+const MAX_VIEWMODEL_SOURCE_ID_BYTES: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ViewmodelHideMode {
+    Full,
+    Weapon,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelBuildCatalog {
+    pub patch_version: String,
+    pub catalog_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelBuildChoice {
+    pub group_id: String,
+    pub mode: ViewmodelHideMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelSourceFingerprint {
+    /// Canonical identifier for a source member, not a path to open directly.
+    pub id: String,
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelBuildRecipe {
+    pub schema: u32,
+    pub catalog: ViewmodelBuildCatalog,
+    pub choices: Vec<ViewmodelBuildChoice>,
+    /// Exact input digests recorded by the future local builder. Catalog
+    /// identity alone does not bind installed item, script, or MDL bytes.
+    pub source_fingerprints: Vec<ViewmodelSourceFingerprint>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -354,6 +401,91 @@ pub struct ViewmodelRecord {
     pub preload: bool,
     #[serde(default)]
     pub options: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_recipe: Option<ViewmodelBuildRecipe>,
+}
+
+fn is_lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_viewmodel_source_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_VIEWMODEL_SOURCE_ID_BYTES
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'/' | b'.' | b'_' | b'-')
+        })
+        && value
+            .split('/')
+            .all(|component| !component.is_empty() && component != "." && component != "..")
+}
+
+impl ViewmodelRecord {
+    /// Validate metadata only. The installed-source builder must separately
+    /// recompute these identities before using a recipe, and verify the VPK.
+    pub fn validate_build_recipe(&self) -> Result<(), &'static str> {
+        let recipe = match (self.source, self.build_recipe.as_ref()) {
+            (ViewmodelSource::StockBuilt, Some(recipe)) => recipe,
+            (ViewmodelSource::StockBuilt, None) => {
+                return Err("stock-built Viewmodels record has no build recipe")
+            }
+            (_, Some(_)) => {
+                return Err("legacy Viewmodels record must not claim a stock build recipe")
+            }
+            (_, None) => return Ok(()),
+        };
+        if recipe.schema != VIEWMODEL_BUILD_RECIPE_SCHEMA {
+            return Err("unsupported Viewmodels build recipe schema");
+        }
+        if recipe.catalog.patch_version.is_empty()
+            || recipe.catalog.patch_version.len() > 128
+            || !recipe
+                .catalog
+                .patch_version
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            || !is_lower_sha256(&recipe.catalog.catalog_sha256)
+        {
+            return Err("invalid Viewmodels build catalog identity");
+        }
+        if recipe.choices.is_empty() || recipe.choices.len() > MAX_VIEWMODEL_RECIPE_CHOICES {
+            return Err("invalid Viewmodels build choice count");
+        }
+        let mut prior_group_id = "";
+        for choice in &recipe.choices {
+            let Some((class, digest)) = choice.group_id.split_once('/') else {
+                return Err("invalid Viewmodels build group ID");
+            };
+            if !crate::viewmodel_vpk_candidate::CLASSES.contains(&class)
+                || !is_lower_sha256(digest)
+                || choice.group_id.as_str() <= prior_group_id
+            {
+                return Err("invalid or repeated Viewmodels build group ID");
+            }
+            prior_group_id = &choice.group_id;
+        }
+        if recipe.source_fingerprints.is_empty()
+            || recipe.source_fingerprints.len() > MAX_VIEWMODEL_RECIPE_FINGERPRINTS
+        {
+            return Err("invalid Viewmodels source fingerprint count");
+        }
+        let mut prior_source_id = "";
+        for source in &recipe.source_fingerprints {
+            if !valid_viewmodel_source_id(&source.id)
+                || !is_lower_sha256(&source.sha256)
+                || source.id.as_str() <= prior_source_id
+            {
+                return Err("invalid or repeated Viewmodels source fingerprint");
+            }
+            prior_source_id = &source.id;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2219,6 +2351,11 @@ fn validate_manifest_files(manifest: &ProfileManifest) -> Result<(), ProfileErro
     if let Some(selection) = &manifest.preloader {
         selection.validate()?;
     }
+    if let Some(viewmodel) = &manifest.viewmodel {
+        viewmodel
+            .validate_build_recipe()
+            .map_err(|message| ProfileError::Io(message.into()))?;
+    }
     if manifest.files.len() > MAX_PROFILE_FILES {
         return Err(ProfileError::Io(
             "Profile manifest contains too many files.".into(),
@@ -3487,6 +3624,11 @@ fn load_manifest_raw(
         return Err(ProfileError::Io(
             "profile manifest id does not match its directory".into(),
         ));
+    }
+    if let Some(viewmodel) = &manifest.viewmodel {
+        viewmodel
+            .validate_build_recipe()
+            .map_err(|message| ProfileError::Io(message.into()))?;
     }
     manifest.tf2_root = user_path_string(Path::new(&manifest.tf2_root));
     Ok(manifest)
@@ -4781,6 +4923,156 @@ mod tests {
     use super::*;
     use crate::blob::blob_path;
     use std::fs;
+
+    fn stock_built_record() -> ViewmodelRecord {
+        ViewmodelRecord {
+            id: "execs-viewmodels".into(),
+            source_changed: false,
+            source: ViewmodelSource::StockBuilt,
+            preload: false,
+            options: BTreeMap::new(),
+            build_recipe: Some(ViewmodelBuildRecipe {
+                schema: VIEWMODEL_BUILD_RECIPE_SCHEMA,
+                catalog: ViewmodelBuildCatalog {
+                    patch_version: "10828683".into(),
+                    catalog_sha256: "a".repeat(64),
+                },
+                choices: vec![ViewmodelBuildChoice {
+                    group_id: format!("scout/{}", "b".repeat(64)),
+                    mode: ViewmodelHideMode::Weapon,
+                }],
+                source_fingerprints: vec![ViewmodelSourceFingerprint {
+                    id: "models/weapons/c_models/c_scout_animations.mdl".into(),
+                    sha256: "c".repeat(64),
+                }],
+            }),
+        }
+    }
+
+    #[test]
+    fn legacy_viewmodel_records_keep_their_exact_json_shape() {
+        let compiled = r#"{"id":"execs-viewmodels","source":"compiled","preload":true,"options":{"hidden":"1,2"}}"#;
+        let record: ViewmodelRecord = serde_json::from_str(compiled).unwrap();
+        assert_eq!(record.source, ViewmodelSource::Compiled);
+        assert_eq!(record.build_recipe, None);
+        assert!(record.validate_build_recipe().is_ok());
+        assert_eq!(serde_json::to_string(&record).unwrap(), compiled);
+
+        let imported =
+            r#"{"id":"execs-viewmodels","source":"imported","preload":false,"options":{}}"#;
+        let record: ViewmodelRecord = serde_json::from_str(imported).unwrap();
+        assert_eq!(record.source, ViewmodelSource::Imported);
+        assert_eq!(record.build_recipe, None);
+        assert!(record.validate_build_recipe().is_ok());
+        assert_eq!(serde_json::to_string(&record).unwrap(), imported);
+    }
+
+    #[test]
+    fn stock_built_viewmodel_recipe_round_trips_and_is_bounded() {
+        let record = stock_built_record();
+        assert!(record.validate_build_recipe().is_ok());
+        let json = serde_json::to_value(&record).unwrap();
+        assert_eq!(json["source"], "stockBuilt");
+        assert_eq!(json["buildRecipe"]["schema"], 1);
+        assert_eq!(json["buildRecipe"]["choices"][0]["mode"], "weapon");
+        assert_eq!(
+            serde_json::from_value::<ViewmodelRecord>(json.clone()).unwrap(),
+            record
+        );
+
+        let mut invalid = record.clone();
+        invalid.build_recipe = None;
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.source = ViewmodelSource::Compiled;
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.build_recipe.as_mut().unwrap().schema = 2;
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .catalog
+            .catalog_sha256 = "A".repeat(64);
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        let choice = invalid.build_recipe.as_ref().unwrap().choices[0].clone();
+        invalid.build_recipe.as_mut().unwrap().choices.push(choice);
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.build_recipe.as_mut().unwrap().source_fingerprints[0].id = "../other".into();
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .source_fingerprints
+            .clear();
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        let source = invalid.build_recipe.as_ref().unwrap().source_fingerprints[0].clone();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .source_fingerprints
+            .push(source);
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.build_recipe.as_mut().unwrap().choices =
+            vec![
+                record.build_recipe.as_ref().unwrap().choices[0].clone();
+                MAX_VIEWMODEL_RECIPE_CHOICES + 1
+            ];
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut unknown = json;
+        unknown["buildRecipe"]["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<ViewmodelRecord>(unknown).is_err());
+    }
+
+    #[test]
+    fn profile_load_refuses_an_invalid_stock_build_recipe() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let profile_id = Uuid::new_v4().to_string();
+        fs::create_dir_all(profile_dir(&profiles, &profile_id)).unwrap();
+        let mut manifest = serde_json::json!({
+            "schema": LIBRARY_SCHEMA,
+            "id": profile_id,
+            "name": "Built pack",
+            "tf2Root": dir.to_string_lossy(),
+            "launchOptions": "",
+            "files": [],
+            "viewmodel": stock_built_record(),
+        });
+        fs::write(
+            manifest_file(&profiles, &profile_id),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(load_manifest_raw(&profiles, &profile_id).is_ok());
+
+        manifest["viewmodel"]["buildRecipe"]["schema"] = serde_json::json!(2);
+        fs::write(
+            manifest_file(&profiles, &profile_id),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(load_manifest_raw(&profiles, &profile_id).is_err());
+        cleanup(&dir);
+    }
 
     fn unlocked() -> [&'static str; 1] {
         ["bash"]

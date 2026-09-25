@@ -444,7 +444,14 @@ export type ModRecord = {
   installedAt: string;
 };
 
-export type ViewmodelSource = "compiled" | "imported";
+export type ViewmodelSource = "compiled" | "imported" | "stockBuilt";
+
+export type ViewmodelBuildRecipe = {
+  schema: number;
+  catalog: { patchVersion: string; catalogSha256: string };
+  choices: { groupId: string; mode: "full" | "weapon" }[];
+  sourceFingerprints: { id: string; sha256: string }[];
+};
 
 export type ViewmodelRecord = {
   id: string;
@@ -452,6 +459,7 @@ export type ViewmodelRecord = {
   source: ViewmodelSource;
   preload: boolean;
   options: Record<string, string>;
+  buildRecipe?: ViewmodelBuildRecipe;
 };
 
 /**
