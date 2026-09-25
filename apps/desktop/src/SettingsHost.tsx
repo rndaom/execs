@@ -914,6 +914,15 @@ export function SettingsHost({
               { success: "HUD installed", failure: "Could not install" },
             );
           }}
+          onReturnToStock={() =>
+            write(
+              async () => {
+                await api.returnToStockHud();
+                await hud.reloadLocal();
+              },
+              { success: "Stock HUD restored", failure: "Could not remove the HUD" },
+            )
+          }
           onUpdate={() => {
             void write(
               async () => {

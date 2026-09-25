@@ -80,6 +80,7 @@ beforeEach(() => {
     onRetryLocal: vi.fn(),
     onInstall: vi.fn(async () => true),
     onUpdate: vi.fn(),
+    onReturnToStock: vi.fn(async () => true),
     onMatch: vi.fn(),
     onApplyOptions: vi.fn(async () => true),
     onImportArchive: vi.fn(async () => true),
@@ -193,6 +194,36 @@ describe("HUD workspace interactions", () => {
     await render({ profileId: "profile-b" });
     await act(async () => complete(true));
     expect(selectedSurface()).toBe("hud-surface-browse");
+  });
+
+  it("confirms Return to stock HUD before removing anything, and Keep HUD cancels", async () => {
+    await render();
+    await surface("installed");
+    await click("hud-return-stock");
+    const dialog = element("hud-stock-dialog");
+    expect(dialog.textContent).toContain("Return to TF2’s stock HUD?");
+    expect(dialog.textContent).toContain("rayshud");
+    expect(dialog.textContent).toContain("other mods, binds and settings stay the same");
+    expect(document.activeElement?.textContent).toBe("Keep HUD");
+    await act(async () => (document.activeElement as HTMLButtonElement).click());
+    expect(container.querySelector('[data-testid="hud-stock-dialog"]')).toBeNull();
+    expect(props.onReturnToStock).not.toHaveBeenCalled();
+
+    await click("hud-return-stock");
+    await click("hud-return-stock-confirm");
+    expect(props.onReturnToStock).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-testid="hud-stock-dialog"]')).toBeNull();
+  });
+
+  it("keeps Return to stock HUD unavailable while TF2 runs", async () => {
+    await render();
+    await surface("installed");
+    await click("hud-return-stock");
+    running = true;
+    await render();
+    expect((element("hud-return-stock-confirm") as HTMLButtonElement).disabled).toBe(true);
+    await click("hud-return-stock-confirm");
+    expect(props.onReturnToStock).not.toHaveBeenCalled();
   });
 
   it("rechecks the game lock while replacement is under review", async () => {

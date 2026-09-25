@@ -711,6 +711,7 @@ pub fn run() {
             commands::hud::install_hud,
             commands::hud::match_hud_catalog,
             commands::hud::update_hud,
+            commands::hud::return_to_stock_hud,
             commands::hud::get_hud_schema,
             commands::hud::apply_hud_options,
             commands::crosshair::apply_crosshairs,

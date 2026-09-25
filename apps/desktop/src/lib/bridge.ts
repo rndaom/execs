@@ -788,6 +788,11 @@ export async function matchHudCatalog(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("match_hud_catalog", { id });
 }
 
+/** Removes the active profile's HUD, its option cfgs and exec lines. */
+export async function returnToStockHud(): Promise<ProfileDetail> {
+  return call<ProfileDetail>("return_to_stock_hud");
+}
+
 export async function updateHud(): Promise<ProfileDetail> {
   return call<ProfileDetail>("update_hud");
 }
