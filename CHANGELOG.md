@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Rename a profile from its menu in the profile list. Only the name changes; its files and
+  settings stay exactly as they were.
 - The GameBanana file chooser shows when each author file was uploaded and picks the only
   installable file for you. Split downloads (PART 1, PART 2…) are explained instead of installed
   half-finished, and a file GameBanana no longer has says so plainly.

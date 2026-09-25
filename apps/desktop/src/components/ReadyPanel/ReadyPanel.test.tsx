@@ -50,6 +50,7 @@ beforeEach(() => {
       refreshKey: "fixture",
       onBindSyncHandled: vi.fn(),
       saveCurrent: vi.fn(async () => false),
+      renameProfile: vi.fn(async () => true),
       importProfile: vi.fn(async () => {}),
       importing: false,
       importStage: null,
@@ -372,4 +373,78 @@ it("keeps the recovery prompt instead of offering the ordinary inactive-library 
   expect(box.querySelector('[data-testid="switch-recovery-pending"]')?.textContent).toContain(
     "Switch to Main to finish recovery",
   );
+});
+
+async function openRename() {
+  await act(async () =>
+    box.querySelector<HTMLDetailsElement>('[data-testid="profile-library"] summary')?.click(),
+  );
+  await act(async () =>
+    box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]')?.click(),
+  );
+  await act(async () => {
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.trim() === "Rename…")
+      ?.click();
+  });
+  const input = box.querySelector<HTMLInputElement>("#profile-rename-input");
+  if (!input) throw new Error("Missing rename field");
+  return input;
+}
+
+async function typeName(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it("renames a profile inline and keeps the menu open for the result", async () => {
+  const library = props.profiles.library as ProfileLibrary;
+  const first = library.profiles[0];
+  await render();
+  const input = await openRename();
+  expect(input.value).toBe(first.name);
+  expect(document.activeElement).toBe(input);
+
+  await typeName(input, "   ");
+  const save = () =>
+    [...box.querySelectorAll<HTMLButtonElement>('[data-testid="profile-rename"] button')].find(
+      (button) => button.textContent === "Save",
+    );
+  expect(save()?.disabled).toBe(true);
+  expect(box.textContent).toContain("Enter a name.");
+
+  await typeName(input, "  Casual ✨ ");
+  await act(async () => {
+    box.querySelector<HTMLFormElement>('[data-testid="profile-rename"]')?.requestSubmit();
+    await Promise.resolve();
+  });
+  expect(props.profiles.renameProfile).toHaveBeenCalledWith(first.id, "Casual ✨");
+  expect(box.querySelector('[data-testid="profile-rename"]')).toBeNull();
+  expect(menu()?.open).toBe(true);
+});
+
+it("cancels a rename with Escape without closing the menu or saving", async () => {
+  await render();
+  const input = await openRename();
+  await typeName(input, "Something else");
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  expect(box.querySelector('[data-testid="profile-rename"]')).toBeNull();
+  expect(menu()?.open).toBe(true);
+  expect(props.profiles.renameProfile).not.toHaveBeenCalled();
+});
+
+it("keeps the editor open with the typed name when a rename fails", async () => {
+  props.profiles.renameProfile = vi.fn(async () => false);
+  await render();
+  const input = await openRename();
+  await typeName(input, "Broken");
+  await act(async () => {
+    box.querySelector<HTMLFormElement>('[data-testid="profile-rename"]')?.requestSubmit();
+    await Promise.resolve();
+  });
+  expect(box.querySelector<HTMLInputElement>("#profile-rename-input")?.value).toBe("Broken");
 });

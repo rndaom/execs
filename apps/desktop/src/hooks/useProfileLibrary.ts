@@ -17,6 +17,7 @@ import {
   canSaveCurrent,
   hasPackChanges,
   newlyImportedProfile,
+  profileNameProblem,
 } from "../lib/library-ui";
 import type { SetOperationError } from "./useOperationErrors";
 import type { SwitchProgressController } from "./useSwitchProgress";
@@ -40,6 +41,8 @@ export type ProfileLibraryState = {
   refreshKey: string;
   onBindSyncHandled: (request: number) => void;
   saveCurrent: (name: string) => Promise<boolean>;
+  /** Resolves true once the new name is saved; failures report and keep the old name. */
+  renameProfile: (id: string, name: string) => Promise<boolean>;
   importProfile: () => Promise<void>;
   importing: boolean;
   importStage: "selecting" | "reading" | "review" | "saving" | "done" | null;
@@ -276,6 +279,27 @@ export function useProfileLibrary(
     onHudReviewRequired,
     absorbRetry,
   ]);
+
+  const renameProfile = useCallback(
+    async (id: string, name: string) => {
+      if (running || profileNameProblem(name) !== null) return false;
+      setBusy(true);
+      try {
+        setLibrary(await api.renameProfile(id, name));
+        setError(null, "profiles:rename");
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not rename that profile.",
+          "profiles:rename",
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, running, setBusy, setError],
+  );
 
   const saveCurrent = useCallback(
     async (name: string) => {
@@ -755,6 +779,7 @@ export function useProfileLibrary(
     refreshKey: `${library?.activeProfileId ?? ""}:${absorbNonce}`,
     onBindSyncHandled,
     saveCurrent,
+    renameProfile,
     importProfile,
     importing,
     importStage,
