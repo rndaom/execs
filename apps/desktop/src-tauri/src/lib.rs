@@ -721,6 +721,7 @@ pub fn run() {
             commands::crosshair::deactivate_crosshairs,
             commands::viewmodel::build_viewmodel_pack,
             commands::viewmodel::import_viewmodels,
+            commands::viewmodel::get_viewmodel_source_catalog,
             commands::viewmodel::remove_viewmodels,
             commands::viewmodel::viewmodel_build_available,
             commands::viewmodel::viewmodel_preview_image,

@@ -462,6 +462,27 @@ export type ViewmodelRecord = {
   buildRecipe?: ViewmodelBuildRecipe;
 };
 
+export type ViewmodelSourceCatalog = {
+  /** Installed-source candidates; their retail behavior is not verified yet. */
+  status: "provisional";
+  catalog: { patchVersion: string; catalogSha256: string };
+  /** Sorted canonical source IDs and digests, as in a stock-build recipe. */
+  sourceFingerprints: { id: string; sha256: string }[];
+  groups: {
+    id: string;
+    class: string;
+    items: { id: number; schemaName: string }[];
+    animations: string[];
+    overlaps: string[];
+    teamVariantsDiffer: boolean;
+  }[];
+  unresolvedItems: { class: string; itemId: number }[];
+  /** Roles without an exact installed script mapping. */
+  unresolvedRoleCount: number;
+  /** Class-specific script candidates awaiting retail equip-path verification. */
+  candidateRoleCount: number;
+};
+
 /**
  * How the app can fetch a HUD's files, derived from its hud-db `repo` host:
  * a pinned GitHub zip, a direct (Dropbox) archive, a GameBanana listing, a
@@ -822,6 +843,10 @@ export async function removeCrosshairs(): Promise<ProfileDetail> {
 
 export async function deactivateCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("deactivate_crosshairs");
+}
+
+export async function getViewmodelSourceCatalog(): Promise<ViewmodelSourceCatalog> {
+  return call<ViewmodelSourceCatalog>("get_viewmodel_source_catalog");
 }
 
 export async function importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
