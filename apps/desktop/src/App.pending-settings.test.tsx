@@ -38,6 +38,12 @@ beforeEach(async () => {
   api = createPreviewApi("settings-hud-installed");
   applyHud = api.applyHudOptions;
   vi.spyOn(api, "launchTf2").mockResolvedValue(undefined);
+  vi.spyOn(api, "getLaunchSyncStatus").mockResolvedValue({
+    profileOptions: "-novid",
+    steamOptions: "-novid",
+    inSync: true,
+    steamRunning: true,
+  });
   const library = await api.getProfileLibrary();
   vi.spyOn(api, "getProfileLibrary").mockResolvedValue({
     ...library,
@@ -297,4 +303,36 @@ it("joins an actual in-flight autosave on native close and waits for its queue r
   await act(async () => finish());
   expect(apply).toHaveBeenCalledOnce();
   expect(native.destroy).toHaveBeenCalledOnce();
+});
+
+it("asks before restarting Steam to write a profile's missing launch options", async () => {
+  vi.mocked(api.getLaunchSyncStatus).mockResolvedValue({
+    profileOptions: "-novid +exec overrides/execs_preload",
+    steamOptions: "",
+    inSync: false,
+    steamRunning: true,
+  });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(element('[data-testid="launch-sync-warning"]').textContent).toContain(
+    "Launch options not in Steam",
+  );
+  await click("Launch TF2");
+  expect(api.launchTf2).not.toHaveBeenCalled();
+  expect(element('[data-testid="launch-sync-review"]').textContent).toContain(
+    "+exec overrides/execs_preload",
+  );
+  await click("Restart Steam and launch");
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true);
+});
+
+it("writes missing launch options without asking when Steam is closed", async () => {
+  vi.mocked(api.getLaunchSyncStatus).mockResolvedValue({
+    profileOptions: "-novid",
+    steamOptions: "",
+    inSync: false,
+    steamRunning: false,
+  });
+  await click("Launch TF2");
+  expect(box.querySelector('[data-testid="launch-sync-review"]')).toBeNull();
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true);
 });
