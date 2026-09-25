@@ -845,6 +845,9 @@ export function createPreviewApi(state: PreviewState): Api {
     },
 
     // --- viewmodels ---------------------------------------------------------
+    async getViewmodelSourceCatalog() {
+      throw notInPreview("The installed Viewmodels source catalog");
+    },
     async importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
       viewmodel = { id: "preview", source: "imported", preload, options: {} };
       return requireDetail();
