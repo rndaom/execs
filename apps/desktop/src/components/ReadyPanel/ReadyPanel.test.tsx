@@ -383,10 +383,14 @@ async function openRename() {
     box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]')?.click(),
   );
   await act(async () => {
-    [...document.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "Rename…")
-      ?.click();
+    const item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Rename…",
+    );
+    // A real click presses first; the menu is portaled outside the popover.
+    item?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    item?.click();
   });
+  expect(menu()?.open).toBe(true);
   const input = box.querySelector<HTMLInputElement>("#profile-rename-input");
   if (!input) throw new Error("Missing rename field");
   return input;

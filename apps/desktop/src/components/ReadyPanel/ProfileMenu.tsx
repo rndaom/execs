@@ -120,9 +120,16 @@ export function ProfileMenu({
     }
     function onPointerDown(event: PointerEvent) {
       const node = detailsRef.current;
-      if (node?.open && event.target instanceof Node && !node.contains(event.target)) {
-        close(false);
+      if (!node?.open || !(event.target instanceof Node) || node.contains(event.target)) return;
+      // The row actions menu is portaled to the body but belongs to this
+      // popover; choosing Rename… or Duplicate… there must keep it open.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="menu"][aria-label="Profile actions"]')
+      ) {
+        return;
       }
+      close(false);
     }
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("pointerdown", onPointerDown, true);
