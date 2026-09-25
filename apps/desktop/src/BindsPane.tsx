@@ -1,4 +1,5 @@
 import { type CfgFile, parseCommands } from "@execs/cfglint";
+import { MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -9,16 +10,19 @@ import {
   actionBindings,
   applyRecordedBind,
   autoexecFilePath,
-  BIND_ACTIONS,
+  BIND_GROUPS,
   type BindActionId,
   type BindSourceMap,
   type BindsLayer,
   bindActionById,
+  bindActionForCommand,
+  bindKeyLabel,
   bindsFilePath,
   ensureAutoexecExecLine,
   normalizeBindCommand,
   recorderOutcomeForKey,
   removeOwnedManagedBind,
+  searchBindActions,
   sourceKeyFromKeyboardEvent,
   sourceKeyFromMouseButton,
   sourceKeyFromWheelDelta,
@@ -42,57 +46,6 @@ export type BindsPaneProps = {
   onSave: (bindsText: string) => Promise<unknown>;
 };
 
-const BIND_GROUPS: Array<{
-  id: string;
-  title: string;
-  ids: BindActionId[];
-}> = [
-  {
-    id: "movement",
-    title: "Movement",
-    ids: ["forward", "back", "moveleft", "moveright", "jump", "duck"],
-  },
-  {
-    id: "combat",
-    title: "Combat",
-    ids: ["attack", "attack2", "attack3", "reload", "inspect", "taunt"],
-  },
-  {
-    id: "weapons",
-    title: "Weapons",
-    ids: ["invprev", "invnext", "lastinv", "slot1", "slot2", "slot3", "slot4", "slot5", "slot6"],
-  },
-  {
-    id: "communication",
-    title: "Communication",
-    ids: [
-      "medic",
-      "voice",
-      "chat",
-      "teamchat",
-      "partychat",
-      "voicemenu1",
-      "voicemenu2",
-      "voicemenu3",
-    ],
-  },
-  {
-    id: "gameplay",
-    title: "Gameplay",
-    ids: ["use", "actionslot", "dropitem", "showscores", "spray", "ready", "lastdisguise"],
-  },
-  {
-    id: "menus",
-    title: "Menus",
-    ids: ["changeclass", "changeteam", "character", "backpack", "mapinfo", "contracts", "console"],
-  },
-  {
-    id: "loadouts",
-    title: "Loadouts",
-    ids: ["loadout0", "loadout1", "loadout2", "loadout3"],
-  },
-];
-
 export function BindsPane({
   profileId,
   layer,
@@ -115,8 +68,10 @@ export function BindsPane({
     command: string;
     source: string;
   } | null>(null);
-  const [groupSelection, setGroupSelection] = useState({ id: "movement", phase: 0 });
-  const activeGroupId = groupSelection.id;
+  const [groupSelection, setGroupSelection] = useState({ id: "all", phase: 0 });
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+  const activeGroupId = searching ? "all" : groupSelection.id;
   const path = bindsFilePath(layer);
   const [draft, setDraft] = useSeededDraft(
     managedText,
@@ -301,23 +256,63 @@ export function BindsPane({
     setRecordingId((current) => (current === actionId ? null : actionId));
   }
 
-  const activeGroup = BIND_GROUPS.find((group) => group.id === activeGroupId) ?? BIND_GROUPS[0];
+  function cancelCapture() {
+    setRecordingId(null);
+    setRecorderNotice(null);
+    setPendingKey(null);
+  }
+
+  const bindingsFor = (id: BindActionId) =>
+    actionBindings(preview.binds, preview.sources, draft, path, id);
+  const matches = searching
+    ? searchBindActions(query, (id) => bindingsFor(id).map((binding) => binding.key))
+    : null;
+  const visibleGroups = BIND_GROUPS.filter(
+    (group) => activeGroupId === "all" || group.id === activeGroupId,
+  )
+    .map((group) => ({ ...group, ids: group.ids.filter((id) => !matches || matches.has(id)) }))
+    .filter((group) => group.ids.length > 0);
 
   return (
-    <section data-testid="settings-binds" className="min-w-0 text-left">
-      <PaneHeader title="Binds" />
+    <section data-testid="settings-binds" className="min-w-0 max-w-[980px] text-left">
+      <PaneHeader
+        title="Binds"
+        actions={
+          <label className="field relative flex w-64 items-center" data-bind-navigation>
+            <MagnifyingGlass
+              size={15}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 text-ink-faint"
+            />
+            <span className="sr-only">Search actions or keys</span>
+            <input
+              type="search"
+              data-testid="bind-search"
+              value={query}
+              onChange={(event) => {
+                cancelCapture();
+                setQuery(event.target.value);
+              }}
+              placeholder="Search actions or keys"
+              className="w-full bg-transparent py-2 pr-3 pl-9 text-sm text-ink outline-none placeholder:text-ink-faint"
+            />
+          </label>
+        }
+      />
 
-      <div data-bind-navigation>
+      <div data-bind-navigation className={searching ? "opacity-50" : undefined}>
         <ClassTabs
-          tabs={BIND_GROUPS.map((group) => ({ id: group.id, label: group.title }))}
+          tabs={[
+            { id: "all", label: "All" },
+            ...BIND_GROUPS.map((group) => ({ id: group.id, label: group.title })),
+          ]}
           selected={activeGroupId}
           label="Bind categories"
           idPrefix="bind-category"
           panelId="bind-category-panel"
           onSelect={(id) => {
-            setRecordingId(null);
-            setRecorderNotice(null);
-            setPendingKey(null);
+            cancelCapture();
+            setQuery("");
             setGroupSelection((current) =>
               current.id === id ? current : { id, phase: current.phase + 1 },
             );
@@ -328,139 +323,233 @@ export function BindsPane({
       <div
         id="bind-category-panel"
         role="tabpanel"
-        aria-labelledby={`bind-category-${activeGroup.id}`}
+        aria-labelledby={`bind-category-${activeGroupId}`}
         className="mt-5"
         data-switch={
           groupSelection.phase === 0 ? undefined : groupSelection.phase % 2 === 1 ? "odd" : "even"
         }
       >
-        <div className="pane-toolbar mb-2">
-          <h2 className="t-section">{activeGroup.title}</h2>
-          <p className="t-meta">Select an action to record a binding.</p>
-        </div>
-        <ul className="pane-split gap-y-0">
-          {activeGroup.ids.map((actionId) => {
-            const action = BIND_ACTIONS.find((item) => item.id === actionId);
-            if (!action) {
-              return null;
-            }
-            const listening = recordingId === action.id;
-            const keys = actionBindings(preview.binds, preview.sources, draft, path, action.id);
-            const bound = keys.map((binding) => binding.key).join(", ");
-            const pending = pendingKey?.actionId === action.id ? pendingKey : null;
-            return (
-              <li
-                key={action.id}
-                data-testid={`bind-row-${action.id}`}
-                data-recording={listening ? "true" : "false"}
-                className="group border-b border-edge"
-              >
-                <button
-                  type="button"
-                  data-bind-navigation
-                  data-testid={`bind-record-${action.id}`}
-                  disabled={!canRecord}
-                  aria-label={`Add a key for ${action.label}. Known startup keys ${bound || "unbound"}`}
-                  aria-pressed={listening}
-                  aria-describedby={`bind-hint-${action.id}`}
-                  onClick={() => onRow(action.id)}
-                  className="flex min-h-16 w-full min-w-0 items-center gap-3 rounded-md py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="t-row block">{action.label}</span>
-                    <span
-                      id={`bind-hint-${action.id}`}
-                      data-testid={listening && recorderNotice ? "bind-recorder-notice" : undefined}
-                      aria-live="polite"
-                      className="t-meta block min-h-5 text-ink-faint"
-                    >
-                      {listening ? (recorderNotice ?? "Esc cancels") : "\u00a0"}
-                    </span>
-                  </span>
-                  <span
-                    data-testid={`bind-key-${action.id}`}
-                    className={`min-w-20 shrink-0 rounded-md border px-3 py-2 text-center text-[13px] font-medium uppercase tracking-wide transition-colors duration-150 ${
-                      listening
-                        ? "border-brand bg-brand/5 text-ink ring-1 ring-brand"
-                        : "border-edge-strong bg-bg text-ink group-hover:border-ink-faint"
-                    }`}
-                  >
-                    {listening ? "Press a key" : bound || "—"}
-                  </span>
-                </button>
-                {keys.length > 0 ? (
-                  <ul data-testid={`bind-keys-${action.id}`} className="mb-3 space-y-1">
-                    {keys.map((binding) => (
-                      <li
-                        key={binding.key}
-                        className="flex items-center gap-2 text-xs text-ink-faint"
-                      >
-                        <span className="font-medium uppercase text-ink">{binding.key}</span>{" "}
-                        <span>
-                          {binding.source
-                            ? `${binding.source.file}:${binding.source.line}`
-                            : "Startup CFG (source unavailable)"}
-                        </span>
-                        {binding.owned ? (
-                          <button
-                            type="button"
-                            data-bind-navigation
-                            data-testid={`bind-remove-${action.id}-${binding.key}`}
-                            disabled={!canRecord}
-                            onClick={() =>
-                              setDraft(removeOwnedManagedBind(draft, action.id, binding.key))
-                            }
-                            className="ml-auto text-ink underline underline-offset-2 disabled:opacity-50"
-                          >
-                            Remove execs key
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {pending ? (
-                  <div
-                    data-testid={`bind-conflict-${action.id}`}
-                    className="mb-3 text-xs text-ink-faint"
-                  >
-                    <p>
-                      {pending.key} currently runs {pending.command} from {pending.source}. Assign
-                      it to
-                      {` ${action.label}`} instead?
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft(applyRecordedBind(draft, pending.actionId, pending.key));
-                        setPendingKey(null);
-                      }}
-                      className="mr-3 text-ink underline underline-offset-2"
-                    >
-                      Assign {pending.key}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendingKey(null)}
-                      className="text-ink underline underline-offset-2"
-                    >
-                      Keep current
-                    </button>
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        {visibleGroups.length === 0 ? (
+          <p data-testid="bind-search-empty" className="t-meta py-8">
+            No actions match “{query.trim()}”.
+          </p>
+        ) : null}
+        {visibleGroups.map((group) => (
+          <section
+            key={group.id}
+            aria-labelledby={`bind-group-${group.id}`}
+            className="mt-6 first:mt-0"
+          >
+            <h2
+              id={`bind-group-${group.id}`}
+              className={activeGroupId === "all" ? "eyebrow mb-1 px-2" : "sr-only"}
+            >
+              {group.title}
+            </h2>
+            <ul className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
+              {group.ids.map((actionId) => {
+                const action = bindActionById(actionId);
+                if (!action) return null;
+                const pending = pendingKey?.actionId === action.id ? pendingKey : null;
+                return (
+                  <BindRow
+                    key={action.id}
+                    id={action.id}
+                    label={action.label}
+                    keys={bindingsFor(action.id)}
+                    listening={recordingId === action.id}
+                    notice={recordingId === action.id ? recorderNotice : null}
+                    canRecord={canRecord}
+                    onRecord={() => onRow(action.id)}
+                    onRemove={(key) => setDraft(removeOwnedManagedBind(draft, action.id, key))}
+                    conflict={
+                      pending
+                        ? {
+                            ...pending,
+                            onAssign: () => {
+                              setDraft(applyRecordedBind(draft, pending.actionId, pending.key));
+                              setPendingKey(null);
+                            },
+                            onKeep: () => setPendingKey(null),
+                          }
+                        : null
+                    }
+                  />
+                );
+              })}
+            </ul>
+          </section>
+        ))}
       </div>
 
-      {!canRecord ? <p className="t-meta mt-8">Finish the current task first.</p> : null}
-      <p className="pane-note mt-6">
-        Add a key without changing an action’s other keys. Only execs keys can be removed here.
-        Sources describe inspected startup CFGs; class and in-game commands can change them. Saved
-        to
-        {` ${path}`}.
+      <p className="t-meta mt-8 px-2 text-ink-faint">
+        {canRecord
+          ? "Click an action, then press a key or mouse button. "
+          : "Finish the current task first. "}
+        Keys you add save to <span className="text-ink-muted">{path}</span>.
       </p>
     </section>
+  );
+}
+
+type RowBinding = ReturnType<typeof actionBindings>[number];
+
+function BindRow({
+  id,
+  label,
+  keys,
+  listening,
+  notice,
+  canRecord,
+  onRecord,
+  onRemove,
+  conflict,
+}: {
+  id: BindActionId;
+  label: string;
+  keys: RowBinding[];
+  listening: boolean;
+  notice: string | null;
+  canRecord: boolean;
+  onRecord: () => void;
+  onRemove: (key: string) => void;
+  conflict: {
+    key: string;
+    command: string;
+    source: string;
+    onAssign: () => void;
+    onKeep: () => void;
+  } | null;
+}) {
+  const spoken = keys.map((binding) => bindKeyLabel(binding.key)).join(", ");
+  return (
+    <li
+      data-testid={`bind-row-${id}`}
+      data-recording={listening ? "true" : "false"}
+      className="group border-b border-edge"
+    >
+      <div
+        className={`relative flex min-h-12 items-center gap-3 rounded-md px-2 transition-colors duration-150 ${
+          listening ? "bg-brand/5 ring-1 ring-brand" : canRecord ? "hover:bg-panel" : ""
+        }`}
+      >
+        {/* The whole row records. Key caps sit above it; only their remove buttons take clicks. */}
+        <button
+          type="button"
+          data-bind-navigation
+          data-testid={`bind-record-${id}`}
+          disabled={!canRecord}
+          aria-label={`${listening ? "Stop recording" : "Add a key"} for ${label}. Keys: ${spoken || "none"}`}
+          aria-pressed={listening}
+          aria-describedby={`bind-hint-${id}`}
+          onClick={onRecord}
+          className="absolute inset-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed"
+        />
+        <span className="t-row pointer-events-none relative min-w-0 flex-1 truncate">{label}</span>
+        <span
+          id={`bind-hint-${id}`}
+          data-testid={listening && notice ? "bind-recorder-notice" : undefined}
+          aria-live="polite"
+          className={`t-meta pointer-events-none relative shrink-0 ${listening ? "" : "sr-only"}`}
+        >
+          {listening ? (notice ?? "Esc cancels") : ""}
+        </span>
+        <span
+          data-testid={`bind-key-${id}`}
+          className="pointer-events-none relative flex shrink-0 flex-wrap items-center justify-end gap-1.5"
+        >
+          <span data-testid={`bind-keys-${id}`} className="contents">
+            {keys.map((binding) => (
+              <KeyCap
+                key={binding.key}
+                actionId={id}
+                actionLabel={label}
+                binding={binding}
+                canRemove={canRecord}
+                onRemove={onRemove}
+              />
+            ))}
+          </span>
+          {listening ? (
+            <span className="inline-flex h-7 items-center rounded border border-brand px-2 text-xs font-medium text-ink">
+              Press a key
+            </span>
+          ) : keys.length === 0 ? (
+            <span className="px-1 text-xs text-ink-faint group-hover:hidden">Not bound</span>
+          ) : null}
+          {!listening && canRecord ? (
+            <span
+              aria-hidden="true"
+              className="hidden h-7 items-center gap-1 rounded border border-dashed border-edge-strong px-2 text-xs text-ink-muted group-hover:inline-flex"
+            >
+              <Plus size={11} /> Add
+            </span>
+          ) : null}
+        </span>
+      </div>
+      {conflict ? (
+        <div data-testid={`bind-conflict-${id}`} className="px-2 pt-2 pb-3">
+          <p className="t-meta" title={`Set in ${conflict.source}`}>
+            <span className="font-medium text-ink">{bindKeyLabel(conflict.key)}</span>{" "}
+            {bindActionForCommand(conflict.command) ? (
+              <>is bound to {bindActionForCommand(conflict.command)?.label}.</>
+            ) : (
+              <>
+                already runs <code className="text-ink-muted">{conflict.command}</code>.
+              </>
+            )}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="btn btn-primary" onClick={conflict.onAssign}>
+              Use for {label}
+            </button>
+            <button type="button" className="btn btn-quiet" onClick={conflict.onKeep}>
+              Keep current
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function KeyCap({
+  actionId,
+  actionLabel,
+  binding,
+  canRemove,
+  onRemove,
+}: {
+  actionId: BindActionId;
+  actionLabel: string;
+  binding: RowBinding;
+  canRemove: boolean;
+  onRemove: (key: string) => void;
+}) {
+  const name = bindKeyLabel(binding.key);
+  const origin = binding.source
+    ? `${binding.source.file}, line ${binding.source.line}`
+    : "a startup cfg";
+  return (
+    <span
+      data-testid={`bind-cap-${actionId}-${binding.key}`}
+      title={binding.owned ? `Added in execs (${origin})` : `Set in ${origin}`}
+      className="pointer-events-auto relative inline-flex h-7 min-w-8 items-center justify-center rounded border border-edge-strong bg-panel-raised px-2 text-xs font-medium text-ink shadow-[inset_0_-1px_0_rgb(0_0_0/0.35)]"
+    >
+      {name}
+      {binding.owned ? (
+        <button
+          type="button"
+          data-bind-navigation
+          data-testid={`bind-remove-${actionId}-${binding.key}`}
+          disabled={!canRemove}
+          aria-label={`Remove ${name} from ${actionLabel}`}
+          onClick={() => onRemove(binding.key)}
+          className="absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:hidden"
+        >
+          <X size={9} weight="bold" aria-hidden="true" />
+        </button>
+      ) : null}
+    </span>
   );
 }

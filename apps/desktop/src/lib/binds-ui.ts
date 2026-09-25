@@ -34,7 +34,14 @@ export const BIND_ACTIONS = [
   { id: "slot4", label: "Weapon slot 4", command: "slot4" },
   { id: "slot5", label: "Weapon slot 5", command: "slot5" },
   { id: "slot6", label: "Weapon slot 6 / grappling hook", command: "slot6" },
-  { id: "medic", label: "Call medic", command: "voicemenu 0 0" },
+  { id: "medic", label: "Medic!", command: "voicemenu 0 0" },
+  { id: "thanks", label: "Thanks!", command: "voicemenu 0 1" },
+  { id: "help", label: "Help!", command: "voicemenu 2 0" },
+  { id: "incoming", label: "Incoming", command: "voicemenu 1 0" },
+  { id: "spy", label: "Spy!", command: "voicemenu 1 1" },
+  { id: "sentryahead", label: "Sentry ahead!", command: "voicemenu 1 2" },
+  { id: "activatecharge", label: "Activate charge!", command: "voicemenu 1 6" },
+  { id: "battlecry", label: "Battle cry", command: "voicemenu 2 1" },
   { id: "use", label: "Use", command: "+use" },
   { id: "voice", label: "Voice chat", command: "+voicerecord" },
   { id: "chat", label: "Text chat", command: "say" },
@@ -56,6 +63,7 @@ export const BIND_ACTIONS = [
   { id: "mapinfo", label: "Map info", command: "showmapinfo" },
   { id: "contracts", label: "Contracts", command: "show_quest_log" },
   { id: "console", label: "Developer console", command: "toggleconsole" },
+  { id: "screenshot", label: "Screenshot", command: "screenshot" },
   { id: "loadout0", label: "Loadout A", command: "load_itempreset 0" },
   { id: "loadout1", label: "Loadout B", command: "load_itempreset 1" },
   { id: "loadout2", label: "Loadout C", command: "load_itempreset 2" },
@@ -64,6 +72,174 @@ export const BIND_ACTIONS = [
 
 export type BindAction = (typeof BIND_ACTIONS)[number];
 export type BindActionId = BindAction["id"];
+
+/** Actions grouped by what the player is doing. Every action appears once. */
+export const BIND_GROUPS: ReadonlyArray<{ id: string; title: string; ids: BindActionId[] }> = [
+  {
+    id: "movement",
+    title: "Movement",
+    ids: ["forward", "back", "moveleft", "moveright", "jump", "duck"],
+  },
+  {
+    id: "combat",
+    title: "Combat",
+    ids: ["attack", "attack2", "attack3", "reload", "inspect", "taunt"],
+  },
+  {
+    id: "weapons",
+    title: "Weapons",
+    ids: ["slot1", "slot2", "slot3", "slot4", "slot5", "slot6", "lastinv", "invprev", "invnext"],
+  },
+  {
+    id: "communication",
+    title: "Chat",
+    ids: ["voice", "chat", "teamchat", "partychat", "voicemenu1", "voicemenu2", "voicemenu3"],
+  },
+  {
+    id: "voice",
+    title: "Voice",
+    ids: [
+      "medic",
+      "thanks",
+      "help",
+      "incoming",
+      "spy",
+      "sentryahead",
+      "activatecharge",
+      "battlecry",
+    ],
+  },
+  {
+    id: "gameplay",
+    title: "Gameplay",
+    ids: ["use", "actionslot", "dropitem", "spray", "lastdisguise", "ready"],
+  },
+  {
+    id: "menus",
+    title: "Menus",
+    ids: [
+      "showscores",
+      "changeclass",
+      "changeteam",
+      "character",
+      "backpack",
+      "mapinfo",
+      "contracts",
+      "console",
+      "screenshot",
+    ],
+  },
+  {
+    id: "loadouts",
+    title: "Loadouts",
+    ids: ["loadout0", "loadout1", "loadout2", "loadout3"],
+  },
+];
+
+/** Words players search for that an action's name does not contain. */
+const SEARCH_HINTS: Partial<Record<BindActionId, string>> = {
+  attack: "shoot fire mouse",
+  attack2: "alt fire zoom scope airblast",
+  attack3: "mvm canteen",
+  lastdisguise: "spy",
+  activatecharge: "medic uber ubercharge",
+  actionslot: "canteen grappling spellbook",
+  slot6: "grapple",
+  spray: "logo",
+  ready: "mvm",
+  showscores: "tab score",
+  voice: "mic push to talk",
+  chat: "say all",
+  console: "tilde",
+};
+
+const KEY_LABELS: Record<string, string> = {
+  space: "Space",
+  ctrl: "Ctrl",
+  shift: "Shift",
+  alt: "Alt",
+  tab: "Tab",
+  enter: "Enter",
+  escape: "Esc",
+  backspace: "Backspace",
+  capslock: "Caps Lock",
+  ins: "Insert",
+  del: "Delete",
+  home: "Home",
+  end: "End",
+  pgup: "Page Up",
+  pgdn: "Page Down",
+  uparrow: "Up",
+  downarrow: "Down",
+  leftarrow: "Left",
+  rightarrow: "Right",
+  semicolin: ";",
+  apostrophe: "'",
+  comma: ",",
+  period: ".",
+  slash: "/",
+  backslash: "\\",
+  minus: "-",
+  equal: "=",
+  mwheelup: "Wheel up",
+  mwheeldown: "Wheel down",
+  kp_ins: "Num 0",
+  kp_end: "Num 1",
+  kp_downarrow: "Num 2",
+  kp_pgdn: "Num 3",
+  kp_leftarrow: "Num 4",
+  kp_5: "Num 5",
+  kp_rightarrow: "Num 6",
+  kp_home: "Num 7",
+  kp_uparrow: "Num 8",
+  kp_pgup: "Num 9",
+  kp_del: "Num .",
+  kp_slash: "Num /",
+  kp_multiply: "Num *",
+  kp_minus: "Num -",
+  kp_plus: "Num +",
+  kp_enter: "Num Enter",
+};
+
+/** A Source key name as players read it on a keyboard: `kp_end` is "Num 1". */
+export function bindKeyLabel(key: string): string {
+  const lower = key.toLowerCase();
+  if (KEY_LABELS[lower]) return KEY_LABELS[lower];
+  const mouse = /^mouse([1-5])$/.exec(lower);
+  if (mouse) return `Mouse ${mouse[1]}`;
+  return lower.length === 1 || /^f\d{1,2}$/.test(lower) ? lower.toUpperCase() : lower;
+}
+
+/**
+ * Actions matching every word of a search, by name, group, command or a key
+ * already bound to it, so "mouse4" finds whatever that button does.
+ */
+export function searchBindActions(
+  query: string,
+  keysFor: (id: BindActionId) => readonly string[],
+): Set<BindActionId> {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = new Set<BindActionId>();
+  for (const group of BIND_GROUPS) {
+    for (const id of group.ids) {
+      const action = bindActionById(id);
+      if (!action) continue;
+      const keys = keysFor(id);
+      const haystack = [
+        action.label,
+        group.title,
+        action.command,
+        SEARCH_HINTS[id] ?? "",
+        ...keys,
+        ...keys.map(bindKeyLabel),
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (words.every((word) => haystack.includes(word))) matches.add(id);
+    }
+  }
+  return matches;
+}
 
 export type BindMap = Map<string, string> | Record<string, string>;
 export type BindSourceMap = Record<string, { file: string; line: number }>;
@@ -201,6 +377,11 @@ export function isBindActionId(value: string): value is BindActionId {
 
 export function bindActionById(id: string): BindAction | undefined {
   return BIND_ACTIONS.find((action) => action.id === id);
+}
+
+/** The pane action a bind command runs, when it is one of ours. */
+export function bindActionForCommand(command: string): BindAction | undefined {
+  return COMMAND_TO_ACTION.get(normalizeBindCommand(command));
 }
 
 export function normalizeBindCommand(command: string): string {
