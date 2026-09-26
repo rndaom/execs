@@ -38,6 +38,9 @@ User-facing changes only. The release workflow publishes the matching
   actions by the key bound to them, and readable key caps such as Mouse 4 and Num 1. New actions
   cover common voice commands (Thanks, Help, Incoming, Spy, Sentry ahead, Activate charge,
   Battle cry) and Screenshot.
+- App settings has a Health section: whether TF2 and the config loader were found, anything
+  interrupted, saved profiles with missing files, the local Steam Cloud copy, and what works
+  offline. It only reads; nothing is changed.
 - The GameBanana file chooser shows when each author file was uploaded and picks the only
   installable file for you. Split downloads (PART 1, PART 2…) are explained instead of installed
   half-finished, and a file GameBanana no longer has says so plainly.

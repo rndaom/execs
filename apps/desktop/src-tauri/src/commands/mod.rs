@@ -9,6 +9,7 @@ pub mod diagnostics;
 pub mod files;
 pub mod finder;
 pub mod first_run;
+pub mod health;
 pub mod hitsound;
 pub mod hud;
 pub mod inventory;
