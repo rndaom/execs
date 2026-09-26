@@ -92,6 +92,11 @@ export function DotEmblem({
 
     function tick(now: number) {
       frame = 0;
+      // High-refresh displays: about 120 draws a second is plenty for this.
+      if (now - last < 7.5) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       const dt = Math.min(48, now - last);
       last = now;
       const elapsed = now - started;
