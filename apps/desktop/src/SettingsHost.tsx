@@ -4,6 +4,7 @@ import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
+import { Disclosure } from "./components/ui/Disclosure";
 import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
@@ -53,12 +54,14 @@ import { gameplayPath } from "./lib/gameplay-ui";
 import { hudOverlayCrosshairState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
+import { overviewRows } from "./lib/overview-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { type CfgText, readSettingsSnapshot } from "./lib/settings-loading";
 import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import { prefetchViewmodelCatalog } from "./lib/viewmodel-catalog-cache";
 import { ModsPane } from "./ModsPane";
+import { type OverviewNotice, OverviewPane } from "./OverviewPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
@@ -805,6 +808,54 @@ export function SettingsHost({
         options,
       );
     }
+    if (tab === "overview") {
+      const cfgReadable = !filesLimited && maps.complete;
+      const notices: OverviewNotice[] = [];
+      if (!cfgReadable && onNavigate) {
+        notices.push({
+          id: "cfg",
+          message: filesLimited
+            ? (cfgReadProblem ?? CFG_INCOMPLETE_MESSAGE)
+            : (maps.reason ?? CFG_INCOMPLETE_MESSAGE),
+          action: "Review in Files",
+          onAction: () => {
+            if (maps.issue)
+              setFilesReviewTarget({ id: ++filesReviewSequence.current, ...maps.issue });
+            onNavigate("files");
+          },
+        });
+      }
+      const changed: [SettingsTab, boolean | undefined, string][] = [
+        ["crosshair", detail?.crosshair?.sourceChanged, "Crosshair files changed outside execs."],
+        ["viewmodels", detail?.viewmodel?.sourceChanged, "Viewmodel files changed outside execs."],
+        ["sounds", detail?.hitsound?.sourceChanged, "Sound files changed outside execs."],
+      ];
+      for (const [target, flagged, message] of changed) {
+        if (flagged && onNavigate) {
+          notices.push({
+            id: target,
+            message,
+            action: `Open ${SETTINGS_TAB_LABELS[target]}`,
+            onAction: () => onNavigate(target),
+          });
+        }
+      }
+      return (
+        <OverviewPane
+          rows={overviewRows({
+            detail,
+            comfig,
+            effective: maps.effective,
+            binds: maps.binds,
+            settingsComplete: cfgReadable,
+            launchOptions: detail?.launchOptions ?? "",
+          })}
+          notices={notices}
+          onOpen={(target) => onNavigate?.(target)}
+        />
+      );
+    }
+
     if (tab === "comfig") {
       return (
         <ComfigPane
@@ -1556,21 +1607,35 @@ export function SettingsHost({
           {!identityPending && profileId && visible && tab === paneTab && provenance ? (
             <CfgOverridesAlert provenance={provenance} onOpen={openCfgSource} />
           ) : null}
+          {filesLimited && usesCfgState(paneTab) && cfgSnapshotProfileId !== profileId ? (
+            <p data-testid="settings-cfg-unavailable" className="t-meta">
+              CFG controls are unavailable until the listed file can be read.
+            </p>
+          ) : (
+            pane(paneTab, visible && tab === paneTab)
+          )}
           {!identityPending &&
           profileId &&
           visible &&
           tab === paneTab &&
           (conditionalSources[paneTab]?.length ?? 0) > 0 ? (
-            <aside
-              data-testid="conditional-cfg-sources"
-              aria-label="Other CFG sources"
-              className="pane-note mb-5"
+            <Disclosure
+              profileId={profileId}
+              storageKey={`conditional-cfg-sources-${paneTab}`}
+              testId="conditional-cfg-sources"
+              className="mt-8"
+              summary={
+                <span className="t-row">
+                  Class cfgs and launch options that can change these (
+                  {conditionalSources[paneTab].length})
+                </span>
+              }
             >
-              <p>
-                These controls show inspected startup CFG values. Launch commands and class CFG
-                lines below may change the game result; launch command order needs TF2 validation.
+              <p className="t-meta mt-2">
+                These controls show the values your startup cfgs set. The lines below can set them
+                again when you play a class or launch TF2.
               </p>
-              <ul className="mt-2 space-y-1">
+              <ul className="t-meta mt-2 space-y-1">
                 {conditionalSources[paneTab].slice(0, 6).map((source) => (
                   <li key={JSON.stringify(source)}>
                     {onNavigate ? (
@@ -1601,17 +1666,12 @@ export function SettingsHost({
                 ))}
               </ul>
               {conditionalSources[paneTab].length > 6 ? (
-                <p className="mt-1">And {conditionalSources[paneTab].length - 6} more sources.</p>
+                <p className="t-meta mt-1">
+                  And {conditionalSources[paneTab].length - 6} more sources.
+                </p>
               ) : null}
-            </aside>
+            </Disclosure>
           ) : null}
-          {filesLimited && usesCfgState(paneTab) && cfgSnapshotProfileId !== profileId ? (
-            <p data-testid="settings-cfg-unavailable" className="t-meta">
-              CFG controls are unavailable until the listed file can be read.
-            </p>
-          ) : (
-            pane(paneTab, visible && tab === paneTab)
-          )}
           {!identityPending && profileId && visible && tab === paneTab && provenance ? (
             <CfgSourcesDetails
               profileId={profileId}

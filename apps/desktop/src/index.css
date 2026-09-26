@@ -1344,3 +1344,168 @@ a:focus-visible,
     color: var(--color-brand);
   }
 }
+
+@layer components {
+  /* Overview: one hairline-divided list; each row leads to its pane. */
+  .overview-list {
+    border-top: 1px solid var(--color-edge);
+  }
+
+  .overview-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--color-edge);
+    text-align: left;
+    transition: background-color var(--motion) ease;
+  }
+
+  .overview-row:hover {
+    background: var(--color-panel);
+  }
+
+  .overview-icon {
+    display: inline-flex;
+    flex: none;
+    color: var(--color-ink-faint);
+  }
+
+  .overview-label {
+    flex: none;
+    width: 120px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .overview-value {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-ink-muted);
+  }
+
+  .overview-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 8px 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--color-warn) 45%, transparent);
+    border-radius: var(--radius-lg);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  .comfig-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+  }
+
+  @media (min-width: 900px) {
+    .comfig-addons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 32px;
+    }
+  }
+}
+
+/* Two columns: the left cell of the last row drops its hairline too. Unlayered
+   so it wins over the row's own border utility. */
+@media (min-width: 900px) {
+  .comfig-addons > :nth-last-child(2):nth-child(odd) {
+    border-bottom-width: 0;
+  }
+}
+
+@layer components {
+  /* Save progress lives in the header as one quiet line of text. */
+  .save-status-slot {
+    display: inline-flex;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .save-status {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 22rem;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-ink-muted);
+  }
+
+  .save-status-floating,
+  .save-alert-floating {
+    pointer-events: auto;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-lg);
+    background: var(--color-panel-raised);
+    padding: 8px 14px;
+  }
+
+  /* A failed save: a strip under the header, like the TF2-running notice. */
+  .save-alert {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    background: color-mix(in srgb, var(--color-error) 8%, var(--color-bg));
+    font-size: 13.5px;
+    line-height: 1.45;
+    text-align: left;
+    color: var(--color-ink);
+  }
+
+  .save-alert-floating {
+    max-width: 34rem;
+    border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
+  }
+}
+
+@layer components {
+  /* Menu rows: the profile menu uses the same flat row as context menus. */
+  .menu-row {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    gap: 10px;
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    font-size: 13.5px;
+    color: var(--color-ink-muted);
+    text-align: left;
+    transition:
+      background-color var(--motion) ease,
+      color var(--motion) ease;
+  }
+
+  .menu-row:hover,
+  button.menu-row:focus-visible {
+    background: var(--color-edge);
+    color: var(--color-ink);
+  }
+
+  button.menu-row:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  .menu-row-current,
+  .menu-row-current:hover {
+    background: transparent;
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+}

@@ -48,9 +48,15 @@ function render(
 }
 
 describe("ComfigPane workspaces", () => {
-  it("exposes every module category and official addon without a disclosure", async () => {
+  it("folds module overrides away by default while keeping every module and addon reachable", async () => {
     await act(async () => render());
-    expect(document.querySelector('[data-testid="comfig-modules"]')?.closest("details")).toBeNull();
+    const fold = document.querySelector('[data-testid="comfig-modules"]')?.closest("details");
+    expect(fold).not.toBeNull();
+    expect(fold?.open).toBe(false);
+    expect(document.querySelector('[data-testid="comfig-modules-summary"]')?.textContent).toBe(
+      "1 module changed from Medium",
+    );
+    if (fold) fold.open = true;
     for (const group of COMFIG_MODULE_GROUPS) {
       await act(async () => document.getElementById(`comfig-module-tab-${group.id}`)?.click());
       expect(
@@ -76,14 +82,12 @@ describe("ComfigPane workspaces", () => {
   it("keeps the committed preset summary when a selection fails", async () => {
     const apply = vi.fn(async () => false);
     await act(async () => render(apply));
-    const summary = document.querySelector('[aria-label="Selected preset details"]');
-    expect(summary?.textContent).toContain("Medium");
-    expect(summary?.textContent).toContain("1 module override");
+    const summary = document.querySelector('[data-testid="comfig-modules-summary"]');
+    expect(summary?.textContent).toBe("1 module changed from Medium");
     await act(async () => document.getElementById("comfig-preset-high")?.click());
     expect(apply).toHaveBeenCalledWith("high");
     expect(document.querySelector<HTMLInputElement>("#comfig-preset-medium")?.checked).toBe(true);
-    expect(summary?.textContent).toContain("Medium");
-    expect(summary?.textContent).not.toContain("High quality for modern systems");
+    expect(summary?.textContent).toBe("1 module changed from Medium");
     expect(document.querySelector("img")).toBeNull();
     for (const preset of COMFIG_PRESETS) {
       expect(document.getElementById(`comfig-preset-${preset.id}`)).not.toBeNull();

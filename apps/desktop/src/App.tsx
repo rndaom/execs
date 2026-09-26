@@ -71,7 +71,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const profileSettings = useRef<HTMLDivElement>(null);
   const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
-    () => previewSettingsTab(preview) ?? "comfig",
+    () => previewSettingsTab(preview) ?? "overview",
   );
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
@@ -747,17 +747,22 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
               />
             )}
 
-            <AppFooter
-              api={api}
-              update={{
-                ...update,
-                install: async () => {
-                  filesExit.request(update.install);
-                },
-              }}
-              pinned={readyShellOpen}
-              onSettings={settingsOpen ? undefined : openAppSettings}
-            />
+            {/* The ready shell has App settings in its sidebar, which holds the
+                version, update check, support and notices. First-run screens
+                keep this footer as their way there. */}
+            {readyShellOpen ? null : (
+              <AppFooter
+                api={api}
+                update={{
+                  ...update,
+                  install: async () => {
+                    filesExit.request(update.install);
+                  },
+                }}
+                pinned={false}
+                onSettings={settingsOpen ? undefined : openAppSettings}
+              />
+            )}
           </main>
         </div>
       </ToastProvider>

@@ -1,34 +1,6 @@
-import {
-  Backpack,
-  Crosshair,
-  FolderOpen,
-  GameController,
-  Keyboard,
-  Monitor,
-  Package,
-  Play,
-  SlidersHorizontal,
-  SpeakerHigh,
-  UserFocus,
-} from "@phosphor-icons/react";
-import { Component, type ComponentType, createRef, type ReactNode } from "react";
+import { Component, createRef, type ReactNode } from "react";
+import { SETTINGS_TAB_ICONS } from "./components/ui/tabIcons";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
-
-type NavIcon = ComponentType<{ size?: number; weight?: "regular" | "bold" }>;
-
-const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
-  comfig: SlidersHorizontal,
-  binds: Keyboard,
-  gameplay: GameController,
-  hud: Monitor,
-  crosshair: Crosshair,
-  viewmodels: UserFocus,
-  sounds: SpeakerHigh,
-  mods: Package,
-  files: FolderOpen,
-  launch: Play,
-  inventory: Backpack,
-};
 
 type WorkspaceTab = SettingsTab | "app";
 
@@ -167,9 +139,11 @@ export function SettingsLayout({
         <nav className="settings-nav" aria-label="Settings">
           {SETTINGS_TAB_GROUPS.map((group) => (
             <div key={group.label} className="settings-nav-group">
-              <p className="eyebrow settings-nav-heading" aria-hidden="true">
-                {group.label}
-              </p>
+              {group.label ? (
+                <p className="eyebrow settings-nav-heading" aria-hidden="true">
+                  {group.label}
+                </p>
+              ) : null}
               {group.tabs.map((item) => {
                 const active = page === null && item === tab;
                 const Icon = SETTINGS_TAB_ICONS[item];

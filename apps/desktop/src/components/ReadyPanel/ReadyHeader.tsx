@@ -2,6 +2,7 @@ import { Check, Copy, Play } from "@phosphor-icons/react";
 import { type ReactNode, useId } from "react";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { formatInstallLabel } from "../../lib/finder-ui";
+import { SaveStatusSlot } from "../ui/Toast";
 
 /**
  * The app chrome: wordmark, profile switcher, install folder, and either a
@@ -73,13 +74,16 @@ export function ReadyHeader({
         </button>
       </div>
 
+      {/* Quiet save progress sits just before the launch controls. */}
+      <SaveStatusSlot className="mr-1 ml-auto" />
+
       {running ? (
-        <div className="t-meta ml-auto flex shrink-0 items-center gap-2">
+        <div className="t-meta flex shrink-0 items-center gap-2">
           <span className="size-2 rounded-full bg-warn" aria-hidden="true" />
           <span className="hidden sm:inline">Game running</span>
         </div>
       ) : (
-        <div className="ml-auto flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
+        <div className="flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
           {launchWarning && !launching && !disabled ? (
             <p
               data-testid="launch-sync-warning"
