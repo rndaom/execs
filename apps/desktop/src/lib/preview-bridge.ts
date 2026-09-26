@@ -1286,6 +1286,42 @@ export function createPreviewApi(state: PreviewState): Api {
       const { PREVIEW_APP_VERSION } = await import("./updater-ui");
       return PREVIEW_APP_VERSION;
     },
+    async getInstallHealth() {
+      return {
+        tf2Root: BROWSED.path,
+        libraryUsable: true,
+        rootMismatch: false,
+        activeLayer: "comfig" as const,
+        profiles: [
+          {
+            id: "main",
+            name: "Main",
+            active: true,
+            trackedFiles: 412,
+            missingFiles: 0,
+            missingExamples: [],
+            uncachedDownloads: [],
+            needsLegacyLibrary: false,
+          },
+          {
+            id: "casual",
+            name: "Casual",
+            active: false,
+            trackedFiles: 188,
+            missingFiles: 0,
+            missingExamples: [],
+            uncachedDownloads: ["Flat Textures v1"],
+            needsLegacyLibrary: false,
+          },
+        ],
+        recovery: { pendingSwitch: null, profileUpdate: false, casual: false, unknown: false },
+        steamAccountFound: true,
+        cloudConfigPresent: true,
+        hudCatalogAgeSeconds: 3 * 86_400,
+        legacyLibraryPresent: false,
+        gameRunning: previewLocked(state),
+      };
+    },
     async getDiagnostics() {
       const { PREVIEW_APP_VERSION } = await import("./updater-ui");
       return `execs ${PREVIEW_APP_VERSION}\nOS: preview\nTF2: ${BROWSED.path}\nProfiles: 1 (active: Main)\npanic.log: none\n`;

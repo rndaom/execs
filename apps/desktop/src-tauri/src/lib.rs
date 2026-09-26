@@ -742,6 +742,7 @@ pub fn run() {
             commands::hitsound::remove_hitsounds,
             commands::open_embedded_page,
             commands::diagnostics::get_diagnostics,
+            commands::health::get_install_health,
             commands::preloader::get_preloader_status,
             commands::preloader::recover_preloader,
             commands::preloader::get_default_mods,

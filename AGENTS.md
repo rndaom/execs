@@ -30,6 +30,7 @@ Commands: `pnpm install`, `pnpm desktop:dev` (Tauri), `pnpm dev` (browser only, 
 - **Pane logic lives in `lib/*-ui.ts` with unit tests**; components stay thin. Drafts use `useSeededDraft` keyed by profile id so a switch never leaks a draft into another profile.
 - **Crash hardening:** no `panic = "abort"`; panics log to `<data dir>/logs/panic.log`; the lock poller wraps each tick in `catch_unwind`; heavy work never runs on the main thread.
 - **Data dir:** Windows `%AppData%\execs`, Linux `$XDG_DATA_HOME/execs` or `~/.local/share/execs` (`settings.json`, `profiles/`, caches per feature, `preloader/originals` snapshots, `logs/`). Not Tauri's app-data dir.
+- App settings Health (`execs-core` `health.rs`, `get_install_health`) is read-only: confirmed root, active cfg layer, pending switch/profile/Casual journals, per-profile missing library bytes (stat only) and uncached direct-author Casual downloads, the picked Steam account's local Cloud `config.cfg`, HUD catalog cache age and legacy library presence. Unreadable evidence is unknown; a local Cloud copy is never described as a confirmed upload; no Steam verification or fetch starts.
 
 ## Integrity rules
 
