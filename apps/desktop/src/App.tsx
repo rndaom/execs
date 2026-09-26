@@ -329,6 +329,22 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             install.change();
           })
         }
+        onUninstall={(deleteData, onError) =>
+          filesExit.request(async () => {
+            try {
+              await api.uninstallExecs(deleteData);
+            } catch (err) {
+              onError(invokeErrorMessage(err));
+            }
+          })
+        }
+        uninstallBlockedReason={
+          lock.running
+            ? "Close TF2 before uninstalling."
+            : anyBusy || progress.state.active
+              ? "Wait for the current operation to finish."
+              : null
+        }
         changeInstallDisabled={anyBusy || lock.running || progress.state.active}
         changeInstallReason={
           lock.running

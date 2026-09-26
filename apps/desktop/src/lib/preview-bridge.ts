@@ -508,6 +508,22 @@ export function createPreviewApi(state: PreviewState): Api {
         blocked: null,
       };
     },
+    async getUninstallInfo() {
+      return {
+        install: {
+          kind: "windowsInstaller" as const,
+          uninstaller: "C:/Users/user/AppData/Local/execs/uninstall.exe",
+        },
+        dataDirectory: "/home/user/.local/share/execs",
+        casual: {
+          patchedFiles: modsPayload.status?.patchedFiles?.length ?? 0,
+          gameinfoBypassed: modsPayload.status?.gameinfoBypassed ?? false,
+        },
+      };
+    },
+    async uninstallExecs() {
+      throw new BridgeError("Uninstall is not available in the browser preview.", "PreviewOnly");
+    },
     async getAppSettings() {
       return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
     },

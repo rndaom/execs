@@ -2,6 +2,7 @@ import { ArrowSquareOut, Copy, FolderOpen, Info } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
 import { InstallHealthPanel } from "./components/InstallHealth";
 import { StorageUsage } from "./components/StorageUsage";
+import { UninstallSection } from "./components/UninstallSection";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -35,6 +36,9 @@ export type AppSettingsPaneProps = {
   backAction?: ReactNode;
   /** Preference writes wait for the native close listener. Reads remain usable. */
   ready?: boolean;
+  /** Absent in contexts that cannot uninstall (tests, first-run shells). */
+  onUninstall?: (deleteData: boolean, onError: (message: string) => void) => void;
+  uninstallBlockedReason?: string | null;
 };
 
 function SettingsSection({
@@ -75,6 +79,8 @@ export function AppSettingsPane({
   changeInstallReason = null,
   backAction,
   ready = true,
+  onUninstall,
+  uninstallBlockedReason = null,
 }: AppSettingsPaneProps) {
   const installation = useCopyFeedback();
   const storage = useCopyFeedback();
@@ -340,6 +346,20 @@ export function AppSettingsPane({
             </div>
           </Disclosure>
         </SettingsSection>
+
+        {onUninstall ? (
+          <SettingsSection
+            id="app-uninstall"
+            title="Uninstall"
+            description="Remove execs from this computer."
+          >
+            <UninstallSection
+              api={api}
+              blockedReason={!ready ? "Wait for execs to finish starting." : uninstallBlockedReason}
+              onUninstall={onUninstall}
+            />
+          </SettingsSection>
+        ) : null}
       </div>
     </div>
   );
