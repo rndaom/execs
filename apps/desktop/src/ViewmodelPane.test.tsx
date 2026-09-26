@@ -329,6 +329,55 @@ describe("Viewmodels source-derived draft", () => {
     expect(getCatalog).toHaveBeenCalledTimes(1);
   });
 
+  it("previews a whole-profile change, applies it only to the draft and can undo it", async () => {
+    await render();
+    await click('[data-testid="viewmodel-choice-scout/a-weapon"]');
+    await click('[data-testid="viewmodel-presets"]');
+    await click('[data-testid="viewmodel-preset-hide-all"]');
+    // Every row across both classes, with its exact change.
+    expect(element('[data-testid="viewmodel-preset-count"]').textContent).toBe("3 choices change:");
+    const changes = element('[data-testid="viewmodel-preset-changes"]').textContent ?? "";
+    expect(changes).toContain("Hands only → Hidden");
+    expect(changes).toContain("Shown → Hidden");
+    expect(changes).toContain("Soldier");
+
+    // Cancel leaves the custom selection exactly as it was.
+    const cancel = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Cancel",
+    );
+    await act(async () => cancel?.click());
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
+      "1 hidden · not built yet",
+    );
+
+    await click('[data-testid="viewmodel-presets"]');
+    await click('[data-testid="viewmodel-preset-hide-all"]');
+    await click('[data-testid="viewmodel-preset-apply"]');
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
+      "3 hidden · not built yet",
+    );
+    expect(buildPack).not.toHaveBeenCalled();
+    await click('[data-testid="viewmodel-preset-undo"]');
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
+      "1 hidden · not built yet",
+    );
+    expect(box.querySelector('[data-testid="viewmodel-preset-undo"]')).toBeNull();
+
+    // Show all is a no-op review when nothing is hidden, and a row edit ends undo.
+    await click('[data-testid="viewmodel-presets"]');
+    await click('[data-testid="viewmodel-preset-show-all"]');
+    await click('[data-testid="viewmodel-preset-apply"]');
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
+      "Everything shown",
+    );
+    await click('[data-testid="viewmodel-choice-scout/b-full"]');
+    expect(box.querySelector('[data-testid="viewmodel-preset-undo"]')).toBeNull();
+    await click('[data-testid="viewmodel-presets"]');
+    await click('[data-testid="viewmodel-preset-keep-melee"]');
+    await click('[data-testid="viewmodel-preset-mode-full"]');
+    expect(element('[data-testid="viewmodel-preset-count"]').textContent).toBe("2 choices change:");
+  });
+
   it("identifies overlapping modes during review", async () => {
     await render();
     await click('[data-testid="viewmodel-choice-scout/a-full"]');
