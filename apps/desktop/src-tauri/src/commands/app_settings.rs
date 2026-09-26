@@ -47,3 +47,30 @@ pub async fn set_app_preferences(
     })
     .await
 }
+
+/// Read-only sizes of the data directory, grouped by what each entry is for.
+#[tauri::command]
+pub async fn get_storage_usage() -> Result<execs_core::storage::StorageReport, CommandError> {
+    blocking(|| {
+        let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
+        execs_core::storage::inspect_storage(&data_dir)
+            .map_err(|err| CommandError::new("StorageRead", err.to_string()))
+    })
+    .await
+}
+
+/// Delete rebuildable downloads and retired leftovers. This is app data, not
+/// the TF2 surface, so it is allowed while the game runs; the write gate keeps
+/// it from racing a switch or Casual apply that reads those downloads.
+#[tauri::command]
+pub async fn clear_download_caches(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<execs_core::storage::ClearReport, CommandError> {
+    let _guard = gate.writes.lock().await;
+    blocking(|| {
+        let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
+        execs_core::storage::clear_download_caches(&data_dir)
+            .map_err(|err| CommandError::new("StorageClear", err.to_string()))
+    })
+    .await
+}

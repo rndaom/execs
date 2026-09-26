@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AppPreferences, AppSettingsPayload } from "./app-settings-ui";
+import type {
+  AppPreferences,
+  AppSettingsPayload,
+  ClearReport,
+  StorageReport,
+} from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 import type { InstallHealth } from "./health-ui";
 
@@ -205,6 +210,14 @@ export function getAppSettings(): Promise<AppSettingsPayload> {
 
 export function setAppPreferences(preferences: AppPreferences): Promise<AppSettingsPayload> {
   return call("set_app_preferences", { preferences });
+}
+
+export function getStorageUsage(): Promise<StorageReport> {
+  return call("get_storage_usage");
+}
+
+export function clearDownloadCaches(): Promise<ClearReport> {
+  return call("clear_download_caches");
 }
 
 export type AbsorbDelta = {
