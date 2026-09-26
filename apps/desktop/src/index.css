@@ -1517,7 +1517,7 @@ a:focus-visible,
   /* One underline glides between tabs. */
   .class-tabs-indicator {
     position: absolute;
-    bottom: -1px;
+    top: 0;
     left: 0;
     height: 2px;
     border-radius: 2px 2px 0 0;

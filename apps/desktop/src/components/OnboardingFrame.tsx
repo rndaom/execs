@@ -40,10 +40,17 @@ export function OnboardingFrame({
         width === "wide" ? "max-w-[880px]" : "max-w-[640px]"
       }`}
     >
-      <div className="rise-in flex w-full items-center gap-3 pb-2">
-        <AppMark size={36} />
-        <p className="brand">execs</p>
-      </div>
+      {compact ? (
+        <div className="rise-in flex w-full items-center gap-3 pb-2">
+          <AppMark size={36} />
+          <p className="brand">execs</p>
+        </div>
+      ) : (
+        <div className="rise-in flex flex-col items-center gap-3">
+          <AppMark size={56} />
+          <p className="brand text-[15px]">execs</p>
+        </div>
+      )}
       <div
         className={
           compact
@@ -53,7 +60,7 @@ export function OnboardingFrame({
       >
         <div className={compact ? "min-w-0" : "flex flex-col items-center"}>
           <h1
-            className={`t-pane rise-in max-w-[28ch] text-balance ${compact ? "" : "mt-6 text-center"}`}
+            className={`t-pane rise-in max-w-[28ch] text-balance ${compact ? "" : "mt-5 text-center"}`}
           >
             {title}
           </h1>

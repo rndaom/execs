@@ -52,7 +52,8 @@ export function ClassTabs<Id extends string>({
       setIndicator((current) => ({
         x: target.offsetLeft,
         width: target.offsetWidth,
-        y: target.offsetTop + target.offsetHeight - root.clientHeight,
+        // Anchor from the top so wrapped rows and zoom use one measurement basis.
+        y: target.offsetTop + target.offsetHeight - 1,
         ready: current !== null,
       }));
     };

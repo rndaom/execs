@@ -37,7 +37,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 
 <p align="center">
   <img src="docs/media/development-comfig.png" width="49%" alt="Comfig pane with a selected preset and module controls in browser preview data">
-  <img src="docs/media/development-gameplay.png" width="49%" alt="Gameplay pane with FOV values and viewmodel controls in browser preview data">
+  <img src="docs/media/development-gameplay.png" width="49%" alt="Gameplay pane with field of view, mouse sensitivity and weapon options in browser preview data">
 </p>
 
 ## Install
