@@ -81,6 +81,8 @@ export type ProfileLibrary = {
   tf2Root: string | null;
   confirmedRoot: string | null;
   activeProfileId: string | null;
+  /** The profile whose files a cut-off switch was removing, until the retry finishes. */
+  interruptedProfileId?: string | null;
   /** Durable target awaiting a retry after an interrupted live switch. */
   pendingSwitchProfileId?: string | null;
   profiles: ProfileSummary[];

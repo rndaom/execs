@@ -1,0 +1,21 @@
+{
+  "initialized": true,
+  "usable": true,
+  "rootMismatch": false,
+  "tf2Root": "C:/Steam/steamapps/common/Team Fortress 2",
+  "confirmedRoot": "C:/Steam/steamapps/common/Team Fortress 2",
+  "activeProfileId": null,
+  "interruptedProfileId": "3f2b8c1e-0000-4000-8000-000000000001",
+  "pendingSwitchProfileId": "3f2b8c1e-0000-4000-8000-000000000002",
+  "profiles": [
+    {
+      "id": "3f2b8c1e-0000-4000-8000-000000000001",
+      "name": "Main",
+      "createdAt": "2026-09-26T12:00:00Z",
+      "updatedAt": "2026-09-26T12:30:00Z",
+      "unsafeCustomFolders": [
+        "materials"
+      ]
+    }
+  ]
+}
