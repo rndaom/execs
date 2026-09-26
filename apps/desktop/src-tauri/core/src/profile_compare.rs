@@ -79,9 +79,7 @@ fn is_credential(name: &str) -> bool {
 
 fn tokens(line: &str) -> Vec<String> {
     let line = match line.find("//") {
-        Some(at) if !line[..at].contains('"') || line[..at].matches('"').count() % 2 == 0 => {
-            &line[..at]
-        }
+        Some(at) if line[..at].matches('"').count().is_multiple_of(2) => &line[..at],
         _ => line,
     };
     let mut out = Vec::new();
