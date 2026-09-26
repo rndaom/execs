@@ -30,6 +30,7 @@ pub mod process_lock;
 pub mod profile;
 pub mod settings;
 pub mod steam_inf;
+pub mod storage;
 pub mod surface;
 pub mod switch;
 pub mod vdf;

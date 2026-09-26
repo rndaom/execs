@@ -1,5 +1,6 @@
 import { ArrowSquareOut, Copy, FolderOpen, Info } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
+import { StorageUsage } from "./components/StorageUsage";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -275,6 +276,7 @@ export function AppSettingsPane({
               </span>
             </button>
           </div>
+          <StorageUsage api={api} ready={ready} />
         </SettingsSection>
 
         <SettingsSection id="app-support" title="Support">
