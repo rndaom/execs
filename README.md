@@ -30,6 +30,8 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Sounds.** Use stock hit and kill effects from your TF2 install or your own WAV.
 - **Mods.** Bring your own packs, or browse GameBanana. Optional Casual preloading offers four direct-author addon choices and particle sources from your installed mods. Older saved cueki library choices need their original verified local cache; new library downloads are paused. Server rules and TF2 updates can limit what appears. **Restore stock files** reverses its gameinfo and stock-particle changes. Compatibility is not guaranteed for every mod.
 - **Files.** Edit your own UTF-8 cfgs with a Source-aware linter; inspect provided cfgs read-only.
+- **Profiles.** Rename, duplicate, delete, export and import profiles; compare a profile with the current one before switching; and keep local restore points you can restore as a new profile.
+- **App settings.** Storage use with a safe Clear downloads, a read-only health check, update and motion preferences, and Uninstall.
 
 ### Development preview
 
@@ -60,11 +62,7 @@ On first launch execs finds TF2 through Steam and asks you to confirm the folder
 | Backups of patched game files | `…\execs\preloader\originals` | `…/execs/preloader/originals` |
 | Crash log | `…\execs\logs\panic.log` | `…/execs/logs/panic.log` |
 
-To remove execs, in this order:
-
-1. Mods pane, **Restore stock files**.
-2. Uninstall the app.
-3. Delete the execs folder. This deletes your profiles.
+To remove execs, open **App settings → Uninstall**. Your current TF2 setup stays installed. If Casual setup changed TF2's own files, **Restore stock files** there puts them back first. Deleting your profiles and other execs data is a separate choice. On Windows the uninstaller opens; an AppImage deletes itself; a `.deb` install shows the `apt remove` command to run.
 
 If the game looks wrong afterwards, verify game files in Steam.
 

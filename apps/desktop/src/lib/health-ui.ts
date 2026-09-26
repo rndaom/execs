@@ -148,7 +148,9 @@ function profilesItem(health: InstallHealth): HealthItem {
     lines.push(
       health.profiles.length === 0
         ? "No profiles yet."
-        : `All ${plural(health.profiles.length, "profile")} have every saved file.`,
+        : health.profiles.length === 1
+          ? `${health.profiles[0].name} has every saved file.`
+          : `All ${health.profiles.length} profiles have every saved file.`,
     );
   return { id: "profiles", title, status, lines };
 }
