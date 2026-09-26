@@ -190,3 +190,6 @@ fn test_temp_dir_never_reuses_an_existing_counter_path() {
         b"older test run"
     );
 }
+
+#[cfg(test)]
+mod contracts;
