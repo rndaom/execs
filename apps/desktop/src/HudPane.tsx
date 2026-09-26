@@ -887,7 +887,7 @@ export function HudPane({
                       data-testid={`hud-card-${entry.id}`}
                       data-github={entry.github ? "true" : "false"}
                       data-install={entry.install}
-                      className={`surface media-card flex min-w-0 flex-col overflow-hidden ${current ? "ring-1 ring-brand" : ""}`}
+                      className={`surface flex min-w-0 flex-col overflow-hidden ${current ? "ring-1 ring-brand" : ""}`}
                     >
                       <button
                         type="button"
@@ -1278,7 +1278,7 @@ function HudPreview({
     />
   ) : (
     <span
-      className={`media-empty flex w-full flex-col items-center justify-center gap-2 text-ink-muted ${compact ? "h-full" : "aspect-video"}`}
+      className={`flex w-full flex-col items-center justify-center gap-2 text-ink-muted ${compact ? "h-full" : "aspect-video"}`}
     >
       <Images size={24} aria-hidden="true" />
       <span className="t-meta">{src ? "Preview unavailable" : "No preview provided"}</span>

@@ -13,7 +13,11 @@ export function UpdateBanner({ update, blocked }: { update: AppUpdateState; bloc
     return null;
   }
   return (
-    <div role="status" data-testid="app-update-banner" className="app-banner app-banner-update">
+    <div
+      role="status"
+      data-testid="app-update-banner"
+      className="t-body flex flex-wrap items-center justify-center gap-3 border-b border-edge bg-panel-raised px-4 py-2 text-ink"
+    >
       <p>{updateBannerCopy(update.available.version)}</p>
       {update.progress ? (
         <p data-testid="app-update-progress">{updateProgressCopy(update.progress)}</p>

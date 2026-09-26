@@ -501,9 +501,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   className="settings-nav-item"
                   onClick={openAppSettings}
                 >
-                  <span aria-hidden="true" className="settings-nav-icon">
-                    <GearSix size={17} weight={appSettingsOpen ? "duotone" : "regular"} />
-                  </span>
+                  <GearSix size={16} aria-hidden="true" />
                   <span className="settings-nav-label">App settings</span>
                 </button>
               }
@@ -696,7 +694,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         />
         {filesExit.modal}
         {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
-        <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-chrome text-ink">
+        <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
           <WriteLockBanner
             running={lock.running}
             degraded={lock.degraded ?? lifecycle.degraded ?? progress.degraded}
@@ -725,7 +723,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             className={`flex min-h-0 w-full flex-1 flex-col ${
               readyShellOpen
                 ? "items-stretch overflow-hidden"
-                : "onboard-backdrop mx-auto items-center justify-start overflow-y-auto px-10 py-14"
+                : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
           >
             {appSettingsOpen && !settingsOpen ? (

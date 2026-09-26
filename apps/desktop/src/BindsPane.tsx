@@ -504,7 +504,7 @@ function BindRow({
             ))}
           </span>
           {listening ? (
-            <span className="keycap-listening inline-flex h-7 items-center px-2.5 text-xs font-medium text-ink">
+            <span className="inline-flex h-7 items-center rounded border border-brand px-2 text-xs font-medium text-ink">
               Press a key
             </span>
           ) : keys.length === 0 ? (
@@ -580,7 +580,7 @@ function KeyCap({
           ? `Added in execs (${origin})`
           : `Set in ${origin}. Removing it adds an unbind to the execs binds file.`
       }
-      className="keycap pointer-events-auto relative inline-flex h-7 min-w-8 items-center justify-center px-2 text-xs font-semibold text-ink"
+      className="pointer-events-auto relative inline-flex h-7 min-w-8 items-center justify-center rounded border border-edge-strong bg-panel-raised px-2 text-xs font-medium text-ink shadow-[inset_0_-1px_0_rgb(0_0_0/0.35)]"
     >
       {name}
       <button

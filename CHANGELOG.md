@@ -8,12 +8,10 @@ User-facing changes only. The release workflow publishes the matching
 ### Added
 
 - A refreshed look across every pane: warm dark surfaces, TF2 orange for selections, clearer
-  type, less repeated text and consistent dialogs. The workspace sits on its own lit canvas, each
-  pane heading carries its icon, and profiles get a colour monogram. Navigation, tabs and choice
-  controls glide to your selection, cards lift under the pointer and sliders show their filled
-  range. Loading shows a flat TF2 emblem, and Viewmodels and Crosshair class tabs show TF2's class
-  emblems read from your own game files. execs follows your system's reduced-motion setting, or
-  your own Reduce preference in App settings.
+  type, less repeated text, consistent dialogs and restrained motion. Loading shows a flat TF2
+  emblem, and Viewmodels and Crosshair class tabs show TF2's class emblems read from your own game
+  files. execs follows your system's reduced-motion setting, or your own Reduce preference in App
+  settings.
 - App settings, available before you create a profile: startup update checks, motion, install
   and data locations, diagnostics, support and credits.
 - App settings shows how much space execs uses for profiles, restore points, downloads, logs and

@@ -1,7 +1,6 @@
 import { X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "../components/ui/Modal";
-import { rangeFill } from "../components/ui/rangeFill";
 import { Switch } from "../components/ui/Switch";
 import {
   type CrosshairDesign,
@@ -340,7 +339,6 @@ function DesignerSlider({
           aria-describedby={noteId}
           onChange={(event) => onChange(Number(event.target.value))}
           className="range w-full"
-          style={rangeFill(value, min, max)}
         />
         <output htmlFor={id} className="tnum text-right text-[13px] text-ink-muted">
           {format ? format(value) : value}

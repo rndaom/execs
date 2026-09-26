@@ -1,5 +1,3 @@
-import { LockSimple, Warning } from "@phosphor-icons/react";
-
 /** The write-lock strip shown while `tf_win64.exe` / `tf_linux64` is running. */
 export function WriteLockBanner({
   running,
@@ -15,9 +13,12 @@ export function WriteLockBanner({
   }
   if (degraded) {
     return (
-      <div role="status" data-testid="write-lock-degraded" className="app-banner app-banner-warn">
-        <Warning size={15} weight="fill" aria-hidden="true" />
-        <span>{degraded}</span>
+      <div
+        role="status"
+        data-testid="write-lock-degraded"
+        className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
+      >
+        {degraded}
       </div>
     );
   }
@@ -26,20 +27,19 @@ export function WriteLockBanner({
       <div
         role="status"
         data-testid="maintenance-write-lock"
-        className="app-banner app-banner-warn"
+        className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
       >
-        <Warning size={15} weight="fill" aria-hidden="true" />
-        <span>{maintenance}</span>
+        {maintenance}
       </div>
     );
   }
   return (
-    <div role="status" data-testid="tf2-write-lock" className="app-banner app-banner-warn">
-      <LockSimple size={15} weight="fill" aria-hidden="true" />
-      <span>
-        TF2 is running — settings keep drafts until it closes. Files requires Save after closing
-        TF2.
-      </span>
+    <div
+      role="status"
+      data-testid="tf2-write-lock"
+      className="t-body border-b border-warn/50 bg-warn/10 px-4 py-2 text-center text-ink"
+    >
+      TF2 is running — settings keep drafts until it closes. Files requires Save after closing TF2.
     </div>
   );
 }

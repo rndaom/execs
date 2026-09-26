@@ -3,7 +3,6 @@ import {
   DotsThree,
   FileCode,
   FilePlus,
-  FolderOpen,
   MagnifyingGlass,
   WarningCircle,
   X,
@@ -506,12 +505,7 @@ function ProfileFilesPane({
   return (
     <section data-testid="settings-files" className="flex min-h-0 min-w-0 flex-col gap-3 text-left">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-2">
-        <div className="pane-title-row">
-          <span aria-hidden="true" className="pane-glyph pane-glyph-sm">
-            <FolderOpen size={18} weight="duotone" />
-          </span>
-          <h1 className="t-pane">Files</h1>
-        </div>
+        <h1 className="t-pane">Files</h1>
         {dirtyDocuments.length > 1 && (
           <button
             type="button"

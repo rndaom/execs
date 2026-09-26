@@ -1,6 +1,4 @@
-import { Check } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { AppMark } from "./ui/AppMark";
 
 export type OnboardingStep = {
   label: string;
@@ -40,17 +38,12 @@ export function OnboardingFrame({
         width === "wide" ? "max-w-[880px]" : "max-w-[640px]"
       }`}
     >
-      {compact ? (
-        <div className="rise-in flex w-full items-center gap-3 pb-2">
-          <AppMark size={36} />
-          <p className="brand">execs</p>
-        </div>
-      ) : (
-        <div className="rise-in flex flex-col items-center gap-3">
-          <AppMark size={56} />
-          <p className="brand text-[15px]">execs</p>
-        </div>
-      )}
+      <div className="flex w-full items-center border-b border-edge pb-4">
+        <p className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-ink">
+          <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
+          execs
+        </p>
+      </div>
       <div
         className={
           compact
@@ -59,9 +52,7 @@ export function OnboardingFrame({
         }
       >
         <div className={compact ? "min-w-0" : "flex flex-col items-center"}>
-          <h1
-            className={`t-pane rise-in max-w-[28ch] text-balance ${compact ? "" : "mt-5 text-center"}`}
-          >
+          <h1 className={`t-pane max-w-[28ch] text-balance ${compact ? "" : "mt-6 text-center"}`}>
             {title}
           </h1>
           {lede ? (
@@ -82,16 +73,23 @@ export function OnboardingFrame({
               <li
                 key={step.label}
                 aria-current={step.state === "current" ? "step" : undefined}
-                data-state={step.state}
-                className="onboard-step relative flex min-w-0 flex-1 flex-col items-center gap-1 px-2 text-center"
+                className="relative flex min-w-0 flex-1 flex-col items-center gap-1 px-2 text-center"
               >
                 {index < steps.length - 1 ? (
-                  <span aria-hidden="true" className="onboard-step-line">
-                    <span data-filled={step.state === "complete" ? "true" : "false"} />
-                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-3.5 left-1/2 h-px w-full bg-edge-strong"
+                  />
                 ) : null}
-                <span aria-hidden="true" className="onboard-step-dot">
-                  {step.state === "complete" ? <Check size={14} weight="bold" /> : index + 1}
+                <span
+                  aria-hidden="true"
+                  className={`relative flex size-7 items-center justify-center rounded-full border bg-bg text-[12px] font-medium ${
+                    step.state === "current"
+                      ? "border-brand text-ink"
+                      : "border-edge-strong text-ink-muted"
+                  }`}
+                >
+                  {index + 1}
                 </span>
                 <span className="t-meta text-ink">{step.label}</span>
                 <span className="text-[11px] leading-4 text-ink-faint">

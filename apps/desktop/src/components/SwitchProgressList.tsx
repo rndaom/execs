@@ -48,31 +48,28 @@ export function SwitchProgressList({
       aria-atomic="true"
       aria-busy={active}
       aria-label="Profile progress"
-      className="overlay toast-enter fixed inset-x-4 bottom-4 z-50 p-4 text-left sm:left-auto sm:right-6 sm:w-[26rem]"
+      className="overlay fixed inset-x-4 bottom-4 z-50 p-4 text-left sm:left-auto sm:right-6 sm:w-[26rem]"
     >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden="true"
-          className={`switch-progress-emblem ${complete ? "switch-progress-emblem-done" : ""}`}
-        >
-          {complete ? <Check size={18} weight="bold" /> : active ? <Spinner size={22} /> : null}
-        </span>
-        <div className="min-w-0">
-          <p className="t-row">{complete ? "Profile applied" : "Applying profile"}</p>
-          <p data-testid="switch-progress-current" className="t-meta">
-            {complete ? detail || "All steps done" : currentLabel}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="t-row">{complete ? "Profile applied" : "Applying profile"}</p>
+        {complete ? (
+          <Check size={16} weight="bold" className="text-ok" />
+        ) : active ? (
+          <Spinner size={16} />
+        ) : null}
       </div>
+      <p data-testid="switch-progress-current" className="t-meta mt-1">
+        {complete ? detail || "All steps done" : currentLabel}
+      </p>
 
       <div
         data-testid="switch-progress-bar"
         data-fraction={fraction.toFixed(3)}
         aria-hidden="true"
-        className="switch-progress-track mt-3.5"
+        className="mt-3 h-1 overflow-hidden rounded-pill bg-bg"
       >
         <div
-          className={`switch-progress-fill ${complete ? "switch-progress-fill-done" : ""}`}
+          className="h-full rounded-pill bg-brand transition-[width] duration-500 ease-out"
           style={{ width: `${Math.round(fraction * 100)}%` }}
         />
       </div>
@@ -99,7 +96,7 @@ export function SwitchProgressList({
                   current
                     ? "border-brand text-ink"
                     : done
-                      ? "switch-step-done border-ok/60 text-ok"
+                      ? "border-ok/60 text-ok"
                       : "border-edge text-ink-faint"
                 }`}
               >

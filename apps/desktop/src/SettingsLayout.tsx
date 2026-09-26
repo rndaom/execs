@@ -1,6 +1,36 @@
-import { Component, createRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
-import { PANE_ICONS, PaneIdentity, type WorkspaceTab } from "./components/ui/paneIdentity";
+import {
+  Backpack,
+  Crosshair,
+  FolderOpen,
+  GameController,
+  Keyboard,
+  Monitor,
+  Package,
+  Play,
+  SlidersHorizontal,
+  SpeakerHigh,
+  UserFocus,
+} from "@phosphor-icons/react";
+import { Component, type ComponentType, createRef, type ReactNode } from "react";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
+
+type NavIcon = ComponentType<{ size?: number; weight?: "regular" | "bold" }>;
+
+const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
+  comfig: SlidersHorizontal,
+  binds: Keyboard,
+  gameplay: GameController,
+  hud: Monitor,
+  crosshair: Crosshair,
+  viewmodels: UserFocus,
+  sounds: SpeakerHigh,
+  mods: Package,
+  files: FolderOpen,
+  launch: Play,
+  inventory: Backpack,
+};
+
+type WorkspaceTab = SettingsTab | "app";
 
 function workspaceLabel(tab: WorkspaceTab) {
   return tab === "app" ? "App settings" : SETTINGS_TAB_LABELS[tab];
@@ -104,9 +134,7 @@ class PaneScrollRegion extends Component<ScrollRegionProps> {
       >
         <div ref={this.content} className="settings-content" data-pane={tab}>
           <div ref={this.pane} data-testid={`settings-pane-${tab}`} className="settings-pane">
-            <PaneIdentity.Provider value={tab}>
-              {children ?? <p className="t-meta">{workspaceLabel(tab)}</p>}
-            </PaneIdentity.Provider>
+            {children ?? <p className="t-meta">{workspaceLabel(tab)}</p>}
           </div>
         </div>
       </section>
@@ -133,54 +161,10 @@ export function SettingsLayout({
   /** A global page can share the shell without becoming a profile pane. */
   page?: "app" | null;
 }) {
-  const nav = useRef<HTMLElement | null>(null);
-  const activeTab = page === null ? tab : null;
-  const [indicator, setIndicator] = useState<{
-    top: number;
-    height: number;
-    ready: boolean;
-  } | null>(null);
-
-  // Measure the active item and move the one shared indicator to it. The
-  // first placement snaps; later ones glide.
-  useLayoutEffect(() => {
-    const root = nav.current;
-    if (!root) return;
-    const place = () => {
-      const item = activeTab
-        ? root.querySelector<HTMLElement>(`[data-testid="settings-tab-${activeTab}"]`)
-        : null;
-      if (!item) {
-        setIndicator(null);
-        return;
-      }
-      setIndicator((current) => ({
-        top: item.offsetTop,
-        height: item.offsetHeight,
-        ready: current !== null,
-      }));
-    };
-    place();
-    // Item heights only change with the window's breakpoints.
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [activeTab]);
-
   return (
     <div data-testid="settings-panes" className="settings-shell">
       <aside className="settings-sidebar">
-        <nav ref={nav} className="settings-nav" aria-label="Settings">
-          {indicator ? (
-            <span
-              aria-hidden="true"
-              className="settings-nav-indicator"
-              data-ready={indicator.ready ? "true" : "false"}
-              style={{
-                transform: `translateY(${indicator.top}px)`,
-                height: indicator.height,
-              }}
-            />
-          ) : null}
+        <nav className="settings-nav" aria-label="Settings">
           {SETTINGS_TAB_GROUPS.map((group) => (
             <div key={group.label} className="settings-nav-group">
               <p className="eyebrow settings-nav-heading" aria-hidden="true">
@@ -188,7 +172,7 @@ export function SettingsLayout({
               </p>
               {group.tabs.map((item) => {
                 const active = page === null && item === tab;
-                const Icon = PANE_ICONS[item];
+                const Icon = SETTINGS_TAB_ICONS[item];
                 return (
                   <button
                     key={item}
@@ -200,8 +184,9 @@ export function SettingsLayout({
                     onClick={() => onTab(item)}
                     className="settings-nav-item"
                   >
-                    <span aria-hidden="true" className="settings-nav-icon">
-                      <Icon size={17} weight={active ? "duotone" : "regular"} />
+                    {active ? <span aria-hidden="true" className="settings-nav-marker" /> : null}
+                    <span aria-hidden="true" className="shrink-0">
+                      <Icon size={16} weight="regular" />
                     </span>
                     <span className="settings-nav-label">{SETTINGS_TAB_LABELS[item]}</span>
                   </button>

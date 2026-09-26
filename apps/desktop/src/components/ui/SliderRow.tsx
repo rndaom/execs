@@ -1,5 +1,3 @@
-import { rangeFill } from "./rangeFill";
-
 /** A labelled range with its current value beside the label. */
 export function SliderRow({
   id,
@@ -59,7 +57,6 @@ export function SliderRow({
         aria-describedby={`${id}-description`}
         onChange={(event) => onChange(Number(event.target.value))}
         className="range mt-3 block w-full"
-        style={rangeFill(inputValue ?? value, min, max)}
       />
       <div className="tnum mt-1 flex justify-between text-[11px] text-ink-faint">
         <span>{min}</span>
