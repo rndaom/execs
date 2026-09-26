@@ -17,6 +17,10 @@ const GAMEPLAY_CVARS = new Set([
   "hud_fastswitch",
   "sensitivity",
   "zoom_sensitivity_ratio",
+  "tf_medigun_autoheal",
+  "hud_combattext",
+  "hud_combattext_batching",
+  "hud_combattext_healing",
 ]);
 
 const CROSSHAIR_CVARS = new Set([

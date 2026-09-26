@@ -25,8 +25,25 @@ export const VIEWMODEL_FOV_MIN = 0.1;
 export const VIEWMODEL_FOV_MAX = 179.9;
 /** Neither mouse cvar has a documented range; this only rejects typos. */
 export const SENSITIVITY_MAX = 1000;
-/** Mouse cvars that follow TF2's own options after an in-game change. */
-export const GAME_SYNCED_CVARS = ["sensitivity", "zoom_sensitivity_ratio"] as const;
+/** Mouse cvars kept at full precision; only positive values are valid. */
+export const MOUSE_CVARS = ["sensitivity", "zoom_sensitivity_ratio"] as const;
+/** Comfort toggles that are plain 0/1 client cvars (none needs sv_cheats). */
+export const COMFORT_TOGGLES = [
+  "tf_medigun_autoheal",
+  "hud_combattext",
+  "hud_combattext_batching",
+  "hud_combattext_healing",
+] as const;
+/**
+ * Gameplay cvars TF2's own options can change in-game. They follow config.cfg
+ * after a game session so the managed cfg does not put the old value back.
+ */
+export const GAME_SYNCED_CVARS = [
+  ...MOUSE_CVARS,
+  "cl_autoreload",
+  "hud_fastswitch",
+  ...COMFORT_TOGGLES,
+] as const;
 export const CROSSHAIR_SCALE_MIN = 16;
 export const CROSSHAIR_SCALE_MAX = 64;
 export const COLOR_MIN = 0;
@@ -69,6 +86,14 @@ export type GameplaySettings = {
   /** Kept at full precision; never rounded through a slider. */
   sensitivity: number;
   zoom_sensitivity_ratio: number;
+  /** Medigun primary fire toggles healing instead of being held. */
+  tf_medigun_autoheal: GameplayToggle;
+  /** Damage numbers over targets you hit. */
+  hud_combattext: GameplayToggle;
+  /** Merge damage numbers that land close together. */
+  hud_combattext_batching: GameplayToggle;
+  /** Health restored per second over heal targets. */
+  hud_combattext_healing: GameplayToggle;
   cl_crosshair_file: CrosshairFile;
   cl_crosshair_scale: number;
   cl_crosshair_red: number;
@@ -135,6 +160,10 @@ export function defaultGameplay(): GameplaySettings {
     hud_fastswitch: corpusNumber("hud_fastswitch", 0),
     sensitivity: corpusFloat("sensitivity", 3),
     zoom_sensitivity_ratio: corpusFloat("zoom_sensitivity_ratio", 1),
+    tf_medigun_autoheal: corpusToggle("tf_medigun_autoheal", 0),
+    hud_combattext: corpusToggle("hud_combattext", 1),
+    hud_combattext_batching: corpusToggle("hud_combattext_batching", 0),
+    hud_combattext_healing: corpusToggle("hud_combattext_healing", 1),
     cl_crosshair_file: "",
     cl_crosshair_scale: corpusNumber("cl_crosshair_scale", 32),
     cl_crosshair_red: corpusNumber("cl_crosshair_red", 200),
@@ -186,6 +215,10 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
     hud_fastswitch: Number.isFinite(settings.hud_fastswitch) ? settings.hud_fastswitch : 0,
     sensitivity: positiveOr(settings.sensitivity, 3),
     zoom_sensitivity_ratio: positiveOr(settings.zoom_sensitivity_ratio, 1),
+    tf_medigun_autoheal: settings.tf_medigun_autoheal ? 1 : 0,
+    hud_combattext: settings.hud_combattext ? 1 : 0,
+    hud_combattext_batching: settings.hud_combattext_batching ? 1 : 0,
+    hud_combattext_healing: settings.hud_combattext_healing ? 1 : 0,
     cl_crosshair_file: parseCrosshairFile(settings.cl_crosshair_file),
     cl_crosshair_scale: clampInt(
       settings.cl_crosshair_scale,
@@ -269,6 +302,10 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `hud_fastswitch ${next.hud_fastswitch}`,
     `sensitivity ${formatCvarNumber(next.sensitivity)}`,
     `zoom_sensitivity_ratio ${formatCvarNumber(next.zoom_sensitivity_ratio)}`,
+    `tf_medigun_autoheal ${next.tf_medigun_autoheal}`,
+    `hud_combattext ${next.hud_combattext}`,
+    `hud_combattext_batching ${next.hud_combattext_batching}`,
+    `hud_combattext_healing ${next.hud_combattext_healing}`,
     `cl_crosshair_file ${file}`,
     `cl_crosshair_scale ${next.cl_crosshair_scale}`,
     `cl_crosshair_red ${next.cl_crosshair_red}`,
@@ -293,6 +330,18 @@ export function gameplayDirty(draft: GameplaySettings, saved: GameplaySettings):
   return serializeGameplay(draft) !== serializeGameplay(saved);
 }
 
+/** Everything the Gameplay pane owns in the shared managed cfg. */
+export const GAMEPLAY_SCOPE_CVARS: ReadonlySet<string> = new Set([
+  "fov_desired",
+  "viewmodel_fov",
+  "tf_use_min_viewmodels",
+  "r_drawviewmodel",
+  "r_drawtracers_firstperson",
+  "r_drawtracers",
+  "cl_flipviewmodels",
+  ...GAME_SYNCED_CVARS,
+]);
+
 /** Sibling panes share a cfg file, but acknowledge only their own controls. */
 export function serializeGameplayScope(
   settings: GameplaySettings,
@@ -306,19 +355,7 @@ export function serializeGameplayScope(
       if (scope === "sounds") {
         return name.startsWith("tf_dingaling");
       }
-      return [
-        "fov_desired",
-        "viewmodel_fov",
-        "tf_use_min_viewmodels",
-        "r_drawviewmodel",
-        "r_drawtracers_firstperson",
-        "r_drawtracers",
-        "cl_flipviewmodels",
-        "cl_autoreload",
-        "hud_fastswitch",
-        "sensitivity",
-        "zoom_sensitivity_ratio",
-      ].includes(name);
+      return GAMEPLAY_SCOPE_CVARS.has(name);
     }),
   );
 }
@@ -369,11 +406,17 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
     const value = Number(fastswitch.trim());
     if (Number.isFinite(value)) next.hud_fastswitch = value;
   }
-  for (const name of GAME_SYNCED_CVARS) {
+  for (const name of MOUSE_CVARS) {
     const raw = read(name);
     if (raw !== undefined) {
       const value = Number(String(raw).trim());
       if (Number.isFinite(value) && value > 0) next[name] = value;
+    }
+  }
+  for (const name of COMFORT_TOGGLES) {
+    const raw = read(name);
+    if (raw !== undefined) {
+      next[name] = parseToggle(raw, next[name]);
     }
   }
   const file = read("cl_crosshair_file");
@@ -470,21 +513,34 @@ export function parseSensitivityInput(
   return { value, problem: null };
 }
 
+/** A config.cfg value TF2's options could have written, or null when it is not one. */
+function gameOptionValue(name: (typeof GAME_SYNCED_CVARS)[number], raw: string): number | null {
+  const text = raw.trim();
+  if (text === "") return null;
+  const value = Number(text);
+  if (!Number.isFinite(value)) return null;
+  if ((MOUSE_CVARS as readonly string[]).includes(name)) return value > 0 ? value : null;
+  if (name === "hud_fastswitch") return Number.isInteger(value) ? value : null;
+  return value === 0 || value === 1 ? value : null;
+}
+
 /**
- * After a game session, TF2's own options may have changed the mouse cvars
- * in config.cfg. The managed Gameplay cfg runs later and would put the old
- * values back, so its matching lines follow config.cfg. Only lines the
- * managed file already sets change; every other byte stays.
+ * After a game session, TF2's own options may have changed Gameplay cvars in
+ * config.cfg (mouse sensitivity, auto reload, damage numbers and so on). The
+ * managed Gameplay cfg runs later and would put the old values back, so its
+ * matching lines follow config.cfg. Only lines the managed file already sets
+ * change; every other byte stays.
  */
-export function syncMouseFromConfig(managedText: string, configText: string): string {
+export function syncGameOptionsFromConfig(managedText: string, configText: string): string {
   const config: Record<string, string> = {};
   for (const [name, value] of Object.entries(parseCvarMap(configText))) {
     config[name.toLowerCase()] = value;
   }
   let next = managedText;
   for (const name of GAME_SYNCED_CVARS) {
-    const value = Number(String(config[name] ?? "").trim());
-    if (config[name] === undefined || !Number.isFinite(value) || value <= 0) continue;
+    const raw = config[name];
+    const value = raw === undefined ? null : gameOptionValue(name, String(raw));
+    if (value === null) continue;
     const line = new RegExp(`^([ \\t]*)${name}[ \\t]+[^\\r\\n]*$`, "gim");
     next = next.replace(line, (whole, indent: string) => {
       const current = Number(whole.trim().split(/\s+/)[1]?.replace(/"/g, ""));
