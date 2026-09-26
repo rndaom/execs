@@ -330,33 +330,38 @@ export function gameplayDirty(draft: GameplaySettings, saved: GameplaySettings):
   return serializeGameplay(draft) !== serializeGameplay(saved);
 }
 
+export type ManagedCfgScope = "gameplay" | "crosshair" | "sounds" | "viewmodels";
+
 /** Everything the Gameplay pane owns in the shared managed cfg. */
 export const GAMEPLAY_SCOPE_CVARS: ReadonlySet<string> = new Set([
   "fov_desired",
-  "viewmodel_fov",
-  "tf_use_min_viewmodels",
-  "r_drawviewmodel",
   "r_drawtracers_firstperson",
   "r_drawtracers",
-  "cl_flipviewmodels",
   ...GAME_SYNCED_CVARS,
 ]);
 
+/** The Viewmodels pane's lines in the same file (the native scope agrees). */
+export const VIEWMODEL_SCOPE_CVARS: ReadonlySet<string> = new Set([
+  "viewmodel_fov",
+  "r_drawviewmodel",
+  "tf_use_min_viewmodels",
+  "cl_flipviewmodels",
+]);
+
+/** Which pane writes a managed cvar, or null when none of them does. */
+export function managedCfgScopeOf(name: string): ManagedCfgScope | null {
+  const cvar = name.toLowerCase();
+  if (cvar.startsWith("cl_crosshair_")) return "crosshair";
+  if (cvar.startsWith("tf_dingaling")) return "sounds";
+  if (VIEWMODEL_SCOPE_CVARS.has(cvar)) return "viewmodels";
+  if (GAMEPLAY_SCOPE_CVARS.has(cvar)) return "gameplay";
+  return null;
+}
+
 /** Sibling panes share a cfg file, but acknowledge only their own controls. */
-export function serializeGameplayScope(
-  settings: GameplaySettings,
-  scope: "gameplay" | "crosshair" | "sounds",
-): string {
+export function serializeGameplayScope(settings: GameplaySettings, scope: ManagedCfgScope): string {
   return JSON.stringify(
-    Object.entries(clampGameplay(settings)).filter(([name]) => {
-      if (scope === "crosshair") {
-        return name.startsWith("cl_crosshair_");
-      }
-      if (scope === "sounds") {
-        return name.startsWith("tf_dingaling");
-      }
-      return GAMEPLAY_SCOPE_CVARS.has(name);
-    }),
+    Object.entries(clampGameplay(settings)).filter(([name]) => managedCfgScopeOf(name) === scope),
   );
 }
 

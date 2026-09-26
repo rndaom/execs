@@ -3,7 +3,6 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameplayPane, type GameplayPaneProps } from "./GameplayPane";
-import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 
 const status = vi.hoisted(() => ({ running: false, busy: false }));
 vi.mock("./hooks/useAppStatus", () => ({ useAppStatus: () => status }));
@@ -38,9 +37,6 @@ function render(overrides: Partial<GameplayPaneProps> = {}) {
       layer: "comfig",
       effective: {},
       managedText: "",
-      transparentViewmodels: false,
-      canUseComfigAddons: true,
-      onToggleTransparentViewmodels: () => undefined,
       onSave: async () => undefined,
       ...overrides,
     }),
@@ -63,9 +59,7 @@ describe("GameplayPane weapon controls", () => {
     expect(control("gameplay-autoreload")?.disabled).toBe(false);
     expect(control("gameplay-fastswitch")?.getAttribute("aria-checked")).toBe("true");
     expect(document.body.textContent).toContain("weapon selection mode 2");
-    expect(
-      document.querySelector<HTMLInputElement>('[data-testid="gameplay-viewmodel-fov"]')?.value,
-    ).toBe("54");
+    expect(document.querySelector('[data-testid="gameplay-viewmodel-fov"]')).toBeNull();
     expect(document.body.textContent).toContain("54.12345°");
     await act(async () => control("gameplay-autoreload")?.click());
     expect(control("gameplay-autoreload")?.getAttribute("aria-checked")).toBe("true");
@@ -92,32 +86,22 @@ describe("GameplayPane weapon controls", () => {
     expect(save.mock.calls[0][0]).toContain("hud_fastswitch 1\n");
   });
 
-  it("keeps immediate addon writes locked while draft controls and advanced options stay available", async () => {
+  it("keeps advanced tracers available while TF2 runs and routes viewmodel controls to Viewmodels", async () => {
     status.running = true;
-    const toggleAddon = vi.fn();
-    await act(async () => render({ onToggleTransparentViewmodels: toggleAddon }));
-    expect(control("gameplay-transparent-viewmodels")?.disabled).toBe(true);
+    const onOpenViewmodels = vi.fn();
+    await act(async () => render({ onOpenViewmodels }));
     expect(control("gameplay-tracers")?.disabled).toBe(false);
-    expect(control("gameplay-flip")?.disabled).toBe(false);
+    expect(control("gameplay-flip")).toBeNull();
+    expect(control("gameplay-transparent-viewmodels")).toBeNull();
+    expect(control("gameplay-draw-viewmodel")).toBeNull();
     expect(
       document.querySelector<HTMLDetailsElement>('[data-testid="gameplay-advanced"]')?.open,
     ).toBe(true);
-    await act(async () => control("gameplay-transparent-viewmodels")?.click());
-    expect(toggleAddon).not.toHaveBeenCalled();
+    await act(async () => control("gameplay-open-viewmodels")?.click());
+    expect(onOpenViewmodels).toHaveBeenCalledOnce();
     expect(document.querySelector('[aria-label="Field of view values"]')?.textContent).toContain(
       "These values describe the cfg settings",
     );
-  });
-
-  it("shares transparent addon guidance and routes to its Comfig owner", async () => {
-    const onOpenComfig = vi.fn();
-    await act(async () => render({ onOpenComfig }));
-    expect(document.body.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
-    const link = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Open Comfig addons",
-    );
-    await act(async () => link?.click());
-    expect(onOpenComfig).toHaveBeenCalledOnce();
   });
 
   it("shows existing comfort values and autosaves a changed one", async () => {

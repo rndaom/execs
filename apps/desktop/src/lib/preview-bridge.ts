@@ -33,7 +33,7 @@ import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
 import { isNewCfgPath } from "./files-create";
 import { editorPathFits, editorTextBytes } from "./files-limits";
-import { defaultGameplay, parseCvarMap } from "./gameplay-ui";
+import { defaultGameplay, managedCfgScopeOf, parseCvarMap } from "./gameplay-ui";
 import { PREVIEW_HUD_BROWSER_CATALOG, PREVIEW_HUD_BROWSER_STATS } from "./hud-browser-preview";
 import {
   emptyHudState,
@@ -682,12 +682,9 @@ export function createPreviewApi(state: PreviewState): Api {
           throw new BridgeError("That managed cfg scope is not allowed.", "InvalidPath");
         }
         const latest = files.find((file) => file.path === path)?.text ?? "";
-        const values = Object.entries(parseCvarMap(text)).filter(([name]) => {
-          if (!(name in defaultGameplay())) return false;
-          if (scope === "crosshair") return name.startsWith("cl_crosshair_");
-          if (scope === "sounds") return name.startsWith("tf_dingaling");
-          return !name.startsWith("cl_crosshair_") && !name.startsWith("tf_dingaling");
-        });
+        const values = Object.entries(parseCvarMap(text)).filter(
+          ([name]) => name in defaultGameplay() && managedCfgScopeOf(name) === scope,
+        );
         text = `${latest}\n${values.map(([name, value]) => `${name} ${JSON.stringify(value)}`).join("\n")}\n`;
       }
       upsert(path, text);

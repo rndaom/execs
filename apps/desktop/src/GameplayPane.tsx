@@ -2,16 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
+import { SliderRow } from "./components/ui/SliderRow";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
-import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import {
   ALL_TRACERS_NOTE,
   clampGameplay,
-  clampInt,
-  FLIP_VIEWMODELS_NOTE,
   FOV_MAX,
   FOV_MIN,
   formatCvarNumber,
@@ -30,13 +28,8 @@ export type GameplayPaneProps = {
   layer: GameplayLayer;
   effective: Record<string, string>;
   managedText: string;
-  /** The mastercomfig transparent-viewmodels addon state (mirrors the Comfig pane). */
-  transparentViewmodels: boolean;
-  /** Official addon belongs to a Comfig profile. */
-  canUseComfigAddons: boolean;
-  onToggleTransparentViewmodels: () => void;
-  onOpenComfig?: () => void;
-  onDrawViewmodelChange?: (shown: boolean) => void;
+  /** Viewmodel FOV, visibility and transparency live in the Viewmodels pane. */
+  onOpenViewmodels?: () => void;
   /** Resolves when the write settles; the toast reports it. */
   onSave: (gameplayText: string) => Promise<unknown>;
 };
@@ -46,14 +39,10 @@ export function GameplayPane({
   layer,
   effective,
   managedText,
-  transparentViewmodels,
-  canUseComfigAddons,
-  onToggleTransparentViewmodels,
-  onOpenComfig,
-  onDrawViewmodelChange,
+  onOpenViewmodels,
   onSave,
 }: GameplayPaneProps) {
-  const { running, busy } = useAppStatus();
+  const { running } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
   const [draft, setDraft] = useSeededDraft(
     seeded,
@@ -66,9 +55,6 @@ export function GameplayPane({
   // write lock defers the save, it does not take the sliders away.
   const text = serializeGameplay(clampGameplay(draft));
   useAutosave({ dirty, locked: running, token, save: () => onSave(text) });
-  // The addon toggle is not part of the draft: it is a comfig package write
-  // that has to wait for the queue like any other.
-  const addonLocked = running || busy;
 
   function patch(update: Partial<GameplaySettings>) {
     setDraft((current) => ({ ...current, ...update }));
@@ -90,19 +76,6 @@ export function GameplayPane({
               max={FOV_MAX}
               suffix="°"
               onChange={(fov_desired) => patch({ fov_desired })}
-            />
-            {/* The readout keeps an imported fraction until the slider moves. */}
-            <SliderRow
-              id="gameplay-viewmodel-fov"
-              testId="gameplay-viewmodel-fov"
-              label="Viewmodel FOV"
-              description="Weapon perspective, independent of your world view."
-              value={draft.viewmodel_fov}
-              inputValue={clampInt(draft.viewmodel_fov, 1, 179)}
-              min={1}
-              max={179}
-              suffix="°"
-              onChange={(viewmodel_fov) => patch({ viewmodel_fov })}
             />
           </div>
         </div>
@@ -214,25 +187,22 @@ export function GameplayPane({
       </div>
 
       <div className="section pane-split">
-        <PaneSection id="gameplay-viewmodels" title="Viewmodels" as="fieldset" first>
-          <SwitchRow
-            id="gameplay-draw-viewmodel"
-            testId="gameplay-draw-viewmodel"
-            label="Draw viewmodel"
-            checked={draft.r_drawviewmodel === 1}
-            onChange={(next) => {
-              patch({ r_drawviewmodel: next ? 1 : 0 });
-              onDrawViewmodelChange?.(next);
-            }}
-          />
-          <SwitchRow
-            id="gameplay-min-viewmodels"
-            testId="gameplay-min-viewmodels"
-            label="Min viewmodels"
-            description="Compact weapon placement."
-            checked={draft.tf_use_min_viewmodels === 1}
-            onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
-          />
+        <PaneSection
+          id="gameplay-viewmodels"
+          title="Viewmodels"
+          description="Viewmodel FOV, visibility, left-handed and transparent viewmodels are in Viewmodels."
+          first
+        >
+          {onOpenViewmodels ? (
+            <button
+              type="button"
+              data-testid="gameplay-open-viewmodels"
+              className="btn btn-ghost mt-3"
+              onClick={onOpenViewmodels}
+            >
+              Open Viewmodels
+            </button>
+          ) : null}
         </PaneSection>
 
         <section className="min-w-0">
@@ -247,33 +217,6 @@ export function GameplayPane({
           >
             <fieldset className="min-w-0">
               <legend className="sr-only">Advanced gameplay options</legend>
-              <SwitchRow
-                id="gameplay-flip"
-                testId="gameplay-flip"
-                label="Left-handed viewmodels"
-                checked={draft.cl_flipviewmodels === 1}
-                note={FLIP_VIEWMODELS_NOTE}
-                onChange={(next) => patch({ cl_flipviewmodels: next ? 1 : 0 })}
-              />
-              <SwitchRow
-                id="gameplay-transparent-viewmodels"
-                testId="gameplay-transparent-viewmodels"
-                label="Transparent viewmodels"
-                description={OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]}
-                checked={transparentViewmodels}
-                disabled={addonLocked || !canUseComfigAddons}
-                note={
-                  canUseComfigAddons
-                    ? "Managed in Comfig. Applies when you select it."
-                    : "Available with a Comfig profile."
-                }
-                onChange={() => onToggleTransparentViewmodels()}
-              />
-              {onOpenComfig ? (
-                <button type="button" className="btn btn-ghost mt-2" onClick={onOpenComfig}>
-                  Open Comfig addons
-                </button>
-              ) : null}
               <SwitchRow
                 id="gameplay-tracers-fp"
                 testId="gameplay-tracers-fp"
@@ -298,70 +241,6 @@ export function GameplayPane({
         closes.
       </p>
     </section>
-  );
-}
-
-function SliderRow({
-  id,
-  testId,
-  label,
-  description,
-  value,
-  inputValue,
-  min,
-  max,
-  step = 1,
-  suffix = "",
-  onChange,
-}: {
-  id: string;
-  testId: string;
-  label: string;
-  description: string;
-  value: number;
-  inputValue?: number;
-  min: number;
-  max: number;
-  step?: number;
-  suffix?: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <label htmlFor={id} className="t-row">
-            {label}
-          </label>
-          <p id={`${id}-description`} className="t-meta mt-1">
-            {description}
-          </p>
-        </div>
-        <output
-          htmlFor={id}
-          className="tnum min-w-16 rounded-md border border-edge-strong bg-panel px-3 py-1.5 text-center text-[18px] font-medium text-ink"
-        >
-          {value}
-          {suffix}
-        </output>
-      </div>
-      <input
-        id={id}
-        data-testid={testId}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={inputValue ?? value}
-        aria-describedby={`${id}-description`}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="range mt-3 block w-full"
-      />
-      <div className="tnum mt-1 flex justify-between text-[11px] text-ink-faint">
-        <span>{min}</span>
-        <span>{max}</span>
-      </div>
-    </div>
   );
 }
 
