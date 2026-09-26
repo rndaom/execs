@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
+import { rangeFill } from "./components/ui/rangeFill";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading, Spinner } from "./components/ui/Spinner";
 import { Switch } from "./components/ui/Switch";
@@ -999,6 +1000,7 @@ function Slider({
           disabled={disabled}
           onChange={(event) => onChange(Number(event.target.value))}
           className="range w-full"
+          style={rangeFill(value, min, max)}
         />
         <output htmlFor={id} className="tnum text-right text-[13px] text-ink-muted">
           {format ? format(value) : value}

@@ -730,6 +730,7 @@ pub fn run() {
             commands::crosshair::apply_crosshairs,
             commands::crosshair::get_pack_crosshair_previews,
             commands::crosshair::get_stock_crosshair_sprites,
+            commands::crosshair::get_class_icons,
             commands::crosshair::get_crosshair_content_sources,
             commands::crosshair::get_crosshair_source_status,
             commands::crosshair::remove_crosshairs,

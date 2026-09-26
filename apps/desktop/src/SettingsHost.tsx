@@ -4,7 +4,7 @@ import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
-import { Loading } from "./components/ui/Spinner";
+import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
@@ -1495,14 +1495,12 @@ export function SettingsHost({
         </div>
       ) : null}
       {identityPending && !shownLoadError ? (
-        <p data-testid="settings-profile-loading">
+        <LoadingState testId="settings-profile-loading">
           Loading settings for {activeProfileName ?? "the selected profile"}…
-        </p>
+        </LoadingState>
       ) : null}
       {!profileId && loading && !identityPending ? (
-        <p>
-          <Loading>Loading settings…</Loading>
-        </p>
+        <LoadingState>Loading settings…</LoadingState>
       ) : null}
       {!identityPending && !filesLimited && !maps.complete && usesCfgState(tab) ? (
         <div role="alert" className="mb-4 text-warn">

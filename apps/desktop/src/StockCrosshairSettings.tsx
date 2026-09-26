@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import { rangeFill } from "./components/ui/rangeFill";
 import { ColorPicker } from "./crosshair/ColorPicker";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
@@ -455,6 +456,7 @@ function StockSliderRow({
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
         className={`range mt-3 w-full ${accentClass}`}
+        style={rangeFill(value, min, max)}
       />
       {note ? <p className="mt-1 text-[12px] leading-5 text-ink-faint">{note}</p> : null}
     </div>

@@ -40,15 +40,17 @@ export function ReadyHeader({
   const reasonId = useId();
 
   return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 max-sm:h-auto max-sm:min-h-14 max-sm:flex-wrap max-sm:gap-y-2 max-sm:py-2 sm:px-6">
-      <div className="mr-1 flex shrink-0 items-center gap-2">
-        <span aria-hidden="true" className="size-2.5 rounded-full bg-brand" />
-        <span className="text-[18px] font-semibold tracking-tight text-ink">execs</span>
+    <header className="relative z-40 flex h-[60px] shrink-0 items-center gap-3 bg-chrome px-4 max-sm:h-auto max-sm:min-h-14 max-sm:flex-wrap max-sm:gap-y-2 max-sm:py-2 sm:pr-5 sm:pl-5">
+      <div className="mr-3 flex w-[140px] shrink-0 items-center max-md:w-auto">
+        <span className="brand">
+          <span aria-hidden="true" className="brand-notch" />
+          execs
+        </span>
       </div>
 
       {menu}
 
-      <div className="mx-1 hidden h-7 w-px bg-edge md:block" />
+      <div className="mx-1 hidden h-6 w-px bg-edge md:block" />
 
       <div className="hidden min-w-0 items-center gap-1.5 md:flex">
         <span className="t-meta truncate" title={path}>
@@ -74,9 +76,12 @@ export function ReadyHeader({
       </div>
 
       {running ? (
-        <div className="t-meta ml-auto flex shrink-0 items-center gap-2">
-          <span className="size-2 rounded-full bg-warn" aria-hidden="true" />
-          <span className="hidden sm:inline">Game running</span>
+        <div className="status-chip ml-auto shrink-0">
+          <span
+            className="size-2 rounded-full bg-warn shadow-[0_0_8px_rgb(226_139_94/0.7)]"
+            aria-hidden="true"
+          />
+          <span className="hidden text-ink sm:inline">Game running</span>
         </div>
       ) : (
         <div className="ml-auto flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
@@ -96,14 +101,14 @@ export function ReadyHeader({
             onClick={launching ? onCancelLaunch : onLaunch}
             disabled={launching ? false : disabled}
             aria-describedby={!launching && disabled && blockedReason ? reasonId : undefined}
-            className="btn btn-ghost shrink-0 gap-1.5 border-brand/70 text-[13px]"
+            className="btn btn-primary shrink-0 gap-2 px-4 text-[13.5px]"
             title={
               launching
                 ? "Cancel only after cancelling the launch and closing Steam"
                 : (blockedReason ?? undefined)
             }
           >
-            <Play size={13} weight="fill" className="text-brand" />
+            <Play size={13} weight="fill" />
             {launching ? "Cancel launch wait" : "Launch TF2"}
           </button>
           {!launching && disabled && blockedReason ? (

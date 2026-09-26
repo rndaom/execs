@@ -159,7 +159,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
               data-source={toast.source}
               aria-label={`Dismiss: ${toast.message}`}
               onClick={() => send({ type: "hide", expected: toast })}
-              className="overlay enter-fade pointer-events-auto max-w-[34rem] border-error/60 px-4 py-2.5 text-left text-[13.5px] leading-5 text-ink"
+              className="overlay toast-enter pointer-events-auto max-w-[34rem] border-error/60 px-4 py-2.5 text-left text-[13.5px] leading-5 text-ink"
             >
               {toast.message}
             </button>
@@ -168,7 +168,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
               data-testid="toast"
               data-kind={toast.kind}
               data-source={toast.source}
-              className="overlay enter-fade pointer-events-auto max-w-[34rem] px-4 py-2.5 text-[13.5px] leading-5 text-ink"
+              className="overlay toast-enter pointer-events-auto max-w-[34rem] px-4 py-2.5 text-[13.5px] leading-5 text-ink"
             >
               {toast.kind === "saving" ? <Loading>{toast.message}</Loading> : toast.message}
             </p>

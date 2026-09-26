@@ -19,6 +19,7 @@ import {
 } from "../../lib/library-ui";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
 import { Loading } from "../ui/Spinner";
+import { ProfileAvatar } from "./ProfileAvatar";
 /**
  * The profile popover: switch, save current, import and change install. Escape
  * and an outside click close it, and focus returns to the summary — a
@@ -171,14 +172,16 @@ export function ProfileMenu({
       data-testid="profile-library"
       className="group relative"
     >
-      <summary
-        ref={summaryRef}
-        className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink hover:bg-panel [&::-webkit-details-marker]:hidden"
-      >
-        <span className="hidden text-ink-faint sm:inline">Profile</span>
-        <strong className="max-w-40 truncate font-medium text-ink">
-          {activeProfile?.name ?? "Profiles"}
-        </strong>
+      <summary ref={summaryRef} className="profile-trigger [&::-webkit-details-marker]:hidden">
+        {activeProfile ? <ProfileAvatar name={activeProfile.name} size={28} /> : null}
+        <span className="flex min-w-0 flex-col items-start leading-tight">
+          <span className="hidden text-[10.5px] font-medium tracking-wide text-ink-faint sm:inline">
+            Profile
+          </span>
+          <strong className="max-w-40 truncate text-[13.5px] font-semibold text-ink">
+            {activeProfile?.name ?? "Profiles"}
+          </strong>
+        </span>
         <CaretDown size={13} className="profile-menu-caret text-ink-faint" />
         {activeProfile ? (
           <span data-testid="profile-active" className="badge hidden md:inline-flex">
@@ -231,8 +234,8 @@ export function ProfileMenu({
               return (
                 <li
                   key={profile.id}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13.5px] transition-colors duration-150 ${
-                    active ? "" : "hover:bg-panel"
+                  className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13.5px] transition-colors duration-150 ${
+                    active ? "bg-brand/8" : "hover:bg-panel"
                   }`}
                 >
                   {renaming?.id === profile.id ? (
@@ -273,11 +276,7 @@ export function ProfileMenu({
                         onClick={() => onSwitch(profile.id)}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
                       >
-                        <span
-                          className={`size-2 shrink-0 rounded-full ${
-                            active ? "bg-brand" : "bg-edge-strong"
-                          }`}
-                        />
+                        <ProfileAvatar name={profile.name} size={24} active={active} />
                         <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
                         <span className="text-[12px] text-ink-faint">
                           {unsafeFolders ? "Needs repair" : active ? "Current" : "Switch"}

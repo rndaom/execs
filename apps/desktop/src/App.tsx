@@ -8,6 +8,7 @@ import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
 import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ClassIconProvider } from "./components/ui/ClassIcon";
 import { Modal } from "./components/ui/Modal";
 import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
@@ -500,7 +501,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   className="settings-nav-item"
                   onClick={openAppSettings}
                 >
-                  <GearSix size={16} aria-hidden="true" />
+                  <span aria-hidden="true" className="settings-nav-icon">
+                    <GearSix size={17} weight={appSettingsOpen ? "duotone" : "regular"} />
+                  </span>
                   <span className="settings-nav-label">App settings</span>
                 </button>
               }
@@ -693,7 +696,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         />
         {filesExit.modal}
         {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
-        <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
+        <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-chrome text-ink">
           <WriteLockBanner
             running={lock.running}
             degraded={lock.degraded ?? lifecycle.degraded ?? progress.degraded}
@@ -722,13 +725,15 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             className={`flex min-h-0 w-full flex-1 flex-col ${
               readyShellOpen
                 ? "items-stretch overflow-hidden"
-                : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
+                : "onboard-backdrop mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
           >
             {appSettingsOpen && !settingsOpen ? (
               <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
             ) : install.screen === "ready" && install.confirmed ? (
-              renderReady(install.confirmed.path)
+              <ClassIconProvider api={api} installPath={install.confirmed.path}>
+                {renderReady(install.confirmed.path)}
+              </ClassIconProvider>
             ) : (
               <FinderPanel
                 scanning={install.scanning}

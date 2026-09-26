@@ -47,7 +47,7 @@ export function GameBananaCard({
     <article
       data-testid={`mods-gb-card-${mod.id}`}
       aria-labelledby={titleId}
-      className="surface group flex min-w-0 flex-col overflow-hidden text-left transition-colors duration-150 hover:border-edge-strong"
+      className="surface media-card group flex min-w-0 flex-col overflow-hidden text-left"
     >
       <div className="relative">
         <button
@@ -151,7 +151,7 @@ function GameBananaThumbnail({ mod }: { mod: GameBananaMod }) {
   return (
     <span className="relative block aspect-[2/1] shrink-0 overflow-hidden border-b border-edge bg-bg">
       {image ?? (
-        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[12px] text-ink-muted">
+        <span className="media-empty absolute inset-0 flex flex-col items-center justify-center gap-2 text-[12px] text-ink-muted">
           <Image size={25} aria-hidden="true" />
           No preview
         </span>
