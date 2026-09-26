@@ -18,13 +18,17 @@ import {
 import {
   conflictingViewmodelGroupIds,
   selectedViewmodelChoices,
+  VIEWMODEL_PRESET_LABELS,
   type ViewmodelDraftChoices,
   type ViewmodelHideMode,
+  type ViewmodelPreset,
   type ViewmodelRow,
   viewmodelCatalogRevision,
+  viewmodelChoiceChanges,
   viewmodelClasses,
   viewmodelClassLabel,
   viewmodelDraftBuildRequest,
+  viewmodelPresetChoices,
   viewmodelRowItemNames,
   viewmodelRowLabel,
   viewmodelRowsForClass,
@@ -50,6 +54,19 @@ const MODE_OPTIONS: { id: "shown" | ViewmodelHideMode; label: string; title: str
   { id: "full", label: "Hidden", title: "Hide the hands and weapon" },
   { id: "weapon", label: "Hands only", title: "Hide the weapon and keep the hands" },
 ];
+
+const PRESET_OPTIONS: { id: ViewmodelPreset; label: string }[] = (
+  ["show-all", "hide-all", "keep-melee"] as const
+).map((id) => ({ id, label: VIEWMODEL_PRESET_LABELS[id] }));
+
+const HIDE_OPTIONS = MODE_OPTIONS.filter(
+  (option): option is { id: ViewmodelHideMode; label: string; title: string } =>
+    option.id !== "shown",
+);
+
+function choiceLabel(mode: ViewmodelHideMode | "shown"): string {
+  return MODE_OPTIONS.find((option) => option.id === mode)?.label ?? mode;
+}
 
 /** Per-class viewmodel choices built from the player's installed TF2 files. */
 export function ViewmodelBuilder({
@@ -294,6 +311,11 @@ function ViewmodelCatalogChoices({
   const [saved] = useState(() => savedChoices(catalog, savedRecipe));
   const [choices, setChoices] = useState<ViewmodelDraftChoices>(saved);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const [preset, setPreset] = useState<ViewmodelPreset>("keep-melee");
+  const [presetMode, setPresetMode] = useState<ViewmodelHideMode>("full");
+  // The draft before the last whole-profile change, until another edit.
+  const [undo, setUndo] = useState<ViewmodelDraftChoices | null>(null);
   const [building, setBuilding] = useState(false);
   const sections = viewmodelSectionsForClass(catalog, selectedClass, query);
   const reviewRequest =
@@ -310,11 +332,26 @@ function ViewmodelCatalogChoices({
     conflicts.size === 0;
 
   useEffect(() => {
-    if (!active || !editable) setReviewOpen(false);
+    if (!active || !editable) {
+      setReviewOpen(false);
+      setPresetOpen(false);
+    }
   }, [active, editable]);
+
+  const proposed = presetOpen ? viewmodelPresetChoices(catalog, preset, presetMode) : null;
+  const proposedChanges = proposed ? viewmodelChoiceChanges(catalog, choices, proposed) : [];
+  const proposedConflicts = proposed ? conflictingViewmodelGroupIds(catalog, proposed).size : 0;
+
+  function applyPreset() {
+    if (!proposed || proposedChanges.length === 0) return;
+    setUndo(choices);
+    setChoices(proposed);
+    setPresetOpen(false);
+  }
 
   // One row can cover a weapon and its reskins; every group in it follows the choice.
   function choose(row: ViewmodelRow, mode: ViewmodelHideMode | "shown") {
+    setUndo(null);
     setChoices((current) => {
       const next = { ...current };
       for (const group of row.groups) {
@@ -399,11 +436,34 @@ function ViewmodelCatalogChoices({
             >
               {busy ? <Spinner size={15} /> : <ArrowClockwise size={15} />}
             </button>
+            <button
+              type="button"
+              data-testid="viewmodel-presets"
+              className="btn btn-ghost whitespace-nowrap"
+              disabled={!editable}
+              onClick={() => setPresetOpen(true)}
+            >
+              Every class…
+            </button>
             <p className="t-meta ml-2 whitespace-nowrap" data-testid="viewmodel-choice-summary">
               {reviewRows.length
                 ? `${reviewRows.length} hidden${changed ? " · not built yet" : ""}`
                 : "Everything shown"}
             </p>
+            {undo ? (
+              <button
+                type="button"
+                data-testid="viewmodel-preset-undo"
+                className="btn btn-quiet whitespace-nowrap"
+                disabled={!editable}
+                onClick={() => {
+                  setChoices(undo);
+                  setUndo(null);
+                }}
+              >
+                Undo
+              </button>
+            ) : null}
             <button
               type="button"
               data-testid="viewmodel-review-build"
@@ -468,6 +528,79 @@ function ViewmodelCatalogChoices({
           )}
         </div>
       ) : null}
+
+      <Modal
+        open={presetOpen && active && editable}
+        title="Change every class"
+        testId="viewmodel-preset-review"
+        className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
+        onClose={() => setPresetOpen(false)}
+      >
+        <div className="mt-4 grid gap-3">
+          <Segmented<ViewmodelPreset>
+            label="Whole-profile choice"
+            options={PRESET_OPTIONS}
+            value={preset}
+            testIdPrefix="viewmodel-preset"
+            onChange={setPreset}
+          />
+          {preset === "show-all" ? null : (
+            <Segmented<ViewmodelHideMode>
+              label="Hide as"
+              size="sm"
+              options={HIDE_OPTIONS}
+              value={presetMode}
+              testIdPrefix="viewmodel-preset-mode"
+              onChange={setPresetMode}
+            />
+          )}
+        </div>
+        <p className="t-meta mt-4" data-testid="viewmodel-preset-count">
+          {proposedChanges.length === 0
+            ? "Nothing changes."
+            : `${proposedChanges.length} ${proposedChanges.length === 1 ? "choice changes" : "choices change"}:`}
+        </p>
+        {proposedChanges.length ? (
+          <ul
+            className="mt-2 grid max-h-64 gap-1.5 overflow-y-auto"
+            data-testid="viewmodel-preset-changes"
+          >
+            {proposedChanges.map((change) => (
+              <li key={change.row.id} className="flex justify-between gap-3 t-meta">
+                <span className="text-ink">
+                  {viewmodelClassLabel(change.row.groups[0].class)} ·{" "}
+                  {viewmodelRowLabel(change.row)}
+                </span>
+                <span className="whitespace-nowrap">
+                  {choiceLabel(change.from)} → {choiceLabel(change.to)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {proposedConflicts ? (
+          <p role="alert" className="t-meta mt-3 text-warn">
+            Some weapons share animations with a melee weapon. Make them match before building.
+          </p>
+        ) : null}
+        <p className="t-meta mt-3">
+          Only your first-person view changes. Nothing is written until you build the pack.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button type="button" className="btn btn-ghost" onClick={() => setPresetOpen(false)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="viewmodel-preset-apply"
+            disabled={proposedChanges.length === 0}
+            className="btn btn-primary"
+            onClick={applyPreset}
+          >
+            Apply to draft
+          </button>
+        </div>
+      </Modal>
 
       <Modal
         open={reviewOpen && active && editable}
