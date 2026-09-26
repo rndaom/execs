@@ -108,6 +108,18 @@ function ModuleControl({
   );
 }
 
+/**
+ * The fold's one-line summary. Custom has no preset values to differ from, so
+ * its modules are simply the ones set.
+ */
+export function comfigModulesSummary(preset: string, presetLabel: string, count: number): string {
+  const modules = `${count} ${count === 1 ? "module" : "modules"}`;
+  if (preset === "none") return count === 0 ? "No modules set yet" : `${modules} set`;
+  return count === 0
+    ? `Using ${presetLabel} for every module`
+    : `${modules} changed from ${presetLabel}`;
+}
+
 export function ComfigPane({
   detail,
   state,
@@ -270,9 +282,7 @@ export function ComfigPane({
           <span className="flex min-w-0 flex-1 items-center justify-between gap-4">
             <span>Fine-tune modules</span>
             <span data-testid="comfig-modules-summary" className="t-meta tnum">
-              {moduleOverrideCount === 0
-                ? `Using ${selectedPresetLabel} for every module`
-                : `${moduleOverrideCount} ${moduleOverrideCount === 1 ? "module" : "modules"} changed from ${selectedPresetLabel}`}
+              {comfigModulesSummary(state.preset, selectedPresetLabel, moduleOverrideCount)}
             </span>
           </span>
         }

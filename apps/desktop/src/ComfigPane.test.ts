@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ComfigPane } from "./ComfigPane";
+import { ComfigPane, comfigModulesSummary } from "./ComfigPane";
 import { COMFIG_MODULE_GROUPS, COMFIG_PRESETS } from "./lib/comfig-catalog";
 import { type ComfigUiState, OFFICIAL_ADDON_DETAILS, PREVIEW_COMFIG_STATE } from "./lib/comfig-ui";
 import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
@@ -46,6 +46,15 @@ function render(
     }),
   );
 }
+
+describe("comfigModulesSummary", () => {
+  it("counts changes from a preset, and set modules for Custom", () => {
+    expect(comfigModulesSummary("medium", "Medium", 0)).toBe("Using Medium for every module");
+    expect(comfigModulesSummary("medium", "Medium", 2)).toBe("2 modules changed from Medium");
+    expect(comfigModulesSummary("none", "Custom", 21)).toBe("21 modules set");
+    expect(comfigModulesSummary("none", "Custom", 0)).toBe("No modules set yet");
+  });
+});
 
 describe("ComfigPane workspaces", () => {
   it("folds module overrides away by default while keeping every module and addon reachable", async () => {
