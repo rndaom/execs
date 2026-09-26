@@ -21,6 +21,7 @@ const MAX_INSPECTED_ENTRIES: u64 = 250_000;
 #[serde(rename_all = "camelCase")]
 pub enum StorageGroupId {
     Profiles,
+    RestorePoints,
     Downloads,
     Retired,
     Logs,
@@ -29,8 +30,9 @@ pub enum StorageGroupId {
 }
 
 impl StorageGroupId {
-    const ALL: [StorageGroupId; 6] = [
+    const ALL: [StorageGroupId; 7] = [
         StorageGroupId::Profiles,
+        StorageGroupId::RestorePoints,
         StorageGroupId::Downloads,
         StorageGroupId::Retired,
         StorageGroupId::Logs,
@@ -93,6 +95,8 @@ fn classify(data_dir: &Path, path: &Path) -> StorageGroupId {
     }
     match name.as_str() {
         "profiles" => StorageGroupId::Profiles,
+        // Removed only from the restore points dialog or by its retention.
+        "restore-points" => StorageGroupId::RestorePoints,
         "logs" => StorageGroupId::Logs,
         // Catalog, statistics, albums and HUD option schemas re-download on use.
         "hud-catalog" => StorageGroupId::Downloads,
@@ -279,6 +283,7 @@ mod tests {
         write(&dir, "profiles/index.json", 100);
         write(&dir, "profiles/a/manifest.json", 200);
         write(&dir, "logs/panic.log", 5);
+        write(&dir, "restore-points/0123.zip", 11);
         write(&dir, "maintenance/journal.json", 7);
         write(&dir, "hud-catalog/catalog-v4.json", 1000);
         write(&dir, "hud-catalog/schemas/flawhud.json", 300);
@@ -308,13 +313,14 @@ mod tests {
         assert_eq!(group(&report, StorageGroupId::Downloads).bytes, 1380);
         assert_eq!(group(&report, StorageGroupId::Retired).bytes, 120);
         assert_eq!(group(&report, StorageGroupId::Logs).bytes, 5);
+        assert_eq!(group(&report, StorageGroupId::RestorePoints).bytes, 11);
         assert_eq!(
             group(&report, StorageGroupId::Protected).bytes,
             7 + 30 + 500 + 3 + 4 + 9
         );
         assert_eq!(group(&report, StorageGroupId::Other).bytes, 12);
         assert_eq!(report.clearable_bytes, 1500);
-        assert_eq!(report.total_bytes, 300 + 1380 + 120 + 5 + 553 + 12);
+        assert_eq!(report.total_bytes, 300 + 11 + 1380 + 120 + 5 + 553 + 12);
         assert!(!report.partial);
         fs::remove_dir_all(dir).unwrap();
     }
@@ -329,6 +335,7 @@ mod tests {
             "settings.json",
             "profiles/a/manifest.json",
             "logs/panic.log",
+            "restore-points/0123.zip",
             "maintenance/journal.json",
             "hitsound-cache/picked/0123.wav",
             &format!("preloader/mods-{MODS_RELEASE}.zip"),

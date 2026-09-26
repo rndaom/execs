@@ -7,6 +7,8 @@ import type {
   StorageReport,
 } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
+import type { InstallHealth } from "./health-ui";
+import type { RestorePoint, RestorePointList } from "./restore-points-ui";
 import type { ProfileComparison } from "./switch-compare-ui";
 import type { UninstallInfo } from "./uninstall-ui";
 
@@ -215,6 +217,30 @@ export function getUninstallInfo(): Promise<UninstallInfo> {
 
 export function uninstallExecs(deleteData: boolean): Promise<{ closing: boolean }> {
   return call("uninstall_execs", { deleteData });
+}
+
+export function listRestorePoints(): Promise<RestorePointList> {
+  return call("list_restore_points");
+}
+
+export function createRestorePoint(profileId: string, label: string | null): Promise<RestorePoint> {
+  return call("create_restore_point", { profileId, label });
+}
+
+export function deleteRestorePoint(id: string): Promise<RestorePointList> {
+  return call("delete_restore_point", { id });
+}
+
+export function setRestorePointRetention(keep: number): Promise<RestorePointList> {
+  return call("set_restore_point_retention", { keep });
+}
+
+export function compareRestorePoint(id: string): Promise<ProfileComparison> {
+  return call("compare_restore_point", { id });
+}
+
+export function restoreRestorePoint(id: string, name: string): Promise<ProfileLibrary> {
+  return call("restore_restore_point", { id, name });
 }
 
 export function getAppSettings(): Promise<AppSettingsPayload> {
@@ -1386,6 +1412,10 @@ export async function getAppVersion(): Promise<string> {
 /** Version, OS, TF2 folder, active profile and the crash-log tail, as text for a bug report. */
 export function getDiagnostics(): Promise<string> {
   return call<string>("get_diagnostics");
+}
+
+export function getInstallHealth(): Promise<InstallHealth> {
+  return call("get_install_health");
 }
 
 /** How long the update feed gets to answer before the footer says so; the

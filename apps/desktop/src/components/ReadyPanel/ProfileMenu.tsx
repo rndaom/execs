@@ -35,6 +35,7 @@ export function ProfileMenu({
   onSave,
   onSwitch,
   onCompare,
+  onRestorePoints,
   onExport,
   onDelete,
   onRename,
@@ -56,6 +57,8 @@ export function ProfileMenu({
   onSwitch: (id: string) => void;
   /** Opens the read-only comparison with the active profile. */
   onCompare?: (id: string) => void;
+  /** Opens local restore points with this profile first. */
+  onRestorePoints?: (id: string) => void;
   onExport: (id: string) => void;
   onDelete: (id: string) => void;
   /** Resolves true when saved; the menu keeps the editor open on failure. */
@@ -434,6 +437,19 @@ export function ProfileMenu({
           >
             Export profile
           </ContextMenuItem>
+          {onRestorePoints ? (
+            <ContextMenuItem
+              disabled={controlsBusy || recoveryPending}
+              onSelect={() => {
+                const id = actions.id;
+                setActions(null);
+                if (detailsRef.current) detailsRef.current.open = false;
+                onRestorePoints(id);
+              }}
+            >
+              Restore points…
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuSeparator />
           <ContextMenuItem
             disabled={running || controlsBusy || recoveryPending}

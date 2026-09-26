@@ -24,6 +24,9 @@ User-facing changes only. The release workflow publishes the matching
   changed in TF2's own options is picked up after the game closes instead of being reset.
 - Return to TF2's stock HUD from the HUD pane. The HUD and its options leave the profile; its
   folder is kept in a backup, and your other mods and settings stay the same.
+- Restore points: save a copy of a profile from its menu, compare the profile with it later,
+  and restore it as a new profile to switch to when you are ready. execs keeps the newest 3, 5 or
+  10 per profile on this computer, and restoring never changes TF2 until you switch.
 - Duplicate any saved profile from its menu to experiment on a copy. The copy is not switched in
   and TF2 is not touched.
 - App settings shows how much space execs uses for profiles, downloads, logs and recovery data,
@@ -39,6 +42,9 @@ User-facing changes only. The release workflow publishes the matching
   actions by the key bound to them, and readable key caps such as Mouse 4 and Num 1. New actions
   cover common voice commands (Thanks, Help, Incoming, Spy, Sentry ahead, Activate charge,
   Battle cry) and Screenshot.
+- App settings has a Health section: whether TF2 and the config loader were found, anything
+  interrupted, saved profiles with missing files, the local Steam Cloud copy, and what works
+  offline. It only reads; nothing is changed.
 - The GameBanana file chooser shows when each author file was uploaded and picks the only
   installable file for you. Split downloads (PART 1, PART 2…) are explained instead of installed
   half-finished, and a file GameBanana no longer has says so plainly.

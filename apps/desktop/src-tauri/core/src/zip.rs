@@ -467,6 +467,31 @@ where
         zip_path,
         running_names,
         review,
+        None,
+        prototype_selected_group_vpk_from_install,
+    )
+}
+
+/// Import a native export under a new display name. Restore points use this so
+/// the restored copy never shares the source profile's name by accident.
+pub(crate) fn import_profile_named_from<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    zip_path: &Path,
+    running_names: I,
+    name: &str,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    import_profile_with_review_and_source(
+        profiles_dir,
+        tf2_root,
+        zip_path,
+        running_names,
+        None,
+        Some(name),
         prototype_selected_group_vpk_from_install,
     )
 }
@@ -477,6 +502,7 @@ fn import_profile_with_review_and_source<I, S, R>(
     zip_path: &Path,
     running_names: I,
     review: Option<&ProfileImportReview>,
+    name_override: Option<&str>,
     read_candidate: R,
 ) -> Result<ProfileLibrary, ProfileError>
 where
@@ -573,7 +599,7 @@ where
     create_populated_profile_to(
         profiles_dir,
         tf2_root,
-        &payload.manifest.name,
+        name_override.unwrap_or(&payload.manifest.name),
         &batch,
         false,
         &running,
@@ -599,6 +625,67 @@ where
             Ok(())
         },
     )
+}
+
+/// Read what a comparison needs from a native export without extracting its
+/// payload: the manifest and the small managed Gameplay/Binds cfgs.
+pub(crate) fn native_zip_compare_side(
+    zip_path: &Path,
+) -> Result<crate::profile_compare::CompareSide, ProfileError> {
+    const MAX_COMPARED_CFG_BYTES: u64 = 1024 * 1024;
+    let file = fs::File::open(zip_path).map_err(io_err)?;
+    let mut archive = ZipArchive::new(file).map_err(zip_invalid)?;
+    let manifest: ProfileZipManifest = {
+        let entry = archive.by_name(ZIP_MANIFEST_NAME).map_err(zip_invalid)?;
+        if entry.size() > MAX_MANIFEST_BYTES {
+            return Err(invalid_zip("execs-profile.json is implausibly large"));
+        }
+        let mut bytes = Vec::new();
+        entry
+            .take(MAX_MANIFEST_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(io_err)?;
+        serde_json::from_slice(&bytes).map_err(json_err)?
+    };
+    let mut managed_text = String::new();
+    for path in crate::profile_compare::MANAGED_COMPARE_PATHS {
+        let Some(file) = manifest
+            .files
+            .iter()
+            .find(|file| file.path == path && file.storage == FileStorage::Exclusive)
+        else {
+            continue;
+        };
+        let Ok(entry) = archive.by_name(&format!("files/{}", file.path)) else {
+            continue;
+        };
+        if entry.size() > MAX_COMPARED_CFG_BYTES {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        entry
+            .take(MAX_COMPARED_CFG_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(io_err)?;
+        managed_text.push_str(&String::from_utf8_lossy(&bytes));
+        managed_text.push('\n');
+    }
+    let (hit_sound, kill_sound) = crate::profile_compare::sound_names(manifest.hitsound.as_ref());
+    Ok(crate::profile_compare::CompareSide {
+        id: String::new(),
+        name: manifest.name.clone(),
+        launch_options: manifest.launch_options.clone(),
+        hud: manifest.hud.as_ref().map(|hud| hud.id.clone()),
+        hit_sound,
+        kill_sound,
+        files: manifest
+            .files
+            .iter()
+            .map(|file| (file.path.clone(), file.sha256.clone()))
+            .collect(),
+        casual: crate::profile_compare::casual_names(manifest.preloader.as_ref(), &manifest.mods),
+        managed_text,
+    })
 }
 
 fn write_profile_zip(
@@ -2223,6 +2310,7 @@ mod tests {
             &archive,
             unlocked(),
             None,
+            None,
             |_, _| {
                 let mut current = candidate.clone();
                 current.sources.item_schema_sha256 = sha256_hex(&fs::read(&source).unwrap());
@@ -2258,6 +2346,7 @@ mod tests {
                 &root,
                 archive,
                 unlocked(),
+                None,
                 None,
                 |_, _| Ok(candidate_for_read.clone()),
             )
@@ -2320,6 +2409,7 @@ mod tests {
             &archive,
             unlocked(),
             None,
+            None,
             |_, _| {
                 reads.set(reads.get() + 1);
                 let mut current = candidate.clone();
@@ -2356,6 +2446,7 @@ mod tests {
             &root,
             &archive,
             unlocked(),
+            None,
             None,
             |_, _| {
                 reads.set(reads.get() + 1);

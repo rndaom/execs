@@ -482,6 +482,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         onReviewFiles={() => navigateSettings("files")}
         onInspectExport={(id) => api.inspectProfileExport(id)}
         onCompareSwitch={(id) => api.compareProfileSwitch(id)}
+        restoreApi={api}
         settings={
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout
