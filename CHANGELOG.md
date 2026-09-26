@@ -26,6 +26,9 @@ User-facing changes only. The release workflow publishes the matching
   folder is kept in a backup, and your other mods and settings stay the same.
 - Duplicate any saved profile from its menu to experiment on a copy. The copy is not switched in
   and TF2 is not touched.
+- App settings shows how much space execs uses for profiles, downloads, logs and recovery data,
+  and can clear downloads it can fetch again plus leftovers from retired features. Profiles,
+  recovery data and sounds you added are always kept.
 - Rename a profile from its menu in the profile list. Only the name changes; its files and
   settings stay exactly as they were.
 - Binds has a cleaner layout: every action on one page grouped by task, a search that also finds

@@ -138,6 +138,8 @@ function notInPreview(what: string): BridgeError {
 
 export function createPreviewApi(state: PreviewState): Api {
   let appPreferences = { checkForUpdatesOnStartup: true, motion: "system" as "system" | "reduce" };
+  let previewDownloadBytes = 1_088_218;
+  let previewRetiredBytes = 20_159_439;
   let failNextAppPreferenceSave = state === "settings-app-failure";
   const hudCatalog =
     state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
@@ -412,6 +414,46 @@ export function createPreviewApi(state: PreviewState): Api {
     },
     async getAppSettings() {
       return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
+    },
+    async getStorageUsage() {
+      const groups = [
+        {
+          id: "profiles" as const,
+          bytes: 299_880_431,
+          files: 5321,
+          unreadable: 0,
+          clearable: false,
+        },
+        {
+          id: "downloads" as const,
+          bytes: previewDownloadBytes,
+          files: 64,
+          unreadable: 0,
+          clearable: true,
+        },
+        {
+          id: "retired" as const,
+          bytes: previewRetiredBytes,
+          files: 188,
+          unreadable: 0,
+          clearable: true,
+        },
+        { id: "logs" as const, bytes: 4_210, files: 1, unreadable: 0, clearable: false },
+        { id: "protected" as const, bytes: 81_537_537, files: 6, unreadable: 0, clearable: false },
+        { id: "other" as const, bytes: 172, files: 1, unreadable: 0, clearable: false },
+      ];
+      return {
+        groups,
+        totalBytes: groups.reduce((sum, group) => sum + group.bytes, 0),
+        clearableBytes: previewDownloadBytes + previewRetiredBytes,
+        partial: false,
+      };
+    },
+    async clearDownloadCaches() {
+      const freedBytes = previewDownloadBytes + previewRetiredBytes;
+      previewDownloadBytes = 0;
+      previewRetiredBytes = 0;
+      return { freedBytes, failed: [] };
     },
     async getHudOwnership(profileId) {
       const folder = hudState.installed?.id ?? null;
