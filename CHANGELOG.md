@@ -69,6 +69,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Binds, Gameplay, Crosshair and Sounds read your settings again when Comfig uses a preset other
+  than the default, including Custom. The preset line mastercomfig reads first no longer stops
+  them with "Cannot derive startup settings".
 - Profiles stop a switch that would carry over a kept external pack or replace its bytes, and
   offer to capture the pack first. After deleting an active profile while keeping its installed
   setup, Save current as… captures that setup before switching elsewhere.

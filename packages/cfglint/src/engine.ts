@@ -722,6 +722,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       : evaluateStartup({
           files: parsed,
           entryPoints,
+          startupAliases: opts.startupAliases ?? {},
           resolveExec,
           payloadCommands,
           takeCommand: (at) => takeWork("command", at),

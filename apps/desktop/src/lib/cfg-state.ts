@@ -1,4 +1,10 @@
-import { type CfgFile, createCfgResolver, engineManagedLintOptions, lint } from "@execs/cfglint";
+import {
+  type CfgFile,
+  createCfgResolver,
+  engineManagedLintOptions,
+  lint,
+  MASTERCOMFIG_STARTUP_ALIASES,
+} from "@execs/cfglint";
 import type { GameplayLayer } from "./gameplay-ui";
 
 /** Entry points use the selected cfg layer, including mastercomfig's user hooks. */
@@ -11,6 +17,14 @@ export function startupCfgEntryPoints(
       ? ["config", "overrides/pre_init", "overrides/setup_hook", "overrides/autoexec"]
       : ["config", "autoexec"];
   return startupTargets.map(search.startup).filter((path) => path !== null);
+}
+
+/**
+ * mastercomfig defines its preset selectors before running the player's hooks,
+ * so `preset=custom` in setup_hook.cfg is known there and nowhere else.
+ */
+export function startupCfgAliases(layer: GameplayLayer): Readonly<Record<string, string>> {
+  return layer === "comfig" ? MASTERCOMFIG_STARTUP_ALIASES : {};
 }
 
 /** Startup user settings only; Files independently reviews every cfg's safety. */
@@ -37,6 +51,7 @@ export function mapsFromFiles(
   const result = lint(mountedFiles, {
     ...engineManagedLintOptions(mountedFiles),
     entryPoints,
+    startupAliases: startupCfgAliases(layer),
   });
   const prefix = layer === "comfig" ? "overrides/" : "";
   // Native saves update only the user's autoexec and managed cfgs. If a pack
