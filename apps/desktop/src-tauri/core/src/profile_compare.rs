@@ -25,6 +25,7 @@ pub struct SetChange {
     pub changed: Vec<String>,
 }
 
+#[cfg(test)]
 impl SetChange {
     fn is_empty(&self) -> bool {
         self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
@@ -167,17 +168,95 @@ fn pack_name(path: &str) -> Option<String> {
     Some(rest.split('/').next()?.to_string())
 }
 
-fn grouped(
-    manifest: &ProfileManifest,
-    key: impl Fn(&str) -> Option<String>,
-) -> BTreeMap<String, String> {
+/// One side of a comparison: a saved profile or a restore-point archive.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct CompareSide {
+    pub id: String,
+    pub name: String,
+    pub launch_options: String,
+    pub hud: Option<String>,
+    pub hit_sound: Option<String>,
+    pub kill_sound: Option<String>,
+    /// `(path, sha256)` for every tracked file.
+    pub files: Vec<(String, String)>,
+    pub casual: BTreeSet<String>,
+    /// The execs Gameplay and Binds cfg text, concatenated.
+    pub managed_text: String,
+}
+
+/// Library paths of the managed cfgs whose values are compared.
+pub(crate) const MANAGED_COMPARE_PATHS: [&str; 4] = [
+    "tf/cfg/overrides/execs_gameplay.cfg",
+    "tf/cfg/execs_gameplay.cfg",
+    "tf/cfg/overrides/execs_binds.cfg",
+    "tf/cfg/execs_binds.cfg",
+];
+
+pub(crate) fn casual_names(
+    selection: Option<&crate::preloader::PreloaderSelection>,
+    mods: &[crate::mods::ModRecord],
+) -> BTreeSet<String> {
+    let Some(selection) = selection else {
+        return BTreeSet::new();
+    };
+    selection
+        .addons
+        .iter()
+        .chain(&selection.particle_mods)
+        .cloned()
+        .chain(selection.profile_particle_mods.iter().map(|id| {
+            mods.iter()
+                .find(|record| &record.id == id)
+                .map_or_else(|| id.clone(), |record| record.name.clone())
+        }))
+        .collect()
+}
+
+pub(crate) fn sound_names(
+    record: Option<&crate::hitsound::HitsoundRecord>,
+) -> (Option<String>, Option<String>) {
+    (
+        record.and_then(|record| record.hit.as_ref().map(|entry| entry.name.clone())),
+        record.and_then(|record| record.kill.as_ref().map(|entry| entry.name.clone())),
+    )
+}
+
+fn library_side(profiles_dir: &Path, manifest: &ProfileManifest) -> CompareSide {
+    let mut managed_text = String::new();
+    for path in MANAGED_COMPARE_PATHS {
+        if manifest.files.iter().any(|file| file.path == path) {
+            if let Ok(bytes) = profile_file_bytes_from(profiles_dir, &manifest.id, path) {
+                managed_text.push_str(&String::from_utf8_lossy(&bytes));
+                managed_text.push('\n');
+            }
+        }
+    }
+    let (hit_sound, kill_sound) = sound_names(manifest.hitsound.as_ref());
+    CompareSide {
+        id: manifest.id.clone(),
+        name: manifest.name.clone(),
+        launch_options: manifest.launch_options.clone(),
+        hud: manifest.hud.as_ref().map(|hud| hud.id.clone()),
+        hit_sound,
+        kill_sound,
+        files: manifest
+            .files
+            .iter()
+            .map(|file| (file.path.clone(), file.sha256.clone()))
+            .collect(),
+        casual: casual_names(manifest.preloader.as_ref(), &manifest.mods),
+        managed_text,
+    }
+}
+
+fn grouped(side: &CompareSide, key: impl Fn(&str) -> Option<String>) -> BTreeMap<String, String> {
     let mut groups: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
-    for file in &manifest.files {
-        if let Some(group) = key(&file.path) {
+    for (path, sha) in &side.files {
+        if let Some(group) = key(path) {
             groups
                 .entry(group)
                 .or_default()
-                .push((file.path.to_ascii_lowercase(), file.sha256.clone()));
+                .push((path.to_ascii_lowercase(), sha.clone()));
         }
     }
     groups
@@ -211,70 +290,14 @@ fn set_change(from: &BTreeMap<String, String>, to: &BTreeMap<String, String>) ->
     change
 }
 
-fn casual_set(manifest: &ProfileManifest) -> BTreeMap<String, String> {
-    let Some(selection) = &manifest.preloader else {
-        return BTreeMap::new();
-    };
-    selection
-        .addons
-        .iter()
-        .chain(&selection.particle_mods)
-        .map(|name| (name.clone(), String::new()))
-        .chain(selection.profile_particle_mods.iter().map(|id| {
-            let name = manifest
-                .mods
-                .iter()
-                .find(|record| &record.id == id)
-                .map_or_else(|| id.clone(), |record| record.name.clone());
-            (name, String::new())
-        }))
-        .collect()
-}
-
-fn managed_text(profiles_dir: &Path, manifest: &ProfileManifest) -> String {
-    let mut text = String::new();
-    for stem in ["execs_gameplay.cfg", "execs_binds.cfg"] {
-        for dir in ["tf/cfg/overrides/", "tf/cfg/"] {
-            let path = format!("{dir}{stem}");
-            if manifest.files.iter().any(|file| file.path == path) {
-                if let Ok(bytes) = profile_file_bytes_from(profiles_dir, &manifest.id, &path) {
-                    text.push_str(&String::from_utf8_lossy(&bytes));
-                    text.push('\n');
-                }
-                break;
-            }
-        }
-    }
-    text
-}
-
-fn sound_label(record: Option<&crate::hitsound::HitsoundEntry>) -> Option<String> {
-    record.map(|entry| entry.name.clone())
-}
-
-pub fn compare_profiles(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    from_id: &str,
-    to_id: &str,
-) -> Result<ProfileComparison, ProfileError> {
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
-    for id in [from_id, to_id] {
-        if !library.profiles.iter().any(|profile| profile.id == id) {
-            return Err(ProfileError::UnknownProfile);
-        }
-    }
-    let from = load_manifest(profiles_dir, from_id)?;
-    let to = load_manifest(profiles_dir, to_id)?;
-    let mut revision = String::new();
-    for id in [from_id, to_id] {
-        let bytes = std::fs::read(manifest_file(profiles_dir, id))
-            .map_err(|err| ProfileError::Io(err.to_string()))?;
-        revision.push_str(&sha256_hex(&bytes));
-    }
-
-    let from_values = managed_values(&managed_text(profiles_dir, &from));
-    let to_values = managed_values(&managed_text(profiles_dir, &to));
+pub(crate) fn compare_sides(
+    from: &CompareSide,
+    to: &CompareSide,
+    revision: String,
+    blocked: Option<String>,
+) -> ProfileComparison {
+    let from_values = managed_values(&from.managed_text);
+    let to_values = managed_values(&to.managed_text);
     let names: BTreeSet<&String> = from_values.keys().chain(to_values.keys()).collect();
     let mut values: Vec<ValueChange> = names
         .into_iter()
@@ -291,57 +314,79 @@ pub fn compare_profiles(
     let cfg_key = |path: &str| {
         (path.starts_with("tf/cfg/") && path != "tf/cfg/config.cfg").then(|| path.to_string())
     };
-    let config_hash = |manifest: &ProfileManifest| {
-        manifest
-            .files
+    let config_hash = |side: &CompareSide| {
+        side.files
             .iter()
-            .find(|file| file.path == "tf/cfg/config.cfg")
-            .map(|file| file.sha256.clone())
+            .find(|(path, _)| path == "tf/cfg/config.cfg")
+            .map(|(_, sha)| sha.clone())
     };
-    let hud_name = |manifest: &ProfileManifest| manifest.hud.as_ref().map(|hud| hud.id.clone());
-
-    let casual = set_change(&casual_set(&from), &casual_set(&to));
-    Ok(ProfileComparison {
+    let as_set = |names: &BTreeSet<String>| {
+        names
+            .iter()
+            .map(|name| (name.clone(), String::new()))
+            .collect::<BTreeMap<_, _>>()
+    };
+    let launch = |side: &CompareSide| {
+        Some(redact_launch(&side.launch_options)).filter(|text| !text.is_empty())
+    };
+    ProfileComparison {
         from_id: from.id.clone(),
         from_name: from.name.clone(),
         to_id: to.id.clone(),
         to_name: to.name.clone(),
         revision,
-        launch_options: text_change(
-            Some(redact_launch(&from.launch_options)).filter(|text| !text.is_empty()),
-            Some(redact_launch(&to.launch_options)).filter(|text| !text.is_empty()),
-        ),
-        hud: text_change(hud_name(&from), hud_name(&to)),
-        hit_sound: text_change(
-            sound_label(
-                from.hitsound
-                    .as_ref()
-                    .and_then(|record| record.hit.as_ref()),
-            ),
-            sound_label(to.hitsound.as_ref().and_then(|record| record.hit.as_ref())),
-        ),
-        kill_sound: text_change(
-            sound_label(
-                from.hitsound
-                    .as_ref()
-                    .and_then(|record| record.kill.as_ref()),
-            ),
-            sound_label(to.hitsound.as_ref().and_then(|record| record.kill.as_ref())),
-        ),
-        packs: set_change(&grouped(&from, pack_name), &grouped(&to, pack_name)),
-        cfg_files: set_change(&grouped(&from, cfg_key), &grouped(&to, cfg_key)),
-        config_cfg_changed: config_hash(&from) != config_hash(&to),
+        launch_options: text_change(launch(from), launch(to)),
+        hud: text_change(from.hud.clone(), to.hud.clone()),
+        hit_sound: text_change(from.hit_sound.clone(), to.hit_sound.clone()),
+        kill_sound: text_change(from.kill_sound.clone(), to.kill_sound.clone()),
+        packs: set_change(&grouped(from, pack_name), &grouped(to, pack_name)),
+        cfg_files: set_change(&grouped(from, cfg_key), &grouped(to, cfg_key)),
+        config_cfg_changed: config_hash(from) != config_hash(to),
         values,
         values_truncated,
-        casual: if casual.is_empty() {
-            SetChange::default()
-        } else {
-            casual
-        },
-        blocked: crate::switch::validate_profile_switch_target(profiles_dir, tf2_root, to_id)
-            .err()
-            .map(|err| err.message()),
-    })
+        casual: set_change(&as_set(&from.casual), &as_set(&to.casual)),
+        blocked,
+    }
+}
+
+pub(crate) fn manifest_revision(profiles_dir: &Path, id: &str) -> Result<String, ProfileError> {
+    let bytes = crate::hash::read_small_file_bounded(&manifest_file(profiles_dir, id), 64 << 20)
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+pub(crate) fn saved_profile_side(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    id: &str,
+) -> Result<CompareSide, ProfileError> {
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if !library.profiles.iter().any(|profile| profile.id == id) {
+        return Err(ProfileError::UnknownProfile);
+    }
+    Ok(library_side(
+        profiles_dir,
+        &load_manifest(profiles_dir, id)?,
+    ))
+}
+
+pub fn compare_profiles(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    from_id: &str,
+    to_id: &str,
+) -> Result<ProfileComparison, ProfileError> {
+    let from = saved_profile_side(profiles_dir, tf2_root, from_id)?;
+    let to = saved_profile_side(profiles_dir, tf2_root, to_id)?;
+    let revision = format!(
+        "{}{}",
+        manifest_revision(profiles_dir, from_id)?,
+        manifest_revision(profiles_dir, to_id)?
+    );
+    let blocked = crate::switch::validate_profile_switch_target(profiles_dir, tf2_root, to_id)
+        .err()
+        .map(|err| err.message());
+    Ok(compare_sides(&from, &to, revision, blocked))
 }
 
 #[cfg(test)]

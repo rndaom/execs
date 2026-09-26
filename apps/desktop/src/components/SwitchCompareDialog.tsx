@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invokeErrorMessage } from "../lib/bridge";
-import {
-  compareSections,
-  comparisonIsEmpty,
-  type ProfileComparison,
-} from "../lib/switch-compare-ui";
+import type { ProfileComparison } from "../lib/switch-compare-ui";
+import { ComparisonTable } from "./ComparisonTable";
 import { Modal } from "./ui/Modal";
 import { Loading } from "./ui/Spinner";
 
@@ -71,7 +68,6 @@ export function SwitchCompareDialog({
     }
   }
 
-  const sections = comparison ? compareSections(comparison) : [];
   return (
     <Modal
       open={targetId !== null}
@@ -100,45 +96,11 @@ export function SwitchCompareDialog({
             Switching replaces your setup with {comparison.toName} exactly. This shows saved
             profiles; changes made in TF2 since the last save are picked up first.
           </p>
-          {comparisonIsEmpty(comparison) ? (
-            <p className="t-body mt-4 text-ink-muted" data-testid="switch-compare-same">
-              These profiles have the same setup.
-            </p>
-          ) : (
-            sections.map((section) => (
-              <section
-                key={section.id}
-                className="mt-5"
-                data-testid={`switch-compare-${section.id}`}
-              >
-                <h3 className="eyebrow mb-2">{section.title}</h3>
-                <table className="t-meta w-full table-fixed border-collapse">
-                  <thead className="sr-only">
-                    <tr>
-                      <th>Item</th>
-                      <th>{comparison.fromName}</th>
-                      <th>{comparison.toName}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {section.rows.map((row) => (
-                      <tr
-                        key={`${row.label}:${row.from}:${row.to}`}
-                        className="border-t border-edge"
-                      >
-                        <td className="w-2/5 py-1.5 pr-3 align-top break-words text-ink">
-                          {row.label}
-                        </td>
-                        <td className="py-1.5 pr-3 align-top break-words">{row.from}</td>
-                        <td className="py-1.5 align-top break-words text-ink">{row.to}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {section.note ? <p className="t-meta mt-1">{section.note}</p> : null}
-              </section>
-            ))
-          )}
+          <ComparisonTable
+            comparison={comparison}
+            testIdPrefix="switch-compare"
+            sameText="These profiles have the same setup."
+          />
           {comparison.blocked ? (
             <p role="alert" className="t-body mt-4 text-warn">
               Switching is not possible yet: {comparison.blocked}

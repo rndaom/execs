@@ -69,6 +69,7 @@ import {
   previewLocked,
   previewUpdate,
 } from "./preview";
+import type { RestorePoint } from "./restore-points-ui";
 import { previewViewmodelRecord } from "./viewmodel-ui";
 
 /** Preview-only simulation of GameBanana's global server order. Production
@@ -145,6 +146,8 @@ export function createPreviewApi(state: PreviewState): Api {
     state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
   let library: ProfileLibrary | null = previewLibrary(state);
+  let restorePoints: RestorePoint[] = [];
+  let restorePointKeep = 5;
   let files = PREVIEW_FILES.map((file) => ({ ...file }));
   let comfig: ComfigState = {
     ...PREVIEW_COMFIG_STATE,
@@ -409,6 +412,72 @@ export function createPreviewApi(state: PreviewState): Api {
         ...library,
         activeProfileId: library.activeProfileId === id ? null : library.activeProfileId,
         profiles: library.profiles.filter((profile) => profile.id !== id),
+      };
+      return library;
+    },
+    async listRestorePoints() {
+      return { points: [...restorePoints], keepPerProfile: restorePointKeep };
+    },
+    async createRestorePoint(profileId, label) {
+      const profile = library?.profiles.find((entry) => entry.id === profileId);
+      if (!profile) throw new BridgeError("That profile is not in the library.", "Unknown");
+      const point = {
+        id: `${restorePoints.length + 1}`.padStart(32, "0"),
+        profileId,
+        profileName: profile.name,
+        ...(label ? { label } : {}),
+        createdAt: Date.now(),
+        bytes: 48_213_004,
+      };
+      restorePoints.unshift(point);
+      return point;
+    },
+    async deleteRestorePoint(id) {
+      restorePoints = restorePoints.filter((point) => point.id !== id);
+      return { points: [...restorePoints], keepPerProfile: restorePointKeep };
+    },
+    async setRestorePointRetention(keep) {
+      restorePointKeep = keep;
+      return { points: [...restorePoints], keepPerProfile: restorePointKeep };
+    },
+    async compareRestorePoint(id) {
+      const point = restorePoints.find((entry) => entry.id === id);
+      if (!point) throw new BridgeError("That restore point no longer exists.", "Io");
+      return {
+        fromId: point.profileId,
+        fromName: point.profileName,
+        toId: point.id,
+        toName: "Restore point",
+        revision: `preview:${point.id}`,
+        launchOptions: null,
+        hud: { from: "toonhud", to: "flawhud" },
+        hitSound: null,
+        killSound: null,
+        packs: { added: ["flawhud"], removed: ["toonhud"], changed: [] },
+        cfgFiles: { added: [], removed: [], changed: [] },
+        configCfgChanged: false,
+        values: [{ name: "fov_desired", from: "75", to: "90" }],
+        valuesTruncated: false,
+        casual: { added: [], removed: [], changed: [] },
+        blocked: null,
+      };
+    },
+    async restoreRestorePoint(id, name) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before restoring a profile.", "GameRunning");
+      const point = restorePoints.find((entry) => entry.id === id);
+      if (!point || !library) throw new BridgeError("That restore point no longer exists.", "Io");
+      library = {
+        ...library,
+        profiles: [
+          ...library.profiles,
+          {
+            id: `restored-${library.profiles.length + 1}`,
+            name,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
       };
       return library;
     },

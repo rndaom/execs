@@ -1,4 +1,4 @@
-import { type ReactNode, useRef, useState } from "react";
+import { type ComponentProps, type ReactNode, useRef, useState } from "react";
 import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
@@ -7,6 +7,7 @@ import { libraryStatusCopy } from "../../lib/library-ui";
 import type { ProfileComparison } from "../../lib/switch-compare-ui";
 import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
 import { ProfileImportDialog } from "../ProfileImportDialog";
+import { RestorePointsDialog } from "../RestorePointsDialog";
 import { SwitchCompareDialog } from "../SwitchCompareDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
 import { Modal } from "../ui/Modal";
@@ -39,6 +40,7 @@ export function ReadyPanel({
   onReviewFiles,
   onInspectExport,
   onCompareSwitch,
+  restoreApi,
 }: {
   path: string;
   profiles: ProfileLibraryState;
@@ -61,10 +63,13 @@ export function ReadyPanel({
   onInspectExport: (id: string) => Promise<ProfileExportReview>;
   /** Read-only switch preview; the menu offers it only when provided. */
   onCompareSwitch?: (id: string) => Promise<ProfileComparison>;
+  /** Local restore points; the menu offers them only when provided. */
+  restoreApi?: ComponentProps<typeof RestorePointsDialog>["api"];
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
   const [profileMenuRequest, setProfileMenuRequest] = useState(0);
   const [compareTargetId, setCompareTargetId] = useState<string | null>(null);
+  const [restoreProfileId, setRestoreProfileId] = useState<string | null>(null);
   const [exportTargetId, setExportTargetId] = useState<string | null>(null);
   const [exportReview, setExportReview] = useState<ProfileExportReview | null>(null);
   const [exportReviewError, setExportReviewError] = useState<string | null>(null);
@@ -146,6 +151,7 @@ export function ReadyPanel({
             onSave={onSave}
             onSwitch={(id) => void profiles.switchProfile(id)}
             onCompare={onCompareSwitch ? setCompareTargetId : undefined}
+            onRestorePoints={restoreApi ? setRestoreProfileId : undefined}
             onExport={reviewExport}
             onDelete={profiles.reviewDelete}
             onRename={profiles.renameProfile}
@@ -176,6 +182,17 @@ export function ReadyPanel({
             Repair folder names
           </button>
         </div>
+      ) : null}
+      {restoreApi ? (
+        <RestorePointsDialog
+          api={restoreApi}
+          profileId={restoreProfileId}
+          library={library}
+          running={running}
+          busy={controlsBusy || recoveryTargetId !== null}
+          onRestored={profiles.setLibrary}
+          onClose={() => setRestoreProfileId(null)}
+        />
       ) : null}
       {onCompareSwitch ? (
         <SwitchCompareDialog
