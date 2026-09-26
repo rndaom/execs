@@ -28,6 +28,10 @@ impl ManagedCfgScope {
                     | b"hud_fastswitch"
                     | b"sensitivity"
                     | b"zoom_sensitivity_ratio"
+                    | b"tf_medigun_autoheal"
+                    | b"hud_combattext"
+                    | b"hud_combattext_batching"
+                    | b"hud_combattext_healing"
             ),
             Self::Crosshair => matches!(
                 name.as_slice(),
@@ -356,6 +360,24 @@ tf_dingaling_volume 0.8
             )
             .unwrap();
             assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("3"));
+        }
+    }
+
+    #[test]
+    fn comfort_toggles_belong_to_gameplay_only() {
+        let original = b"tf_medigun_autoheal 0\nhud_combattext 1\nhud_combattext_batching 0\nhud_combattext_healing 1\n";
+        let incoming = b"tf_medigun_autoheal 1\nhud_combattext 0\nhud_combattext_batching 1\nhud_combattext_healing 0\n";
+        let changed = merge_scope(original, incoming, ManagedCfgScope::Gameplay).unwrap();
+        assert_eq!(changed, incoming);
+        // Crosshair and Sounds saves never rewrite them.
+        let sibling = b"tf_medigun_autoheal 1\nhud_combattext 0\ncl_crosshair_scale 50\ntf_dingaling_volume 0.8\n";
+        for scope in [ManagedCfgScope::Crosshair, ManagedCfgScope::Sounds] {
+            let changed = merge_scope(original, sibling, scope).unwrap();
+            assert_eq!(
+                scalar(&changed, "tf_medigun_autoheal").as_deref(),
+                Some("0")
+            );
+            assert_eq!(scalar(&changed, "hud_combattext").as_deref(), Some("1"));
         }
     }
 

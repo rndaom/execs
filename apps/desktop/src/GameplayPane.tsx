@@ -128,12 +128,7 @@ export function GameplayPane({
         </aside>
       </div>
 
-      <PaneSection
-        id="gameplay-mouse"
-        title="Mouse"
-        description="Changes made in TF2’s options are picked up after the game closes."
-        as="fieldset"
-      >
+      <PaneSection id="gameplay-mouse" title="Mouse" as="fieldset">
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <NumberField
             id="gameplay-sensitivity"
@@ -157,25 +152,7 @@ export function GameplayPane({
       </PaneSection>
 
       <div className="section pane-split">
-        <PaneSection id="gameplay-viewmodels" title="Viewmodels and weapons" as="fieldset" first>
-          <SwitchRow
-            id="gameplay-draw-viewmodel"
-            testId="gameplay-draw-viewmodel"
-            label="Draw viewmodel"
-            checked={draft.r_drawviewmodel === 1}
-            onChange={(next) => {
-              patch({ r_drawviewmodel: next ? 1 : 0 });
-              onDrawViewmodelChange?.(next);
-            }}
-          />
-          <SwitchRow
-            id="gameplay-min-viewmodels"
-            testId="gameplay-min-viewmodels"
-            label="Min viewmodels"
-            description="Compact weapon placement."
-            checked={draft.tf_use_min_viewmodels === 1}
-            onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
-          />
+        <PaneSection id="gameplay-weapons" title="Weapons" as="fieldset" first>
           <SwitchRow
             id="gameplay-autoreload"
             testId="gameplay-autoreload"
@@ -196,6 +173,65 @@ export function GameplayPane({
                 : undefined
             }
             onChange={(next) => patch({ hud_fastswitch: next ? 1 : 0 })}
+          />
+          <SwitchRow
+            id="gameplay-medigun-autoheal"
+            testId="gameplay-medigun-autoheal"
+            label="Medigun auto-heal"
+            description="Click once to keep healing instead of holding fire."
+            checked={draft.tf_medigun_autoheal === 1}
+            onChange={(next) => patch({ tf_medigun_autoheal: next ? 1 : 0 })}
+          />
+        </PaneSection>
+
+        <PaneSection id="gameplay-combat-feedback" title="Combat feedback" as="fieldset" first>
+          <SwitchRow
+            id="gameplay-combattext"
+            testId="gameplay-combattext"
+            label="Damage numbers"
+            description="Show the damage you deal over each target."
+            checked={draft.hud_combattext === 1}
+            onChange={(next) => patch({ hud_combattext: next ? 1 : 0 })}
+          />
+          <SwitchRow
+            id="gameplay-combattext-batching"
+            testId="gameplay-combattext-batching"
+            label="Combine damage numbers"
+            description="Merge hits that land close together into one number."
+            checked={draft.hud_combattext_batching === 1}
+            note={draft.hud_combattext === 1 ? undefined : "Applies when damage numbers are on."}
+            onChange={(next) => patch({ hud_combattext_batching: next ? 1 : 0 })}
+          />
+          <SwitchRow
+            id="gameplay-combattext-healing"
+            testId="gameplay-combattext-healing"
+            label="Healing numbers"
+            description="Show health restored per second over players you heal."
+            checked={draft.hud_combattext_healing === 1}
+            onChange={(next) => patch({ hud_combattext_healing: next ? 1 : 0 })}
+          />
+        </PaneSection>
+      </div>
+
+      <div className="section pane-split">
+        <PaneSection id="gameplay-viewmodels" title="Viewmodels" as="fieldset" first>
+          <SwitchRow
+            id="gameplay-draw-viewmodel"
+            testId="gameplay-draw-viewmodel"
+            label="Draw viewmodel"
+            checked={draft.r_drawviewmodel === 1}
+            onChange={(next) => {
+              patch({ r_drawviewmodel: next ? 1 : 0 });
+              onDrawViewmodelChange?.(next);
+            }}
+          />
+          <SwitchRow
+            id="gameplay-min-viewmodels"
+            testId="gameplay-min-viewmodels"
+            label="Min viewmodels"
+            description="Compact weapon placement."
+            checked={draft.tf_use_min_viewmodels === 1}
+            onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}
           />
         </PaneSection>
 
@@ -257,7 +293,10 @@ export function GameplayPane({
           </Disclosure>
         </section>
       </div>
-      <p className="pane-note mt-6">Saved to {gameplayPath(layer)}.</p>
+      <p className="pane-note mt-6">
+        Saved to {gameplayPath(layer)}. Changes made in TF2’s options are picked up after the game
+        closes.
+      </p>
     </section>
   );
 }

@@ -119,4 +119,28 @@ describe("GameplayPane weapon controls", () => {
     await act(async () => link?.click());
     expect(onOpenComfig).toHaveBeenCalledOnce();
   });
+
+  it("shows existing comfort values and autosaves a changed one", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    await act(async () =>
+      render({
+        effective: { tf_medigun_autoheal: "1", hud_combattext: "0", hud_combattext_healing: "0" },
+        onSave: save,
+      }),
+    );
+    expect(control("gameplay-medigun-autoheal")?.getAttribute("aria-checked")).toBe("true");
+    expect(control("gameplay-combattext")?.getAttribute("aria-checked")).toBe("false");
+    expect(control("gameplay-combattext-healing")?.getAttribute("aria-checked")).toBe("false");
+    expect(document.body.textContent).toContain("Applies when damage numbers are on.");
+
+    await act(async () => control("gameplay-combattext")?.click());
+    expect(document.body.textContent).not.toContain("Applies when damage numbers are on.");
+    await act(async () => vi.runAllTimersAsync());
+    expect(save).toHaveBeenCalledTimes(1);
+    const text = save.mock.calls[0][0];
+    expect(text).toContain("\ntf_medigun_autoheal 1\n");
+    expect(text).toContain("\nhud_combattext 1\n");
+    expect(text).toContain("\nhud_combattext_batching 0\n");
+    expect(text).toContain("\nhud_combattext_healing 0\n");
+  });
 });

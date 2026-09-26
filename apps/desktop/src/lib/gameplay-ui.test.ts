@@ -14,7 +14,7 @@ import {
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
-  syncMouseFromConfig,
+  syncGameOptionsFromConfig,
 } from "./gameplay-ui";
 
 describe("gameplay clamp", () => {
@@ -272,7 +272,7 @@ describe("mouse sync after a game session", () => {
     "// execs gameplay — managed, do not edit by hand\r\nfov_desired 90\r\nsensitivity 3\r\nzoom_sensitivity_ratio 1\r\ncl_crosshair_scale 32\r\n";
 
   it("follows a sensitivity changed in TF2's options and keeps every other byte", () => {
-    const next = syncMouseFromConfig(
+    const next = syncGameOptionsFromConfig(
       managed,
       'sensitivity "2.2"\nzoom_sensitivity_ratio "0.793471"\n',
     );
@@ -282,13 +282,72 @@ describe("mouse sync after a game session", () => {
   });
 
   it("changes nothing when the values already match or config.cfg has none", () => {
-    expect(syncMouseFromConfig(managed, 'sensitivity "3.000000"\n')).toBe(managed);
-    expect(syncMouseFromConfig(managed, "bind w +forward\n")).toBe(managed);
-    expect(syncMouseFromConfig(managed, 'sensitivity "0"\n')).toBe(managed);
+    expect(syncGameOptionsFromConfig(managed, 'sensitivity "3.000000"\n')).toBe(managed);
+    expect(syncGameOptionsFromConfig(managed, "bind w +forward\n")).toBe(managed);
+    expect(syncGameOptionsFromConfig(managed, 'sensitivity "0"\n')).toBe(managed);
   });
 
   it("never adds mouse lines the managed file did not already set", () => {
     const without = "fov_desired 90\n";
-    expect(syncMouseFromConfig(without, 'sensitivity "2"\n')).toBe(without);
+    expect(syncGameOptionsFromConfig(without, 'sensitivity "2"\n')).toBe(without);
+  });
+});
+
+describe("comfort options", () => {
+  it("uses TF2's defaults only when a value is absent", () => {
+    const fresh = seedGameplay("", {});
+    expect(fresh.tf_medigun_autoheal).toBe(0);
+    expect(fresh.hud_combattext).toBe(1);
+    expect(fresh.hud_combattext_batching).toBe(0);
+    expect(fresh.hud_combattext_healing).toBe(1);
+
+    const effective = seedGameplay("", {
+      tf_medigun_autoheal: "1",
+      hud_combattext: "0",
+      hud_combattext_batching: "1",
+      hud_combattext_healing: "0",
+    });
+    expect(effective.tf_medigun_autoheal).toBe(1);
+    expect(effective.hud_combattext).toBe(0);
+    expect(effective.hud_combattext_batching).toBe(1);
+    expect(effective.hud_combattext_healing).toBe(0);
+    // The managed file wins over config.cfg; an unreadable value keeps what was there.
+    expect(seedGameplay("hud_combattext 1\n", { hud_combattext: "0" }).hud_combattext).toBe(1);
+    expect(seedGameplay("", { hud_combattext: "maybe" }).hud_combattext).toBe(1);
+  });
+
+  it("writes every comfort cvar and keeps it in the Gameplay scope", () => {
+    const settings = {
+      ...defaultGameplay(),
+      tf_medigun_autoheal: 1 as const,
+      hud_combattext: 0 as const,
+    };
+    const text = serializeGameplay(settings);
+    expect(text).toContain("\ntf_medigun_autoheal 1\n");
+    expect(text).toContain("\nhud_combattext 0\n");
+    expect(text).toContain("\nhud_combattext_batching 0\n");
+    expect(text).toContain("\nhud_combattext_healing 1\n");
+    expect(serializeGameplayScope(settings, "gameplay")).toContain("hud_combattext");
+    expect(serializeGameplayScope(settings, "crosshair")).not.toContain("hud_combattext");
+    expect(serializeGameplayScope(settings, "sounds")).not.toContain("tf_medigun_autoheal");
+  });
+
+  it("follows TF2's options after a game session like the mouse values", () => {
+    const managed =
+      "cl_autoreload 1\nhud_fastswitch 2\ntf_medigun_autoheal 0\nhud_combattext 1\nhud_combattext_healing 1\n";
+    const config =
+      'cl_autoreload "0"\nhud_fastswitch "1"\ntf_medigun_autoheal "1"\nhud_combattext "0"\nhud_combattext_healing "1"\n';
+    expect(syncGameOptionsFromConfig(managed, config)).toBe(
+      "cl_autoreload 0\nhud_fastswitch 1\ntf_medigun_autoheal 1\nhud_combattext 0\nhud_combattext_healing 1\n",
+    );
+  });
+
+  it("ignores config.cfg values TF2's options would not write", () => {
+    const managed = "tf_medigun_autoheal 0\nhud_fastswitch 1\n";
+    expect(
+      syncGameOptionsFromConfig(managed, 'tf_medigun_autoheal "2"\nhud_fastswitch "1.5"\n'),
+    ).toBe(managed);
+    // Lines the managed file does not set are never added.
+    expect(syncGameOptionsFromConfig(managed, 'hud_combattext "0"\n')).toBe(managed);
   });
 });

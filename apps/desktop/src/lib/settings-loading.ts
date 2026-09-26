@@ -2,7 +2,7 @@ import type { Api } from "./api";
 import { bindsFilePath, configBindsFromFiles, syncTrackedBindsFromConfig } from "./binds-ui";
 import type { FilesContext, FilesSource, ProfileDetail } from "./bridge";
 import { addEditorTextToBudget, editorCfgCandidates } from "./files-limits";
-import { gameplayPath, syncMouseFromConfig } from "./gameplay-ui";
+import { gameplayPath, syncGameOptionsFromConfig } from "./gameplay-ui";
 
 export type CfgText = { path: string; text: string; source?: FilesSource };
 
@@ -103,12 +103,12 @@ export async function readSettingsSnapshot(
     }
   }
 
-  // The same config.cfg drift can carry a sensitivity changed in TF2's options.
+  // The same config.cfg drift can carry Gameplay values changed in TF2's options.
   if (syncBinds && !incomplete) {
     const gameplayFile = gameplayPath(detail?.layer ?? "comfig");
     const managed = files.find((file) => file.path === gameplayFile);
     const config = files.find((file) => file.path.toLowerCase() === "tf/cfg/config.cfg");
-    const synced = managed && config ? syncMouseFromConfig(managed.text, config.text) : null;
+    const synced = managed && config ? syncGameOptionsFromConfig(managed.text, config.text) : null;
     if (managed && synced !== null && synced !== managed.text) {
       if (!managed.source)
         throw new Error("The Gameplay source identity is unavailable. Retry loading settings.");
