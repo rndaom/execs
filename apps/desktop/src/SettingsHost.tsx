@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
+import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { Loading } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
@@ -30,6 +31,7 @@ import {
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
+import { cfgProvenance } from "./lib/cfg-provenance";
 import { CFG_INCOMPLETE_MESSAGE, mapsFromFiles, usesCfgState } from "./lib/cfg-state";
 import {
   type ComfigUiState,
@@ -265,12 +267,38 @@ export function SettingsHost({
       ),
     [files, launchSeed, detail],
   );
+  // Only the visible pane pays for the extra override probe.
+  const provenanceTab = visible && !filesLimited ? tab : null;
+  const provenance = useMemo(
+    () =>
+      provenanceTab
+        ? cfgProvenance({
+            files,
+            layer,
+            tab: provenanceTab,
+            managedPath: gameplayPath(layer),
+            effective: maps.effective,
+            effectiveSources: maps.effectiveSources,
+            complete: maps.complete,
+            inventory: detail?.files,
+            hudProjection: detail ?? undefined,
+            hudId: detail?.selectedHudRoot ?? cfgHudFolder(detail?.files ?? [], detail?.hud),
+          })
+        : null,
+    [provenanceTab, files, layer, maps, detail],
+  );
   const [filesReviewTarget, setFilesReviewTarget] = useState<{
     id: number;
     path: string;
     line: number;
   } | null>(null);
   const filesReviewSequence = useRef(0);
+  const openCfgSource = onNavigate
+    ? (path: string, line: number) => {
+        setFilesReviewTarget({ id: ++filesReviewSequence.current, path, line });
+        onNavigate("files");
+      }
+    : undefined;
   const cfgComplete = useRef(maps.complete);
   cfgComplete.current = maps.complete && !filesLimited;
   const cfgReason = useRef(maps.reason);
@@ -1527,6 +1555,9 @@ export function SettingsHost({
               : undefined
           }
         >
+          {!identityPending && profileId && visible && tab === paneTab && provenance ? (
+            <CfgOverridesAlert provenance={provenance} onOpen={openCfgSource} />
+          ) : null}
           {!identityPending &&
           profileId &&
           visible &&
@@ -1583,6 +1614,14 @@ export function SettingsHost({
           ) : (
             pane(paneTab, visible && tab === paneTab)
           )}
+          {!identityPending && profileId && visible && tab === paneTab && provenance ? (
+            <CfgSourcesDetails
+              profileId={profileId}
+              tab={paneTab}
+              provenance={provenance}
+              onOpen={openCfgSource}
+            />
+          ) : null}
         </SettingsDraftBoundary>
       ))}
     </AppStatusProvider>

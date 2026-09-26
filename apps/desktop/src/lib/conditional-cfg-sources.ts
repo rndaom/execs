@@ -5,7 +5,7 @@ export type ConditionalCfgSource =
   | { kind: "launch"; label: string }
   | { kind: "class"; label: string; path: string; line: number };
 
-const GAMEPLAY_CVARS = new Set([
+export const GAMEPLAY_CVARS = new Set([
   "fov_desired",
   "r_drawtracers_firstperson",
   "r_drawtracers",
@@ -19,14 +19,14 @@ const GAMEPLAY_CVARS = new Set([
   "hud_combattext_healing",
 ]);
 
-const VIEWMODEL_CVARS = new Set([
+export const VIEWMODEL_CVARS = new Set([
   "viewmodel_fov",
   "r_drawviewmodel",
   "tf_use_min_viewmodels",
   "cl_flipviewmodels",
 ]);
 
-const CROSSHAIR_CVARS = new Set([
+export const CROSSHAIR_CVARS = new Set([
   "crosshair",
   "cl_crosshair_file",
   "cl_crosshair_scale",
@@ -35,7 +35,7 @@ const CROSSHAIR_CVARS = new Set([
   "cl_crosshair_blue",
 ]);
 
-const SOUNDS_CVARS = new Set([
+export const SOUNDS_CVARS = new Set([
   "tf_dingalingaling",
   "tf_dingaling_volume",
   "tf_dingaling_pitchmindmg",
@@ -49,7 +49,7 @@ const SOUNDS_CVARS = new Set([
   "tf_dingalingaling_last_effect",
 ]);
 
-function relevantCvars(tab: string): Set<string> | null {
+export function relevantCvars(tab: string): Set<string> | null {
   switch (tab) {
     case "gameplay":
       return GAMEPLAY_CVARS;
@@ -64,7 +64,7 @@ function relevantCvars(tab: string): Set<string> | null {
   }
 }
 
-function isClassCfg(path: string): boolean {
+export function isClassCfg(path: string): boolean {
   return /^tf\/(?:custom\/[^/]+\/)?cfg\/(?:overrides\/)?(?:scout|soldier|pyro|demoman|heavy|heavyweapons|engineer|medic|sniper|spy)\.cfg$/i.test(
     path.replaceAll("\\", "/"),
   );

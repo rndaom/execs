@@ -137,6 +137,25 @@ describe("real Gameplay save preserves cfg settings", () => {
     expect(writeManagedCfg).toHaveBeenCalledOnce();
   });
 
+  it("shows where each Gameplay value comes from and warns about later overrides", async () => {
+    const { render, onNavigate } = fixture({
+      "tf/cfg/config.cfg": "sensitivity 3\n",
+      "tf/cfg/autoexec.cfg": "exec execs_gameplay\nfov_desired 80\n",
+      "tf/cfg/execs_gameplay.cfg": "fov_desired 90\n",
+    });
+    await render("gameplay");
+    const overrides = control<HTMLElement>('[data-testid="cfg-overrides"]');
+    expect(overrides.textContent).toContain("fov_desired — tf/cfg/autoexec.cfg:2");
+    const source = control<HTMLElement>('[data-testid="cfg-source-sensitivity"]');
+    expect(source.textContent).toContain("TF2 config.cfg");
+    await act(async () =>
+      source
+        .querySelector<HTMLButtonElement>('button[aria-label="Open tf/cfg/config.cfg:1 in Files"]')
+        ?.click(),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("files");
+  });
+
   it("clears a quiet autosave failure after its next successful Gameplay write", async () => {
     const { render, writeManagedCfg } = fixture({ "tf/cfg/config.cfg": "viewmodel_fov 70\n" });
     writeManagedCfg.mockRejectedValueOnce(new Error("Disk read only"));

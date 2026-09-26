@@ -38,6 +38,9 @@ User-facing changes only. The release workflow publishes the matching
 - Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
   patches and preloader pack are prepared once, before any files change, instead of being
   rebuilt during the switch.
+- Gameplay, Viewmodels, Crosshair and Sounds show where each value comes from: the cfg file and
+  line that set it, whether execs saved it, and which class cfgs set it again. A warning names any
+  later startup line that would undo a change made in the pane, with a link to open it in Files.
 - Launch TF2: flag a profile whose launch options are not in Steam yet, and write them before
   launching. When Steam is open, execs asks before restarting it to apply them.
 - Launch options say whether they are only saved to the profile or also in Steam, based on
