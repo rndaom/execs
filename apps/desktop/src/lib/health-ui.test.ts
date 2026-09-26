@@ -39,6 +39,7 @@ describe("installation health", () => {
   it("reports a healthy setup without claiming a Cloud upload", () => {
     const items = healthItems(health());
     expect(items.every((item) => item.status === "ok")).toBe(true);
+    expect(byId(items, "profiles").lines).toEqual(["Main has every saved file."]);
     expect(byId(items, "cloud").lines).toContain(
       "Steam uploads that copy when it syncs; execs cannot confirm the upload.",
     );

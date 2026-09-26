@@ -5,201 +5,144 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-### Improved
+### Added
 
-- Binds can remove any key, including one set in `config.cfg`. A removed key does nothing
-  afterwards; an older binding for it no longer comes back.
-- Viewmodels can show all, hide all, or hide everything except melee across every class at once.
-  You see exactly what changes first, can undo it, and nothing is written until you build.
-- The Sounds library now chooses for one slot at a time. Browse from the hit or kill sound, then
-  preview and use a sound from a simpler list.
-- Viewmodels is now the one place for viewmodel FOV, Draw viewmodel, Min viewmodels,
-  left-handed and transparent viewmodels, above the per-weapon choices. Gameplay links there.
-- Casual setup shows which particle mod wins each file two of your mods both change, before you
-  apply, and lets you pick the other one. Skipped files explain what you can do.
-- Gameplay has Medigun auto-heal, damage numbers, combined damage numbers and healing numbers,
-  grouped with auto reload and fast switch under Weapons and Combat feedback. Your current values
-  are kept, and changes made in TF2's own options are picked up after the game closes.
-- Gameplay has mouse sensitivity and zoomed sensitivity fields that keep exact decimals. A value
-  changed in TF2's own options is picked up after the game closes instead of being reset.
-- Return to TF2's stock HUD from the HUD pane. The HUD and its options leave the profile; its
-  folder is kept in a backup, and your other mods and settings stay the same.
-- Restore points: save a copy of a profile from its menu, compare the profile with it later,
-  and restore it as a new profile to switch to when you are ready. execs keeps the newest 3, 5 or
-  10 per profile on this computer, and restoring never changes TF2 until you switch.
-- Duplicate any saved profile from its menu to experiment on a copy. The copy is not switched in
-  and TF2 is not touched.
-- App settings shows how much space execs uses for profiles, downloads, logs and recovery data,
-  and can clear downloads it can fetch again plus leftovers from retired features. Profiles,
-  recovery data and sounds you added are always kept.
-- Rename a profile from its menu in the profile list. Only the name changes; its files and
-  settings stay exactly as they were.
-- App settings can uninstall execs. Your TF2 setup stays as it is. Restore stock files
-  undoes Casual setup's changes to TF2's own files, and deleting profiles and other execs data is
-  a separate choice. Windows opens the uninstaller, an AppImage deletes itself, and a deb install
-  shows the package manager command.
-- Binds has a cleaner layout: every action on one page grouped by task, a search that also finds
-  actions by the key bound to them, and readable key caps such as Mouse 4 and Num 1. New actions
-  cover common voice commands (Thanks, Help, Incoming, Spy, Sentry ahead, Activate charge,
-  Battle cry) and Screenshot.
+- A refreshed look across every pane: warm dark surfaces, TF2 orange for selections, clearer
+  type, less repeated text, consistent dialogs and restrained motion. execs follows your system's
+  reduced-motion setting, or your own Reduce preference in App settings.
+- App settings, available before you create a profile: startup update checks, motion, install
+  and data locations, diagnostics, support and credits.
+- App settings shows how much space execs uses for profiles, restore points, downloads, logs and
+  recovery data. Clear downloads removes files execs can fetch again and leftovers from retired
+  features; profiles, recovery data and sounds you added are always kept.
 - App settings has a Health section: whether TF2 and the config loader were found, anything
   interrupted, saved profiles with missing files, the local Steam Cloud copy, and what works
   offline. It only reads; nothing is changed.
-- The GameBanana file chooser shows when each author file was uploaded and picks the only
-  installable file for you. Split downloads (PART 1, PART 2…) are explained instead of installed
-  half-finished, and a file GameBanana no longer has says so plainly.
-- Compare with current… in a profile's menu shows what switching would change first: HUD,
-  sounds, launch options, settings and binds, custom files, config files and Casual setup.
-  Saved passwords are hidden, and nothing changes until you choose Switch.
-- Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
-  patches and preloader pack are prepared once, before any files change, instead of being
-  rebuilt during the switch.
+- Uninstall execs from App settings. Your TF2 setup stays as it is. Restore stock files undoes
+  Casual setup's changes to TF2's own files, and deleting profiles and other execs data is a
+  separate choice. Windows opens the uninstaller, an AppImage deletes itself, and a deb install
+  shows the package manager command.
+- Profiles: rename, duplicate or delete a profile from its menu. Rename changes only the name;
+  a duplicate is not switched in; deleting reviews what happens first, and deleting the active
+  or last profile can keep your installed setup.
+- Profiles: Compare with current… shows what switching would change first: HUD, sounds, launch
+  options, settings and binds, custom files, config files and Casual setup. Saved passwords are
+  hidden, and nothing changes until you choose Switch.
+- Profiles: restore points. Save a copy of a profile from its menu, compare the profile with it
+  later, and restore it as a new profile to switch to when you are ready. execs keeps the newest
+  3, 5 or 10 per profile on this computer, and restoring never changes TF2 until you switch.
 - Gameplay, Viewmodels, Crosshair and Sounds show where each value comes from: the cfg file and
   line that set it, whether execs saved it, and which class cfgs set it again. A warning names any
   later startup line that would undo a change made in the pane, with a link to open it in Files.
-- Launch TF2: flag a profile whose launch options are not in Steam yet, and write them before
-  launching. When Steam is open, execs asks before restarting it to apply them.
-- Launch options say whether they are only saved to the profile or also in Steam, based on
-  Steam's saved copy rather than the last save. Write to Steam retries from the Launch pane, and
-  copying the options never counts as updating Steam.
-- Files keeps saved password and remote-console cfg commands through local saves, imports and
-  exports. Export review names possible credential locations, lists the included custom packs,
-  and flags Crosshair scripts and Viewmodels VPKs before creating a ZIP, without displaying
-  credential values. The review expires if the profile changes. Help now focuses on searchable command details; production hides
-  offline catalog gaps, and startup warnings link to the affected cfg line.
-- Launch offers 21 documented TF2-relevant options through search and eight-item pages while
-  retaining direct editing of the full launch string.
-- Gameplay's viewmodel FOV slider now selects whole numbers while preserving existing fractional
-  cfg values until the slider is changed.
-- Binds and Gameplay save changes quietly in the background. A short notice still explains when
-  TF2 keeps a draft pending, and a failed save remains visible for retry.
-- Refresh every pane with the overhaul: subtly warmed dark surfaces, TF2 orange selection, clearer type,
-  less redundant copy, compact navigation, consistent dialogs and restrained motion. Profile menus,
-  pane navigation and Binds categories now ease into place. Each pane
-  keeps a layout suited to its task, and the app follows system reduced motion or your own Reduce
-  preference.
-- Comfig and the setup wizard now offer mastercomfig's current presets without an expanded list of
-  retired choices. Existing profiles still show a legacy preset until you choose a current one.
-- Keep separate scroll positions for visited panes and App settings. Profile changes reset
-  profile-specific positions.
-- Enlarge or reduce the interface with Ctrl + Plus / Minus, and restore its original size with
-  Ctrl + 0. The layout reflows while keeping keyboard access to controls.
-- Crosshair: keep the designer beside its preview, retain unfinished designs, and distinguish
-  saving a design to the library from building the installed pack. Weapon pickers stay in view.
-- Crosshair Shapes can start an editable design, and a separate sprite detail view keeps thin
-  segments visible while the in-game size reference stays at 1280×720.
-- HUD: sort by sourced TF2 HUDs listing activity and popularity, show uncredited creators without
-  inventing names, and refresh older catalog and statistics caches for accurate metadata.
-- Viewmodels: import, replace or remove a compatible VPK, with saved packs from earlier builds
-  still available through profile switching and export/import.
+- Gameplay: exact mouse and zoomed sensitivity, automatic reload, fast weapon switch, Medigun
+  auto-heal, damage numbers, combined damage numbers and healing numbers. Your current values
+  are kept, and changes made in TF2's own options are picked up after the game closes.
 - Viewmodels: choose Shown, Hidden or Hands only for each weapon, organized by class into
-  Primary, Secondary, Melee and Inspect with readable weapon names from your TF2 files. Inspect
-  animations have their own choices, and bread reskins such as Mutated Milk share their base
-  weapon's choice. Build pack creates the viewmodel pack from your own TF2 files, and profile
-  exports carry the recipe so the recipient's copy is rebuilt from their install. execs reads
-  these weapons in the background when it opens, so the pane is ready without waiting.
-- Show a turning cog wherever execs is loading, checking or saving. It stays still when reduced
-  motion is on.
-- Keep the full-window header and library status when no profile is active yet, instead of an
-  inset card.
-- Sounds: keep hit and kill slots together above the searchable, paged library, with advanced
-  controls and clearer source retry feedback.
-- Files: keep Find controls, new-file choices and full destination paths readable at the minimum
-  window size.
-- Reduce background lifecycle polling while execs is hidden or unfocused, refresh on return,
-  and back off failed reads while keeping launch and maintenance state guarded.
-
-### Changed
-
-- Temporarily pause Viewmodels Build and generated previews while replacing the CompVMInstaller
-  dependency with a builder based on the player's installed TF2 files. Existing profile-owned VPKs
-  and choices remain intact; equivalent class/group and Full/Weapon controls are required before
-  0.2.0 ships.
-- Retire new Venom Crosshairs, TF2Hitsounds and comfig hosted-sound catalog downloads. Existing
-  profile-owned VTFs and WAVs remain usable; a saved remote WAV needs a new source to change its
-  baked boost.
-- Retire new cueki mod-library downloads and selections. Four direct-author Casual addons remain
-  available. Saved library choices can still apply with their original verified cache; if the cache
-  is missing, an explicit review can remove only those choices from an inactive profile before
-  switching. Cancel preserves them.
-- Replace packaged preset and promotional game captures with text and browser preview media.
-
-### Added
-
-- Delete profiles from their menu with an explicit review. Active profiles can switch first or
-  keep the installed setup and stop tracking it; deleting the last profile keeps TF2 files intact.
-- App settings for startup update checks, reduced motion, install location, data location,
-  diagnostics and support, available before creating a profile.
-- Gameplay controls for automatic reload and fast weapon switching, preserving existing
-  alternative fast-switch values until you choose to change them.
-- Binds: include primary attack, secondary attack and reload in a dedicated Combat group.
+  Primary, Secondary, Melee and Inspect with readable weapon names from your TF2 files. Show all,
+  hide all or hide everything except melee across every class at once, with an exact review
+  first. Build pack creates the pack from your own TF2 files, and profile exports carry the recipe
+  so the recipient's copy is rebuilt from their install.
+- Viewmodels is the one place for viewmodel FOV, Draw viewmodel, Min viewmodels, left-handed and
+  transparent viewmodels. It can also import, replace or remove a compatible VPK.
+- HUD: sort the catalog by TF2 HUDs listing activity and popularity. Creators without credit stay
+  uncredited instead of getting invented names.
+- HUD: Return to TF2's stock HUD. The HUD and its options leave the profile; its folder is kept in
+  a backup, and your other mods and settings stay the same.
+- Crosshair: the designer sits beside its preview and keeps unfinished designs. Saving a design to
+  the library is separate from building the installed pack, and Shapes can start an editable
+  design with a detail view that keeps thin segments visible.
+- Casual setup shows which particle mod wins each file two of your mods both change, before you
+  apply, and lets you pick the other one. Skipped files explain what you can do.
+- Launch: flag a profile whose launch options are not in Steam yet, and write them before Launch
+  TF2. When Steam is open, execs asks before restarting it. The Launch pane says whether options
+  are only saved to the profile or also in Steam, and offers 21 documented TF2 options through
+  search while keeping the full launch string editable.
+- Binds: remove any key, including one set in `config.cfg`, without an older binding coming back.
+  Every action is on one page, grouped by task, with a search that also finds actions by their
+  key and readable key caps such as Mouse 4 and Num 1. New actions cover primary attack,
+  secondary attack, reload, common voice commands and Screenshot.
+- Enlarge or reduce the interface with Ctrl + Plus / Minus, and restore it with Ctrl + 0.
 
 ### Fixed
 
-- Profiles now stop a switch that would carry over a kept external pack or replace its bytes,
-  and offer to capture the pack first. After deleting an active profile while keeping its
-  installed setup, Save current as… captures that setup before switching elsewhere.
+- Profiles stop a switch that would carry over a kept external pack or replace its bytes, and
+  offer to capture the pack first. After deleting an active profile while keeping its installed
+  setup, Save current as… captures that setup before switching elsewhere.
+- Profiles switch shared preloader selections with the target profile, keep saved particle
+  selections when repairing custom folder names, and switch local-only particle profiles without
+  downloading the default mod library.
 - Accepted external custom packs appear under Mods → Custom packs with a removable record that
-  survives profile switches and export/import. Externally changed crosshair, viewmodel and
-  sound files show a source warning until repaired or replaced.
-- Creating a profile from Current setup includes recent live `config.cfg` edits. Imported
-  profile feature records must have the matching verified crosshair, viewmodel or sound files.
-- Binds preserves unrelated lines in its managed cfg and shows every key assigned to an
-  action. Binds, Gameplay, Crosshair and Sounds identify saved class and Launch overrides.
-- Crosshair retains unrecognized external selections, refuses incomplete weapon-script
-  builds and conflicting mod scripts, and warns when Valve source scripts change.
-  HUD overlays, custom stock art and competing hitsound paths are identified as possible
-  in-game sources.
-- Sounds applies settings and sound files together so a failed install keeps the prior
-  values. Viewmodel VPK imports reject unrelated content before installing anything.
+  survives profile switches and export/import. Externally changed crosshair, viewmodel and sound
+  files show a source warning until repaired or replaced.
+- Creating a profile from Current setup includes recent live `config.cfg` edits. Imported profile
+  records must have their matching verified crosshair, viewmodel or sound files.
+- Review competing HUDs before activation, keep excluded originals, and require a visible choice
+  for profile ZIPs with several HUDs. Generic mod imports send detected HUD content to HUD review
+  instead of installing a second active HUD. Imported cfg bytes stay unchanged during that choice.
+- Binds keeps unrelated lines in its managed cfg and shows every key assigned to an action.
+- Crosshair keeps unrecognized external selections, refuses incomplete weapon-script builds and
+  conflicting mod scripts, and warns when Valve's source scripts change. HUD overlays, custom stock
+  art and competing hit sound paths are named as possible in-game sources.
+- Sounds applies settings and sound files together, so a failed install keeps the earlier values.
+  The 0/6/12 dB Boost controls stay visible and explain when a custom sound is needed.
+- Viewmodel VPK imports reject unrelated content before installing anything, and the FOV slider
+  keeps an existing fractional value until you move it.
 - HUD options distinguish overlays from stock crosshairs, show unsupported controls as
   unavailable, and refresh showcase pictures. Supported e.v.e Plus options are enabled.
-- Mods Browse includes GameBanana GUI results and asks which author file to install when
-  a download has variants. HUD results route to HUD import, and other GUIs explain how
-  to import the author's intended files.
-- Sounds: keep the 0/6/12 dB Boost controls visible and explain that stock effects need a custom
-  sound before they can be boosted.
+- Mods Browse includes GameBanana GUI results. The file chooser shows upload dates, picks the only
+  installable file for you, explains split downloads instead of installing half of one, and says
+  plainly when GameBanana no longer has a file.
+- Files keeps saved password and remote-console commands through saves, imports and exports.
+  Export review names possible credential locations and lists the included custom packs without
+  showing credential values, and expires if the profile changes.
 - Files no longer warns about dormant quit, disconnect or retry aliases as though they run at
-  startup, or treats a dormant self-reloading alias as an active exec cycle. Uneven quotes remain
-  advisory, and startup diagnostics suggest a known command for a close spelling mistake.
-- Files separates actionable findings from offline command catalog gaps, expands searchable command
-  help, and points startup-setting failures to the first cfg path and line. UTF-8 BOMs and malformed
-  individual binds no longer create unrelated findings or hide later known settings.
-- Refresh packaged credits and dependency licenses to match the current application.
-- Bind native download connections and proxy tunnels to checked public addresses while
-  preserving HTTPS certificate checks and configured proxy access. Debian packages now
-  declare the OpenSSL and zlib libraries required by the transport.
-- Offer a clear Choose profile action when saved profiles exist but none is active.
-  Import review now describes the unchanged TF2 setup without assuming an active profile.
-- Keep profile actions visible in inactive libraries and enlarged interfaces, with scrolling
-  for short windows and longer profile lists.
-- Keep menus, pending-review actions and keyboard focus reachable when the interface is enlarged.
-- Files: restore the editor's scroll and focus when returning from another pane, alongside its
-  draft, selection and undo history.
-- Keep complete cfg paths readable in the unsaved-changes dialog without horizontal scrolling.
-- Pending-change review moves keyboard focus to the selected pane; close requests also wait
-  for settings writes that start before the busy indicator renders.
-- App settings errors identify the failed settings read without blaming the profile library;
-  Retry preserves the requested preference and existing installation choice.
-- Clear an obsolete update offer after a successful newer check reports no update, and prevent
-  out-of-order checks or repeated install clicks from changing the intended update.
-- Show an actionable native error when startup recovery checks fail, including the app version,
-  state location and copyable report details, while preserving maintenance markers and TF2 files.
-- Protect unfinished pack/designer drafts during profile, install, update and close transitions;
-  direct you to the pane that needs an explicit apply action, with discard and cancel available.
-- Review competing HUDs before activation, preserve excluded originals, and require a visible
-  choice for profile ZIPs containing several HUDs. Generic mod imports route detected HUD content
-  to HUD review instead of installing a second active HUD.
-- Preserve imported cfg bytes during HUD choice; managed HUD-option cleanup receives a separate
-  review with original files retained for recovery.
-- Switch local-only particle profiles without downloading the default mod library, and keep
-  legacy preloader cleanup from undoing profile-owned selections.
-- Keep Casual preload console history, remove an invalid post-disconnect script call, and avoid
-  duplicate managed launch hooks. The supported offline preload step remains explicit.
-- Correct installer, platform and Casual compatibility descriptions in the README and promo.
-- Profiles: retain saved particle selections when repairing custom folder names,
-  including profiles that are not active.
-- Profiles: switch shared preloader selections with the target profile.
+  startup. Startup failures point to the first cfg path and line and suggest a known command for a
+  close misspelling. UTF-8 BOMs and one malformed bind no longer hide later settings.
+- Files keeps Find controls, new-file choices and full paths readable at the minimum window size,
+  and restores the editor's scroll and focus when you come back to it.
+- Keep menus, profile actions, pending-review actions and keyboard focus reachable when the
+  interface is enlarged or the window is short.
+- The unsaved-changes dialog keeps complete cfg paths readable and moves focus to the pane you
+  choose. Closing also waits for settings writes that have just started.
+- Unfinished pack and designer drafts are protected during profile, install, update and close
+  changes, with discard and cancel available.
+- An update offer disappears after a later check finds no update, and repeated install clicks
+  cannot change which update installs.
+- A failed startup recovery check shows a clear error with the app version, state location and
+  copyable details, and keeps maintenance markers and TF2 files unchanged.
+- App settings errors name the failed settings read, and Retry keeps your choice.
+- Offer Choose profile, and keep the full header and library status, when saved profiles exist
+  but none is active.
+- Casual preload keeps console history, drops an invalid post-disconnect call and avoids duplicate
+  managed launch hooks.
+- Downloads connect only to checked public addresses while keeping HTTPS certificate checks and
+  configured proxies. Debian packages declare the OpenSSL and zlib libraries they need.
+- Less background polling while execs is hidden or unfocused.
+- Installer, platform and Casual compatibility descriptions in the README are corrected, and the
+  packaged credits and dependency licenses are up to date.
+
+### Changed
+
+- Viewmodels builds from your own installed TF2 files instead of downloaded CompVMInstaller
+  animations, and generated previews are gone. Packs built by earlier versions keep working.
+- New Venom Crosshairs, TF2Hitsounds and comfig hosted-sound downloads are retired. Crosshairs and
+  sounds already in your profiles keep working; a saved downloaded sound needs a new source to
+  change its baked Boost.
+- New cueki mod-library downloads and choices are retired. Four direct-author Casual addons remain.
+  Saved library choices still apply with their original verified cache; without it, a review can
+  remove only those choices from an inactive profile before switching.
+- Comfig and the setup wizard offer mastercomfig's current presets only. Existing profiles keep
+  showing a retired preset until you choose a current one.
+- Switching to or from a profile with Casual setup choices is about twice as fast.
+- Binds and Gameplay save quietly in the background. A short notice explains when TF2 keeps a
+  draft pending, and a failed save stays visible for retry.
+- Sounds chooses for one slot at a time: Browse from the hit or kill sound, then preview and use a
+  sound from a simpler list.
+- Each pane and App settings keeps its own scroll position; changing profiles resets the
+  profile-specific ones.
+- A turning cog shows wherever execs is loading, checking or saving, and stays still with reduced
+  motion.
+- Promotional game captures are replaced with text and browser preview media.
 
 ## [0.1.8] - 2026-09-20
 
