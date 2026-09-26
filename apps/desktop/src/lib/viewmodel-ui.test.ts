@@ -6,12 +6,14 @@ import {
   previewViewmodelRecord,
   selectedViewmodelChoices,
   viewmodelCatalogRevision,
+  viewmodelChoiceChanges,
   viewmodelClasses,
   viewmodelDraftBuildRequest,
   viewmodelGroupItemNames,
   viewmodelGroupLabel,
   viewmodelGroupsForClass,
   viewmodelItemName,
+  viewmodelPresetChoices,
   viewmodelRowItemNames,
   viewmodelRowLabel,
   viewmodelRowsForClass,
@@ -293,5 +295,65 @@ describe("loadout sections and readable names", () => {
       "Mutated Milk",
     ]);
     expect(viewmodelRowLabel(rows[1])).toBe("Bonk! Atomic Punch inspect");
+  });
+});
+
+describe("whole-profile viewmodel presets", () => {
+  const withMelee: ViewmodelSourceCatalog = {
+    ...catalog,
+    groups: [
+      ...catalog.groups,
+      {
+        id: "scout/bat",
+        class: "scout",
+        items: [{ id: 0, schemaName: "Bat", slot: "melee" }],
+        animations: ["m"],
+        overlaps: [],
+        teamVariantsDiffer: false,
+      },
+      {
+        id: "scout/bat-inspect",
+        class: "scout",
+        items: [{ id: 0, schemaName: "Bat", slot: "melee" }],
+        animations: ["mi"],
+        overlaps: [],
+        teamVariantsDiffer: false,
+        inspect: true,
+      },
+    ],
+  };
+
+  it("hides every row in every class, or all but melee, in the chosen mode", () => {
+    expect(viewmodelPresetChoices(withMelee, "show-all", "full")).toEqual({});
+    expect(viewmodelPresetChoices(withMelee, "hide-all", "weapon")).toEqual({
+      "scout/one": "weapon",
+      "scout/two": "weapon",
+      "scout/bat": "weapon",
+      "scout/bat-inspect": "weapon",
+      "soldier/one": "weapon",
+    });
+    expect(viewmodelPresetChoices(withMelee, "keep-melee", "full")).toEqual({
+      "scout/one": "full",
+      "scout/two": "full",
+      "soldier/one": "full",
+    });
+  });
+
+  it("lists exactly the rows that change, in class and loadout order", () => {
+    const before = { "scout/one": "weapon" as const, "scout/bat": "full" as const };
+    const after = viewmodelPresetChoices(withMelee, "keep-melee", "full");
+    const changes = viewmodelChoiceChanges(withMelee, before, after).map((change) => [
+      change.row.id,
+      change.from,
+      change.to,
+    ]);
+    // The fixture's other weapons have no slot, so they sort after Melee.
+    expect(changes).toEqual([
+      ["scout/bat", "full", "shown"],
+      ["scout/one", "weapon", "full"],
+      ["scout/two", "shown", "full"],
+      ["soldier/one", "shown", "full"],
+    ]);
+    expect(viewmodelChoiceChanges(withMelee, after, after)).toEqual([]);
   });
 });

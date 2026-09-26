@@ -305,6 +305,57 @@ export function viewmodelSectionsForClass(
   })).filter((section) => section.rows.length > 0);
 }
 
+/** Whole-profile starting points; every class and weapon row follows the same rule. */
+export type ViewmodelPreset = "show-all" | "hide-all" | "keep-melee";
+
+export const VIEWMODEL_PRESET_LABELS: Record<ViewmodelPreset, string> = {
+  "show-all": "Show all",
+  "hide-all": "Hide all",
+  "keep-melee": "Keep melee visible",
+};
+
+/**
+ * The draft a preset produces. A row keeps its reskins together; a melee
+ * inspect animation counts as melee.
+ */
+export function viewmodelPresetChoices(
+  catalog: ViewmodelSourceCatalog,
+  preset: ViewmodelPreset,
+  mode: ViewmodelHideMode,
+): ViewmodelDraftChoices {
+  const next: ViewmodelDraftChoices = {};
+  if (preset === "show-all") return next;
+  for (const className of viewmodelClasses(catalog)) {
+    for (const row of viewmodelRowsForClass(catalog, className)) {
+      if (preset === "keep-melee" && viewmodelGroupSlot(row.groups[0]) === "melee") continue;
+      for (const group of row.groups) next[group.id] = mode;
+    }
+  }
+  return next;
+}
+
+export type ViewmodelChoiceChange = {
+  row: ViewmodelRow;
+  from: ViewmodelHideMode | "shown";
+  to: ViewmodelHideMode | "shown";
+};
+
+/** Rows whose choice differs between two drafts, in class and loadout order. */
+export function viewmodelChoiceChanges(
+  catalog: ViewmodelSourceCatalog,
+  before: ViewmodelDraftChoices,
+  after: ViewmodelDraftChoices,
+): ViewmodelChoiceChange[] {
+  return viewmodelClasses(catalog).flatMap((className) =>
+    viewmodelRowsForClass(catalog, className).flatMap((row) => {
+      const id = row.groups[0].id;
+      const from = before[id] ?? "shown";
+      const to = after[id] ?? "shown";
+      return from === to ? [] : [{ row, from, to }];
+    }),
+  );
+}
+
 export function selectedViewmodelChoices(choices: ViewmodelDraftChoices) {
   return Object.entries(choices)
     .map(([groupId, mode]) => ({ groupId, mode }))
