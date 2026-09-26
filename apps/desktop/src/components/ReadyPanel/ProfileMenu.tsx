@@ -34,6 +34,7 @@ export function ProfileMenu({
   onDraftName,
   onSave,
   onSwitch,
+  onCompare,
   onExport,
   onDelete,
   onRename,
@@ -53,6 +54,8 @@ export function ProfileMenu({
   onDraftName: (name: string) => void;
   onSave: () => void;
   onSwitch: (id: string) => void;
+  /** Opens the read-only comparison with the active profile. */
+  onCompare?: (id: string) => void;
   onExport: (id: string) => void;
   onDelete: (id: string) => void;
   /** Resolves true when saved; the menu keeps the editor open on failure. */
@@ -375,6 +378,19 @@ export function ProfileMenu({
       </div>
       {actions ? (
         <ContextMenu label="Profile actions" position={actions} onClose={() => setActions(null)}>
+          {onCompare && library?.activeProfileId && actions.id !== library.activeProfileId ? (
+            <ContextMenuItem
+              disabled={controlsBusy || recoveryPending}
+              onSelect={() => {
+                const id = actions.id;
+                setActions(null);
+                if (detailsRef.current) detailsRef.current.open = false;
+                onCompare(id);
+              }}
+            >
+              Compare with current…
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuItem
             disabled={running || controlsBusy || recoveryPending}
             onSelect={() => {

@@ -668,6 +668,7 @@ pub fn run() {
             commands::library::rename_profile,
             commands::library::duplicate_profile,
             commands::library::delete_profile,
+            commands::compare::compare_profile_switch,
             commands::app_settings::get_app_settings,
             commands::app_settings::set_app_preferences,
             commands::app_settings::get_storage_usage,

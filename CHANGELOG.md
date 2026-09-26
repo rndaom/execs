@@ -38,6 +38,9 @@ User-facing changes only. The release workflow publishes the matching
 - The GameBanana file chooser shows when each author file was uploaded and picks the only
   installable file for you. Split downloads (PART 1, PART 2…) are explained instead of installed
   half-finished, and a file GameBanana no longer has says so plainly.
+- Compare with current… in a profile's menu shows what switching would change first: HUD,
+  sounds, launch options, settings and binds, custom files, config files and Casual setup.
+  Saved passwords are hidden, and nothing changes until you choose Switch.
 - Switching to or from a profile with Casual setup choices is about twice as fast. Its particle
   patches and preloader pack are prepared once, before any files change, instead of being
   rebuilt during the switch.

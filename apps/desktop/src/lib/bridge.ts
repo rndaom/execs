@@ -7,6 +7,7 @@ import type {
   StorageReport,
 } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
+import type { ProfileComparison } from "./switch-compare-ui";
 
 export type InventoryItem = {
   id: string;
@@ -201,6 +202,10 @@ export async function duplicateProfile(id: string, name: string): Promise<Profil
 
 export function deleteProfile(id: string, keepInstalled: boolean): Promise<ProfileLibrary> {
   return call("delete_profile", { id, keepInstalled });
+}
+
+export function compareProfileSwitch(targetId: string): Promise<ProfileComparison> {
+  return call("compare_profile_switch", { targetId });
 }
 
 export function getAppSettings(): Promise<AppSettingsPayload> {
