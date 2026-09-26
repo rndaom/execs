@@ -9,6 +9,11 @@ User-facing changes only. The release workflow publishes the matching
 
 - Binds can remove any key, including one set in `config.cfg`. A removed key does nothing
   afterwards; an older binding for it no longer comes back.
+- Viewmodels is now the one place for viewmodel FOV, Draw viewmodel, Min viewmodels,
+  left-handed and transparent viewmodels, above the per-weapon choices. Gameplay links there.
+- Gameplay has Medigun auto-heal, damage numbers, combined damage numbers and healing numbers,
+  grouped with auto reload and fast switch under Weapons and Combat feedback. Your current values
+  are kept, and changes made in TF2's own options are picked up after the game closes.
 - Gameplay has mouse sensitivity and zoomed sensitivity fields that keep exact decimals. A value
   changed in TF2's own options is picked up after the game closes instead of being reset.
 - Return to TF2's stock HUD from the HUD pane. The HUD and its options leave the profile; its

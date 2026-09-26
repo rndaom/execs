@@ -653,7 +653,7 @@ export async function writeManagedCfg(
   path: string,
   text: string,
   expectedProfileId: string,
-  scope?: "gameplay" | "crosshair" | "sounds",
+  scope?: "gameplay" | "crosshair" | "sounds" | "viewmodels",
 ): Promise<ProfileDetail> {
   if (!editorPathFits(path)) {
     throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");

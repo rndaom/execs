@@ -4,15 +4,15 @@ import { useCanWrite } from "./hooks/useAppStatus";
 import type { ViewmodelBuildRequest, ViewmodelRecord, ViewmodelSourceCatalog } from "./lib/bridge";
 import { legacyViewmodelSelectionCount } from "./lib/viewmodel-ui";
 import { ViewmodelBuilder } from "./ViewmodelBuilder";
+import { ViewmodelSettings, type ViewmodelSettingsProps } from "./ViewmodelSettings";
 
 /** Per-class viewmodel choices, with the profile's saved pack kept usable. */
 export function ViewmodelPane({
   active,
   profileId,
   record,
-  globalViewmodelsShown,
+  settings,
   profilePreload,
-  onOpenGameplay,
   loadCatalog,
   onImport,
   onBuild,
@@ -21,9 +21,9 @@ export function ViewmodelPane({
   active: boolean;
   profileId: string | null;
   record: ViewmodelRecord | null;
-  globalViewmodelsShown: boolean | null;
+  /** The in-game cvar controls; omitted where no cfg state exists. */
+  settings?: Omit<ViewmodelSettingsProps, "profileId">;
   profilePreload: boolean | null;
-  onOpenGameplay: () => void;
   loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   onImport: (preload: boolean) => void;
   onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
@@ -61,19 +61,15 @@ export function ViewmodelPane({
           known state.
         </p>
       ) : null}
-      {globalViewmodelsShown === false ? (
-        <div
-          data-testid="viewmodel-global-status"
-          role="status"
-          className="mb-4 flex flex-wrap items-center justify-between gap-3"
-        >
-          <p className="t-meta text-warn">
-            Draw viewmodel is off in Gameplay, so every viewmodel is hidden in game.
-          </p>
-          <button type="button" className="btn btn-ghost" onClick={onOpenGameplay}>
-            Open Gameplay
-          </button>
+      {settings ? (
+        <div className="mb-8">
+          <ViewmodelSettings key={profileId ?? "no-profile"} profileId={profileId} {...settings} />
         </div>
+      ) : null}
+      {settings ? (
+        <h2 id="viewmodel-per-weapon" className="t-section section mb-3">
+          Per weapon
+        </h2>
       ) : null}
 
       <ViewmodelBuilder
