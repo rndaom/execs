@@ -87,6 +87,14 @@ export function mapsFromFiles(
     effective: complete
       ? Object.fromEntries([...result.effective].map(([name, entry]) => [name, entry.value]))
       : {},
+    effectiveSources: complete
+      ? Object.fromEntries(
+          [...result.effective].map(([name, entry]) => [
+            name,
+            { file: entry.file, line: entry.line },
+          ]),
+        )
+      : {},
     complete,
     issue:
       !uncertainHuds && !shadowed && unresolved
