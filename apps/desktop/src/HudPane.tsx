@@ -99,6 +99,7 @@ export function HudPane({
   onRefresh,
   onInstall,
   onUpdate,
+  onReturnToStock,
   onMatch,
   onApplyOptions,
   onImportArchive,
@@ -126,6 +127,8 @@ export function HudPane({
   onRefresh: () => void;
   onInstall: (id: string) => HudMutationResult;
   onUpdate: () => void;
+  /** Resolves when the removal settles; the toast reports it. */
+  onReturnToStock: () => Promise<unknown>;
   onMatch: (id: string) => void;
   /** Resolves when the write settles; the toast reports it. */
   onApplyOptions: (options: Record<string, string>) => Promise<unknown>;
@@ -150,6 +153,7 @@ export function HudPane({
   const [detailsEntry, setDetailsEntry] = useState<HudCatalogEntry | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [replacement, setReplacement] = useState<HudReplacement | null>(null);
+  const [confirmStock, setConfirmStock] = useState(false);
   const recordKey = installedKeyOf(profileId, state);
   const incomingSeed = useMemo(
     () => seedHudOptions(schema, state.installed),
@@ -358,6 +362,16 @@ export function HudPane({
                         Match to catalog…
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      data-testid="hud-return-stock"
+                      disabled={mutationBlocked}
+                      title={mutationReason}
+                      onClick={() => setConfirmStock(true)}
+                      className="btn btn-ghost"
+                    >
+                      Return to stock HUD
+                    </button>
                     {installedEntry &&
                     (installedEntry.screenshots.length > 0 ||
                       installedEntry.album ||
@@ -1127,6 +1141,50 @@ export function HudPane({
               }}
             >
               {running ? "Close TF2 to replace" : "Replace HUD"}
+            </button>
+          </div>
+        </Modal>
+      ) : null}
+
+      {confirmStock && installedId ? (
+        <Modal
+          open
+          testId="hud-stock-dialog"
+          title="Return to TF2’s stock HUD?"
+          description={`Removes ${installedEntry ? hudDisplayName(installedEntry) : installedId} from this profile.`}
+          className="fixed top-1/2 left-1/2 z-50 w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2"
+          onClose={() => setConfirmStock(false)}
+        >
+          <ul className="t-meta mt-4 list-disc space-y-1.5 pl-5">
+            {state.installed && Object.keys(state.installed.options).length > 0 ? (
+              <li>Its HUD option settings are removed with it.</li>
+            ) : null}
+            <li>
+              The HUD folder moves to a backup outside TF2’s HUD folders, including files you added
+              to it.
+            </li>
+            <li>Your other mods, binds and settings stay the same.</li>
+          </ul>
+          {dirty ? (
+            <p className="t-meta mt-3">Wait for your HUD options to finish saving first.</p>
+          ) : null}
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirmStock(false)}>
+              Keep HUD
+            </button>
+            <button
+              type="button"
+              data-testid="hud-return-stock-confirm"
+              disabled={mutationBlocked}
+              title={mutationReason}
+              className="btn btn-primary"
+              onClick={() => {
+                if (mutationBlocked) return;
+                setConfirmStock(false);
+                void onReturnToStock();
+              }}
+            >
+              {running ? "Close TF2 to change" : "Return to stock HUD"}
             </button>
           </div>
         </Modal>

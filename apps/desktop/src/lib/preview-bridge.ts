@@ -783,6 +783,12 @@ export function createPreviewApi(state: PreviewState): Api {
     async matchHudCatalog(id: string) {
       return api.installHud(id);
     },
+    async returnToStockHud() {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before changing the HUD.", "GameRunning");
+      hudState = { ...hudState, installed: null, updateAvailable: false, inferred: false };
+      return requireDetail();
+    },
     async updateHud() {
       if (hudState.installed) {
         hudState = {

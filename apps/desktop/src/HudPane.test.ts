@@ -32,6 +32,7 @@ function renderHudPane(
         onRefresh: noop,
         onInstall: noop,
         onUpdate: noop,
+        onReturnToStock: async () => undefined,
         onMatch: noop,
         onApplyOptions: async () => undefined,
         onImportArchive: noop,

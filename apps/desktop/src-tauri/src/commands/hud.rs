@@ -330,6 +330,24 @@ pub async fn match_hud_catalog(
     .await
 }
 
+/// Remove the active profile's HUD so TF2 uses its own. Nothing is fetched.
+#[tauri::command]
+pub async fn return_to_stock_hud(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
+        Ok(execs_core::hud::return_to_stock_hud_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
+
 /// Same shape as `install_hud`: the download runs before the gate, the
 /// install under it, and the options the record already carries survive.
 #[tauri::command]
