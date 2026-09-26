@@ -176,6 +176,10 @@ export function DotBackdrop() {
       wake();
     }
 
+    // A surface without layout (a test DOM, a hidden window) gets nothing:
+    // no observers, no listeners, no drawing.
+    const bounds = frameElement.getBoundingClientRect();
+    if (bounds.width === 0 || bounds.height === 0) return;
     resize();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
     observer?.observe(frameElement);
