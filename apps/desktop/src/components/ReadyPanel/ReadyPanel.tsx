@@ -4,8 +4,10 @@ import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
 import type { ProfileExportReview } from "../../lib/bridge";
 import { libraryStatusCopy } from "../../lib/library-ui";
+import type { ProfileComparison } from "../../lib/switch-compare-ui";
 import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
 import { ProfileImportDialog } from "../ProfileImportDialog";
+import { SwitchCompareDialog } from "../SwitchCompareDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
 import { Modal } from "../ui/Modal";
 import { OperationError } from "../ui/OperationError";
@@ -36,6 +38,7 @@ export function ReadyPanel({
   onCancelLaunch,
   onReviewFiles,
   onInspectExport,
+  onCompareSwitch,
 }: {
   path: string;
   profiles: ProfileLibraryState;
@@ -56,9 +59,12 @@ export function ReadyPanel({
   onCancelLaunch: () => void;
   onReviewFiles: () => void;
   onInspectExport: (id: string) => Promise<ProfileExportReview>;
+  /** Read-only switch preview; the menu offers it only when provided. */
+  onCompareSwitch?: (id: string) => Promise<ProfileComparison>;
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
   const [profileMenuRequest, setProfileMenuRequest] = useState(0);
+  const [compareTargetId, setCompareTargetId] = useState<string | null>(null);
   const [exportTargetId, setExportTargetId] = useState<string | null>(null);
   const [exportReview, setExportReview] = useState<ProfileExportReview | null>(null);
   const [exportReviewError, setExportReviewError] = useState<string | null>(null);
@@ -139,6 +145,7 @@ export function ReadyPanel({
             onDraftName={onDraftName}
             onSave={onSave}
             onSwitch={(id) => void profiles.switchProfile(id)}
+            onCompare={onCompareSwitch ? setCompareTargetId : undefined}
             onExport={reviewExport}
             onDelete={profiles.reviewDelete}
             onRename={profiles.renameProfile}
@@ -169,6 +176,22 @@ export function ReadyPanel({
             Repair folder names
           </button>
         </div>
+      ) : null}
+      {onCompareSwitch ? (
+        <SwitchCompareDialog
+          targetId={compareTargetId}
+          activeId={library?.activeProfileId ?? null}
+          switchDisabled={
+            running ||
+            controlsBusy ||
+            recoveryTargetId !== null ||
+            (library?.profiles.find((profile) => profile.id === compareTargetId)
+              ?.unsafeCustomFolders?.length ?? 0) > 0
+          }
+          onCompare={onCompareSwitch}
+          onSwitch={(id) => void profiles.switchProfile(id)}
+          onClose={() => setCompareTargetId(null)}
+        />
       ) : null}
       <FolderRepair
         review={profiles.folderRepair}

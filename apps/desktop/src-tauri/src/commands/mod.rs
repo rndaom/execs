@@ -3,6 +3,7 @@
 pub mod absorb;
 pub mod app_settings;
 pub mod comfig;
+pub mod compare;
 pub mod crosshair;
 pub mod diagnostics;
 pub mod files;

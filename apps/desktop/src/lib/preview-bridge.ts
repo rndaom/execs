@@ -412,6 +412,33 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return library;
     },
+    async compareProfileSwitch(targetId) {
+      const target = library?.profiles.find((profile) => profile.id === targetId);
+      const active = library?.profiles.find((profile) => profile.id === library?.activeProfileId);
+      if (!target || !active)
+        throw new BridgeError("Save or switch to a profile first.", "Unknown");
+      return {
+        fromId: active.id,
+        fromName: active.name,
+        toId: target.id,
+        toName: target.name,
+        revision: `preview:${active.id}:${target.id}`,
+        launchOptions: { from: "-novid", to: "-novid -high" },
+        hud: { from: "flawhud", to: null },
+        hitSound: null,
+        killSound: null,
+        packs: { added: ["execs-viewmodels.vpk"], removed: ["flawhud"], changed: [] },
+        cfgFiles: { added: [], removed: [], changed: ["tf/cfg/overrides/execs_gameplay.cfg"] },
+        configCfgChanged: true,
+        values: [
+          { name: "fov_desired", from: "90", to: "75" },
+          { name: "bind mouse4", from: "+jump", to: null },
+        ],
+        valuesTruncated: false,
+        casual: { added: ["Flat Textures v1"], removed: [], changed: [] },
+        blocked: null,
+      };
+    },
     async getAppSettings() {
       return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
     },
