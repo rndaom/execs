@@ -468,12 +468,16 @@ where
         running_names,
         review,
         None,
+        false,
         prototype_selected_group_vpk_from_install,
     )
 }
 
 /// Import a native export under a new display name. Restore points use this so
-/// the restored copy never shares the source profile's name by accident.
+/// the restored copy never shares the source profile's name by accident. The
+/// archive is execs' own export of the player's own profile, so its cfg bytes
+/// get the same trusted scan export applied instead of the stricter scan for
+/// profiles received from someone else.
 pub(crate) fn import_profile_named_from<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -492,10 +496,12 @@ where
         running_names,
         None,
         Some(name),
+        true,
         prototype_selected_group_vpk_from_install,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn import_profile_with_review_and_source<I, S, R>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -503,6 +509,7 @@ fn import_profile_with_review_and_source<I, S, R>(
     running_names: I,
     review: Option<&ProfileImportReview>,
     name_override: Option<&str>,
+    own_export: bool,
     read_candidate: R,
 ) -> Result<ProfileLibrary, ProfileError>
 where
@@ -531,7 +538,8 @@ where
         &read_candidate,
     )?;
     creator::seed_default_config(&mut payload, tf2_root, profiles_dir, &staging.path)?;
-    let trust_creator = payload.creator && review.is_some_and(|review| review.creator);
+    let trust_creator = (payload.creator && review.is_some_and(|review| review.creator))
+        || (own_export && !payload.creator);
     validate_payload_with_trust(&mut payload, trust_creator)?;
     let hud_roots = creator::payload_huds(&payload)?;
     let selected_hud = if hud_roots.len() > 1 {
@@ -2311,6 +2319,7 @@ mod tests {
             unlocked(),
             None,
             None,
+            false,
             |_, _| {
                 let mut current = candidate.clone();
                 current.sources.item_schema_sha256 = sha256_hex(&fs::read(&source).unwrap());
@@ -2348,6 +2357,7 @@ mod tests {
                 unlocked(),
                 None,
                 None,
+                false,
                 |_, _| Ok(candidate_for_read.clone()),
             )
             .unwrap_err();
@@ -2410,6 +2420,7 @@ mod tests {
             unlocked(),
             None,
             None,
+            false,
             |_, _| {
                 reads.set(reads.get() + 1);
                 let mut current = candidate.clone();
@@ -2448,6 +2459,7 @@ mod tests {
             unlocked(),
             None,
             None,
+            false,
             |_, _| {
                 reads.set(reads.get() + 1);
                 if reads.get() == 2 {

@@ -438,6 +438,54 @@ mod tests {
     }
 
     #[test]
+    fn restores_cfg_commands_that_only_the_stricter_shared_import_refuses() {
+        let (data, profiles, root, id) = fixture();
+        // mastercomfig's own preset VPKs carry cfgs like this; the player's
+        // library already accepted them, and export scans them as trusted.
+        mutate_profile_files_to(
+            &profiles,
+            &root,
+            &id,
+            &[(
+                "tf/cfg/overrides/mine.cfg".into(),
+                FileSource::Bytes(b"alias kill \"explode\"\n"),
+            )],
+            &[],
+            ProfileLiveProjection::LibraryOnly,
+            ["not-running"],
+            |_| Ok(()),
+        )
+        .unwrap();
+        let point = create_restore_point(&profiles, &data, &root, &id, None).unwrap();
+        let zip = zip_path(&data, &point.id);
+        assert!(crate::zip::import_profile_from(&profiles, &root, &zip, ["not-running"]).is_err());
+        let library = restore_restore_point(
+            &profiles,
+            &data,
+            &root,
+            &point.id,
+            "Restored",
+            ["not-running"],
+        )
+        .unwrap();
+        let restored = library
+            .profiles
+            .iter()
+            .find(|profile| profile.name == "Restored")
+            .unwrap();
+        assert_eq!(
+            crate::apply::profile_file_bytes_from(
+                &profiles,
+                &restored.id,
+                "tf/cfg/overrides/mine.cfg"
+            )
+            .unwrap(),
+            b"alias kill \"explode\"\n"
+        );
+        fs::remove_dir_all(data.parent().unwrap()).unwrap();
+    }
+
+    #[test]
     fn retention_keeps_the_newest_points_per_profile_and_cleans_leftovers() {
         let (data, profiles, root, id) = fixture();
         set_keep_per_profile(&data, 2).unwrap();
