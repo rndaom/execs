@@ -1,6 +1,6 @@
 import { type CfgFile, parseCommands } from "@execs/cfglint";
 import { MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
@@ -18,6 +18,7 @@ import {
   bindActionForCommand,
   bindKeyLabel,
   bindsFilePath,
+  clearManagedKey,
   ensureAutoexecExecLine,
   normalizeBindCommand,
   recorderOutcomeForKey,
@@ -68,6 +69,7 @@ export function BindsPane({
     command: string;
     source: string;
   } | null>(null);
+  const [keyNotice, setKeyNotice] = useState<{ actionId: BindActionId; text: string } | null>(null);
   const [groupSelection, setGroupSelection] = useState({ id: "all", phase: 0 });
   const [query, setQuery] = useState("");
   const searching = query.trim().length > 0;
@@ -89,57 +91,60 @@ export function BindsPane({
     setRecordingId(null);
     setRecorderNotice(null);
     setPendingKey(null);
+    setKeyNotice(null);
   }, [profileId, path]);
-  const preview = useMemo(() => {
-    if (startupFiles) {
-      const found = startupFiles.some((file) => file.path === path);
-      const revised = startupFiles.map((file) =>
-        file.path === path ? { ...file, text: draft } : file,
-      );
-      if (!found) revised.push({ path, text: draft });
-      const autoexecPath = autoexecFilePath(layer);
-      const autoexec = revised.find((file) => file.path === autoexecPath);
-      const autoexecText = ensureAutoexecExecLine(autoexec?.text ?? "", "execs_binds", layer);
-      if (autoexec) {
-        const index = revised.indexOf(autoexec);
-        revised[index] = { ...autoexec, text: autoexecText };
-      } else revised.push({ path: autoexecPath, text: autoexecText });
-      const inferred = mapsFromFiles(revised, layer, startupInventory ?? revised, hudProjection);
-      if (inferred.complete) return { binds: inferred.binds, sources: inferred.bindSources };
-    }
-    // The standalone preview uses the supplied startup map and replays this
-    // file. The app supplies all files above so removed keys can reveal an
-    // earlier config.cfg assignment accurately.
-    const binds = { ...effectiveBinds };
-    const sources = { ...bindSources };
-    for (const command of parseCommands(managedText, path)) {
-      if (command.name === "bind" && command.args[0]) {
-        delete binds[command.args[0].toLowerCase()];
-        delete sources[command.args[0].toLowerCase()];
+  // What TF2 would bind at startup if the managed file held `text`.
+  const previewFor = useCallback(
+    (text: string) => {
+      if (startupFiles) {
+        const found = startupFiles.some((file) => file.path === path);
+        const revised = startupFiles.map((file) => (file.path === path ? { ...file, text } : file));
+        if (!found) revised.push({ path, text });
+        const autoexecPath = autoexecFilePath(layer);
+        const autoexec = revised.find((file) => file.path === autoexecPath);
+        const autoexecText = ensureAutoexecExecLine(autoexec?.text ?? "", "execs_binds", layer);
+        if (autoexec) {
+          const index = revised.indexOf(autoexec);
+          revised[index] = { ...autoexec, text: autoexecText };
+        } else revised.push({ path: autoexecPath, text: autoexecText });
+        const inferred = mapsFromFiles(revised, layer, startupInventory ?? revised, hudProjection);
+        if (inferred.complete) return { binds: inferred.binds, sources: inferred.bindSources };
       }
-    }
-    for (const command of parseCommands(draft, path)) {
-      const key = command.args[0]?.toLowerCase();
-      if (command.name === "bind" && key && command.args.length >= 2) {
-        binds[key] = command.args.slice(1).join(" ");
-        sources[key] = { file: path, line: command.line };
-      } else if (command.name === "unbind" && key) {
-        delete binds[key];
-        delete sources[key];
+      // The standalone preview uses the supplied startup map and replays this
+      // file. The app supplies all files above so removed keys can reveal an
+      // earlier config.cfg assignment accurately.
+      const binds = { ...effectiveBinds };
+      const sources = { ...bindSources };
+      for (const command of parseCommands(managedText, path)) {
+        if (command.name === "bind" && command.args[0]) {
+          delete binds[command.args[0].toLowerCase()];
+          delete sources[command.args[0].toLowerCase()];
+        }
       }
-    }
-    return { binds, sources };
-  }, [
-    startupFiles,
-    startupInventory,
-    hudProjection,
-    path,
-    draft,
-    layer,
-    effectiveBinds,
-    bindSources,
-    managedText,
-  ]);
+      for (const command of parseCommands(text, path)) {
+        const key = command.args[0]?.toLowerCase();
+        if (command.name === "bind" && key && command.args.length >= 2) {
+          binds[key] = command.args.slice(1).join(" ");
+          sources[key] = { file: path, line: command.line };
+        } else if (command.name === "unbind" && key) {
+          delete binds[key];
+          delete sources[key];
+        }
+      }
+      return { binds, sources };
+    },
+    [
+      startupFiles,
+      startupInventory,
+      hudProjection,
+      path,
+      layer,
+      effectiveBinds,
+      bindSources,
+      managedText,
+    ],
+  );
+  const preview = useMemo(() => previewFor(draft), [previewFor, draft]);
 
   useEffect(() => {
     if (recordingId === null || !canRecord) {
@@ -253,7 +258,32 @@ export function BindsPane({
     }
     setRecorderNotice(null);
     setPendingKey(null);
+    setKeyNotice(null);
     setRecordingId((current) => (current === actionId ? null : actionId));
+  }
+
+  /**
+   * Remove one key from an action so it runs nothing. Deleting the pane's own
+   * line is enough only when nothing earlier binds the key; otherwise an
+   * `unbind` keeps an inherited binding from coming back.
+   */
+  function removeKey(actionId: BindActionId, key: string, owned: boolean) {
+    const withoutLine = owned ? removeOwnedManagedBind(draft, actionId, key) : draft;
+    const next =
+      previewFor(withoutLine).binds[key] === undefined ? withoutLine : clearManagedKey(draft, key);
+    const after = previewFor(next);
+    if (after.binds[key] !== undefined) {
+      const origin = after.sources[key];
+      setKeyNotice({
+        actionId,
+        text: `${bindKeyLabel(key)} is bound again later by ${
+          origin ? `${origin.file}, line ${origin.line}` : "another startup CFG"
+        }. Change it in Files.`,
+      });
+      return;
+    }
+    setKeyNotice(null);
+    setDraft(next);
   }
 
   function cancelCapture() {
@@ -361,7 +391,8 @@ export function BindsPane({
                     notice={recordingId === action.id ? recorderNotice : null}
                     canRecord={canRecord}
                     onRecord={() => onRow(action.id)}
-                    onRemove={(key) => setDraft(removeOwnedManagedBind(draft, action.id, key))}
+                    onRemove={(binding) => removeKey(action.id, binding.key, binding.owned)}
+                    keyNotice={keyNotice?.actionId === action.id ? keyNotice.text : null}
                     conflict={
                       pending
                         ? {
@@ -403,6 +434,7 @@ function BindRow({
   canRecord,
   onRecord,
   onRemove,
+  keyNotice,
   conflict,
 }: {
   id: BindActionId;
@@ -412,7 +444,8 @@ function BindRow({
   notice: string | null;
   canRecord: boolean;
   onRecord: () => void;
-  onRemove: (key: string) => void;
+  onRemove: (binding: RowBinding) => void;
+  keyNotice: string | null;
   conflict: {
     key: string;
     command: string;
@@ -487,6 +520,15 @@ function BindRow({
           ) : null}
         </span>
       </div>
+      {keyNotice ? (
+        <p
+          data-testid={`bind-key-notice-${id}`}
+          role="status"
+          className="t-meta px-2 pt-1 pb-3 text-warn"
+        >
+          {keyNotice}
+        </p>
+      ) : null}
       {conflict ? (
         <div data-testid={`bind-conflict-${id}`} className="px-2 pt-2 pb-3">
           <p className="t-meta" title={`Set in ${conflict.source}`}>
@@ -524,7 +566,7 @@ function KeyCap({
   actionLabel: string;
   binding: RowBinding;
   canRemove: boolean;
-  onRemove: (key: string) => void;
+  onRemove: (binding: RowBinding) => void;
 }) {
   const name = bindKeyLabel(binding.key);
   const origin = binding.source
@@ -533,23 +575,25 @@ function KeyCap({
   return (
     <span
       data-testid={`bind-cap-${actionId}-${binding.key}`}
-      title={binding.owned ? `Added in execs (${origin})` : `Set in ${origin}`}
+      title={
+        binding.owned
+          ? `Added in execs (${origin})`
+          : `Set in ${origin}. Removing it adds an unbind to the execs binds file.`
+      }
       className="pointer-events-auto relative inline-flex h-7 min-w-8 items-center justify-center rounded border border-edge-strong bg-panel-raised px-2 text-xs font-medium text-ink shadow-[inset_0_-1px_0_rgb(0_0_0/0.35)]"
     >
       {name}
-      {binding.owned ? (
-        <button
-          type="button"
-          data-bind-navigation
-          data-testid={`bind-remove-${actionId}-${binding.key}`}
-          disabled={!canRemove}
-          aria-label={`Remove ${name} from ${actionLabel}`}
-          onClick={() => onRemove(binding.key)}
-          className="absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:hidden"
-        >
-          <X size={9} weight="bold" aria-hidden="true" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        data-bind-navigation
+        data-testid={`bind-remove-${actionId}-${binding.key}`}
+        disabled={!canRemove}
+        aria-label={`Remove ${name} from ${actionLabel}`}
+        onClick={() => onRemove(binding)}
+        className="absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:hidden"
+      >
+        <X size={9} weight="bold" aria-hidden="true" />
+      </button>
     </span>
   );
 }

@@ -10,11 +10,13 @@ import {
   bindKeyLabel,
   bindsFilePath,
   canRecordBinds,
+  clearManagedKey,
   configBindsFromFiles,
   ensureAutoexecExecLine,
   MANAGED_BINDS_HEADER,
   normalizeBindCommand,
   ownedManagedBindKeys,
+  ownedManagedUnbindKeys,
   recorderOutcomeForKey,
   removeOwnedManagedBind,
   searchBindActions,
@@ -493,5 +495,39 @@ describe("bind search", () => {
   it("requires every word and matches nothing for an unrelated search", () => {
     expect([...searchBindActions("weapon slot 3", none)]).toEqual(["slot3"]);
     expect(searchBindActions("zzz", none).size).toBe(0);
+  });
+});
+
+describe("clearing one key", () => {
+  const managed = `${MANAGED_BINDS_HEADER}\r\n// mine\r\nbind shift +jump\r\nbind f "say gg; +attack"\r\n`;
+
+  it("replaces the pane's lines for that key with one unbind and keeps everything else", () => {
+    expect(clearManagedKey(managed, "SHIFT")).toBe(
+      `${MANAGED_BINDS_HEADER}\r\n// mine\r\nbind f "say gg; +attack"\r\nunbind shift\r\n`,
+    );
+    expect(clearManagedKey("", "space")).toBe(`${MANAGED_BINDS_HEADER}\nunbind space\n`);
+    // Clearing twice leaves one unbind, and never an unbindall.
+    const twice = clearManagedKey(clearManagedKey(managed, "shift"), "shift");
+    expect(ownedManagedUnbindKeys(twice)).toEqual(["shift"]);
+    expect(twice).not.toContain("unbindall");
+  });
+
+  it("treats only standalone unbind lines as the pane's own", () => {
+    const text = "unbind q // keep\nunbind e; bind e +use\nunbind r\n";
+    expect(ownedManagedUnbindKeys(text)).toEqual(["r"]);
+  });
+
+  it("drops the pane's unbind when the key is recorded again", () => {
+    expect(applyRecordedBind(`${MANAGED_BINDS_HEADER}\nunbind space\n`, "jump", "space")).toBe(
+      `${MANAGED_BINDS_HEADER}\nbind space +jump\n`,
+    );
+  });
+
+  it("keeps a cleared key after a game session unless TF2 bound it again", () => {
+    const text = `${MANAGED_BINDS_HEADER}\nunbind space\nbind w +forward\n`;
+    expect(syncTrackedBindsFromConfig(text, { w: "+forward" })).toBe(text);
+    expect(syncTrackedBindsFromConfig(text, { w: "+forward", space: "+jump" })).toBe(
+      `${MANAGED_BINDS_HEADER}\nbind w +forward\nbind space +jump\n`,
+    );
   });
 });

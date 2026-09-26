@@ -75,9 +75,10 @@ describe("BindsPane autosave", () => {
       ),
     );
     expect(caps("jump")).toEqual(["Space", "X"]);
-    expect(capSource("jump", "space")).toBe("Set in tf/cfg/config.cfg, line 1");
+    expect(capSource("jump", "space")).toBe(
+      "Set in tf/cfg/config.cfg, line 1. Removing it adds an unbind to the execs binds file.",
+    );
     expect(capSource("jump", "x")).toBe("Added in execs (tf/cfg/execs_binds.cfg, line 2)");
-    expect(document.querySelector('[data-testid="bind-remove-jump-space"]')).toBeNull();
 
     await act(async () =>
       document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
@@ -92,6 +93,89 @@ describe("BindsPane autosave", () => {
     await act(async () => vi.advanceTimersByTimeAsync(700));
     expect(save.mock.calls.at(-1)?.[0]).toContain("bind y +jump");
     expect(save.mock.calls.at(-1)?.[0]).not.toContain("bind x +jump");
+  });
+
+  it("clears an inherited key with an unbind and never brings an old binding back", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    // Shift crouches in config.cfg; the player moved it to Jump in execs.
+    const managedText = `${MANAGED_BINDS_HEADER}\nbind shift +jump\n`;
+    const startupFiles = [
+      { path: "tf/cfg/config.cfg", text: "bind space +jump\nbind shift +duck\n" },
+      { path: "tf/cfg/autoexec.cfg", text: "exec execs_binds\n" },
+      { path: "tf/cfg/execs_binds.cfg", text: managedText },
+    ];
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: { space: "+jump", shift: "+jump" },
+          startupFiles,
+          managedText,
+          onSave: save,
+        }),
+      ),
+    );
+    expect(caps("jump")).toEqual(["Space", "Shift"]);
+    expect(caps("duck")).toEqual([]);
+
+    // Removing the execs key does not hand Shift back to Duck.
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-remove-jump-shift"]')?.click(),
+    );
+    expect(caps("jump")).toEqual(["Space"]);
+    expect(caps("duck")).toEqual([]);
+
+    // Removing the config.cfg key adds an unbind instead of editing config.cfg.
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-remove-jump-space"]')?.click(),
+    );
+    expect(caps("jump")).toEqual([]);
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    const saved = save.mock.calls.at(-1)?.[0] ?? "";
+    expect(saved).toBe(`${MANAGED_BINDS_HEADER}\nunbind shift\nunbind space\n`);
+    expect(saved).not.toContain("unbindall");
+
+    // Recording the key again replaces the pane's own unbind.
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await pressKey(" ", "Space");
+    expect(caps("jump")).toEqual(["Space"]);
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save.mock.calls.at(-1)?.[0]).toBe(
+      `${MANAGED_BINDS_HEADER}\nunbind shift\nbind space +jump\n`,
+    );
+  });
+
+  it("explains a key a later startup cfg binds again instead of pretending to clear it", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    const startupFiles = [
+      { path: "tf/cfg/config.cfg", text: "" },
+      { path: "tf/cfg/autoexec.cfg", text: "exec execs_binds\nbind space +jump\n" },
+      { path: "tf/cfg/execs_binds.cfg", text: "" },
+    ];
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: { space: "+jump" },
+          startupFiles,
+          managedText: "",
+          onSave: save,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-remove-jump-space"]')?.click(),
+    );
+    expect(caps("jump")).toEqual(["Space"]);
+    expect(document.querySelector('[data-testid="bind-key-notice-jump"]')?.textContent).toBe(
+      "Space is bound again later by tf/cfg/autoexec.cfg, line 2. Change it in Files.",
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("reviews a conflicting startup key before overriding its command", async () => {
