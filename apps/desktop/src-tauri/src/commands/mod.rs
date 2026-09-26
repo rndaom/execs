@@ -18,6 +18,7 @@ pub mod library;
 pub mod lifecycle;
 pub mod mods;
 pub mod preloader;
+pub mod restore_points;
 pub mod shared;
 pub mod viewmodel;
 

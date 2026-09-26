@@ -24,6 +24,9 @@ User-facing changes only. The release workflow publishes the matching
   changed in TF2's own options is picked up after the game closes instead of being reset.
 - Return to TF2's stock HUD from the HUD pane. The HUD and its options leave the profile; its
   folder is kept in a backup, and your other mods and settings stay the same.
+- Restore points: save a copy of a profile from its menu, compare the profile with it later,
+  and restore it as a new profile to switch to when you are ready. execs keeps the newest 3, 5 or
+  10 per profile on this computer, and restoring never changes TF2 until you switch.
 - Duplicate any saved profile from its menu to experiment on a copy. The copy is not switched in
   and TF2 is not touched.
 - App settings shows how much space execs uses for profiles, downloads, logs and recovery data,

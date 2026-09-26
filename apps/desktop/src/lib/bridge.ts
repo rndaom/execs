@@ -8,6 +8,7 @@ import type {
 } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 import type { InstallHealth } from "./health-ui";
+import type { RestorePoint, RestorePointList } from "./restore-points-ui";
 import type { ProfileComparison } from "./switch-compare-ui";
 
 export type InventoryItem = {
@@ -207,6 +208,30 @@ export function deleteProfile(id: string, keepInstalled: boolean): Promise<Profi
 
 export function compareProfileSwitch(targetId: string): Promise<ProfileComparison> {
   return call("compare_profile_switch", { targetId });
+}
+
+export function listRestorePoints(): Promise<RestorePointList> {
+  return call("list_restore_points");
+}
+
+export function createRestorePoint(profileId: string, label: string | null): Promise<RestorePoint> {
+  return call("create_restore_point", { profileId, label });
+}
+
+export function deleteRestorePoint(id: string): Promise<RestorePointList> {
+  return call("delete_restore_point", { id });
+}
+
+export function setRestorePointRetention(keep: number): Promise<RestorePointList> {
+  return call("set_restore_point_retention", { keep });
+}
+
+export function compareRestorePoint(id: string): Promise<ProfileComparison> {
+  return call("compare_restore_point", { id });
+}
+
+export function restoreRestorePoint(id: string, name: string): Promise<ProfileLibrary> {
+  return call("restore_restore_point", { id, name });
 }
 
 export function getAppSettings(): Promise<AppSettingsPayload> {

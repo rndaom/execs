@@ -25,7 +25,14 @@ export const MOTION_OPTIONS = [
   { id: "reduce", label: "Reduce" },
 ] satisfies { id: MotionPreference; label: string }[];
 
-export type StorageGroupId = "profiles" | "downloads" | "retired" | "logs" | "protected" | "other";
+export type StorageGroupId =
+  | "profiles"
+  | "restorePoints"
+  | "downloads"
+  | "retired"
+  | "logs"
+  | "protected"
+  | "other";
 
 export type StorageGroup = {
   id: StorageGroupId;
@@ -46,6 +53,10 @@ export type ClearReport = { freedBytes: number; failed: string[] };
 
 export const STORAGE_GROUP_COPY: Record<StorageGroupId, { label: string; detail: string }> = {
   profiles: { label: "Profiles", detail: "Your saved profiles and their files." },
+  restorePoints: {
+    label: "Restore points",
+    detail: "Kept until you delete them in Restore points or newer ones replace them.",
+  },
   downloads: {
     label: "Downloads",
     detail: "HUD catalog and options, and Casual setup files. Downloaded again when needed.",

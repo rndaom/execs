@@ -30,6 +30,7 @@ pub mod preloader;
 pub mod process_lock;
 pub mod profile;
 pub mod profile_compare;
+pub mod restore_points;
 pub mod settings;
 pub mod steam_inf;
 pub mod storage;
