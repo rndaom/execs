@@ -1,5 +1,6 @@
 import type {
   CatalogAddon,
+  CatalogParticleMod,
   GameBananaCategory,
   GameBananaMod,
   ModRecord,
@@ -73,6 +74,110 @@ export function repairActionDisabled(
  */
 export function repairReadyForConfirmation(status: PreloaderStatusPayload | null): boolean {
   return status !== null && status.status.untrackedModified.length === 0;
+}
+
+/** One mod that supplies a particle file, in the order Apply queues it. */
+export type ParticleProvider = {
+  key: string;
+  label: string;
+  group: "library" | "profile";
+};
+
+/** A particle file two or more selected mods supply; the last provider wins it. */
+export type ParticleConflict = {
+  file: string;
+  providers: ParticleProvider[];
+  winner: ParticleProvider;
+};
+
+/**
+ * The stock slot a mod's PCF patches, matching the native planner: names are
+ * lowercased, and blood_trail patches npc_fx because its own slot is too small.
+ */
+export function particleTarget(file: string): string {
+  const name = (file.replace(/\\/g, "/").split("/").pop() ?? file).toLowerCase();
+  return name === "blood_trail.pcf" ? "npc_fx.pcf" : name;
+}
+
+/**
+ * Files that more than one selected mod supplies, in file order. Apply queues
+ * library particles in selection order and then the profile's own mods in
+ * selection order; each file is replaced whole by the last one, never merged.
+ */
+export function particleConflicts(
+  selection: Pick<ModSelection, "particleMods" | "profileParticleMods">,
+  libraryMods: readonly Pick<CatalogParticleMod, "name" | "pcfFiles">[],
+  profileSources: readonly ParticleSource[],
+): ParticleConflict[] {
+  const queued: { provider: ParticleProvider; files: readonly string[] }[] = [
+    ...selection.particleMods.map((name) => ({
+      provider: {
+        key: `library:${name}`,
+        label: name.replace(/_/g, " "),
+        group: "library" as const,
+      },
+      files: libraryMods.find((mod) => mod.name === name)?.pcfFiles ?? [],
+    })),
+    ...selection.profileParticleMods.map((id) => {
+      const source = profileSources.find((candidate) => candidate.modId === id);
+      return {
+        provider: { key: `profile:${id}`, label: source?.name ?? id, group: "profile" as const },
+        files: source?.pcfFiles ?? [],
+      };
+    }),
+  ];
+  const byFile = new Map<string, ParticleProvider[]>();
+  for (const { provider, files } of queued) {
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith(".pcf")) continue;
+      const target = particleTarget(file);
+      const providers = (byFile.get(target) ?? []).filter((entry) => entry.key !== provider.key);
+      byFile.set(target, [...providers, provider]);
+    }
+  }
+  return [...byFile.entries()]
+    .filter(([, providers]) => providers.length > 1)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([file, providers]) => ({ file, providers, winner: providers[providers.length - 1] }));
+}
+
+/**
+ * Whether reordering the draft can make this provider win. Profile mods are
+ * always queued after library particles, so a library provider cannot beat one.
+ */
+export function canPreferParticleProvider(
+  conflict: ParticleConflict,
+  provider: ParticleProvider,
+): boolean {
+  if (provider.key === conflict.winner.key) return false;
+  return provider.group === "profile" || conflict.providers.every((p) => p.group === "library");
+}
+
+/** Move one provider to the end of its list so it wins the files it shares. */
+export function preferParticleProvider<T extends ModSelection>(selection: T, key: string): T {
+  const [group, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  const moveLast = (list: string[]) =>
+    list.includes(id) ? [...list.filter((entry) => entry !== id), id] : list;
+  return group === "library"
+    ? { ...selection, particleMods: moveLast(selection.particleMods) }
+    : { ...selection, profileParticleMods: moveLast(selection.profileParticleMods) };
+}
+
+/** What the player can do about a file Apply left stock. */
+export function particleSkipAdvice(reason: string): string {
+  if (/over the stock budget|larger than any stock particle file/.test(reason)) {
+    return "It is too large for TF2's file slot, so the stock file stays. A lighter version of the mod may fit.";
+  }
+  if (reason.startsWith("overridden by ")) {
+    return `${reason.slice("overridden by ".length)} supplies this file instead.`;
+  }
+  if (reason.includes("spy disguise")) {
+    return "The stock file stays so disguises keep working.";
+  }
+  if (/could not (parse|shrink|re-encode)/.test(reason)) {
+    return "The stock file stays. The mod's file may be damaged or made for another game version.";
+  }
+  return "The stock file stays.";
 }
 
 export function toggleName(list: string[], name: string): string[] {

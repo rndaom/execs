@@ -281,3 +281,45 @@ describe("ModsPane profile particle containment", () => {
     expect(onRevert).not.toHaveBeenCalled();
   });
 });
+
+describe("ModsPane particle overlaps", () => {
+  it("names the winning mod for each shared file and changes it only through the draft", async () => {
+    const first = { ...PREVIEW_PROFILE_MODS[1], id: "trails-a", name: "Trails A" };
+    const second = { ...PREVIEW_PROFILE_MODS[1], id: "trails-b", name: "Trails B" };
+    const payload = {
+      ...PREVIEW_MODS_STATUS,
+      status: {
+        ...PREVIEW_MODS_STATUS.status,
+        particleMods: [],
+        profileParticleMods: ["trails-a", "trails-b"],
+      },
+      profileParticleSources: [
+        { modId: "trails-a", name: "Trails A", pcfFiles: ["RocketTrail.pcf", "explosion.pcf"] },
+        { modId: "trails-b", name: "Trails B", pcfFiles: ["rockettrail.pcf"] },
+      ],
+    };
+    const onApply = vi.fn();
+    await act(async () =>
+      root.render(createElement(ModsPane, props({ payload, mods: [first, second], onApply }))),
+    );
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+
+    const conflict = () =>
+      document.querySelector('[data-testid="mods-particle-conflict-rockettrail.pcf"]');
+    expect(conflict()?.textContent).toContain("Trails B wins over Trails A");
+    expect(
+      document.querySelector('[data-testid="mods-particle-conflict-explosion.pcf"]'),
+    ).toBeNull();
+    expect(document.body.textContent).toContain("not merged");
+
+    const use = [...(conflict()?.querySelectorAll("button") ?? [])].find(
+      (candidate) => candidate.textContent === "Use Trails A",
+    );
+    expect(use?.getAttribute("aria-label")).toBe("Use Trails A for rockettrail.pcf");
+    await act(async () => use?.click());
+    expect(conflict()?.textContent).toContain("Trails A wins over Trails B");
+    expect(onApply).not.toHaveBeenCalled();
+    await act(async () => button("mods-apply").click());
+    expect(onApply).toHaveBeenCalledWith(expect.any(Array), [], ["trails-b", "trails-a"]);
+  });
+});
