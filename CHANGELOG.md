@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Binds can remove any key, including one set in `config.cfg`. A removed key does nothing
+  afterwards; an older binding for it no longer comes back.
 - Gameplay has mouse sensitivity and zoomed sensitivity fields that keep exact decimals. A value
   changed in TF2's own options is picked up after the game closes instead of being reset.
 - Return to TF2's stock HUD from the HUD pane. The HUD and its options leave the profile; its

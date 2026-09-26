@@ -573,6 +573,30 @@ function ownedBindLine(raw: string): { actionId: BindActionId; key: string } | n
   return action ? { actionId: action.id, key: command.args[0].toLowerCase() } : null;
 }
 
+/** A standalone `unbind <key>` line clears one key for the Binds pane. */
+function ownedUnbindLine(raw: string): string | null {
+  const commands = parseCommands(raw, "execs_binds.cfg");
+  if (commands.length !== 1) return null;
+  const command = commands[0];
+  if (
+    command.name !== "unbind" ||
+    command.args.length !== 1 ||
+    command.tokens.some((token) => !token.closed) ||
+    raw.slice(command.to).trim() !== ""
+  ) {
+    return null;
+  }
+  return command.args[0].toLowerCase();
+}
+
+/** Keys the pane cleared with its own standalone `unbind` lines. */
+export function ownedManagedUnbindKeys(text: string): string[] {
+  return fileLines(text).flatMap((line) => {
+    const key = ownedUnbindLine(line);
+    return key ? [key] : [];
+  });
+}
+
 function fileLines(text: string): string[] {
   return text.match(/[^\r\n]*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];
 }
@@ -616,6 +640,20 @@ export function removeOwnedManagedBind(text: string, actionId: BindActionId, key
     .join("");
 }
 
+/**
+ * Clear one key: drop the pane's own lines for it and add one standalone
+ * `unbind`. The managed file runs after config.cfg, so this also silences an
+ * inherited binding instead of letting it return. Never `unbindall`.
+ */
+export function clearManagedKey(text: string, key: string): string {
+  const wanted = key.trim().toLowerCase();
+  if (!wanted) return text;
+  const kept = fileLines(text)
+    .filter((line) => ownedBindLine(line)?.key !== wanted && ownedUnbindLine(line) !== wanted)
+    .join("");
+  return appendManagedLines(kept, [`unbind ${quoteCfgToken(wanted)}`]);
+}
+
 function quoteCfgToken(value: string): string {
   return /[\s"]/.test(value) ? `"${value}"` : value;
 }
@@ -650,8 +688,9 @@ export function applyRecordedBind(
   if (owned.some((bind) => bind.actionId === actionId && bind.key === key)) return currentFile;
   // A key has one final payload. Reusing a pane-owned key moves that key to
   // the new action, but does not remove the action's other keys.
+  // A pane-owned unbind for this key is replaced by the new assignment.
   const withoutClaim = fileLines(currentFile)
-    .filter((line) => ownedBindLine(line)?.key !== key)
+    .filter((line) => ownedBindLine(line)?.key !== key && ownedUnbindLine(line) !== key)
     .join("");
   const action = bindActionById(actionId);
   return action
@@ -687,19 +726,28 @@ export function syncTrackedBindsFromConfig(currentFile: string, configBinds: Bin
     const action = COMMAND_TO_ACTION.get(normalizeBindCommand(command));
     return action ? [{ actionId: action.id, key: key.toLowerCase() }] : [];
   });
-  const current = ownedManagedBindKeys(currentFile);
+  // A key bound again in TF2 after the pane cleared it keeps its new binding.
+  const configKeys = new Set(bindEntries(configBinds).map(([key]) => key.toLowerCase()));
+  const staleUnbind = (line: string) => {
+    const key = ownedUnbindLine(line);
+    return key !== null && configKeys.has(key);
+  };
+  const withoutStale = fileLines(currentFile)
+    .filter((line) => !staleUnbind(line))
+    .join("");
+  const current = ownedManagedBindKeys(withoutStale);
   const identity = (bindings: typeof next) =>
     bindings
       .map(({ actionId, key }) => `${actionId}:${key}`)
       .sort()
       .join("\n");
-  if (currentFile.trim().length > 0 && identity(current) === identity(next)) return currentFile;
+  if (currentFile.trim().length > 0 && identity(current) === identity(next)) return withoutStale;
   const ordered = BIND_ACTIONS.flatMap((action) =>
     next
       .filter((bind) => bind.actionId === action.id)
       .map((bind) => `bind ${quoteCfgToken(bind.key)} ${quoteCfgToken(action.command)}`),
   );
-  return replaceOwnedLines(currentFile, ordered);
+  return replaceOwnedLines(withoutStale, ordered);
 }
 
 function execStem(target: string): string {
