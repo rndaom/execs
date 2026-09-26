@@ -289,6 +289,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       surface === "ready" &&
       !creating &&
       !appSettingsOpen);
+  // The sidebar holds App settings. Without it (first run, or a ready shell
+  // with no active profile) the footer is the way there.
+  const sidebarShown = readyShellOpen && showSettingsChrome(profiles.library);
 
   const activeProfileId = profiles.library?.activeProfileId ?? null;
   const refreshLaunchSync = useCallback(async (): Promise<LaunchSyncStatus | null> => {
@@ -767,7 +770,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             {/* The ready shell has App settings in its sidebar, which holds the
                 version, update check, support and notices. First-run screens
                 keep this footer as their way there. */}
-            {readyShellOpen ? null : (
+            {sidebarShown ? null : (
               <AppFooter
                 api={api}
                 update={{
@@ -776,7 +779,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                     filesExit.request(update.install);
                   },
                 }}
-                pinned={false}
+                pinned={readyShellOpen}
                 onSettings={settingsOpen ? undefined : openAppSettings}
               />
             )}
