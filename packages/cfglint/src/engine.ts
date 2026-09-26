@@ -1,5 +1,5 @@
 import { argumentFindings } from "./arguments.ts";
-import { lookupCommand } from "./catalog.ts";
+import { lookupCommand, suggestCvarByRemovingOneCharacter } from "./catalog.ts";
 import { lookupCvar } from "./corpus.ts";
 import { evaluateStartup } from "./execution.ts";
 import { parseCommands } from "./parser.ts";
@@ -44,6 +44,8 @@ interface ScanContext {
   via?: string;
   /** Set when scanning the payload of a bind on this key. */
   bindKey?: string;
+  /** Payload is defined for a future alias/key invocation, not running now. */
+  deferred?: boolean;
 }
 
 const MODULE_LINE_RE = /^([a-z0-9_]+)=([a-z0-9_.-]+)$/i;
@@ -371,22 +373,17 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       return;
     }
     if (name === "password" || RCON_NAMES.has(name)) {
-      // `password` is FCVAR_ARCHIVE, so Source writes it into config.cfg on
-      // every `host_writeconfig` — an untouched settings snapshot still
-      // carries `password "0"`. Blocking that would leave the player unable to
-      // save their own config.cfg at all. Accept the unset form, and only that
-      // form, at the top level of the engine-managed file: a real password
-      // still blocks here, and `password` blocks outright everywhere else.
-      const archivedUnset =
-        name === "password" &&
-        isEngineManagedTopLevel &&
-        cmd.args.length <= 1 &&
-        (value === undefined || value === "" || value === "0");
-      if (archivedUnset) return;
+      // Players can save their own cfg bytes, including credentials. The
+      // finding points to the command before a profile is shared, without
+      // copying its value into diagnostics or a generated summary. Source
+      // archives the unset password value into config.cfg; it is not a secret.
+      if (cmd.args.length === 0) return;
+      if (name === "password" && cmd.args.length === 1 && (value === "" || value === "0")) return;
+      if (name === "rcon_password" && cmd.args.length === 1 && value === "") return;
       report(
-        "block",
+        "warn",
         "rcon-password",
-        `execs does not save or export \`${name}\` commands here because they can contain credentials or remote-console access; remove this command explicitly to save`,
+        `\`${name}\` may contain a credential or remote-console setting. It is saved unchanged; review this line before sharing an exported profile`,
         cmd,
         ctx.via,
       );
@@ -466,7 +463,8 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         return;
       }
       const payload = cmd.args.slice(1).join(" ");
-      if (payload) scanPayload(payload, cmd, { via: `alias ${cmd.args[0]}` }, aliasStack);
+      if (payload)
+        scanPayload(payload, cmd, { via: `alias ${cmd.args[0]}`, deferred: true }, aliasStack);
       return;
     }
 
@@ -490,16 +488,17 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
       }
       const payload = cmd.args.slice(1).join(" ");
       if (payload) {
-        scanPayload(payload, cmd, { via: `bind ${key}`, bindKey: key }, aliasStack);
+        scanPayload(payload, cmd, { via: `bind ${key}`, bindKey: key, deferred: true }, aliasStack);
       }
       return;
     }
 
     if (name === "exec") {
-      // Top-level execs belong to the safety walk below, which owns the
-      // exec graph. An exec *inside a bind or alias payload* never reaches
-      // that walk, so it is resolved and followed here — hiding a payload
-      // behind `bind f "exec sketchy"` must not launder it.
+      // The safety walk scans every supplied file, including dormant cfgs.
+      // Resolving a deferred `exec` here is useful for missing-source advice,
+      // but following it with the defining file's active exec chain falsely
+      // reports recursion for `alias reload "exec this_file"`. Startup
+      // evaluation follows aliases only when they actually run.
       if (ctx.via === undefined) return;
       const target = cmd.args[0];
       if (!target) return;
@@ -508,15 +507,6 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
         reportUnresolvedExec(target, cmd, ctx.via);
         return;
       }
-      if (execChain.includes(resolved)) {
-        report("warn", "exec-cycle", `\`exec ${target}\` creates a cycle`, cmd, ctx.via);
-        return;
-      }
-      if (execDepth + 1 > MAX_EXEC_DEPTH) {
-        report("warn", "exec-depth", `exec chain deeper than ${MAX_EXEC_DEPTH}`, cmd, ctx.via);
-        return;
-      }
-      walkFile(resolved, execDepth + 1, [...execChain, resolved]);
       return;
     }
 
@@ -531,6 +521,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
           ctx.via,
         );
       } else if (ctx.via) {
+        if (ctx.deferred && !ctx.bindKey && trust === "self" && !isAdvisorySource(cmd)) return;
         report("warn", "disruptive-bind", `\`${name}\` inside ${ctx.via}`, cmd, ctx.via);
       } else {
         // Top level of an exec'd file: runs the moment the config loads.
@@ -630,10 +621,11 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     if (entry) return; // catalogued comfig alias; availability is conditional
 
     // Unknown token: +forward style actions and one-off community commands land here.
+    const suggestion = suggestCvarByRemovingOneCharacter(name);
     report(
       "info",
       "unknown-command",
-      `\`${name}\` is not in this offline catalog; a plugin or external alias may define it`,
+      `\`${name}\` is not in this offline catalog; a plugin or external alias may define it${suggestion ? `; did you mean \`${suggestion}\`?` : ""}`,
       { ...cmd, to: cmd.tokens[0]?.to ?? cmd.to },
       ctx.via,
     );
@@ -726,7 +718,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     .filter((path) => parsed.has(path) && !isModulesData(path));
   const execution: ReturnType<typeof evaluateStartup> =
     workExhausted || search.problem
-      ? { effective: new Map(), binds: new Map(), executionComplete: false }
+      ? { effective: new Map(), binds: new Map(), bindSources: new Map(), executionComplete: false }
       : evaluateStartup({
           files: parsed,
           entryPoints,
@@ -735,8 +727,9 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
           takeCommand: (at) => takeWork("command", at),
           takeExec: (at) => takeWork("exec", at),
           incomplete: (rule, message, at) => report("warn", rule, message, at),
+          allowMalformedBinds: trust === "self",
         });
-  const { effective, binds, executionComplete } = execution;
+  const { effective, binds, bindSources, executionComplete } = execution;
 
   // ---- metadata -------------------------------------------------------------
   const classesTouched = [
@@ -767,6 +760,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
     findings,
     effective,
     binds,
+    bindSources,
     executionComplete,
     moduleLevels,
     classesTouched,

@@ -1,6 +1,6 @@
 //! Versioned profile zip export/import. Library only — never writes live TF2.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -11,8 +11,8 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::archive::{
-    read_regular_file_bounded, validate_cfg_has_no_secrets, validate_imported_cfg,
-    validate_imported_launch_options, validate_launch_has_no_secrets, MAX_IMPORTED_CFG_BYTES,
+    read_regular_file_bounded, validate_exported_cfg, validate_exported_launch_options,
+    validate_imported_cfg, validate_imported_launch_options, MAX_IMPORTED_CFG_BYTES,
 };
 use crate::blob::blob_path;
 use crate::hash::{
@@ -26,15 +26,49 @@ use crate::profile::{
     create_populated_profile_to, exclusive_file_path, is_profile_ownable_rel_path,
     is_shared_rel_path, load_library_from, load_manifest, normalize_rel_path, portable_path_key,
     profiles_dir, CrosshairRecord, FileSource, FileStorage, HudRecord, ProfileError, ProfileFile,
-    ProfileLibrary, ProfileManifest, ViewmodelRecord,
+    ProfileLibrary, ProfileManifest, ViewmodelBuildRecipe, ViewmodelHideMode, ViewmodelRecord,
+    ViewmodelSource,
 };
+use crate::viewmodel_group_selection::{
+    ProvisionalGroupCatalogIdentity, ProvisionalGroupChoice, ProvisionalGroupRequest,
+    ProvisionalHideMode,
+};
+use crate::viewmodel_selected_pack::{
+    prototype_selected_group_vpk_from_install, InstalledGroupVpkCandidate,
+};
+use crate::viewmodel_source::StockSourceError;
 use crate::vpk::read_vpk_file_filtered_hashed;
 
 mod creator;
 pub use creator::{import_reviewed_profile, inspect_profile_import, ProfileImportReview};
 
 pub const ZIP_SCHEMA: u32 = 1;
+const RECIPE_ZIP_SCHEMA: u32 = 2;
 pub const ZIP_MANIFEST_NAME: &str = "execs-profile.json";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileExportReview {
+    pub revision: String,
+    pub credential_locations: Vec<String>,
+    pub custom_packs: Vec<ProfileExportPack>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileExportPack {
+    pub path: String,
+    pub file_count: usize,
+    pub kind: ProfileExportPackKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProfileExportPackKind {
+    Other,
+    CrosshairScripts,
+    Viewmodels,
+}
 
 /// Import ceilings. A profile zip is a mastercomfig layer plus a HUD plus
 /// skins; anything past these is a deflate bomb or a mistake, and reading one
@@ -76,9 +110,17 @@ struct ProfileZipManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     hud: Option<HudRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    hud_selected_root: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    hud_review_pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     viewmodel: Option<ViewmodelRecord>,
+    /// Schema 2 omits the generated VPK payload. This digest must also match
+    /// the file entry and a local rebuild before import creates a profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    viewmodel_output_sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     hitsound: Option<crate::hitsound::HitsoundRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -96,6 +138,9 @@ struct ZipPayload {
     manifest: ProfileZipManifest,
     exclusive: HashMap<String, PathBuf>,
     blobs: HashMap<String, PathBuf>,
+    /// Actual uncompressed archive bytes, including execs-profile.json.
+    /// A locally rebuilt VPK is charged on top of this amount.
+    zip_uncompressed_bytes: u64,
     creator: bool,
     skipped_files: usize,
     import_notes: Vec<String>,
@@ -154,6 +199,161 @@ pub fn export_profile(
     export_profile_to(&profiles_dir(), tf2_root, profile_id, zip_path)
 }
 
+/// Read-only disclosure before the user chooses an export destination. Values
+/// never leave the core. Export revalidates every source when it writes the ZIP.
+pub fn inspect_profile_export(
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<ProfileExportReview, ProfileError> {
+    inspect_profile_export_from(&profiles_dir(), tf2_root, profile_id)
+}
+
+pub fn inspect_profile_export_from(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+) -> Result<ProfileExportReview, ProfileError> {
+    let library = require_usable_library(profiles_dir, tf2_root)?;
+    if !library
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id)
+    {
+        return Err(ProfileError::UnknownProfile);
+    }
+    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    if let Some(selection) = crate::preloader::selection_for_export(profiles_dir, profile_id)? {
+        manifest.preloader = Some(selection);
+    }
+    let revision = profile_export_revision(&manifest)?;
+    validate_exported_launch_options(&manifest.launch_options)?;
+    let export_files = validated_export_files(&manifest)?;
+    let stock_built = stock_built_file(manifest.viewmodel.as_ref(), &export_files)?;
+    let custom_packs = profile_export_custom_packs(
+        &export_files
+            .iter()
+            .filter(|file| stock_built.is_none_or(|built| file.path != built.path))
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
+    let mut locations = Vec::new();
+    if manifest
+        .launch_options
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .any(|word| {
+            matches!(
+                word.to_ascii_lowercase().as_str(),
+                "password" | "rcon_password" | "sv_password"
+            )
+        })
+    {
+        locations
+            .push("Launch options may contain a saved password or remote-console setting.".into());
+    }
+    for entry in export_files {
+        if !has_extension(&entry.path, "cfg") && !has_extension(&entry.path, "vpk") {
+            continue;
+        }
+        let source_path = match entry.storage {
+            FileStorage::Exclusive => exclusive_file_path(profiles_dir, profile_id, &entry.path),
+            FileStorage::Shared => blob_path(profiles_dir, &entry.sha256),
+        };
+        let (mut source, len) =
+            open_verified_source(profiles_dir, &source_path, &entry.sha256, &entry.path)?;
+        if let Some(bytes) =
+            read_validated_export_cfg_source(&entry.path, &mut source, len, &entry.sha256)?
+        {
+            for line in crate::archive::cfg_credential_lines(&entry.path, &bytes) {
+                locations.push(format!("{}:{line}", entry.path));
+            }
+        } else if has_extension(&entry.path, "vpk") {
+            source.rewind().map_err(io_err)?;
+            let mut signature = [0u8; 4];
+            if source.read_exact(&mut signature).is_ok()
+                && signature == 0x55aa_1234u32.to_le_bytes()
+            {
+                source.rewind().map_err(io_err)?;
+                let (cfgs, hash) = read_vpk_file_filtered_hashed(
+                    &mut source,
+                    &|path| has_extension(path, "cfg"),
+                    MAX_IMPORTED_CFG_BYTES as u64,
+                )
+                .map_err(|err| {
+                    invalid_zip(format!(
+                        "invalid profile VPK {}: {}",
+                        entry.path,
+                        err.message()
+                    ))
+                })?;
+                if !hash.eq_ignore_ascii_case(&entry.sha256) {
+                    return Err(ProfileError::Io(format!(
+                        "{} changed during export review.",
+                        entry.path
+                    )));
+                }
+                for (cfg_path, bytes) in cfgs.files {
+                    let path = format!("{}/{cfg_path}", entry.path);
+                    for line in crate::archive::cfg_credential_lines(&path, &bytes) {
+                        locations.push(format!("{path}:{line}"));
+                    }
+                }
+            }
+        }
+        if locations.len() >= 50 {
+            locations.truncate(50);
+            locations.push("Additional locations were omitted from this review.".into());
+            break;
+        }
+    }
+    Ok(ProfileExportReview {
+        revision,
+        credential_locations: locations,
+        custom_packs,
+    })
+}
+
+fn profile_export_revision(manifest: &ProfileManifest) -> Result<String, ProfileError> {
+    let bytes = serde_json::to_vec(manifest).map_err(|err| ProfileError::Io(err.to_string()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+/// Group only paths that the ZIP writer will copy. Feature metadata can be
+/// absent or stale, so the disclosure derives from the validated file list.
+fn profile_export_custom_packs(files: &[ProfileFile]) -> Vec<ProfileExportPack> {
+    let mut packs = BTreeMap::<String, ProfileExportPack>::new();
+    for file in files {
+        let lower = file.path.to_ascii_lowercase();
+        if !lower.starts_with("tf/custom/") {
+            continue;
+        }
+        // Validated profile paths retain source casing even though ownership
+        // and portable identity checks compare their components without it.
+        let custom_path = &file.path["tf/custom/".len()..];
+        let (root, folder) = match custom_path.split_once('/') {
+            Some((root, _)) => (root, true),
+            None => (custom_path, false),
+        };
+        let path = format!("tf/custom/{root}{}", if folder { "/" } else { "" });
+        let pack = packs
+            .entry(path.to_lowercase())
+            .or_insert_with(|| ProfileExportPack {
+                path,
+                file_count: 0,
+                kind: ProfileExportPackKind::Other,
+            });
+        pack.file_count += 1;
+        if lower == "tf/custom/execs-viewmodels.vpk" {
+            pack.kind = ProfileExportPackKind::Viewmodels;
+        } else if lower.starts_with("tf/custom/execs-crosshairs/")
+            && lower.contains("/scripts/tf_weapon_")
+            && lower.ends_with(".txt")
+        {
+            pack.kind = ProfileExportPackKind::CrosshairScripts;
+        }
+    }
+    packs.into_values().collect()
+}
+
 pub fn import_profile(tf2_root: &Path, zip_path: &Path) -> Result<ProfileLibrary, ProfileError> {
     import_profile_from(&profiles_dir(), tf2_root, zip_path, live_process_names())
 }
@@ -184,6 +384,34 @@ pub fn export_profile_to(
     profile_id: &str,
     zip_path: &Path,
 ) -> Result<(), ProfileError> {
+    export_profile_to_with_review(profiles_dir, tf2_root, profile_id, zip_path, None)
+}
+
+/// The normal UI path binds the chosen ZIP destination to the review that
+/// listed its files. Background profile edits require the player to review it
+/// again; this token says nothing about redistribution rights.
+pub fn export_profile_reviewed(
+    tf2_root: &Path,
+    profile_id: &str,
+    zip_path: &Path,
+    expected_revision: &str,
+) -> Result<(), ProfileError> {
+    export_profile_to_with_review(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        zip_path,
+        Some(expected_revision),
+    )
+}
+
+fn export_profile_to_with_review(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    zip_path: &Path,
+    expected_revision: Option<&str>,
+) -> Result<(), ProfileError> {
     let library = require_usable_library(profiles_dir, tf2_root)?;
     if !library
         .profiles
@@ -195,6 +423,14 @@ pub fn export_profile_to(
     let mut manifest = load_manifest(profiles_dir, profile_id)?;
     if let Some(selection) = crate::preloader::selection_for_export(profiles_dir, profile_id)? {
         manifest.preloader = Some(selection);
+    }
+    if let Some(expected) = expected_revision {
+        if profile_export_revision(&manifest)? != expected {
+            return Err(ProfileError::Io(
+                "This profile changed since export review. Review it again before exporting."
+                    .into(),
+            ));
+        }
     }
     write_profile_zip(profiles_dir, profile_id, &manifest, zip_path)
 }
@@ -225,6 +461,62 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    import_profile_with_review_and_source(
+        profiles_dir,
+        tf2_root,
+        zip_path,
+        running_names,
+        review,
+        None,
+        false,
+        prototype_selected_group_vpk_from_install,
+    )
+}
+
+/// Import a native export under a new display name. Restore points use this so
+/// the restored copy never shares the source profile's name by accident. The
+/// archive is execs' own export of the player's own profile, so its cfg bytes
+/// get the same trusted scan export applied instead of the stricter scan for
+/// profiles received from someone else.
+pub(crate) fn import_profile_named_from<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    zip_path: &Path,
+    running_names: I,
+    name: &str,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    import_profile_with_review_and_source(
+        profiles_dir,
+        tf2_root,
+        zip_path,
+        running_names,
+        None,
+        Some(name),
+        true,
+        prototype_selected_group_vpk_from_install,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn import_profile_with_review_and_source<I, S, R>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    zip_path: &Path,
+    running_names: I,
+    review: Option<&ProfileImportReview>,
+    name_override: Option<&str>,
+    own_export: bool,
+    read_candidate: R,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    R: Fn(&Path, &ProvisionalGroupRequest) -> Result<InstalledGroupVpkCandidate, StockSourceError>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
@@ -238,9 +530,52 @@ where
 
     let staging = StagingDir::create(profiles_dir)?;
     let mut payload = read_import_zip(zip_path, profiles_dir, &staging.path, review)?;
+    prepare_stock_built_payload(
+        &mut payload,
+        tf2_root,
+        profiles_dir,
+        &staging.path,
+        &read_candidate,
+    )?;
     creator::seed_default_config(&mut payload, tf2_root, profiles_dir, &staging.path)?;
-    let trust_creator = payload.creator && review.is_some_and(|review| review.creator);
+    let trust_creator = (payload.creator && review.is_some_and(|review| review.creator))
+        || (own_export && !payload.creator);
     validate_payload_with_trust(&mut payload, trust_creator)?;
+    let hud_roots = creator::payload_huds(&payload)?;
+    let selected_hud = if hud_roots.len() > 1 {
+        review
+            .and_then(|review| review.selected_hud.clone())
+            .ok_or(ProfileError::HudReviewRequired)
+            .map(Some)?
+    } else {
+        hud_roots.first().cloned()
+    };
+    if selected_hud
+        .as_ref()
+        .is_some_and(|selected| !hud_roots.contains(selected))
+    {
+        return Err(invalid_zip(
+            "The selected HUD is not part of the reviewed archive.",
+        ));
+    }
+    let hud_review_pending =
+        creator::hud_options_need_review(&payload, &hud_roots, selected_hud.as_deref())?;
+    if let Some(folder) = &selected_hud {
+        let keep_record = payload.manifest.hud_selected_root.as_deref() == Some(folder)
+            || payload
+                .manifest
+                .hud
+                .as_ref()
+                .is_some_and(|record| record.id.eq_ignore_ascii_case(folder));
+        if !keep_record && !hud_review_pending {
+            payload.manifest.hud = Some(HudRecord {
+                id: crate::hud::hud_id_from_name(folder),
+                hash: None,
+                source: crate::profile::HudSource::Local,
+                options: std::collections::BTreeMap::new(),
+            });
+        }
+    }
 
     let mut batch: Vec<(String, FileSource<'_>)> = Vec::with_capacity(payload.manifest.files.len());
     for file in &payload.manifest.files {
@@ -267,19 +602,28 @@ where
     let mods = payload.manifest.mods.clone();
     let preloader = payload.manifest.preloader.clone().unwrap_or_default();
     let ignored_packs = payload.manifest.ignored_packs.clone();
+    let recipe_manifest = payload.manifest.clone();
+    verify_stock_built_rebuild(&recipe_manifest, tf2_root, &read_candidate)?;
     create_populated_profile_to(
         profiles_dir,
         tf2_root,
-        &payload.manifest.name,
+        name_override.unwrap_or(&payload.manifest.name),
         &batch,
         false,
         &running,
         move |manifest| {
+            // This runs after files are staged and before the profile's index
+            // commit. A changing installed source leaves no visible profile.
+            verify_copied_stock_built_output(manifest, &recipe_manifest)?;
+            verify_stock_built_rebuild(&recipe_manifest, tf2_root, &read_candidate)?;
             manifest.launch_options = launch;
             // An imported library has never been projected into this
             // machine's Steam config, regardless of any sender-side state.
             manifest.launch_sync_pending = true;
             manifest.hud = hud;
+            manifest.hud_roots = Some(hud_roots);
+            manifest.hud_selected_root = selected_hud;
+            manifest.hud_review_pending = hud_review_pending;
             manifest.crosshair = crosshair;
             manifest.viewmodel = viewmodel;
             manifest.hitsound = hitsound;
@@ -289,6 +633,67 @@ where
             Ok(())
         },
     )
+}
+
+/// Read what a comparison needs from a native export without extracting its
+/// payload: the manifest and the small managed Gameplay/Binds cfgs.
+pub(crate) fn native_zip_compare_side(
+    zip_path: &Path,
+) -> Result<crate::profile_compare::CompareSide, ProfileError> {
+    const MAX_COMPARED_CFG_BYTES: u64 = 1024 * 1024;
+    let file = fs::File::open(zip_path).map_err(io_err)?;
+    let mut archive = ZipArchive::new(file).map_err(zip_invalid)?;
+    let manifest: ProfileZipManifest = {
+        let entry = archive.by_name(ZIP_MANIFEST_NAME).map_err(zip_invalid)?;
+        if entry.size() > MAX_MANIFEST_BYTES {
+            return Err(invalid_zip("execs-profile.json is implausibly large"));
+        }
+        let mut bytes = Vec::new();
+        entry
+            .take(MAX_MANIFEST_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(io_err)?;
+        serde_json::from_slice(&bytes).map_err(json_err)?
+    };
+    let mut managed_text = String::new();
+    for path in crate::profile_compare::MANAGED_COMPARE_PATHS {
+        let Some(file) = manifest
+            .files
+            .iter()
+            .find(|file| file.path == path && file.storage == FileStorage::Exclusive)
+        else {
+            continue;
+        };
+        let Ok(entry) = archive.by_name(&format!("files/{}", file.path)) else {
+            continue;
+        };
+        if entry.size() > MAX_COMPARED_CFG_BYTES {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        entry
+            .take(MAX_COMPARED_CFG_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(io_err)?;
+        managed_text.push_str(&String::from_utf8_lossy(&bytes));
+        managed_text.push('\n');
+    }
+    let (hit_sound, kill_sound) = crate::profile_compare::sound_names(manifest.hitsound.as_ref());
+    Ok(crate::profile_compare::CompareSide {
+        id: String::new(),
+        name: manifest.name.clone(),
+        launch_options: manifest.launch_options.clone(),
+        hud: manifest.hud.as_ref().map(|hud| hud.id.clone()),
+        hit_sound,
+        kill_sound,
+        files: manifest
+            .files
+            .iter()
+            .map(|file| (file.path.clone(), file.sha256.clone()))
+            .collect(),
+        casual: crate::profile_compare::casual_names(manifest.preloader.as_ref(), &manifest.mods),
+        managed_text,
+    })
 }
 
 fn write_profile_zip(
@@ -303,19 +708,27 @@ fn write_profile_zip(
         }
     }
     validate_export_destination(profiles_dir, zip_path)?;
-    validate_launch_has_no_secrets(&manifest.launch_options)?;
+    validate_exported_launch_options(&manifest.launch_options)?;
     let export_files = validated_export_files(manifest)?;
+    let stock_built = stock_built_file(manifest.viewmodel.as_ref(), &export_files)?;
 
     let mut zip_manifest = ProfileZipManifest {
-        schema: ZIP_SCHEMA,
+        schema: if stock_built.is_some() {
+            RECIPE_ZIP_SCHEMA
+        } else {
+            ZIP_SCHEMA
+        },
         name: manifest.name.clone(),
         launch_options: manifest.launch_options.clone(),
         files: export_files.clone(),
         id: None,
         tf2_root: None,
         hud: manifest.hud.clone(),
+        hud_selected_root: manifest.hud_selected_root.clone(),
+        hud_review_pending: manifest.hud_review_pending,
         crosshair: manifest.crosshair.clone(),
         viewmodel: manifest.viewmodel.clone(),
+        viewmodel_output_sha256: stock_built.map(|file| file.sha256.clone()),
         hitsound: manifest.hitsound.clone(),
         mods: manifest.mods.clone(),
         preloader: manifest.preloader.clone(),
@@ -357,6 +770,13 @@ fn write_profile_zip(
     let mut written_blobs = HashSet::new();
     let mut total = json.len() as u64 + 1;
     for entry in &export_files {
+        if stock_built.is_some_and(|built| entry.path == built.path) {
+            // Verify the library copy, but never write transformed stock MDL
+            // bytes into a shareable archive. The recipient rebuilds them.
+            let source = exclusive_file_path(profiles_dir, profile_id, &entry.path);
+            let _ = open_verified_source(profiles_dir, &source, &entry.sha256, &entry.path)?;
+            continue;
+        }
         match entry.storage {
             FileStorage::Exclusive => {
                 let source = exclusive_file_path(profiles_dir, profile_id, &entry.path);
@@ -399,6 +819,192 @@ fn write_profile_zip(
     refuse_symlink_destination(zip_path)?;
     replace_file(&temp.path, zip_path).map_err(io_err)?;
     temp.persisted = true;
+    Ok(())
+}
+
+fn stock_built_file<'a>(
+    viewmodel: Option<&ViewmodelRecord>,
+    files: &'a [ProfileFile],
+) -> Result<Option<&'a ProfileFile>, ProfileError> {
+    let Some(record) = viewmodel.filter(|record| record.source == ViewmodelSource::StockBuilt)
+    else {
+        return Ok(None);
+    };
+    record.validate_build_recipe().map_err(invalid_zip)?;
+    if record.id != crate::viewmodel::EXECS_VIEWMODELS_PACK
+        || record.source_changed
+        || !record.options.is_empty()
+        || files.iter().any(|file| {
+            let path = file.path.to_ascii_lowercase();
+            path.starts_with("tf/custom/execs-viewmodels/")
+                || (path == crate::viewmodel::EXECS_VIEWMODELS_VPK
+                    && file.path != crate::viewmodel::EXECS_VIEWMODELS_VPK)
+        })
+    {
+        return Err(invalid_zip("invalid locally built Viewmodels metadata"));
+    }
+    let file = files
+        .iter()
+        .find(|file| file.path == crate::viewmodel::EXECS_VIEWMODELS_VPK)
+        .ok_or_else(|| invalid_zip("locally built Viewmodels pack has no saved VPK"))?;
+    if file.storage != FileStorage::Exclusive || !is_sha256_hex(&file.sha256) {
+        return Err(invalid_zip("invalid locally built Viewmodels VPK identity"));
+    }
+    Ok(Some(file))
+}
+
+fn stock_built_request(recipe: &ViewmodelBuildRecipe) -> ProvisionalGroupRequest {
+    ProvisionalGroupRequest {
+        catalog: ProvisionalGroupCatalogIdentity {
+            patch_version: recipe.catalog.patch_version.clone(),
+            catalog_sha256: recipe.catalog.catalog_sha256.clone(),
+        },
+        choices: recipe
+            .choices
+            .iter()
+            .map(|choice| ProvisionalGroupChoice {
+                group_id: choice.group_id.clone(),
+                mode: match choice.mode {
+                    ViewmodelHideMode::Full => ProvisionalHideMode::Full,
+                    ViewmodelHideMode::Weapon => ProvisionalHideMode::Weapon,
+                },
+            })
+            .collect(),
+    }
+}
+
+fn verify_stock_built_rebuild<R>(
+    manifest: &ProfileZipManifest,
+    tf2_root: &Path,
+    read_candidate: &R,
+) -> Result<Option<InstalledGroupVpkCandidate>, ProfileError>
+where
+    R: Fn(&Path, &ProvisionalGroupRequest) -> Result<InstalledGroupVpkCandidate, StockSourceError>,
+{
+    if manifest.schema == ZIP_SCHEMA {
+        if manifest.viewmodel_output_sha256.is_some() {
+            return Err(invalid_zip(
+                "schema-1 profile ZIP cannot declare a rebuilt Viewmodels output",
+            ));
+        }
+        return Ok(None);
+    }
+    if manifest.schema != RECIPE_ZIP_SCHEMA {
+        return Err(invalid_zip("unsupported profile zip schema"));
+    }
+    let file =
+        stock_built_file(manifest.viewmodel.as_ref(), &manifest.files)?.ok_or_else(|| {
+            invalid_zip("schema-2 profile ZIP requires a locally built Viewmodels pack")
+        })?;
+    if manifest.viewmodel_output_sha256.as_deref() != Some(file.sha256.as_str())
+        || file.sha256 != file.sha256.to_ascii_lowercase()
+    {
+        return Err(invalid_zip(
+            "schema-2 Viewmodels output digest does not match its file entry",
+        ));
+    }
+    let recipe = manifest
+        .viewmodel
+        .as_ref()
+        .and_then(|record| record.build_recipe.as_ref())
+        .ok_or_else(|| invalid_zip("locally built Viewmodels recipe is missing"))?;
+    let request = stock_built_request(recipe);
+    let root = crate::finder::normalize_tf2_root(tf2_root).map_err(|error| {
+        invalid_zip(format!(
+            "Confirm a TF2 install before rebuilding Viewmodels: {}",
+            error.message()
+        ))
+    })?;
+    let candidate = read_candidate(&root, &request).map_err(|error| {
+        invalid_zip(format!(
+            "Could not rebuild Viewmodels from this TF2 install: {error}"
+        ))
+    })?;
+    let rebuilt_recipe = crate::viewmodel::selected_candidate_recipe(&candidate, &request)?;
+    if &rebuilt_recipe != recipe || sha256_hex(&candidate.vpk_bytes) != file.sha256 {
+        return Err(invalid_zip(
+            "The installed TF2 Viewmodels sources or rebuilt output differ from this profile ZIP's recipe.",
+        ));
+    }
+    Ok(Some(candidate))
+}
+
+fn prepare_stock_built_payload<R>(
+    payload: &mut ZipPayload,
+    tf2_root: &Path,
+    profiles_dir: &Path,
+    staging: &Path,
+    read_candidate: &R,
+) -> Result<(), ProfileError>
+where
+    R: Fn(&Path, &ProvisionalGroupRequest) -> Result<InstalledGroupVpkCandidate, StockSourceError>,
+{
+    if payload.manifest.schema == RECIPE_ZIP_SCHEMA
+        && payload
+            .exclusive
+            .keys()
+            .any(|path| path.eq_ignore_ascii_case(crate::viewmodel::EXECS_VIEWMODELS_VPK))
+    {
+        return Err(invalid_zip(
+            "schema-2 profile ZIP must omit the locally built Viewmodels VPK payload",
+        ));
+    }
+    if let Some(candidate) =
+        verify_stock_built_rebuild(&payload.manifest, tf2_root, read_candidate)?
+    {
+        check_rebuilt_import_budget(
+            payload.zip_uncompressed_bytes,
+            candidate.vpk_bytes.len() as u64,
+        )?;
+        let staged = staging.join("rebuilt-viewmodels.vpk");
+        let mut file = create_new_file_within(profiles_dir, &staged).map_err(io_err)?;
+        file.write_all(&candidate.vpk_bytes).map_err(io_err)?;
+        file.flush().map_err(io_err)?;
+        payload
+            .exclusive
+            .insert(crate::viewmodel::EXECS_VIEWMODELS_VPK.to_string(), staged);
+        payload.import_notes.push(
+            "The Viewmodels pack was rebuilt from this installed TF2 copy; its recipe and output digest matched the archive."
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+fn check_rebuilt_import_budget(archive_bytes: u64, rebuilt_bytes: u64) -> Result<(), ProfileError> {
+    if rebuilt_bytes > MAX_ENTRY_UNCOMPRESSED
+        || archive_bytes
+            .checked_add(rebuilt_bytes)
+            .is_none_or(|total| total > MAX_TOTAL_UNCOMPRESSED)
+    {
+        return Err(invalid_zip(
+            "The rebuilt Viewmodels pack exceeds the profile import size limit.",
+        ));
+    }
+    Ok(())
+}
+
+fn verify_copied_stock_built_output(
+    saved: &ProfileManifest,
+    zip: &ProfileZipManifest,
+) -> Result<(), ProfileError> {
+    if zip.schema != RECIPE_ZIP_SCHEMA {
+        return Ok(());
+    }
+    let expected = zip
+        .viewmodel_output_sha256
+        .as_deref()
+        .ok_or_else(|| invalid_zip("schema-2 Viewmodels output digest is missing"))?;
+    let copied = saved
+        .files
+        .iter()
+        .find(|file| file.path == crate::viewmodel::EXECS_VIEWMODELS_VPK)
+        .ok_or_else(|| invalid_zip("rebuilt Viewmodels file was not staged"))?;
+    if copied.storage != FileStorage::Exclusive || copied.sha256 != expected {
+        return Err(invalid_zip(
+            "Rebuilt Viewmodels bytes changed while the imported profile was staged.",
+        ));
+    }
     Ok(())
 }
 
@@ -517,8 +1123,11 @@ fn read_zip_payload(
                 check_total_compression_ratio(total, archive_bytes)?;
                 let parsed: ProfileZipManifest =
                     serde_json::from_slice(&bytes).map_err(zip_invalid)?;
-                if parsed.schema != ZIP_SCHEMA {
+                if parsed.schema != ZIP_SCHEMA && parsed.schema != RECIPE_ZIP_SCHEMA {
                     return Err(invalid_zip("unsupported profile zip schema"));
+                }
+                if parsed.schema == RECIPE_ZIP_SCHEMA {
+                    validate_recipe_zip_fields(&bytes)?;
                 }
                 manifest = Some(parsed);
             }
@@ -581,10 +1190,71 @@ fn read_zip_payload(
         manifest,
         exclusive,
         blobs,
+        zip_uncompressed_bytes: total,
         creator: false,
         skipped_files: 0,
         import_notes: Vec::new(),
     })
+}
+
+fn validate_recipe_zip_fields(bytes: &[u8]) -> Result<(), ProfileError> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(zip_invalid)?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| invalid_zip("schema-2 profile manifest must be an object"))?;
+    for key in object.keys() {
+        if !matches!(
+            key.as_str(),
+            "schema"
+                | "name"
+                | "launchOptions"
+                | "files"
+                | "hud"
+                | "hudSelectedRoot"
+                | "hudReviewPending"
+                | "crosshair"
+                | "viewmodel"
+                | "viewmodelOutputSha256"
+                | "hitsound"
+                | "mods"
+                | "preloader"
+                | "ignoredPacks"
+        ) {
+            return Err(invalid_zip(format!(
+                "unknown schema-2 profile field: {key}"
+            )));
+        }
+    }
+    let viewmodel = object
+        .get("viewmodel")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| invalid_zip("schema-2 Viewmodels record is missing"))?;
+    for key in viewmodel.keys() {
+        if !matches!(
+            key.as_str(),
+            "id" | "sourceChanged" | "source" | "preload" | "options" | "buildRecipe"
+        ) {
+            return Err(invalid_zip(format!(
+                "unknown schema-2 Viewmodels field: {key}"
+            )));
+        }
+    }
+    let files = object
+        .get("files")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| invalid_zip("schema-2 file list is missing"))?;
+    for file in files {
+        let fields = file
+            .as_object()
+            .ok_or_else(|| invalid_zip("invalid schema-2 file entry"))?;
+        if fields
+            .keys()
+            .any(|key| !matches!(key.as_str(), "path" | "sha256" | "storage"))
+        {
+            return Err(invalid_zip("unknown schema-2 file entry field"));
+        }
+    }
+    Ok(())
 }
 
 /// Refuse an entry on its declared size and compression ratio, before a byte of
@@ -858,6 +1528,20 @@ fn validate_imported_metadata(
     exclusive: &HashMap<String, PathBuf>,
     blobs: &HashMap<String, PathBuf>,
 ) -> Result<(), ProfileError> {
+    // ZIP metadata and its VPK hash only prove what the sender packed. They
+    // cannot establish that this recipient built the pack from their own
+    // installed item schema, scripts, and MDLs. A later import path may
+    // rebuild and verify a recipe before assigning StockBuilt provenance.
+    if manifest.schema == ZIP_SCHEMA
+        && manifest
+            .viewmodel
+            .as_ref()
+            .is_some_and(|record| record.source == ViewmodelSource::StockBuilt)
+    {
+        return Err(invalid_zip(
+            "A locally built Viewmodels pack cannot be imported until its recipe is rebuilt and verified from this TF2 install.",
+        ));
+    }
     if let Some(selection) = &manifest.preloader {
         selection.validate()?;
     }
@@ -889,7 +1573,15 @@ fn validate_imported_metadata(
         }
         let expected_folder = record.id.as_str();
         let expected_vpk = format!("{}.vpk", record.id);
-        if record.pack != expected_folder && record.pack != expected_vpk {
+        let external_pack = !record.pack.is_empty()
+            && record.pack.len() <= 255
+            && !record.pack.contains(['/', '\\'])
+            && is_profile_ownable_rel_path(&format!("tf/custom/{}", record.pack));
+        let pack_owned = match record.source {
+            ModSource::External => external_pack,
+            _ => record.pack == expected_folder || record.pack == expected_vpk,
+        };
+        if !pack_owned {
             return Err(invalid_zip(format!(
                 "mod {} does not own its recorded pack",
                 record.id
@@ -929,6 +1621,10 @@ fn validate_imported_metadata(
         record.bytes = bytes;
     }
 
+    // The file loop above has already checked every listed payload against its
+    // manifest hash. Feature metadata may only claim those verified files.
+    validate_feature_payloads(manifest)?;
+
     if manifest.ignored_packs.len() > MAX_PROFILE_FILES {
         return Err(invalid_zip("too many ignored packs in profile metadata"));
     }
@@ -949,12 +1645,101 @@ fn validate_imported_metadata(
     Ok(())
 }
 
+fn validate_feature_payloads(manifest: &ProfileZipManifest) -> Result<(), ProfileError> {
+    let paths: HashSet<&str> = manifest
+        .files
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect();
+    if let Some(record) = &manifest.crosshair {
+        if record.id != crate::crosshair::EXECS_CROSSHAIRS_PACK {
+            return Err(invalid_zip("crosshair record names an unknown pack"));
+        }
+        let prefix = if record.inactive {
+            "tf/custom/execs-crosshairs/inactive/"
+        } else {
+            "tf/custom/execs-crosshairs/"
+        };
+        let material = |name: &str, extension: &str| {
+            paths.contains(
+                format!("{prefix}materials/vgui/replay/thumbnails/{name}.{extension}").as_str(),
+            )
+        };
+        // Old schema-1 records may omit `shape`; retain readability when the
+        // pack still has a verified material pair.
+        if record.shape.is_empty() {
+            let material_root = format!("{prefix}materials/vgui/replay/thumbnails/");
+            if !paths.iter().any(|path| {
+                path.strip_prefix(&material_root)
+                    .and_then(|name| name.strip_suffix(".vtf"))
+                    .is_some_and(|name| material(name, "vmt"))
+            }) {
+                return Err(invalid_zip(
+                    "crosshair record has no verified material pair",
+                ));
+            }
+        }
+        let names = (!record.shape.is_empty())
+            .then_some(record.shape.as_str())
+            .into_iter()
+            .chain(record.library.keys().map(String::as_str));
+        for name in names {
+            if !crate::crosshair::valid_crosshair_name(name)
+                || !material(name, "vtf")
+                || !material(name, "vmt")
+            {
+                return Err(invalid_zip(format!(
+                    "crosshair record has no verified material pair for {name}"
+                )));
+            }
+        }
+        if !paths.iter().any(|path| {
+            path.starts_with(&format!("{prefix}scripts/tf_weapon_")) && path.ends_with(".txt")
+        }) {
+            return Err(invalid_zip(
+                "crosshair record has no verified weapon scripts",
+            ));
+        }
+        for stem in record.assignments.keys() {
+            if !paths.contains(format!("{prefix}scripts/{stem}.txt").as_str()) {
+                return Err(invalid_zip(format!(
+                    "crosshair record has no verified weapon script for {stem}"
+                )));
+            }
+        }
+    }
+    if let Some(record) = &manifest.viewmodel {
+        record.validate_build_recipe().map_err(invalid_zip)?;
+        if record.id != crate::viewmodel::EXECS_VIEWMODELS_PACK
+            || !paths.contains(crate::viewmodel::EXECS_VIEWMODELS_VPK)
+        {
+            return Err(invalid_zip("viewmodel record has no verified VPK"));
+        }
+    }
+    if let Some(record) = &manifest.hitsound {
+        if record.hit.is_none() && record.kill.is_none() {
+            return Err(invalid_zip("hitsound record has no sound slots"));
+        }
+        for (entry, path) in [
+            (&record.hit, crate::hitsound::HITSOUND_REL),
+            (&record.kill, crate::hitsound::KILLSOUND_REL),
+        ] {
+            if entry.is_some() && !paths.contains(path) {
+                return Err(invalid_zip(format!(
+                    "hitsound record has no verified {path}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Remove identifiers that are meaningful only in the sender's local app-data
 /// directory. In particular, a picked-hit-sound token names a private stash
 /// file and must neither leak into an export nor be allowed to reference an
 /// unrelated stash file on the recipient's machine. GameBanana links are
 /// reconstructed from their numeric id so archive metadata cannot smuggle a
-/// credential-bearing or unsafe navigation URL into another library.
+/// unsafe navigation URL into another library.
 fn make_metadata_portable(manifest: &mut ProfileZipManifest) {
     if let Some(record) = &mut manifest.hitsound {
         for entry in [&mut record.hit, &mut record.kill].into_iter().flatten() {
@@ -1115,7 +1900,7 @@ fn read_validated_export_cfg_source(
     expected_hash: &str,
 ) -> Result<Option<Vec<u8>>, ProfileError> {
     if has_extension(path, "vpk") {
-        inspect_profile_vpk(path, source, expected_hash, validate_cfg_has_no_secrets)?;
+        inspect_profile_vpk(path, source, expected_hash, validate_exported_cfg)?;
         source.seek(SeekFrom::Start(0)).map_err(io_err)?;
         return Ok(None);
     }
@@ -1124,7 +1909,7 @@ fn read_validated_export_cfg_source(
     }
     if expected_len > MAX_IMPORTED_CFG_BYTES as u64 {
         return Err(ProfileError::Io(format!(
-            "{path} is too large to inspect for credentials before export."
+            "{path} is too large to inspect as cfg text before export."
         )));
     }
     let mut bytes = Vec::with_capacity(expected_len as usize);
@@ -1138,7 +1923,7 @@ fn read_validated_export_cfg_source(
             "{path} changed while it was being exported."
         )));
     }
-    validate_cfg_has_no_secrets(path, &bytes)?;
+    validate_exported_cfg(path, &bytes)?;
     Ok(Some(bytes))
 }
 
@@ -1301,12 +2086,401 @@ mod tests {
     use crate::hash::{part_path, sha256_hex};
     use crate::mods::{ModRecord, ModSource};
     use crate::profile::{
-        exclusive_file_path, index_file, init_library_to, load_library_from, load_manifest,
-        save_current_as_to, save_manifest, FileStorage, ProfileError, SaveCurrentOptions,
+        create_populated_profile_to, exclusive_file_path, index_file, init_library_to,
+        load_library_from, load_manifest, save_current_as_to, save_manifest, FileStorage,
+        ProfileError, SaveCurrentOptions,
     };
+    use crate::viewmodel_selected_pack::InstalledViewmodelSourceFingerprints;
+    use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::io::{Cursor, Write};
     use std::path::Path;
+
+    #[test]
+    fn native_zip_requires_a_valid_stock_build_recipe_with_the_saved_vpk() {
+        let mut json = serde_json::json!({
+            "schema": ZIP_SCHEMA,
+            "name": "Built pack",
+            "files": [{
+                "path": crate::viewmodel::EXECS_VIEWMODELS_VPK,
+                "sha256": "a".repeat(64),
+                "storage": "exclusive"
+            }],
+            "viewmodel": {
+                "id": crate::viewmodel::EXECS_VIEWMODELS_PACK,
+                "source": "stockBuilt"
+            }
+        });
+        let manifest: ProfileZipManifest = serde_json::from_value(json.clone()).unwrap();
+        assert!(validate_feature_payloads(&manifest).is_err());
+
+        json["viewmodel"]["buildRecipe"] = serde_json::json!({
+            "schema": 1,
+            "catalog": {
+                "patchVersion": "10828683",
+                "catalogSha256": "a".repeat(64)
+            },
+            "choices": [{
+                "groupId": format!("scout/{}", "b".repeat(64)),
+                "mode": "full"
+            }],
+            "sourceFingerprints": [{
+                "id": "models/weapons/c_models/c_scout_animations.mdl",
+                "sha256": "c".repeat(64)
+            }]
+        });
+        let manifest: ProfileZipManifest = serde_json::from_value(json).unwrap();
+        assert!(validate_feature_payloads(&manifest).is_ok());
+    }
+
+    #[test]
+    fn native_import_refuses_forged_stock_build_provenance_but_keeps_legacy_import() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        let zip_path = dir.join("viewmodels.zip");
+        let vpk = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"synthetic model bytes".to_vec(),
+        )]));
+        let mut manifest = serde_json::json!({
+            "schema": ZIP_SCHEMA,
+            "name": "Viewmodels",
+            "files": [{
+                "path": crate::viewmodel::EXECS_VIEWMODELS_VPK,
+                "sha256": sha256_hex(&vpk),
+                "storage": "exclusive"
+            }],
+            "viewmodel": {
+                "id": crate::viewmodel::EXECS_VIEWMODELS_PACK,
+                "source": "stockBuilt",
+                "buildRecipe": {
+                    "schema": 1,
+                    "catalog": {
+                        "patchVersion": "10828683",
+                        "catalogSha256": "a".repeat(64)
+                    },
+                    "choices": [{
+                        "groupId": format!("scout/{}", "b".repeat(64)),
+                        "mode": "full"
+                    }],
+                    "sourceFingerprints": [{
+                        "id": "models/weapons/c_models/c_scout_animations.mdl",
+                        "sha256": "c".repeat(64)
+                    }]
+                }
+            }
+        });
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        write_raw_zip(
+            &zip_path,
+            &[
+                (ZIP_MANIFEST_NAME, &manifest_bytes),
+                ("files/tf/custom/execs-viewmodels.vpk", &vpk),
+            ],
+        );
+        let before = snapshot_tree(&profiles);
+        let error = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+        assert!(
+            error.message().contains("rebuilt and verified"),
+            "{error:?}"
+        );
+        assert_eq!(snapshot_tree(&profiles), before);
+
+        manifest["viewmodel"]["source"] = serde_json::json!("compiled");
+        manifest["viewmodel"]
+            .as_object_mut()
+            .unwrap()
+            .remove("buildRecipe");
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        write_raw_zip(
+            &zip_path,
+            &[
+                (ZIP_MANIFEST_NAME, &manifest_bytes),
+                ("files/tf/custom/execs-viewmodels.vpk", &vpk),
+            ],
+        );
+        let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        let saved = load_manifest(&profiles, &imported.profiles[0].id).unwrap();
+        assert_eq!(saved.viewmodel.unwrap().source, ViewmodelSource::Compiled);
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &imported.profiles[0].id,
+                crate::viewmodel::EXECS_VIEWMODELS_VPK,
+            ))
+            .unwrap(),
+            vpk
+        );
+        cleanup(&dir);
+    }
+
+    fn stock_built_zip_fixture() -> (
+        PathBuf,
+        PathBuf,
+        PathBuf,
+        PathBuf,
+        ProvisionalGroupRequest,
+        InstalledGroupVpkCandidate,
+    ) {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("Team Fortress 2");
+        fs::create_dir_all(root.join("tf")).unwrap();
+        fs::write(root.join("tf/steam.inf"), "appID=440\n").unwrap();
+        let source = root.join("tf/installed-source.fixture");
+        fs::write(&source, b"source-v1").unwrap();
+        let request = ProvisionalGroupRequest {
+            catalog: ProvisionalGroupCatalogIdentity {
+                patch_version: "fixture".into(),
+                catalog_sha256: "a".repeat(64),
+            },
+            choices: vec![ProvisionalGroupChoice {
+                group_id: format!("scout/{}", "b".repeat(64)),
+                mode: ProvisionalHideMode::Weapon,
+            }],
+        };
+        let candidate = InstalledGroupVpkCandidate {
+            vpk_bytes: crate::vpk::write_vpk_v1(&BTreeMap::from([(
+                "models/weapons/c_models/c_scout_animations.mdl".into(),
+                b"locally transformed model".to_vec(),
+            )])),
+            catalog: request.catalog.clone(),
+            sources: InstalledViewmodelSourceFingerprints {
+                patch_version: request.catalog.patch_version.clone(),
+                item_schema_sha256: sha256_hex(b"source-v1"),
+                weapon_script_sha256: BTreeMap::from([(
+                    "scripts/tf_weapon_scout.ctx".into(),
+                    sha256_hex(b"script"),
+                )]),
+                class_model_sha256: BTreeMap::from([("scout".into(), sha256_hex(b"stock-model"))]),
+            },
+        };
+        let record = ViewmodelRecord {
+            id: crate::viewmodel::EXECS_VIEWMODELS_PACK.into(),
+            source_changed: false,
+            source: ViewmodelSource::StockBuilt,
+            preload: false,
+            options: BTreeMap::new(),
+            build_recipe: Some(
+                crate::viewmodel::selected_candidate_recipe(&candidate, &request).unwrap(),
+            ),
+        };
+        let saved = create_populated_profile_to(
+            &profiles,
+            &root,
+            "Built Viewmodels",
+            &[(
+                crate::viewmodel::EXECS_VIEWMODELS_VPK.into(),
+                FileSource::Bytes(&candidate.vpk_bytes),
+            )],
+            false,
+            unlocked(),
+            |manifest| {
+                manifest.viewmodel = Some(record);
+                Ok(())
+            },
+        )
+        .unwrap();
+        let archive = dir.join("built-profile.zip");
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &archive).unwrap();
+        (dir, profiles, root, archive, request, candidate)
+    }
+
+    #[test]
+    fn recipe_zip_omits_generated_vpk_and_rebuilds_exact_saved_output() {
+        let (dir, profiles, root, archive, request, candidate) = stock_built_zip_fixture();
+        let source = root.join("tf/installed-source.fixture");
+        let mut zip = ZipArchive::new(fs::File::open(&archive).unwrap()).unwrap();
+        assert_eq!(zip.len(), 1);
+        assert!(zip.by_name("files/tf/custom/execs-viewmodels.vpk").is_err());
+        let manifest_bytes = zip.by_name(ZIP_MANIFEST_NAME).unwrap().size();
+        let staging = StagingDir::create(&profiles).unwrap();
+        let read_back = read_profile_zip(&archive, &profiles, &staging.path).unwrap();
+        assert_eq!(read_back.zip_uncompressed_bytes, manifest_bytes);
+        drop(staging);
+        let manifest: ProfileZipManifest =
+            serde_json::from_reader(zip.by_name(ZIP_MANIFEST_NAME).unwrap()).unwrap();
+        assert_eq!(manifest.schema, RECIPE_ZIP_SCHEMA);
+        assert_eq!(
+            manifest.viewmodel_output_sha256,
+            Some(sha256_hex(&candidate.vpk_bytes))
+        );
+        assert_eq!(manifest.files[0].sha256, sha256_hex(&candidate.vpk_bytes));
+        assert_eq!(
+            manifest.viewmodel.unwrap().build_recipe.unwrap().choices[0].group_id,
+            request.choices[0].group_id
+        );
+
+        let imported = import_profile_with_review_and_source(
+            &profiles,
+            &root,
+            &archive,
+            unlocked(),
+            None,
+            None,
+            false,
+            |_, _| {
+                let mut current = candidate.clone();
+                current.sources.item_schema_sha256 = sha256_hex(&fs::read(&source).unwrap());
+                Ok(current)
+            },
+        )
+        .unwrap();
+        assert_eq!(imported.profiles.len(), 2);
+        let imported_id = &imported.profiles[1].id;
+        let saved = load_manifest(&profiles, imported_id).unwrap();
+        assert_eq!(saved.viewmodel.unwrap().source, ViewmodelSource::StockBuilt);
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                imported_id,
+                crate::viewmodel::EXECS_VIEWMODELS_VPK
+            ))
+            .unwrap(),
+            candidate.vpk_bytes
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn recipe_zip_rejects_mismatches_and_embedded_generated_bytes_without_profile_write() {
+        let (dir, profiles, root, archive, _, candidate) = stock_built_zip_fixture();
+        let original = fs::read(&archive).unwrap();
+        let before = snapshot_tree(&profiles);
+        let candidate_for_read = candidate.clone();
+        let check = |archive: &Path, expected: &str| {
+            let error = import_profile_with_review_and_source(
+                &profiles,
+                &root,
+                archive,
+                unlocked(),
+                None,
+                None,
+                false,
+                |_, _| Ok(candidate_for_read.clone()),
+            )
+            .unwrap_err();
+            assert!(error.message().contains(expected), "{error:?}");
+            assert_eq!(snapshot_tree(&profiles), before);
+        };
+
+        let mut zip = ZipArchive::new(std::io::Cursor::new(original)).unwrap();
+        let mut manifest: serde_json::Value =
+            serde_json::from_reader(zip.by_name(ZIP_MANIFEST_NAME).unwrap()).unwrap();
+        manifest["viewmodelOutputSha256"] = serde_json::json!("0".repeat(64));
+        let modified = dir.join("wrong-digest.zip");
+        write_raw_zip(
+            &modified,
+            &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())],
+        );
+        check(&modified, "output digest");
+
+        manifest["viewmodelOutputSha256"] = serde_json::json!(sha256_hex(&candidate.vpk_bytes));
+        manifest["viewmodel"]["buildRecipe"]["sourceFingerprints"][0]["sha256"] =
+            serde_json::json!("1".repeat(64));
+        let modified = dir.join("wrong-source.zip");
+        write_raw_zip(
+            &modified,
+            &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())],
+        );
+        check(&modified, "sources or rebuilt output differ");
+
+        manifest["viewmodel"]["buildRecipe"]["sourceFingerprints"][0]["sha256"] =
+            serde_json::json!(candidate.sources.class_model_sha256["scout"]);
+        let modified = dir.join("embedded-output.zip");
+        write_raw_zip(
+            &modified,
+            &[
+                (ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap()),
+                ("files/tf/custom/execs-viewmodels.vpk", &candidate.vpk_bytes),
+            ],
+        );
+        check(&modified, "must omit");
+
+        manifest["unknownExtension"] = serde_json::json!({"payload": "ignored?"});
+        let modified = dir.join("unknown-extension.zip");
+        write_raw_zip(
+            &modified,
+            &[(ZIP_MANIFEST_NAME, &serde_json::to_vec(&manifest).unwrap())],
+        );
+        check(&modified, "unknown schema-2 profile field");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn recipe_zip_rechecks_installed_sources_before_profile_publication() {
+        let (dir, profiles, root, archive, _, candidate) = stock_built_zip_fixture();
+        let before = snapshot_tree(&profiles);
+        let reads = Cell::new(0);
+        let error = import_profile_with_review_and_source(
+            &profiles,
+            &root,
+            &archive,
+            unlocked(),
+            None,
+            None,
+            false,
+            |_, _| {
+                reads.set(reads.get() + 1);
+                let mut current = candidate.clone();
+                if reads.get() == 2 {
+                    current.sources.item_schema_sha256 = sha256_hex(b"source-changed");
+                }
+                Ok(current)
+            },
+        )
+        .unwrap_err();
+        assert_eq!(reads.get(), 2);
+        assert!(error.message().contains("sources or rebuilt output differ"));
+        assert_eq!(snapshot_tree(&profiles), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn recipe_zip_charges_manifest_bytes_and_refuses_changed_staged_output() {
+        let rebuilt_bytes = 10;
+        let archive_payload_without_manifest = MAX_TOTAL_UNCOMPRESSED - rebuilt_bytes;
+        assert!(
+            check_rebuilt_import_budget(archive_payload_without_manifest, rebuilt_bytes).is_ok()
+        );
+        assert!(
+            check_rebuilt_import_budget(archive_payload_without_manifest + 1, rebuilt_bytes)
+                .is_err()
+        );
+
+        let (dir, profiles, root, archive, _, candidate) = stock_built_zip_fixture();
+        let before = snapshot_tree(&profiles);
+        let reads = Cell::new(0);
+        let error = import_profile_with_review_and_source(
+            &profiles,
+            &root,
+            &archive,
+            unlocked(),
+            None,
+            None,
+            false,
+            |_, _| {
+                reads.set(reads.get() + 1);
+                if reads.get() == 2 {
+                    let staged = profiles
+                        .join(IMPORT_STAGING_DIR)
+                        .join("rebuilt-viewmodels.vpk");
+                    let mut bytes = fs::read(&staged).unwrap();
+                    bytes[0] ^= 1;
+                    fs::write(&staged, bytes).unwrap();
+                }
+                Ok(candidate.clone())
+            },
+        )
+        .unwrap_err();
+        assert_eq!(reads.get(), 2);
+        assert!(error
+            .message()
+            .contains("changed while the imported profile was staged"));
+        assert_eq!(snapshot_tree(&profiles), before);
+        cleanup(&dir);
+    }
 
     fn unlocked() -> [&'static str; 1] {
         ["bash"]
@@ -1648,14 +2822,18 @@ mod tests {
             &root.join("tf/cfg/config_default.cfg"),
             "unbindall\nbind w +forward\n",
         );
-        let cfg = b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\n";
+        let cfg =
+            b"sv_Cheats 1\nfov_desired 90\npassword saved-server-password\nconnect bad.example\n";
         write_raw_zip(&path, &[("/", b""), ("cfg/overrides/autoexec.cfg", cfg)]);
         let refused = import_profile_from(&profiles, &root, &path, unlocked()).unwrap_err();
-        assert!(refused.message().contains("password"), "{refused:?}");
+        assert!(refused.message().contains("connect"), "{refused:?}");
         let review =
             creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
-        assert_eq!(review.warnings.len(), 1);
-        assert!(review.warnings[0].contains("password"));
+        assert_eq!(review.warnings.len(), 2);
+        assert!(review
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("password")));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
         assert_eq!(
@@ -1667,13 +2845,22 @@ mod tests {
             .unwrap(),
             cfg
         );
-        assert!(export_profile_to(
+        export_profile_to(
             &profiles,
             &root,
             &imported.profiles[0].id,
-            &dir.join("export.zip")
+            &dir.join("export.zip"),
         )
-        .is_err());
+        .unwrap();
+        let mut exported =
+            ZipArchive::new(fs::File::open(dir.join("export.zip")).unwrap()).unwrap();
+        let mut contents = Vec::new();
+        exported
+            .by_name("files/tf/cfg/overrides/autoexec.cfg")
+            .unwrap()
+            .read_to_end(&mut contents)
+            .unwrap();
+        assert_eq!(contents, cfg);
         let before = snapshot_tree(&profiles);
         write_raw_zip(&path, &[("cfg/autoexec.cfg", b"sensitivity 4\n")]);
         assert!(
@@ -1728,7 +2915,238 @@ mod tests {
     }
 
     #[test]
-    fn creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export() {
+    fn creator_and_native_multiple_huds_require_choice_and_preserve_inactive_originals() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let path = dir.join("two-huds.zip");
+        let first = b"\"HUD\" { \"ui_version\" \"3\" } // first\n";
+        let second = b"\"HUD\" { \"ui_version\" \"3\" } // second\n";
+        write_raw_zip(
+            &path,
+            &[
+                ("custom/Alpha/info.vdf", first),
+                ("custom/Zeta/info.vdf", second),
+            ],
+        );
+        let before = snapshot_tree(&root);
+        let mut review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        assert_eq!(review.huds, ["Alpha", "Zeta"]);
+        assert!(review.selected_hud.is_none());
+        assert_eq!(
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review))
+                .unwrap_err(),
+            ProfileError::HudReviewRequired
+        );
+        assert!(review.select_hud(Some("forged".into())).is_err());
+        review.select_hud(Some("Zeta".into())).unwrap();
+        let library =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        assert!(library.active_profile_id.is_none());
+        assert_eq!(snapshot_tree(&root), before);
+        let id = library.profiles[0].id.clone();
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(manifest.hud_selected_root.as_deref(), Some("Zeta"));
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/Alpha/info.vdf"
+            ))
+            .unwrap(),
+            first
+        );
+        let opts = || crate::absorb::AbsorbOptions {
+            cloud_config: None,
+            steam_roots: Some(&[]),
+        };
+        crate::switch::switch_profile_to(&profiles, &root, &id, unlocked(), opts(), |_| {})
+            .unwrap();
+        assert_eq!(
+            crate::hud::live_hud_names(&root)
+                .iter()
+                .map(|hud| hud.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Zeta"]
+        );
+        let native = dir.join("native.zip");
+        export_profile_to(&profiles, &root, &id, &native).unwrap();
+        let mut native_review =
+            creator::inspect_profile_import_from(&profiles, &root, &native, unlocked()).unwrap();
+        assert_eq!(native_review.huds, ["Alpha", "Zeta"]);
+        native_review.select_hud(Some("Alpha".into())).unwrap();
+        let imported =
+            import_profile_with_review(&profiles, &root, &native, unlocked(), Some(&native_review))
+                .unwrap();
+        let second_id = &imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap()
+            .id;
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                second_id,
+                "tf/custom/Zeta/info.vdf"
+            ))
+            .unwrap(),
+            second
+        );
+        crate::switch::switch_profile_to(&profiles, &root, second_id, unlocked(), opts(), |_| {})
+            .unwrap();
+        assert_eq!(
+            crate::hud::live_hud_names(&root)
+                .iter()
+                .map(|hud| hud.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Alpha"]
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn profile_import_refuses_real_hud_vpks_but_keeps_ordinary_and_opaque_vpks() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let path = dir.join("vpk.zip");
+        let hud = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "info.vdf".into(),
+            b"\"HUD\" { \"ui_version\" \"3\" }".to_vec(),
+        )]));
+        write_raw_zip(&path, &[("custom/hud.vpk", &hud)]);
+        let before = snapshot_tree(&root);
+        let original = sha256_file(&path).unwrap();
+        assert_eq!(
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked())
+                .unwrap_err()
+                .code(),
+            "HudImportRequired"
+        );
+        assert_eq!(snapshot_tree(&root), before);
+        assert_eq!(sha256_file(&path).unwrap(), original);
+        let ordinary = crate::vpk::write_vpk_v1(&BTreeMap::from([(
+            "info.vdf".into(),
+            b"\"Addon\" { \"version\" \"3\" }".to_vec(),
+        )]));
+        write_raw_zip(
+            &path,
+            &[
+                ("custom/ordinary.vpk", &ordinary),
+                ("custom/opaque.vpk", b"legacy opaque bytes"),
+            ],
+        );
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        let imported =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        let id = &imported.profiles[0].id;
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/custom/ordinary.vpk")).unwrap(),
+            ordinary
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/custom/opaque.vpk")).unwrap(),
+            b"legacy opaque bytes"
+        );
+        assert_eq!(snapshot_tree(&root), before);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn changing_imported_hud_preserves_approved_cfg_until_separate_option_reset_review() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let path = dir.join("options.zip");
+        let info = b"\"HUD\" { \"ui_version\" \"3\" }\n";
+        let autoexec = b"echo retained\nexec execs_hud_minmode // execs:managed\n";
+        let options = b"cl_hud_minmode 1\n";
+        write_raw_zip(
+            &path,
+            &[
+                ("custom/Alpha/info.vdf", info),
+                ("custom/Beta/info.vdf", info),
+                ("cfg/autoexec.cfg", autoexec),
+                ("cfg/execs_hud_minmode.cfg", options),
+            ],
+        );
+        let original_zip = sha256_file(&path).unwrap();
+        let mut review =
+            creator::inspect_profile_import_from(&profiles, &root, &path, unlocked()).unwrap();
+        review.select_hud(Some("Beta".into())).unwrap();
+        let library =
+            import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
+        let id = &library.profiles[0].id;
+        assert!(load_manifest(&profiles, id).unwrap().hud_review_pending);
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/cfg/autoexec.cfg")).unwrap(),
+            autoexec
+        );
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                id,
+                "tf/cfg/execs_hud_minmode.cfg"
+            ))
+            .unwrap(),
+            options
+        );
+        assert_eq!(
+            crate::switch::validate_profile_switch_target(&profiles, &root, id).unwrap_err(),
+            ProfileError::HudReviewRequired
+        );
+        let ownership = crate::hud::get_hud_ownership_to(&profiles, &root, id).unwrap();
+        assert!(ownership.reset_options);
+        assert_eq!(
+            ownership.managed_option_files,
+            ["tf/cfg/execs_hud_minmode.cfg"]
+        );
+        crate::hud::select_profile_hud_to(
+            &profiles,
+            &root,
+            id,
+            "Beta",
+            &ownership.fingerprint,
+            unlocked(),
+        )
+        .unwrap();
+        let after = load_manifest(&profiles, id).unwrap();
+        assert!(!after.hud_review_pending);
+        assert!(!after
+            .files
+            .iter()
+            .any(|file| file.path == "tf/cfg/execs_hud_minmode.cfg"));
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, id, "tf/cfg/autoexec.cfg")).unwrap(),
+            b"echo retained\n"
+        );
+        let backup = fs::read_dir(profiles.join(id).join("hud-backups"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(
+            fs::read(backup.join("files/tf/cfg/autoexec.cfg")).unwrap(),
+            autoexec
+        );
+        assert_eq!(
+            fs::read(backup.join("files/tf/cfg/execs_hud_minmode.cfg")).unwrap(),
+            options
+        );
+        assert_eq!(sha256_file(&path).unwrap(), original_zip);
+        crate::switch::validate_profile_switch_target(&profiles, &root, id).unwrap();
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn creator_vpk_review_preserves_approved_bytes_through_export() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs/profiles");
         let root = dir.join("tf2");
@@ -1744,7 +3162,7 @@ mod tests {
         assert!(review
             .warnings
             .iter()
-            .any(|warning| warning.contains("creator.vpk/cfg/autoexec.cfg")
+            .any(|warning| warning.contains("creator.vpk/cfg/autoexec.cfg:1")
                 && warning.contains("password")));
         let imported =
             import_profile_with_review(&profiles, &root, &path, unlocked(), Some(&review)).unwrap();
@@ -1755,11 +3173,15 @@ mod tests {
         );
         let destination = dir.join("export.zip");
         fs::write(&destination, b"keep existing export").unwrap();
-        assert!(export_profile_to(&profiles, &root, id, &destination)
-            .unwrap_err()
-            .message()
-            .contains("password"));
-        assert_eq!(fs::read(&destination).unwrap(), b"keep existing export");
+        export_profile_to(&profiles, &root, id, &destination).unwrap();
+        let mut exported = ZipArchive::new(fs::File::open(&destination).unwrap()).unwrap();
+        let mut contents = Vec::new();
+        exported
+            .by_name("files/tf/custom/creator.vpk")
+            .unwrap()
+            .read_to_end(&mut contents)
+            .unwrap();
+        assert_eq!(contents, pack);
 
         let before = snapshot_tree(&profiles);
         write_raw_zip(
@@ -2190,8 +3612,11 @@ mod tests {
             id: None,
             tf2_root: None,
             hud: None,
+            hud_selected_root: None,
+            hud_review_pending: false,
             crosshair: None,
             viewmodel: None,
+            viewmodel_output_sha256: None,
             hitsound: None,
             mods: Vec::new(),
             preloader: None,
@@ -2701,7 +4126,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_export_preserves_an_existing_destination_and_refuses_credentials() {
+    fn export_replaces_destination_and_preserves_credentials() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -2717,10 +4142,31 @@ mod tests {
         .unwrap();
         let destination = dir.join("existing.zip");
         fs::write(&destination, b"previous export").unwrap();
-        let err =
-            export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap_err();
-        assert!(err.message().contains("credential"), "{}", err.message());
-        assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+        let review = inspect_profile_export_from(&profiles, &root, &saved.profiles[0].id).unwrap();
+        assert_eq!(review.credential_locations, ["tf/cfg/config.cfg:1"]);
+        assert_eq!(
+            review.custom_packs,
+            [ProfileExportPack {
+                path: "tf/custom/mastercomfig-base.vpk".into(),
+                file_count: 1,
+                kind: ProfileExportPackKind::Other,
+            }]
+        );
+        assert!(!format!("{review:?}").contains("hunter2"));
+        export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
+        assert_ne!(fs::read(&destination).unwrap(), b"previous export");
+        let imported = import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
+        assert_eq!(imported.profiles.len(), 2);
+        let imported_id = &imported.profiles[1].id;
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                imported_id,
+                "tf/cfg/config.cfg"
+            ))
+            .unwrap(),
+            b"password hunter2\n"
+        );
         assert!(!fs::read_dir(&dir).unwrap().flatten().any(|entry| {
             entry
                 .file_name()
@@ -2731,7 +4177,90 @@ mod tests {
     }
 
     #[test]
-    fn export_inspects_exclusive_and_shared_vpk_cfgs_before_replacing_destination() {
+    fn export_review_lists_saved_custom_roots_and_flags_managed_derived_packs() {
+        let files = [
+            "tf/cfg/config.cfg",
+            "TF/CUSTOM/alpha.vpk",
+            "tf/custom/other-pack/materials/a.vtf",
+            "TF/CUSTOM/OTHER-PACK/sound/a.wav",
+            "tf/custom/execs-crosshairs/inactive/materials/a.vtf",
+            "TF/CUSTOM/EXECS-CROSSHAIRS/INACTIVE/SCRIPTS/TF_WEAPON_SCATTERGUN.TXT",
+            "TF/CUSTOM/EXECS-VIEWMODELS.VPK",
+        ]
+        .into_iter()
+        .map(|path| ProfileFile {
+            path: path.into(),
+            sha256: "0".repeat(64),
+            storage: FileStorage::Exclusive,
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(
+            profile_export_custom_packs(&files),
+            [
+                ProfileExportPack {
+                    path: "tf/custom/alpha.vpk".into(),
+                    file_count: 1,
+                    kind: ProfileExportPackKind::Other,
+                },
+                ProfileExportPack {
+                    path: "tf/custom/execs-crosshairs/".into(),
+                    file_count: 2,
+                    kind: ProfileExportPackKind::CrosshairScripts,
+                },
+                ProfileExportPack {
+                    path: "tf/custom/EXECS-VIEWMODELS.VPK".into(),
+                    file_count: 1,
+                    kind: ProfileExportPackKind::Viewmodels,
+                },
+                ProfileExportPack {
+                    path: "tf/custom/other-pack/".into(),
+                    file_count: 2,
+                    kind: ProfileExportPackKind::Other,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn reviewed_export_refuses_a_profile_changed_after_disclosure() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        seed_live(&root);
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let id = &saved.profiles[0].id;
+        let review = inspect_profile_export_from(&profiles, &root, id).unwrap();
+        assert_eq!(review.revision.len(), 64);
+        let destination = dir.join("profile.zip");
+        export_profile_to_with_review(&profiles, &root, id, &destination, Some(&review.revision))
+            .unwrap();
+
+        let mut manifest = load_manifest(&profiles, id).unwrap();
+        manifest.launch_options = "-novid".into();
+        save_manifest(&profiles, &root, &manifest, unlocked()).unwrap();
+        fs::write(&destination, b"previous export").unwrap();
+        let error = export_profile_to_with_review(
+            &profiles,
+            &root,
+            id,
+            &destination,
+            Some(&review.revision),
+        )
+        .unwrap_err();
+        assert!(error.message().contains("changed since export review"));
+        assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn export_preserves_exclusive_and_shared_vpk_cfgs() {
         for pack in ["private-config.vpk", "mastercomfig-base.vpk"] {
             let dir = crate::test_temp_dir();
             let profiles = dir.join("profiles");
@@ -2753,17 +4282,21 @@ mod tests {
             let before = snapshot_tree(&profiles);
             let destination = dir.join("existing.zip");
             fs::write(&destination, b"previous export").unwrap();
-            let err = export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination)
-                .unwrap_err();
-            let message = err.message();
-            assert!(
-                message.contains(&format!("{pack}/cfg/private-server.cfg")),
-                "{message}"
-            );
-            assert!(message.contains("credential"), "{message}");
-            assert!(!message.contains("audit_dummy_never_a_real_secret"));
-            assert_eq!(fs::read(&destination).unwrap(), b"previous export");
+            let review =
+                inspect_profile_export_from(&profiles, &root, &saved.profiles[0].id).unwrap();
+            assert!(review.credential_locations.iter().any(|location| {
+                location == &format!("tf/custom/{pack}/cfg/private-server.cfg:1")
+            }));
+            assert!(review
+                .custom_packs
+                .iter()
+                .any(|item| item.path == format!("tf/custom/{pack}")));
+            assert!(!format!("{review:?}").contains("audit_dummy_never_a_real_secret"));
+            export_profile_to(&profiles, &root, &saved.profiles[0].id, &destination).unwrap();
+            assert_ne!(fs::read(&destination).unwrap(), b"previous export");
             assert_eq!(snapshot_tree(&profiles), before);
+            let imported = import_profile_from(&profiles, &root, &destination, unlocked()).unwrap();
+            assert_eq!(imported.profiles.len(), 2);
             assert!(!fs::read_dir(&dir)
                 .unwrap()
                 .flatten()
@@ -3004,6 +4537,10 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         seed_live(&root);
         write_live(&root.join("tf/custom/my-mod/materials/a.vmt"), "vmt");
+        write_live(
+            &root.join(crate::hitsound::HITSOUND_REL),
+            "RIFF\u{0000}\u{0000}\u{0000}\u{0000}WAVE",
+        );
         let saved = save_current_as_to(
             &profiles,
             &root,
@@ -3033,6 +4570,7 @@ mod tests {
             profile_particle_mods: vec!["my-mod".into()],
         });
         manifest.hitsound = Some(crate::hitsound::HitsoundRecord {
+            source_changed: false,
             hit: Some(crate::hitsound::HitsoundEntry {
                 name: "My picked sound".into(),
                 source: crate::hitsound::HitsoundSource::File,
@@ -3080,6 +4618,234 @@ mod tests {
     }
 
     #[test]
+    fn saved_catalog_wavs_survive_export_import_and_profile_switch() {
+        use crate::hitsound::{
+            apply_hitsounds_to, stored_hitsound, HitsoundChange, HitsoundEntry, HitsoundKind,
+            HitsoundSource, HITSOUND_REL, KILLSOUND_REL,
+        };
+
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        seed_live(&root);
+        let saved = save_current_as_to(
+            &profiles,
+            &root,
+            "Saved catalog sounds",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let source_id = saved.active_profile_id.unwrap();
+
+        // A valid 10 ms, 44.1 kHz mono PCM WAV stands in for already saved
+        // profile bytes. This path must never need the retired remote fetches.
+        let wav = |sample: u8| {
+            let samples = vec![sample; 882];
+            let mut wav = Vec::new();
+            wav.extend_from_slice(b"RIFF");
+            wav.extend_from_slice(&(36 + samples.len() as u32).to_le_bytes());
+            wav.extend_from_slice(b"WAVEfmt ");
+            wav.extend_from_slice(&16u32.to_le_bytes());
+            wav.extend_from_slice(&1u16.to_le_bytes());
+            wav.extend_from_slice(&1u16.to_le_bytes());
+            wav.extend_from_slice(&44_100u32.to_le_bytes());
+            wav.extend_from_slice(&88_200u32.to_le_bytes());
+            wav.extend_from_slice(&2u16.to_le_bytes());
+            wav.extend_from_slice(&16u16.to_le_bytes());
+            wav.extend_from_slice(b"data");
+            wav.extend_from_slice(&(samples.len() as u32).to_le_bytes());
+            wav.extend_from_slice(&samples);
+            wav
+        };
+        let hit_wav = wav(0x40);
+        let kill_wav = wav(0x20);
+
+        let mut community = HitsoundEntry::new("quack".into(), HitsoundSource::Community);
+        community.boost = 6;
+        let mut comfig = HitsoundEntry::new("Saved upload".into(), HitsoundSource::Comfig);
+        comfig.boost = 12;
+        comfig.hash = Some("a".repeat(128));
+        apply_hitsounds_to(
+            &profiles,
+            &root,
+            &source_id,
+            HitsoundChange::Install {
+                entry: community,
+                wav: hit_wav.clone(),
+            },
+            HitsoundChange::Install {
+                entry: comfig,
+                wav: kill_wav.clone(),
+            },
+            unlocked(),
+        )
+        .unwrap();
+        let source_record = load_manifest(&profiles, &source_id).unwrap().hitsound;
+
+        let archive = dir.join("saved-catalog-sounds.zip");
+        export_profile_to(&profiles, &root, &source_id, &archive).unwrap();
+        let imported = import_profile_from(&profiles, &root, &archive, unlocked()).unwrap();
+        let imported_id = imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != source_id)
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(
+            imported.active_profile_id.as_deref(),
+            Some(source_id.as_str())
+        );
+        assert_eq!(
+            load_manifest(&profiles, &imported_id).unwrap().hitsound,
+            source_record
+        );
+        assert_eq!(
+            stored_hitsound(&profiles, &imported_id, HitsoundKind::Hit),
+            Some(hit_wav.clone())
+        );
+        assert_eq!(
+            stored_hitsound(&profiles, &imported_id, HitsoundKind::Kill),
+            Some(kill_wav.clone())
+        );
+
+        // Clear the original active profile first, so the imported copy must
+        // restore both canonical WAVs from its own verified library files.
+        apply_hitsounds_to(
+            &profiles,
+            &root,
+            &source_id,
+            HitsoundChange::Clear,
+            HitsoundChange::Clear,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!root.join(HITSOUND_REL).exists());
+        assert!(!root.join(KILLSOUND_REL).exists());
+        let no_steam = Vec::new();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &imported_id,
+            unlocked(),
+            crate::absorb::AbsorbOptions {
+                steam_roots: Some(&no_steam),
+                ..Default::default()
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(fs::read(root.join(HITSOUND_REL)).unwrap(), hit_wav);
+        assert_eq!(fs::read(root.join(KILLSOUND_REL)).unwrap(), kill_wav);
+        assert_eq!(
+            load_manifest(&profiles, &imported_id).unwrap().hitsound,
+            source_record
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn feature_records_without_verified_payloads_refuse_import() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        init_library_to(&profiles, &root, unlocked()).unwrap();
+        for (name, feature) in [
+            (
+                "crosshair",
+                serde_json::json!({
+                    "crosshair": {"id": "execs-crosshairs", "shape": "dot"}
+                }),
+            ),
+            (
+                "viewmodel",
+                serde_json::json!({
+                    "viewmodel": {"id": "execs-viewmodels", "source": "imported"}
+                }),
+            ),
+            (
+                "hitsound",
+                serde_json::json!({
+                    "hitsound": {"hit": {"name": "claimed", "source": "file"}}
+                }),
+            ),
+        ] {
+            let mut manifest = serde_json::json!({
+                "schema": ZIP_SCHEMA,
+                "name": "Missing feature payload",
+                "files": []
+            });
+            manifest
+                .as_object_mut()
+                .unwrap()
+                .extend(feature.as_object().unwrap().clone());
+            let json = serde_json::to_vec(&manifest).unwrap();
+            let zip_path = dir.join(format!("{name}.zip"));
+            write_raw_zip(&zip_path, &[("execs-profile.json", &json)]);
+            let error = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+            assert!(
+                matches!(&error, ProfileError::Io(message) if message.contains("record")),
+                "{name} had unexpected error: {error:?}"
+            );
+            assert!(load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .profiles
+                .is_empty());
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn legacy_crosshair_record_without_shape_keeps_readable_verified_pack() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        init_library_to(&profiles, &root, unlocked()).unwrap();
+        let files = [
+            (
+                "tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vtf",
+                b"vtf".as_slice(),
+            ),
+            (
+                "tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vmt",
+                b"vmt".as_slice(),
+            ),
+            (
+                "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt",
+                b"script".as_slice(),
+            ),
+        ];
+        let manifest = serde_json::json!({
+            "schema": ZIP_SCHEMA,
+            "name": "Legacy crosshair",
+            "files": files.iter().map(|(path, bytes)| serde_json::json!({
+                "path": path,
+                "sha256": sha256_hex(bytes),
+                "storage": "exclusive"
+            })).collect::<Vec<_>>(),
+            "crosshair": {"id": "execs-crosshairs"}
+        });
+        let json = serde_json::to_vec(&manifest).unwrap();
+        let zip_path = dir.join("legacy-crosshair.zip");
+        let mut entries: Vec<(String, &[u8])> = vec![("execs-profile.json".into(), &json)];
+        entries.extend(
+            files
+                .iter()
+                .map(|(path, bytes)| (format!("files/{path}"), *bytes)),
+        );
+        let borrowed: Vec<(&str, &[u8])> = entries
+            .iter()
+            .map(|(path, bytes)| (path.as_str(), *bytes))
+            .collect();
+        write_raw_zip(&zip_path, &borrowed);
+        let library = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        let imported = load_manifest(&profiles, &library.profiles[0].id).unwrap();
+        assert_eq!(imported.crosshair.unwrap().shape, "");
+        cleanup(&dir);
+    }
+
+    #[test]
     fn manifest_file_and_path_budgets_are_checked_before_payload_lookup() {
         let file = ProfileFile {
             path: "tf/cfg/overrides/a.cfg".into(),
@@ -3098,8 +4864,11 @@ mod tests {
                 id: None,
                 tf2_root: None,
                 hud: None,
+                hud_selected_root: None,
+                hud_review_pending: false,
                 crosshair: None,
                 viewmodel: None,
+                viewmodel_output_sha256: None,
                 hitsound: None,
                 mods: Vec::new(),
                 preloader: None,
@@ -3107,6 +4876,7 @@ mod tests {
             },
             exclusive: HashMap::new(),
             blobs: HashMap::new(),
+            zip_uncompressed_bytes: 0,
         };
         let err = validate_payload(&mut payload).unwrap_err();
         assert!(err.message().contains("more than"), "{}", err.message());

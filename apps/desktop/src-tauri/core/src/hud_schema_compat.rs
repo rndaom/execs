@@ -145,17 +145,42 @@ pub fn validate_identities(schema: &HudSchema) -> Result<(), ProfileError> {
 }
 
 pub fn unavailable_reason(control: &HudControl) -> Option<&'static str> {
-    if control.write_file.is_some()
-        || control.options.as_ref().is_some_and(|options| {
-            options
-                .iter()
-                .any(|option| unavailable_reason(option).is_some())
-        })
-    {
-        Some("This option requires the HUD editor's log-based customization wiring, which execs does not support. Use the HUD author's instructions. Previously saved values are retained but are not applied.")
-    } else {
-        None
+    if control.special.is_some() || control.special_parameters.is_some() {
+        return Some("This option uses a HUD editor Special operation that execs cannot apply. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
     }
+    if control.write_file.is_some() {
+        return Some("This option requires the HUD editor's log-based customization wiring, which execs does not support. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
+    }
+    if control.pulse.is_some() || control.shadow.is_some() {
+        return Some("This option generates additional HUD color entries that execs cannot apply. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
+    }
+    if control.extra.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "ToolTip" | "Tooltip" | "Restart" | "Preview" | "Width" | "Increment"
+        )
+    }) {
+        return Some("This option contains a HUD editor operation that execs does not recognize. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
+    }
+    if !control.control_type.is_empty()
+        && crate::hud_apply::normalize_type(&control.control_type) == "other"
+    {
+        return Some("This HUD editor control type is not supported in execs. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
+    }
+    control
+        .options
+        .as_ref()
+        .and_then(|options| options.iter().find_map(unavailable_reason))
+}
+
+/// A combo choice may omit Type because it inherits the parent operation.
+/// Only a top-level nameless-type control lacks a usable editor widget.
+pub fn unavailable_top_level_reason(control: &HudControl) -> Option<&'static str> {
+    unavailable_reason(control).or_else(|| {
+        (control.control_type.is_empty()).then_some(
+            "This HUD editor control has no supported type. Use the HUD author's instructions. Previously saved values are retained but are not applied.",
+        )
+    })
 }
 
 /// These two copy/pasted paths are wrong in schema commit
@@ -208,7 +233,7 @@ pub fn preserve_unavailable_options(
     requested: &mut std::collections::BTreeMap<String, String>,
 ) -> Result<(), ProfileError> {
     for control in schema.controls.values().flatten() {
-        if unavailable_reason(control).is_none() {
+        if unavailable_top_level_reason(control).is_none() {
             continue;
         }
         let stored = previous.get(&control.name).unwrap_or(&control.value);
@@ -344,7 +369,14 @@ mod tests {
         let corpus = std::path::PathBuf::from(
             std::env::var_os("EXECS_HUD_SCHEMA_CORPUS").expect("schema corpus directory"),
         );
-        for id in ["rayshud", "kbnhud", "budhud", "flawhud", "hypnotizehud"] {
+        for id in [
+            "rayshud",
+            "kbnhud",
+            "budhud",
+            "flawhud",
+            "hypnotizehud",
+            "eve-plus",
+        ] {
             let raw = std::fs::read_to_string(corpus.join(id).join("schema.json")).unwrap();
             let mut schema =
                 parse_hud_schema(&raw).unwrap_or_else(|error| panic!("{id}: {}", error.message()));
@@ -352,6 +384,46 @@ mod tests {
             validate_identities(&schema).unwrap();
         }
         assert!(check_catalog_schema("m0rehud").is_err());
+    }
+
+    #[test]
+    #[ignore = "requires the pinned downloaded schema corpus, EXECS_HUD_SCHEMA_CORPUS"]
+    fn omitted_catalog_schemas_are_triaged_by_the_same_parser_and_operation_gate() {
+        let corpus = std::path::PathBuf::from(
+            std::env::var_os("EXECS_HUD_SCHEMA_CORPUS").expect("schema corpus directory"),
+        );
+        for id in ["berryhud", "eve-plus", "hexhud", "hud-fixes", "sunsethud"] {
+            let raw = std::fs::read_to_string(corpus.join(id).join("schema.json")).unwrap();
+            let schema =
+                parse_hud_schema(&raw).unwrap_or_else(|error| panic!("{id}: {}", error.message()));
+            let view = schema_view(&schema);
+            let controls: Vec<_> = view
+                .sections
+                .iter()
+                .flat_map(|section| &section.controls)
+                .collect();
+            let unavailable = controls
+                .iter()
+                .filter(|control| control.unavailable_reason.is_some())
+                .count();
+            eprintln!(
+                "{id}: {} displayed controls, {unavailable} unavailable operations",
+                controls.len()
+            );
+            assert!(controls.iter().all(|control| {
+                let source = schema
+                    .controls
+                    .values()
+                    .flatten()
+                    .find(|item| item.name == control.name)
+                    .unwrap();
+                if source.special.is_some() || source.special_parameters.is_some() {
+                    control.unavailable_reason.is_some()
+                } else {
+                    true
+                }
+            }));
+        }
     }
 
     #[test]
@@ -408,6 +480,8 @@ mod tests {
             assert!(schema_supported(id));
             assert_eq!(schema_file_name(id), Some("hypnotize-hud.json"));
         }
+        assert!(schema_supported("eve-plus"));
+        assert_eq!(schema_file_name("eve-plus"), Some("eve-plus.json"));
     }
 
     #[test]
@@ -446,6 +520,92 @@ mod tests {
         assert_eq!(omitted, previous);
         let mut changed = BTreeMap::from([("crosshair".into(), "false".into())]);
         assert!(preserve_unavailable_options(&schema, &previous, &mut changed).is_err());
+    }
+
+    #[test]
+    fn rayshud_special_background_is_visible_but_cannot_be_saved_as_a_no_op() {
+        // This is the operation shape of rh_val_main_menu_bg in the pinned
+        // rayshud schema. None of its choices has a regular Files operation.
+        let schema = parse_hud_schema(r#"{"Controls":{"Menu":[{"Name":"rh_val_main_menu_bg","Label":"Menu Background","Type":"ComboBox","Value":"1","Options":[{"Label":"Modern","Value":"0","Special":"HUDBackground","SpecialParameters":["background_modern"]},{"Label":"Classic","Value":"1","Special":"HUDBackground","SpecialParameters":["background_classic"]},{"Label":"Default","Value":"2","Special":"StockBackgrounds"}]}]}}"#).unwrap();
+        let view = schema_view(&schema);
+        let control = &view.sections[0].controls[0];
+        assert_eq!(control.name, "rh_val_main_menu_bg");
+        assert!(control
+            .unavailable_reason
+            .as_deref()
+            .unwrap()
+            .contains("Special"));
+        let mut requested = BTreeMap::from([("rh_val_main_menu_bg".into(), "2".into())]);
+        let previous = BTreeMap::from([("rh_val_main_menu_bg".into(), "1".into())]);
+        assert!(
+            preserve_unavailable_options(&schema, &previous, &mut requested)
+                .unwrap_err()
+                .message()
+                .contains("unavailable")
+        );
+        let mut requested = previous.clone();
+        preserve_unavailable_options(&schema, &previous, &mut requested).unwrap();
+        let mut tree = HudTree::default();
+        tree.insert(
+            "materials/console/background_classic.vtf",
+            b"untouched".to_vec(),
+        );
+        let before = tree.clone();
+        apply_hud_options(&mut tree, &schema, "rayshud", &requested).unwrap();
+        assert_eq!(tree, before);
+    }
+
+    #[test]
+    fn unknown_operations_and_derived_colors_are_unavailable() {
+        let schema = parse_hud_schema(r#"{"Controls":{"Color":[{"Name":"pulse","Type":"ColorPicker","Value":"1 2 3 255","Pulse":true,"Files":{"colors.res":{"Color":"$value"}}},{"Name":"future","Type":"Checkbox","Value":"false","FutureOperation":{"FileName":"other.res"}},{"Name":"background","Type":"CustomBackground","Special":"CustomBackground"},{"Name":"text","Type":"TextBox","Value":"hidden","Files":{"settings.res":{"value":"$value"}}}]}}"#).unwrap();
+        let view = schema_view(&schema);
+        assert!(view.sections[0]
+            .controls
+            .iter()
+            .all(|control| control.unavailable_reason.is_some()));
+        let mut requested = BTreeMap::from([("future".into(), "true".into())]);
+        assert!(preserve_unavailable_options(&schema, &BTreeMap::new(), &mut requested).is_err());
+    }
+
+    #[test]
+    fn missing_top_level_type_is_unavailable_but_typeless_combo_choices_apply() {
+        let schema = parse_hud_schema(r#"{"Controls":{"Choices":[{"Name":"untyped","Value":"1","Files":{"untyped.res":{"value":"$value"}}},{"Name":"choice","Type":"ComboBox","Value":"a","Options":[{"Name":"first","Value":"a","Files":{"choice.res":{"value":"A"}}},{"Name":"second","Value":"b","Files":{"choice.res":{"value":"B"}}}]}]}}"#).unwrap();
+        let view = schema_view(&schema);
+        assert!(view.sections[0].controls[0].unavailable_reason.is_some());
+        assert!(view.sections[0].controls[1].unavailable_reason.is_none());
+        let mut requested = BTreeMap::from([("untyped".into(), "2".into())]);
+        assert!(preserve_unavailable_options(&schema, &BTreeMap::new(), &mut requested).is_err());
+        let mut tree = HudTree::default();
+        tree.insert("choice.res", b"\"value\" \"before\"".to_vec());
+        let options = BTreeMap::from([("choice".into(), "b".into())]);
+        apply_hud_options(&mut tree, &schema, "rayshud", &options).unwrap();
+        assert!(!tree.files.contains_key("untyped.res"));
+        assert!(String::from_utf8_lossy(&tree.files["choice.res"]).contains("B"));
+    }
+
+    #[test]
+    fn pinned_crosshair_glyph_selection_changes_only_the_hud_overlay_resource() {
+        let schema = parse_hud_schema(r#"{"Controls":{"Crosshair":[{"Name":"rh_val_xhair_style","Label":"Style","Type":"Crosshair","Value":"<","Files":{"resource/ui/hudplayerclass.res":{"CustomCrosshair":{"labelText":"$value"}}}}]}}"#).unwrap();
+        let view = schema_view(&schema);
+        let control = &view.sections[0].controls[0];
+        assert_eq!(control.control_type, "crosshair");
+        assert!(control.choices.iter().any(|choice| choice.value == "<"));
+        assert!(control.choices.iter().any(|choice| choice.value == "Z"));
+        assert!(!control.choices.iter().any(|choice| choice.value == "l"));
+        let mut tree = HudTree::default();
+        tree.insert("resource/ui/hudplayerclass.res", b"\"Resource/UI/HudPlayerClass.res\" { \"CustomCrosshair\" { \"labelText\" \"<\" \"visible\" \"1\" } \"Keep\" \"same\" }".to_vec());
+        let before = tree.clone();
+        let selected = BTreeMap::from([("rh_val_xhair_style".into(), "Z".into())]);
+        apply_hud_options(&mut tree, &schema, "rayshud", &selected).unwrap();
+        let text =
+            std::str::from_utf8(tree.get("resource/ui/hudplayerclass.res").unwrap()).unwrap();
+        assert!(text.contains("\"labelText\" \"Z\""), "{text}");
+        assert!(text.contains("\"Keep\" \"same\""), "{text}");
+        let changed = tree.clone();
+        let invalid = BTreeMap::from([("rh_val_xhair_style".into(), "Z0".into())]);
+        assert!(apply_hud_options(&mut tree, &schema, "rayshud", &invalid).is_err());
+        assert_eq!(tree, changed);
+        assert_ne!(tree, before);
     }
 
     #[test]

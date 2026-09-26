@@ -57,11 +57,13 @@ const MAX_MATERIALIZED_VPK_BYTES: u64 = 512 * 1024 * 1024;
 struct MaterializationLimits {
     entry_bytes: u64,
     total_bytes: u64,
+    skip_oversize_entries: bool,
 }
 
 const DEFAULT_MATERIALIZATION_LIMITS: MaterializationLimits = MaterializationLimits {
     entry_bytes: MAX_VPK_ENTRY_BYTES,
     total_bytes: MAX_MATERIALIZED_VPK_BYTES,
+    skip_oversize_entries: false,
 };
 
 #[derive(Clone, Copy)]
@@ -134,6 +136,32 @@ pub fn read_vpk_dir_file_filtered_bounded(
         MaterializationLimits {
             entry_bytes: max_entry_bytes.min(MAX_VPK_ENTRY_BYTES),
             total_bytes: max_total_bytes.min(MAX_MATERIALIZED_VPK_BYTES),
+            skip_oversize_entries: false,
+        },
+    )
+}
+
+/// Read optional preview artwork without allowing one unusually large entry
+/// to reject all other selected entries. The same entry and aggregate bounds
+/// still apply; only entries exceeding those bounds are omitted.
+pub fn read_vpk_dir_file_filtered_bounded_partial(
+    path: &Path,
+    keep: &dyn Fn(&str) -> bool,
+    max_entry_bytes: u64,
+    max_total_bytes: u64,
+) -> Result<VpkArchive, VpkError> {
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    read_vpk(
+        &tree,
+        Some(path),
+        Some(keep),
+        on_disk_len,
+        limits,
+        MaterializationLimits {
+            entry_bytes: max_entry_bytes.min(MAX_VPK_ENTRY_BYTES),
+            total_bytes: max_total_bytes.min(MAX_MATERIALIZED_VPK_BYTES),
+            skip_oversize_entries: true,
         },
     )
 }
@@ -509,6 +537,16 @@ fn ensure_same_archive_parent(dir_path: &Path, data_path: &Path) -> Result<(), V
 /// split-archive references, and no more overlap between entries than a full
 /// read would tolerate. The cheap gate for a pack the user is importing.
 pub fn validate_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkSummary, VpkError> {
+    validate_vpk_dir_bytes_with_paths(bytes, &mut |_| Ok(()))
+}
+
+/// Validate a single-file VPK and inspect each normalized virtual path without
+/// materializing entry bodies. The imported-pack entry, tree, path-metadata,
+/// entry-size, and aggregate-byte limits also apply to the callback.
+pub fn validate_vpk_dir_bytes_with_paths(
+    bytes: &[u8],
+    visit_path: &mut dyn FnMut(&str) -> Result<(), VpkError>,
+) -> Result<VpkSummary, VpkError> {
     let mut summary = VpkSummary::default();
     let budget = materialize_budget(bytes.len() as u64);
     walk_vpk_tree(bytes, bytes.len() as u64, IMPORT_LIMITS, &mut |entry| {
@@ -546,6 +584,7 @@ pub fn validate_vpk_dir_bytes(bytes: &[u8]) -> Result<VpkSummary, VpkError> {
         }
         summary.files += 1;
         charge(&mut summary.bytes, budget, total_len)?;
+        visit_path(&entry.rel)?;
         Ok(())
     })?;
     Ok(summary)
@@ -774,11 +813,19 @@ fn read_vpk(
             .checked_add(length)
             .ok_or_else(|| VpkError("VPK entry size overflows.".into()))?;
         if total_len as u64 > materialization_limits.entry_bytes {
+            if materialization_limits.skip_oversize_entries {
+                return Ok(());
+            }
             return Err(VpkError(format!(
                 "{} is larger than {} MiB.",
                 entry.rel,
                 materialization_limits.entry_bytes / (1024 * 1024)
             )));
+        }
+        if materialization_limits.skip_oversize_entries
+            && materialized.saturating_add(total_len as u64) > materialization_limits.total_bytes
+        {
+            return Ok(());
         }
         charge(
             &mut materialized,
@@ -927,11 +974,92 @@ impl VpkEntryLocation {
     }
 }
 
+/// A directory walk, kept only inside [`with_directory_memo`].
+struct MappedTree {
+    on_disk_len: u64,
+    tree: Vec<u8>,
+    entries: std::rc::Rc<BTreeMap<String, VpkEntryLocation>>,
+}
+
+/// Enough for the misc, textures and sound directories one apply consults.
+const DIRECTORY_MEMO_TREES: usize = 4;
+
+thread_local! {
+    /// `None` outside a memo scope; the most recent walks inside one.
+    static DIRECTORY_MEMO: std::cell::RefCell<Option<Vec<MappedTree>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Walking `tf2_misc_dir.vpk` (about 100k entries) costs roughly 100 ms, and
+/// particle patching confirms the directory before every single write. Inside
+/// this scope every call still re-reads the tree from disk under the usual
+/// identity checks, but a tree whose bytes and on-disk length are identical to
+/// the previous walk maps identically, so that walk is reused. Nothing is kept
+/// once `f` returns; nested scopes share the outermost one.
+pub fn with_directory_memo<R>(f: impl FnOnce() -> R) -> R {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            DIRECTORY_MEMO.with(|memo| memo.borrow_mut().take());
+        }
+    }
+    let outermost = DIRECTORY_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        let outermost = memo.is_none();
+        if outermost {
+            *memo = Some(Vec::new());
+        }
+        outermost
+    });
+    // Only the outermost scope owns the reset; a nested scope must not
+    // construct one, because dropping it would end the shared memo early.
+    let _reset = if outermost { Some(Reset) } else { None };
+    f()
+}
+
+fn mapped_vpk_entries(
+    path: &Path,
+) -> Result<std::rc::Rc<BTreeMap<String, VpkEntryLocation>>, VpkError> {
+    let (tree, on_disk_len) = read_tree_from_path(path, DIRECTORY_LIMITS)?;
+    let reused = DIRECTORY_MEMO.with(|memo| {
+        memo.borrow().as_ref().and_then(|scope| {
+            scope
+                .iter()
+                .find(|mapped| mapped.on_disk_len == on_disk_len && mapped.tree == tree)
+                .map(|mapped| mapped.entries.clone())
+        })
+    });
+    if let Some(entries) = reused {
+        return Ok(entries);
+    }
+    let entries = std::rc::Rc::new(walk_vpk_entries(&tree, on_disk_len)?);
+    DIRECTORY_MEMO.with(|memo| {
+        if let Some(scope) = memo.borrow_mut().as_mut() {
+            if scope.len() == DIRECTORY_MEMO_TREES {
+                scope.remove(0);
+            }
+            scope.push(MappedTree {
+                on_disk_len,
+                tree,
+                entries: entries.clone(),
+            });
+        }
+    });
+    Ok(entries)
+}
+
 /// Map every entry to its physical location without reading any file bodies.
 pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
-    let (bytes, on_disk_len) = read_tree_from_path(path, DIRECTORY_LIMITS)?;
+    let entries = mapped_vpk_entries(path)?;
+    Ok(std::rc::Rc::try_unwrap(entries).unwrap_or_else(|shared| (*shared).clone()))
+}
+
+fn walk_vpk_entries(
+    bytes: &[u8],
+    on_disk_len: u64,
+) -> Result<BTreeMap<String, VpkEntryLocation>, VpkError> {
     let mut entries = BTreeMap::new();
-    walk_vpk_tree(&bytes, on_disk_len, DIRECTORY_LIMITS, &mut |entry| {
+    walk_vpk_tree(bytes, on_disk_len, DIRECTORY_LIMITS, &mut |entry| {
         entries.insert(
             entry.rel.clone(),
             VpkEntryLocation {
@@ -948,6 +1076,28 @@ pub fn map_vpk_entries(path: &Path) -> Result<BTreeMap<String, VpkEntryLocation>
         Ok(())
     })?;
     Ok(entries)
+}
+
+/// Inspect selected virtual member paths without reading their payloads or
+/// allocating a map of every member in a large directory VPK.
+pub fn list_vpk_member_paths_filtered(
+    path: &Path,
+    keep: &dyn Fn(&str) -> bool,
+    max_matches: usize,
+) -> Result<Vec<String>, VpkError> {
+    let limits = limits_for_path(path);
+    let (tree, on_disk_len) = read_tree_from_path(path, limits)?;
+    let mut matches = Vec::new();
+    walk_vpk_tree(&tree, on_disk_len, limits, &mut |entry| {
+        if keep(&entry.rel) {
+            if matches.len() >= max_matches {
+                return Err(VpkError("Too many matching VPK members.".into()));
+            }
+            matches.push(entry.rel);
+        }
+        Ok(())
+    })?;
+    Ok(matches)
 }
 
 /// Read one entry's bytes via its location (no full-archive materialization).
@@ -1067,8 +1217,9 @@ where
     // Steam verification and game updates can replace the directory and data
     // archives independently. Never use an offset mapped before lengthy PCF
     // processing without confirming that the directory still says exactly the
-    // same thing about this entry.
-    let remapped = map_vpk_entries(dir_path)?;
+    // same thing about this entry. The directory is re-read here every time;
+    // inside a directory memo only an identical tree skips the re-walk.
+    let remapped = mapped_vpk_entries(dir_path)?;
     let current_entry = remapped.get(&expected_entry.rel).ok_or_else(|| {
         VpkError(format!(
             "{} disappeared while the VPK was being prepared; retry after Steam finishes.",
@@ -1352,21 +1503,43 @@ fn write_cstring(out: &mut Vec<u8>, s: &str) {
     out.push(0);
 }
 
+/// The CRC-32 (IEEE) Valve stores per VPK entry.
 pub(crate) fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in data {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = if crc & 1 != 0 { 0xffff_ffff } else { 0 };
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
+    crc32fast::hash(data)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn crc32_matches_the_bitwise_ieee_reference() {
+        fn reference(data: &[u8]) -> u32 {
+            let mut crc = 0xffff_ffffu32;
+            for byte in data {
+                crc ^= u32::from(*byte);
+                for _ in 0..8 {
+                    let mask = if crc & 1 != 0 { 0xffff_ffff } else { 0 };
+                    crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+                }
+            }
+            !crc
+        }
+        assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
+        assert_eq!(crc32(b""), 0);
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let bytes: Vec<u8> = (0..70_001)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                seed as u8
+            })
+            .collect();
+        for len in [1, 7, 16, 63, 64, 65, 4096, bytes.len()] {
+            assert_eq!(crc32(&bytes[..len]), reference(&bytes[..len]), "{len}");
+        }
+    }
 
     #[test]
     fn v2_header_matches_the_layout_the_game_ships() {
@@ -1572,6 +1745,24 @@ mod tests {
             read_vpk_dir_file_filtered_bounded(&path, &|rel| rel.starts_with("particles/"), 5, 9)
                 .unwrap_err();
         assert!(err.0.contains("overlap"), "{}", err.0);
+
+        let partial = read_vpk_dir_file_filtered_bounded_partial(
+            &path,
+            &|rel| rel.starts_with("particles/"),
+            5,
+            9,
+        )
+        .unwrap();
+        assert_eq!(partial.files.len(), 1);
+        assert_eq!(partial.files["particles/one.pcf"], b"12345");
+        let partial = read_vpk_dir_file_filtered_bounded_partial(
+            &path,
+            &|rel| rel.starts_with("particles/"),
+            4,
+            9,
+        )
+        .unwrap();
+        assert!(partial.files.is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 

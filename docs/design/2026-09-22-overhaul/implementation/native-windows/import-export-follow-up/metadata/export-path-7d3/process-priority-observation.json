@@ -1,0 +1,335 @@
+{
+  "checkedUtc": "2026-09-22T17:52:31.7005710Z",
+  "sourceCommit": "6ff64004c4366084d997dba25a9076f61f46fb71",
+  "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+  "appPid": 35100,
+  "processPriorityClass": "Normal",
+  "basePriority": 8,
+  "priorityBoostEnabled": true,
+  "threadCount": 46,
+  "threads": [
+    {
+      "id": 7156,
+      "basePriority": 8,
+      "currentPriority": 10,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 30864,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 4632,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 27116,
+      "basePriority": 8,
+      "currentPriority": 10,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 37580,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 31940,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 23400,
+      "basePriority": 8,
+      "currentPriority": 15,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 21956,
+      "basePriority": 8,
+      "currentPriority": 10,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 10456,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 29908,
+      "basePriority": 8,
+      "currentPriority": 10,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 30832,
+      "basePriority": 8,
+      "currentPriority": 10,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 22128,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 5068,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 10144,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 33460,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 29840,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 26760,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 464,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 20320,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 24752,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 2760,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 27344,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 13348,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 7652,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 29820,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 11792,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 8680,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 9876,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 8556,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 8608,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 35672,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 32752,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 35104,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 31024,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 28596,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 5808,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 9436,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 27548,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 4684,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 13552,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 34696,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 6500,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 13760,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 18880,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 26680,
+      "basePriority": 8,
+      "currentPriority": 8,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    },
+    {
+      "id": 3480,
+      "basePriority": 8,
+      "currentPriority": 9,
+      "priorityLevel": "Normal",
+      "state": "Wait"
+    }
+  ],
+  "observation": "One read-only snapshot after explicitly activating the private inactive-library native window. No priority changed. No TF2, foreground/background comparison, frame-time, WebView2 child-process or UI latency qualification."
+}

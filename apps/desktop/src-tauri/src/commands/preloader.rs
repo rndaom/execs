@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
 use execs_core::mods::ParticleSource;
-use execs_core::preloader::{ModsCatalog, PreloaderReport, PreloaderStatus, RevertReport};
+use execs_core::preloader::{
+    ModsCatalog, PreloaderReport, PreloaderSelection, PreloaderStatus, RevertReport,
+};
 use serde::Serialize;
 
 use super::shared::{
@@ -226,85 +228,6 @@ fn preloader_status_payload(
     })
 }
 
-/// Called with the write gate held, before a profile switch can remove the
-/// source packs. Keep the 0.1.3 global library selection, but remove every
-/// profile-sourced particle through the same recoverable Apply transaction.
-pub(super) fn clear_profile_particles_before_switch(root: &Path) -> Result<(), CommandError> {
-    reconcile_profile_particles(root, &[])
-}
-
-/// Repair stale 0.1.3 state after a previous switch or removed source pack.
-/// The caller holds the write gate; source-discovery failures must propagate
-/// instead of being treated as an empty profile and authorizing cleanup.
-pub(super) fn reconcile_active_profile_particles(root: &Path) -> Result<(), CommandError> {
-    reconcile_active_profile_particles_except(root, None)
-}
-
-/// A removed source must be unpatched while its pack still exists, before
-/// removal projects the profile's new tree into the live game.
-pub(super) fn clear_profile_particles_before_mod_removal(
-    root: &Path,
-    id: &str,
-) -> Result<(), CommandError> {
-    let profile_id = active_profile_id(root)?;
-    let manifest = execs_core::load_manifest(&execs_core::profiles_dir(), &profile_id)?;
-    if !manifest.mods.iter().any(|record| record.id == id) {
-        return Err(CommandError::unknown(
-            "That mod is not installed on this profile.",
-        ));
-    }
-    reconcile_active_profile_particles_except(root, Some(id))
-}
-
-fn reconcile_active_profile_particles_except(
-    root: &Path,
-    removed: Option<&str>,
-) -> Result<(), CommandError> {
-    let active = execs_core::load_library(Some(root))?.active_profile_id;
-    let available = active
-        .as_deref()
-        .map(|id| execs_core::mods::profile_particle_sources_from(&execs_core::profiles_dir(), id))
-        .transpose()?
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|source| Some(source.mod_id.as_str()) != removed)
-        .map(|source| source.mod_id)
-        .collect::<Vec<_>>();
-    reconcile_profile_particles(root, &available)
-}
-
-fn reconcile_profile_particles(root: &Path, available: &[String]) -> Result<(), CommandError> {
-    let data_dir = execs_core::execs_data_dir();
-    let Some(selection) =
-        execs_core::preloader::profile_particle_cleanup_selection(&data_dir, available)
-            .map_err(CommandError::preloader)?
-    else {
-        return Ok(());
-    };
-    // The gate protects writes, so an 81 MB download cannot happen here.
-    // Missing/corrupt cache refuses the transition while the old particles
-    // and their source packs are still intact.
-    if (!selection.addons.is_empty() || !selection.particle_mods.is_empty())
-        && !crate::mods_fetch::is_cached()
-    {
-        return Err(CommandError::new(
-            "ModsCleanupRequired",
-            "Download the mod library or Restore stock files in Mods before changing profiles; the previous profile's particle patches must be removed first.",
-        ));
-    }
-    let initial_names = execs_core::process_lock::live_process_names();
-    execs_core::preloader::apply_preloader_selection_with_sampler(
-        root,
-        &data_dir,
-        &crate::mods_fetch::cache_path(),
-        &selection,
-        &initial_names,
-        &execs_core::process_lock::live_process_names,
-    )
-    .map_err(CommandError::preloader)?;
-    Ok(())
-}
-
 fn status_after_committed_change(root: &Path) -> Result<PreloaderStatusPayload, CommandError> {
     preloader_status_payload(root, false).map_err(|error| {
         CommandError::new(
@@ -386,44 +309,63 @@ pub struct DefaultModsPayload {
     pub catalog: Option<ModsCatalog>,
 }
 
-/// The catalog if the library zip is already cached; never downloads.
+/// Only direct-author choices are offered for new selections. Existing library
+/// choices are shown from the active profile's saved selection in the UI.
 #[tauri::command]
 pub async fn get_default_mods() -> Result<DefaultModsPayload, CommandError> {
     blocking(|| {
-        if !crate::mods_fetch::is_cached() {
-            return Ok(DefaultModsPayload {
-                cached: false,
-                catalog: None,
-            });
-        }
-        let catalog = execs_core::preloader::read_mods_catalog(&crate::mods_fetch::cache_path())?;
+        let cached = crate::mods_fetch::is_cached();
         Ok(DefaultModsPayload {
-            cached: true,
-            catalog: Some(catalog),
+            cached,
+            catalog: Some(crate::mods_fetch::direct_catalog()),
         })
     })
     .await
 }
 
-/// Download (or reuse) the pinned library zip and return its catalog.
-#[tauri::command]
-pub async fn download_default_mods() -> Result<DefaultModsPayload, CommandError> {
-    blocking(|| {
-        let zip = crate::mods_fetch::ensure_mods_zip()?;
-        let catalog = execs_core::preloader::read_mods_catalog(&zip)?;
-        Ok(DefaultModsPayload {
-            cached: true,
-            catalog: Some(catalog),
-        })
-    })
-    .await
+/// Include both the saved manifest and an installed selection whose capture
+/// was interrupted before the manifest update. Neither source is changed.
+fn retained_library_selection(root: &Path) -> Result<PreloaderSelection, CommandError> {
+    let profile_id = active_profile_id(root)?;
+    let profiles = execs_core::profiles_dir();
+    let mut retained = execs_core::load_manifest(&profiles, &profile_id)?
+        .preloader
+        .unwrap_or_default();
+    if let Some(installed) = execs_core::preloader::selection_for_export(&profiles, &profile_id)? {
+        retained.addons.extend(installed.addons);
+        retained.particle_mods.extend(installed.particle_mods);
+    }
+    Ok(retained)
+}
+
+fn refuse_new_library_choices(
+    retained: &PreloaderSelection,
+    requested: &PreloaderSelection,
+) -> Result<(), CommandError> {
+    let new_addon = requested.addons.iter().any(|addon| {
+        addon != execs_core::preloader::flat_textures::ID
+            && addon != execs_core::preloader::developer_textures::ID
+            && !execs_core::preloader::square_overlays::is_overlay(addon)
+            && !retained.addons.contains(addon)
+    });
+    let new_particles = requested
+        .particle_mods
+        .iter()
+        .any(|name| !retained.particle_mods.contains(name));
+    if new_addon || new_particles {
+        return Err(CommandError::new(
+            "RetiredLibraryChoice",
+            "New choices from the default mod library are paused while their source-asset rights are unresolved. The four direct-author addons and particles from your installed mods remain available.",
+        ));
+    }
+    Ok(())
 }
 
 /// Apply a mod selection: restore previous patches, patch the selected
 /// particle files into tf2_misc, pack addon content into tf/custom, and turn
 /// the gameinfo bypass on. Refused while the game is running — checked
-/// before the 81 MB library download, which runs outside the write gate so
-/// an autosave is not queued behind it.
+/// before any direct-author download, which runs outside the write gate so an
+/// autosave is not queued behind it.
 #[tauri::command]
 pub async fn apply_preloader_mods(
     gate: tauri::State<'_, WriteGate>,
@@ -436,22 +378,40 @@ pub async fn apply_preloader_mods(
         particle_mods,
         profile_particle_mods: profile_particle_mods.unwrap_or_default(),
     };
-    let needs_library = !selection.addons.is_empty() || !selection.particle_mods.is_empty();
+    let needs_cueki_library = selection.needs_cueki_library();
+    let needs_flat_textures = selection.uses_flat_textures();
+    let needs_developer_textures = selection.uses_developer_textures();
+    let needs_square_overlays = selection.uses_square_overlays();
+    let preflight_selection = selection.clone();
     let (context, zip) = with_root(move |root| {
         execs_core::refuse_if_running()?;
-        Ok((
-            ProfileSelectionContext::capture(&root)?,
-            if needs_library {
-                crate::mods_fetch::ensure_mods_zip()?
-            } else {
-                crate::mods_fetch::cache_path()
-            },
-        ))
+        let context = ProfileSelectionContext::capture(&root)?;
+        refuse_new_library_choices(&retained_library_selection(&root)?, &preflight_selection)?;
+        let zip = if needs_cueki_library {
+            crate::mods_fetch::verified_legacy_mods_zip()?
+        } else {
+            crate::mods_fetch::cache_path()
+        };
+        if needs_flat_textures {
+            crate::mods_fetch::ensure_flat_textures_zip()?;
+        }
+        if needs_developer_textures {
+            crate::mods_fetch::ensure_developer_textures_7z()?;
+        }
+        if needs_square_overlays {
+            crate::mods_fetch::ensure_square_overlays_zip()?;
+        }
+        Ok((context, zip))
     })
     .await?;
     let _guard = gate.lock_for_preloader_recovery().await?;
     with_root(move |root| {
         context.ensure_current(&root)?;
+        refuse_new_library_choices(&retained_library_selection(&root)?, &selection)?;
+        if needs_cueki_library {
+            // Recheck after direct-author downloads and before any mutation.
+            crate::mods_fetch::verified_legacy_mods_zip()?;
+        }
         // Refuse stale renderer IDs before enabling preload or recording
         // cleanup intent. Core repeats this validation before restoring any
         // currently installed particles.
@@ -725,9 +685,50 @@ pub async fn revert_preloader(
 #[cfg(test)]
 mod tests {
     use super::{
-        refuse_repair_cancel_unless_stably_closed, refuse_repair_cancel_while_processes_run,
-        repair_surface_paths, MAX_REPAIR_DIRECTORY_ENTRIES, MAX_REPAIR_SNAPSHOT_PATH_BYTES,
+        refuse_new_library_choices, refuse_repair_cancel_unless_stably_closed,
+        refuse_repair_cancel_while_processes_run, repair_surface_paths,
+        MAX_REPAIR_DIRECTORY_ENTRIES, MAX_REPAIR_SNAPSHOT_PATH_BYTES,
     };
+    use execs_core::preloader::PreloaderSelection;
+
+    #[test]
+    fn saved_library_choices_can_be_reapplied_or_removed_but_not_added() {
+        let retained = PreloaderSelection {
+            addons: vec!["factory new".into()],
+            particle_mods: vec!["TF2_Classic".into()],
+            profile_particle_mods: vec![],
+        };
+        assert!(refuse_new_library_choices(&retained, &retained).is_ok());
+        assert!(refuse_new_library_choices(&retained, &PreloaderSelection::default()).is_ok());
+
+        let mut added = retained.clone();
+        added.addons.push("WLOY - Gibs + Decals".into());
+        assert_eq!(
+            refuse_new_library_choices(&retained, &added)
+                .unwrap_err()
+                .code,
+            "RetiredLibraryChoice"
+        );
+        let mut added = retained.clone();
+        added.particle_mods.push("Square".into());
+        assert_eq!(
+            refuse_new_library_choices(&retained, &added)
+                .unwrap_err()
+                .code,
+            "RetiredLibraryChoice"
+        );
+
+        let direct = PreloaderSelection {
+            addons: vec![
+                "Flat Textures v1".into(),
+                "Developer Textures Overhaul v2".into(),
+                "No Burning Overlay".into(),
+                "No Sentry Shield Overlay".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(refuse_new_library_choices(&retained, &direct).is_ok());
+    }
 
     #[test]
     fn cancelled_repair_can_only_unlock_after_steam_and_tf2_exit() {

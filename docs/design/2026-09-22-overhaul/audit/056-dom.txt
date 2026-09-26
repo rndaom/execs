@@ -1,0 +1,68 @@
+- main:
+  - generic: execs
+  - generic "Profile Main Active":
+    - generic: Profile
+    - strong: Main
+    - generic: Active
+  - generic "/home/user/.local/share/Steam/steamapps/common/Team Fortress 2": Team Fortress 2
+  - button "Copy install path":
+  - button "Launch TF2" [disabled]:
+    - text: Launch TF2
+  - status: Wait for the profile switch to finish before launching TF2.
+  - complementary:
+    - navigation "Settings":
+      - paragraph: Setup
+      - button "Comfig":
+        - generic: Comfig
+      - button "Binds":
+        - generic: Binds
+      - button "Gameplay":
+        - generic: Gameplay
+      - paragraph: Look
+      - button "HUD":
+        - generic: HUD
+      - button "Crosshair":
+        - generic: Crosshair
+      - button "Viewmodels":
+        - generic: Viewmodels
+      - button "Sounds":
+        - generic: Sounds
+      - paragraph: More
+      - button "Mods":
+        - generic: Mods
+      - button "Files":
+        - generic: Files
+      - button "Launch":
+        - generic: Launch
+      - paragraph: Steam
+      - button "Inventory":
+        - generic: Inventory
+  - paragraph: Loading settings…
+  - status "Profile progress":
+    - paragraph: Applying profile
+    - paragraph: Write files
+    - list:
+      - 'listitem "Game closed: done"':
+        - generic: Game closed
+      - 'listitem "Pack current: done"':
+        - generic: Pack current
+      - 'listitem "Remove live packs: done"':
+        - generic: Remove live packs
+      - 'listitem "Write files: current"':
+        - generic: "4"
+        - generic: Write files
+      - 'listitem "Cloud: pending"':
+        - generic: "5"
+        - generic: Cloud
+      - 'listitem "Done: pending"':
+        - generic: "6"
+        - generic: Done
+  - paragraph:
+    - text: v0.2.0 ·
+    - button "Check for updates"
+    - text: ·
+    - button "Report a bug"
+    - text: ·
+    - button "Copy diagnostics"
+  - paragraph: Fan project — not affiliated with Valve or Steam.
+- status

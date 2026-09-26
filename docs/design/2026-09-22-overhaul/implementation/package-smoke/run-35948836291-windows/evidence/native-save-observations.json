@@ -1,0 +1,616 @@
+{
+    "at":  "2026-09-24T02:50:03.4645669Z",
+    "fieldValue":  null,
+    "stage":  "dialog-found-before-focus",
+    "requestedPath":  "D:\\a\\_temp\\execs-windows-package-OfHbbB\\fixture\\exports\\previous-ui-export.zip",
+    "windows":  [
+                    {
+                        "handle":  66172,
+                        "owner":  0,
+                        "class":  "#32770",
+                        "pid":  5668,
+                        "visible":  true,
+                        "title":  "Export profile"
+                    },
+                    {
+                        "handle":  131532,
+                        "owner":  0,
+                        "class":  "Tauri Window",
+                        "pid":  5668,
+                        "visible":  true,
+                        "title":  "execs"
+                    },
+                    {
+                        "handle":  196682,
+                        "owner":  0,
+                        "class":  "com.rndaom.execs-sic",
+                        "pid":  5668,
+                        "visible":  true,
+                        "title":  "com.rndaom.execs-siw"
+                    },
+                    {
+                        "handle":  1376350,
+                        "owner":  0,
+                        "class":  "Tao Thread Event Target",
+                        "pid":  5668,
+                        "visible":  true,
+                        "title":  ""
+                    }
+                ],
+    "controls":  [
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Command Module",
+                         "id":  "FolderBandModuleInner",
+                         "type":  "ControlType.ToolBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "\u0026Help",
+                         "id":  "HelpButton",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Views",
+                         "id":  "ViewControl",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "View Slider",
+                         "id":  "SplitMenuButton",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Organize",
+                         "id":  "{7DDC1264-7E4D-4F74-BBC0-D191987C8D0F}",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "New folder",
+                         "id":  "{E44616AD-6DF1-4B94-85A4-E465AE8A19DB}",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Control Host",
+                         "id":  "ProperTreeHost",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Namespace Tree Control",
+                         "id":  "100",
+                         "type":  "ControlType.Tree",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Quick access",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Desktop",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Downloads",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Documents",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Pictures",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Desktop",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "This PC",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Network",
+                         "id":  "",
+                         "type":  "ControlType.TreeItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Shell Folder View",
+                         "id":  "listview",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Items View",
+                         "id":  "",
+                         "type":  "ControlType.List",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Horizontal",
+                         "id":  "HorizontalScrollBar",
+                         "type":  "ControlType.ScrollBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Column left",
+                         "id":  "",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Position",
+                         "id":  "",
+                         "type":  "ControlType.Custom",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Page right",
+                         "id":  "",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Column right",
+                         "id":  "",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Header",
+                         "id":  "",
+                         "type":  "ControlType.Header",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Name",
+                         "id":  "System.ItemNameDisplay",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Filter dropdown",
+                         "id":  "DropDown",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Date modified",
+                         "id":  "System.DateModified",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Filter dropdown",
+                         "id":  "DropDown",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Type",
+                         "id":  "System.ItemTypeText",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Filter dropdown",
+                         "id":  "DropDown",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Size",
+                         "id":  "System.Size",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Filter dropdown",
+                         "id":  "DropDown",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Visual Studio 2022",
+                         "id":  "0",
+                         "type":  "ControlType.ListItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Image",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Name",
+                         "id":  "System.ItemNameDisplay",
+                         "type":  "ControlType.Edit",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Date modified",
+                         "id":  "System.DateModified",
+                         "type":  "ControlType.Edit",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Type",
+                         "id":  "System.ItemTypeText",
+                         "type":  "ControlType.Edit",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Size",
+                         "id":  "System.Size",
+                         "type":  "ControlType.Edit",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "File name:",
+                         "id":  "SaveDialogLabel",
+                         "type":  "ControlType.Text",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "File name:",
+                         "id":  "FileNameControlHost",
+                         "type":  "ControlType.ComboBox",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "File name:",
+                         "id":  "1001",
+                         "type":  "ControlType.Edit",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "File name:",
+                         "id":  "ListBox",
+                         "type":  "ControlType.List",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Drop Down Button",
+                         "id":  "DropDown",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Save as type:",
+                         "id":  "SaveDialogLabel",
+                         "type":  "ControlType.Text",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Save as type:",
+                         "id":  "FileTypeControlHost",
+                         "type":  "ControlType.ComboBox",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Save as type:",
+                         "id":  "ListBox",
+                         "type":  "ControlType.List",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Zip",
+                         "id":  "",
+                         "type":  "ControlType.ListItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Drop Down Button",
+                         "id":  "DropDown",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Save Fields",
+                         "id":  "SaveDialogPreviewMetadataInner",
+                         "type":  "ControlType.Tree",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "Application Controls",
+                         "id":  "AppControlsModuleInner",
+                         "type":  "ControlType.Tree",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.ToolBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Hide Folders",
+                         "id":  "Item 103",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Save",
+                         "id":  "1",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Cancel",
+                         "id":  "2",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "40965",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Navigation buttons",
+                         "id":  "",
+                         "type":  "ControlType.ToolBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Back (Alt + Left Arrow)",
+                         "id":  "Item 256",
+                         "type":  "ControlType.Button",
+                         "enabled":  false
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Forward (Alt + Right Arrow)",
+                         "id":  "Item 257",
+                         "type":  "ControlType.Button",
+                         "enabled":  false
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Recent locations",
+                         "id":  "Item 258",
+                         "type":  "ControlType.Button",
+                         "enabled":  false
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Up band",
+                         "id":  "",
+                         "type":  "ControlType.ToolBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Up to \"This PC\" (Alt + Up Arrow)",
+                         "id":  "Item 256",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.ProgressBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Address: Documents",
+                         "id":  "1001",
+                         "type":  "ControlType.ToolBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "All locations",
+                         "id":  "Item 1280",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "This PC",
+                         "id":  "Item 1281",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Documents",
+                         "id":  "Item 1282",
+                         "type":  "ControlType.SplitButton",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Address band toolbar",
+                         "id":  "",
+                         "type":  "ControlType.ToolBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Previous Locations",
+                         "id":  "Item 202",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Refresh \"Documents\" (F5)",
+                         "id":  "Item 102",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Search Box",
+                         "id":  "SearchEditBox",
+                         "type":  "ControlType.Edit",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Search",
+                         "id":  "SearchBoxSearchButton",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "",
+                         "id":  "",
+                         "type":  "ControlType.Pane",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Export profile",
+                         "id":  "TitleBar",
+                         "type":  "ControlType.TitleBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  true,
+                         "name":  "System Menu Bar",
+                         "id":  "SystemMenuBar",
+                         "type":  "ControlType.MenuBar",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "System",
+                         "id":  "Item 1",
+                         "type":  "ControlType.MenuItem",
+                         "enabled":  true
+                     },
+                     {
+                         "offscreen":  false,
+                         "name":  "Close",
+                         "id":  "Close",
+                         "type":  "ControlType.Button",
+                         "enabled":  true
+                     }
+                 ]
+}

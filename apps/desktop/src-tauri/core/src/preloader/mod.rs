@@ -76,18 +76,22 @@ pub const DX8_TWIN_STEMS: [&str; 22] = [
 // ---------------------------------------------------------------------------
 mod apply;
 mod catalog;
+pub mod developer_textures;
+pub mod flat_textures;
 mod gameinfo;
 mod pack;
 mod profiles;
+pub mod square_overlays;
 pub(crate) use profiles::selection_for_snapshot;
 pub use profiles::{
-    apply_profile_preloader, capture_installed_selections, clear_saved_profile_selection,
-    prepare_profile_preloader, selection_for_export, ProfileContext, MODS_RELEASE, MODS_SHA256,
+    apply_profile_preloader, capture_installed_selections, clear_retired_library_choices,
+    clear_saved_profile_selection, prepare_profile_preloader, retired_library_review,
+    selected_profile_particle_mod_ids, selection_for_export, ProfileContext, RetiredLibraryReview,
+    MODS_RELEASE, MODS_SHA256,
 };
 mod state;
 mod transaction;
 
-// The public API is exactly what `preloader.rs` exported before the split.
 pub use apply::{
     apply_preloader_selection, apply_preloader_selection_with_sampler, forget_preload_profile,
     preload_profiles, preloader_status, profile_particle_cleanup_selection, rebuild_keep_lists,
@@ -97,8 +101,7 @@ pub use apply::{
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{
-    gameinfo_bypass_state, restore_gameinfo_from_backup, restore_gameinfo_from_backup_with_sampler,
-    set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
+    gameinfo_bypass_state, set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
 };
 pub use state::{preload_is_wanted, PatchedEntry, PreloaderState, SkipNotice};
 pub use transaction::{

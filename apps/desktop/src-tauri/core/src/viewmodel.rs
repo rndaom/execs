@@ -1,4 +1,4 @@
-//! Viewmodel pack install (imported or built) + Casual itemtest preload.
+//! Viewmodel pack import and saved-pack management + Casual itemtest preload.
 //! This module never edits gameinfo.txt or official VPKs — the preloader
 //! module owns those (snapshot-first, revertible; see AGENTS.md).
 
@@ -17,14 +17,21 @@ use crate::launch::{
 use crate::preloader::preload_is_wanted;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    exclusive_file_path, load_library_from, load_manifest, mutate_profile_files_to, profile_dir,
-    profiles_dir, FileSource, FileStorage, ProfileError, ProfileLiveProjection, ProfileManifest,
-    ViewmodelRecord, ViewmodelSource,
+    exclusive_file_path, load_library_from, load_manifest, mutate_profile_files_checked_to,
+    mutate_profile_files_to, profile_dir, profiles_dir, FileSource, FileStorage, ProfileError,
+    ProfileLiveProjection, ProfileManifest, ViewmodelBuildCatalog, ViewmodelBuildChoice,
+    ViewmodelBuildRecipe, ViewmodelHideMode, ViewmodelRecord, ViewmodelSource,
+    ViewmodelSourceFingerprint, VIEWMODEL_BUILD_RECIPE_SCHEMA,
 };
 use crate::surface::CfgLayer;
-use crate::vpk::validate_vpk_dir_bytes;
+use crate::viewmodel_group_selection::{ProvisionalGroupRequest, ProvisionalHideMode};
+use crate::viewmodel_selected_pack::{
+    prototype_selected_group_vpk_from_install, InstalledGroupVpkCandidate,
+};
+use crate::viewmodel_source::StockSourceError;
 #[cfg(test)]
 use crate::vpk::write_vpk_v1;
+use crate::vpk::{validate_vpk_dir_bytes_with_paths, VpkError};
 
 pub const EXECS_VIEWMODELS_PACK: &str = "execs-viewmodels";
 pub const EXECS_VIEWMODELS_VPK: &str = "tf/custom/execs-viewmodels.vpk";
@@ -42,19 +49,22 @@ const MAX_VIEWMODEL_TRANSACTION_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 pub fn serialize_preload_cfg() -> String {
     [
         "// execs preload — managed, do not edit by hand",
+        "// Launch-only hook: opens the offline itemtest map, then disconnects to the menu.",
+        "// Do not exec this from autoexec, map/class cfgs, or an alias loop.",
+        "echo \"[execs preload] Starting offline itemtest preload. Engine errors stay in this console.\"",
         // -1 loads without any pure whitelist; the point_servercommand cvar
         // must be set before the map loads or Casual resets it.
         "sv_pure -1",
         "sv_allow_point_servercommand always",
         "map itemtest",
-        // wait counts frames; 10 gives heavier animation packs margin to finish caching.
+        // Keep the established bounded delay. It is a command-buffer delay,
+        // not evidence that the map initialized or every asset cached successfully.
         "wait 10; disconnect",
-        // A beat for the disconnect to settle, then clean the console and
-        // restart the menu music the map load cut off. TF2 has no
-        // `playmenumusic` command — it logs as unknown; the menu music is a
-        // VScript entry point.
-        "wait 1; clear",
-        "script_execute randommenumusic",
+        // Preserve engine failures and the user's console history. Server VScript
+        // terminates on level shutdown, so it cannot restart music after disconnect.
+        // This marks dispatch completion only; cfg commands cannot inspect success.
+        "wait 1",
+        "echo \"[execs preload] Hook finished. If loading failed, review the engine errors above.\"",
         "",
     ]
     .join("\n")
@@ -95,6 +105,14 @@ fn with_preload_launch_stem(options: &str, enabled: bool, stem: &str) -> String 
 }
 
 fn is_preload_stem(value: &str) -> bool {
+    // Source accepts an optional cfg suffix and quoted filenames. Recognize
+    // those spellings when replacing old launch tokens so one managed hook
+    // does not become two after a profile edit. Other execs stay untouched.
+    let value = value
+        .strip_prefix('"')
+        .and_then(|quoted| quoted.strip_suffix('"'))
+        .unwrap_or(value);
+    let value = value.strip_suffix(".cfg").unwrap_or(value);
     value == EXECS_PRELOAD_STEM || value == EXECS_PRELOAD_OVERRIDES_STEM
 }
 
@@ -119,41 +137,8 @@ pub fn import_viewmodel_vpk(
         process_names,
         &steam_roots,
         true,
-    )
-}
-
-/// Install a pack built from Yttrium-style hidden groups. Same machinery as
-/// import; the record remembers the hidden set for re-editing.
-pub fn install_built_viewmodel_pack(
-    tf2_root: &Path,
-    profile_id: &str,
-    vpk_bytes: &[u8],
-    hidden_groups: &std::collections::BTreeSet<String>,
-    mode: crate::viewmodel_build::ViewmodelHideMode,
-    preload: bool,
-) -> Result<ProfileDetail, ProfileError> {
-    let mut options = BTreeMap::new();
-    options.insert(
-        "hidden".into(),
-        hidden_groups.iter().cloned().collect::<Vec<_>>().join(","),
-    );
-    options.insert("mode".into(), mode.as_str().into());
-    options.insert("schema".into(), "yttrium-1".into());
-    let process_names = live_process_names();
-    let steam_roots = discover_steam_roots();
-    import_viewmodel_vpk_to_with_launch(
-        &profiles_dir(),
-        &crate::settings::execs_data_dir(),
-        tf2_root,
-        profile_id,
-        vpk_bytes,
-        preload,
-        ViewmodelSource::Compiled,
-        options,
-        process_names.clone(),
-        process_names,
-        &steam_roots,
-        true,
+        None,
+        None,
     )
 }
 
@@ -186,6 +171,8 @@ where
         std::iter::empty::<String>(),
         &[],
         false,
+        None,
+        None,
     )
 }
 
@@ -203,6 +190,8 @@ fn import_viewmodel_vpk_to_with_launch<I, J, S, T>(
     steam_names: J,
     steam_roots: &[PathBuf],
     fresh_steam_process_check: bool,
+    build_recipe: Option<ViewmodelBuildRecipe>,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
 ) -> Result<ProfileDetail, ProfileError>
 where
     I: IntoIterator<Item = S>,
@@ -220,7 +209,7 @@ where
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     validate_viewmodel_import_metadata(vpk_bytes.len(), &options)?;
-    validate_vpk_dir_bytes(vpk_bytes).map_err(|err| ProfileError::Io(err.message()))?;
+    validate_viewmodel_vpk(vpk_bytes)?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
     refuse_untracked_live_viewmodel_files(profiles_dir, tf2_root, profile_id, &manifest)?;
     // Importing without preload must not strip the shared cfg and launch
@@ -256,13 +245,15 @@ where
     )?;
 
     let record = ViewmodelRecord {
+        source_changed: false,
         id: EXECS_VIEWMODELS_PACK.into(),
         source,
         preload,
         options,
+        build_recipe,
     };
     let expected_launch = next_launch.clone();
-    let manifest = mutate_profile_files_to(
+    let manifest = mutate_profile_files_checked_to(
         profiles_dir,
         tf2_root,
         profile_id,
@@ -278,6 +269,7 @@ where
             }
             Ok(())
         },
+        precommit,
     )?;
     if let Some(expected) = expected_launch {
         sync_launch_after_commit(
@@ -292,6 +284,303 @@ where
         )?;
     }
     detail_from_manifest(profiles_dir, &manifest)
+}
+
+fn viewmodel_build_error(error: StockSourceError) -> ProfileError {
+    ProfileError::Io(format!(
+        "Could not verify installed TF2 Viewmodels sources: {error}"
+    ))
+}
+
+pub(crate) fn selected_candidate_recipe(
+    candidate: &InstalledGroupVpkCandidate,
+    request: &ProvisionalGroupRequest,
+) -> Result<ViewmodelBuildRecipe, ProfileError> {
+    if candidate.catalog != request.catalog
+        || candidate.sources.patch_version != request.catalog.patch_version
+    {
+        return Err(ProfileError::Io(
+            "The selected Viewmodels catalog and installed sources disagree.".into(),
+        ));
+    }
+    let mut choices = BTreeMap::new();
+    for choice in &request.choices {
+        let mode = match choice.mode {
+            ProvisionalHideMode::Full => ViewmodelHideMode::Full,
+            ProvisionalHideMode::Weapon => ViewmodelHideMode::Weapon,
+        };
+        if choices.insert(choice.group_id.clone(), mode).is_some() {
+            return Err(ProfileError::Io(
+                "The selected Viewmodels groups contain a duplicate choice.".into(),
+            ));
+        }
+    }
+    let mut fingerprints = BTreeMap::new();
+    fingerprints.insert(
+        "scripts/items/items_game.txt".to_string(),
+        candidate.sources.item_schema_sha256.clone(),
+    );
+    for (id, sha256) in &candidate.sources.weapon_script_sha256 {
+        if id != &id.to_ascii_lowercase()
+            || fingerprints.insert(id.clone(), sha256.clone()).is_some()
+        {
+            return Err(ProfileError::Io(
+                "The installed Viewmodels sources contain colliding script IDs.".into(),
+            ));
+        }
+    }
+    for (class, sha256) in &candidate.sources.class_model_sha256 {
+        let id = format!("models/weapons/c_models/c_{class}_animations.mdl");
+        if fingerprints.insert(id, sha256.clone()).is_some() {
+            return Err(ProfileError::Io(
+                "The installed Viewmodels sources contain colliding model IDs.".into(),
+            ));
+        }
+    }
+    let recipe = ViewmodelBuildRecipe {
+        schema: VIEWMODEL_BUILD_RECIPE_SCHEMA,
+        catalog: ViewmodelBuildCatalog {
+            patch_version: request.catalog.patch_version.clone(),
+            catalog_sha256: request.catalog.catalog_sha256.clone(),
+        },
+        choices: choices
+            .into_iter()
+            .map(|(group_id, mode)| ViewmodelBuildChoice { group_id, mode })
+            .collect(),
+        source_fingerprints: fingerprints
+            .into_iter()
+            .map(|(id, sha256)| ViewmodelSourceFingerprint { id, sha256 })
+            .collect(),
+    };
+    ViewmodelRecord {
+        id: EXECS_VIEWMODELS_PACK.into(),
+        source_changed: false,
+        source: ViewmodelSource::StockBuilt,
+        preload: false,
+        options: BTreeMap::new(),
+        build_recipe: Some(recipe.clone()),
+    }
+    .validate_build_recipe()
+    .map_err(|message| ProfileError::Io(message.into()))?;
+    Ok(recipe)
+}
+
+fn check_selected_build_context(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    expected_viewmodel: Option<&ViewmodelRecord>,
+) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
+    if !library.usable
+        || library.root_mismatch
+        || library.active_profile_id.as_deref() != Some(profile_id)
+        || library.interrupted_profile_id.is_some()
+        || library.pending_switch_profile_id.is_some()
+    {
+        return Err(ProfileError::Io(
+            "The active Viewmodels profile or confirmed TF2 install changed.".into(),
+        ));
+    }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let manifest_root = crate::finder::normalize_tf2_root(Path::new(&manifest.tf2_root))
+        .map_err(|error| ProfileError::Io(error.message()))?;
+    if manifest_root != tf2_root || manifest.viewmodel.as_ref() != expected_viewmodel {
+        return Err(ProfileError::Io(
+            "The active Viewmodels profile changed while the selected pack was prepared.".into(),
+        ));
+    }
+    refuse_untracked_live_viewmodel_files(profiles_dir, tf2_root, profile_id, &manifest)?;
+    refuse_selected_build_live_drift(tf2_root, &manifest)?;
+    Ok(())
+}
+
+fn refuse_selected_build_live_drift(
+    tf2_root: &Path,
+    manifest: &ProfileManifest,
+) -> Result<(), ProfileError> {
+    for file in &manifest.files {
+        let lower = file.path.to_ascii_lowercase();
+        if lower != EXECS_VIEWMODELS_VPK
+            && !lower.starts_with("tf/custom/execs-viewmodels/")
+            && !is_preload_path(&lower)
+        {
+            continue;
+        }
+        let live = tf2_root.join(&file.path);
+        let actual = match std::fs::symlink_metadata(&live) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(ProfileError::Io(error.to_string())),
+            Ok(metadata) => {
+                if metadata_is_link(&metadata) || !metadata.is_file() {
+                    return Err(ProfileError::Io(format!(
+                        "Refusing to replace an invalid live Viewmodels file: {}",
+                        file.path
+                    )));
+                }
+                validate_file_within(tf2_root, &live)
+                    .map_err(|error| ProfileError::Io(error.to_string()))?;
+                Some(
+                    crate::hash::sha256_file(&live)
+                        .map_err(|error| ProfileError::Io(error.to_string()))?,
+                )
+            }
+        };
+        if !actual
+            .as_deref()
+            .is_some_and(|hash| hash.eq_ignore_ascii_case(&file.sha256))
+        {
+            return Err(ProfileError::Io(format!(
+                "The live Viewmodels file changed outside this profile: {}. Capture or restore that change before building.",
+                file.path
+            )));
+        }
+    }
+    for rel in [EXECS_PRELOAD_VANILLA_PATH, EXECS_PRELOAD_COMFIG_PATH] {
+        if manifest
+            .files
+            .iter()
+            .any(|file| file.path.eq_ignore_ascii_case(rel))
+        {
+            continue;
+        }
+        match std::fs::symlink_metadata(tf2_root.join(rel)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(ProfileError::Io(error.to_string())),
+            Ok(_) => {
+                return Err(ProfileError::Io(format!(
+                    "The live Viewmodels preload file is not tracked by this profile: {rel}. Capture or remove it before building."
+                )))
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn install_selected_viewmodel_pack_with_source<I, J, S, T, R>(
+    profiles_dir: &Path,
+    data_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    request: &ProvisionalGroupRequest,
+    candidate: &InstalledGroupVpkCandidate,
+    expected_viewmodel: Option<&ViewmodelRecord>,
+    preload: bool,
+    running_names: I,
+    steam_names: J,
+    steam_roots: &[PathBuf],
+    fresh_steam_process_check: bool,
+    read_candidate: R,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    J: IntoIterator<Item = T>,
+    T: AsRef<str>,
+    R: Fn(&Path, &ProvisionalGroupRequest) -> Result<InstalledGroupVpkCandidate, StockSourceError>,
+{
+    let root = crate::finder::normalize_tf2_root(tf2_root)
+        .map_err(|error| ProfileError::Io(error.message()))?;
+    check_selected_build_context(profiles_dir, &root, profile_id, expected_viewmodel)?;
+    let recipe = selected_candidate_recipe(candidate, request)?;
+    let expected_recipe = recipe.clone();
+    let precommit = || {
+        check_selected_build_context(profiles_dir, &root, profile_id, expected_viewmodel)?;
+        let current = read_candidate(&root, request).map_err(viewmodel_build_error)?;
+        if current != *candidate || selected_candidate_recipe(&current, request)? != expected_recipe
+        {
+            return Err(ProfileError::Io(
+                "Installed TF2 Viewmodels sources or the selected output changed; refresh the catalog and try again."
+                    .into(),
+            ));
+        }
+        check_selected_build_context(profiles_dir, &root, profile_id, expected_viewmodel)?;
+        Ok(())
+    };
+    import_viewmodel_vpk_to_with_launch(
+        profiles_dir,
+        data_dir,
+        &root,
+        profile_id,
+        &candidate.vpk_bytes,
+        preload,
+        ViewmodelSource::StockBuilt,
+        BTreeMap::new(),
+        running_names,
+        steam_names,
+        steam_roots,
+        fresh_steam_process_check,
+        Some(recipe),
+        Some(&precommit),
+    )
+}
+
+/// Commit a previously composed installed-source candidate. The final
+/// source, catalog, output, root, and active-profile comparison runs after
+/// rollback snapshots and immediately before the durable profile journal.
+/// The eventual Tauri command must hold `WriteGate` across this call after
+/// rechecking its captured `ActiveContext` and previous Viewmodels record.
+pub fn install_selected_viewmodel_pack(
+    tf2_root: &Path,
+    profile_id: &str,
+    request: &ProvisionalGroupRequest,
+    candidate: &InstalledGroupVpkCandidate,
+    expected_viewmodel: Option<&ViewmodelRecord>,
+    preload: bool,
+) -> Result<ProfileDetail, ProfileError> {
+    let process_names = live_process_names();
+    let steam_roots = discover_steam_roots();
+    install_selected_viewmodel_pack_with_source(
+        &profiles_dir(),
+        &crate::settings::execs_data_dir(),
+        tf2_root,
+        profile_id,
+        request,
+        candidate,
+        expected_viewmodel,
+        preload,
+        process_names.clone(),
+        process_names,
+        &steam_roots,
+        true,
+        prototype_selected_group_vpk_from_install,
+    )
+}
+
+/// Injectable library-root variant for controlled callers and core tests.
+/// This still requires the caller to serialize writes with the app `WriteGate`.
+#[allow(clippy::too_many_arguments)]
+pub fn install_selected_viewmodel_pack_to<I, S>(
+    profiles_dir: &Path,
+    data_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    request: &ProvisionalGroupRequest,
+    candidate: &InstalledGroupVpkCandidate,
+    expected_viewmodel: Option<&ViewmodelRecord>,
+    preload: bool,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    install_selected_viewmodel_pack_with_source(
+        profiles_dir,
+        data_dir,
+        tf2_root,
+        profile_id,
+        request,
+        candidate,
+        expected_viewmodel,
+        preload,
+        running_names,
+        std::iter::empty::<String>(),
+        &[],
+        false,
+        prototype_selected_group_vpk_from_install,
+    )
 }
 
 pub fn remove_viewmodels(tf2_root: &Path, profile_id: &str) -> Result<ProfileDetail, ProfileError> {
@@ -597,7 +886,7 @@ where
     let manifest = load_manifest(profiles_dir, profile_id)?;
     if enabled && manifest.viewmodel.is_none() {
         return Err(ProfileError::Io(
-            "Import or build a viewmodel pack before enabling preload.".into(),
+            "Import a viewmodel pack before enabling preload.".into(),
         ));
     }
     // Turning the viewmodel pack's preload off must not strip the shared cfg
@@ -818,6 +1107,54 @@ fn validate_viewmodel_import_metadata(
     Ok(())
 }
 
+/// A custom VPK mounts every member as game content. Keep the Viewmodels
+/// shortcut limited to compiled first-person weapon models; mixed packs belong
+/// in Mods, where CFG members receive their separate trust review.
+fn validate_viewmodel_vpk(bytes: &[u8]) -> Result<(), ProfileError> {
+    let mut model_files = 0usize;
+    validate_vpk_dir_bytes_with_paths(bytes, &mut |path| {
+        if !is_viewmodel_member(path) {
+            return Err(VpkError(format!(
+                "Viewmodel VPK contains unrelated content: {path}. Import mixed-content packs through Mods."
+            )));
+        }
+        if path.to_ascii_lowercase().ends_with(".mdl") {
+            model_files += 1;
+        }
+        Ok(())
+    })
+    .map_err(|err| ProfileError::Io(err.message()))?;
+    if model_files == 0 {
+        return Err(ProfileError::Io(
+            "Viewmodel VPK must contain a compiled weapon viewmodel (.mdl).".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_viewmodel_member(path: &str) -> bool {
+    if path.chars().any(char::is_control) || path.contains(':') {
+        return false;
+    }
+    let lower = path.to_ascii_lowercase();
+    let Some(member) = [
+        "models/weapons/c_models/",
+        "models/weapons/v_models/",
+        "models/workshop/weapons/c_models/",
+    ]
+    .into_iter()
+    .find_map(|prefix| lower.strip_prefix(prefix)) else {
+        return false;
+    };
+    !member.is_empty()
+        && member
+            .split('/')
+            .all(|part| !part.is_empty() && part != ".")
+        && [".mdl", ".vvd", ".vtx", ".phy", ".ani"]
+            .into_iter()
+            .any(|suffix| member.ends_with(suffix))
+}
+
 /// The fixed legacy folder is still on TF2's search path beside the generated
 /// VPK. A transaction can safely replace tracked entries, but silently leaving
 /// unknown files there would mount customization the profile does not own.
@@ -1015,6 +1352,10 @@ mod tests {
     use crate::apply::{write_owned_file_to, WriteOwnedOptions};
     use crate::profile::{create_profile_record_to, set_active_profile_to};
     use crate::test_temp_dir;
+    use crate::viewmodel_group_selection::{
+        ProvisionalGroupCatalogIdentity, ProvisionalGroupChoice,
+    };
+    use crate::viewmodel_selected_pack::InstalledViewmodelSourceFingerprints;
 
     fn unlocked() -> Vec<String> {
         Vec::new()
@@ -1026,6 +1367,377 @@ mod tests {
         } else {
             "tf_linux64".into()
         }]
+    }
+
+    fn selected_build_fixture(
+        tf2_root: &Path,
+    ) -> (ProvisionalGroupRequest, InstalledGroupVpkCandidate, PathBuf) {
+        let source = tf2_root.join("tf/installed-viewmodel-source.fixture");
+        std::fs::write(&source, b"installed-source-v1").unwrap();
+        let catalog = ProvisionalGroupCatalogIdentity {
+            patch_version: "fixture".into(),
+            catalog_sha256: "a".repeat(64),
+        };
+        let request = ProvisionalGroupRequest {
+            catalog: catalog.clone(),
+            choices: vec![ProvisionalGroupChoice {
+                group_id: format!("scout/{}", "b".repeat(64)),
+                mode: ProvisionalHideMode::Weapon,
+            }],
+        };
+        let candidate = InstalledGroupVpkCandidate {
+            vpk_bytes: write_vpk_v1(&BTreeMap::from([(
+                "models/weapons/c_models/c_scout_animations.mdl".into(),
+                b"locally transformed model".to_vec(),
+            )])),
+            catalog,
+            sources: InstalledViewmodelSourceFingerprints {
+                patch_version: "fixture".into(),
+                item_schema_sha256: crate::hash::sha256_hex(b"installed-source-v1"),
+                weapon_script_sha256: BTreeMap::from([(
+                    "scripts/tf_weapon_scout.ctx".into(),
+                    crate::hash::sha256_hex(b"script"),
+                )]),
+                class_model_sha256: BTreeMap::from([(
+                    "scout".into(),
+                    crate::hash::sha256_hex(b"stock-model"),
+                )]),
+            },
+        };
+        (request, candidate, source)
+    }
+
+    fn reread_fixture_candidate(
+        candidate: &InstalledGroupVpkCandidate,
+        source: &Path,
+    ) -> InstalledGroupVpkCandidate {
+        let mut current = candidate.clone();
+        current.sources.item_schema_sha256 =
+            crate::hash::sha256_hex(&std::fs::read(source).unwrap());
+        current
+    }
+
+    #[test]
+    fn selected_build_commits_exact_pack_recipe_and_preload_together() {
+        let (root, profiles, tf2, id) = setup();
+        let (request, candidate, source) = selected_build_fixture(&tf2);
+        let detail = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            None,
+            true,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| Ok(reread_fixture_candidate(&candidate, &source)),
+        )
+        .unwrap();
+        let record = detail.viewmodel.unwrap();
+        assert_eq!(record.source, ViewmodelSource::StockBuilt);
+        assert!(record.preload);
+        assert!(record.options.is_empty());
+        let recipe = record.build_recipe.unwrap();
+        assert_eq!(recipe.schema, VIEWMODEL_BUILD_RECIPE_SCHEMA);
+        assert_eq!(
+            recipe.catalog.catalog_sha256,
+            request.catalog.catalog_sha256
+        );
+        assert_eq!(recipe.choices[0].group_id, request.choices[0].group_id);
+        assert_eq!(recipe.choices[0].mode, ViewmodelHideMode::Weapon);
+        assert_eq!(recipe.source_fingerprints.len(), 3);
+        assert_eq!(
+            recipe
+                .source_fingerprints
+                .iter()
+                .map(|fingerprint| fingerprint.id.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "models/weapons/c_models/c_scout_animations.mdl",
+                "scripts/items/items_game.txt",
+                "scripts/tf_weapon_scout.ctx",
+            ]
+        );
+        assert_eq!(
+            std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(),
+            candidate.vpk_bytes
+        );
+        assert!(tf2.join(EXECS_PRELOAD_VANILLA_PATH).is_file());
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK)).unwrap(),
+            candidate.vpk_bytes
+        );
+        let export = root.join("existing-export.zip");
+        std::fs::write(&export, b"keep previous archive").unwrap();
+        crate::zip::inspect_profile_export_from(&profiles, &tf2, &id).unwrap();
+        crate::zip::export_profile_to(&profiles, &tf2, &id, &export).unwrap();
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&export).unwrap()).unwrap();
+        assert!(archive
+            .by_name("files/tf/custom/execs-viewmodels.vpk")
+            .is_err());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn selected_build_refuses_changed_sources_output_profile_and_running_game() {
+        let (root, profiles, tf2, id) = setup();
+        let (request, candidate, source) = selected_build_fixture(&tf2);
+        let before = load_manifest(&profiles, &id).unwrap();
+        std::fs::write(&source, b"installed-source-v2").unwrap();
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            None,
+            false,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| Ok(reread_fixture_candidate(&candidate, &source)),
+        )
+        .unwrap_err();
+        assert!(
+            err.message().contains("sources or the selected output"),
+            "{err:?}"
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists());
+
+        std::fs::write(&source, b"installed-source-v1").unwrap();
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            None,
+            false,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| {
+                let mut changed = candidate.clone();
+                changed.vpk_bytes.push(0);
+                Ok(changed)
+            },
+        )
+        .unwrap_err();
+        assert!(
+            err.message().contains("sources or the selected output"),
+            "{err:?}"
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+
+        let other = create_profile_record_to(&profiles, &tf2, "Other", unlocked())
+            .unwrap()
+            .profiles
+            .into_iter()
+            .find(|profile| profile.id != id)
+            .unwrap()
+            .id;
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &other,
+            &request,
+            &candidate,
+            None,
+            false,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| panic!("inactive profile must refuse before source reads"),
+        )
+        .unwrap_err();
+        assert!(
+            err.message().contains("active Viewmodels profile"),
+            "{err:?}"
+        );
+        assert!(!exclusive_file_path(&profiles, &other, EXECS_VIEWMODELS_VPK).exists());
+
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            None,
+            false,
+            locked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| panic!("game lock must refuse before precommit"),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ProfileError::GameRunning));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn selected_build_rolls_back_pack_recipe_preload_and_launch_on_commit_failure() {
+        let (root, profiles, tf2, id) = setup();
+        let previous_vpk = write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"previous imported model".to_vec(),
+        )]));
+        import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &previous_vpk,
+            false,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let previous_record = before.viewmodel.as_ref().unwrap();
+        let (request, candidate, source) = selected_build_fixture(&tf2);
+
+        let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        std::fs::create_dir_all(&blocker).unwrap();
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            Some(previous_record),
+            true,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| Ok(reread_fixture_candidate(&candidate, &source)),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ProfileError::Io(_)), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(
+            std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(),
+            previous_vpk
+        );
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK)).unwrap(),
+            previous_vpk
+        );
+        assert!(!tf2.join(EXECS_PRELOAD_VANILLA_PATH).exists());
+
+        std::fs::remove_dir(&blocker).unwrap();
+        let detail = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            Some(previous_record),
+            true,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| Ok(reread_fixture_candidate(&candidate, &source)),
+        )
+        .unwrap();
+        assert_eq!(
+            detail.viewmodel.unwrap().source,
+            ViewmodelSource::StockBuilt
+        );
+        assert_eq!(
+            std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(),
+            candidate.vpk_bytes
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn selected_build_refuses_drifted_live_pack_and_untracked_preload() {
+        let (root, profiles, tf2, id) = setup();
+        let old_vpk = write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"previous imported model".to_vec(),
+        )]));
+        import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &old_vpk,
+            false,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let (request, candidate, _) = selected_build_fixture(&tf2);
+        let live = tf2.join(EXECS_VIEWMODELS_VPK);
+        std::fs::write(&live, b"unabsorbed live edit").unwrap();
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            before.viewmodel.as_ref(),
+            true,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| panic!("drift must refuse before source reads"),
+        )
+        .unwrap_err();
+        assert!(
+            err.message().contains("live Viewmodels file changed"),
+            "{err:?}"
+        );
+        assert_eq!(std::fs::read(&live).unwrap(), b"unabsorbed live edit");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+
+        std::fs::write(&live, &old_vpk).unwrap();
+        let preload = tf2.join(EXECS_PRELOAD_VANILLA_PATH);
+        std::fs::write(&preload, b"untracked preload").unwrap();
+        let err = install_selected_viewmodel_pack_with_source(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &request,
+            &candidate,
+            before.viewmodel.as_ref(),
+            true,
+            unlocked(),
+            unlocked(),
+            &[],
+            false,
+            |_, _| panic!("untracked preload must refuse before source reads"),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("not tracked"), "{err:?}");
+        assert_eq!(std::fs::read(&preload).unwrap(), b"untracked preload");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        cleanup(&root);
     }
 
     fn setup() -> (
@@ -1077,15 +1789,55 @@ mod tests {
     }
 
     #[test]
-    fn preload_cfg_is_itemtest_and_never_mentions_gameinfo() {
+    fn preload_cfg_preserves_caching_and_engine_failure_evidence() {
         let cfg = serialize_preload_cfg();
-        assert!(cfg.contains("sv_pure -1"));
-        assert!(cfg.contains("sv_allow_point_servercommand always"));
-        assert!(cfg.contains("map itemtest"));
-        assert!(cfg.contains("disconnect"));
-        assert!(cfg.contains("script_execute randommenumusic"));
+        let commands: Vec<_> = cfg.lines().filter(|line| !line.starts_with("//")).collect();
+        assert!(cfg.contains("opens the offline itemtest map"));
+        assert!(commands.contains(&"sv_pure -1"));
+        assert!(commands.contains(&"sv_allow_point_servercommand always"));
+        assert_eq!(
+            commands
+                .iter()
+                .filter(|line| **line == "map itemtest")
+                .count(),
+            1
+        );
+        assert!(commands.contains(&"wait 10; disconnect"));
+        assert!(cfg.contains("review the engine errors above"));
+        assert!(!commands.iter().any(|line| line.contains("clear")));
+        assert!(!commands
+            .iter()
+            .any(|line| line.starts_with("script_execute")));
+        assert!(!commands
+            .iter()
+            .any(|line| line.starts_with("exec ") || line.starts_with("alias ")));
         assert!(!cfg.contains("gameinfo"));
         assert!(!cfg.contains("+quit"));
+    }
+
+    #[test]
+    fn preload_launch_replaces_all_managed_spellings_without_repeating_the_hook() {
+        let existing = "-novid +exec \"execs_preload.cfg\" +exec overrides/execs_preload +exec overrides/execs_preload.cfg +exec overrides/autoexec";
+        let enabled = with_preload_launch_stem(existing, true, EXECS_PRELOAD_OVERRIDES_STEM);
+        assert_eq!(
+            enabled,
+            "-novid +exec overrides/autoexec +exec overrides/execs_preload"
+        );
+        assert_eq!(
+            with_preload_launch_stem(&enabled, true, EXECS_PRELOAD_OVERRIDES_STEM),
+            enabled
+        );
+        assert_eq!(
+            with_preload_launch(existing, false),
+            "-novid +exec overrides/autoexec"
+        );
+        assert!(has_preload_launch("+exec \"overrides/execs_preload.cfg\""));
+        assert!(!has_preload_launch("+exec overrides/not_execs_preload.cfg"));
+        assert!(!has_preload_launch("+exec my_execs_preload.cfg"));
+    }
+
+    #[test]
+    fn preload_launch_supports_both_cfg_layers() {
         let enabled = with_preload_launch("-novid -nojoy", true);
         assert!(has_preload_launch(&enabled));
         assert!(!with_preload_launch(&enabled, false).contains("execs_preload"));
@@ -1131,12 +1883,191 @@ mod tests {
     }
 
     #[test]
+    fn legacy_compiled_pack_survives_export_import_switch_and_remove() {
+        let (root, profiles, tf2, id) = setup();
+        let vpk = write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"saved legacy model bytes".to_vec(),
+        )]));
+        let legacy_options = BTreeMap::from([
+            ("hidden".into(), "scout/scatterguns,scout/melee".into()),
+            ("mode".into(), "weapon".into()),
+            ("schema".into(), "yttrium-1".into()),
+        ]);
+        import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &vpk,
+            false,
+            ViewmodelSource::Compiled,
+            legacy_options.clone(),
+            unlocked(),
+        )
+        .unwrap();
+        let saved = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(
+            saved.viewmodel.as_ref().unwrap().source,
+            ViewmodelSource::Compiled
+        );
+        assert_eq!(saved.viewmodel.as_ref().unwrap().options, legacy_options);
+        assert_eq!(std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(), vpk);
+
+        let archive = root.join("legacy-viewmodels.zip");
+        crate::zip::export_profile_to(&profiles, &tf2, &id, &archive).unwrap();
+        let imported =
+            crate::zip::import_profile_from(&profiles, &tf2, &archive, unlocked()).unwrap();
+        let imported_id = imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap()
+            .id
+            .clone();
+        let imported_manifest = load_manifest(&profiles, &imported_id).unwrap();
+        assert_eq!(imported_manifest.viewmodel, saved.viewmodel);
+        assert_eq!(
+            std::fs::read(exclusive_file_path(
+                &profiles,
+                &imported_id,
+                EXECS_VIEWMODELS_VPK
+            ))
+            .unwrap(),
+            vpk
+        );
+
+        let empty = create_profile_record_to(&profiles, &tf2, "Empty", unlocked()).unwrap();
+        let empty_id = empty
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id && profile.id != imported_id)
+            .unwrap()
+            .id
+            .clone();
+        let options = || crate::absorb::AbsorbOptions {
+            cloud_config: None,
+            steam_roots: Some(&[]),
+        };
+        crate::switch::switch_profile_to(&profiles, &tf2, &empty_id, unlocked(), options(), |_| {})
+            .unwrap();
+        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists());
+        crate::switch::switch_profile_to(
+            &profiles,
+            &tf2,
+            &imported_id,
+            unlocked(),
+            options(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(tf2.join(EXECS_VIEWMODELS_VPK)).unwrap(), vpk);
+        assert_eq!(
+            load_manifest(&profiles, &imported_id).unwrap().viewmodel,
+            saved.viewmodel
+        );
+
+        remove_viewmodels_to(&profiles, &no_mods(&root), &tf2, &imported_id, unlocked()).unwrap();
+        assert!(!tf2.join(EXECS_VIEWMODELS_VPK).exists());
+        assert!(load_manifest(&profiles, &imported_id)
+            .unwrap()
+            .viewmodel
+            .is_none());
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().viewmodel,
+            saved.viewmodel
+        );
+        assert_eq!(
+            std::fs::read(exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK)).unwrap(),
+            vpk
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn viewmodel_vpk_members_are_limited_to_compiled_weapon_models() {
+        for path in [
+            "models/weapons/c_models/c_scout_animations.mdl",
+            "MODELS/WEAPONS/C_MODELS/c_scout_animations.dx90.vtx",
+            "models/weapons/v_models/v_pistol.vvd",
+            "models/workshop/weapons/c_models/custom/c_custom.ani",
+        ] {
+            assert!(is_viewmodel_member(path), "{path}");
+        }
+        for path in [
+            "cfg/autoexec.cfg",
+            "scripts/game_sounds.txt",
+            "models/player/scout.mdl",
+            "models/weapons/w_models/w_rocket.mdl",
+            "materials/models/weapons/c_models/skin.vmt",
+            "models/weapons/c_models/readme.txt",
+            "models/weapons/c_models//c_scout_animations.mdl",
+            "models/weapons/c_models/./c_scout_animations.mdl",
+        ] {
+            assert!(!is_viewmodel_member(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn viewmodel_import_refuses_a_vpk_with_cfg_without_touching_live_files() {
+        let (root, profiles, tf2, id) = setup();
+        let old_vpk = write_vpk_v1(&BTreeMap::from([(
+            "models/weapons/c_models/c_scout_animations.mdl".into(),
+            b"original model".to_vec(),
+        )]));
+        import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &old_vpk,
+            false,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let live = tf2.join(EXECS_VIEWMODELS_VPK);
+        let library = exclusive_file_path(&profiles, &id, EXECS_VIEWMODELS_VPK);
+        let before_live = std::fs::read(&live).unwrap();
+        let before_library = std::fs::read(&library).unwrap();
+        let mixed_vpk = write_vpk_v1(&BTreeMap::from([
+            ("cfg/autoexec.cfg".into(), b"echo unexpected\n".to_vec()),
+            (
+                "models/weapons/c_models/c_scout_animations.mdl".into(),
+                b"replacement model".to_vec(),
+            ),
+        ]));
+
+        let err = import_viewmodel_vpk_to(
+            &profiles,
+            &no_mods(&root),
+            &tf2,
+            &id,
+            &mixed_vpk,
+            true,
+            ViewmodelSource::Imported,
+            BTreeMap::new(),
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("cfg/autoexec.cfg"), "{err:?}");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(&live).unwrap(), before_live);
+        assert_eq!(std::fs::read(&library).unwrap(), before_library);
+        assert!(!tf2.join(EXECS_PRELOAD_VANILLA_PATH).exists());
+        assert!(!tf2.join("tf/cfg/autoexec.cfg").exists());
+        cleanup(&root);
+    }
+
+    #[test]
     fn enabling_preload_without_viewmodels_is_side_effect_free() {
         let (root, profiles, tf2, id) = setup();
         let before = load_manifest(&profiles, &id).unwrap();
         let err = set_viewmodel_preload_to(&profiles, &no_mods(&root), &tf2, &id, true, unlocked())
             .unwrap_err();
-        assert!(err.message().contains("Import or build"));
+        assert!(err.message().contains("Import a viewmodel pack"));
         let after = load_manifest(&profiles, &id).unwrap();
         assert_eq!(after.launch_options, before.launch_options);
         assert_eq!(after.files, before.files);
@@ -1149,7 +2080,7 @@ mod tests {
     fn disabling_preload_removes_the_managed_cfg_and_launch_token() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1192,7 +2123,7 @@ mod tests {
         )
         .unwrap();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         let detail = import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1219,7 +2150,7 @@ mod tests {
         let steam = root.join("Steam");
         let localconfig = write_steam_account(&steam, "-novid");
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to_with_launch(
             &profiles,
             &no_mods(&root),
@@ -1233,6 +2164,8 @@ mod tests {
             unlocked(),
             &[steam],
             false,
+            None,
+            None,
         )
         .unwrap();
         let text = std::fs::read_to_string(localconfig).unwrap();
@@ -1245,7 +2178,7 @@ mod tests {
     fn malformed_localconfig_leaves_the_committed_change_pending_for_retry() {
         let (root, profiles, tf2, id) = setup();
         let mut old_files = BTreeMap::new();
-        old_files.insert("models/old.mdl".into(), b"old".to_vec());
+        old_files.insert("models/weapons/c_models/old.mdl".into(), b"old".to_vec());
         let old_vpk = write_vpk_v1(&old_files);
         import_viewmodel_vpk_to(
             &profiles,
@@ -1266,7 +2199,7 @@ mod tests {
         let localconfig = write_steam_account(&steam, "-novid");
         std::fs::write(&localconfig, "{{{ malformed").unwrap();
         let mut new_files = BTreeMap::new();
-        new_files.insert("models/new.mdl".into(), b"new".to_vec());
+        new_files.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let new_vpk = write_vpk_v1(&new_files);
         let err = import_viewmodel_vpk_to_with_launch(
             &profiles,
@@ -1281,6 +2214,8 @@ mod tests {
             unlocked(),
             &[steam],
             false,
+            None,
+            None,
         )
         .unwrap_err();
 
@@ -1309,7 +2244,7 @@ mod tests {
     fn import_transaction_rolls_back_pack_preload_record_and_launch_together() {
         let (root, profiles, tf2, id) = setup();
         let mut old_files = BTreeMap::new();
-        old_files.insert("models/old.mdl".into(), b"old".to_vec());
+        old_files.insert("models/weapons/c_models/old.mdl".into(), b"old".to_vec());
         let old_vpk = write_vpk_v1(&old_files);
         let mut old_options = BTreeMap::new();
         old_options.insert("generation".into(), "old".into());
@@ -1340,7 +2275,7 @@ mod tests {
         let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
         std::fs::create_dir_all(&blocker).unwrap();
         let mut new_files = BTreeMap::new();
-        new_files.insert("models/new.mdl".into(), b"new".to_vec());
+        new_files.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let new_vpk = write_vpk_v1(&new_files);
         let mut new_options = BTreeMap::new();
         new_options.insert("generation".into(), "new".into());
@@ -1406,7 +2341,7 @@ mod tests {
     fn oversized_prior_live_pack_is_rejected_without_materializing_a_snapshot() {
         let (root, profiles, tf2, id) = setup();
         let mut old_files = BTreeMap::new();
-        old_files.insert("models/old.mdl".into(), b"old".to_vec());
+        old_files.insert("models/weapons/c_models/old.mdl".into(), b"old".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1429,7 +2364,7 @@ mod tests {
             .unwrap();
 
         let mut replacement = BTreeMap::new();
-        replacement.insert("models/new.mdl".into(), b"new".to_vec());
+        replacement.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let err = import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1455,7 +2390,7 @@ mod tests {
     fn remove_preserves_drifted_live_viewmodel_files() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1504,7 +2439,7 @@ mod tests {
         let (root, profiles, tf2, id) = setup();
         let data = mods_installed(&tf2);
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &data,
@@ -1615,7 +2550,7 @@ mod tests {
         std::fs::write(&untracked, b"echo user-owned\n").unwrap();
         let before = load_manifest(&profiles, &id).unwrap();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
 
         let err = import_viewmodel_vpk_to(
             &profiles,
@@ -1640,7 +2575,10 @@ mod tests {
     fn remove_refuses_an_untracked_canonical_viewmodel_vpk_without_mutating() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/orphan.mdl".into(), b"user-owned".to_vec());
+        files.insert(
+            "models/weapons/c_models/orphan.mdl".into(),
+            b"user-owned".to_vec(),
+        );
         let orphan = write_vpk_v1(&files);
         let live_vpk = tf2.join(EXECS_VIEWMODELS_VPK);
         std::fs::write(&live_vpk, &orphan).unwrap();
@@ -1658,7 +2596,7 @@ mod tests {
     fn remove_refuses_untracked_legacy_viewmodel_content_without_mutating() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),
@@ -1734,7 +2672,7 @@ mod tests {
     fn refuses_while_tf2_is_running() {
         let (root, profiles, tf2, id) = setup();
         let mut files = BTreeMap::new();
-        files.insert("models/a.mdl".into(), b"x".to_vec());
+        files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         let err = import_viewmodel_vpk_to(
             &profiles,
             &no_mods(&root),

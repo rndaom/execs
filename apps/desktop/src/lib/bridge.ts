@@ -1,6 +1,57 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type {
+  AppPreferences,
+  AppSettingsPayload,
+  ClearReport,
+  StorageReport,
+} from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
+import type { InstallHealth } from "./health-ui";
+import type { RestorePoint, RestorePointList } from "./restore-points-ui";
+import type { ProfileComparison } from "./switch-compare-ui";
+import type { UninstallInfo } from "./uninstall-ui";
+
+export type InventoryItem = {
+  id: string;
+  definition: number;
+  position: number;
+  quality: number;
+  level: number;
+  customName: string | null;
+};
+export type InventoryDefinition = {
+  name: string;
+  kind: string;
+  classes: string[];
+  icon: string | null;
+};
+export type InventorySnapshot = {
+  steamId: string;
+  personaName?: string | null;
+  avatar?: string | null;
+  capacity: number;
+  items: InventoryItem[];
+  definitions: Record<string, InventoryDefinition>;
+  itemDescriptions?: Record<
+    string,
+    InventoryDefinition & {
+      details: string[];
+      targetIcon?: string | null;
+      patternIcon?: string | null;
+    }
+  >;
+  qualityColors?: Record<string, string>;
+  warning: string | null;
+};
+export function getInventory(): Promise<InventorySnapshot> {
+  return call("get_inventory");
+}
+export function getInventoryIcons(
+  paths: string[],
+): Promise<Record<string, { width: number; height: number; rgba: number[] }>> {
+  return call("get_inventory_icons", { paths });
+}
 
 export type Tf2Install = {
   path: string;
@@ -31,6 +82,8 @@ export type ProfileLibrary = {
   tf2Root: string | null;
   confirmedRoot: string | null;
   activeProfileId: string | null;
+  /** The profile whose files a cut-off switch was removing, until the retry finishes. */
+  interruptedProfileId?: string | null;
   /** Durable target awaiting a retry after an interrupted live switch. */
   pendingSwitchProfileId?: string | null;
   profiles: ProfileSummary[];
@@ -142,6 +195,72 @@ export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("save_current_as", { name });
 }
 
+/** Changes only the display name; files, records and active tracking stay put. */
+export async function renameProfile(id: string, name: string): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("rename_profile", { id, name });
+}
+
+/** Copies a saved profile into a new inactive one; TF2 is not touched. */
+export async function duplicateProfile(id: string, name: string): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("duplicate_profile", { id, name });
+}
+
+export function deleteProfile(id: string, keepInstalled: boolean): Promise<ProfileLibrary> {
+  return call("delete_profile", { id, keepInstalled });
+}
+
+export function compareProfileSwitch(targetId: string): Promise<ProfileComparison> {
+  return call("compare_profile_switch", { targetId });
+}
+
+export function getUninstallInfo(): Promise<UninstallInfo> {
+  return call("get_uninstall_info");
+}
+
+export function uninstallExecs(deleteData: boolean): Promise<{ closing: boolean }> {
+  return call("uninstall_execs", { deleteData });
+}
+
+export function listRestorePoints(): Promise<RestorePointList> {
+  return call("list_restore_points");
+}
+
+export function createRestorePoint(profileId: string, label: string | null): Promise<RestorePoint> {
+  return call("create_restore_point", { profileId, label });
+}
+
+export function deleteRestorePoint(id: string): Promise<RestorePointList> {
+  return call("delete_restore_point", { id });
+}
+
+export function setRestorePointRetention(keep: number): Promise<RestorePointList> {
+  return call("set_restore_point_retention", { keep });
+}
+
+export function compareRestorePoint(id: string): Promise<ProfileComparison> {
+  return call("compare_restore_point", { id });
+}
+
+export function restoreRestorePoint(id: string, name: string): Promise<ProfileLibrary> {
+  return call("restore_restore_point", { id, name });
+}
+
+export function getAppSettings(): Promise<AppSettingsPayload> {
+  return call("get_app_settings");
+}
+
+export function setAppPreferences(preferences: AppPreferences): Promise<AppSettingsPayload> {
+  return call("set_app_preferences", { preferences });
+}
+
+export function getStorageUsage(): Promise<StorageReport> {
+  return call("get_storage_usage");
+}
+
+export function clearDownloadCaches(): Promise<ClearReport> {
+  return call("clear_download_caches");
+}
+
 export type AbsorbDelta = {
   ownedChanged: string[];
   ownedMissing: string[];
@@ -160,7 +279,7 @@ export type AbsorbOwnedResult = {
 
 /** Update adopts the live packs, Keep leaves the profile alone, Restore puts
  * the removed packs back from the library. */
-export type PackChoice = "update" | "keep" | "restore";
+export type PackChoice = "update" | "keep" | "restore" | "captureKept";
 
 export async function absorbOwned(): Promise<AbsorbOwnedResult> {
   return call<AbsorbOwnedResult>("absorb_owned");
@@ -181,6 +300,26 @@ export async function switchProfile(id: string): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("switch_profile", { id });
 }
 
+export type RetiredCasualReview = {
+  profileId: string;
+  revision: string;
+  addonsToRemove: string[];
+  particleModsToRemove: string[];
+  directAddonsKept: string[];
+  profileParticleModsKept: string[];
+};
+
+export async function reviewRetiredCasualProfile(id: string): Promise<RetiredCasualReview> {
+  return call<RetiredCasualReview>("review_retired_casual_profile", { id });
+}
+
+export async function clearRetiredCasualProfile(
+  id: string,
+  expectedRevision: string,
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("clear_retired_casual_profile", { id, expectedRevision });
+}
+
 export async function onSwitchProgress(
   handler: (progress: SwitchProgress) => void,
 ): Promise<UnlistenFn> {
@@ -189,8 +328,25 @@ export async function onSwitchProgress(
   });
 }
 
-export async function exportProfile(id: string): Promise<string | null> {
-  return call<string | null>("export_profile", { id });
+export async function exportProfile(
+  id: string,
+  expectedReviewRevision: string,
+): Promise<string | null> {
+  return call<string | null>("export_profile", { id, expectedReviewRevision });
+}
+
+export type ProfileExportReview = {
+  revision: string;
+  credentialLocations: string[];
+  customPacks: {
+    path: string;
+    fileCount: number;
+    kind: "other" | "crosshairScripts" | "viewmodels";
+  }[];
+};
+
+export async function inspectProfileExport(id: string): Promise<ProfileExportReview> {
+  return call<ProfileExportReview>("inspect_profile_export", { id });
 }
 
 export type ProfileImportReview = {
@@ -201,14 +357,20 @@ export type ProfileImportReview = {
   creator: boolean;
   warnings: string[];
   notes: string[];
+  /** Present on current native reviews; omitted by earlier saved fixtures. */
+  huds?: string[];
+  selectedHud?: string | null;
 };
 
 export async function importProfile(): Promise<ProfileImportReview | null> {
   return call<ProfileImportReview | null>("import_profile");
 }
 
-export async function confirmProfileImport(token: string): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("confirm_profile_import", { token });
+export async function confirmProfileImport(
+  token: string,
+  selectedHud?: string,
+): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("confirm_profile_import", { token, selectedHud });
 }
 
 export async function cancelProfileImport(token: string): Promise<void> {
@@ -307,6 +469,9 @@ export type HudRecord = {
 
 export type CrosshairRecord = {
   id: string;
+  /** Accepted external pack changes mean the saved design/source is unverified. */
+  sourceChanged?: boolean;
+  sourceScriptsSha256?: string | null;
   inactive?: boolean;
   scale?: number;
   stock?: { file: string; scale: number };
@@ -320,8 +485,16 @@ export type CrosshairRecord = {
   design?: string | null;
 };
 
+export type CrosshairSourceStatus = {
+  state: "none" | "current" | "changed" | "unverified" | "unavailable";
+  reason?: string;
+};
+
 /** Where a pack in the profile came from. */
-export type ModSource = { kind: "local" } | { kind: "gamebanana"; id: number; url: string };
+export type ModSource =
+  | { kind: "local" }
+  | { kind: "external" }
+  | { kind: "gamebanana"; id: number; url: string };
 
 /** One pack the user brought into the active profile's `tf/custom`. */
 export type ModRecord = {
@@ -336,13 +509,54 @@ export type ModRecord = {
   installedAt: string;
 };
 
-export type ViewmodelSource = "compiled" | "imported";
+export type ViewmodelSource = "compiled" | "imported" | "stockBuilt";
+
+export type ViewmodelBuildRecipe = {
+  schema: number;
+  catalog: { patchVersion: string; catalogSha256: string };
+  choices: { groupId: string; mode: "full" | "weapon" }[];
+  sourceFingerprints: { id: string; sha256: string }[];
+};
 
 export type ViewmodelRecord = {
   id: string;
+  sourceChanged?: boolean;
   source: ViewmodelSource;
   preload: boolean;
   options: Record<string, string>;
+  buildRecipe?: ViewmodelBuildRecipe;
+};
+
+export type ViewmodelSourceCatalog = {
+  /** Installed-source candidates; their retail behavior is not verified yet. */
+  status: "provisional";
+  catalog: { patchVersion: string; catalogSha256: string };
+  /** Sorted canonical source IDs and digests, as in a stock-build recipe. */
+  sourceFingerprints: { id: string; sha256: string }[];
+  groups: {
+    id: string;
+    class: string;
+    /** `slot` is the item's loadout slot for this group's class, when the schema names one. */
+    items: { id: number; schemaName: string; itemClass?: string; slot?: string | null }[];
+    animations: string[];
+    /** Inspect animations are grouped separately from the weapon's ordinary actions. */
+    inspect?: boolean;
+    overlaps: string[];
+    teamVariantsDiffer: boolean;
+  }[];
+  unresolvedItems: { class: string; itemId: number }[];
+  /** Roles without an exact installed script mapping. */
+  unresolvedRoleCount: number;
+  /** Class-specific script candidates awaiting retail equip-path verification. */
+  candidateRoleCount: number;
+};
+
+/** Bind Build to the exact provisional catalog and installed source bytes. */
+export type ViewmodelBuildRequest = {
+  catalog: ViewmodelSourceCatalog["catalog"];
+  sourceFingerprints: ViewmodelSourceCatalog["sourceFingerprints"];
+  choices: { groupId: string; mode: "full" | "weapon" }[];
+  preload: boolean;
 };
 
 /**
@@ -356,6 +570,8 @@ export type HudCatalogEntry = {
   id: string;
   name: string;
   author: string;
+  /** hud-db lists prior creators or maintainers here; not the active author. */
+  contributors?: string[];
   repo: string;
   hash: string;
   github: boolean;
@@ -378,6 +594,28 @@ export type HudUiState = {
   /** The backend could not verify catalog-backed update state. */
   catalogUnavailable?: boolean;
 };
+
+export type HudOwnershipReview = {
+  profileId: string;
+  selectedHud: string | null;
+  candidates: { folder: string; source: "profile" | "live"; files: number }[];
+  fingerprint: string;
+  reviewRequired: boolean;
+  managedOptionFiles: string[];
+  resetOptions: boolean;
+};
+
+export function getHudOwnership(profileId: string): Promise<HudOwnershipReview> {
+  return call("get_hud_ownership", { profileId });
+}
+
+export function selectProfileHud(
+  profileId: string,
+  hudFolder: string,
+  expectedFingerprint: string,
+): Promise<ProfileDetail> {
+  return call("select_profile_hud", { profileId, hudFolder, expectedFingerprint });
+}
 
 export type HudSchemaChoice = {
   label: string;
@@ -411,6 +649,10 @@ export type ProfileDetail = {
   launchOptions: string;
   layer: CfgLayer;
   files: ProfileFile[];
+  /** Retained HUD roots, including roots excluded from the live projection. */
+  hudRoots?: string[];
+  /** The exact root projected into TF2, when native can resolve one. */
+  selectedHudRoot?: string | null;
   hud?: HudRecord | null;
   crosshair?: CrosshairRecord | null;
   viewmodel?: ViewmodelRecord | null;
@@ -466,7 +708,7 @@ export async function writeManagedCfg(
   path: string,
   text: string,
   expectedProfileId: string,
-  scope?: "gameplay" | "crosshair" | "sounds",
+  scope?: "gameplay" | "crosshair" | "sounds" | "viewmodels",
 ): Promise<ProfileDetail> {
   if (!editorPathFits(path)) {
     throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
@@ -527,6 +769,19 @@ export type SetLaunchResult = {
   steamWrite: SteamWriteStatus;
 };
 
+/** How the active profile's launch options compare with Steam's saved copy. */
+export type LaunchSyncStatus = {
+  profileOptions: string;
+  /** `null` when no Steam account was found, so there is nothing to sync. */
+  steamOptions: string | null;
+  inSync: boolean;
+  steamRunning: boolean;
+};
+
+export async function getLaunchSyncStatus(): Promise<LaunchSyncStatus> {
+  return call<LaunchSyncStatus>("get_launch_sync_status");
+}
+
 export async function recommendedLaunchOptions(): Promise<string> {
   return call<string>("recommended_launch_options");
 }
@@ -576,8 +831,8 @@ export async function getHudStats(refresh = false): Promise<HudStatsPayload> {
 }
 
 /** The pictures behind a HUD's Imgur album or GitHub showcase page. */
-export async function getHudAlbum(id: string): Promise<HudAlbumImage[]> {
-  return call<HudAlbumImage[]>("get_hud_album", { id });
+export async function getHudAlbum(id: string, refresh = false): Promise<HudAlbumImage[]> {
+  return call<HudAlbumImage[]>("get_hud_album", { id, refresh });
 }
 
 export async function installHud(id: string): Promise<ProfileDetail> {
@@ -596,6 +851,11 @@ export async function importHudFolder(): Promise<ProfileDetail | null> {
 
 export async function matchHudCatalog(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("match_hud_catalog", { id });
+}
+
+/** Removes the active profile's HUD, its option cfgs and exec lines. */
+export async function returnToStockHud(): Promise<ProfileDetail> {
+  return call<ProfileDetail>("return_to_stock_hud");
 }
 
 export async function updateHud(): Promise<ProfileDetail> {
@@ -644,31 +904,6 @@ export async function applyCrosshairs(
   });
 }
 
-export type CommunityCrosshair = {
-  file: string;
-  width: number;
-  height: number;
-  rgba: number[];
-  bytes: number[];
-};
-
-/** Download (with cache) one community crosshair and its decoded preview. */
-export async function fetchCommunityCrosshair(file: string): Promise<CommunityCrosshair> {
-  return call<CommunityCrosshair>("fetch_community_crosshair", { file });
-}
-
-/**
- * Thumbnails for the community picker: every requested upstream file stem,
- * fetched (with cache) and decoded. Missing keys failed to download or decode.
- */
-export async function fetchCommunityCrosshairPreviews(
-  files: string[],
-): Promise<Record<string, StockCrosshairSprite>> {
-  return call<Record<string, StockCrosshairSprite>>("fetch_community_crosshair_previews", {
-    files,
-  });
-}
-
 /** Decoded previews of the installed pack's library crosshairs. */
 export async function getPackCrosshairPreviews(): Promise<Record<string, StockCrosshairSprite>> {
   return call<Record<string, StockCrosshairSprite>>("get_pack_crosshair_previews");
@@ -686,6 +921,16 @@ export async function getStockCrosshairSprites(): Promise<Record<string, StockCr
   return call<Record<string, StockCrosshairSprite>>("get_stock_crosshair_sprites");
 }
 
+/** Installed custom-pack candidates that could replace Valve's stock art. */
+export async function getCrosshairContentSources(): Promise<ContentIndex> {
+  return call<ContentIndex>("get_crosshair_content_sources");
+}
+
+/** Whether the saved pack still matches TF2's current weapon scripts. */
+export async function getCrosshairSourceStatus(): Promise<CrosshairSourceStatus> {
+  return call<CrosshairSourceStatus>("get_crosshair_source_status");
+}
+
 export async function removeCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_crosshairs");
 }
@@ -694,18 +939,14 @@ export async function deactivateCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("deactivate_crosshairs");
 }
 
-/** "full" hides the weapon and the arms; "weapon" keeps the hands animating. */
-export type ViewmodelHideMode = "full" | "weapon";
+export async function getViewmodelSourceCatalog(): Promise<ViewmodelSourceCatalog> {
+  return call<ViewmodelSourceCatalog>("get_viewmodel_source_catalog");
+}
 
-/** Build a Yttrium-style pack from hidden animation groups and install it. */
-export async function buildViewmodelPack(
-  hidden: string[],
-  preload: boolean,
-  hideMode: ViewmodelHideMode = "full",
+export async function buildSelectedViewmodelPack(
+  request: ViewmodelBuildRequest,
 ): Promise<ProfileDetail> {
-  // camelCase: Tauri v2 lower-camels command args, and a snake_case key
-  // would silently arrive as None.
-  return call<ProfileDetail>("build_viewmodel_pack", { hidden, preload, hideMode });
+  return call<ProfileDetail>("build_selected_viewmodel_pack", { request });
 }
 
 export async function importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
@@ -714,28 +955,6 @@ export async function importViewmodels(preload: boolean): Promise<ProfileDetail 
 
 export async function removeViewmodels(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_viewmodels");
-}
-
-/**
- * Whether this machine can compile a viewmodel pack (TF2's own studiomdl,
- * Windows only for now). False disables Build rather than sending a Linux
- * user into a dead end with a `.exe` in the error.
- */
-export async function viewmodelBuildAvailable(): Promise<boolean> {
-  return call<boolean>("viewmodel_build_available");
-}
-
-/**
- * One of CompVMInstaller's preview screenshots (JPEG bytes) by its upstream
- * resource stem, e.g. `scout_scattergun`. Raw bytes cross the bridge as an
- * ArrayBuffer, not a JSON array.
- */
-export async function viewmodelPreviewImage(name: string): Promise<ArrayBuffer> {
-  return call<ArrayBuffer>("viewmodel_preview_image", { name });
-}
-
-export async function setViewmodelPreload(enabled: boolean): Promise<ProfileDetail> {
-  return call<ProfileDetail>("set_viewmodel_preload", { enabled });
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +977,7 @@ export type HitsoundEntry = {
 
 /** What the profile's sound pack holds; a missing slot plays the engine's own sound. */
 export type HitsoundRecord = {
+  sourceChanged?: boolean;
   hit?: HitsoundEntry | null;
   kill?: HitsoundEntry | null;
 };
@@ -797,21 +1017,20 @@ export async function hitsoundBytes(pick: HitsoundPick): Promise<ArrayBuffer> {
   return call<ArrayBuffer>("hitsound_bytes", { pick });
 }
 
-/** One comfig.app hits-library entry from the pinned index. */
-export type ComfigHitsound = {
-  name: string;
-  hash: string;
-  kind: HitsoundKind;
-};
-
-/** comfig.app's hits library (pinned index, cached). */
-export async function comfigHitsoundIndex(): Promise<ComfigHitsound[]> {
-  return call<ComfigHitsound[]>("comfig_hitsound_index");
-}
-
 /** Stems of the stock hit/kill sounds found in the user's own sound VPK. */
 export async function listStockHitsounds(): Promise<string[]> {
   return call<string[]>("list_stock_hitsounds");
+}
+
+/** Candidate virtual-path sources in tf/custom; an incomplete scan is explicit. */
+export type ContentIndex = {
+  hits: Record<string, { pack: string; member: string; kind: "loose" | "vpk" }[]>;
+  incomplete: string[];
+};
+
+/** Other installed packs containing TF2's canonical hit or kill sound paths. */
+export async function getHitsoundSources(): Promise<ContentIndex> {
+  return call<ContentIndex>("get_hitsound_sources");
 }
 
 /** Open the file dialog for a WAV, prepare it for the engine, and stash it. */
@@ -824,6 +1043,29 @@ export async function applyHitsounds(
   kill: HitsoundSlotChange,
 ): Promise<ProfileDetail> {
   return call<ProfileDetail>("apply_hitsounds", { hit, kill });
+}
+
+/** Commit the Sounds pane's scoped CFG and WAV changes as one profile write. */
+export async function applyHitsoundsWithSettings(
+  path: string,
+  text: string,
+  expectedProfileId: string,
+  hit: HitsoundSlotChange,
+  kill: HitsoundSlotChange,
+): Promise<ProfileDetail> {
+  if (!editorPathFits(path)) {
+    throw new BridgeError("That profile file path is too long for the editor.", "InvalidPath");
+  }
+  if (editorTextBytes(text) === null) {
+    throw new BridgeError("That cfg is larger than the 1 MiB editor limit.", "FileTooLarge");
+  }
+  return call<ProfileDetail>("apply_hitsounds_with_settings", {
+    path,
+    text,
+    expectedProfileId,
+    hit,
+    kill,
+  });
 }
 
 export async function removeHitsounds(): Promise<ProfileDetail> {
@@ -872,25 +1114,55 @@ export type GameBananaMod = {
   author: string;
   category: string;
   categoryId: number;
-  likes: number;
-  views: number;
+  subCategory: string | null;
+  /** GUI listings route to HUD or manual import, never generic Mods install. */
+  route: "mod" | "hud" | "manual";
+  /** Listing metrics are absent on some index records. */
+  likes: number | null;
+  views: number | null;
   /** GameBanana withholds this on some listings. */
   downloads: number | null;
-  /** Unix seconds. */
-  updatedAt: number;
-  addedAt: number;
+  /** Unix seconds. These are separate upstream events and never substitute for one another. */
+  addedAt: number | null;
+  updatedAt: number | null;
+  modifiedAt: number | null;
   thumb: string | null;
   url: string;
   /** Flagged on GameBanana as mature content. */
   mature: boolean;
 };
 
+export type GameBananaTotal =
+  | { kind: "exact"; value: number }
+  | { kind: "estimated"; value: number }
+  | { kind: "capped"; value: number }
+  | { kind: "unknown" };
+
+export type GameBananaFilterScope = "global" | "page";
+
+export type GameBananaFilterScopes = {
+  query: GameBananaFilterScope;
+  category: GameBananaFilterScope;
+  contentRating: GameBananaFilterScope;
+  installability: GameBananaFilterScope;
+};
+
+export type GameBananaCacheInfo = {
+  source: "network" | "memory";
+  /** How much longer the native cache considers this response fresh. */
+  freshForMs: number;
+};
+
 export type GameBananaPage = {
+  /** Already ordered by GameBanana. Filtering must preserve this order. */
   records: GameBananaMod[];
-  total: number;
+  total: GameBananaTotal;
   perPage: number;
   /** No further pages to load. */
   complete: boolean;
+  ordering: "server";
+  filters: GameBananaFilterScopes;
+  cache: GameBananaCacheInfo;
 };
 
 export type GameBananaCategory = {
@@ -898,7 +1170,18 @@ export type GameBananaCategory = {
   name: string;
 };
 
-export type GameBananaSort = "downloads" | "likes" | "views" | "updated" | "new";
+export type GameBananaDownloadVariant = {
+  id: number;
+  fileName: string;
+  description: string;
+  sizeBytes: number | null;
+  addedAt: number | null;
+  supported: boolean;
+  /** One piece of a split upload; never installable on its own. */
+  splitPart: boolean;
+};
+
+export type GameBananaSort = "new" | "updated" | "downloads" | "likes" | "views";
 
 /** Pick an archive or vpk and install it into the active profile. Null = cancelled. */
 export async function importModArchive(): Promise<ProfileDetail | null> {
@@ -915,12 +1198,10 @@ export async function removeMod(id: string): Promise<ProfileDetail> {
 }
 
 /**
- * One page of GameBanana listings. `page` is 1-based. A search query cannot be
- * ordered server-side, so the caller sorts what it has loaded.
- *
- * With `includeMature` false, flagged records are dropped from the page by our
- * own client, so a page can hold fewer than `perPage` records; `total` and
- * `perPage` still describe the unfiltered run, and the pager rides those.
+ * One page of GameBanana listings. `page` is 1-based. Query, category, content
+ * rating and ordering are sent to the index together. Safety filtering for the
+ * aggregate "All" category remains page-local and is disclosed by `filters`.
+ * `refresh` bypasses both the browser's page cache and the native memory cache.
  */
 export async function searchGameBananaMods(
   query: string,
@@ -928,6 +1209,7 @@ export async function searchGameBananaMods(
   category: number | null,
   page: number,
   includeMature = false,
+  refresh = false,
 ): Promise<GameBananaPage> {
   return call<GameBananaPage>("search_gamebanana_mods", {
     query,
@@ -935,15 +1217,20 @@ export async function searchGameBananaMods(
     category,
     page,
     includeMature,
+    refresh,
   });
 }
 
-export async function gameBananaModCategories(): Promise<GameBananaCategory[]> {
-  return call<GameBananaCategory[]>("gamebanana_mod_categories");
+export async function gameBananaModCategories(refresh = false): Promise<GameBananaCategory[]> {
+  return call<GameBananaCategory[]>("gamebanana_mod_categories", { refresh });
 }
 
-export async function installGameBananaMod(id: number): Promise<ProfileDetail> {
-  return call<ProfileDetail>("install_gamebanana_mod", { id });
+export async function gameBananaDownloadVariants(id: number): Promise<GameBananaDownloadVariant[]> {
+  return call<GameBananaDownloadVariant[]>("gamebanana_download_variants", { id });
+}
+
+export async function installGameBananaMod(id: number, fileId: number): Promise<ProfileDetail> {
+  return call<ProfileDetail>("install_gamebanana_mod", { id, fileId });
 }
 
 // ---------------------------------------------------------------------------
@@ -1055,10 +1342,6 @@ export async function getDefaultMods(): Promise<DefaultModsPayload> {
   return call<DefaultModsPayload>("get_default_mods");
 }
 
-export async function downloadDefaultMods(): Promise<DefaultModsPayload> {
-  return call<DefaultModsPayload>("download_default_mods");
-}
-
 export async function applyPreloaderMods(
   addons: string[],
   particleMods: string[],
@@ -1099,9 +1382,13 @@ export async function cancelGameFileRepair(): Promise<boolean> {
   return call<boolean>("cancel_game_file_repair");
 }
 
-/** Start TF2 through Steam (`steam://rungameid/440`). */
-export async function launchTf2(): Promise<void> {
-  return call<void>("launch_tf2");
+/**
+ * Start TF2 through Steam (`steam://rungameid/440`). With `syncSteam`, the
+ * player agreed to close Steam first so the profile's launch options can be
+ * written; the launch then starts Steam again.
+ */
+export async function launchTf2(syncSteam = false): Promise<void> {
+  return call<void>("launch_tf2", { syncSteam });
 }
 
 /** Release a pending launch after the user has cancelled it in Steam. */
@@ -1117,6 +1404,7 @@ export type AppUpdateStep = "downloading" | "installing" | "restarting";
 
 /** Exact version the latest successful read-only check advertised. */
 let pendingUpdateVersion: string | null = null;
+let updateCheckGeneration = 0;
 
 export async function getAppVersion(): Promise<string> {
   const { getVersion } = await import("@tauri-apps/api/app");
@@ -1128,22 +1416,27 @@ export function getDiagnostics(): Promise<string> {
   return call<string>("get_diagnostics");
 }
 
+export function getInstallHealth(): Promise<InstallHealth> {
+  return call("get_install_health");
+}
+
 /** How long the update feed gets to answer before the footer says so; the
  * plugin has no default, so a stalled connection would hang the check. */
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 
 export async function checkAppUpdate(): Promise<{ version: string; notes: string | null } | null> {
+  const generation = ++updateCheckGeneration;
   const { check } = await import("@tauri-apps/plugin-updater");
   const update = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
   if (!update) {
-    pendingUpdateVersion = null;
+    if (generation === updateCheckGeneration) pendingUpdateVersion = null;
     return null;
   }
-  pendingUpdateVersion = update.version;
   const info = { version: update.version, notes: update.body ?? null };
   // The install command re-checks in Rust. Do not retain a renderer-owned
   // resource handle whose mutating methods are intentionally denied by ACL.
   await update.close().catch(() => {});
+  if (generation === updateCheckGeneration) pendingUpdateVersion = update.version;
   return info;
 }
 

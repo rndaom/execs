@@ -1,0 +1,17 @@
+Command failed: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoLogo -NoProfile -NonInteractive -Sta -ExecutionPolicy RemoteSigned -File D:\a\execs\execs\scripts\windows-package-native.ps1 -Action Save -Request D:\a\_temp\execs-windows-package-tol2LK\requests\08-save.json
+Native filename did not regain keyboard focus.
+At D:\a\execs\execs\scripts\windows-package-native.ps1:426 char:44
++ ... oardFocus) { throw 'Native filename did not regain keyboard focus.' }
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Native filename...keyboard focus.:String) [], RuntimeException
+    + FullyQualifiedErrorId : Native filename did not regain keyboard focus.
+ 
+
+
+Native filename did not regain keyboard focus.
+At D:\a\execs\execs\scripts\windows-package-native.ps1:426 char:44
++ ... oardFocus) { throw 'Native filename did not regain keyboard focus.' }
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Native filename...keyboard focus.:String) [], RuntimeException
+    + FullyQualifiedErrorId : Native filename did not regain keyboard focus.
+ 

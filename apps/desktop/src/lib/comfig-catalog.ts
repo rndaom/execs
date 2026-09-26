@@ -12,14 +12,14 @@ export type ComfigPresetEntry = {
 };
 
 /**
- * The one preset catalog. Both the Comfig pane and the setup wizard render
- * these, so the wizard and the Comfig pane offer one list.
+ * Presets offered by current mastercomfig. Both the Comfig pane and setup
+ * wizard render this list. Older profile values remain readable below.
  */
 export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "ultra",
     label: "Ultra",
-    description: "Maximum fidelity with the highest system requirements.",
+    description: "Highest fidelity. Most demanding.",
     balance: "Fidelity",
     performance: "Lowest",
     fidelity: "Maximum",
@@ -27,54 +27,30 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "high",
     label: "High",
-    description: "High visual quality for modern systems.",
+    description: "High quality for modern systems.",
     balance: "Quality",
     performance: "Moderate",
     fidelity: "High",
   },
   {
-    id: "medium_high",
-    label: "Medium high",
-    description: "Sharper visuals without the full performance cost.",
-    balance: "Balanced +",
-    performance: "Good",
-    fidelity: "High",
-  },
-  {
     id: "medium",
     label: "Medium",
-    description: "A balanced mix of visual quality and performance.",
+    description: "Balanced quality and performance.",
     balance: "Balanced",
     performance: "Great",
     fidelity: "Balanced",
   },
   {
-    id: "medium_low",
-    label: "Medium low",
-    description: "Performance-first settings with readable detail.",
-    balance: "Performance +",
-    performance: "High",
-    fidelity: "Moderate",
-  },
-  {
     id: "low",
     label: "Low",
-    description: "Maximum performance with reduced visual effects.",
+    description: "Fewer effects, higher performance.",
     balance: "Performance",
     performance: "Very high",
     fidelity: "Low",
   },
   {
-    id: "very_low",
-    label: "Very low",
-    description: "Minimum visual cost for the highest frame rate.",
-    balance: "Maximum FPS",
-    performance: "Maximum",
-    fidelity: "Minimal",
-  },
-  {
     id: "none",
-    label: "None",
+    label: "Custom",
     description: "Skip preset tuning and configure modules yourself.",
     balance: "Manual",
     performance: "Stock",
@@ -82,32 +58,29 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   },
 ];
 
-/** Shown by default; the rest sit behind "Show all presets". */
-export const FEATURED_PRESETS = new Set<ComfigPreset>(["ultra", "high", "medium", "low"]);
+const OLD_PRESET_LABELS: Partial<Record<ComfigPreset, string>> = {
+  medium_high: "Medium high",
+  medium_low: "Medium low",
+  very_low: "Very low",
+};
 
 export function comfigPresetById(id: ComfigPreset): ComfigPresetEntry | undefined {
   return COMFIG_PRESETS.find((preset) => preset.id === id);
 }
 
 export function comfigPresetLabel(id: ComfigPreset): string {
-  return comfigPresetById(id)?.label ?? id;
+  return comfigPresetById(id)?.label ?? OLD_PRESET_LABELS[id] ?? id;
 }
 
-/**
- * A preset outside the featured four keeps the full list open — collapsing it
- * would hide the selection.
- */
-export function presetListExpanded(selected: ComfigPreset, showAll: boolean): boolean {
-  return showAll || !FEATURED_PRESETS.has(selected);
-}
-
-export function visibleComfigPresets(
-  selected: ComfigPreset,
-  showAll: boolean,
-): ComfigPresetEntry[] {
-  return presetListExpanded(selected, showAll)
-    ? COMFIG_PRESETS
-    : COMFIG_PRESETS.filter((preset) => FEATURED_PRESETS.has(preset.id));
+/** Describe an older saved value without claiming its old alias still works. */
+export function oldComfigPresetMessage(id: ComfigPreset): string | null {
+  if (id === "very_low") {
+    return "This profile records Very low. Current mastercomfig calls it Destitute and hides it from the preset picker. Choose a current preset to change it.";
+  }
+  if (id === "medium_high" || id === "medium_low") {
+    return `This profile records ${comfigPresetLabel(id)}, which current mastercomfig no longer supports. Choose a current preset to update it.`;
+  }
+  return null;
 }
 
 export type ComfigModule = {

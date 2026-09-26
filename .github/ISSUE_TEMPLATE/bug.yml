@@ -6,6 +6,7 @@ body:
     attributes:
       value: |
         Thanks for the report. The fields below are what it takes to reproduce a problem on another machine; without them most reports stall.
+        For a write outside the documented TF2 files, a write while TF2 runs, or a lock bypass, follow [private security reporting](https://github.com/rndaom/execs/blob/main/SECURITY.md) instead of opening a public issue.
   - type: input
     id: version
     attributes:
@@ -72,4 +73,5 @@ body:
       description: |
         If the app crashed, attach or paste `logs/panic.log` from the execs data folder:
         Windows `%AppData%\execs\logs\panic.log`, Linux `~/.local/share/execs/logs/panic.log`.
+        Review and redact personal paths, account details, credentials, and tokens before posting the log publicly.
       render: text

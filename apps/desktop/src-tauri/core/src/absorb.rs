@@ -14,9 +14,11 @@ use crate::apply::manifest_source_path;
 use crate::finder::discover_steam_roots;
 use crate::hash::{
     copy_verified_atomic_within, part_path, read_small_file_bounded, remove_file_force_within,
-    sha256_file, validate_dir_within, write_atomic_within, MAX_CFG_FILE_BYTES, PART_SUFFIX,
+    sha256_file, sha256_hex, validate_dir_within, write_atomic_within, MAX_CFG_FILE_BYTES,
+    PART_SUFFIX,
 };
 use crate::launch::{cloud_config_path_from, find_cloud_config, find_cloud_config_from};
+use crate::mods::{ModRecord, ModSource};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     is_profile_ownable_rel_path, load_library_from, load_manifest, mutate_profile_files_to,
@@ -94,6 +96,9 @@ pub enum PackChoice {
     /// Put the removed packs back from the library. `packs_added` are left
     /// exactly as they are: neither absorbed nor ignored.
     Restore,
+    /// Capture only live packs previously answered Keep. Missing packs and
+    /// other pending changes keep their existing disposition.
+    CaptureKept,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -143,7 +148,11 @@ pub fn pack_key(rel: &str) -> Option<String> {
     if is_stock_custom_entry(rel) {
         return None;
     }
-    let rest = rel.strip_prefix("tf/custom/")?;
+    let prefix = rel.get(.."tf/custom/".len())?;
+    if !prefix.eq_ignore_ascii_case("tf/custom/") {
+        return None;
+    }
+    let rest = rel.get("tf/custom/".len()..)?;
     let first = rest.split('/').next()?;
     if first.is_empty() {
         return None;
@@ -300,8 +309,70 @@ where
     let Some(profile_id) = library.active_profile_id.clone() else {
         return Ok(library);
     };
-    repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     if choice == PackChoice::Update {
+        crate::hud::require_resolved_live_huds(profiles_dir, tf2_root, &profile_id)?;
+        // This read-only preflight precedes even interrupted-write repair.
+        // Updating a missing selected source must not change profile, live, or
+        // recovery bytes before telling the caller to clear the selection.
+        let before_repair = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+        refuse_selected_particle_source_removal(
+            profiles_dir,
+            &profile_id,
+            &before_repair.pack_live_files,
+        )?;
+    }
+    repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
+    let mut classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    if choice == PackChoice::CaptureKept {
+        let manifest = load_manifest(profiles_dir, &profile_id)?;
+        let huds: BTreeSet<String> = crate::hud::live_hud_names_checked(tf2_root)?
+            .into_iter()
+            .filter_map(|hud| pack_key(&format!("tf/custom/{}", hud.name)))
+            .collect();
+        let owned: BTreeSet<String> = manifest
+            .files
+            .iter()
+            .filter_map(|file| pack_key(&file.path))
+            .collect();
+        let captured: BTreeSet<String> = manifest
+            .ignored_packs
+            .iter()
+            .filter_map(|pack| pack_key(&format!("tf/custom/{pack}")))
+            .filter(|key| {
+                classified.pack_live_files.contains_key(key)
+                    && !owned.contains(key)
+                    && !huds.contains(key)
+            })
+            .collect();
+        let added: Vec<String> = captured
+            .iter()
+            .flat_map(|key| classified.pack_live_files.get(key).into_iter().flatten())
+            .cloned()
+            .collect();
+        absorb_live_files(
+            profiles_dir,
+            tf2_root,
+            &profile_id,
+            &added,
+            &[],
+            &classified.live,
+            &running,
+        )?;
+        if !captured.is_empty() {
+            let mut manifest = load_manifest(profiles_dir, &profile_id)?;
+            manifest.ignored_packs.retain(|pack| {
+                pack_key(&format!("tf/custom/{pack}")).is_none_or(|key| !captured.contains(&key))
+            });
+            crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+        }
+        return load_library_from(profiles_dir, Some(tf2_root));
+    }
+    if choice == PackChoice::Update {
+        refuse_selected_particle_source_removal(
+            profiles_dir,
+            &profile_id,
+            &classified.pack_live_files,
+        )?;
         // Update is the user changing their mind about every pack they had
         // previously kept out, so the ignore list has to go before `classify`
         // filters those packs back out of the delta.
@@ -309,10 +380,10 @@ where
         if !manifest.ignored_packs.is_empty() {
             manifest.ignored_packs.clear();
             crate::profile::save_manifest(profiles_dir, tf2_root, &manifest, &running)?;
+            classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
         }
     }
 
-    let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     if choice == PackChoice::Restore {
         // The removed packs are still in the manifest, so the library still
         // holds their bytes. Added packs are not part of this answer.
@@ -378,6 +449,32 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+/// Profile selections own their particle sources. An accepted external
+/// removal must stop before publishing any profile mutation whenever the
+/// missing pack still owns one of this profile's selected IDs. Keep and
+/// Restore do not delete library sources and never call this guard.
+fn refuse_selected_particle_source_removal(
+    profiles_dir: &Path,
+    profile_id: &str,
+    live_packs: &BTreeMap<String, Vec<String>>,
+) -> Result<(), ProfileError> {
+    let selected = crate::preloader::selected_profile_particle_mod_ids(profiles_dir, profile_id)?;
+    if selected.is_empty() {
+        return Ok(());
+    }
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    for record in &manifest.mods {
+        if !selected.iter().any(|id| id == &record.id) {
+            continue;
+        }
+        let rel = format!("tf/custom/{}", record.pack);
+        if pack_key(&rel).is_some_and(|pack| !live_packs.contains_key(&pack)) {
+            return Err(ProfileError::ParticleSourceSelected(record.name.clone()));
+        }
+    }
+    Ok(())
+}
+
 /// The pack step of a profile switch: take the packs the user added into the
 /// profile being left, and nothing more.
 ///
@@ -405,6 +502,7 @@ where
     let Some(profile_id) = active_profile_id(profiles_dir, tf2_root)? else {
         return Ok(());
     };
+    crate::hud::require_resolved_live_huds(profiles_dir, tf2_root, &profile_id)?;
     repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
     let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
     let added: Vec<String> = classified
@@ -837,6 +935,36 @@ where
     }
     let before = load_manifest(profiles_dir, profile_id)?;
     let selected_hud = crate::hud::selected_hud_pack(&before);
+    let selected_was_validated = selected_hud.is_some();
+    // An older explicit record may outlive invalid/opaque HUD metadata. It
+    // still needs clearing when the user accepts removal of its whole pack;
+    // that does not make arbitrary info.vdf files into validated HUD roots.
+    let selected_hud_key = selected_hud
+        .as_deref()
+        .or_else(|| before.hud.as_ref().map(|record| record.id.as_str()))
+        .and_then(|pack| pack_key(&format!("tf/custom/{pack}")));
+    let mut hud_roots = crate::hud::manifest_hud_packs(&before);
+    for (path, source) in &batch {
+        let Some(rest) = path.strip_prefix("tf/custom/") else {
+            continue;
+        };
+        let Some((folder, rel)) = rest.split_once('/') else {
+            continue;
+        };
+        if !rel.eq_ignore_ascii_case("info.vdf") {
+            continue;
+        }
+        if let FileSource::PathExact { path: source, .. } = source {
+            let bytes = crate::archive::read_regular_file_bounded(source, 1024 * 1024)?
+                .ok_or_else(|| {
+                    ProfileError::Io("HUD info.vdf exceeds the inspection limit.".into())
+                })?;
+            hud_roots.retain(|root| !root.eq_ignore_ascii_case(folder));
+            if crate::hud::is_current_hud_info(&bytes) {
+                hud_roots.push(folder.to_string());
+            }
+        }
+    }
     let previous_files: HashMap<&str, &ProfileFile> = before
         .files
         .iter()
@@ -854,6 +982,57 @@ where
             _ => None,
         })
         .collect();
+    let accepted_pack_names: BTreeMap<String, String> = paths
+        .iter()
+        .filter_map(|path| {
+            let key = pack_key(path)?;
+            let name = path.get("tf/custom/".len()..)?.split('/').next()?;
+            Some((key, name.to_string()))
+        })
+        .collect();
+    let accepted_paths: Vec<&str> = paths
+        .iter()
+        .chain(remove_paths)
+        .map(String::as_str)
+        .collect();
+    let crosshair_pack_changed = accepted_paths.iter().any(|path| {
+        path.to_ascii_lowercase()
+            .starts_with("tf/custom/execs-crosshairs/")
+    });
+    let mut crosshair_cfg_changed = false;
+    for path in paths.iter().chain(remove_paths) {
+        if !path.eq_ignore_ascii_case("tf/cfg/overrides/execs_gameplay.cfg")
+            && !path.eq_ignore_ascii_case("tf/cfg/execs_gameplay.cfg")
+        {
+            continue;
+        }
+        let old = match before
+            .files
+            .iter()
+            .find(|file| file.path.eq_ignore_ascii_case(path))
+        {
+            Some(file) => read_small_file_bounded(
+                &manifest_source_path(profiles_dir, profile_id, file)?,
+                MAX_CFG_FILE_BYTES,
+            )
+            .map_err(|error| ProfileError::Io(error.to_string()))?,
+            None => Vec::new(),
+        };
+        let new = match live.get(path) {
+            Some(source) => read_small_file_bounded(source, MAX_CFG_FILE_BYTES)
+                .map_err(|error| ProfileError::Io(error.to_string()))?,
+            None => Vec::new(),
+        };
+        crosshair_cfg_changed |= crate::apply::gameplay_crosshair_values_changed(&old, &new);
+    }
+    let crosshair_source_changed = crosshair_pack_changed || crosshair_cfg_changed;
+    let viewmodel_source_changed = accepted_paths
+        .iter()
+        .any(|path| path.eq_ignore_ascii_case(crate::viewmodel::EXECS_VIEWMODELS_VPK));
+    let hitsound_source_changed = accepted_paths.iter().any(|path| {
+        path.eq_ignore_ascii_case(crate::hitsound::HITSOUND_REL)
+            || path.eq_ignore_ascii_case(crate::hitsound::KILLSOUND_REL)
+    });
     refuse_absorb_mutation()?;
     mutate_profile_files_to(
         profiles_dir,
@@ -864,10 +1043,32 @@ where
         ProfileLiveProjection::LibraryOnly,
         running,
         |manifest| {
+            hud_roots.retain(|root| {
+                manifest.files.iter().any(|file| {
+                    pack_key(&file.path).is_some_and(|pack| pack.eq_ignore_ascii_case(root))
+                })
+            });
+            manifest.hud_roots = Some(hud_roots.clone());
             // Reconcile only accepted changes, against the planned manifest, not
             // the live tree. Kept/Restored packs and inactive HUDs still belong
             // to the library even when absent from the live inventory.
             let groups = group_by_pack(manifest.files.iter().map(|file| &file.path));
+            let pack_bytes = |files: &[String]| -> Result<u64, ProfileError> {
+                files.iter().try_fold(0u64, |total, path| {
+                    let len = match lengths.get(path.as_str()) {
+                        Some(len) => *len,
+                        None => {
+                            let file = previous_files
+                                .get(path.as_str())
+                                .ok_or(ProfileError::InvalidPath)?;
+                            source_file_len(&manifest_source_path(profiles_dir, profile_id, file)?)?
+                        }
+                    };
+                    total.checked_add(len).ok_or_else(|| {
+                        ProfileError::Io("Mod size exceeds the supported limit".into())
+                    })
+                })
+            };
             let mut records = Vec::with_capacity(manifest.mods.len());
             for mut record in manifest.mods.iter().cloned() {
                 let key = pack_key(&format!("tf/custom/{}", record.pack));
@@ -876,32 +1077,70 @@ where
                         continue;
                     };
                     record.files = files.len();
-                    record.bytes = files.iter().try_fold(0u64, |total, path| {
-                        let len = match lengths.get(path.as_str()) {
-                            Some(len) => *len,
-                            None => {
-                                let file = previous_files
-                                    .get(path.as_str())
-                                    .ok_or(ProfileError::InvalidPath)?;
-                                source_file_len(&manifest_source_path(
-                                    profiles_dir,
-                                    profile_id,
-                                    file,
-                                )?)?
-                            }
-                        };
-                        total.checked_add(len).ok_or_else(|| {
-                            ProfileError::Io("Mod size exceeds the supported limit".into())
-                        })
-                    })?;
+                    record.bytes = pack_bytes(files)?;
                 }
                 records.push(record);
             }
+            let hud_packs: BTreeSet<String> = crate::hud::manifest_hud_packs(manifest)
+                .into_iter()
+                .filter_map(|name| pack_key(&format!("tf/custom/{name}")))
+                .collect();
+            for (key, pack) in &accepted_pack_names {
+                if pack.to_ascii_lowercase().starts_with(APP_PACK_PREFIX)
+                    || pack.to_ascii_lowercase().starts_with("mastercomfig")
+                    || hud_packs.contains(key)
+                    || records.iter().any(|record| {
+                        pack_key(&format!("tf/custom/{}", record.pack)).as_ref() == Some(key)
+                    })
+                {
+                    continue;
+                }
+                let Some(files) = groups.get(key) else {
+                    continue;
+                };
+                let digest = sha256_hex(key.as_bytes());
+                let id = [24, 32, 64]
+                    .into_iter()
+                    .map(|len| format!("external-{}", &digest[..len]))
+                    .find(|id| records.iter().all(|record| record.id != *id))
+                    .ok_or_else(|| ProfileError::Io("External pack identity collision".into()))?;
+                records.push(ModRecord {
+                    id,
+                    name: pack.clone(),
+                    source: ModSource::External,
+                    pack: pack.clone(),
+                    files: files.len(),
+                    bytes: pack_bytes(files)?,
+                    installed_at: crate::profile::utc_rfc3339(),
+                });
+            }
             manifest.mods = records;
-            if selected_hud.as_ref().is_some_and(|pack| {
-                touched.contains(pack) && !crate::hud::hud_packs(&manifest.files).contains(pack)
+            if crosshair_source_changed {
+                if let Some(record) = manifest.crosshair.as_mut() {
+                    record.source_changed = true;
+                }
+            }
+            if viewmodel_source_changed {
+                if let Some(record) = manifest.viewmodel.as_mut() {
+                    record.source_changed = true;
+                }
+            }
+            if hitsound_source_changed {
+                if let Some(record) = manifest.hitsound.as_mut() {
+                    record.source_changed = true;
+                }
+            }
+            if selected_hud_key.as_ref().is_some_and(|pack| {
+                touched.contains(pack)
+                    && (!groups.contains_key(pack)
+                        || (selected_was_validated
+                            && !crate::hud::manifest_hud_packs(manifest)
+                                .iter()
+                                .any(|root| root.eq_ignore_ascii_case(pack))))
             }) {
                 manifest.hud = None;
+                manifest.hud_selected_root = None;
+                manifest.hud_review_pending = !crate::hud::manifest_hud_packs(manifest).is_empty();
             }
             Ok(())
         },

@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "runId": 35775130896,
+  "headSha": "c40e2743a88e0d5c29c137ba4ee5e4b2c868cb8e",
+  "checkoutSha": "6a738eebb77de9594219de389667397c509380f0",
+  "transformation": "Log only: removed terminal ANSI sequences, their caret-escaped rendering and embedded BOM characters; normalized CRLF/CRCRLF to LF. No log lines filtered. API JSON bytes retained exactly with .gen.json suffix.",
+  "files": [
+    {
+      "file": "workflow.log",
+      "source": ".artifacts/development-packages-run-35775130896.log",
+      "rawBytes": 291263,
+      "rawSha256": "429a517f2fbec9ee908ab352abd7239b245f3a5883c3a075caac726cdd5d6639",
+      "bytes": 281388,
+      "sha256": "013e45b0ca34ecc64251904afb3787b447ddd3ac0ca98be2dcd004b2f8b2950b"
+    },
+    {
+      "file": "workflow.gen.json",
+      "source": ".artifacts/development-packages-run-35775130896.json",
+      "rawBytes": 3992,
+      "rawSha256": "888eb4571afb4bac1be2dabb92306065bcc513b911068cb5e615b220339d688d",
+      "bytes": 3992,
+      "sha256": "888eb4571afb4bac1be2dabb92306065bcc513b911068cb5e615b220339d688d"
+    },
+    {
+      "file": "artifacts.gen.json",
+      "source": ".artifacts/development-packages-artifacts-35775130896.json",
+      "rawBytes": 32,
+      "rawSha256": "244563f989470892c537c9a4622920af0d228ee4528f7d00c64a06d6cd95856c",
+      "bytes": 32,
+      "sha256": "244563f989470892c537c9a4622920af0d228ee4528f7d00c64a06d6cd95856c"
+    }
+  ]
+}

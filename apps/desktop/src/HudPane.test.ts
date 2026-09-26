@@ -32,6 +32,7 @@ function renderHudPane(
         onRefresh: noop,
         onInstall: noop,
         onUpdate: noop,
+        onReturnToStock: async () => undefined,
         onMatch: noop,
         onApplyOptions: async () => undefined,
         onImportArchive: noop,
@@ -84,16 +85,27 @@ describe("HudPane catalog status", () => {
 
   it("reports stats loading and failure independently of a usable catalog", () => {
     const loading = renderHudPane(false, null, PREVIEW_HUD_CATALOG, { statsLoading: true });
-    expect(loading).toContain("Loading dates and popularity…");
+    expect(loading).toContain("Loading HUD activity and popularity…");
     expect(loading).not.toContain("Loading catalog…");
     expect(loading).toContain('data-testid="hud-card-rayshud"');
 
     const failed = renderHudPane(false, null, PREVIEW_HUD_CATALOG, {
       statsError: "The source timed out.",
     });
-    expect(failed).toContain("Dates and popularity refresh is incomplete.");
+    expect(failed).toContain("HUD activity refresh is incomplete.");
     expect(failed).toContain("The source timed out.");
     expect(failed).toContain('data-testid="hud-card-rayshud"');
     expect(failed).not.toContain('data-testid="hud-catalog-error"');
+  });
+
+  it("presents an opaque catalog ID as an untitled HUD without inventing a creator", () => {
+    const catalog = [
+      { ...PREVIEW_HUD_CATALOG[0], id: "512561891", name: "512561891", author: "Unknown" },
+    ];
+    const markup = renderHudPane(false, null, catalog);
+    expect(markup).toContain('data-testid="hud-card-512561891"');
+    expect(markup).toContain("Untitled HUD");
+    expect(markup).toContain("Creator uncredited");
+    expect(markup).not.toContain("by Unknown");
   });
 });

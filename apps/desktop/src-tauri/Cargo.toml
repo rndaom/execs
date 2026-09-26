@@ -19,7 +19,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 execs-core = { path = "core" }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+execs-inventory-probe = { path = "../../../tools/inventory-probe" }
+curl = { version = "=0.4.50", features = ["static-curl"] }
+# URL and status types remain in the fetchers; libcurl owns native transfers.
+reqwest = { version = "0.12", default-features = false }
 serde = { version = "1", features = ["derive"] }
 # Required by tauri::generate_context! macro expansion, not by our own code.
 serde_json = "1"
@@ -28,10 +31,13 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
+# Pre-webview startup failures must be visible in a normal no-console launch.
+# Reuse the same native dialog backend as tauri-plugin-dialog.
+rfd = { version = "0.16", default-features = false, features = ["gtk3"] }
 # The write gate's mutex. Must be tokio's (not std's): the guard is held
 # across `.await` in every async command, and std's would also bring back
 # poisoning.
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["rt", "sync"] }
 
 [features]
 release-probes = ["tauri/test"]
@@ -56,3 +62,22 @@ opt-level = 3
 # background thread (lock poller, hud fetch workers, tokio tasks) kills the
 # whole app with no UI and no log. Unwinding keeps a stray panic survivable.
 strip = true
+
+# `pnpm desktop:dev` and `cargo test` use the dev profile. Profile switches,
+# absorb and imports hash, CRC and inflate hundreds of megabytes; unoptimized,
+# these leaf crates made a dev-build switch several times slower than release.
+# execs code itself stays unoptimized and debuggable.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.crc32fast]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.adler2]
+opt-level = 3
+
+[profile.dev.package.lzma-rust2]
+opt-level = 3

@@ -1,0 +1,46 @@
+{
+  "preparedOnly": true,
+  "nativeAppLaunched": false,
+  "checkedUtc": "2026-09-22T18:09:56.9337117Z",
+  "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+  "launcherSha256": "C4198DAB6ED06553788BA0FB49A70D205007BC5DFBB1B000D284A6BB5EACA242",
+  "readDenialFixtureProbe": "Private marker denied a read with Windows error 32; finally released the handle and preserved exact bytes. This is not a native app result.",
+  "cases": [
+    {
+      "variant": "UnsetAppData",
+      "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b",
+      "rootless": true,
+      "noProfileLibrary": true,
+      "originalSettingsAndMarkerBytesMatch": true,
+      "launchRecordAbsent": true,
+      "markerCount": 0
+    },
+    {
+      "variant": "MismatchedToken",
+      "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28",
+      "rootless": true,
+      "noProfileLibrary": true,
+      "originalSettingsAndMarkerBytesMatch": true,
+      "launchRecordAbsent": true,
+      "markerCount": 1
+    },
+    {
+      "variant": "MultipleMarkers",
+      "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509",
+      "rootless": true,
+      "noProfileLibrary": true,
+      "originalSettingsAndMarkerBytesMatch": true,
+      "launchRecordAbsent": true,
+      "markerCount": 2
+    },
+    {
+      "variant": "UnreadableMarker",
+      "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9",
+      "rootless": true,
+      "noProfileLibrary": true,
+      "originalSettingsAndMarkerBytesMatch": true,
+      "launchRecordAbsent": true,
+      "markerCount": 1
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "runId": 35780701908,
+  "workflowUrl": "https://github.com/rndaom/execs/actions/runs/35780701908",
+  "artifactId": 10718401519,
+  "artifactName": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3",
+  "artifactApiSizeBytes": 898608,
+  "head": "ee0a8f22db5f6a07af053bd070490d55c9f271e9",
+  "testedMerge": "3b979c6cdbcf0406e8c5cdc691150f2917cc70b3",
+  "files": [
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/01-native-active-files.png",
+      "bytes": 122828,
+      "sha256": "9327e265fbf2b9ca0932281cd6098d76491394e7b26f3334f7ab1a2779f9519b"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/02-native-draft-before-navigation.png",
+      "bytes": 72128,
+      "sha256": "2d6798619c4c43f50a36aa403ea97ebe58d023693fc5b3ff24e7f3c80e5c351d"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/03-native-draft-after-navigation.png",
+      "bytes": 71061,
+      "sha256": "cb067bc3bda7299a80576cc8805143c1ed2b8c29f0ae0949d5ee74b5a930fe1e"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/04-native-explicit-save.png",
+      "bytes": 129753,
+      "sha256": "779b7229b6ebd14c8515b3cd8b311338af4966aa2912e94b6b93f9c228bb2a86"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/05-native-close-cancel-dialog.png",
+      "bytes": 112090,
+      "sha256": "71c10fc007e629f8f7902ce4e2962109618637785932fc7935bf081e1077ff38"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/06-native-close-discard-dialog.png",
+      "bytes": 114292,
+      "sha256": "a8fa10654c88a4ee59c5a6b814b1b1a328b43e586f421a44a6e3df7c3b5809ec"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/first-active-launch-driver.log",
+      "bytes": 203,
+      "sha256": "939b61ef0ffa417a2e6cf4e7f7cf931e5c6bfc26532cbd8a69920f13673a3697"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/fixture-baseline.gen.json",
+      "bytes": 22626,
+      "sha256": "d5e6dfc227c1ec94504b1ad4f7acf2643aafe8a0972b68398d5dd5b289bdf5a7"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-active-CnuZAL/evidence/results.gen.json",
+      "bytes": 76122,
+      "sha256": "f43e87576a7434829db2f28dec864671be7ba2abe0924eecd48764028920682d"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/01-native-inactive-1200.png",
+      "bytes": 45109,
+      "sha256": "9a2840e4c1eadd5d5c871f01cb2bcea5195cb376213fff51b2ae79f3d4de1ef3"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/02-native-menu-960.png",
+      "bytes": 50064,
+      "sha256": "bbe820f8b9cda9cf1b54f8d2f5c2d09fb435af5df799fd1ac909456b46a9f77f"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/03-native-keyboard-zoom-menu.png",
+      "bytes": 42155,
+      "sha256": "72484f1ffc1c77996e28d186b0c53732c63fc65649d20deb6b680456f3f763bd"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/04-native-preferences-saved.png",
+      "bytes": 84045,
+      "sha256": "151ecc742039af3f944b9d7ff0ca6513283014e350d52c61b23b4e10103edb00"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/05-native-preferences-after-restart.png",
+      "bytes": 98975,
+      "sha256": "1847c391bc52198529db8e31c9d9af199feb73e75c8ca097b10dedacf721d261"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/first-launch-driver.log",
+      "bytes": 203,
+      "sha256": "7258b834e703d0bf8c1a8d89da1296378e4c8fc933b4a0db43e64d61720b2f32"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/fixture-baseline.gen.json",
+      "bytes": 15245,
+      "sha256": "4c2c54bc489161bd14565ccf530392be15cf812e2df199434739af4ebb6a2df8"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/restart-driver.log",
+      "bytes": 359,
+      "sha256": "e2b46418254ee464aaf40cb915a34e7e2098e38c3ad6fee647aa18479e979e49"
+    },
+    {
+      "path": "linux-native-smoke-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3/execs-linux-native-zPfX8z/evidence/results.gen.json",
+      "bytes": 10874,
+      "sha256": "b2f801a095b450f81658574dc8c01a70a7e018bbfbb2915e42446f6770053119"
+    }
+  ]
+}

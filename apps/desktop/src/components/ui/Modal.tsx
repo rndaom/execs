@@ -1,4 +1,4 @@
-import { type ReactNode, useContext, useId, useLayoutEffect, useRef } from "react";
+import { type ReactNode, type RefObject, useContext, useId, useLayoutEffect, useRef } from "react";
 import { AutosaveActivity } from "../../hooks/useAutosave";
 
 const FOCUSABLE =
@@ -28,7 +28,17 @@ function updateStack(stack: ModalEntry[]) {
   });
 }
 
-function focusFirst(node: HTMLElement) {
+function focusFirst(node: HTMLElement, preferred?: HTMLElement | null) {
+  if (
+    preferred &&
+    node.contains(preferred) &&
+    preferred.matches(FOCUSABLE) &&
+    !preferred.matches(":disabled") &&
+    !preferred.closest("[hidden], [inert]")
+  ) {
+    preferred.focus();
+    return;
+  }
   (node.querySelector<HTMLElement>(FOCUSABLE) ?? node).focus();
 }
 
@@ -47,6 +57,7 @@ export function Modal({
   children,
   onClose,
   onDefaultAction,
+  initialFocusRef,
 }: {
   open: boolean;
   title: ReactNode;
@@ -60,6 +71,8 @@ export function Modal({
   onClose: () => void;
   /** Fired on Enter when focus is not already on a button or a text field. */
   onDefaultAction?: () => void;
+  /** A safe initial action can be focused without changing the visual order. */
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const active = useContext(AutosaveActivity);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -94,7 +107,7 @@ export function Modal({
     stack.push(entry);
     stack.sort((a, b) => a.order - b.order);
     updateStack(stack);
-    if (stack.at(-1) === entry) focusFirst(node);
+    if (stack.at(-1) === entry) focusFirst(node, initialFocusRef?.current);
 
     function onKeyDown(event: KeyboardEvent) {
       if (stack.at(-1) !== entry) return;
@@ -171,7 +184,7 @@ export function Modal({
         focusFirst(top.node);
       }
     };
-  }, [open, active, scrim]);
+  }, [open, active, scrim, initialFocusRef]);
 
   if (!open || !active) {
     return null;

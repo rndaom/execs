@@ -1,17 +1,18 @@
 //! Profile-owned selections projected into the install's shared preloader files.
 use std::path::{Path, PathBuf};
 
-use crate::hash::{sha256_file, write_atomic_within};
+use crate::hash::{sha256_file, sha256_hex};
 use crate::process_lock::refuse_if_running_among;
 use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
     load_library_from, load_manifest, mutate_profile_files_to, ProfileError, ProfileLiveProjection,
 };
 use crate::vpk::map_vpk_entries;
+use serde::Serialize;
 
 use super::apply::{
-    apply_preloader_selection_transactional, prepare_preloader_selection, PreloaderReport,
-    PreloaderSelection,
+    apply_preloader_selection_transactional, plan_preloader_selection, PreloaderPlan,
+    PreloaderReport, PreloaderSelection,
 };
 use super::state::{app_dir_within, load_state, misc_vpk_path, PreloaderState};
 
@@ -25,6 +26,32 @@ pub struct ProfileContext {
 }
 
 impl PreloaderSelection {
+    pub fn uses_flat_textures(&self) -> bool {
+        self.addons
+            .iter()
+            .any(|addon| addon == super::flat_textures::ID)
+    }
+
+    pub fn uses_developer_textures(&self) -> bool {
+        self.addons
+            .iter()
+            .any(|addon| addon == super::developer_textures::ID)
+    }
+
+    pub fn uses_square_overlays(&self) -> bool {
+        self.addons
+            .iter()
+            .any(|addon| super::square_overlays::is_overlay(addon))
+    }
+
+    pub fn needs_cueki_library(&self) -> bool {
+        !self.particle_mods.is_empty()
+            || self
+                .addons
+                .iter()
+                .any(|addon| !is_direct_author_addon(addon))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.addons.is_empty()
             && self.particle_mods.is_empty()
@@ -49,6 +76,114 @@ impl PreloaderSelection {
         }
         Ok(())
     }
+}
+
+fn is_direct_author_addon(addon: &str) -> bool {
+    addon == super::flat_textures::ID
+        || addon == super::developer_textures::ID
+        || super::square_overlays::is_overlay(addon)
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RetiredLibraryReview {
+    pub profile_id: String,
+    pub revision: String,
+    pub addons_to_remove: Vec<String>,
+    pub particle_mods_to_remove: Vec<String>,
+    pub direct_addons_kept: Vec<String>,
+    pub profile_particle_mods_kept: Vec<String>,
+}
+
+fn selection_revision(selection: &PreloaderSelection) -> Result<String, ProfileError> {
+    let bytes =
+        serde_json::to_vec(selection).map_err(|error| ProfileError::Io(error.to_string()))?;
+    Ok(sha256_hex(&bytes))
+}
+
+/// Read a bounded, exact list of saved library choices before a user reviews
+/// clearing them. No profile or installed file is changed by this read.
+pub fn retired_library_review(
+    profiles: &Path,
+    id: &str,
+) -> Result<Option<RetiredLibraryReview>, ProfileError> {
+    let selection = load_manifest(profiles, id)?.preloader.unwrap_or_default();
+    selection.validate()?;
+    let addons_to_remove = selection
+        .addons
+        .iter()
+        .filter(|addon| !is_direct_author_addon(addon))
+        .cloned()
+        .collect::<Vec<_>>();
+    if addons_to_remove.is_empty() && selection.particle_mods.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(RetiredLibraryReview {
+        profile_id: id.to_string(),
+        revision: selection_revision(&selection)?,
+        addons_to_remove,
+        particle_mods_to_remove: selection.particle_mods,
+        direct_addons_kept: selection
+            .addons
+            .into_iter()
+            .filter(|addon| is_direct_author_addon(addon))
+            .collect(),
+        profile_particle_mods_kept: selection.profile_particle_mods,
+    }))
+}
+
+/// Review-bound library-only change for an inactive profile whose original
+/// cueki cache is unavailable. Direct author and profile-owned sources stay
+/// saved. The installed projection and other profiles are left untouched.
+pub fn clear_retired_library_choices(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    expected_revision: &str,
+    running: &[String],
+) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles, Some(root))?;
+    if library.active_profile_id.as_deref() == Some(id)
+        || library.pending_switch_profile_id.is_some()
+        || selection_for_export(profiles, id)?.is_some()
+    {
+        return Err(ProfileError::Io(
+            "This profile owns an installed or pending Casual selection. Finish recovery or switch away before reviewing its saved choices.".into(),
+        ));
+    }
+    let review = retired_library_review(profiles, id)?.ok_or_else(|| {
+        ProfileError::Io("This profile no longer has saved library choices to clear.".into())
+    })?;
+    if review.revision != expected_revision {
+        return Err(ProfileError::Io(
+            "The saved Casual selection changed. Review it again before clearing choices.".into(),
+        ));
+    }
+    mutate_profile_files_to(
+        profiles,
+        root,
+        id,
+        &[],
+        &[],
+        ProfileLiveProjection::LibraryOnly,
+        running,
+        |manifest| {
+            let mut selection = manifest.preloader.clone().unwrap_or_default();
+            if selection_revision(&selection)? != expected_revision {
+                return Err(ProfileError::Io(
+                    "The saved Casual selection changed. Review it again before clearing choices."
+                        .into(),
+                ));
+            }
+            selection
+                .addons
+                .retain(|addon| is_direct_author_addon(addon));
+            selection.particle_mods.clear();
+            manifest.preloader = Some(selection);
+            Ok(())
+        },
+    )?;
+    Ok(())
 }
 
 fn selection(state: &PreloaderState) -> PreloaderSelection {
@@ -85,6 +220,37 @@ pub fn selection_for_export(
         .profile_particle_mods
         .retain(|id| manifest.mods.iter().any(|m| &m.id == id));
     Ok(Some(chosen))
+}
+
+/// Selected profile-mod IDs owned by one profile. New manifests are
+/// authoritative; legacy global state is consulted only when its owner marker
+/// (or recorded migration list) names this profile.
+pub fn selected_profile_particle_mod_ids(
+    profiles: &Path,
+    id: &str,
+) -> Result<Vec<String>, ProfileError> {
+    let manifest = load_manifest(profiles, id)?;
+    let saved = manifest.preloader.as_ref();
+    let installed = selection_for_export(profiles, id)?;
+    Ok(selected_profile_particle_mod_union(
+        saved,
+        installed.as_ref(),
+    ))
+}
+
+fn selected_profile_particle_mod_union(
+    saved: Option<&PreloaderSelection>,
+    installed: Option<&PreloaderSelection>,
+) -> Vec<String> {
+    let mut selected = saved
+        .map(|selection| selection.profile_particle_mods.clone())
+        .unwrap_or_default();
+    if let Some(installed) = installed {
+        selected.extend(installed.profile_particle_mods.iter().cloned());
+    }
+    selected.sort();
+    selected.dedup();
+    selected
 }
 
 /// Save before replacing the shared projection. A newly imported profile is
@@ -143,10 +309,13 @@ pub struct ProfilePreloaderPlan {
     zip: PathBuf,
     profile: ProfileContext,
     selection: PreloaderSelection,
+    /// Derived while the previous profile was still installed. Apply reuses it
+    /// when the preloader state and `tf2_misc` directory are unchanged.
+    prepared: PreloaderPlan,
 }
 
-/// Validate the target while the old profile is still intact. Empty targets
-/// need no downloaded library, including after the user clears the cache.
+/// Validate the target while the old profile is still intact. Empty and
+/// profile-only targets need no downloaded default library.
 pub fn prepare_profile_preloader(
     profiles: &Path,
     root: &Path,
@@ -173,18 +342,7 @@ pub fn prepare_profile_preloader(
     {
         return Ok(None);
     }
-    let zip = if selection.is_empty() {
-        let folder = data.join("preloader");
-        app_dir_within(&data, &folder, true).map_err(ProfileError::Io)?;
-        let zip = folder.join("empty-mods.zip");
-        write_atomic_within(
-            &data,
-            &zip,
-            b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-        )
-        .map_err(|e| ProfileError::Io(e.to_string()))?;
-        zip
-    } else {
+    let zip = if selection.needs_cueki_library() {
         let zip = data
             .join("preloader")
             .join(format!("mods-{MODS_RELEASE}.zip"));
@@ -192,10 +350,14 @@ pub fn prepare_profile_preloader(
             || sha256_file(&zip).ok().as_deref() != Some(MODS_SHA256)
         {
             return Err(ProfileError::Io(
-                "Download the default mod library in Mods before switching to this profile.".into(),
+                "This saved Casual choice needs its previously verified mod library cache before switching. New library downloads are paused while source-asset rights are unresolved.".into(),
             ));
         }
         zip
+    } else {
+        // The selection reader creates an empty archive in memory. Target
+        // preflight therefore never creates a cache or mutates source state.
+        data.join("preloader/unused-mods.zip")
     };
     let profile = ProfileContext {
         profiles: profiles.to_path_buf(),
@@ -204,7 +366,9 @@ pub fn prepare_profile_preloader(
     let entries =
         map_vpk_entries(&misc_vpk_path(root)).map_err(|e| ProfileError::Io(e.message()))?;
     super::state::discover_orphaned_snapshots_readonly(&data, &mut state, Some(&entries));
-    prepare_preloader_selection(
+    // The plan verifies every direct author file and the complete package
+    // before the previous profile's live files are removed.
+    let prepared = plan_preloader_selection(
         root,
         &data,
         &zip,
@@ -219,12 +383,13 @@ pub fn prepare_profile_preloader(
         zip,
         profile,
         selection,
+        prepared,
     }))
 }
 
 impl ProfilePreloaderPlan {
     pub fn apply(&self, root: &Path, running: &[String]) -> Result<(), ProfileError> {
-        apply_profile_preloader(
+        apply_profile_preloader_with_plan(
             root,
             &self.data,
             &self.zip,
@@ -232,6 +397,7 @@ impl ProfilePreloaderPlan {
             &self.profile,
             running,
             &live_process_names,
+            Some(&self.prepared),
         )
         .map_err(ProfileError::Io)?;
         Ok(())
@@ -248,6 +414,20 @@ pub fn apply_profile_preloader(
     running: &[String],
     sampler: &dyn Fn() -> Vec<String>,
 ) -> Result<PreloaderReport, String> {
+    apply_profile_preloader_with_plan(root, data, zip, selection, profile, running, sampler, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_profile_preloader_with_plan(
+    root: &Path,
+    data: &Path,
+    zip: &Path,
+    selection: &PreloaderSelection,
+    profile: &ProfileContext,
+    running: &[String],
+    sampler: &dyn Fn() -> Vec<String>,
+    prepared: Option<&PreloaderPlan>,
+) -> Result<PreloaderReport, String> {
     refuse_if_running_among(running).map_err(|e| e.message().to_string())?;
     selection.validate().map_err(|e| e.message())?;
     apply_preloader_selection_transactional(
@@ -259,6 +439,7 @@ pub fn apply_profile_preloader(
         sampler,
         &|| Ok(()),
         Some(profile),
+        prepared,
     )
 }
 
@@ -290,4 +471,101 @@ pub fn clear_saved_profile_selection(
         },
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{selected_profile_particle_mod_union, PreloaderSelection};
+
+    fn selection(ids: &[&str]) -> PreloaderSelection {
+        PreloaderSelection {
+            profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+            ..PreloaderSelection::default()
+        }
+    }
+
+    #[test]
+    fn removal_guard_unions_saved_and_newer_installed_owner_selections() {
+        assert_eq!(
+            selected_profile_particle_mod_union(
+                Some(&selection(&["saved", "shared"])),
+                Some(&selection(&["installed", "shared"])),
+            ),
+            ["installed", "saved", "shared"]
+        );
+    }
+
+    #[test]
+    fn flat_textures_keeps_its_saved_id_without_requiring_the_cueki_zip() {
+        let flat = PreloaderSelection {
+            addons: vec![super::super::flat_textures::ID.into()],
+            ..PreloaderSelection::default()
+        };
+        assert!(flat.uses_flat_textures());
+        assert!(!flat.needs_cueki_library());
+        let mixed = PreloaderSelection {
+            addons: vec![
+                super::super::flat_textures::ID.into(),
+                "Another addon".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(mixed.uses_flat_textures());
+        assert!(mixed.needs_cueki_library());
+    }
+
+    #[test]
+    fn developer_textures_keeps_its_saved_id_without_requiring_the_cueki_zip() {
+        let developer = PreloaderSelection {
+            addons: vec![super::super::developer_textures::ID.into()],
+            ..PreloaderSelection::default()
+        };
+        assert!(developer.uses_developer_textures());
+        assert!(!developer.needs_cueki_library());
+        let both_direct = PreloaderSelection {
+            addons: vec![
+                super::super::developer_textures::ID.into(),
+                super::super::flat_textures::ID.into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(!both_direct.needs_cueki_library());
+        let mixed = PreloaderSelection {
+            addons: vec![
+                super::super::developer_textures::ID.into(),
+                "factory new".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(mixed.needs_cueki_library());
+    }
+
+    #[test]
+    fn square_overlays_keep_both_saved_ids_without_requiring_the_cueki_zip() {
+        let each = [
+            super::super::square_overlays::BURNING_ID,
+            super::super::square_overlays::SENTRY_ID,
+        ];
+        for id in each {
+            let selection = PreloaderSelection {
+                addons: vec![id.into()],
+                ..PreloaderSelection::default()
+            };
+            assert!(selection.uses_square_overlays());
+            assert!(!selection.needs_cueki_library());
+        }
+        let both = PreloaderSelection {
+            addons: each.into_iter().map(str::to_owned).collect(),
+            ..PreloaderSelection::default()
+        };
+        assert!(!both.needs_cueki_library());
+        let mixed = PreloaderSelection {
+            addons: vec![
+                super::super::square_overlays::BURNING_ID.into(),
+                "factory new".into(),
+            ],
+            ..PreloaderSelection::default()
+        };
+        assert!(mixed.needs_cueki_library());
+    }
 }

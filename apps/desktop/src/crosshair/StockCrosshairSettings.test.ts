@@ -33,7 +33,12 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(scale: number, running = false, profileId = "profile-a") {
+async function render(
+  scale: number,
+  running = false,
+  profileId = "profile-a",
+  managedText = managed(scale),
+) {
   await act(async () =>
     root.render(
       h(
@@ -48,7 +53,7 @@ async function render(scale: number, running = false, profileId = "profile-a") {
             h(StockCrosshairSettings, {
               profileId,
               effective: {},
-              managedText: managed(scale),
+              managedText,
               onSave: save,
             }),
           ),
@@ -80,6 +85,18 @@ async function debounce() {
 }
 
 describe("stock crosshair refreshes", () => {
+  it("shows and preserves an external material through a size edit", async () => {
+    await render(32, false, "profile-a", "cl_crosshair_file myreticle\ncl_crosshair_scale 32\n");
+    expect(box.querySelector("[data-testid='stock-crosshair-external']")).not.toBeNull();
+    expect(box.textContent).toContain("External: myreticle");
+    expect(box.textContent).toContain("External material preview unavailable");
+    await setScale(40);
+    await debounce();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_file myreticle\n");
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_scale 40\n");
+  });
+
   it("does not autosave old sliders when a reload publishes values and unlocks together", async () => {
     await render(32);
     await render(32, true);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement as h } from "react";
+import { act, createRef, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrosshairDesigner } from "../../crosshair/CrosshairDesigner";
@@ -194,6 +194,49 @@ it("uses current Escape and Enter callbacks without reopening or moving focus", 
   await update(nextClose);
   await key("Enter");
   expect(nextApply).toHaveBeenCalledOnce();
+});
+
+it("focuses a designated safe action without moving it ahead of the dialog's content", async () => {
+  const cancel = createRef<HTMLButtonElement>();
+  await act(async () =>
+    root.render(
+      h(
+        Modal,
+        {
+          open: true,
+          title: "Delete saved profile?",
+          onClose: closePane,
+          initialFocusRef: cancel,
+        },
+        h("button", { type: "button", "data-testid": "export" }, "Export profile"),
+        h("button", { type: "button", "data-testid": "delete" }, "Delete profile"),
+        h("button", { type: "button", ref: cancel, "data-testid": "cancel" }, "Cancel"),
+      ),
+    ),
+  );
+  expect(document.activeElement).toBe(element("cancel"));
+  await key("Tab");
+  expect(document.activeElement).toBe(element("export"));
+});
+
+it("falls back to a contained enabled action when the requested initial target is disabled", async () => {
+  const disabled = createRef<HTMLButtonElement>();
+  await act(async () =>
+    root.render(
+      h(
+        Modal,
+        {
+          open: true,
+          title: "Review profile",
+          onClose: closePane,
+          initialFocusRef: disabled,
+        },
+        h("button", { type: "button", ref: disabled, disabled: true }, "Working"),
+        h("button", { type: "button", "data-testid": "cancel" }, "Cancel"),
+      ),
+    ),
+  );
+  expect(document.activeElement).toBe(element("cancel"));
 });
 
 it("cancels the real Files exit guard above the designer without closing either the app or designer", async () => {

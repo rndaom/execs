@@ -6,6 +6,9 @@ rust-version = "1.93"
 description = "TF2 finder, settings, write-lock, and profile library (no Tauri / WebKit)"
 
 [dependencies]
+# Already in the graph through zip. VPK entry CRCs are checked over every stock
+# particle file on each preloader apply or profile switch.
+crc32fast = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 same-file = "1"
@@ -28,15 +31,43 @@ winreg = "0.52"
 probes = []
 
 [[example]]
+name = "inventory_metadata_probe"
+required-features = ["probes"]
+
+[[example]]
 name = "mdl_probe"
 required-features = ["probes"]
 
 [[example]]
-name = "pack_probe"
+name = "viewmodel_source_probe"
 required-features = ["probes"]
 
 [[example]]
-name = "viewmodel_build_probe"
+name = "viewmodel_items_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "viewmodel_scripts_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "viewmodel_raw_rotation_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "viewmodel_weapon_mdl_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "viewmodel_group_weight_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "viewmodel_vpk_candidate_probe"
+required-features = ["probes"]
+
+[[example]]
+name = "pack_probe"
 required-features = ["probes"]
 
 [[example]]

@@ -2,7 +2,15 @@
   "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/*.gen.json", "!**/*.gen.ts", "!**/src-tauri", "!**/dist"]
+    "includes": [
+      "**",
+      "!**/*.gen.json",
+      "!**/*.gen.ts",
+      "!**/src-tauri",
+      "!**/dist",
+      "!docs/design/2026-09-22-overhaul/implementation/linux-native/run-*",
+      "!docs/design/2026-09-22-overhaul/implementation/package-smoke/run-*"
+    ]
   },
   "formatter": {
     "enabled": true,

@@ -1,0 +1,93 @@
+Window: "Export profile", App: execs.exe.
+	0 dialog Export profile Secondary Actions: Raise
+		1 pane
+			2 tool bar Command Module ID: FolderBandModuleInner
+				3 button &Help Description: Get help. ID: HelpButton
+				4 split button Details Description: Change your view. ID: ViewControl
+					5 button View Slider Description: More options ID: SplitMenuButton
+				6 button Organize Description: Organize this folder's contents. ID: {7DDC1264-7E4D-4F74-BBC0-D191987C8D0F}
+				7 button New folder Description: Create a new folder. ID: {E44616AD-6DF1-4B94-85A4-E465AE8A19DB}
+			8 pane Control Host ID: ProperTreeHost
+				9 tree Navigation Pane ID: 100
+					10 scroll bar (settable, float) Vertical Value: 62 ID: NonClientVerticalScrollBar
+						11 button Line up ID: UpButton
+						12 button Page up ID: UpPageButton
+						13 thumb Position ID: ScrollbarThumb
+						14 button Page down ID: DownPageButton
+						15 button Line down ID: DownButton
+					16 tree item (selectable, settable, string) Desktop Value: Desktop
+						17 tree item (selectable, settable, string) Home Value: Home
+						18 tree item (selectable, settable, string) Gallery Value: Gallery
+						19 tree item (selectable, settable, string) Start of Quick Access - Desktop (pinned) Value: Start of Quick Access - Desktop (pinned)
+						20 tree item (selectable, settable, string) Downloads (pinned) Value: Downloads (pinned)
+						21 tree item (selectable, settable, string) Documents (pinned) Value: Documents (pinned)
+						22 tree item (selectable, settable, string) Pictures (pinned) Value: Pictures (pinned)
+						23 tree item (selectable, settable, string) Music (pinned) Value: Music (pinned)
+						24 tree item (selectable, settable, string) Videos (pinned) Value: Videos (pinned)
+						25 tree item (selectable, settable, string) docs Value: docs
+						26 tree item (selectable, settable, string) outputs Value: outputs
+						27 tree item (selectable, settable, string) End of Quick Access - Projects Value: End of Quick Access - Projects
+						28 tree item (selectable, settable, string) This PC Value: This PC
+						29 tree item (selectable, settable, string) Network Value: Network
+			30 pane Shell Folder View ID: listview
+				31 list Items View
+					32 header Header
+						33 split button Name ID: System.ItemNameDisplay
+							34 button Filter dropdown ID: DropDown
+						35 split button Date modified ID: System.DateModified
+							36 button Filter dropdown ID: DropDown
+						37 split button Type ID: System.ItemTypeText
+							38 button Filter dropdown ID: DropDown
+						39 split button Size ID: System.Size
+							40 button Filter dropdown ID: DropDown
+					41 list item (selectable, settable, string) review-multiple-huds-v018 Value: review-multiple-huds-v018 ID: 0
+						42 edit (settable, string) Name Value: review-multiple-huds-v018 ID: System.ItemNameDisplay
+						43 edit Date modified Value: ‎9/‎22/‎2026 ‏‎1:14 PM ID: System.DateModified
+						44 edit Type Value: Compressed (zipped) Folder ID: System.ItemTypeText
+						45 edit Size Value: 4 KB ID: System.Size
+			46 text File name: Description: File name: ID: SaveDialogLabel
+			47 combo box (settable, string) File name: Value: G:\Projects\execs\.artifacts\native-isolation\20260922-134811-inactivelibrary-55ac7ac8\exports\keyboard-path-check.zip ID: FileNameControlHost
+				48 edit (settable, string) File name: Value: G:\Projects\execs\.artifacts\native-isolation\20260922-134811-inactivelibrary-55ac7ac8\exports\keyboard-path-check.zip ID: 1001
+				49 button Open ID: DropDown
+			50 text Save as type: Description: Save as type: ID: SaveDialogLabel
+			51 combo box (settable, string) Save as type: Value: Zip ID: FileTypeControlHost
+				52 text (settable, string) Value: Zip
+				53 button Open ID: DropDown
+			54 tree Save Fields ID: SaveDialogPreviewMetadataInner
+			55 tree Application Controls ID: AppControlsModuleInner
+		56 tool bar
+			57 button Hide Folders
+		58 button Save ID: 1
+		59 button Cancel ID: 2
+		60 thumb (settable, float) Value: 0
+		61 pane ID: 40965
+			62 pane
+				63 tool bar Navigation buttons
+					64 button (disabled) Back (Alt + Left Arrow)
+					65 button (disabled) Forward (Alt + Right Arrow)
+					66 button (disabled) Recent locations
+			67 pane
+				68 tool bar Up band
+					69 button Up to "20260922-131412-inactiveimport-65ffd4ab" (Alt + Up Arrow)
+			70 pane ID: 41477
+				71 progress bar Value: 0
+					72 pane
+						73 tool bar Address: G:\Projects\execs\.artifacts\native-isolation\20260922-131412-inactiveimport-65ffd4ab\imports ID: 1001
+							74 split button All locations
+							75 split button ‎native-isolation
+							76 split button ‎20260922-131412-inactiveimport-65ffd4ab
+							90 split button ‎imports
+					78 tool bar Address band
+						79 button Previous Locations
+						80 button Refresh "imports" (F5)
+			81 pane
+			82 pane
+				83 pane
+					84 pane
+						85 edit (settable, string) Search Box Description: Search imports ID: SearchEditBox
+						86 button Search ID: SearchBoxSearchButton
+			87 pane
+		88 title bar (settable, string) Value: Export profile
+			89 button Close
+
+The focused UI element is 85 edit (settable, string) Search Box Description: Search imports ID: SearchEditBox.

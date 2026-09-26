@@ -1,4 +1,9 @@
-import { createCfgResolver, normalizeCfgPath, parseCommands } from "@execs/cfglint";
+import {
+  createCfgResolver,
+  enumerateCatalog,
+  normalizeCfgPath,
+  parseCommands,
+} from "@execs/cfglint";
 
 export const CLASS_CFG_NAMES = [
   "scout",
@@ -11,81 +16,18 @@ export const CLASS_CFG_NAMES = [
   "sniper",
   "spy",
 ] as const;
-export const REFERENCE_REVIEWED = "2026-09-20";
-export const CFG_GUIDES = [
-  {
-    id: "first",
-    title: "Your first cfg",
-    text: "Create autoexec.cfg in the detected user layer. Add the Console marker snippet, review its destination, then save. On the next TF2 launch, open the console to find the marker. Saving a draft does not execute it in the running game.",
-  },
-  {
-    id: "files",
-    title: "config.cfg and autoexec.cfg",
-    text: "config.cfg is engine-managed but editable here. TF2 saves archived settings and binds back to it; engine serialization need not preserve your comments or alias definitions. Put authored scripts in autoexec.cfg. Later commands can replace earlier values.",
-  },
-  {
-    id: "profile",
-    title: "Profile and live files",
-    text: "Files edits the selected profile. Saving an active profile also projects its supported user files into the confirmed install while TF2 is closed. Inactive profiles remain in the library. Unsaved drafts have no game effect. Engine, HUD and pack sources are provided read-only.",
-  },
-  {
-    id: "layers",
-    title: "Vanilla and mastercomfig",
-    text: "Vanilla user scripts live in tf/cfg. Supported mastercomfig user scripts live in tf/cfg/overrides: autoexec.cfg at launch and class cfgs at class change. game_overrides.cfg is the shared class hook. Use Comfig for preset/modules, Binds for managed binds, and Gameplay for its managed controls; saving those panes may rewrite their cfg commands.",
-  },
-  {
-    id: "classes",
-    title: "All nine class files",
-    text: `${CLASS_CFG_NAMES.map((name) => `${name}.cfg`).join(", ")}. Heavy uses heavyweapons.cfg. Class scripts run on class changes; values are not automatically reset when leaving a class. Review the other class files before assuming a setting only affects one class.`,
-  },
-  {
-    id: "syntax",
-    title: "Comments, quotes and semicolons",
-    text: "Use // for a line comment. Quote multi-word arguments. A semicolon separates commands outside quotes. A quoted bind or alias payload can contain several commands; those commands run later when invoked. Keep scripts small and check diagnostics before saving.",
-  },
-  {
-    id: "bind",
-    title: "Binds and press/release pairs",
-    text: 'bind "KEY" "+action" assigns a key. A + command starts on press and its matching - command ends on release. Custom held actions need both +name and -name aliases. Avoid combining held actions in a bind without a deliberate release path. The Binds pane handles usual actions.',
-  },
-  {
-    id: "alias",
-    title: "Alias definition and invocation",
-    text: 'alias "name" "commands" defines a command; writing name invokes it. A definition alone does not apply its payload. Definitions can be replaced later. Static links show candidate definitions, not proof of which definition exists at runtime.',
-  },
-  {
-    id: "exec",
-    title: "Exec paths and load order",
-    text: "exec resolves from cfg search roots, not the current file’s folder. For tf/cfg/overrides/helper.cfg use exec overrides/helper. Custom mounts can shadow tf/cfg files. Files scans dormant and deferred content too; a finding does not prove startup execution. An unresolved target does not prove a file is absent: VPKs, unreadable files and inventory limits can hide sources.",
-  },
-  {
-    id: "restrictions",
-    title: "Server and cheat restrictions",
-    text: "A recognized command may still be unavailable in your game build or disallowed by the server. Cheat-flagged settings require server permission; replicated values can be server-controlled. A documented default is source metadata, never your draft value or a measurement of the running game. This bundled reference may lag TF2 updates.",
-  },
-] as const;
-
-export const CFG_SNIPPETS = [
-  {
-    id: "marker",
-    title: "Console marker",
-    text: '// Confirm this file ran by looking in the TF2 console.\necho "execs: my config loaded"\n',
-    effect: "Prints a harmless console message when this cfg executes.",
-  },
-  {
-    id: "helper",
-    title: "Named console message",
-    text: 'alias "execs_hello" "echo Hello from my config"\n',
-    effect:
-      "Defines execs_hello. Enter execs_hello in the console after this file runs to print the message.",
-  },
-] as const;
-
-export function searchCfgGuides(query: string) {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return CFG_GUIDES.filter((guide) =>
-    terms.every((term) => `${guide.title} ${guide.text}`.toLowerCase().includes(term)),
-  );
+export const REFERENCE_REVIEWED = "2026-09-22";
+/** Bounded, name-first lookup over the pinned offline catalog. */
+export function searchCfgCommands(query: string, limit = 12) {
+  const term = query.trim().toLowerCase();
+  if (!term) return [];
+  const prefix = [];
+  const other = [];
+  for (const entry of enumerateCatalog()) {
+    if (entry.name.startsWith(term)) prefix.push(entry);
+    else if (entry.name.includes(term)) other.push(entry);
+  }
+  return [...prefix, ...other].slice(0, limit);
 }
 
 /** Mirrors the native HUD manifest resolver: exact record wins, then a unique HUD marker. */

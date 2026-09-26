@@ -4,6 +4,28 @@ import { editorCfgCandidates } from "./files-limits";
 import { createPreviewApi } from "./preview-bridge";
 
 describe("profile startup settings", () => {
+  it("tracks the final source of each startup bind after exec and unbind", () => {
+    const files = [
+      { path: "tf/cfg/config.cfg", text: "bind space +jump\nbind e +use\n" },
+      {
+        path: "tf/cfg/autoexec.cfg",
+        text: "exec execs_binds\n",
+      },
+      {
+        path: "tf/cfg/execs_binds.cfg",
+        text: "unbind e\nbind x +jump\nbind r +reload\n",
+      },
+    ];
+    expect(mapsFromFiles(files, "vanilla")).toMatchObject({
+      binds: { space: "+jump", x: "+jump", r: "+reload" },
+      bindSources: {
+        space: { file: "tf/cfg/config.cfg", line: 1 },
+        x: { file: "tf/cfg/execs_binds.cfg", line: 2 },
+        r: { file: "tf/cfg/execs_binds.cfg", line: 3 },
+      },
+    });
+  });
+
   it("uses the mastercomfig hook order and its override autoexec", () => {
     const files = [
       { path: "tf/cfg/overrides/autoexec.cfg", text: "apply\n" },
@@ -60,6 +82,63 @@ describe("profile startup settings", () => {
     expect(mapsFromFiles(files, "vanilla")).toMatchObject({
       complete: true,
       effective: { viewmodel_fov: "120" },
+    });
+  });
+
+  it("uses only the HUD root native selected when legacy HUDs are retained", () => {
+    const files = [
+      { path: "tf/cfg/autoexec.cfg", text: "exec hud_settings" },
+      { path: "tf/custom/hud-a/cfg/hud_settings.cfg", text: "viewmodel_fov 45" },
+      { path: "tf/custom/hud-b/cfg/hud_settings.cfg", text: "viewmodel_fov 70" },
+    ];
+    const inventory = [
+      ...files,
+      { path: "tf/custom/hud-a/info.vdf" },
+      { path: "tf/custom/hud-b/info.vdf" },
+    ];
+    expect(mapsFromFiles(files, "vanilla", inventory).complete).toBe(false);
+    expect(
+      mapsFromFiles(files, "vanilla", inventory, {
+        hudRoots: ["hud-a", "hud-b"],
+        selectedHudRoot: "hud-b",
+      }),
+    ).toMatchObject({ complete: true, effective: { viewmodel_fov: "70" } });
+  });
+
+  it("keeps known pane settings when one personal bind is malformed", () => {
+    const files = [
+      {
+        path: "tf/cfg/config.cfg",
+        text: 'viewmodel_fov "70"',
+      },
+      {
+        path: "tf/cfg/overrides/autoexec.cfg",
+        text: "exec overrides/binds\nviewmodel_fov 90",
+      },
+      {
+        path: "tf/cfg/overrides/binds.cfg",
+        text: 'bind p ""show_quest_log"\nbind w +forward',
+      },
+    ];
+    expect(mapsFromFiles(files, "comfig")).toMatchObject({
+      complete: true,
+      effective: { viewmodel_fov: "90" },
+      binds: { w: "+forward" },
+    });
+  });
+
+  it("points to a likely startup typo without guessing its effect", () => {
+    const files = [
+      { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
+      { path: "tf/cfg/overrides/autoexec.cfg", text: "viewwmodel_fov 90" },
+    ];
+    expect(mapsFromFiles(files, "comfig")).toMatchObject({
+      complete: false,
+      effective: {},
+      reason: expect.stringContaining(
+        "Cannot derive startup settings after `viewwmodel_fov` at tf/cfg/overrides/autoexec.cfg:1. Did you mean `viewmodel_fov`?",
+      ),
+      issue: { path: "tf/cfg/overrides/autoexec.cfg", line: 1 },
     });
   });
 

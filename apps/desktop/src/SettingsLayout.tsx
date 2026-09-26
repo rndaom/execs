@@ -1,4 +1,5 @@
 import {
+  Backpack,
   Crosshair,
   FolderOpen,
   GameController,
@@ -10,7 +11,7 @@ import {
   SpeakerHigh,
   UserFocus,
 } from "@phosphor-icons/react";
-import type { ComponentType, ReactNode } from "react";
+import { Component, type ComponentType, createRef, type ReactNode } from "react";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
 type NavIcon = ComponentType<{ size?: number; weight?: "regular" | "bold" }>;
@@ -26,43 +27,151 @@ const SETTINGS_TAB_ICONS: Record<SettingsTab, NavIcon> = {
   mods: Package,
   files: FolderOpen,
   launch: Play,
+  inventory: Backpack,
+};
+
+type WorkspaceTab = SettingsTab | "app";
+
+function workspaceLabel(tab: WorkspaceTab) {
+  return tab === "app" ? "App settings" : SETTINGS_TAB_LABELS[tab];
+}
+
+type ScrollRegionProps = {
+  tab: WorkspaceTab;
+  scrollIdentity: string | null;
+  children?: ReactNode;
 };
 
 /**
- * The settings shell: a grouped sidebar and one 880px content column.
- *
- * The lock state is shown in exactly one place, the top banner; the disabled
- * controls carry the rest of the message.
+ * A snapshot captures scroll before React hides the previous retained pane.
+ * An effect cleanup is too late: the shorter next pane can already have
+ * clamped scrollTop. The children stay mounted, including their draft stores.
  */
+class PaneScrollRegion extends Component<ScrollRegionProps> {
+  private viewport = createRef<HTMLElement>();
+  private content = createRef<HTMLDivElement>();
+  private pane = createRef<HTMLDivElement>();
+  private positions = new Map<WorkspaceTab, number>();
+  private pendingRestore: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private transitionPhase = 0;
+
+  componentDidMount() {
+    if (typeof ResizeObserver === "undefined" || !this.content.current) return;
+    this.resizeObserver = new ResizeObserver(() => this.restorePending());
+    this.resizeObserver.observe(this.content.current);
+  }
+
+  getSnapshotBeforeUpdate(previous: ScrollRegionProps) {
+    if (previous.tab === this.props.tab && previous.scrollIdentity === this.props.scrollIdentity) {
+      return null;
+    }
+    return this.pendingRestore ?? this.viewport.current?.scrollTop ?? 0;
+  }
+
+  componentDidUpdate(previous: ScrollRegionProps, _state: unknown, snapshot: number | null) {
+    if (snapshot === null) return;
+    if (previous.scrollIdentity !== this.props.scrollIdentity) {
+      // Inventory is account-owned; App settings is global. Profile/install
+      // changes only reset customization-pane positions.
+      for (const tab of this.positions.keys()) {
+        if (tab !== "inventory" && tab !== "app") this.positions.delete(tab);
+      }
+      if (previous.tab === "inventory" || previous.tab === "app") {
+        this.positions.set(previous.tab, snapshot);
+      }
+    } else {
+      this.positions.set(previous.tab, snapshot);
+    }
+    this.pendingRestore = this.positions.get(this.props.tab) ?? 0;
+    this.restorePending();
+    if (previous.tab !== this.props.tab) {
+      // Alternate identical animations so a rapid second tab switch starts a
+      // fresh entrance without remounting the pane or losing its drafts.
+      this.transitionPhase += 1;
+      this.pane.current?.setAttribute(
+        "data-switch",
+        this.transitionPhase % 2 === 1 ? "odd" : "even",
+      );
+    }
+  }
+
+  componentWillUnmount() {
+    this.resizeObserver?.disconnect();
+  }
+
+  private restorePending = () => {
+    const viewport = this.viewport.current;
+    if (!viewport || this.pendingRestore === null) return;
+    viewport.scrollTop = this.pendingRestore;
+    if (Math.abs(viewport.scrollTop - this.pendingRestore) < 1) {
+      this.pendingRestore = null;
+    }
+  };
+
+  private takeScrollControl = () => {
+    // A deliberate input wins over a delayed image/read finishing its layout.
+    this.pendingRestore = null;
+  };
+
+  render() {
+    const { tab, children } = this.props;
+    return (
+      <section
+        ref={this.viewport}
+        data-testid="settings-scroll"
+        className="settings-scroll"
+        aria-label={`${workspaceLabel(tab)} workspace`}
+        onScroll={(event) => {
+          if (this.pendingRestore === null) {
+            this.positions.set(tab, event.currentTarget.scrollTop);
+          }
+        }}
+        onWheel={this.takeScrollControl}
+        onTouchStart={this.takeScrollControl}
+        onPointerDown={this.takeScrollControl}
+        onKeyDownCapture={this.takeScrollControl}
+      >
+        <div ref={this.content} className="settings-content" data-pane={tab}>
+          <div ref={this.pane} data-testid={`settings-pane-${tab}`} className="settings-pane">
+            {children ?? <p className="t-meta">{workspaceLabel(tab)}</p>}
+          </div>
+        </div>
+      </section>
+    );
+  }
+}
+
+/** Grouped navigation and a task-sized workspace. The top banner owns locks. */
 export function SettingsLayout({
   tab,
   children,
   onTab,
+  scrollIdentity = null,
+  utility,
+  page = null,
 }: {
   tab: SettingsTab;
   children?: ReactNode;
   onTab: (tab: SettingsTab) => void;
+  /** Confirmed install + profile identity. A change resets profile-pane scroll. */
+  scrollIdentity?: string | null;
+  /** Global actions, such as App settings, remain reachable below the nav. */
+  utility?: ReactNode;
+  /** A global page can share the shell without becoming a profile pane. */
+  page?: "app" | null;
 }) {
   return (
-    <div
-      data-testid="settings-panes"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-edge bg-bg lg:flex-row"
-    >
-      <aside className="shrink-0 border-b border-edge bg-panel lg:w-(--sidebar-width) lg:border-r lg:border-b-0">
-        <nav
-          className="flex gap-0.5 overflow-x-auto px-3 py-3 lg:flex-col lg:gap-0 lg:px-0 lg:py-6"
-          aria-label="Settings"
-        >
-          {SETTINGS_TAB_GROUPS.map((group, index) => (
-            <div key={group.label} className="contents lg:block">
-              <p
-                className={`eyebrow hidden px-6 lg:block ${index === 0 ? "" : "mt-7"} mb-2`}
-                aria-hidden="true"
-              >
+    <div data-testid="settings-panes" className="settings-shell">
+      <aside className="settings-sidebar">
+        <nav className="settings-nav" aria-label="Settings">
+          {SETTINGS_TAB_GROUPS.map((group) => (
+            <div key={group.label} className="settings-nav-group">
+              <p className="eyebrow settings-nav-heading" aria-hidden="true">
                 {group.label}
               </p>
               {group.tabs.map((item) => {
-                const active = item === tab;
+                const active = page === null && item === tab;
                 const Icon = SETTINGS_TAB_ICONS[item];
                 return (
                   <button
@@ -71,36 +180,26 @@ export function SettingsLayout({
                     data-testid={`settings-tab-${item}`}
                     data-active={active ? "true" : "false"}
                     aria-current={active ? "page" : undefined}
+                    title={SETTINGS_TAB_LABELS[item]}
                     onClick={() => onTab(item)}
-                    className={`group relative flex shrink-0 items-center gap-3 rounded-lg px-4 py-2 text-left text-[13.5px] transition-colors duration-150 lg:w-full lg:rounded-none lg:px-6 lg:py-2 ${
-                      active
-                        ? "font-medium text-ink"
-                        : "text-ink-muted hover:text-ink lg:hover:bg-panel-raised"
-                    }`}
+                    className="settings-nav-item"
                   >
-                    <span
-                      aria-hidden="true"
-                      className={`absolute inset-y-1 left-0 hidden w-[2px] lg:block ${
-                        active ? "bg-brand" : "bg-transparent"
-                      }`}
-                    />
-                    <Icon size={16} weight="regular" />
-                    <span>{SETTINGS_TAB_LABELS[item]}</span>
+                    {active ? <span aria-hidden="true" className="settings-nav-marker" /> : null}
+                    <span aria-hidden="true" className="shrink-0">
+                      <Icon size={16} weight="regular" />
+                    </span>
+                    <span className="settings-nav-label">{SETTINGS_TAB_LABELS[item]}</span>
                   </button>
                 );
               })}
             </div>
           ))}
         </nav>
+        {utility ? <div className="settings-utility">{utility}</div> : null}
       </aside>
-
-      <section className="min-w-0 flex-1 overflow-y-auto">
-        <div className={tab === "files" ? "mx-auto w-full px-4 py-3" : "content-col py-10"}>
-          <div data-testid={`settings-pane-${tab}`} className="min-w-0 pb-8">
-            {children ?? <p className="t-meta">{SETTINGS_TAB_LABELS[tab]} settings</p>}
-          </div>
-        </div>
-      </section>
+      <PaneScrollRegion tab={page ?? tab} scrollIdentity={scrollIdentity}>
+        {children}
+      </PaneScrollRegion>
     </div>
   );
 }

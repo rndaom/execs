@@ -84,6 +84,957 @@ fn fake_root() -> (std::path::PathBuf, std::path::PathBuf) {
 }
 
 #[test]
+fn corrupt_direct_flat_source_keeps_the_installed_selection_byte_exact() {
+    let (root, data) = fake_root();
+    let cueki = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(
+        &root,
+        &data,
+        &cueki,
+        &PreloaderSelection {
+            particle_mods: vec!["Blue Water".into()],
+            ..PreloaderSelection::default()
+        },
+        &[],
+    )
+    .unwrap();
+    let watched = [
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
+    let flat = flat_textures::cache_path(&data);
+    // Same length as the real source: length-only cache checks must not pass.
+    std::fs::write(&flat, vec![0; flat_textures::ZIP_BYTES as usize]).unwrap();
+    let err = apply_preloader_selection(
+        &root,
+        &data,
+        &cueki,
+        &PreloaderSelection {
+            addons: vec![flat_textures::ID.into()],
+            particle_mods: vec!["Blue Water".into()],
+            ..PreloaderSelection::default()
+        },
+        &[],
+    )
+    .unwrap_err();
+    assert!(err.contains("pinned revision"), "{err}");
+    for (path, bytes) in watched.iter().zip(before) {
+        assert_eq!(std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+}
+
+#[test]
+fn missing_or_corrupt_direct_developer_source_keeps_the_installed_selection_byte_exact() {
+    let (root, data) = fake_root();
+    let cueki = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(
+        &root,
+        &data,
+        &cueki,
+        &PreloaderSelection {
+            particle_mods: vec!["Blue Water".into()],
+            ..PreloaderSelection::default()
+        },
+        &[],
+    )
+    .unwrap();
+    let watched = [
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
+    let selected = PreloaderSelection {
+        addons: vec![developer_textures::ID.into()],
+        particle_mods: vec!["Blue Water".into()],
+        ..PreloaderSelection::default()
+    };
+    let err = apply_preloader_selection(&root, &data, &cueki, &selected, &[]).unwrap_err();
+    assert!(err.contains("Download Developer Textures"), "{err}");
+    for (path, bytes) in watched.iter().zip(&before) {
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+    let cache = developer_textures::cache_path(&data);
+    std::fs::write(&cache, vec![0; developer_textures::ARCHIVE_BYTES as usize]).unwrap();
+    let err = apply_preloader_selection(&root, &data, &cueki, &selected, &[]).unwrap_err();
+    assert!(err.contains("pinned revision"), "{err}");
+    for (path, bytes) in watched.iter().zip(&before) {
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+}
+
+#[test]
+fn missing_or_corrupt_square_source_keeps_the_installed_selection_byte_exact() {
+    let (root, data) = fake_root();
+    let cueki = fake_mods_zip(root.parent().unwrap());
+    apply_preloader_selection(
+        &root,
+        &data,
+        &cueki,
+        &PreloaderSelection {
+            particle_mods: vec!["Blue Water".into()],
+            ..PreloaderSelection::default()
+        },
+        &[],
+    )
+    .unwrap();
+    let watched = [
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
+    let selected = PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+        ],
+        particle_mods: vec!["Blue Water".into()],
+        ..PreloaderSelection::default()
+    };
+    let err = apply_preloader_selection(&root, &data, &cueki, &selected, &[]).unwrap_err();
+    assert!(err.contains("Download the Square Series"), "{err}");
+    for (path, bytes) in watched.iter().zip(&before) {
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+    let cache = square_overlays::cache_path(&data);
+    std::fs::write(&cache, vec![0; square_overlays::ARCHIVE_BYTES as usize]).unwrap();
+    let err = apply_preloader_selection(&root, &data, &cueki, &selected, &[]).unwrap_err();
+    assert!(err.contains("pinned revision"), "{err}");
+    for (path, bytes) in watched.iter().zip(&before) {
+        assert_eq!(&std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+}
+
+#[test]
+fn flat_target_switch_refuses_missing_or_corrupt_source_before_removing_the_current_profile() {
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let profiles = data.join("profiles");
+    let active = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .active_profile_id
+    .unwrap();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Flat", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: vec![flat_textures::ID.into()],
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    let watched = [
+        root.join("tf/cfg/config.cfg"),
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).ok())
+        .collect();
+    let assert_unchanged = || {
+        for (path, bytes) in watched.iter().zip(&before) {
+            assert_eq!(&std::fs::read(path).ok(), bytes, "{}", path.display());
+        }
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id,
+            Some(active.clone())
+        );
+    };
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("Download Flat Textures"));
+    assert_unchanged();
+
+    let flat_cache = flat_textures::cache_path(&data);
+    std::fs::create_dir_all(flat_cache.parent().unwrap()).unwrap();
+    std::fs::write(&flat_cache, vec![0; flat_textures::ZIP_BYTES as usize]).unwrap();
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("pinned revision"));
+    assert_unchanged();
+}
+
+#[test]
+fn developer_target_switch_refuses_missing_or_corrupt_source_before_removing_current_profile() {
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let profiles = data.join("profiles");
+    let active = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .active_profile_id
+    .unwrap();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Developer", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: vec![developer_textures::ID.into()],
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    let watched = [
+        root.join("tf/cfg/config.cfg"),
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).ok())
+        .collect();
+    let assert_unchanged = || {
+        for (path, bytes) in watched.iter().zip(&before) {
+            assert_eq!(&std::fs::read(path).ok(), bytes, "{}", path.display());
+        }
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id,
+            Some(active.clone())
+        );
+    };
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("Download Developer Textures"));
+    assert_unchanged();
+
+    let cache = developer_textures::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, vec![0; developer_textures::ARCHIVE_BYTES as usize]).unwrap();
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("pinned revision"));
+    assert_unchanged();
+}
+
+#[test]
+fn square_target_switch_refuses_missing_or_corrupt_source_before_removing_current_profile() {
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let profiles = data.join("profiles");
+    let active = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .active_profile_id
+    .unwrap();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Square", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+        ],
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    let watched = [
+        root.join("tf/cfg/config.cfg"),
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/tf2_misc_dir.vpk"),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/custom/execs-preloader.vpk"),
+        data.join("preloader/state.json"),
+    ];
+    let before: Vec<_> = watched
+        .iter()
+        .map(|path| std::fs::read(path).ok())
+        .collect();
+    let assert_unchanged = || {
+        for (path, bytes) in watched.iter().zip(&before) {
+            assert_eq!(&std::fs::read(path).ok(), bytes, "{}", path.display());
+        }
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id,
+            Some(active.clone())
+        );
+    };
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("Download the Square Series"));
+    assert_unchanged();
+
+    let cache = square_overlays::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, vec![0; square_overlays::ARCHIVE_BYTES as usize]).unwrap();
+    let err =
+        crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+            .unwrap_err();
+    assert!(err.message().contains("pinned revision"));
+    assert_unchanged();
+}
+
+/// Run explicitly with exact author and cueki downloads in the environment;
+/// this keeps third-party bytes out of the repository and the normal test
+/// suite. The fake TF2 root is entirely under the test's temporary folder.
+#[test]
+#[ignore = "requires EXECS_D7_FLAT_ZIP and EXECS_D7_CUEKI_ZIP"]
+fn pinned_flat_author_archive_applies_alone_and_with_other_choices() {
+    let author = std::env::var("EXECS_D7_FLAT_ZIP").unwrap();
+    let cueki = std::env::var("EXECS_D7_CUEKI_ZIP").unwrap();
+    let author_bytes = std::fs::read(&author).unwrap();
+    assert_eq!(
+        flat_textures::validate_bytes(&author_bytes).unwrap().len(),
+        flat_textures::PAYLOAD_FILES
+    );
+    assert_eq!(
+        crate::hash::sha256_file(Path::new(&cueki)).unwrap(),
+        MODS_SHA256
+    );
+    let mut author_archive = zip::ZipArchive::new(std::io::Cursor::new(&author_bytes)).unwrap();
+    let expected = {
+        let mut entry = author_archive
+            .by_name("FlatTexturesV1/materials/brick/brickwall001.vtf")
+            .unwrap();
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        bytes
+    };
+    let (root, data) = fake_root();
+    let flat_cache = flat_textures::cache_path(&data);
+    std::fs::create_dir_all(flat_cache.parent().unwrap()).unwrap();
+    std::fs::write(&flat_cache, author_bytes).unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let dummy_cueki = data.join("preloader/unused-mods.zip");
+    let flat = PreloaderSelection {
+        addons: vec![flat_textures::ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &flat, &[]).unwrap();
+    assert_eq!(report.addons_installed, vec![flat_textures::ID]);
+    let pack = root.join("tf/custom/execs-preloader.vpk");
+    let entries = map_vpk_entries(&pack).unwrap();
+    let entry = entries.get("materials/brick/brickwall001.vtf").unwrap();
+    assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
+
+    let mixed = PreloaderSelection {
+        addons: vec![flat_textures::ID.into(), "factory new".into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, Path::new(&cueki), &mixed, &[]).unwrap();
+    assert_eq!(report.addons_installed, mixed.addons);
+    let entries = map_vpk_entries(&pack).unwrap();
+    let entry = entries.get("materials/brick/brickwall001.vtf").unwrap();
+    assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
+    assert!(entries.contains_key("materials/patterns/paint_blood_drops.vmt"));
+
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert!(!pack.exists());
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+/// The three exact downloads stay outside Git and are provided explicitly.
+#[test]
+#[ignore = "requires EXECS_D7_DEVELOPER_7Z, EXECS_D7_FLAT_ZIP and EXECS_D7_CUEKI_ZIP"]
+fn pinned_developer_archive_applies_alone_with_flat_and_with_cueki() {
+    let developer = std::fs::read(std::env::var("EXECS_D7_DEVELOPER_7Z").unwrap()).unwrap();
+    let flat = std::fs::read(std::env::var("EXECS_D7_FLAT_ZIP").unwrap()).unwrap();
+    let cueki = std::env::var("EXECS_D7_CUEKI_ZIP").unwrap();
+    let game_files = developer_textures::validate_bytes(&developer).unwrap();
+    flat_textures::validate_bytes(&flat).unwrap();
+    assert_eq!(
+        crate::hash::sha256_file(Path::new(&cueki)).unwrap(),
+        MODS_SHA256
+    );
+    let sample = "materials/dev/grey.vtf";
+    let expected = game_files[&format!("mods/addons/{}/{sample}", developer_textures::ID)].clone();
+    let (root, data) = fake_root();
+    let cache = developer_textures::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, developer).unwrap();
+    std::fs::write(flat_textures::cache_path(&data), flat).unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let dummy_cueki = data.join("preloader/unused-mods.zip");
+    let developer_only = PreloaderSelection {
+        addons: vec![developer_textures::ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report =
+        apply_preloader_selection(&root, &data, &dummy_cueki, &developer_only, &[]).unwrap();
+    assert_eq!(report.addons_installed, developer_only.addons);
+    let pack = root.join("tf/custom/execs-preloader.vpk");
+    let assert_sample = || {
+        let entries = map_vpk_entries(&pack).unwrap();
+        let entry = entries.get(sample).unwrap();
+        assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
+    };
+    assert_sample();
+
+    let direct_pair = PreloaderSelection {
+        addons: vec![developer_textures::ID.into(), flat_textures::ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &direct_pair, &[]).unwrap();
+    assert_eq!(report.addons_installed, direct_pair.addons);
+    assert_sample();
+    assert!(map_vpk_entries(&pack)
+        .unwrap()
+        .contains_key("materials/brick/brickwall001.vtf"));
+
+    let mixed = PreloaderSelection {
+        addons: vec![developer_textures::ID.into(), "factory new".into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, Path::new(&cueki), &mixed, &[]).unwrap();
+    assert_eq!(report.addons_installed, mixed.addons);
+    assert_sample();
+    assert!(map_vpk_entries(&pack)
+        .unwrap()
+        .contains_key("materials/patterns/paint_blood_drops.vmt"));
+
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert!(!pack.exists());
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
+#[ignore = "requires EXECS_D7_SQUARE_ZIP and EXECS_D7_CUEKI_ZIP"]
+fn pinned_square_overlays_apply_separately_together_and_with_cueki() {
+    let author = std::fs::read(std::env::var("EXECS_D7_SQUARE_ZIP").unwrap()).unwrap();
+    let cueki = std::env::var("EXECS_D7_CUEKI_ZIP").unwrap();
+    let game_files = square_overlays::validate_bytes(&author).unwrap();
+    assert_eq!(
+        crate::hash::sha256_file(Path::new(&cueki)).unwrap(),
+        MODS_SHA256
+    );
+    let burning_path = "materials/effects/tiledfire/firelayeredslowtiled512.vtf";
+    let sentry_path = "materials/models/buildables/sentry_shield/sentry_shield.vtf";
+    let burning_expected =
+        game_files[&format!("mods/addons/{}/{burning_path}", square_overlays::BURNING_ID)].clone();
+    let sentry_expected =
+        game_files[&format!("mods/addons/{}/{sentry_path}", square_overlays::SENTRY_ID)].clone();
+    let (root, data) = fake_root();
+    let cache = square_overlays::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, author).unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let dummy_cueki = data.join("preloader/unused-mods.zip");
+    let pack = root.join("tf/custom/execs-preloader.vpk");
+    let assert_packed = |path: &str, expected: &[u8]| {
+        let entries = map_vpk_entries(&pack).unwrap();
+        let entry = entries.get(path).unwrap();
+        assert_eq!(crate::vpk::read_vpk_entry(&pack, entry).unwrap(), expected);
+    };
+
+    let burning = PreloaderSelection {
+        addons: vec![square_overlays::BURNING_ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &burning, &[]).unwrap();
+    assert_eq!(report.addons_installed, burning.addons);
+    assert_packed(burning_path, &burning_expected);
+    assert!(!map_vpk_entries(&pack).unwrap().contains_key(sentry_path));
+
+    let sentry = PreloaderSelection {
+        addons: vec![square_overlays::SENTRY_ID.into()],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &sentry, &[]).unwrap();
+    assert_eq!(report.addons_installed, sentry.addons);
+    assert_packed(sentry_path, &sentry_expected);
+    assert!(!map_vpk_entries(&pack).unwrap().contains_key(burning_path));
+
+    let pair = PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+        ],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, &dummy_cueki, &pair, &[]).unwrap();
+    assert_eq!(report.addons_installed, pair.addons);
+    assert_packed(burning_path, &burning_expected);
+    assert_packed(sentry_path, &sentry_expected);
+
+    let mixed = PreloaderSelection {
+        addons: vec![
+            square_overlays::BURNING_ID.into(),
+            square_overlays::SENTRY_ID.into(),
+            "factory new".into(),
+        ],
+        ..PreloaderSelection::default()
+    };
+    let report = apply_preloader_selection(&root, &data, Path::new(&cueki), &mixed, &[]).unwrap();
+    assert_eq!(report.addons_installed, mixed.addons);
+    assert_packed(burning_path, &burning_expected);
+    assert_packed(sentry_path, &sentry_expected);
+    assert!(map_vpk_entries(&pack)
+        .unwrap()
+        .contains_key("materials/patterns/paint_blood_drops.vmt"));
+
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert!(!pack.exists());
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
+#[ignore = "requires EXECS_D7_FLAT_ZIP"]
+fn pinned_flat_selection_survives_switch_export_import_and_stock_restore() {
+    let author = std::env::var("EXECS_D7_FLAT_ZIP").unwrap();
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let flat_cache = flat_textures::cache_path(&data);
+    std::fs::create_dir_all(flat_cache.parent().unwrap()).unwrap();
+    std::fs::copy(author, &flat_cache).unwrap();
+    let profiles = data.join("profiles");
+    let original = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .profiles
+    .last()
+    .unwrap()
+    .id
+    .clone();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Flat", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: vec![flat_textures::ID.into()],
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(
+        preloader_status(&root, &data).unwrap().addons,
+        vec![flat_textures::ID]
+    );
+    assert!(root.join("tf/custom/execs-preloader.vpk").exists());
+
+    let exported = data.join("flat-profile.zip");
+    crate::zip::export_profile_to(&profiles, &root, &target, &exported).unwrap();
+    let zip_file = std::fs::File::open(&exported).unwrap();
+    let exported_zip = zip::ZipArchive::new(zip_file).unwrap();
+    assert!(!exported_zip
+        .file_names()
+        .any(|name| name.contains("execs-preloader.vpk") || name.contains("flattexturesv1-")));
+    let imported = crate::zip::import_profile_from(&profiles, &root, &exported, ["bash"])
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|profile| profile.id != original && profile.id != target)
+        .unwrap()
+        .id;
+    assert_eq!(
+        crate::profile::load_manifest(&profiles, &imported)
+            .unwrap()
+            .preloader
+            .unwrap()
+            .addons,
+        vec![flat_textures::ID]
+    );
+    crate::switch::switch_profile_to(&profiles, &root, &imported, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(
+        preloader_status(&root, &data).unwrap().addons,
+        vec![flat_textures::ID]
+    );
+    crate::switch::switch_profile_to(&profiles, &root, &original, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert!(!root.join("tf/custom/execs-preloader.vpk").exists());
+    assert!(preloader_status(&root, &data).unwrap().addons.is_empty());
+    // The material bypass is an independent global choice; Restore stock
+    // files, rather than a profile switch, removes it.
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
+#[ignore = "requires EXECS_D7_DEVELOPER_7Z"]
+fn pinned_developer_selection_survives_switch_export_import_and_stock_restore() {
+    let author = std::env::var("EXECS_D7_DEVELOPER_7Z").unwrap();
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let cache = developer_textures::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::copy(author, &cache).unwrap();
+    let profiles = data.join("profiles");
+    let original = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .profiles
+    .last()
+    .unwrap()
+    .id
+    .clone();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Developer", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: vec![developer_textures::ID.into()],
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(
+        preloader_status(&root, &data).unwrap().addons,
+        vec![developer_textures::ID]
+    );
+    assert!(root.join("tf/custom/execs-preloader.vpk").exists());
+
+    let exported = data.join("developer-profile.zip");
+    crate::zip::export_profile_to(&profiles, &root, &target, &exported).unwrap();
+    let zip_file = std::fs::File::open(&exported).unwrap();
+    let exported_zip = zip::ZipArchive::new(zip_file).unwrap();
+    assert!(!exported_zip.file_names().any(|name| {
+        name.contains("execs-preloader.vpk") || name.contains("developer-textures-v2-")
+    }));
+    let imported = crate::zip::import_profile_from(&profiles, &root, &exported, ["bash"])
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|profile| profile.id != original && profile.id != target)
+        .unwrap()
+        .id;
+    assert_eq!(
+        crate::profile::load_manifest(&profiles, &imported)
+            .unwrap()
+            .preloader
+            .unwrap()
+            .addons,
+        vec![developer_textures::ID]
+    );
+    crate::switch::switch_profile_to(&profiles, &root, &imported, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(
+        preloader_status(&root, &data).unwrap().addons,
+        vec![developer_textures::ID]
+    );
+    crate::switch::switch_profile_to(&profiles, &root, &original, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert!(!root.join("tf/custom/execs-preloader.vpk").exists());
+    assert!(preloader_status(&root, &data).unwrap().addons.is_empty());
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
+#[ignore = "requires EXECS_D7_SQUARE_ZIP"]
+fn pinned_square_overlay_selections_survive_switch_export_import_and_stock_restore() {
+    let author = std::env::var("EXECS_D7_SQUARE_ZIP").unwrap();
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let original_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+    let original_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let cache = square_overlays::cache_path(&data);
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::copy(author, &cache).unwrap();
+    let profiles = data.join("profiles");
+    let original = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Original",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .profiles
+    .last()
+    .unwrap()
+    .id
+    .clone();
+    let target = crate::profile::create_profile_record_to(&profiles, &root, "Square", ["bash"])
+        .unwrap()
+        .profiles
+        .last()
+        .unwrap()
+        .id
+        .clone();
+    crate::profile::put_exclusive_file_to(
+        &profiles,
+        &root,
+        &target,
+        "tf/cfg/config.cfg",
+        b"bind b +attack\n",
+        ["bash"],
+    )
+    .unwrap();
+    let selected = vec![
+        square_overlays::BURNING_ID.into(),
+        square_overlays::SENTRY_ID.into(),
+    ];
+    let mut manifest = crate::profile::load_manifest(&profiles, &target).unwrap();
+    manifest.preloader = Some(PreloaderSelection {
+        addons: selected.clone(),
+        ..PreloaderSelection::default()
+    });
+    crate::profile::save_manifest(&profiles, &root, &manifest, ["bash"]).unwrap();
+    static NO_STEAM: [std::path::PathBuf; 0] = [];
+    let no_steam = || crate::absorb::AbsorbOptions {
+        cloud_config: None,
+        steam_roots: Some(&NO_STEAM),
+    };
+    crate::switch::switch_profile_to(&profiles, &root, &target, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(preloader_status(&root, &data).unwrap().addons, selected);
+    assert!(root.join("tf/custom/execs-preloader.vpk").exists());
+
+    let exported = data.join("square-profile.zip");
+    crate::zip::export_profile_to(&profiles, &root, &target, &exported).unwrap();
+    let exported_zip = zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
+    assert!(!exported_zip
+        .file_names()
+        .any(|name| name.contains("execs-preloader.vpk") || name.contains("square-overlays-")));
+    let imported = crate::zip::import_profile_from(&profiles, &root, &exported, ["bash"])
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|profile| profile.id != original && profile.id != target)
+        .unwrap()
+        .id;
+    assert_eq!(
+        crate::profile::load_manifest(&profiles, &imported)
+            .unwrap()
+            .preloader
+            .unwrap()
+            .addons,
+        selected
+    );
+    crate::switch::switch_profile_to(&profiles, &root, &imported, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert_eq!(preloader_status(&root, &data).unwrap().addons, selected);
+    crate::switch::switch_profile_to(&profiles, &root, &original, ["bash"], no_steam(), |_| {})
+        .unwrap();
+    assert!(!root.join("tf/custom/execs-preloader.vpk").exists());
+    assert!(preloader_status(&root, &data).unwrap().addons.is_empty());
+    revert_preloader(&root, &data, &[]).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        original_gameinfo
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        original_misc
+    );
+}
+
+#[test]
 fn profile_projection_replaces_addons_and_particles_then_restores_the_previous_profile() {
     let (root, data) = fake_root();
     let zip = fake_mods_zip(&data.parent().unwrap().join("game"));
@@ -146,6 +1097,243 @@ fn profile_projection_replaces_addons_and_particles_then_restores_the_previous_p
 }
 
 #[test]
+fn inactive_legacy_review_clears_only_retired_choices_after_exact_revision() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let active = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Active",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .active_profile_id
+        .unwrap();
+        let target = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Imported legacy",
+            Vec::<String>::new(),
+        )
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|record| record.name == "Imported legacy")
+        .unwrap()
+        .id;
+        let saved = PreloaderSelection {
+            addons: vec![flat_textures::ID.into(), "factory new".into()],
+            particle_mods: vec!["Square_Series".into()],
+            profile_particle_mods: vec!["installed-particle-pack".into()],
+        };
+        crate::profile::mutate_profile_files_to(
+            &profiles,
+            &root,
+            &target,
+            &[],
+            &[],
+            crate::profile::ProfileLiveProjection::LibraryOnly,
+            Vec::<String>::new(),
+            |manifest| {
+                manifest.preloader = Some(saved.clone());
+                Ok(())
+            },
+        )
+        .unwrap();
+        let review = retired_library_review(&profiles, &target).unwrap().unwrap();
+        assert_eq!(review.addons_to_remove, ["factory new"]);
+        assert_eq!(review.particle_mods_to_remove, ["Square_Series"]);
+        assert_eq!(review.direct_addons_kept, [flat_textures::ID]);
+        assert_eq!(
+            review.profile_particle_mods_kept,
+            ["installed-particle-pack"]
+        );
+        let manifest_before = crate::profile::load_manifest(&profiles, &target).unwrap();
+        let gameinfo_before = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+        let misc_before = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+
+        assert!(
+            clear_retired_library_choices(&profiles, &root, &target, "stale-review", &[],)
+                .unwrap_err()
+                .message()
+                .contains("Review it again")
+        );
+        assert_eq!(
+            crate::profile::load_manifest(&profiles, &target).unwrap(),
+            manifest_before
+        );
+
+        clear_retired_library_choices(&profiles, &root, &target, &review.revision, &[]).unwrap();
+        let updated = crate::profile::load_manifest(&profiles, &target).unwrap();
+        let remaining = updated.preloader.unwrap();
+        assert_eq!(remaining.addons, [flat_textures::ID]);
+        assert!(remaining.particle_mods.is_empty());
+        assert_eq!(remaining.profile_particle_mods, ["installed-particle-pack"]);
+        assert!(!remaining.needs_cueki_library());
+        assert!(retired_library_review(&profiles, &target)
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+            gameinfo_before
+        );
+        assert_eq!(
+            std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+            misc_before
+        );
+        assert_eq!(
+            crate::profile::load_library_from(&profiles, Some(&root))
+                .unwrap()
+                .active_profile_id,
+            Some(active)
+        );
+    });
+}
+
+/// Run with the pinned cueki release already available outside the repo. The
+/// archive is copied into the app cache as a preexisting legacy source; this
+/// test never downloads it or writes into the user's actual TF2 install.
+#[test]
+#[ignore = "requires EXECS_D7_CUEKI_ZIP"]
+fn saved_legacy_selection_switches_only_with_exact_cached_archive_and_restores_stock() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let source_zip = std::path::PathBuf::from(std::env::var("EXECS_D7_CUEKI_ZIP").unwrap());
+        assert_eq!(crate::hash::sha256_file(&source_zip).unwrap(), MODS_SHA256);
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let source = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Saved legacy",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .active_profile_id
+        .unwrap();
+        let target = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Direct choices",
+            Vec::<String>::new(),
+        )
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|record| record.name == "Direct choices")
+        .unwrap()
+        .id;
+        let cache = data
+            .join("preloader")
+            .join(format!("mods-{MODS_RELEASE}.zip"));
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::copy(&source_zip, &cache).unwrap();
+        let stock_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+        let stock_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+        let selection = PreloaderSelection {
+            addons: vec!["factory new".into()],
+            ..Default::default()
+        };
+        apply_preloader_selection_with_sampler(&root, &data, &cache, &selection, &[], &Vec::new)
+            .unwrap();
+        record_preload_profile(&data, &source).unwrap();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &target,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(
+            crate::profile::load_manifest(&profiles, &source)
+                .unwrap()
+                .preloader,
+            Some(selection.clone())
+        );
+        let before_gameinfo = std::fs::read(root.join("tf/gameinfo.txt")).unwrap();
+        let before_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+
+        // Missing and same-sized corrupt caches both fail during target
+        // preflight, before the active profile or installed bytes change.
+        std::fs::remove_file(&cache).unwrap();
+        for corrupt in [false, true] {
+            if corrupt {
+                std::fs::write(&cache, vec![0; 81_529_475]).unwrap();
+            }
+            let err = crate::switch::switch_profile_to(
+                &profiles,
+                &root,
+                &source,
+                Vec::<String>::new(),
+                crate::absorb::AbsorbOptions::default(),
+                |_| {},
+            )
+            .unwrap_err();
+            assert!(err
+                .message()
+                .contains("previously verified mod library cache"));
+            assert_eq!(
+                crate::profile::load_library_from(&profiles, Some(&root))
+                    .unwrap()
+                    .active_profile_id
+                    .as_deref(),
+                Some(target.as_str())
+            );
+            assert_eq!(
+                std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+                before_gameinfo
+            );
+            assert_eq!(
+                std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+                before_misc
+            );
+            assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+        }
+
+        std::fs::copy(&source_zip, &cache).unwrap();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &source,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(
+            preloader_status(&root, &data).unwrap().addons,
+            selection.addons
+        );
+        assert!(root.join("tf/custom").join(PRELOADER_VPK).exists());
+        revert_preloader(&root, &data, &[]).unwrap();
+        assert_eq!(
+            std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+            stock_gameinfo
+        );
+        assert_eq!(
+            std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+            stock_misc
+        );
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    });
+}
+
+#[test]
 fn failed_profile_projection_restores_the_previous_owner_and_bytes() {
     let (root, data) = fake_root();
     let zip = fake_mods_zip(&root);
@@ -172,6 +1360,7 @@ fn failed_profile_projection_restores_the_previous_owner_and_bytes() {
         &Vec::new,
         &|| Err("injected commit failure".into()),
         Some(&imported),
+        None,
     )
     .unwrap_err();
     assert_eq!(
@@ -262,7 +1451,9 @@ fn switching_to_imported_profile_clears_global_mods_and_preserves_the_legacy_sel
             |_| {},
         )
         .unwrap_err();
-        assert!(err.message().contains("Download the default mod library"));
+        assert!(err
+            .message()
+            .contains("previously verified mod library cache"));
         assert_eq!(
             crate::profile::load_library_from(&profiles, Some(&root))
                 .unwrap()
@@ -719,9 +1910,9 @@ fn gameinfo_does_not_toggle_prefixes_or_lines_with_extra_tokens() {
 }
 
 /// After a TF2 update replaces gameinfo.txt while the bypass is off, the
-/// backup must follow the new file — and it must be restorable.
+/// backup follows the new file and the live toggle preserves those new bytes.
 #[test]
-fn gameinfo_backup_refreshes_after_a_game_update_and_restores() {
+fn gameinfo_backup_refreshes_after_a_game_update_and_reverses_the_toggle() {
     let (root, data) = fake_root();
     let path = root.join("tf/gameinfo.txt");
     let backup = data.join("preloader/gameinfo.original.txt");
@@ -742,11 +1933,8 @@ fn gameinfo_backup_refreshes_after_a_game_update_and_restores() {
     set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
     assert_eq!(std::fs::read(&backup).unwrap(), updated);
 
-    // The backup is a real repair path.
-    std::fs::write(&path, b"corrupted").unwrap();
-    assert!(restore_gameinfo_from_backup(&root, &data, &[]).unwrap());
+    assert!(set_gameinfo_bypass(&root, &data, false, &[]).unwrap());
     assert_eq!(std::fs::read(&path).unwrap(), updated);
-    assert!(!restore_gameinfo_from_backup(&root, &data, &[]).unwrap());
 }
 
 /// The run lock lives in core now, not only in the command layer: the
@@ -786,11 +1974,6 @@ fn preloader_writes_refuse_while_tf2_runs_and_touch_nothing() {
         set_gameinfo_bypass(&root, &data, false, &running).unwrap_err(),
         locked
     );
-    assert_eq!(
-        restore_gameinfo_from_backup(&root, &data, &running).unwrap_err(),
-        locked
-    );
-
     assert_eq!(std::fs::read(&gameinfo).unwrap(), gameinfo_before);
     assert_eq!(std::fs::read(&vpk_path).unwrap(), dir_before);
     assert_eq!(std::fs::read(&sibling_path).unwrap(), sibling_before);
@@ -919,6 +2102,237 @@ fn patch_refuses_a_directory_mapping_that_changed_after_inspection() {
 
     let err = crate::vpk::patch_vpk_entry(&path, &old, &vec![0; old.length as usize]).unwrap_err();
     assert!(err.0.contains("changed location or CRC"), "{}", err.0);
+}
+
+#[test]
+fn a_directory_memo_still_refuses_a_directory_that_changed_inside_its_scope() {
+    let (root, _data) = fake_root();
+    let path = root.join("tf").join(MISC_VPK);
+    crate::vpk::with_directory_memo(|| {
+        let old = map_vpk_entries(&path).unwrap()["particles/water.pcf"].clone();
+        let mut files = BTreeMap::new();
+        let mut replacement_stock = tiny_pcf("water_effect", 11.0);
+        replacement_stock.resize(old.length as usize, b' ');
+        files.insert("particles/water.pcf".to_string(), replacement_stock);
+        write_split_vpk(&path, &files);
+
+        let remapped = map_vpk_entries(&path).unwrap()["particles/water.pcf"].clone();
+        assert_ne!(remapped.crc, old.crc);
+        let err =
+            crate::vpk::patch_vpk_entry(&path, &old, &vec![0; old.length as usize]).unwrap_err();
+        assert!(err.0.contains("changed location or CRC"), "{}", err.0);
+    });
+}
+
+fn plan_derivations() -> usize {
+    PLAN_DERIVATIONS.with(|count| count.get())
+}
+
+fn current_plan(
+    root: &Path,
+    data: &Path,
+    zip: &Path,
+    selection: &PreloaderSelection,
+    profile: &ProfileContext,
+) -> PreloaderPlan {
+    let entries = map_vpk_entries(&root.join("tf").join(MISC_VPK)).unwrap();
+    let mut state = load_state(data).unwrap();
+    discover_orphaned_snapshots_readonly(data, &mut state, Some(&entries));
+    plan_preloader_selection(root, data, zip, selection, &state, &entries, Some(profile)).unwrap()
+}
+
+fn plan_owner(data: &Path) -> ProfileContext {
+    ProfileContext {
+        profiles: data.join("profiles"),
+        id: "owner".into(),
+    }
+}
+
+fn blue_water_and_flat_look() -> PreloaderSelection {
+    PreloaderSelection {
+        addons: vec!["Flat Look".into()],
+        particle_mods: vec!["Blue Water".into()],
+        profile_particle_mods: vec![],
+    }
+}
+
+/// Planning reads every source and decodes every particle; the write phase
+/// executes that plan instead of deriving it a second time.
+#[test]
+fn one_apply_derives_its_selection_plan_once() {
+    let (root, data) = fake_root();
+    let zip = fake_mods_zip(&root);
+    let selected = blue_water_and_flat_look();
+    let before = plan_derivations();
+    apply_preloader_selection_with_sampler(&root, &data, &zip, &selected, &[], &Vec::new).unwrap();
+    assert_eq!(plan_derivations() - before, 1);
+    let state = load_state(&data).unwrap();
+    assert_eq!(state.particle_mods, selected.particle_mods);
+    assert!(!state.patched.is_empty());
+}
+
+#[test]
+fn a_prepared_plan_is_reused_only_for_the_state_it_was_derived_from() {
+    let selected = blue_water_and_flat_look();
+    let (fresh_root, fresh_data) = fake_root();
+    let fresh_zip = fake_mods_zip(&fresh_root);
+    apply_profile_preloader(
+        &fresh_root,
+        &fresh_data,
+        &fresh_zip,
+        &selected,
+        &plan_owner(&fresh_data),
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    let expected = installed_bytes(&fresh_root, &fresh_data);
+
+    let (root, data) = fake_root();
+    let zip = fake_mods_zip(&root);
+    let stock_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let owner = plan_owner(&data);
+    let plan = current_plan(&root, &data, &zip, &selected, &owner);
+    let before = plan_derivations();
+    apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &selected,
+        &[],
+        &Vec::new,
+        &|| Ok(()),
+        Some(&owner),
+        Some(&plan),
+    )
+    .unwrap();
+    assert_eq!(
+        plan_derivations(),
+        before,
+        "a current plan runs as prepared"
+    );
+    assert_eq!(installed_bytes(&root, &data), expected);
+
+    // Another selection installed after planning changes the state the plan
+    // was derived from, so the write phase derives it again.
+    let stale = current_plan(&root, &data, &zip, &PreloaderSelection::default(), &owner);
+    apply_profile_preloader(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection {
+            addons: vec!["Flat Look".into()],
+            ..Default::default()
+        },
+        &owner,
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    let before = plan_derivations();
+    apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &[],
+        &Vec::new,
+        &|| Ok(()),
+        Some(&owner),
+        Some(&stale),
+    )
+    .unwrap();
+    assert_eq!(plan_derivations() - before, 1, "a stale plan is re-derived");
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+    assert!(load_state(&data).unwrap().patched.is_empty());
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        stock_misc
+    );
+
+    // A plan for a different selection is never executed in its place.
+    let other = current_plan(&root, &data, &zip, &selected, &owner);
+    let before = plan_derivations();
+    apply_preloader_selection_transactional(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &[],
+        &Vec::new,
+        &|| Ok(()),
+        Some(&owner),
+        Some(&other),
+    )
+    .unwrap();
+    assert_eq!(plan_derivations() - before, 1);
+    assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+}
+
+#[test]
+fn a_profile_switch_derives_the_target_preloader_plan_once() {
+    crate::profile::with_profile_process_sampler(Vec::new, || {
+        let (root, data) = fake_root();
+        std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        std::fs::write(root.join("tf/cfg/config.cfg"), b"sensitivity 2\n").unwrap();
+        let profiles = data.join("profiles");
+        let previous = crate::profile::save_current_as_to(
+            &profiles,
+            &root,
+            "Previous",
+            Vec::<String>::new(),
+            crate::profile::SaveCurrentOptions {
+                launch_options: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .active_profile_id
+        .unwrap();
+        let target = crate::profile::create_profile_record_to(
+            &profiles,
+            &root,
+            "Target",
+            Vec::<String>::new(),
+        )
+        .unwrap()
+        .profiles
+        .into_iter()
+        .find(|p| p.name == "Target")
+        .unwrap()
+        .id;
+        let zip = fake_mods_zip(&root);
+        apply_preloader_selection_with_sampler(
+            &root,
+            &data,
+            &zip,
+            &PreloaderSelection {
+                addons: vec!["Flat Look".into()],
+                ..Default::default()
+            },
+            &[],
+            &Vec::new,
+        )
+        .unwrap();
+        record_preload_profile(&data, &previous).unwrap();
+
+        let before = plan_derivations();
+        crate::switch::switch_profile_to(
+            &profiles,
+            &root,
+            &target,
+            Vec::<String>::new(),
+            crate::absorb::AbsorbOptions::default(),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(plan_derivations() - before, 1);
+        assert!(!root.join("tf/custom").join(PRELOADER_VPK).exists());
+        assert_eq!(
+            load_state(&data).unwrap().selection_profile.as_deref(),
+            Some(target.as_str())
+        );
+    });
 }
 
 /// An unknown id must fail before the restore pass has uninstalled the
@@ -2291,18 +3705,18 @@ fn an_unexplained_snapshot_survives_restore_and_torn_writes_do_not() {
     assert!(originals.is_dir());
 }
 
-/// The pristine backup is only worth restoring when it is a gameinfo file.
+/// A corrupt backup cannot authorize a live toggle while bypassed.
 #[test]
-fn a_backup_that_is_not_a_gameinfo_file_is_refused() {
+fn a_corrupt_backup_refuses_the_active_gameinfo_toggle() {
     let (root, data) = fake_root();
     let path = root.join("tf/gameinfo.txt");
+    set_gameinfo_bypass(&root, &data, true, &[]).unwrap();
     let before = std::fs::read(&path).unwrap();
     let backup = data.join("preloader/gameinfo.original.txt");
-    std::fs::create_dir_all(backup.parent().unwrap()).unwrap();
     std::fs::write(&backup, b"corrupted").unwrap();
 
-    let err = restore_gameinfo_from_backup(&root, &data, &[]).unwrap_err();
-    assert!(err.contains("not a GameInfo file"), "{err}");
+    let err = set_gameinfo_bypass(&root, &data, false, &[]).unwrap_err();
+    assert!(err.contains("does not match the active bypass"), "{err}");
     assert_eq!(std::fs::read(&path).unwrap(), before);
     assert!(!crate::hash::part_path(&path).exists());
 }

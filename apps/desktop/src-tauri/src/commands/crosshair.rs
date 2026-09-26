@@ -3,9 +3,8 @@
 use std::collections::BTreeMap;
 
 use execs_core::{CrosshairAsset, ProfileDetail, StockCrosshairSprite};
-use serde::Serialize;
 
-use super::shared::{active_manifest, blocking, with_profile, with_root};
+use super::shared::{active_manifest, with_profile, with_root};
 use crate::error::CommandError;
 use crate::WriteGate;
 
@@ -46,71 +45,6 @@ pub async fn apply_crosshairs(
             &library.unwrap_or_default(),
             design.as_deref(),
         )?)
-    })
-    .await
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CommunityCrosshair {
-    pub file: String,
-    pub width: u32,
-    pub height: u32,
-    /// Frame 0 as unpremultiplied RGBA, for the picker preview.
-    pub rgba: Vec<u8>,
-    /// The raw VTF bytes to pass back through apply_crosshairs' library.
-    pub bytes: Vec<u8>,
-}
-
-/// Download (with local cache) one Venom-pack crosshair and decode a preview.
-#[tauri::command]
-pub async fn fetch_community_crosshair(file: String) -> Result<CommunityCrosshair, CommandError> {
-    blocking(move || {
-        let bytes = crate::crosshair_fetch::fetch_crosshair_vtf(&file)?;
-        let decoded = execs_core::vtf_read::decode_vtf_frame0(&bytes)?;
-        if decoded.frames > 1 {
-            return Err(CommandError::unknown(
-                "Animated crosshairs are not supported yet.",
-            ));
-        }
-        Ok(CommunityCrosshair {
-            file,
-            width: decoded.width,
-            height: decoded.height,
-            rgba: decoded.rgba,
-            bytes,
-        })
-    })
-    .await
-}
-
-/// Thumbnails for the community picker: every requested Venom entry fetched
-/// (with cache) and decoded to frame 0. Entries that fail to download or
-/// decode are simply absent from the map.
-#[tauri::command]
-pub async fn fetch_community_crosshair_previews(
-    files: Vec<String>,
-) -> Result<BTreeMap<String, StockCrosshairSprite>, CommandError> {
-    blocking(move || {
-        let fetched = crate::crosshair_fetch::fetch_crosshair_vtfs(&files);
-        let mut out = BTreeMap::new();
-        for (file, bytes) in fetched {
-            let Ok(decoded) = execs_core::vtf_read::decode_vtf_frame0(&bytes) else {
-                continue;
-            };
-            if decoded.frames > 1 {
-                continue;
-            }
-            out.insert(
-                file,
-                StockCrosshairSprite {
-                    width: decoded.width,
-                    height: decoded.height,
-                    rgba: decoded.rgba,
-                },
-            );
-        }
-        Ok(out)
     })
     .await
 }
@@ -157,6 +91,42 @@ pub async fn get_pack_crosshair_previews(
 pub async fn get_stock_crosshair_sprites(
 ) -> Result<BTreeMap<String, StockCrosshairSprite>, CommandError> {
     with_root(|root| Ok(execs_core::extract_stock_crosshair_sprites(&root)?)).await
+}
+
+/// Candidate custom-pack members that could replace Valve's stock preview art.
+/// The index deliberately does not claim a runtime winner.
+#[tauri::command]
+pub async fn get_crosshair_content_sources(
+) -> Result<execs_core::content_index::ContentIndex, CommandError> {
+    with_root(|root| {
+        let paths: Vec<String> = (1..=7)
+            .flat_map(|number| {
+                ["vtf", "vmt"].map(move |extension| {
+                    format!("materials/vgui/crosshairs/crosshair{number}.{extension}")
+                })
+            })
+            .collect();
+        let path_refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+        Ok(execs_core::content_index::scan_custom_paths(
+            &root,
+            &path_refs,
+            Some(execs_core::crosshair::EXECS_CROSSHAIRS_PACK),
+        ))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_crosshair_source_status(
+) -> Result<execs_core::crosshair::CrosshairSourceStatus, CommandError> {
+    with_profile(|root, profile_id| {
+        Ok(execs_core::crosshair::crosshair_source_status_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+        )?)
+    })
+    .await
 }
 
 #[tauri::command]

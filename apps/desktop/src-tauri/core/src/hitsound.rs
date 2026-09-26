@@ -14,7 +14,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::apply::{detail_from_manifest, ProfileDetail};
+use crate::apply::{detail_from_manifest, prepare_managed_cfg_to, ProfileDetail};
 use crate::archive::read_regular_file_bounded_within;
 use crate::hash::{metadata_is_link, remove_file_force_within, validate_dir_within};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
@@ -23,6 +23,7 @@ use crate::profile::{
     FileSource, ProfileError, ProfileLiveProjection, ProfileManifest,
 };
 use crate::vpk::read_vpk_dir_file_filtered;
+use crate::ManagedCfgScope;
 
 pub const EXECS_HITSOUNDS_PACK: &str = "execs-hitsounds";
 pub const HITSOUND_REL: &str = "tf/custom/execs-hitsounds/sound/ui/hitsound.wav";
@@ -72,16 +73,16 @@ impl HitsoundKind {
     }
 }
 
-/// Where an installed sound came from, so the pane can show its origin and
-/// re-offer the right thing.
+/// Where an installed sound came from, retained with profile bytes even when
+/// a remote source is no longer offered for new selections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HitsoundSource {
-    /// A pinned community-pack entry; `name` is the upstream file stem.
+    /// Legacy TF2Hitsounds entry; `name` is the upstream file stem.
     Community,
     /// A file the user picked; `name` is its original file name.
     File,
-    /// comfig.app's hits library; `name` is the entry's display name.
+    /// Legacy comfig.app entry; `name` is the entry's display name.
     Comfig,
 }
 
@@ -135,10 +136,16 @@ pub fn clamp_boost_db(db: u8) -> u8 {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HitsoundRecord {
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub source_changed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hit: Option<HitsoundEntry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kill: Option<HitsoundEntry>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// What a WAV file is, read from its `fmt ` chunk.
@@ -808,6 +815,79 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    apply_hitsounds_to_internal(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        None,
+        hit,
+        kill,
+        running_names,
+    )
+}
+
+/// Commit sound CVars, autoexec wiring, WAVs and their record in one journal.
+/// The submitted cfg is merged only for the Sounds scope, preserving settings
+/// owned by the other panes.
+pub fn apply_hitsounds_with_settings(
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    settings: &[u8],
+    hit: HitsoundChange,
+    kill: HitsoundChange,
+) -> Result<ProfileDetail, ProfileError> {
+    apply_hitsounds_with_settings_to(
+        &profiles_dir(),
+        tf2_root,
+        profile_id,
+        rel_path,
+        settings,
+        hit,
+        kill,
+        live_process_names(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn apply_hitsounds_with_settings_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    rel_path: &str,
+    settings: &[u8],
+    hit: HitsoundChange,
+    kill: HitsoundChange,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    apply_hitsounds_to_internal(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        Some((rel_path, settings)),
+        hit,
+        kill,
+        running_names,
+    )
+}
+
+fn apply_hitsounds_to_internal<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    settings: Option<(&str, &[u8])>,
+    hit: HitsoundChange,
+    kill: HitsoundChange,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
@@ -815,6 +895,18 @@ where
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
     validate_prepared_change(&hit)?;
     validate_prepared_change(&kill)?;
+    let prepared = settings
+        .map(|(rel_path, bytes)| {
+            prepare_managed_cfg_to(
+                profiles_dir,
+                tf2_root,
+                profile_id,
+                rel_path,
+                bytes,
+                Some(ManagedCfgScope::Sounds),
+            )
+        })
+        .transpose()?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
     refuse_untracked_live_hitsound_files(profiles_dir, tf2_root, profile_id, &manifest)?;
     // Cache cleanup can fail (notably for a read-only file on Windows). Do it
@@ -839,6 +931,21 @@ where
                 set_slot(&mut record, kind, Some(entry.clone()));
             }
         }
+    }
+    // An accepted external edit invalidates the saved source label. A partial
+    // apply cannot clear that warning while an old installed slot remains:
+    // the changed file might be the slot this apply left untouched.
+    let retains_old_slot = (matches!(&hit, HitsoundChange::Keep) && record.hit.is_some())
+        || (matches!(&kill, HitsoundChange::Keep) && record.kill.is_some());
+    if !retains_old_slot {
+        record.source_changed = false;
+    }
+    if let (Some((rel_path, _)), Some(prepared)) = (settings, &prepared) {
+        puts.push((rel_path.to_owned(), FileSource::Bytes(&prepared.cfg)));
+        puts.push((
+            prepared.auto_path.clone(),
+            FileSource::Bytes(&prepared.auto),
+        ));
     }
     let manifest = mutate_profile_files_to(
         profiles_dir,
@@ -1411,6 +1518,141 @@ mod tests {
         assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
         assert_eq!(std::fs::read(tf2.join(HITSOUND_REL)).unwrap(), old);
         assert!(!tf2.join(KILLSOUND_REL).exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn sound_settings_and_files_fail_or_commit_together() {
+        let (root, profiles, tf2, id) = setup();
+        let path = "tf/cfg/execs_gameplay.cfg";
+        let auto_path = "tf/cfg/autoexec.cfg";
+        let old_wav = pcm_wav(44100, 1, 16, 20);
+        apply_hitsounds_with_settings_to(
+            &profiles,
+            &tf2,
+            &id,
+            path,
+            b"tf_dingaling_volume 0.3\n",
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("old".into(), HitsoundSource::File),
+                wav: old_wav.clone(),
+            },
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let old_cfg = std::fs::read(tf2.join(path)).unwrap();
+        let old_auto = std::fs::read(tf2.join(auto_path)).unwrap();
+
+        // This used to be the second command: if installing its WAV fails,
+        // the first command must not have committed the new CVars.
+        let error = apply_hitsounds_with_settings_to(
+            &profiles,
+            &tf2,
+            &id,
+            path,
+            b"tf_dingaling_volume 0.7\n",
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("bad".into(), HitsoundSource::File),
+                wav: pcm_wav(48000, 1, 16, 20),
+            },
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(error.message().contains("Prepare it first"));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(std::fs::read(tf2.join(path)).unwrap(), old_cfg);
+
+        // Even failure during the shared journal's commit restores CFG,
+        // autoexec, WAV and record, in both live and library copies.
+        let blocker = crate::hash::part_path(&crate::profile::manifest_file(&profiles, &id));
+        std::fs::create_dir_all(&blocker).unwrap();
+        let error = apply_hitsounds_with_settings_to(
+            &profiles,
+            &tf2,
+            &id,
+            path,
+            b"tf_dingaling_volume 0.7\n",
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("new".into(), HitsoundSource::Community),
+                wav: pcm_wav(44100, 1, 16, 30),
+            },
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(matches!(error, ProfileError::Io(_)));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        for (rel, expected) in [
+            (path, &old_cfg),
+            (auto_path, &old_auto),
+            (HITSOUND_REL, &old_wav),
+        ] {
+            assert_eq!(std::fs::read(tf2.join(rel)).unwrap(), *expected);
+            assert_eq!(
+                std::fs::read(exclusive_file_path(&profiles, &id, rel)).unwrap(),
+                *expected
+            );
+        }
+        std::fs::remove_dir(&blocker).unwrap();
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn changed_source_warning_clears_only_after_all_old_slots_are_replaced() {
+        let (root, profiles, tf2, id) = setup();
+        let wav = pcm_wav(44100, 1, 16, 20);
+        apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("old hit".into(), HitsoundSource::File),
+                wav: wav.clone(),
+            },
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("old kill".into(), HitsoundSource::File),
+                wav: wav.clone(),
+            },
+            unlocked(),
+        )
+        .unwrap();
+        let mut manifest = load_manifest(&profiles, &id).unwrap();
+        manifest.hitsound.as_mut().unwrap().source_changed = true;
+        crate::profile::save_manifest(&profiles, &tf2, &manifest, unlocked()).unwrap();
+
+        let partial = apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("new hit".into(), HitsoundSource::File),
+                wav: wav.clone(),
+            },
+            HitsoundChange::Keep,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(partial.hitsound.unwrap().source_changed);
+
+        let complete = apply_hitsounds_to(
+            &profiles,
+            &tf2,
+            &id,
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("newer hit".into(), HitsoundSource::File),
+                wav: wav.clone(),
+            },
+            HitsoundChange::Install {
+                entry: HitsoundEntry::new("new kill".into(), HitsoundSource::File),
+                wav,
+            },
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!complete.hitsound.unwrap().source_changed);
         let _ = std::fs::remove_dir_all(root);
     }
 

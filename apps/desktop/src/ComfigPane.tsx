@@ -1,17 +1,10 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { useState } from "react";
-import presetHigh from "./assets/presets/high.webp";
-import presetLow from "./assets/presets/low.webp";
-import presetMedium from "./assets/presets/medium.webp";
-import presetMediumHigh from "./assets/presets/medium_high.webp";
-import presetMediumLow from "./assets/presets/medium_low.webp";
-import presetUltra from "./assets/presets/ultra.webp";
-import presetVeryLow from "./assets/presets/very_low.webp";
 import { ClassTabs } from "./components/ui/ClassTabs";
-import { Disclosure } from "./components/ui/Disclosure";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
+import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import {
   type ComfigPreset,
@@ -22,15 +15,16 @@ import {
 } from "./lib/bridge";
 import {
   COMFIG_MODULE_GROUPS,
+  COMFIG_PRESETS,
   type ComfigModule,
   type ComfigModuleGroupId,
+  comfigPresetById,
   comfigPresetLabel,
-  FEATURED_PRESETS,
-  presetListExpanded,
-  visibleComfigPresets,
+  oldComfigPresetMessage,
 } from "./lib/comfig-catalog";
 import {
   type ComfigUiState,
+  canUseTransparentViewmodels,
   hasBaseVpk,
   hasComfigCustom,
   OFFICIAL_ADDON_DETAILS,
@@ -38,18 +32,6 @@ import {
 } from "./lib/comfig-ui";
 import { OFFICIAL_ADDONS } from "./lib/first-run-ui";
 import { canWriteSettings } from "./lib/settings-ui";
-
-/** Real in-game screenshots per preset (koth_sawmill, staged identically),
- * from the mastercomfig comfig-app repo (MIT). */
-const PRESET_IMAGES: Record<Exclude<ComfigPreset, "none">, string> = {
-  ultra: presetUltra,
-  high: presetHigh,
-  medium_high: presetMediumHigh,
-  medium: presetMedium,
-  medium_low: presetMediumLow,
-  low: presetLow,
-  very_low: presetVeryLow,
-};
 
 const DEFAULT_VISIBLE_MODULES = 12;
 
@@ -108,11 +90,20 @@ function ModuleControl({
                 selected ? selectedClass : "text-ink-muted hover:bg-panel-raised hover:text-ink"
               }`}
             >
-              {option ? readableLevel(option) : "Default"}
+              {option === ""
+                ? "Use preset"
+                : option === "default"
+                  ? "Module default"
+                  : readableLevel(option)}
             </button>
           );
         })}
       </fieldset>
+      {module.levels.includes("default") ? (
+        <p className="t-meta mt-1">
+          Use preset inherits its value; Module default writes an explicit override.
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -142,16 +133,15 @@ export function ComfigPane({
   const [activeGroupId, setActiveGroupId] = useState<ComfigModuleGroupId>("graphics");
   const [moduleSearch, setModuleSearch] = useState("");
   const [showAllModules, setShowAllModules] = useState(false);
-  const [showAllPresets, setShowAllPresets] = useState(false);
 
   const locked = !canWriteSettings(running, busy);
   const paths = detail?.files.map((file) => file.path) ?? [];
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
-  const presetsExpanded = presetListExpanded(state.preset, showAllPresets);
-  const visiblePresets = visibleComfigPresets(state.preset, showAllPresets);
   const selectedPresetLabel = comfigPresetLabel(state.preset);
-  const presetImage = state.preset === "none" ? null : PRESET_IMAGES[state.preset];
+  const selectedPreset = comfigPresetById(state.preset);
+  const oldPresetMessage = oldComfigPresetMessage(state.preset);
+  const moduleOverrideCount = Object.values(state.modules).filter(Boolean).length;
   const activeGroup =
     COMFIG_MODULE_GROUPS.find((group) => group.id === activeGroupId) ?? COMFIG_MODULE_GROUPS[0];
   const normalizedSearch = moduleSearch.trim().toLowerCase();
@@ -188,34 +178,19 @@ export function ComfigPane({
 
   return (
     <section data-testid="settings-comfig" className="min-w-0 text-left">
-      <PaneHeader
-        title="Comfig"
-        lede={
-          <>
-            Performance, visuals and networking, powered by{" "}
-            <button
-              type="button"
-              onClick={() => void openExternal("https://comfig.app")}
-              className="text-ink underline decoration-edge-strong underline-offset-4 hover:text-ink"
-            >
-              mastercomfig
-            </button>
-            .
-          </>
-        }
-        actions={
-          statusProblem ? (
-            <p aria-live="polite" className="badge">
-              {statusProblem}
-            </p>
-          ) : null
-        }
-      />
-
-      {/* Lead with the one decision: the preset. The screenshot stays a fixed
-          360px preview beside it and never becomes a full-width banner. */}
       <div className="hero-row">
         <div className="min-w-0">
+          <PaneHeader
+            title="Comfig"
+            actions={
+              statusProblem ? (
+                <p aria-live="polite" className="badge">
+                  {statusProblem}
+                </p>
+              ) : null
+            }
+          />
+
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <div className="min-w-0">
               <h2 className="t-section">Preset</h2>
@@ -223,8 +198,14 @@ export function ComfigPane({
             </div>
           </div>
 
-          <div data-testid="comfig-preset" className="mt-4 grid gap-3 sm:grid-cols-2">
-            {visiblePresets.map((item) => (
+          {oldPresetMessage ? (
+            <p data-testid="comfig-old-preset" className="t-meta mt-3 text-ink-muted">
+              {oldPresetMessage}
+            </p>
+          ) : null}
+
+          <div data-testid="comfig-preset" className="mt-4 grid grid-cols-2 gap-2">
+            {COMFIG_PRESETS.map((item) => (
               <OptionTile
                 key={item.id}
                 id={`comfig-preset-${item.id}`}
@@ -241,16 +222,7 @@ export function ComfigPane({
             ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {FEATURED_PRESETS.has(state.preset) ? (
-              <button
-                type="button"
-                onClick={() => setShowAllPresets((current) => !current)}
-                className="btn btn-ghost"
-              >
-                {presetsExpanded ? "Show core presets" : "Show all presets"}
-              </button>
-            ) : null}
+          <div className="pane-actions mt-3">
             <button
               type="button"
               data-testid="comfig-preset-guide"
@@ -263,57 +235,50 @@ export function ComfigPane({
           </div>
         </div>
 
-        {presetImage ? (
-          <figure className="surface hero-preview relative m-0 self-start">
-            <img
-              src={presetImage}
-              alt={`In-game screenshot of the ${selectedPresetLabel} preset on koth_sawmill`}
-              className="aspect-video w-full object-cover"
-            />
-            <figcaption className="t-meta absolute right-2.5 bottom-2.5 rounded-md bg-bg/85 px-2.5 py-1 text-[12px] text-ink backdrop-blur-sm">
-              {selectedPresetLabel}
-            </figcaption>
-          </figure>
-        ) : (
-          <div className="surface hero-preview grid aspect-video place-items-center self-start p-6 text-center">
-            <p className="t-meta">Custom preset — modules decide every setting.</p>
+        <aside className="surface hero-preview self-start p-5" aria-label="Selected preset details">
+          <p className="t-meta text-ink-faint">Selected preset</p>
+          <h3 className="t-section mt-2">{selectedPresetLabel}</h3>
+          <p className="t-meta mt-2">
+            {selectedPreset?.description ??
+              oldPresetMessage ??
+              "This saved preset is not offered by the current catalog."}
+          </p>
+          <div className="mt-5 border-t border-edge pt-4">
+            <p className="t-row">
+              {moduleOverrideCount} module {moduleOverrideCount === 1 ? "override" : "overrides"}
+            </p>
+            <p className="t-meta mt-1">
+              Preset values apply unless a module below has its own setting. The preset guide opens
+              mastercomfig’s current reference.
+            </p>
           </div>
-        )}
+        </aside>
       </div>
 
-      <section className="section" aria-labelledby="comfig-modules-heading">
-        <Disclosure
-          profileId={detail?.id ?? null}
-          storageKey="comfig-modules"
-          summary="Fine-tune modules"
-          testId="comfig-modules"
+      <div className="section pane-workspace comfig-workspace">
+        <PaneSection
+          id="comfig-modules"
+          title="Modules"
+          description="Overrides for your selected preset."
+          first
         >
-          <div className="mt-2 flex flex-col gap-3 border-b border-edge sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 id="comfig-modules-heading" className="sr-only">
-                Fine-tune modules
-              </h2>
-              <div>
-                <ClassTabs
-                  tabs={COMFIG_MODULE_GROUPS.map((group) => ({
-                    id: group.id,
-                    label: group.label,
-                    meta: group.modules.length,
-                  }))}
-                  selected={activeGroupId}
-                  label="Module categories"
-                  idPrefix="comfig-module-tab"
-                  panelId="comfig-module-panel"
-                  onSelect={(id) => {
-                    setActiveGroupId(id);
-                    setModuleSearch("");
-                    setShowAllModules(false);
-                  }}
-                />
-              </div>
-            </div>
-
-            <label className="mb-2 block w-full sm:w-64">
+          <div data-testid="comfig-modules" className="mt-3">
+            <ClassTabs
+              tabs={COMFIG_MODULE_GROUPS.map((group) => ({
+                id: group.id,
+                label: group.label,
+              }))}
+              selected={activeGroupId}
+              label="Module categories"
+              idPrefix="comfig-module-tab"
+              panelId="comfig-module-panel"
+              onSelect={(id) => {
+                setActiveGroupId(id);
+                setModuleSearch("");
+                setShowAllModules(false);
+              }}
+            />
+            <label className="mt-3 block">
               <span className="sr-only">Search {activeGroup.label} modules</span>
               <input
                 type="search"
@@ -335,7 +300,7 @@ export function ComfigPane({
             className="mt-1"
           >
             {displayedModules.length > 0 ? (
-              <div className="grid md:grid-cols-2 md:gap-x-8">
+              <div>
                 {displayedModules.map((module) => (
                   <div key={module.id} className="border-b border-edge">
                     <ModuleControl
@@ -382,35 +347,36 @@ export function ComfigPane({
               Show fewer modules
             </button>
           ) : null}
-        </Disclosure>
-      </section>
+        </PaneSection>
 
-      <PaneSection
-        id="comfig-addons"
-        title="Official addons"
-        meta={<span className="tnum">{state.addons.length} selected</span>}
-      >
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {OFFICIAL_ADDONS.map((item) => {
-            const selected = state.addons.includes(item.id);
-            return (
-              <OptionTile
+        <PaneSection
+          id="comfig-addons"
+          title="Official addons"
+          meta={<span className="tnum">{state.addons.length} selected</span>}
+          first
+        >
+          <div className="mt-2">
+            {OFFICIAL_ADDONS.map((item) => (
+              <SwitchRow
                 key={item.id}
                 id={`comfig-addon-input-${item.id}`}
-                type="checkbox"
                 testId={`comfig-addon-${item.id}`}
-                title={item.label}
+                label={item.label}
                 description={OFFICIAL_ADDON_DETAILS[item.id]}
-                selected={selected}
-                disabled={locked}
-                onSelect={() => {
+                checked={state.addons.includes(item.id)}
+                disabled={
+                  locked ||
+                  (item.id === "transparent-viewmodels" &&
+                    !canUseTransparentViewmodels(detail?.layer ?? null))
+                }
+                onChange={() => {
                   void onToggleAddon(item.id);
                 }}
               />
-            );
-          })}
-        </div>
-      </PaneSection>
+            ))}
+          </div>
+        </PaneSection>
+      </div>
 
       <section className="section" aria-label="Comfig packages">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -423,7 +389,7 @@ export function ComfigPane({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="pane-actions">
             <button
               type="button"
               data-testid="comfig-update"
@@ -455,9 +421,8 @@ export function ComfigPane({
         </div>
       </section>
 
-      <p className="t-meta mt-12 text-ink-faint">
-        Uses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is
-        not affiliated with mastercomfig or{" "}
+      <p className="pane-note mt-6">
+        Uses official mastercomfig packages. execs is not affiliated with mastercomfig or{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app")}

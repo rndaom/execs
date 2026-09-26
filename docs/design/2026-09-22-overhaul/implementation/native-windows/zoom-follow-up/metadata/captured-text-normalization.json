@@ -1,0 +1,71 @@
+{
+  "collectedUtc": "2026-09-22T17:22:36.0538276Z",
+  "files": [
+    {
+      "archivedRelativePath": "01-settings-baseline-uia.txt",
+      "capturedSourceSha256": "5432F7F5251E5A4477D5ED08AD121720FF78EF7A3E6DD6F08F39954E4608599A",
+      "archivedSha256": "5432F7F5251E5A4477D5ED08AD121720FF78EF7A3E6DD6F08F39954E4608599A",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "02-zoom-shortcuts-no-change-uia.txt",
+      "capturedSourceSha256": "5432F7F5251E5A4477D5ED08AD121720FF78EF7A3E6DD6F08F39954E4608599A",
+      "archivedSha256": "5432F7F5251E5A4477D5ED08AD121720FF78EF7A3E6DD6F08F39954E4608599A",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "03-settings-enlarged-1200-uia.txt",
+      "capturedSourceSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "archivedSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "04-settings-enlarged-960-uia.txt",
+      "capturedSourceSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "archivedSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "05-enlarged-keyboard-scroll-uia.txt",
+      "capturedSourceSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "archivedSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "06-zoom-reset-960-uia.txt",
+      "capturedSourceSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "archivedSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "07-settings-save-failure-uia.txt",
+      "capturedSourceSha256": "64137F43C34FB41CA4DD21AF3374A45F4D18FF18674005E3266AEE6CB38AB522",
+      "archivedSha256": "64137F43C34FB41CA4DD21AF3374A45F4D18FF18674005E3266AEE6CB38AB522",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "08-settings-retry-succeeded-uia.txt",
+      "capturedSourceSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "archivedSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "09-settings-retry-survives-restart-uia.txt",
+      "capturedSourceSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "archivedSha256": "0C6985F64A480C86E0CAA68C8B72632F321F0F7B0EE04B6FFE0AEF848566D684",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "10-corrected-settings-error.uia.txt",
+      "capturedSourceSha256": "0E3830D22A7AEC381C9083B1E23E10E3D74CEAEFE64E26D2421AE8397F16588B",
+      "archivedSha256": "0423ABBB55B8E2FDBA6A6D89E0612C1A4D825898600DB4AB25F8033BE61BCA24",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    },
+    {
+      "archivedRelativePath": "11-corrected-error-retry-succeeded.uia.txt",
+      "capturedSourceSha256": "FB272B89345E2848C84E0C922C8CAF8019FE3DC123BB27B922FDFE18C07272D1",
+      "archivedSha256": "6CE78E2DBE0F315B337328401C6232616FEAD8994112046051058BC35FE8D9E1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline. Captured text retained."
+    }
+  ]
+}

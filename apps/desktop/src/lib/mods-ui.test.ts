@@ -1,19 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import type { GameBananaMod } from "./bridge";
 import {
+  canPreferParticleProvider,
+  DIRECT_BURNING_OVERLAY_ID,
+  DIRECT_DEVELOPER_TEXTURES_ID,
+  DIRECT_FLAT_TEXTURES_ID,
+  DIRECT_SENTRY_OVERLAY_ID,
   foldCategories,
   formatModBytes,
   gameBananaIdOf,
-  gameBananaMetaLine,
-  gameBananaPageKey,
-  gameBananaPager,
   isGameBananaInstalled,
   MATURE_STORAGE_KEY,
-  MOD_CONFIRM_BYTES,
   type ModSelection,
   modDomId,
   modMetaLine,
-  modNeedsRemoveConfirm,
   modSourceLabel,
   modSourceUrl,
   modsApplyEnabled,
@@ -22,15 +21,17 @@ import {
   PREVIEW_GAMEBANANA_RECORDS,
   PREVIEW_MODS_STATUS,
   PREVIEW_PROFILE_MODS,
+  particleConflicts,
+  particleSkipAdvice,
+  particleTarget,
+  preferParticleProvider,
   REPAIR_POLL_MS,
   REPAIR_SLOW_POLL_MS,
   readMaturePreference,
-  relativeDate,
   repairActionDisabled,
   repairPollDelay,
   repairStateAfterBackendRead,
   selectionDirty,
-  sortGameBananaMods,
   summarizeReport,
   toggleName,
   visibleModSelection,
@@ -79,7 +80,6 @@ describe("mods ui", () => {
   it("marks the selection dirty only when it differs from installed", () => {
     const status = PREVIEW_MODS_STATUS;
     expect(selectionDirty(status, INSTALLED)).toBe(false);
-    // Order does not matter.
     expect(selectionDirty(status, selection({ particleMods: ["Square_Series"] }))).toBe(true);
     expect(selectionDirty(status, selection({ addons: ["No Burning Overlay"] }))).toBe(true);
     expect(selectionDirty(null, selection())).toBe(false);
@@ -138,7 +138,7 @@ describe("mods apply gating", () => {
     status: { ...status.status, stale: true },
   };
 
-  it("sees a reordered selection as unchanged", () => {
+  it("sees unchanged source order as unchanged", () => {
     expect(selectionDirty(status, INSTALLED)).toBe(false);
     expect(selectionDirty(status, { ...INSTALLED, addons: [...INSTALLED.addons].reverse() })).toBe(
       false,
@@ -147,6 +147,18 @@ describe("mods apply gating", () => {
     expect(selectionDirty(status, { ...INSTALLED, particleMods: ["Other"] })).toBe(true);
     expect(selectionDirty(null, selection())).toBe(false);
   });
+
+  it.each(["addons", "particleMods", "profileParticleMods"] as const)(
+    "keeps a change to %s precedence unapplied until explicitly saved",
+    (field) => {
+      const ordered = { ...INSTALLED, [field]: ["first", "second"] };
+      const payload = { ...status, status: { ...status.status, ...ordered } };
+      const reordered = { ...ordered, [field]: ["second", "first"] };
+      expect(selectionDirty(payload, ordered)).toBe(false);
+      expect(selectionDirty(payload, reordered)).toBe(true);
+      expect(modsApplyEnabled(payload, reordered)).toBe(true);
+    },
+  );
 
   it("counts the profile's own particle sources as part of the selection", () => {
     // Nothing from your mods is patched in the fixture, so picking one is dirty.
@@ -213,9 +225,39 @@ describe("mods apply gating", () => {
   it("requires the cached library only when selecting its content", () => {
     const uncached = { ...stale, modsCached: false };
     expect(modsApplyEnabled(uncached, selection())).toBe(true);
+    const directFlat = selection({ addons: [DIRECT_FLAT_TEXTURES_ID] });
+    expect(modsApplyEnabled(uncached, directFlat)).toBe(true);
+    expect(modsStatusLine(uncached, directFlat, false)).toBe("Unsaved changes");
+    const directDeveloper = selection({ addons: [DIRECT_DEVELOPER_TEXTURES_ID] });
+    expect(modsApplyEnabled(uncached, directDeveloper)).toBe(true);
+    expect(modsApplyEnabled(uncached, selection({ addons: [DIRECT_BURNING_OVERLAY_ID] }))).toBe(
+      true,
+    );
+    expect(modsApplyEnabled(uncached, selection({ addons: [DIRECT_SENTRY_OVERLAY_ID] }))).toBe(
+      true,
+    );
+    expect(
+      modsApplyEnabled(
+        uncached,
+        selection({
+          addons: [DIRECT_BURNING_OVERLAY_ID, DIRECT_SENTRY_OVERLAY_ID],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      modsApplyEnabled(
+        uncached,
+        selection({
+          addons: [DIRECT_FLAT_TEXTURES_ID, DIRECT_DEVELOPER_TEXTURES_ID],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      modsApplyEnabled(uncached, selection({ addons: [DIRECT_FLAT_TEXTURES_ID, "factory new"] })),
+    ).toBe(false);
     expect(modsApplyEnabled(uncached, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(null, selection())).toBe(false);
-    expect(modsStatusLine(uncached, INSTALLED, false)).toContain("Download the mod library");
+    expect(modsStatusLine(uncached, INSTALLED, false)).toContain("restore the verified cache");
     expect(modsStatusLine(uncached, selection(), false)).toBe("Unsaved changes");
   });
 
@@ -233,8 +275,10 @@ describe("your mods", () => {
   it("names the source and the size", () => {
     expect(modSourceLabel(local.source)).toBe("Local");
     expect(modSourceLabel(gb.source)).toBe("GameBanana");
+    expect(modSourceLabel({ kind: "external" })).toBe("External");
     expect(modMetaLine(local)).toBe("Local · 12.0 MB");
     expect(modMetaLine(gb)).toBe("GameBanana · 58.9 MB");
+    expect(modMetaLine({ ...local, source: { kind: "external" } })).toBe("External · 12.0 MB");
   });
 
   it("only offers a link for a pack that has a page", () => {
@@ -243,13 +287,6 @@ describe("your mods", () => {
     expect(modSourceUrl({ kind: "gamebanana", id: 7, url: "https://evil.example/fake" })).toBe(
       "https://gamebanana.com/mods/7",
     );
-  });
-
-  it("asks before removing a big pack only", () => {
-    expect(modNeedsRemoveConfirm(local)).toBe(false);
-    expect(modNeedsRemoveConfirm(gb)).toBe(true);
-    expect(modNeedsRemoveConfirm({ ...local, bytes: MOD_CONFIRM_BYTES })).toBe(false);
-    expect(modNeedsRemoveConfirm({ ...local, bytes: MOD_CONFIRM_BYTES + 1 })).toBe(true);
   });
 
   it("looks up what came from GameBanana", () => {
@@ -266,86 +303,6 @@ describe("your mods", () => {
 });
 
 describe("gamebanana browser", () => {
-  const NOW = Date.UTC(2026, 8, 2);
-  const record = (over: Partial<GameBananaMod>): GameBananaMod => ({
-    id: 1,
-    name: "A",
-    author: "a",
-    category: "Skins",
-    categoryId: 1,
-    likes: 0,
-    views: 0,
-    downloads: 0,
-    updatedAt: 0,
-    addedAt: 0,
-    thumb: null,
-    url: "https://gamebanana.com/mods/1",
-    mature: false,
-    ...over,
-  });
-
-  it("sorts the loaded records by every pill", () => {
-    const ids = (sort: Parameters<typeof sortGameBananaMods>[1]) =>
-      sortGameBananaMods(PREVIEW_GAMEBANANA_RECORDS, sort).map((mod) => mod.id);
-    expect(ids("likes")[0]).toBe(577_301);
-    expect(ids("views")[0]).toBe(577_301);
-    expect(ids("downloads")[0]).toBe(577_301);
-    expect(ids("updated")[0]).toBe(602_110);
-    expect(ids("new")[0]).toBe(602_110);
-    // Sorting never drops or duplicates a record.
-    expect(ids("likes")).toHaveLength(PREVIEW_GAMEBANANA_RECORDS.length);
-  });
-
-  it("sinks a withheld download count instead of reading it as zero", () => {
-    const sorted = sortGameBananaMods(
-      [record({ id: 1, downloads: null }), record({ id: 2, downloads: 0 })],
-      "downloads",
-    );
-    expect(sorted.map((mod) => mod.id)).toEqual([2, 1]);
-  });
-
-  it("labels the pager from the count when there is one", () => {
-    const pager = gameBananaPager(3, 240, 20, false);
-    expect(pager.label).toBe("Page 3 of 12");
-    expect(pager.pageCount).toBe(12);
-    expect(pager.hasPrevious).toBe(true);
-    expect(pager.hasNext).toBe(true);
-    expect(gameBananaPager(1, 240, 20, false).hasPrevious).toBe(false);
-    expect(gameBananaPager(12, 240, 20, false).hasNext).toBe(false);
-  });
-
-  it("drops the total from the label when GameBanana withholds it", () => {
-    const pager = gameBananaPager(3, 0, 20, true);
-    expect(pager.label).toBe("Page 3");
-    expect(pager.pageCount).toBeNull();
-    // Nothing but the page itself can say the run has ended.
-    expect(pager.hasNext).toBe(false);
-    expect(gameBananaPager(3, 0, 20, false).hasNext).toBe(true);
-  });
-
-  it("stops at a page that says it is the last one", () => {
-    expect(gameBananaPager(2, 240, 20, true).hasNext).toBe(false);
-  });
-
-  it("keys a cached page by everything that changes it", () => {
-    expect(gameBananaPageKey(" Rocket ", "likes", 5225, 2, false)).toBe(
-      gameBananaPageKey("rocket", "likes", 5225, 2, false),
-    );
-    expect(gameBananaPageKey("rocket", "likes", null, 2, false)).not.toBe(
-      gameBananaPageKey("rocket", "likes", 5225, 2, false),
-    );
-    expect(gameBananaPageKey("rocket", "likes", null, 1, false)).not.toBe(
-      gameBananaPageKey("rocket", "likes", null, 2, false),
-    );
-    expect(gameBananaPageKey("rocket", "views", null, 1, false)).not.toBe(
-      gameBananaPageKey("rocket", "likes", null, 1, false),
-    );
-    // The mature flag changes what a page holds, so it changes the key.
-    expect(gameBananaPageKey("rocket", "likes", null, 1, true)).not.toBe(
-      gameBananaPageKey("rocket", "likes", null, 1, false),
-    );
-  });
-
   it("keeps mature content off until it is asked for", () => {
     // No storage at all (or a blocked one) must never open the filter.
     expect(readMaturePreference()).toBe(false);
@@ -375,34 +332,103 @@ describe("gamebanana browser", () => {
     expect(flagged).toEqual(["Flat Scattergun", "Vintage Sniper Rifle"]);
   });
 
-  it("says how long ago in words", () => {
-    const days = (count: number) => NOW / 1000 - count * 86_400;
-    expect(relativeDate(days(0), NOW)).toBe("today");
-    expect(relativeDate(days(1), NOW)).toBe("yesterday");
-    expect(relativeDate(days(3), NOW)).toBe("3 days ago");
-    expect(relativeDate(days(8), NOW)).toBe("a week ago");
-    expect(relativeDate(days(21), NOW)).toBe("3 weeks ago");
-    expect(relativeDate(days(70), NOW)).toBe("2 months ago");
-    expect(relativeDate(days(400), NOW)).toBe("a year ago");
-    expect(relativeDate(days(1200), NOW)).toBe("3 years ago");
-    // A clock skewed into the future must not read as "-0 days ago".
-    expect(relativeDate(days(-2), NOW)).toBe("today");
-  });
-
-  it("writes the card meta line, downloads only when known", () => {
-    expect(gameBananaMetaLine(PREVIEW_GAMEBANANA_RECORDS[0], NOW)).toBe(
-      "▲ 1.3k · 41k downloads · Updated 5 days ago",
-    );
-    expect(gameBananaMetaLine(PREVIEW_GAMEBANANA_RECORDS[2], NOW)).toBe(
-      "▲ 402 · Updated a month ago",
-    );
-  });
-
   it("folds a long category list behind More", () => {
     expect(foldCategories(PREVIEW_GAMEBANANA_CATEGORIES).hidden).toEqual([]);
     const many = Array.from({ length: 7 }, (_, index) => ({ id: index, name: `c${index}` }));
     expect(foldCategories(many).shown).toHaveLength(4);
     expect(foldCategories(many).hidden).toHaveLength(3);
     expect(foldCategories(many.slice(0, 5)).hidden).toEqual([]);
+  });
+});
+
+describe("particle file overlaps", () => {
+  const library = [
+    { name: "Square_Series", pcfFiles: ["RocketTrail.pcf", "explosion.pcf"] },
+    { name: "Old_Trails", pcfFiles: ["rockettrail.pcf", "blood_trail.pcf"] },
+  ];
+  const sources = [
+    { modId: "gb-1", name: "Clean Rocket Trails", pcfFiles: ["rockettrail.pcf"] },
+    { modId: "gb-2", name: "Blood Mod", pcfFiles: ["npc_fx.pcf", "Explosion.pcf"] },
+  ];
+
+  it("maps files to the same stock slot the native planner patches", () => {
+    expect(particleTarget("RocketTrail.pcf")).toBe("rockettrail.pcf");
+    expect(particleTarget("particles/blood_trail.pcf")).toBe("npc_fx.pcf");
+  });
+
+  it("names every provider in queue order and the last one as the winner", () => {
+    const conflicts = particleConflicts(
+      {
+        particleMods: ["Square_Series", "Old_Trails"],
+        profileParticleMods: ["gb-2", "gb-1"],
+      },
+      library,
+      sources,
+    );
+    expect(
+      conflicts.map((conflict) => [
+        conflict.file,
+        conflict.providers.map((provider) => provider.label),
+        conflict.winner.label,
+      ]),
+    ).toEqual([
+      ["explosion.pcf", ["Square Series", "Blood Mod"], "Blood Mod"],
+      ["npc_fx.pcf", ["Old Trails", "Blood Mod"], "Blood Mod"],
+      [
+        "rockettrail.pcf",
+        ["Square Series", "Old Trails", "Clean Rocket Trails"],
+        "Clean Rocket Trails",
+      ],
+    ]);
+    // A single provider, or one mod listing a file twice, is not an overlap.
+    expect(
+      particleConflicts({ particleMods: [], profileParticleMods: ["gb-1"] }, library, [
+        { modId: "gb-1", name: "Twice", pcfFiles: ["a.pcf", "A.pcf"] },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("reorders the draft explicitly and never promises a library win over a profile mod", () => {
+    const selection = {
+      addons: [],
+      particleMods: ["Square_Series", "Old_Trails"],
+      profileParticleMods: ["gb-1"],
+    };
+    const [rockets] = particleConflicts(selection, library, sources).filter(
+      (conflict) => conflict.file === "rockettrail.pcf",
+    );
+    const [square, old] = rockets.providers;
+    expect(canPreferParticleProvider(rockets, square)).toBe(false);
+    expect(canPreferParticleProvider(rockets, rockets.winner)).toBe(false);
+
+    const libraryOnly = particleConflicts(
+      { particleMods: ["Square_Series", "Old_Trails"], profileParticleMods: [] },
+      library,
+      sources,
+    )[0];
+    expect(canPreferParticleProvider(libraryOnly, libraryOnly.providers[0])).toBe(true);
+    expect(preferParticleProvider(selection, square.key).particleMods).toEqual([
+      "Old_Trails",
+      "Square_Series",
+    ]);
+    expect(preferParticleProvider(selection, old.key)).toEqual(selection);
+    const two = { ...selection, profileParticleMods: ["gb-1", "gb-2"] };
+    expect(preferParticleProvider(two, "profile:gb-1").profileParticleMods).toEqual([
+      "gb-2",
+      "gb-1",
+    ]);
+  });
+
+  it("explains each kind of skipped file", () => {
+    expect(
+      particleSkipAdvice("particles/x.pcf is 223 bytes over the stock budget even after shrinking"),
+    ).toContain("too large");
+    expect(particleSkipAdvice("overridden by Clean Rocket Trails")).toBe(
+      "Clean Rocket Trails supplies this file instead.",
+    );
+    expect(particleSkipAdvice("redefines spy disguise systems, which must stay stock")).toContain(
+      "disguises",
+    );
+    expect(particleSkipAdvice("could not parse: bad header")).toContain("damaged");
   });
 });

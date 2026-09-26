@@ -34,7 +34,9 @@ export function tokenizeCommands(text: string): Token[][] {
       i++;
       continue;
     }
-    if (ch === "\r" || ch === " " || ch === "\t") {
+    // UTF-8 cfgs can begin with a decoded BOM. Source treats that marker as
+    // encoding metadata, not as part of the first console command.
+    if (ch === "\r" || ch === " " || ch === "\t" || ch === "\uFEFF") {
       i++;
       col++;
       continue;

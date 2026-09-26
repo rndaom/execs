@@ -27,16 +27,9 @@ export function Switch({
       aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 rounded-pill border transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${
-        checked ? "border-brand bg-brand" : "border-edge-strong bg-bg"
-      }`}
+      className="switch"
     >
-      <span
-        aria-hidden="true"
-        className={`absolute top-0.5 size-4 rounded-full transition-[left,background-color] duration-150 ${
-          checked ? "left-[22px] bg-on-brand" : "left-1 bg-ink-muted"
-        }`}
-      />
+      <span aria-hidden="true" className="switch-thumb" />
       <span className="sr-only">{label}</span>
     </button>
   );

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { HitsoundEntry } from "./bridge";
-import { boostOf, packChangeNeeded, type SlotDraft, sameChoice, slotChange } from "./hitsound-ui";
+import { defaultGameplay } from "./gameplay-ui";
+import {
+  boostOf,
+  packChangeNeeded,
+  type SlotDraft,
+  sameChoice,
+  seedSoundsDraft,
+  slotChange,
+  soundsToCvars,
+} from "./hitsound-ui";
 
 const installed: HitsoundEntry = { name: "quack", source: "community" };
 
@@ -86,5 +95,52 @@ describe("boost", () => {
         },
       ),
     ).toBe(true);
+  });
+});
+
+describe("dormant custom files", () => {
+  it("keeps a saved WAV through unrelated settings edits and restores it without replacing bytes", () => {
+    const cvars = { ...defaultGameplay(), tf_dingalingaling_effect: 2 };
+    const record = { hit: installed };
+    const seeded = seedSoundsDraft(record, cvars);
+    expect(seeded.hit.choice).toEqual({ kind: "stock", effect: 2 });
+    expect(packChangeNeeded(seeded, record)).toBe(false);
+    const volumeEdit = { ...seeded, hit: { ...seeded.hit, volume: 42 } };
+    expect(packChangeNeeded(volumeEdit, record)).toBe(false);
+    expect(slotChange("hit", volumeEdit.hit, installed)).toEqual({ change: "keep" });
+
+    const restored = {
+      ...seeded,
+      hit: { ...seeded.hit, choice: { kind: "installed" as const, entry: installed } },
+    };
+    expect(soundsToCvars(restored, cvars).tf_dingalingaling_effect).toBe(0);
+    expect(slotChange("hit", restored.hit, installed)).toEqual({ change: "keep" });
+  });
+
+  it("clears a saved WAV when default ding is chosen, and replaces it for a new file", () => {
+    expect(slotChange("hit", slot({ choice: { kind: "stock", effect: 0 } }), installed)).toEqual({
+      change: "clear",
+    });
+    expect(slotChange("hit", slot({ choice: { kind: "stock", effect: 3 } }), installed)).toEqual({
+      change: "keep",
+    });
+    const picked = {
+      token: "new",
+      name: "new.wav",
+      converted: false,
+      info: {
+        formatTag: 1,
+        channels: 1,
+        sampleRate: 44100,
+        bitsPerSample: 16,
+        dataBytes: 2,
+        durationMs: 1,
+      },
+    };
+    expect(slotChange("hit", slot({ choice: { kind: "file", picked } }), installed)).toEqual({
+      change: "install",
+      pick: { kind: "file", token: "new", name: "new.wav" },
+      boost: 0,
+    });
   });
 });

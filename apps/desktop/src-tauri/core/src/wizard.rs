@@ -7,6 +7,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::apply::manifest_source_path;
+use crate::archive::read_regular_file_bounded_within;
 use crate::hash::read_small_file_bounded;
 use crate::launch::{recommended_launch_options, sanitize_launch_options};
 use crate::process_lock::live_process_names;
@@ -121,7 +122,7 @@ pub struct WizardSpec {
 }
 
 /// What a new profile's `tf/cfg/config.cfg` starts from (user decision,
-/// 2026-09-01). `Current` copies the ACTIVE profile's `config.cfg` verbatim, so
+/// 2026-09-01). `Current` copies the active live `config.cfg` verbatim, so
 /// binds, audio, `con_enable`, advanced options and the
 /// `tf_training_has_prompted_*` / `tf_explanations_*` "already shown" flags all
 /// carry over. `Fresh` is Valve's `config_default.cfg`, i.e. a newly installed
@@ -321,10 +322,34 @@ fn build_config_cfg(
             let source = manifest_source_path(profiles_dir, &active, file).map_err(|_| {
                 ProfileError::Io("The active profile has no config.cfg to copy.".into())
             })?;
-            read_wizard_config(
+            let saved = read_wizard_config(
                 &source,
                 "The active profile's config.cfg is missing or unreadable.",
-            )
+            )?;
+            if !crate::hash::sha256_hex(&saved).eq_ignore_ascii_case(&file.sha256) {
+                return Err(ProfileError::Io(
+                    "The active profile's saved config.cfg changed outside execs. Repair or save the current setup before cloning it."
+                        .into(),
+                ));
+            }
+            // A player can edit config.cfg after the last absorb. The wizard
+            // runs under the native write gate, and the following switch will
+            // absorb that drift into the old profile. Copy the same live bytes
+            // into the new profile so "Current setup" means what is installed.
+            let live = tf2_root.join(CONFIG_CFG);
+            let current =
+                read_regular_file_bounded_within(tf2_root, &live, MAX_WIZARD_CONFIG_BYTES as u64)?
+                    .ok_or_else(|| {
+                        ProfileError::Io(format!(
+                    "The live config.cfg is larger than {} MiB and cannot be copied safely.",
+                    MAX_WIZARD_CONFIG_BYTES / (1024 * 1024)
+                ))
+                    })?;
+            if current == saved {
+                Ok(saved)
+            } else {
+                Ok(current)
+            }
         }
     }
 }
@@ -594,6 +619,63 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(config, LIVE_CONFIG.as_bytes());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn start_from_current_includes_a_recent_live_config_edit() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        let profiles = dir.join("profiles");
+        library_with_active_profile(&profiles, &root, LIVE_CONFIG);
+        let edited = format!("{LIVE_CONFIG}bind \"q\" \"lastinv\"\n");
+        write_file(&root.join(CONFIG_CFG), &edited);
+
+        let result = materialize_wizard_profile_to(
+            &profiles,
+            &root,
+            &spec("Alt"),
+            StartFrom::Current,
+            &assets(b"base", b"addon"),
+            None::<&str>,
+            WizardOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &result.profile_id,
+                CONFIG_CFG
+            ))
+            .unwrap(),
+            edited.as_bytes()
+        );
+        // Creating a profile does not silently change the old saved snapshot.
+        let old = load_library_from(&profiles, Some(&root))
+            .unwrap()
+            .active_profile_id
+            .unwrap();
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &old, CONFIG_CFG)).unwrap(),
+            LIVE_CONFIG.as_bytes()
+        );
+        switch_profile_to(
+            &profiles,
+            &root,
+            &result.profile_id,
+            None::<&str>,
+            AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            },
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &old, CONFIG_CFG)).unwrap(),
+            edited.as_bytes(),
+            "the switch absorbs the same live edit into the old profile"
+        );
         cleanup(&dir);
     }
 

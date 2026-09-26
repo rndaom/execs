@@ -35,6 +35,25 @@ export function canSaveCurrent(library: ProfileLibrary, running: boolean, name: 
   return library.usable && !library.rootMismatch && !running && name.trim().length > 0;
 }
 
+export const PROFILE_NAME_MAX = 80;
+
+/** Why a profile name cannot be saved, or null. Mirrors the native rules. */
+export function profileNameProblem(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return "Enter a name.";
+  if ([...trimmed].length > PROFILE_NAME_MAX) return `Use ${PROFILE_NAME_MAX} characters or fewer.`;
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what this rejects.
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(trimmed)) return "Remove tabs and line breaks.";
+  return null;
+}
+
+/** The suggested name for a copy, kept within the name limit. */
+export function duplicateProfileName(name: string): string {
+  const suffix = " copy";
+  const base = [...name.trim()].slice(0, PROFILE_NAME_MAX - suffix.length).join("");
+  return `${base}${suffix}`;
+}
+
 /** Export reads app-data, so it stays available while TF2 is running. */
 export function canExportProfile(library: ProfileLibrary, _running: boolean): boolean {
   return library.usable && !library.rootMismatch;

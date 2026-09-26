@@ -13,6 +13,9 @@ import {
   BridgeError,
   type ComfigState,
   type FilesSource,
+  type GameBananaDownloadVariant,
+  type GameBananaMod,
+  type GameBananaSort,
   type HitsoundRecord,
   type HitsoundSlotChange,
   type HudUiState,
@@ -30,7 +33,7 @@ import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
 import { isNewCfgPath } from "./files-create";
 import { editorPathFits, editorTextBytes } from "./files-limits";
-import { defaultGameplay, parseCvarMap } from "./gameplay-ui";
+import { defaultGameplay, managedCfgScopeOf, parseCvarMap } from "./gameplay-ui";
 import { PREVIEW_HUD_BROWSER_CATALOG, PREVIEW_HUD_BROWSER_STATS } from "./hud-browser-preview";
 import {
   emptyHudState,
@@ -45,6 +48,7 @@ import {
   emptyLibrary,
   previewPackDelta,
   previewSavedProfile,
+  profileNameProblem,
   SWITCH_STEPS,
 } from "./library-ui";
 import {
@@ -54,7 +58,6 @@ import {
   PREVIEW_MODS_STATUS,
   PREVIEW_PARTICLE_SOURCES,
   PREVIEW_PROFILE_MODS,
-  sortGameBananaMods,
 } from "./mods-ui";
 import {
   type PreviewState,
@@ -66,7 +69,36 @@ import {
   previewLocked,
   previewUpdate,
 } from "./preview";
+import type { RestorePoint } from "./restore-points-ui";
 import { previewViewmodelRecord } from "./viewmodel-ui";
+
+/** Preview-only simulation of GameBanana's global server order. Production
+ * records are already ordered and must never pass through this helper. */
+function previewGameBananaOrder(records: GameBananaMod[], sort: GameBananaSort): GameBananaMod[] {
+  const value = (record: GameBananaMod): number | null => {
+    switch (sort) {
+      case "downloads":
+        return record.downloads;
+      case "likes":
+        return record.likes;
+      case "views":
+        return record.views;
+      case "updated":
+        return record.updatedAt;
+      case "new":
+        return record.addedAt;
+    }
+  };
+  return records
+    .map((record, index) => ({ record, index, value: value(record) }))
+    .sort((a, b) => {
+      if (a.value === null && b.value === null) return a.index - b.index;
+      if (a.value === null) return 1;
+      if (b.value === null) return -1;
+      return b.value - a.value || a.index - b.index;
+    })
+    .map(({ record }) => record);
+}
 
 const PREVIEW_FILES: { path: string; text: string }[] = [
   {
@@ -106,10 +138,16 @@ function notInPreview(what: string): BridgeError {
 }
 
 export function createPreviewApi(state: PreviewState): Api {
+  let appPreferences = { checkForUpdatesOnStartup: true, motion: "system" as "system" | "reduce" };
+  let previewDownloadBytes = 1_088_218;
+  let previewRetiredBytes = 20_159_439;
+  let failNextAppPreferenceSave = state === "settings-app-failure";
   const hudCatalog =
     state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
   let library: ProfileLibrary | null = previewLibrary(state);
+  let restorePoints: RestorePoint[] = [];
+  let restorePointKeep = 5;
   let files = PREVIEW_FILES.map((file) => ({ ...file }));
   let comfig: ComfigState = {
     ...PREVIEW_COMFIG_STATE,
@@ -118,7 +156,10 @@ export function createPreviewApi(state: PreviewState): Api {
   };
   let launchOptions = recommendedLaunchOptions();
   let hudState: HudUiState =
-    state === "settings-hud-installed" ? previewInstalledState() : emptyHudState();
+    state === "settings-hud-installed" || state === "hud-ownership"
+      ? previewInstalledState()
+      : emptyHudState();
+  let hudOwnershipPending = state === "hud-ownership";
   let mods: ModRecord[] =
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
@@ -156,6 +197,8 @@ export function createPreviewApi(state: PreviewState): Api {
         storage: "exclusive" as const,
       })),
       hud: hudState.installed,
+      hudRoots: hudState.installed ? [hudState.installed.id] : [],
+      selectedHudRoot: hudState.installed?.id ?? null,
       crosshair,
       viewmodel,
       hitsound,
@@ -212,6 +255,75 @@ export function createPreviewApi(state: PreviewState): Api {
   }
 
   const api: Api = {
+    async getInventory() {
+      return {
+        steamId: "Preview data",
+        personaName: "Preview player",
+        avatar: null,
+        capacity: 300,
+        warning: "Preview data · These are fixture items, not a Steam inventory.",
+        items: [
+          { id: "preview-1", definition: 13, position: 1, quality: 6, level: 1, customName: null },
+          {
+            id: "preview-paint",
+            definition: 17286,
+            position: 2,
+            quality: 15,
+            level: 1,
+            customName: null,
+          },
+          {
+            id: "preview-kit",
+            definition: 6526,
+            position: 3,
+            quality: 6,
+            level: 1,
+            customName: null,
+          },
+          {
+            id: "preview-2",
+            definition: 13,
+            position: 51,
+            quality: 11,
+            level: 10,
+            customName: "A familiar scattergun",
+          },
+          {
+            id: "preview-3",
+            definition: 5002,
+            position: 0,
+            quality: 6,
+            level: 1,
+            customName: null,
+          },
+        ],
+        definitions: {
+          "13": { name: "Scattergun", kind: "Scattergun", classes: ["scout"], icon: null },
+          "5002": { name: "Refined Metal", kind: "Crafting Item", classes: [], icon: null },
+          "17286": { name: "War Paint", kind: "War Paint", classes: [], icon: null },
+          "6526": { name: "Killstreak Kit", kind: "Tool", classes: [], icon: null },
+        },
+        itemDescriptions: {
+          "preview-paint": {
+            name: "Skull Cracked War Paint",
+            kind: "War Paint",
+            classes: [],
+            icon: null,
+            details: ["Minimal Wear", "Pattern preview unavailable"],
+          },
+          "preview-kit": {
+            name: "Professional Killstreak Kit · Rocket Launcher",
+            kind: "Tool",
+            classes: [],
+            icon: null,
+            details: ["Sheen: Team Shine", "Killstreaker: Fire Horns"],
+          },
+        },
+      };
+    },
+    async getInventoryIcons() {
+      return {};
+    },
     // --- finder -------------------------------------------------------------
     async scanTf2Installs() {
       return installs;
@@ -257,7 +369,267 @@ export function createPreviewApi(state: PreviewState): Api {
     async saveCurrentAs(name: string) {
       return addProfile(name, library?.activeProfileId === null);
     },
+    async renameProfile(id: string, name: string) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before renaming a profile.", "GameRunning");
+      const trimmed = name.trim();
+      if (profileNameProblem(trimmed))
+        throw new BridgeError("Give the profile a name.", "InvalidName");
+      if (!library?.profiles.some((profile) => profile.id === id)) {
+        throw new BridgeError("This profile is no longer in the library.", "UnknownProfile");
+      }
+      library = {
+        ...library,
+        profiles: library.profiles.map((profile) =>
+          profile.id === id ? { ...profile, name: trimmed } : profile,
+        ),
+      };
+      return library;
+    },
+    async duplicateProfile(id: string, name: string) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before duplicating a profile.", "GameRunning");
+      if (profileNameProblem(name))
+        throw new BridgeError("Give the profile a name.", "InvalidName");
+      if (!library?.profiles.some((profile) => profile.id === id)) {
+        throw new BridgeError("This profile is no longer in the library.", "UnknownProfile");
+      }
+      return addProfile(name.trim(), false);
+    },
+    async deleteProfile(id, keepInstalled) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before deleting a profile.", "GameRunning");
+      if (!library?.profiles.some((profile) => profile.id === id)) {
+        throw new BridgeError("This profile is no longer in the library.", "ProfileMissing");
+      }
+      if (library.activeProfileId === id && !keepInstalled) {
+        throw new BridgeError(
+          "Switch to another profile or keep the installed setup before deleting this profile.",
+          "ActiveProfile",
+        );
+      }
+      library = {
+        ...library,
+        activeProfileId: library.activeProfileId === id ? null : library.activeProfileId,
+        profiles: library.profiles.filter((profile) => profile.id !== id),
+      };
+      return library;
+    },
+    async listRestorePoints() {
+      return { points: [...restorePoints], keepPerProfile: restorePointKeep };
+    },
+    async createRestorePoint(profileId, label) {
+      const profile = library?.profiles.find((entry) => entry.id === profileId);
+      if (!profile) throw new BridgeError("That profile is not in the library.", "Unknown");
+      const point = {
+        id: `${restorePoints.length + 1}`.padStart(32, "0"),
+        profileId,
+        profileName: profile.name,
+        ...(label ? { label } : {}),
+        createdAt: Date.now(),
+        bytes: 48_213_004,
+      };
+      restorePoints.unshift(point);
+      return point;
+    },
+    async deleteRestorePoint(id) {
+      restorePoints = restorePoints.filter((point) => point.id !== id);
+      return { points: [...restorePoints], keepPerProfile: restorePointKeep };
+    },
+    async setRestorePointRetention(keep) {
+      restorePointKeep = keep;
+      return { points: [...restorePoints], keepPerProfile: restorePointKeep };
+    },
+    async compareRestorePoint(id) {
+      const point = restorePoints.find((entry) => entry.id === id);
+      if (!point) throw new BridgeError("That restore point no longer exists.", "Io");
+      return {
+        fromId: point.profileId,
+        fromName: point.profileName,
+        toId: point.id,
+        toName: "Restore point",
+        revision: `preview:${point.id}`,
+        launchOptions: null,
+        hud: { from: "toonhud", to: "flawhud" },
+        hitSound: null,
+        killSound: null,
+        packs: { added: ["flawhud"], removed: ["toonhud"], changed: [] },
+        cfgFiles: { added: [], removed: [], changed: [] },
+        configCfgChanged: false,
+        values: [{ name: "fov_desired", from: "75", to: "90" }],
+        valuesTruncated: false,
+        casual: { added: [], removed: [], changed: [] },
+        blocked: null,
+      };
+    },
+    async restoreRestorePoint(id, name) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before restoring a profile.", "GameRunning");
+      const point = restorePoints.find((entry) => entry.id === id);
+      if (!point || !library) throw new BridgeError("That restore point no longer exists.", "Io");
+      library = {
+        ...library,
+        profiles: [
+          ...library.profiles,
+          {
+            id: `restored-${library.profiles.length + 1}`,
+            name,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      return library;
+    },
+    async compareProfileSwitch(targetId) {
+      const target = library?.profiles.find((profile) => profile.id === targetId);
+      const active = library?.profiles.find((profile) => profile.id === library?.activeProfileId);
+      if (!target || !active)
+        throw new BridgeError("Save or switch to a profile first.", "Unknown");
+      return {
+        fromId: active.id,
+        fromName: active.name,
+        toId: target.id,
+        toName: target.name,
+        revision: `preview:${active.id}:${target.id}`,
+        launchOptions: { from: "-novid", to: "-novid -high" },
+        hud: { from: "flawhud", to: null },
+        hitSound: null,
+        killSound: null,
+        packs: { added: ["execs-viewmodels.vpk"], removed: ["flawhud"], changed: [] },
+        cfgFiles: { added: [], removed: [], changed: ["tf/cfg/overrides/execs_gameplay.cfg"] },
+        configCfgChanged: true,
+        values: [
+          { name: "fov_desired", from: "90", to: "75" },
+          { name: "bind mouse4", from: "+jump", to: null },
+        ],
+        valuesTruncated: false,
+        casual: { added: ["Flat Textures v1"], removed: [], changed: [] },
+        blocked: null,
+      };
+    },
+    async getUninstallInfo() {
+      return {
+        install: {
+          kind: "windowsInstaller" as const,
+          uninstaller: "C:/Users/user/AppData/Local/execs/uninstall.exe",
+        },
+        dataDirectory: "/home/user/.local/share/execs",
+        casual: {
+          patchedFiles: modsPayload.status?.patchedFiles?.length ?? 0,
+          gameinfoBypassed: modsPayload.status?.gameinfoBypassed ?? false,
+        },
+      };
+    },
+    async uninstallExecs() {
+      throw new BridgeError("Uninstall is not available in the browser preview.", "PreviewOnly");
+    },
+    async getAppSettings() {
+      return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
+    },
+    async getStorageUsage() {
+      const groups = [
+        {
+          id: "profiles" as const,
+          bytes: 299_880_431,
+          files: 5321,
+          unreadable: 0,
+          clearable: false,
+        },
+        {
+          id: "downloads" as const,
+          bytes: previewDownloadBytes,
+          files: 64,
+          unreadable: 0,
+          clearable: true,
+        },
+        {
+          id: "retired" as const,
+          bytes: previewRetiredBytes,
+          files: 188,
+          unreadable: 0,
+          clearable: true,
+        },
+        { id: "logs" as const, bytes: 4_210, files: 1, unreadable: 0, clearable: false },
+        { id: "protected" as const, bytes: 81_537_537, files: 6, unreadable: 0, clearable: false },
+        { id: "other" as const, bytes: 172, files: 1, unreadable: 0, clearable: false },
+      ];
+      return {
+        groups,
+        totalBytes: groups.reduce((sum, group) => sum + group.bytes, 0),
+        clearableBytes: previewDownloadBytes + previewRetiredBytes,
+        partial: false,
+      };
+    },
+    async clearDownloadCaches() {
+      const freedBytes = previewDownloadBytes + previewRetiredBytes;
+      previewDownloadBytes = 0;
+      previewRetiredBytes = 0;
+      return { freedBytes, failed: [] };
+    },
+    async getHudOwnership(profileId) {
+      const folder = hudState.installed?.id ?? null;
+      if (hudOwnershipPending)
+        return {
+          profileId,
+          selectedHud: "rayshud",
+          candidates: [
+            { folder: "rayshud", source: "profile" as const, files: 120 },
+            { folder: "toonhud", source: "live" as const, files: 184 },
+          ],
+          fingerprint: `preview:${profileId}:review`,
+          reviewRequired: true,
+          managedOptionFiles: ["tf/cfg/overrides/execs_hud_crosshair.cfg"],
+          resetOptions: false,
+        };
+      return {
+        profileId,
+        selectedHud: folder,
+        candidates: folder ? [{ folder, source: "profile" as const, files: 42 }] : [],
+        fingerprint: `preview:${profileId}:${folder ?? "none"}`,
+        reviewRequired: false,
+        managedOptionFiles: [],
+        resetOptions: false,
+      };
+    },
+    async selectProfileHud(profileId, hudFolder, expectedFingerprint) {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before changing the selected HUD.", "GameRunning");
+      if (hudOwnershipPending) {
+        if (
+          expectedFingerprint !== `preview:${profileId}:review` ||
+          !["rayshud", "toonhud"].includes(hudFolder)
+        )
+          throw new BridgeError("The HUD files changed. Review them again.", "HudReviewStale");
+        hudOwnershipPending = false;
+        hudState = { ...hudState, installed: { id: hudFolder, source: "local", options: {} } };
+        return { ...requireDetail(), id: profileId };
+      }
+      const folder = hudState.installed?.id ?? null;
+      if (
+        expectedFingerprint !== `preview:${profileId}:${folder ?? "none"}` ||
+        hudFolder !== folder
+      )
+        throw new BridgeError("The HUD files changed. Review them again.", "HudReviewStale");
+      return { ...requireDetail(), id: profileId };
+    },
+    async setAppPreferences(preferences) {
+      if (failNextAppPreferenceSave) {
+        failNextAppPreferenceSave = false;
+        throw new BridgeError(
+          "Could not save app settings (preview failure). Retry to try again.",
+          "PreviewOnly",
+        );
+      }
+      appPreferences = { ...preferences };
+      return { preferences: { ...appPreferences }, dataDirectory: "/home/user/.local/share/execs" };
+    },
     async absorbOwned() {
+      if (hudOwnershipPending)
+        throw new BridgeError(
+          "More than one HUD needs review. Choose which HUD this profile should use.",
+          "HudLiveReviewRequired",
+        );
       const delta: AbsorbDelta = state === "absorb" ? previewPackDelta() : emptyAbsorbDelta();
       return {
         library: library ?? emptyLibrary(BROWSED.path, true),
@@ -274,6 +646,18 @@ export function createPreviewApi(state: PreviewState): Api {
       library = { ...(library ?? emptyLibrary(BROWSED.path, true)), activeProfileId: id };
       return library;
     },
+    async reviewRetiredCasualProfile() {
+      throw new BridgeError(
+        "No unavailable saved library choices in preview data.",
+        "NoLegacyCasualChoices",
+      );
+    },
+    async clearRetiredCasualProfile() {
+      throw new BridgeError(
+        "No unavailable saved library choices in preview data.",
+        "NoLegacyCasualChoices",
+      );
+    },
     async onSwitchProgress(handler: (progress: SwitchProgress) => void) {
       progressHandler = handler;
       return () => {
@@ -282,6 +666,13 @@ export function createPreviewApi(state: PreviewState): Api {
     },
     async exportProfile() {
       return null;
+    },
+    async inspectProfileExport() {
+      return {
+        revision: "preview-export-review",
+        credentialLocations: ["tf/cfg/config.cfg:8"],
+        customPacks: [{ path: "tf/custom/example.vpk", fileCount: 1, kind: "other" }],
+      };
     },
     async onProfileImportReading(handler) {
       importReadingHandler = handler;
@@ -299,8 +690,10 @@ export function createPreviewApi(state: PreviewState): Api {
         skippedFiles: 16,
         creator: true,
         notes: [],
+        huds: state === "profile-import-huds" ? ["rayshud", "toonhud"] : [],
+        selectedHud: state === "profile-import-huds" ? "rayshud" : null,
         warnings: [
-          "tf/cfg/config.cfg contains 'password', which may expose a server credential and cannot be shared.",
+          "tf/cfg/config.cfg:8 may contain a saved password or remote-console setting. Review it before sharing this profile.",
           "tf/custom/low.vpk/cfg/comfig/comfig.cfg contains 'alias kill'.",
           "tf/cfg/overrides/autoexec.cfg contains 'sv_cheats'.",
         ],
@@ -443,12 +836,9 @@ export function createPreviewApi(state: PreviewState): Api {
           throw new BridgeError("That managed cfg scope is not allowed.", "InvalidPath");
         }
         const latest = files.find((file) => file.path === path)?.text ?? "";
-        const values = Object.entries(parseCvarMap(text)).filter(([name]) => {
-          if (!(name in defaultGameplay())) return false;
-          if (scope === "crosshair") return name.startsWith("cl_crosshair_");
-          if (scope === "sounds") return name.startsWith("tf_dingaling");
-          return !name.startsWith("cl_crosshair_") && !name.startsWith("tf_dingaling");
-        });
+        const values = Object.entries(parseCvarMap(text)).filter(
+          ([name]) => name in defaultGameplay() && managedCfgScopeOf(name) === scope,
+        );
         text = `${latest}\n${values.map(([name, value]) => `${name} ${JSON.stringify(value)}`).join("\n")}\n`;
       }
       upsert(path, text);
@@ -487,6 +877,16 @@ export function createPreviewApi(state: PreviewState): Api {
     async getProfileLaunchOptions() {
       return launchOptions;
     },
+    async getLaunchSyncStatus() {
+      // Preview data: Steam still has the options from before the last switch.
+      const steamOptions = "-novid";
+      return {
+        profileOptions: launchOptions,
+        steamOptions,
+        inSync: launchOptions === steamOptions,
+        steamRunning: true,
+      };
+    },
     async setProfileLaunchOptions(options: string) {
       launchOptions = options;
       return { launchOptions: options, steamWrite: "steam_open" as const };
@@ -499,7 +899,7 @@ export function createPreviewApi(state: PreviewState): Api {
     async getHudState() {
       return { ...hudState, profileId: requireDetail().id };
     },
-    async getHudAlbum() {
+    async getHudAlbum(_id, _refresh = false) {
       return [];
     },
     async getHudStats() {
@@ -533,6 +933,12 @@ export function createPreviewApi(state: PreviewState): Api {
     },
     async matchHudCatalog(id: string) {
       return api.installHud(id);
+    },
+    async returnToStockHud() {
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before changing the HUD.", "GameRunning");
+      hudState = { ...hudState, installed: null, updateAvailable: false, inferred: false };
+      return requireDetail();
     },
     async updateHud() {
       if (hudState.installed) {
@@ -601,18 +1007,17 @@ export function createPreviewApi(state: PreviewState): Api {
       );
       return requireDetail();
     },
-    async fetchCommunityCrosshair(file: string) {
-      throw notInPreview(`Downloading ${file}`);
-    },
-    async fetchCommunityCrosshairPreviews() {
-      // No network in preview: the picker shows name-only tiles.
-      return {};
-    },
     async getPackCrosshairPreviews() {
       return crosshairPixels;
     },
     async getStockCrosshairSprites() {
       throw notInPreview("Stock crosshair sprites");
+    },
+    async getCrosshairContentSources() {
+      return { hits: {}, incomplete: [] };
+    },
+    async getCrosshairSourceStatus() {
+      return { state: crosshair ? ("unverified" as const) : ("none" as const) };
     },
     async removeCrosshairs() {
       crosshair = null;
@@ -635,14 +1040,12 @@ export function createPreviewApi(state: PreviewState): Api {
     },
 
     // --- viewmodels ---------------------------------------------------------
-    async buildViewmodelPack(hidden: string[], preload: boolean, hideMode = "full" as const) {
-      viewmodel = {
-        id: "preview",
-        source: "compiled",
-        preload,
-        options: { hidden: hidden.join(","), mode: hideMode },
-      };
-      return requireDetail();
+    async getViewmodelSourceCatalog() {
+      const { PREVIEW_VIEWMODEL_CATALOG } = await import("./preview-viewmodels");
+      return PREVIEW_VIEWMODEL_CATALOG;
+    },
+    async buildSelectedViewmodelPack() {
+      throw notInPreview("Building a Viewmodels pack from installed TF2 sources");
     },
     async importViewmodels(preload: boolean): Promise<ProfileDetail | null> {
       viewmodel = { id: "preview", source: "imported", preload, options: {} };
@@ -652,33 +1055,17 @@ export function createPreviewApi(state: PreviewState): Api {
       viewmodel = null;
       return requireDetail();
     },
-    async viewmodelPreviewImage(name: string) {
-      throw notInPreview(`Fetching the ${name} preview`);
-    },
-    async viewmodelBuildAvailable() {
-      return true;
-    },
-    async setViewmodelPreload(enabled: boolean) {
-      if (viewmodel) {
-        viewmodel = { ...viewmodel, preload: enabled };
-      }
-      return requireDetail();
-    },
-
     // --- hit and kill sounds ------------------------------------------------
     async hitsoundBytes() {
       throw notInPreview("Auditioning sounds");
-    },
-    async comfigHitsoundIndex() {
-      return [
-        { name: "Quake 3 hit", hash: "a".repeat(128), kind: "hit" as const },
-        { name: "Kill bell", hash: "b".repeat(128), kind: "kill" as const },
-      ];
     },
     async listStockHitsounds() {
       // Every stock effect is "present" in preview; nothing can play anyway.
       const { STOCK_HITSOUND_EFFECTS } = await import("./hitsound-ui");
       return STOCK_HITSOUND_EFFECTS.flatMap((effect) => [effect.hit, effect.kill]);
+    },
+    async getHitsoundSources() {
+      return { hits: {}, incomplete: [] };
     },
     async pickHitsoundFile() {
       throw notInPreview("Picking a sound file");
@@ -686,27 +1073,40 @@ export function createPreviewApi(state: PreviewState): Api {
     async applyHitsounds(hit: HitsoundSlotChange, kill: HitsoundSlotChange) {
       const next: HitsoundRecord = { ...(hitsound ?? {}) };
       const apply = (slot: "hit" | "kill", change: HitsoundSlotChange) => {
+        if (change.change === "install" && ["community", "comfig"].includes(change.pick.kind)) {
+          throw new BridgeError("This sound catalog is no longer offered.", "SourceUnavailable");
+        }
+        if (
+          change.change === "install" &&
+          change.pick.kind === "installed" &&
+          next[change.pick.slot]?.source !== "file"
+        ) {
+          throw new BridgeError(
+            "This saved catalog sound cannot be re-encoded from its original source.",
+            "SourceUnavailable",
+          );
+        }
         if (change.change === "clear") {
           next[slot] = null;
         } else if (change.change === "install") {
           const pick = change.pick;
           const boost = change.boost;
           next[slot] =
-            pick.kind === "community"
-              ? { name: pick.name, source: "community", boost }
-              : pick.kind === "file"
-                ? { name: pick.name, source: "file", boost }
-                : pick.kind === "comfig"
-                  ? { name: pick.name, source: "comfig", boost }
-                  : next[slot]
-                    ? { ...next[slot], boost }
-                    : null;
+            pick.kind === "file"
+              ? { name: pick.name, source: "file", boost }
+              : next[slot]
+                ? { ...next[slot], boost }
+                : null;
         }
       };
       apply("hit", hit);
       apply("kill", kill);
       hitsound = next.hit || next.kill ? next : null;
       return requireDetail();
+    },
+    async applyHitsoundsWithSettings(path, text, expectedProfileId, hit, kill) {
+      await api.writeManagedCfg(path, text, expectedProfileId, "sounds");
+      return api.applyHitsounds(hit, kill);
     },
     async removeHitsounds() {
       hitsound = null;
@@ -744,34 +1144,108 @@ export function createPreviewApi(state: PreviewState): Api {
       category: number | null,
       page: number,
       includeMature = false,
+      _refresh = false,
     ) {
       const needle = query.trim().toLowerCase();
       const matching = PREVIEW_GAMEBANANA_RECORDS.filter((record) => {
-        const hitsQuery =
-          needle === "" ||
-          record.name.toLowerCase().includes(needle) ||
-          record.author.toLowerCase().includes(needle);
-        return hitsQuery && (category === null || record.categoryId === category);
+        const hitsQuery = needle === "" || record.name.toLowerCase().includes(needle);
+        return (
+          hitsQuery &&
+          (category === null || record.categoryId === category) &&
+          (includeMature || !record.mature)
+        );
       });
-      // A small page so the preview exercises the pager, not one long grid.
-      const perPage = 3;
+      const perPage = 20;
       const start = (page - 1) * perPage;
-      const slice = sortGameBananaMods(matching, sort).slice(start, start + perPage);
+      const slice = previewGameBananaOrder(matching, sort).slice(start, start + perPage);
       return {
-        // Flagged records are dropped from the page, not from the run: the
-        // count and the pager still describe every listing, like the real one.
-        records: includeMature ? slice : slice.filter((record) => !record.mature),
-        total: matching.length,
+        records: slice,
+        total:
+          category === null
+            ? ({ kind: "estimated", value: matching.length } as const)
+            : ({ kind: "exact", value: matching.length } as const),
         perPage,
         complete: start + slice.length >= matching.length,
+        ordering: "server" as const,
+        filters: {
+          query: "global" as const,
+          category: "global" as const,
+          contentRating: "global" as const,
+          installability: category === null ? ("page" as const) : ("global" as const),
+        },
+        cache: { source: "network" as const, freshForMs: 10 * 60_000 },
       };
     },
     async gameBananaModCategories() {
       return PREVIEW_GAMEBANANA_CATEGORIES;
     },
-    async installGameBananaMod(id: number) {
+    async gameBananaDownloadVariants(id: number): Promise<GameBananaDownloadVariant[]> {
       const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
-      if (!listing) {
+      if (listing?.route !== "mod") {
+        throw notInPreview(`GameBanana files for ${id}`);
+      }
+      const files: GameBananaDownloadVariant[] = [
+        {
+          id: id * 10 + 1,
+          fileName: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.zip`,
+          description: "Main version from the author",
+          sizeBytes: 4_200_000,
+          addedAt: listing.addedAt,
+          supported: true,
+          splitPart: false,
+        },
+      ];
+      if (id === 700_001) {
+        // A split upload: two parts that only work together, plus an addon.
+        const added = listing.addedAt ?? 1_760_000_000;
+        const day = 86_400;
+        return [
+          {
+            id: id * 10 + 1,
+            fileName: "vintage_sniper_-_part_1.zip",
+            description: "PART 1",
+            sizeBytes: 48_000_000,
+            addedAt: added,
+            supported: false,
+            splitPart: true,
+          },
+          {
+            id: id * 10 + 2,
+            fileName: "vintage_sniper_-_part_2.zip",
+            description: "PART 2",
+            sizeBytes: 31_500_000,
+            addedAt: added - day,
+            supported: false,
+            splitPart: true,
+          },
+          {
+            id: id * 10 + 3,
+            fileName: "vintage_sniper_scope_overlay.7z",
+            description: "Optional scope overlay",
+            sizeBytes: 820_000,
+            addedAt: added - 400 * day,
+            supported: true,
+            splitPart: false,
+          },
+        ];
+      }
+      if (id === 700_000) {
+        files.push({
+          id: id * 10 + 2,
+          fileName: "alternate-layout.7z",
+          description: "Alternate layout from the author",
+          sizeBytes: 3_100_000,
+          addedAt: listing.addedAt,
+          supported: true,
+          splitPart: false,
+        });
+      }
+      return files;
+    },
+    async installGameBananaMod(id: number, fileId: number) {
+      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
+      const variants = await this.gameBananaDownloadVariants(id);
+      if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
         throw notInPreview(`Installing mod ${id}`);
       }
       if (!mods.some((mod) => mod.source.kind === "gamebanana" && mod.source.id === id)) {
@@ -801,10 +1275,6 @@ export function createPreviewApi(state: PreviewState): Api {
       return { ...modsPayload, profileParticleSources: particleSources() };
     },
     async getDefaultMods() {
-      return { cached: true, catalog: PREVIEW_MODS_CATALOG };
-    },
-    async downloadDefaultMods() {
-      modsPayload = { ...modsPayload, modsCached: true };
       return { cached: true, catalog: PREVIEW_MODS_CATALOG };
     },
     async applyPreloaderMods(
@@ -848,7 +1318,7 @@ export function createPreviewApi(state: PreviewState): Api {
       }
       return modsPayload;
     },
-    async launchTf2() {
+    async launchTf2(_syncSteam?: boolean) {
       // Steam is not reachable from the preview; the button is a no-op here.
     },
     async cancelTf2Launch() {
@@ -900,6 +1370,42 @@ export function createPreviewApi(state: PreviewState): Api {
     async getAppVersion() {
       const { PREVIEW_APP_VERSION } = await import("./updater-ui");
       return PREVIEW_APP_VERSION;
+    },
+    async getInstallHealth() {
+      return {
+        tf2Root: BROWSED.path,
+        libraryUsable: true,
+        rootMismatch: false,
+        activeLayer: "comfig" as const,
+        profiles: [
+          {
+            id: "main",
+            name: "Main",
+            active: true,
+            trackedFiles: 412,
+            missingFiles: 0,
+            missingExamples: [],
+            uncachedDownloads: [],
+            needsLegacyLibrary: false,
+          },
+          {
+            id: "casual",
+            name: "Casual",
+            active: false,
+            trackedFiles: 188,
+            missingFiles: 0,
+            missingExamples: [],
+            uncachedDownloads: ["Flat Textures v1"],
+            needsLegacyLibrary: false,
+          },
+        ],
+        recovery: { pendingSwitch: null, profileUpdate: false, casual: false, unknown: false },
+        steamAccountFound: true,
+        cloudConfigPresent: true,
+        hudCatalogAgeSeconds: 3 * 86_400,
+        legacyLibraryPresent: false,
+        gameRunning: previewLocked(state),
+      };
     },
     async getDiagnostics() {
       const { PREVIEW_APP_VERSION } = await import("./updater-ui");

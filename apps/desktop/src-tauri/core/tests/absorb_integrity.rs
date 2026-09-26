@@ -1,9 +1,9 @@
 //! Regressions for incomplete inventories and case-only renames. These tests
 //! isolate both profiles and the live surface and never discover real Steam.
 use execs_core::absorb::{absorb_owned_to, absorb_packs_to, AbsorbOptions, PackChoice};
-use execs_core::mods::{install_mod_to, ModContent, ModSource};
+use execs_core::mods::{install_mod_to, remove_mod_to, ModContent, ModRecord, ModSource};
 use execs_core::profile::{
-    create_profile_record_to, exclusive_file_path, load_manifest, save_current_as_to,
+    create_profile_record_to, exclusive_file_path, load_manifest, save_current_as_to, ProfileError,
     SaveCurrentOptions,
 };
 use execs_core::switch::switch_profile_to;
@@ -48,14 +48,18 @@ impl Fixture {
         .unwrap()
     }
 
+    fn write(&self, rel: &str, bytes: &[u8]) {
+        let path = self.root.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+
     fn empty_profile(&self, current: &str) -> String {
-        create_profile_record_to(&self.profiles, &self.root, "Empty", unlocked())
-            .unwrap()
-            .profiles
-            .into_iter()
-            .find(|p| p.id != current)
-            .unwrap()
-            .id
+        let library =
+            create_profile_record_to(&self.profiles, &self.root, "Empty", unlocked()).unwrap();
+        let created = library.profiles.last().unwrap();
+        assert_ne!(created.id, current);
+        created.id.clone()
     }
 
     fn switch(&self, target: &str) {
@@ -103,6 +107,43 @@ impl Fixture {
             .clone()
     }
 
+    fn install_particle_mod(&self, id: &str, name: &str, pcf: &str) -> ModRecord {
+        install_mod_to(
+            &self.profiles,
+            &self.root,
+            id,
+            name,
+            ModContent::Tree(vec![(format!("particles/{pcf}"), b"pcf".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap()
+        .mods
+        .into_iter()
+        .find(|record| record.name == name)
+        .unwrap()
+    }
+
+    fn save_selected_sources(&self, profile_id: &str, ids: &[&str]) {
+        execs_core::profile::mutate_profile_files_to(
+            &self.profiles,
+            &self.root,
+            profile_id,
+            &[],
+            &[],
+            execs_core::profile::ProfileLiveProjection::LibraryOnly,
+            unlocked(),
+            |manifest| {
+                manifest.preloader = Some(execs_core::preloader::PreloaderSelection {
+                    profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+                    ..execs_core::preloader::PreloaderSelection::default()
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+    }
+
     fn choose(&self, choice: PackChoice) {
         absorb_packs_to(
             &self.profiles,
@@ -125,6 +166,7 @@ impl Fixture {
             unlocked(),
             |next| {
                 next.hud = manifest.hud.clone();
+                next.crosshair = manifest.crosshair.clone();
                 next.hitsound = manifest.hitsound.clone();
                 next.viewmodel = manifest.viewmodel.clone();
                 Ok(())
@@ -178,27 +220,180 @@ fn accepted_mod_removal_exports_imports_and_switches_without_stale_records() {
 }
 
 #[test]
+fn accepted_external_packs_get_stable_removable_records_through_export() {
+    for vpk in [false, true] {
+        let f = Fixture::new();
+        let id = f.save();
+        let pack = if vpk { "Outside.vpk" } else { "Outside" };
+        let rel = if vpk {
+            format!("tf/custom/{pack}")
+        } else {
+            format!("tf/custom/{pack}/materials/test.vmt")
+        };
+        let bytes = if vpk {
+            execs_core::vpk::write_vpk_v2(
+                &[("materials/test.vmt".into(), b"first".to_vec())]
+                    .into_iter()
+                    .collect(),
+            )
+        } else {
+            b"first".to_vec()
+        };
+        f.write(&rel, &bytes);
+        f.choose(PackChoice::Update);
+        let manifest = load_manifest(&f.profiles, &id).unwrap();
+        assert_eq!(manifest.mods.len(), 1);
+        let record = &manifest.mods[0];
+        assert_eq!(record.pack, pack);
+        assert_eq!(record.name, pack);
+        assert_eq!(record.source, ModSource::External);
+        assert!(record.id.starts_with("external-"));
+        assert_eq!(record.files, 1);
+        assert_eq!(record.bytes, bytes.len() as u64);
+        let stable_id = record.id.clone();
+
+        let second = if vpk {
+            execs_core::vpk::write_vpk_v2(
+                &[("materials/test.vmt".into(), b"second".to_vec())]
+                    .into_iter()
+                    .collect(),
+            )
+        } else {
+            b"second".to_vec()
+        };
+        f.write(&rel, &second);
+        f.absorb();
+        let updated = load_manifest(&f.profiles, &id).unwrap();
+        assert_eq!(updated.mods.len(), 1);
+        assert_eq!(updated.mods[0].id, stable_id);
+        assert_eq!(updated.mods[0].bytes, second.len() as u64);
+
+        let imported = f.round_trip(&id);
+        f.switch(&imported);
+        assert_eq!(
+            load_manifest(&f.profiles, &imported).unwrap().mods[0].id,
+            stable_id
+        );
+        remove_mod_to(&f.profiles, &f.root, &imported, &stable_id, unlocked()).unwrap();
+        assert!(!f.root.join(&rel).exists());
+        assert!(load_manifest(&f.profiles, &imported)
+            .unwrap()
+            .mods
+            .is_empty());
+    }
+}
+
+#[test]
+fn selected_particle_source_external_removal_is_refused_before_update_mutates_state() {
+    let f = Fixture::new();
+    let id = f.save();
+    let first = f.install_particle_mod(&id, "Particle source A", "a.pcf");
+    let second = f.install_particle_mod(&id, "Particle source B", "b.pcf");
+    f.save_selected_sources(&id, &[&first.id, &second.id]);
+    let snapshot = f.base.join("preloader/originals/sentinel");
+    fs::create_dir_all(snapshot.parent().unwrap()).unwrap();
+    fs::write(&snapshot, b"pristine snapshot").unwrap();
+    let misc_dir = f.root.join("tf/tf2_misc_dir.vpk");
+    fs::write(&misc_dir, b"stock directory VPK bytes").unwrap();
+    execs_core::profile::mutate_profile_files_to(
+        &f.profiles,
+        &f.root,
+        &id,
+        &[],
+        &[],
+        execs_core::profile::ProfileLiveProjection::LibraryOnly,
+        unlocked(),
+        |manifest| {
+            manifest.ignored_packs.push(first.pack.clone());
+            Ok(())
+        },
+    )
+    .unwrap();
+    let before = load_manifest(&f.profiles, &id).unwrap();
+    let first_live = f.root.join("tf/custom").join(&first.pack);
+    let second_live = f.root.join("tf/custom").join(&second.pack);
+    fs::remove_dir_all(&first_live).unwrap();
+    let second_file = second_live.join("particles/b.pcf");
+    let second_part = second_live.join("particles/b.pcf.execs-part");
+    fs::rename(&second_file, &second_part).unwrap();
+
+    let err = absorb_packs_to(
+        &f.profiles,
+        &f.root,
+        PackChoice::Update,
+        ["tf_win64.exe"],
+        absorb_options(),
+    )
+    .unwrap_err();
+    assert_eq!(err, ProfileError::GameRunning);
+    assert_eq!(load_manifest(&f.profiles, &id).unwrap(), before);
+
+    let err = absorb_packs_to(
+        &f.profiles,
+        &f.root,
+        PackChoice::Update,
+        unlocked(),
+        absorb_options(),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        &err,
+        ProfileError::ParticleSourceSelected(name) if name == "Particle source A"
+    ));
+    assert_eq!(err.code(), "ParticleSourceSelected");
+    assert_eq!(load_manifest(&f.profiles, &id).unwrap(), before);
+    assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+    assert_eq!(fs::read(&misc_dir).unwrap(), b"stock directory VPK bytes");
+    assert!(!first_live.exists());
+    assert!(!second_file.exists());
+    assert_eq!(fs::read(&second_part).unwrap(), b"pcf");
+
+    fs::rename(&second_part, &second_file).unwrap();
+    f.save_selected_sources(&id, &[&second.id]);
+    f.choose(PackChoice::Update);
+    let after = load_manifest(&f.profiles, &id).unwrap();
+    assert_eq!(after.mods, vec![second.clone()]);
+    assert!(after.ignored_packs.is_empty());
+    assert!(!after
+        .files
+        .iter()
+        .any(|file| file.path.starts_with(&format!("tf/custom/{}/", first.pack))));
+    assert!(second_live.exists());
+    assert_eq!(
+        after.preloader.as_ref().unwrap().profile_particle_mods,
+        vec![second.id]
+    );
+    assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+    assert_eq!(fs::read(&misc_dir).unwrap(), b"stock directory VPK bytes");
+}
+
+#[test]
 fn accepted_hud_removal_clears_its_record_but_keep_and_restore_preserve_it() {
     use execs_core::profile::{HudRecord, HudSource};
-    for choice in [PackChoice::Update, PackChoice::Keep, PackChoice::Restore] {
-        let f = Fixture::new();
-        fs::write(f.root.join("tf/custom/mypack/info.vdf"), b"hud").unwrap();
-        let id = f.save();
-        let mut manifest = load_manifest(&f.profiles, &id).unwrap();
-        manifest.hud = Some(HudRecord {
-            id: "mypack".into(),
-            hash: None,
-            source: HudSource::Local,
-            options: Default::default(),
-        });
-        f.save_metadata(&manifest);
-        fs::remove_dir_all(f.root.join("tf/custom/mypack")).unwrap();
-        f.choose(choice);
-        assert_eq!(
-            load_manifest(&f.profiles, &id).unwrap().hud.is_none(),
-            choice == PackChoice::Update
-        );
-        f.round_trip(&id);
+    for info in [
+        b"hud".as_slice(),
+        b"\"HUD\" { \"ui_version\" \"3\" }\n".as_slice(),
+    ] {
+        for choice in [PackChoice::Update, PackChoice::Keep, PackChoice::Restore] {
+            let f = Fixture::new();
+            fs::write(f.root.join("tf/custom/mypack/info.vdf"), info).unwrap();
+            let id = f.save();
+            let mut manifest = load_manifest(&f.profiles, &id).unwrap();
+            manifest.hud = Some(HudRecord {
+                id: "mypack".into(),
+                hash: None,
+                source: HudSource::Local,
+                options: Default::default(),
+            });
+            f.save_metadata(&manifest);
+            fs::remove_dir_all(f.root.join("tf/custom/mypack")).unwrap();
+            f.choose(choice);
+            assert_eq!(
+                load_manifest(&f.profiles, &id).unwrap().hud.is_none(),
+                choice == PackChoice::Update
+            );
+            f.round_trip(&id);
+        }
     }
 }
 
@@ -218,14 +413,17 @@ fn managed_sound_and_viewmodel_deletions_self_heal_and_keep_records() {
     let id = f.save();
     let mut before = load_manifest(&f.profiles, &id).unwrap();
     before.hitsound = Some(HitsoundRecord {
+        source_changed: false,
         hit: Some(HitsoundEntry::new("sound".into(), HitsoundSource::File)),
         kill: None,
     });
     before.viewmodel = Some(ViewmodelRecord {
         id: "execs-viewmodels".into(),
+        source_changed: false,
         source: ViewmodelSource::Imported,
         preload: false,
         options: Default::default(),
+        build_recipe: None,
     });
     f.save_metadata(&before);
     fs::remove_file(f.root.join(HITSOUND_REL)).unwrap();
@@ -241,6 +439,82 @@ fn managed_sound_and_viewmodel_deletions_self_heal_and_keep_records() {
     assert_eq!(
         fs::read(f.root.join(EXECS_VIEWMODELS_VPK)).unwrap(),
         b"original viewmodel bytes"
+    );
+}
+
+#[test]
+fn accepted_managed_payload_drift_marks_feature_sources_unverified() {
+    use execs_core::hitsound::{HitsoundEntry, HitsoundRecord, HitsoundSource, HITSOUND_REL};
+    use execs_core::profile::{ViewmodelRecord, ViewmodelSource};
+    use execs_core::viewmodel::EXECS_VIEWMODELS_VPK;
+    let f = Fixture::new();
+    let crosshair = "tf/custom/execs-crosshairs/materials/cross.vtf";
+    f.write(crosshair, b"original crosshair");
+    f.write(HITSOUND_REL, b"original sound");
+    f.write(EXECS_VIEWMODELS_VPK, b"original viewmodel");
+    let id = f.save();
+    let mut before = load_manifest(&f.profiles, &id).unwrap();
+    before.crosshair = Some(
+        serde_json::from_str(r#"{"id":"execs-crosshairs","shape":"cross","assignments":{}}"#)
+            .unwrap(),
+    );
+    before.viewmodel = Some(ViewmodelRecord {
+        id: "execs-viewmodels".into(),
+        source_changed: false,
+        source: ViewmodelSource::Imported,
+        preload: false,
+        options: Default::default(),
+        build_recipe: None,
+    });
+    before.hitsound = Some(HitsoundRecord {
+        source_changed: false,
+        hit: Some(HitsoundEntry::new("old".into(), HitsoundSource::File)),
+        kill: None,
+    });
+    f.save_metadata(&before);
+    f.write(crosshair, b"changed crosshair");
+    f.write(HITSOUND_REL, b"changed sound");
+    f.write(EXECS_VIEWMODELS_VPK, b"changed viewmodel");
+    f.absorb();
+    let after = load_manifest(&f.profiles, &id).unwrap();
+    assert!(after.crosshair.unwrap().source_changed);
+    assert!(after.viewmodel.unwrap().source_changed);
+    assert!(after.hitsound.unwrap().source_changed);
+    assert_eq!(
+        fs::read(exclusive_file_path(&f.profiles, &id, crosshair)).unwrap(),
+        b"changed crosshair"
+    );
+}
+
+#[test]
+fn external_gameplay_edit_marks_crosshair_only_for_relevant_cvars() {
+    let f = Fixture::new();
+    let gameplay = "tf/cfg/execs_gameplay.cfg";
+    f.write(gameplay, b"fov_desired 90\ncl_crosshair_scale 32\n");
+    let id = f.save();
+    let mut manifest = load_manifest(&f.profiles, &id).unwrap();
+    manifest.crosshair = Some(
+        serde_json::from_str(r#"{"id":"execs-crosshairs","shape":"cross","assignments":{}}"#)
+            .unwrap(),
+    );
+    f.save_metadata(&manifest);
+    f.write(gameplay, b"fov_desired 100\ncl_crosshair_scale 32\n");
+    f.absorb();
+    assert!(
+        !load_manifest(&f.profiles, &id)
+            .unwrap()
+            .crosshair
+            .unwrap()
+            .source_changed
+    );
+    f.write(gameplay, b"fov_desired 100\ncl_crosshair_scale 40\n");
+    f.absorb();
+    assert!(
+        load_manifest(&f.profiles, &id)
+            .unwrap()
+            .crosshair
+            .unwrap()
+            .source_changed
     );
 }
 
@@ -309,7 +583,10 @@ fn rename_to_dashed_peer_drops_only_old_record_and_preserves_new_bytes() {
     let renamed = f.root.join("tf/custom").join(format!("-{pack}"));
     fs::rename(f.root.join("tf/custom").join(&pack), &renamed).unwrap();
     f.choose(PackChoice::Update);
-    assert!(load_manifest(&f.profiles, &id).unwrap().mods.is_empty());
+    let manifest = load_manifest(&f.profiles, &id).unwrap();
+    assert_eq!(manifest.mods.len(), 1);
+    assert_eq!(manifest.mods[0].pack, format!("-{pack}"));
+    assert_eq!(manifest.mods[0].source, ModSource::External);
     let imported = f.round_trip(&id);
     f.switch(&imported);
     assert_eq!(

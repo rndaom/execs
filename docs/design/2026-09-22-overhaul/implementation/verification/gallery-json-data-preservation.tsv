@@ -1,0 +1,10 @@
+file	canonical_sha256
+docs\design\2026-09-22-overhaul\audit\captures.json	b4ca2dcf850f09dfb1cab48db872344631a2004bde909c571fd713a86bce69e6
+docs\design\2026-09-22-overhaul\combined-release-consolidation.json	e2f61bec25d089ed30381bec7a0be0aecf5dfbee5cceab27ffff7ffa2c1bcc46
+docs\design\2026-09-22-overhaul\combined-release-linear-handoff.json	ede14663722f02928c8694aa8f93324cb2206af88ccf02cba1a3bac34ebea430
+docs\design\2026-09-22-overhaul\options\generation-record.json	49885e9cf83046cbad14aa18ae4059584520ba9828cb97d92f0d2c762accb38b
+docs\design\2026-09-22-overhaul\options\manifest.json	336dab4cce8c34448ca32a678a13054fc483d6bde56fd09cb7992472c01c136d
+docs\design\2026-09-22-overhaul\options\prompts.json	59604cd17a726483229668785e3b2ba12cb17da2be87e93da6c97c71e6e9f5a9
+docs\design\2026-09-22-overhaul\planning-status.json	d3b8d60a1badc7424924d2ac10dc541f456dc13fb21bc54d1adfdb97aa0fe979
+docs\design\2026-09-22-overhaul\research\release-scope-evidence.json	5fbc007e72c0b3813fb54aa7f646255e6340217cfcc387d39a2b3cd2f1973d27
+docs\design\2026-09-22-overhaul\verification.json	ff5706e42a44ee8dd960066cab6cf55f487c29eafc6672e0e1ff2c9d7dafd722

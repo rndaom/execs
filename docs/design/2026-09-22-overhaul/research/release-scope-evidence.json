@@ -1,0 +1,546 @@
+{
+  "retrievedAt": "2026-09-22",
+  "project": {
+    "id": "P-RND-6",
+    "name": "execs",
+    "url": "https://linear.app/rndaom/project/execs-a89f9a30e95c",
+    "summary": "0.1.8 is latest stable: PR #59 and the tag workflow published verified Windows/Linux installers and updater. All nine 0.1.8 milestone issues are Done; remaining cumulative validation and 0.2.0 work are tracked separately."
+  },
+  "milestones": [
+    {
+      "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+      "name": "0.1.9",
+      "description": "Startup, updater state, accessibility and release validation.\n\nClear stale update offers ([RND-246](<https://linear.app/rndaom/issue/RND-246/clear-stale-update-offers-when-a-later-check-reports-no-update>)), show fail-closed startup errors ([RND-290](<https://linear.app/rndaom/issue/RND-290/show-an-actionable-startup-error-when-durable-maintenance-preflight>)), fix per-pane scroll/active-nav visibility ([RND-291](<https://linear.app/rndaom/issue/RND-291/keep-each-settings-pane-at-a-predictable-scroll-position>)), meaningful text contrast ([RND-292](<https://linear.app/rndaom/issue/RND-292/make-meaningful-helper-and-status-text-meet-minimum-contrast>)), and inaccurate player documentation ([RND-294](<https://linear.app/rndaom/issue/RND-294/correct-installer-platform-and-casual-compatibility-claims-in-player>)). Complete the cumulative Windows/Linux/Steam Cloud/Casual gate ([RND-251](<https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before>)), with realistic profile preservation and visible packaged startup evidence. The unbounded update download ([RND-288](<https://linear.app/rndaom/issue/RND-288/time-out-stalled-updater-payload-downloads-and-release-the-update>)) leads in 0.1.5; this bucket inherits it.\n\nPlanning checkpoints are provisional, not release promises or a requirement to publish every numbered patch. Do not hold install, updater, data-loss or write-lock fixes for a theme/date. Combine or skip empty releases if useful. Prepare patches from the latest public maintenance baseline (currently v0.1.5), with no incompatible schema or new live write targets, and forward-port each fix to 0.2.0. User-facing fixes carry \\[Unreleased\\] notes in their implementation commit. Require relevant regression checks, Windows/Linux CI, previous-public-profile compatibility and signed installer/updater verification. This audit creates work; it does not implement, tag or publish it.",
+      "targetDate": "2026-09-28",
+      "progress": "4%"
+    },
+    {
+      "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+      "name": "0.2.0",
+      "description": "Selected profile-management minor plus a clearly labeled candidate pool.\n\nCreator ZIP review/import ([RND-201](<https://linear.app/rndaom/issue/RND-201/import-creator-cfgcustom-zips-with-a-themed-trust-review-and-real>)) shipped in the owner-assigned 0.1.6 patch and is inherited here. The remaining selected user-visible scope is safe profile deletion ([RND-213](<https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu>)), and focused app settings ([RND-214](<https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support>)). Complete profile-preloader integration/migration ([RND-202](<https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during>)/[RND-274](<https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod>) and the minor slice of [RND-248](<https://linear.app/rndaom/issue/RND-248/prevent-removing-particle-source-mods-while-their-preloader-selections>)), single-HUD lifecycle ([RND-215](<https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and>)), and all maintenance fixes before the release gate [RND-208](<https://linear.app/rndaom/issue/RND-208/validate-and-publish-020-after-the-functional-fixes-and-profile>).\n\nAt the owner's request, new capabilities and larger refactors are now organized here using the execs-candidate label. Candidate does not mean committed to this release. Existing expanded binds, sensitivity, rename/duplicate/uninstall, broader cfg provenance, viewmodel organization/Linux compilation, stock-HUD return, particle conflict review, sound browsing, launch status and storage work remain selectable. New ideas [RND-295](<https://linear.app/rndaom/issue/RND-295/preview-profile-differences-before-switching>)–299 cover switch diffs, health/offline readiness, restore points, GameBanana file variants and cfg provenance; [RND-300](<https://linear.app/rndaom/issue/RND-300/extract-settings-loading-and-mutation-coordination-from-settingshost>)–302 are focused internal refactors. Authenticode [RND-191](<https://linear.app/rndaom/issue/RND-191/windows-code-signing-authenticode-for-the-installer-and-updater>) and comment cleanup [RND-204](<https://linear.app/rndaom/issue/RND-204/trim-redundant-comments-across-panes-shared-ui-hooks-and-rust-commands>) are also uncommitted candidates with their prior work states preserved.\n\nChoose or swap within at most three visible features, or one large feature for a whole minor. Defer unselected candidates to a later minor before freezing the release; do not call the milestone percentage a release-readiness score.\n\nPlanning checkpoints are provisional, not release promises or a requirement to publish every numbered patch. Do not hold install, updater, data-loss or write-lock fixes for a theme/date. Combine or skip empty releases if useful. Prepare patches from the latest public maintenance baseline (currently v0.1.6), with no incompatible schema or new live write targets, and forward-port each fix to 0.2.0. User-facing fixes carry \\[Unreleased\\] notes in their implementation commit. Require relevant regression checks, Windows/Linux CI, previous-public-profile compatibility and signed installer/updater verification. This audit creates work; it does not implement, tag or publish it.\n\nSeptember 17 owner planning update: [RND-228](<https://linear.app/rndaom/issue/RND-228/rebuild-files-as-a-profile-aware-tf2-config-workspace-for-017>) is expanded into the Files workspace rework and moved to proposed 0.1.7 with [RND-313](<https://linear.app/rndaom/issue/RND-313/give-files-an-editor-first-workspace-with-usable-navigation-and-core>)–323. It is no longer in this milestone's candidate pool. The bounded patch exception and [source-backed plan](<https://linear.app/rndaom/document/files-workspace-deep-audit-research-and-017-rework-plan-73e3e612b655>) are recorded in 0.1.7. [RND-299](<https://linear.app/rndaom/issue/RND-299/explain-the-cfg-source-and-class-context-of-a-setting>) retains broader setting-pane provenance here; Files-local source context is [RND-322](<https://linear.app/rndaom/issue/RND-322/explain-files-ownership-execution-role-and-resolvable-cfg-links>). Existing selected minor scope is unchanged.",
+      "targetDate": "2026-10-01",
+      "progress": "1%"
+    }
+  ],
+  "issues": [
+    {
+      "id": "RND-251",
+      "title": "Run the cumulative Windows and Linux functional release matrix before 0.2.0",
+      "status": "In Progress",
+      "statusType": "started",
+      "labels": ["compat", "Desktop", "Infra"],
+      "url": "https://linear.app/rndaom/issue/RND-251/run-the-cumulative-windows-and-linux-functional-release-matrix-before",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-22T08:15:24.711Z"
+    },
+    {
+      "id": "RND-298",
+      "title": "Review GameBanana file variants before choosing a download",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "compat", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-298/review-gamebanana-file-variants-before-choosing-a-download",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-20T01:14:34.746Z"
+    },
+    {
+      "id": "RND-292",
+      "title": "Make meaningful helper and status text meet minimum contrast",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["Desktop", "UX", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-292/make-meaningful-helper-and-status-text-meet-minimum-contrast",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-20T01:14:34.746Z"
+    },
+    {
+      "id": "RND-291",
+      "title": "Keep each settings pane at a predictable scroll position",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["Desktop", "UX", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-291/keep-each-settings-pane-at-a-predictable-scroll-position",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-20T01:14:33.052Z"
+    },
+    {
+      "id": "RND-229",
+      "title": "Show which particle mod wins each conflicting file before Apply",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-229/show-which-particle-mod-wins-each-conflicting-file-before-apply",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-20T01:13:02.553Z"
+    },
+    {
+      "id": "RND-325",
+      "title": "Audit execs Windows polling for periodic TF2 frame stalls",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "labels": ["Desktop", "Gameplay", "Infra", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-325/audit-execs-windows-polling-for-periodic-tf2-frame-stalls",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-19T00:48:36.603Z"
+    },
+    {
+      "id": "RND-202",
+      "title": "Replace shared preloader selections with the target profile during switching",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "labels": ["compat", "Desktop", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-202/replace-shared-preloader-selections-with-the-target-profile-during",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-19T00:48:35.153Z"
+    },
+    {
+      "id": "RND-324",
+      "title": "Make the execs TF2 preload hook startup-safe",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "labels": ["Desktop", "Launch", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-324/make-the-execs-tf2-preload-hook-startup-safe",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-19T00:48:34.886Z"
+    },
+    {
+      "id": "RND-299",
+      "title": "Explain the cfg source and class context of a setting",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-299/explain-the-cfg-source-and-class-context-of-a-setting",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-17T13:48:19.241Z"
+    },
+    {
+      "id": "RND-208",
+      "title": "Validate and publish 0.2.0 after the functional fixes and profile-management scope",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "labels": ["compat", "Desktop", "Infra"],
+      "url": "https://linear.app/rndaom/issue/RND-208/validate-and-publish-020-after-the-functional-fixes-and-profile",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:37:01.449Z"
+    },
+    {
+      "id": "RND-295",
+      "title": "Preview profile differences before switching",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "compat", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-295/preview-profile-differences-before-switching",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:37:01.417Z"
+    },
+    {
+      "id": "RND-294",
+      "title": "Correct installer, platform and Casual compatibility claims in player documentation",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["Desktop", "Docs", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-294/correct-installer-platform-and-casual-compatibility-claims-in-player",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-14T13:37:01.417Z"
+    },
+    {
+      "id": "RND-302",
+      "title": "Remove or restrict unused whole-backup gameinfo restoration helpers",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "compat", "Desktop", "Improvement"],
+      "url": "https://linear.app/rndaom/issue/RND-302/remove-or-restrict-unused-whole-backup-gameinfo-restoration-helpers",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:37:01.417Z"
+    },
+    {
+      "id": "RND-213",
+      "title": "Delete profiles safely from the profile menu",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-213/delete-profiles-safely-from-the-profile-menu",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:30:20.449Z"
+    },
+    {
+      "id": "RND-290",
+      "title": "Show an actionable startup error when durable maintenance preflight fails",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "Infra", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-290/show-an-actionable-startup-error-when-durable-maintenance-preflight",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-14T13:30:18.058Z"
+    },
+    {
+      "id": "RND-300",
+      "title": "Extract settings loading and mutation coordination from SettingsHost",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "Desktop", "Infra", "Improvement"],
+      "url": "https://linear.app/rndaom/issue/RND-300/extract-settings-loading-and-mutation-coordination-from-settingshost",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:30:05.361Z"
+    },
+    {
+      "id": "RND-215",
+      "title": "Enforce one HUD per profile across replacement, import, switch and absorb",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-215/enforce-one-hud-per-profile-across-replacement-import-switch-and",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:29:39.537Z"
+    },
+    {
+      "id": "RND-246",
+      "title": "Clear stale update offers when a later check reports no update",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-246/clear-stale-update-offers-when-a-later-check-reports-no-update",
+      "projectMilestone": {
+        "id": "945106ab-1062-4ee5-ae9f-675040b3305e",
+        "name": "0.1.9"
+      },
+      "updatedAt": "2026-09-14T13:28:45.231Z"
+    },
+    {
+      "id": "RND-274",
+      "title": "Switch local-only particle profiles without requiring the default mod library",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "Bug"],
+      "url": "https://linear.app/rndaom/issue/RND-274/switch-local-only-particle-profiles-without-requiring-the-default-mod",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:28:39.411Z"
+    },
+    {
+      "id": "RND-204",
+      "title": "Trim redundant comments across panes, shared UI, hooks, and Rust commands",
+      "status": "In Progress",
+      "statusType": "started",
+      "labels": ["Desktop", "Improvement", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-204/trim-redundant-comments-across-panes-shared-ui-hooks-and-rust-commands",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:16.501Z"
+    },
+    {
+      "id": "RND-214",
+      "title": "Add app settings for updates, motion, install location and support",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-214/add-app-settings-for-updates-motion-install-location-and-support",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:16.447Z"
+    },
+    {
+      "id": "RND-191",
+      "title": "Windows code signing (Authenticode) for the installer and updater",
+      "status": "Todo",
+      "statusType": "unstarted",
+      "labels": ["Desktop", "Infra", "compat", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-191/windows-code-signing-authenticode-for-the-installer-and-updater",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:15.053Z"
+    },
+    {
+      "id": "RND-267",
+      "title": "Let Linux users build custom per-class viewmodel setups inside execs",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-267/let-linux-users-build-custom-per-class-viewmodel-setups-inside-execs",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:13.161Z"
+    },
+    {
+      "id": "RND-232",
+      "title": "Show local storage usage and safely clear rebuildable caches in Settings",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-232/show-local-storage-usage-and-safely-clear-rebuildable-caches-in",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:10.418Z"
+    },
+    {
+      "id": "RND-231",
+      "title": "Show whether profile launch options are copied, pending or saved to Steam",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Improvement", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-231/show-whether-profile-launch-options-are-copied-pending-or-saved-to",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:09.042Z"
+    },
+    {
+      "id": "RND-230",
+      "title": "Add Return to stock HUD without changing the rest of the profile",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-230/add-return-to-stock-hud-without-changing-the-rest-of-the-profile",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:27:07.075Z"
+    },
+    {
+      "id": "RND-227",
+      "title": "Simplify Sounds browsing around the selected hit or kill sound",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["Desktop", "UX", "Improvement", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-227/simplify-sounds-browsing-around-the-selected-hit-or-kill-sound",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:59.359Z"
+    },
+    {
+      "id": "RND-226",
+      "title": "Add whole-profile viewmodel visibility presets with an exact change review",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-226/add-whole-profile-viewmodel-visibility-presets-with-an-exact-change",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:57.738Z"
+    },
+    {
+      "id": "RND-225",
+      "title": "Bring visibility, FOV and transparent viewmodels together in Viewmodels",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Improvement", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-225/bring-visibility-fov-and-transparent-viewmodels-together-in-viewmodels",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:55.129Z"
+    },
+    {
+      "id": "RND-223",
+      "title": "Duplicate any saved profile without switching it into the game",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-223/duplicate-any-saved-profile-without-switching-it-into-the-game",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:53.603Z"
+    },
+    {
+      "id": "RND-222",
+      "title": "Rename profiles without rebuilding or copying their contents",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-222/rename-profiles-without-rebuilding-or-copying-their-contents",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:51.829Z"
+    },
+    {
+      "id": "RND-221",
+      "title": "Add a safe uninstall and leave-TF2-as-is flow in app settings",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-221/add-a-safe-uninstall-and-leave-tf2-as-is-flow-in-app-settings",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:50.462Z"
+    },
+    {
+      "id": "RND-220",
+      "title": "Add a curated Gameplay section for reload, healing and damage feedback",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-220/add-a-curated-gameplay-section-for-reload-healing-and-damage-feedback",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:48.666Z"
+    },
+    {
+      "id": "RND-219",
+      "title": "Add precise mouse and zoom sensitivity controls to Gameplay",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-219/add-precise-mouse-and-zoom-sensitivity-controls-to-gameplay",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:47.018Z"
+    },
+    {
+      "id": "RND-218",
+      "title": "Review bind conflicts and provide explicit clear and secondary-key actions",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-218/review-bind-conflicts-and-provide-explicit-clear-and-secondary-key",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:43.511Z"
+    },
+    {
+      "id": "RND-217",
+      "title": "Expand Binds with combat, weapon, communication and menu actions",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["compat", "Desktop", "UX", "Feature", "execs-candidate"],
+      "url": "https://linear.app/rndaom/issue/RND-217/expand-binds-with-combat-weapon-communication-and-menu-actions",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:26:32.779Z"
+    },
+    {
+      "id": "RND-301",
+      "title": "Keep serialized Rust records and TypeScript bridge types in sync",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "Desktop", "Infra", "Improvement"],
+      "url": "https://linear.app/rndaom/issue/RND-301/keep-serialized-rust-records-and-typescript-bridge-types-in-sync",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:25:51.978Z"
+    },
+    {
+      "id": "RND-297",
+      "title": "Add bounded local profile restore points with a change review",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "compat", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-297/add-bounded-local-profile-restore-points-with-a-change-review",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:25:46.890Z"
+    },
+    {
+      "id": "RND-296",
+      "title": "Show local installation health and offline readiness",
+      "status": "Backlog",
+      "statusType": "backlog",
+      "labels": ["execs-candidate", "compat", "Desktop", "UX", "Feature"],
+      "url": "https://linear.app/rndaom/issue/RND-296/show-local-installation-health-and-offline-readiness",
+      "projectMilestone": {
+        "id": "11129e84-327b-4b07-8ad6-0489cdd56642",
+        "name": "0.2.0"
+      },
+      "updatedAt": "2026-09-14T13:25:45.469Z"
+    }
+  ],
+  "publicRelease": {
+    "tag": "v0.1.8",
+    "publishedAt": "2026-09-21T02:26:18Z",
+    "commit": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "url": "https://github.com/rndaom/execs/releases/tag/v0.1.8"
+  },
+  "local": {
+    "branch": "rndaom/inventory-manager",
+    "head": "9ac45a3847b65da087661b1c08cf719fc6b9df11",
+    "main": "0c5aa21e9b16e3bd3c05c1bb4d9d7e9acddfc7be",
+    "forwardPort018": "d5d65e347fe05394d98a41c8db3027c8207bd480"
+  }
+}

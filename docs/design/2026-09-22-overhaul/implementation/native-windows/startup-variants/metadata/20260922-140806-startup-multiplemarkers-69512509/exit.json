@@ -1,0 +1,18 @@
+{
+  "appPid": 17484,
+  "exitCode": 0,
+  "exitedUtc": "2026-09-22T18:15:11.1998320Z",
+  "markerSha256Before": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E",
+  "markerSha256After": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E",
+  "startupMarkersAfter": [
+    {
+      "name": "launching-tf2",
+      "sha256": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E"
+    },
+    {
+      "name": "steam-verification",
+      "sha256": "09A844541B3F307BD54A74C6326A6401B131EFA25018388B3E6A60DE3B4C40F4"
+    }
+  ],
+  "defaultTauriLocalDataExistsAfter": true
+}

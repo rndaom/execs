@@ -18,6 +18,7 @@ export function ReadyHeader({
   blockedReason,
   blockedAction,
   onBlocked,
+  launchWarning,
   menu,
   onLaunch,
   onCancelLaunch,
@@ -29,6 +30,8 @@ export function ReadyHeader({
   blockedReason?: string | null;
   blockedAction?: string;
   onBlocked?: () => void;
+  /** Shown beside Launch TF2 when Steam's launch options differ from the profile. */
+  launchWarning?: string | null;
   menu: ReactNode;
   onLaunch: () => void;
   onCancelLaunch: () => void;
@@ -37,10 +40,10 @@ export function ReadyHeader({
   const reasonId = useId();
 
   return (
-    <header className="relative z-40 flex min-h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 sm:px-6">
+    <header className="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 max-sm:h-auto max-sm:min-h-14 max-sm:flex-wrap max-sm:gap-y-2 max-sm:py-2 sm:px-6">
       <div className="mr-1 flex shrink-0 items-center gap-2">
-        <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
-        <span className="text-[15px] font-semibold tracking-tight text-ink">execs</span>
+        <span aria-hidden="true" className="size-2.5 rounded-full bg-brand" />
+        <span className="text-[18px] font-semibold tracking-tight text-ink">execs</span>
       </div>
 
       {menu}
@@ -76,31 +79,45 @@ export function ReadyHeader({
           <span className="hidden sm:inline">Game running</span>
         </div>
       ) : (
-        <div className="ml-auto flex max-w-md flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
+          {launchWarning && !launching && !disabled ? (
+            <p
+              data-testid="launch-sync-warning"
+              className="t-meta flex min-w-0 items-center gap-1.5 text-warn"
+              title="Launch TF2 will write this profile's launch options into Steam first."
+            >
+              <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warn" />
+              <span className="truncate">{launchWarning}</span>
+            </p>
+          ) : null}
           <button
             type="button"
             data-testid="launch-tf2"
             onClick={launching ? onCancelLaunch : onLaunch}
             disabled={launching ? false : disabled}
             aria-describedby={!launching && disabled && blockedReason ? reasonId : undefined}
-            className="btn btn-ghost shrink-0 gap-1.5 text-[13px]"
+            className="btn btn-ghost shrink-0 gap-1.5 border-brand/70 text-[13px]"
             title={
               launching
                 ? "Cancel only after cancelling the launch and closing Steam"
                 : (blockedReason ?? undefined)
             }
           >
-            <Play size={13} weight="fill" />
+            <Play size={13} weight="fill" className="text-brand" />
             {launching ? "Cancel launch wait" : "Launch TF2"}
           </button>
           {!launching && disabled && blockedReason ? (
             <>
               {onBlocked && blockedAction ? (
-                <button type="button" className="btn btn-ghost" onClick={onBlocked}>
+                <button
+                  type="button"
+                  className="btn btn-ghost max-sm:whitespace-nowrap"
+                  onClick={onBlocked}
+                >
                   {blockedAction}
                 </button>
               ) : null}
-              <p id={reasonId} role="status" className="t-meta w-full pb-1 text-right">
+              <p id={reasonId} role="status" className="sr-only">
                 {blockedReason}
               </p>
             </>

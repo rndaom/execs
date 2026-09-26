@@ -1,0 +1,77 @@
+{
+  "passed": true,
+  "checkedUtc": "2026-09-22T17:33:56.5907882Z",
+  "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-133354-inactiveimport-validator-selftest-3f4bcb02",
+  "checks": [
+    {
+      "name": "fresh initial fixture accepted",
+      "passed": true
+    },
+    {
+      "name": "unimported fixture cannot reopen",
+      "passed": true
+    },
+    {
+      "name": "authored imported state accepted",
+      "passed": true
+    },
+    {
+      "name": "authored export with ten exact payloads accepted",
+      "passed": true
+    },
+    {
+      "name": "no native session evidence cannot reopen",
+      "passed": true
+    },
+    {
+      "name": "exact empty ordinary blob incoming container accepted after import",
+      "passed": true
+    },
+    {
+      "name": "nonempty blob incoming container rejected",
+      "passed": true
+    },
+    {
+      "name": "non-directory blob incoming container rejected",
+      "passed": true
+    },
+    {
+      "name": "synthetic live drift rejected",
+      "passed": true
+    },
+    {
+      "name": "non-null active profile rejected",
+      "passed": true
+    },
+    {
+      "name": "unexpected pending Cloud state rejected",
+      "passed": true
+    },
+    {
+      "name": "nonempty imported preloader rejected",
+      "passed": true
+    },
+    {
+      "name": "recovery journal rejected",
+      "passed": true
+    },
+    {
+      "name": "empty staging directory rejected",
+      "passed": true
+    },
+    {
+      "name": "altered export payload rejected",
+      "passed": true
+    },
+    {
+      "name": "changed executable identity rejected",
+      "passed": true
+    },
+    {
+      "name": "exact state accepted after restoration",
+      "passed": true
+    }
+  ],
+  "count": 17,
+  "note": "Validator self-test with authored files only. No native app, import IPC, export IPC, Steam, Cloud, or GUI was executed. This directory is not a native qualification case and contains no launch/exit records."
+}

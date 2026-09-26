@@ -1,23 +1,65 @@
 //! App-data settings. Not Tauri's reverse-domain directory.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use crate::archive::read_regular_file_bounded_within;
 use crate::finder::{normalize_tf2_root, user_path_string, Tf2RootError};
 use crate::hash::{validate_dir_within, write_atomic_within};
+use crate::profile::ProfileError;
 
 pub const SETTINGS_SCHEMA: u32 = 1;
 const MAX_SETTINGS_BYTES: usize = 64 * 1024;
+// Root confirmation and preference changes share one file. Include the
+// legacy-path migration performed by a read in this serializer as well.
+static SETTINGS_WRITES: Mutex<()> = Mutex::new(());
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MotionPreference {
+    #[default]
+    System,
+    Reduce,
+}
+
+/// Application preferences never belong to a profile or exported archive.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AppPreferences {
+    pub check_for_updates_on_startup: bool,
+    pub motion: MotionPreference,
+}
+
+impl Default for AppPreferences {
+    fn default() -> Self {
+        Self {
+            check_for_updates_on_startup: true,
+            motion: MotionPreference::System,
+        }
+    }
+}
 
 /// Settings files written by earlier versions may carry keys this struct does
 /// not have, such as `inheritBinds`. Unknown keys are ignored, so they load.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub schema: u32,
-    #[serde(rename = "tf2Root")]
+    #[serde(rename = "tf2Root", default)]
     pub tf2_root: String,
+    #[serde(default)]
+    pub preferences: AppPreferences,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            schema: SETTINGS_SCHEMA,
+            tf2_root: String::new(),
+            preferences: AppPreferences::default(),
+        }
+    }
 }
 
 /// Windows `%AppData%\execs`, Linux `~/.local/share/execs` (or `$XDG_DATA_HOME/execs`).
@@ -94,15 +136,56 @@ pub fn settings_file() -> PathBuf {
 }
 
 pub fn load_settings_from(file: &Path) -> Option<Settings> {
-    let parent = file.parent()?;
-    let bytes =
-        read_regular_file_bounded_within(parent, file, MAX_SETTINGS_BYTES as u64).ok()??;
-    let text = String::from_utf8(bytes).ok()?;
-    let settings: Settings = serde_json::from_str(&text).ok()?;
-    if settings.schema != SETTINGS_SCHEMA || settings.tf2_root.is_empty() {
-        return None;
+    read_settings_from(file).ok().flatten()
+}
+
+/// Missing settings use defaults; corrupt, unsupported or inaccessible files
+/// stay errors. A preference write must not silently erase a remembered root.
+pub fn read_settings_from(file: &Path) -> Result<Option<Settings>, String> {
+    match std::fs::symlink_metadata(file) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(format!("Could not read app settings: {err}")),
+        Ok(_) => {}
     }
-    Some(settings)
+    let parent = file
+        .parent()
+        .ok_or_else(|| "The settings path has no parent directory.".to_string())?;
+    let bytes = read_regular_file_bounded_within(parent, file, MAX_SETTINGS_BYTES as u64)
+        .map_err(|err| {
+            // The guarded reader is shared with profiles; retain its I/O
+            // reason without the unrelated profile-library write context.
+            let detail = match err {
+                ProfileError::Io(detail) => detail,
+                other => other.message(),
+            };
+            format!("Could not read app settings: {detail}")
+        })?
+        .ok_or_else(|| "The app settings file exceeds the read limit.".to_string())?;
+    let settings: Settings = serde_json::from_slice(&bytes)
+        .map_err(|err| format!("Could not read app settings: {err}"))?;
+    if settings.schema != SETTINGS_SCHEMA {
+        return Err("This app settings format is not supported by this version of execs.".into());
+    }
+    Ok(Some(settings))
+}
+
+pub fn app_preferences_from(file: &Path) -> Result<AppPreferences, String> {
+    Ok(read_settings_from(file)?.unwrap_or_default().preferences)
+}
+
+/// Writes only app data, including before an install is confirmed or while
+/// TF2 runs. Read after acquiring the mutex so root confirmation cannot race.
+pub fn set_app_preferences_to(
+    file: &Path,
+    preferences: AppPreferences,
+) -> Result<AppPreferences, String> {
+    let _guard = SETTINGS_WRITES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut settings = read_settings_from(file)?.unwrap_or_default();
+    settings.preferences = preferences;
+    save_settings_to(file, &settings)?;
+    Ok(settings.preferences)
 }
 
 pub fn save_settings_to(file: &Path, settings: &Settings) -> Result<(), String> {
@@ -136,6 +219,9 @@ pub fn save_settings_to(file: &Path, settings: &Settings) -> Result<(), String> 
 
 /// Re-validates `steam.inf`. A moved or non-440 root is treated as unconfirmed.
 pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
+    let _guard = SETTINGS_WRITES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut settings = load_settings_from(file)?;
     let valid = normalize_tf2_root(Path::new(&settings.tf2_root)).ok()?;
     let cleaned = user_path_string(&valid);
@@ -150,10 +236,13 @@ pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
 
 pub fn remember_tf2_root_to(file: &Path, root: &Path) -> Result<PathBuf, Tf2RootError> {
     let valid = normalize_tf2_root(root)?;
-    let settings = Settings {
-        schema: SETTINGS_SCHEMA,
-        tf2_root: user_path_string(&valid),
-    };
+    let _guard = SETTINGS_WRITES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut settings = read_settings_from(file)
+        .map_err(Tf2RootError::Io)?
+        .unwrap_or_default();
+    settings.tf2_root = user_path_string(&valid);
     save_settings_to(file, &settings).map_err(Tf2RootError::Io)?;
     Ok(valid)
 }
@@ -227,6 +316,7 @@ mod tests {
             &Settings {
                 schema: SETTINGS_SCHEMA,
                 tf2_root: "/not/used/by-this-write-test".into(),
+                ..Settings::default()
             },
         )
         .unwrap();
@@ -287,6 +377,156 @@ mod tests {
         .unwrap();
         let parsed = load_settings_from(&legacy).unwrap();
         assert_eq!(parsed.tf2_root, "D:/steam");
+        assert_eq!(parsed.preferences, AppPreferences::default());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reading_missing_preferences_uses_defaults_without_creating_files() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        assert_eq!(
+            app_preferences_from(&file).unwrap(),
+            AppPreferences::default()
+        );
+        assert!(!file.exists());
+        assert!(!file.parent().unwrap().exists());
+    }
+
+    #[test]
+    fn preferences_persist_before_a_profile_or_install_exists() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        let preferences = AppPreferences {
+            check_for_updates_on_startup: false,
+            motion: MotionPreference::Reduce,
+        };
+        assert_eq!(
+            set_app_preferences_to(&file, preferences.clone()).unwrap(),
+            preferences
+        );
+        assert_eq!(app_preferences_from(&file).unwrap(), preferences);
+        assert_eq!(remembered_tf2_root_from(&file), None);
+        assert!(!dir.join("execs/profiles").exists());
+        let written: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+        assert_eq!(written["preferences"]["motion"], "reduce");
+        assert_eq!(written["preferences"]["checkForUpdatesOnStartup"], false);
+        assert!(!file.with_extension("json.execs-part").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn changing_install_and_preferences_preserves_the_other_global_fields() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        let first = dir.join("first-install");
+        let second = dir.join("second-install");
+        write_tf2(&first);
+        write_tf2(&second);
+        let first = remember_tf2_root_to(&file, &first).unwrap();
+        let preferences = AppPreferences {
+            check_for_updates_on_startup: false,
+            motion: MotionPreference::Reduce,
+        };
+        set_app_preferences_to(&file, preferences.clone()).unwrap();
+        assert_eq!(remembered_tf2_root_from(&file), Some(first));
+        let second = remember_tf2_root_to(&file, &second).unwrap();
+        assert_eq!(remembered_tf2_root_from(&file), Some(second));
+        assert_eq!(app_preferences_from(&file).unwrap(), preferences);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn partial_preference_objects_keep_backwards_compatible_defaults() {
+        let dir = crate::test_temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("settings.json");
+        fs::write(&file, br#"{"schema":1,"preferences":{"motion":"reduce"}}"#).unwrap();
+        let loaded = app_preferences_from(&file).unwrap();
+        assert!(loaded.check_for_updates_on_startup);
+        assert_eq!(loaded.motion, MotionPreference::Reduce);
+        assert!(load_settings_from(&file).unwrap().tf2_root.is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn invalid_existing_settings_are_not_replaced_by_preference_defaults() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        for original in [
+            br#"{"schema":1,"tf2Root":"D:/steam""#.as_slice(),
+            br#"{"schema":999,"tf2Root":"D:/steam"}"#.as_slice(),
+            br#"{"schema":1,"preferences":{"motion":"animate"}}"#.as_slice(),
+        ] {
+            fs::write(&file, original).unwrap();
+            assert!(app_preferences_from(&file).is_err());
+            assert!(set_app_preferences_to(&file, AppPreferences::default()).is_err());
+            assert_eq!(fs::read(&file).unwrap(), original);
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn locked_settings_keep_app_context_and_allow_retry_without_losing_root() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        let original = Settings {
+            tf2_root: "D:/remembered-tf2-root".into(),
+            ..Settings::default()
+        };
+        save_settings_to(&file, &original).unwrap();
+        let original_bytes = fs::read(&file).unwrap();
+        let preferences = AppPreferences {
+            check_for_updates_on_startup: false,
+            motion: MotionPreference::Reduce,
+        };
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&file)
+            .unwrap();
+
+        let error = set_app_preferences_to(&file, preferences.clone()).unwrap_err();
+        assert!(error.starts_with("Could not read app settings:"));
+        assert!(error.contains(&std::io::Error::from_raw_os_error(32).to_string()));
+        assert!(!error.contains("profile library"), "{error}");
+
+        drop(held);
+        assert_eq!(fs::read(&file).unwrap(), original_bytes);
+        assert!(!file.with_extension("json.execs-part").exists());
+        assert_eq!(
+            set_app_preferences_to(&file, preferences.clone()).unwrap(),
+            preferences
+        );
+        let saved = read_settings_from(&file).unwrap().unwrap();
+        assert_eq!(saved.tf2_root, original.tf2_root);
+        assert_eq!(saved.preferences, preferences);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn concurrent_confirmation_and_preferences_do_not_drop_each_other() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        let root = dir.join("install");
+        write_tf2(&root);
+        let preferences = AppPreferences {
+            check_for_updates_on_startup: false,
+            motion: MotionPreference::Reduce,
+        };
+        std::thread::scope(|scope| {
+            scope.spawn(|| remember_tf2_root_to(&file, &root).unwrap());
+            scope.spawn(|| set_app_preferences_to(&file, preferences.clone()).unwrap());
+        });
+        assert_eq!(
+            remembered_tf2_root_from(&file),
+            Some(normalize_tf2_root(&root).unwrap())
+        );
+        assert_eq!(app_preferences_from(&file).unwrap(), preferences);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -319,6 +559,7 @@ mod tests {
             &Settings {
                 schema: SETTINGS_SCHEMA,
                 tf2_root: legacy,
+                ..Settings::default()
             },
         )
         .unwrap();

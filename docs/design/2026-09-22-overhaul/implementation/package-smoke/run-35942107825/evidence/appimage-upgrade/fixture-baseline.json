@@ -1,0 +1,301 @@
+{
+  "childEnv": {
+    "APPDATA": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/roaming",
+    "LOCALAPPDATA": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/local",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/config",
+    "HOME": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/home",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/tmp"
+  },
+  "data": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/data/execs",
+  "library": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/data/execs/profiles",
+  "tf2Root": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/fixture-tf2",
+  "metadata": {
+    "f20a0001-8d01-4000-8000-000000000001/manifest.json": {
+      "schema": 1,
+      "name": "Package smoke - active",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f20a0001-8d01-4000-8000-000000000001",
+      "tf2Root": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/fixture-tf2"
+    },
+    "f20a0001-8d01-4000-8000-000000000002/manifest.json": {
+      "schema": 1,
+      "name": "Package smoke - saved HUD",
+      "launchOptions": "-novid -nojoy",
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/autoexec.cfg",
+          "sha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/compat.cfg",
+          "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+          "sha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/compat-pack.vpk",
+          "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/fixturehud/info.vdf",
+          "sha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/fixturehud/resource/ui/layout.res",
+          "sha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "storage": "shared"
+        }
+      ],
+      "hud": {
+        "id": "fixturehud",
+        "source": "local",
+        "options": {
+          "compact": "1"
+        }
+      },
+      "mods": [
+        {
+          "id": "compat-pack",
+          "name": "Compatibility pack",
+          "source": {
+            "kind": "local"
+          },
+          "pack": "compat-pack.vpk",
+          "files": 1,
+          "bytes": 170,
+          "installedAt": "2026-09-20T00:00:00Z"
+        }
+      ],
+      "id": "f20a0001-8d01-4000-8000-000000000002",
+      "tf2Root": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/fixture-tf2"
+    },
+    "index.json": {
+      "schema": 1,
+      "tf2Root": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/fixture-tf2",
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": [
+        {
+          "id": "f20a0001-8d01-4000-8000-000000000001",
+          "name": "Package smoke - active",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        },
+        {
+          "id": "f20a0001-8d01-4000-8000-000000000002",
+          "name": "Package smoke - saved HUD",
+          "createdAt": "2026-09-20T00:00:00Z",
+          "updatedAt": "2026-09-20T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "settings": {
+    "schema": 1,
+    "tf2Root": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/fixture-tf2",
+    "preferences": {
+      "checkForUpdatesOnStartup": false,
+      "motion": "system"
+    }
+  },
+  "libraryHashes": {
+    "blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+    "f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f20a0001-8d01-4000-8000-000000000001/manifest.json": "dfff2030f170d820cf00ecfa4114eb0ca1785f4bf8875b181fc56bed3d9487a1",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+    "f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+    "f20a0001-8d01-4000-8000-000000000002/manifest.json": "e72833d2d3b6a5fa46e82c6dc19a1fa553af382e937931d2421080f0183058b8",
+    "index.json": "f38e169eb4ec3b52a8c2cd6f5e9d41d553f436a180f716023f28e3867fc5ddae"
+  },
+  "liveHashes": {
+    "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+    "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+    "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+    "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+    "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+    "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+  },
+  "provenance": {
+    "exporterTag": "v0.1.8",
+    "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "archives": [
+      {
+        "name": "no-hud",
+        "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
+      },
+      {
+        "name": "single-hud",
+        "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9"
+      }
+    ],
+    "authored": "Schema-1 library index, profile IDs/names, settings and disposable TF2 root; source export manifests and payload bytes are unchanged except the named library identity fields. This Linux case additionally authors isolated HOME/XDG/TMPDIR and disables candidate startup update checking before recording its baseline. Actual installed-old UI export provenance must be recorded by the runner; fixture metadata alone does not prove it."
+  },
+  "root": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT",
+  "scratch": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT",
+  "parent": "/home/runner/work/_temp/execs-development-packages-gv8lc7",
+  "exports": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/exports",
+  "exportPath": "/home/runner/work/_temp/execs-development-packages-gv8lc7/execs-development-package-rnDlkT/exports/previous-ui-export.zip",
+  "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+  "activeProfileName": "Package smoke - active",
+  "expectedConfigText": "unbindall\nbind w +forward\nsensitivity 2.5\ncon_enable 1\n",
+  "portableManifest": {
+    "schema": 1,
+    "name": "Package smoke - active",
+    "launchOptions": "-novid -nojoy",
+    "files": [
+      {
+        "path": "tf/cfg/config.cfg",
+        "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "storage": "exclusive"
+      },
+      {
+        "path": "tf/cfg/overrides/compat.cfg",
+        "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "storage": "exclusive"
+      },
+      {
+        "path": "tf/custom/compat-pack.vpk",
+        "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "storage": "exclusive"
+      },
+      {
+        "path": "tf/custom/mastercomfig-base.vpk",
+        "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "storage": "shared"
+      }
+    ],
+    "mods": [
+      {
+        "id": "compat-pack",
+        "name": "Compatibility pack",
+        "source": {
+          "kind": "local"
+        },
+        "pack": "compat-pack.vpk",
+        "files": 1,
+        "bytes": 170,
+        "installedAt": "2026-09-20T00:00:00Z"
+      }
+    ]
+  },
+  "seededAt": "2026-09-24T01:21:46.643Z",
+  "baseline": {
+    "data": {
+      "files": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "dfff2030f170d820cf00ecfa4114eb0ca1785f4bf8875b181fc56bed3d9487a1",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "e72833d2d3b6a5fa46e82c6dc19a1fa553af382e937931d2421080f0183058b8",
+        "profiles/index.json": "f38e169eb4ec3b52a8c2cd6f5e9d41d553f436a180f716023f28e3867fc5ddae",
+        "settings.json": "3a9800fc7ae5f03c991f64e1cb9f499bbfdb97b82f2ecb3535e07169b670b4a3"
+      },
+      "directories": [
+        "profiles",
+        "profiles/blobs",
+        "profiles/blobs/sha256",
+        "profiles/blobs/sha256/ec",
+        "profiles/f20a0001-8d01-4000-8000-000000000001",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+      ]
+    },
+    "live": {
+      "files": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "directories": [
+        "tf",
+        "tf/cfg",
+        "tf/cfg/overrides",
+        "tf/custom"
+      ]
+    }
+  }
+}

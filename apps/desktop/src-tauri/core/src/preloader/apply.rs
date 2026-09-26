@@ -38,43 +38,255 @@ use super::transaction::{
 use super::{
     catalog::read_mods_catalog, DUPLICATE_EFFECT_FILES, DX8_TWIN_STEMS, MISC_VPK, PRELOADER_VPK,
 };
+use super::{developer_textures, flat_textures, square_overlays};
 use crate::mods::{profile_particle_sources_from, read_mod_pcf, ParticleSource};
 use crate::profile::{load_library_from, profiles_dir};
 
 trait ModLibraryReader: Read + Seek {}
 impl<T: Read + Seek> ModLibraryReader for T {}
-type SelectionArchive = zip::ZipArchive<Box<dyn ModLibraryReader>>;
+
+type SourceZip = zip::ZipArchive<Box<dyn ModLibraryReader>>;
+
+enum SourceEntry {
+    Cueki(usize, String),
+    FlatTextures(usize, String),
+    DeveloperTextures(String),
+    SquareOverlay(String),
+}
+
+struct SelectionArchive {
+    cueki: SourceZip,
+    flat_textures: Option<SourceZip>,
+    developer_textures: Option<BTreeMap<String, Vec<u8>>>,
+    square_overlays: Option<BTreeMap<String, Vec<u8>>>,
+    entries: Vec<SourceEntry>,
+}
+
+struct SelectionEntry<'a> {
+    inner: SelectionEntryInner<'a>,
+    virtual_name: String,
+    size: u64,
+    is_dir: bool,
+}
+
+enum SelectionEntryInner<'a> {
+    Zip(Box<zip::read::ZipFile<'a>>),
+    Content(Cursor<&'a [u8]>),
+}
+
+impl SelectionEntry<'_> {
+    fn name(&self) -> &str {
+        &self.virtual_name
+    }
+
+    fn size(&self) -> u64 {
+        self.size
+    }
+
+    fn is_dir(&self) -> bool {
+        self.is_dir
+    }
+}
+
+impl Read for SelectionEntry<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match &mut self.inner {
+            SelectionEntryInner::Zip(entry) => entry.read(buf),
+            SelectionEntryInner::Content(entry) => entry.read(buf),
+        }
+    }
+}
+
+impl SelectionArchive {
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn by_index(&mut self, index: usize) -> Result<SelectionEntry<'_>, String> {
+        match self
+            .entries
+            .get(index)
+            .ok_or("Invalid mod library entry index.")?
+        {
+            SourceEntry::Cueki(source_index, name) => {
+                let entry = self
+                    .cueki
+                    .by_index(*source_index)
+                    .map_err(|err| err.to_string())?;
+                Ok(SelectionEntry {
+                    size: entry.size(),
+                    is_dir: entry.is_dir(),
+                    inner: SelectionEntryInner::Zip(Box::new(entry)),
+                    virtual_name: name.clone(),
+                })
+            }
+            SourceEntry::FlatTextures(source_index, name) => {
+                let entry = self
+                    .flat_textures
+                    .as_mut()
+                    .ok_or("The Flat Textures author archive is unavailable.")?
+                    .by_index(*source_index)
+                    .map_err(|err| err.to_string())?;
+                Ok(SelectionEntry {
+                    size: entry.size(),
+                    is_dir: entry.is_dir(),
+                    inner: SelectionEntryInner::Zip(Box::new(entry)),
+                    virtual_name: name.clone(),
+                })
+            }
+            SourceEntry::DeveloperTextures(name) => {
+                let content = self
+                    .developer_textures
+                    .as_ref()
+                    .and_then(|files| files.get(name))
+                    .ok_or("The Developer Textures author payload is unavailable.")?;
+                Ok(SelectionEntry {
+                    size: content.len() as u64,
+                    is_dir: false,
+                    inner: SelectionEntryInner::Content(Cursor::new(content.as_slice())),
+                    virtual_name: name.clone(),
+                })
+            }
+            SourceEntry::SquareOverlay(name) => {
+                let content = self
+                    .square_overlays
+                    .as_ref()
+                    .and_then(|files| files.get(name))
+                    .ok_or("The Square Series overlay author payload is unavailable.")?;
+                Ok(SelectionEntry {
+                    size: content.len() as u64,
+                    is_dir: false,
+                    inner: SelectionEntryInner::Content(Cursor::new(content.as_slice())),
+                    virtual_name: name.clone(),
+                })
+            }
+        }
+    }
+}
 
 /// Empty/profile-only selections need no default-library download. An empty
 /// archive lets the same preflight and rollback path restore old patches.
 fn selection_archive(
+    data_dir: &Path,
     zip_path: &Path,
     selection: &PreloaderSelection,
 ) -> Result<SelectionArchive, String> {
-    let reader: Box<dyn ModLibraryReader> =
-        if selection.addons.is_empty() && selection.particle_mods.is_empty() {
-            let cursor = zip::ZipWriter::new(Cursor::new(Vec::new()))
-                .finish()
-                .map_err(|err| format!("Could not prepare an empty mod selection: {err}"))?;
-            Box::new(cursor)
-        } else {
-            Box::new(
-                std::fs::File::open(zip_path)
-                    .map_err(|err| format!("Could not open the mod library: {err}"))?,
-            )
-        };
-    zip::ZipArchive::new(reader).map_err(|err| format!("Could not read the mod library: {err}"))
+    let reader: Box<dyn ModLibraryReader> = if !selection.needs_cueki_library() {
+        let cursor = zip::ZipWriter::new(Cursor::new(Vec::new()))
+            .finish()
+            .map_err(|err| format!("Could not prepare an empty mod selection: {err}"))?;
+        Box::new(cursor)
+    } else {
+        Box::new(
+            std::fs::File::open(zip_path)
+                .map_err(|err| format!("Could not open the mod library: {err}"))?,
+        )
+    };
+    let mut cueki: SourceZip = zip::ZipArchive::new(reader)
+        .map_err(|err| format!("Could not read the mod library: {err}"))?;
+    let mut entries = Vec::with_capacity(cueki.len());
+    for index in 0..cueki.len() {
+        let entry = cueki
+            .by_index(index)
+            .map_err(|err| format!("Could not read the mod library: {err}"))?;
+        let name = entry.name().replace('\\', "/");
+        // Once this selection uses the direct author file, no copy from
+        // cueki's bundled version can replace it, including on a mixed pick.
+        if selection.uses_flat_textures()
+            && name.starts_with(&format!("mods/addons/{}/", flat_textures::ID))
+        {
+            continue;
+        }
+        if selection.uses_developer_textures()
+            && name.starts_with(&format!("mods/addons/{}/", developer_textures::ID))
+        {
+            continue;
+        }
+        if selection.addons.iter().any(|id| {
+            square_overlays::is_overlay(id) && name.starts_with(&format!("mods/addons/{id}/"))
+        }) {
+            continue;
+        }
+        entries.push(SourceEntry::Cueki(index, name));
+    }
+    let flat_textures = if selection.uses_flat_textures() {
+        let verified = flat_textures::read_verified(data_dir)?;
+        entries.extend(
+            verified
+                .entries
+                .into_iter()
+                .map(|(index, name)| SourceEntry::FlatTextures(index, name)),
+        );
+        let reader: Box<dyn ModLibraryReader> = Box::new(Cursor::new(verified.bytes));
+        Some(
+            zip::ZipArchive::new(reader)
+                .map_err(|err| format!("Could not read the Flat Textures author archive: {err}"))?,
+        )
+    } else {
+        None
+    };
+    let developer_textures = if selection.uses_developer_textures() {
+        let files = developer_textures::read_verified(data_dir)?;
+        entries.extend(files.keys().cloned().map(SourceEntry::DeveloperTextures));
+        Some(files)
+    } else {
+        None
+    };
+    let square_overlays = if selection.uses_square_overlays() {
+        let files = square_overlays::read_verified(data_dir)?;
+        entries.extend(
+            files
+                .keys()
+                .filter(|name| {
+                    selection.addons.iter().any(|id| {
+                        square_overlays::is_overlay(id)
+                            && name.starts_with(&format!("mods/addons/{id}/"))
+                    })
+                })
+                .cloned()
+                .map(SourceEntry::SquareOverlay),
+        );
+        Some(files)
+    } else {
+        None
+    };
+    Ok(SelectionArchive {
+        cueki,
+        flat_textures,
+        developer_textures,
+        square_overlays,
+        entries,
+    })
 }
 
+/// The addons and particle mods a selection may name. Direct author files are
+/// verified once, by `selection_archive`, before this runs.
 fn selection_catalog(
     zip_path: &Path,
     selection: &PreloaderSelection,
 ) -> Result<super::ModsCatalog, String> {
-    if selection.addons.is_empty() && selection.particle_mods.is_empty() {
-        Ok(super::ModsCatalog::default())
+    let mut catalog = if !selection.needs_cueki_library() {
+        super::ModsCatalog::default()
     } else {
-        read_mods_catalog(zip_path)
+        read_mods_catalog(zip_path)?
+    };
+    if selection.uses_flat_textures() {
+        catalog.addons.retain(|addon| addon.id != flat_textures::ID);
+        catalog.addons.push(flat_textures::catalog_addon());
     }
+    if selection.uses_developer_textures() {
+        catalog
+            .addons
+            .retain(|addon| addon.id != developer_textures::ID);
+        catalog.addons.push(developer_textures::catalog_addon());
+    }
+    if selection.uses_square_overlays() {
+        catalog
+            .addons
+            .retain(|addon| !square_overlays::is_overlay(&addon.id));
+        catalog.addons.extend(square_overlays::catalog_addons());
+    }
+    Ok(catalog)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -127,23 +339,6 @@ fn live_file_exists(tf2_root: &Path, path: &Path, name: &str) -> Result<bool, St
         Ok(exists) => Ok(exists),
         Err(err) => Err(format!("Could not safely inspect {name}: {err}")),
     }
-}
-
-pub(crate) fn decode_vanilla(
-    tf2_root: &Path,
-    entries: &BTreeMap<String, VpkEntryLocation>,
-    rel: &str,
-) -> Result<PcfFile, String> {
-    let entry = entries
-        .get(rel)
-        .ok_or_else(|| format!("{rel} is missing from {MISC_VPK}"))?;
-    let bytes = read_particle_entry_bounded(&misc_vpk_path(tf2_root), entry)?;
-    if !is_stock(&bytes, entry) {
-        return Err(format!(
-            "{rel} is not stock. Repair TF2 through Steam before rebuilding duplicate particles."
-        ));
-    }
-    decode_pcf(&bytes).map_err(|err| format!("{rel}: {}", err.0))
 }
 
 /// Ceiling on a mod's raw particle file before it is decoded at all: the
@@ -249,11 +444,67 @@ fn decode_baseline(
     decode_pcf(&bytes).map_err(|err| format!("{rel}: {}", err.0))
 }
 
+/// One particle entry the plan writes, already shrunk and padded to its stock
+/// slot. A DX8 twin gets its own entry carrying the same bytes.
+pub(crate) struct PlannedPatch {
+    rel: String,
+    owner: String,
+    padded: Vec<u8>,
+}
+
+/// Selection B, fully read, decoded, transformed and packed while selection A
+/// is still byte-for-byte live. The write phase executes this plan after the
+/// restore pass instead of deriving it again, so every deterministic
+/// archive/CRC/decode failure is discovered before A's restore begins and the
+/// expensive work runs once per apply.
+///
+/// A plan is bound to the exact preloader state and `tf2_misc` directory it
+/// was derived from. The write phase re-derives it when either has changed.
+pub(crate) struct PreloaderPlan {
+    selection: PreloaderSelection,
+    profile_id: Option<String>,
+    state: PreloaderState,
+    entries: BTreeMap<String, VpkEntryLocation>,
+    /// Entries the write phase may patch; the recovery transaction snapshots
+    /// them before the first write.
+    touched: BTreeSet<String>,
+    patches: Vec<PlannedPatch>,
+    /// The complete `execs-preloader.vpk`, or `None` when nothing is packed.
+    custom_vpk: Option<Vec<u8>>,
+    skipped: Vec<SkipNotice>,
+    synthesized_vmts: usize,
+    relocated_model_materials: usize,
+}
+
+impl PreloaderPlan {
+    /// Whether this plan was derived from exactly these inputs. Anything else
+    /// (a recovered transaction, adopted snapshots, a game update, another
+    /// selection or owner) re-derives the plan under the same write gate.
+    fn derived_from(
+        &self,
+        selection: &PreloaderSelection,
+        profile: Option<&ProfileContext>,
+        state: &PreloaderState,
+        entries: &BTreeMap<String, VpkEntryLocation>,
+    ) -> bool {
+        &self.selection == selection
+            && self.profile_id.as_deref() == profile.map(|p| p.id.as_str())
+            && &self.state == state
+            && &self.entries == entries
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many plans this thread derived; tests pin one derivation per apply.
+    pub(crate) static PLAN_DERIVATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Read, decode, transform, and pack selection B while selection A is still
-/// byte-for-byte live. The write phase intentionally repeats some cheap
-/// validation to close races, but every deterministic archive/CRC failure is
-/// discovered here before A's restore begins.
-pub(super) fn prepare_preloader_selection(
+/// byte-for-byte live. Baseline particle bytes come from execs' verified
+/// snapshots for entries A patched and from the live archive otherwise, so the
+/// result is the same one the old apply derived after its restore pass.
+pub(super) fn plan_preloader_selection(
     tf2_root: &Path,
     data_dir: &Path,
     zip_path: &Path,
@@ -261,7 +512,11 @@ pub(super) fn prepare_preloader_selection(
     state: &PreloaderState,
     entries: &BTreeMap<String, VpkEntryLocation>,
     profile: Option<&ProfileContext>,
-) -> Result<BTreeSet<String>, String> {
+) -> Result<PreloaderPlan, String> {
+    #[cfg(test)]
+    PLAN_DERIVATIONS.with(|count| count.set(count.get() + 1));
+    // Opening the selection verifies every direct author file exactly once.
+    let mut archive = selection_archive(data_dir, zip_path, selection)?;
     let catalog = selection_catalog(zip_path, selection)?;
     for name in &selection.addons {
         if !catalog.addons.iter().any(|addon| &addon.id == name) {
@@ -287,7 +542,8 @@ pub(super) fn prepare_preloader_selection(
         ));
     }
 
-    let mut archive = selection_archive(zip_path, selection)?;
+    let mut skipped = Vec::new();
+    // Particle worklist: selection order, later mods win a contested file.
     let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();
     for mod_name in &selection.particle_mods {
         let prefix = format!("mods/particles/{mod_name}/actual_particles/");
@@ -299,6 +555,7 @@ pub(super) fn prepare_preloader_selection(
             let Some(file) = path.strip_prefix(&prefix) else {
                 continue;
             };
+            // The engine looks paths up lowercased; so does every slot below.
             let file = file.to_ascii_lowercase();
             if file.contains('/') || !file.ends_with(".pcf") || entry.is_dir() {
                 continue;
@@ -308,10 +565,19 @@ pub(super) fn prepare_preloader_selection(
                 .read_to_end(&mut bytes)
                 .map_err(|err| format!("Could not read {path}: {err}"))?;
             let target = if file == "blood_trail.pcf" {
+                // blood_trail's own slot is too small for any mod; the same
+                // systems also load from npc_fx, which has room.
                 "npc_fx.pcf".to_string()
             } else {
                 file
             };
+            if let Some(previous) = work.get(&target) {
+                skipped.push(SkipNotice {
+                    file: target.clone(),
+                    mod_name: previous.mod_name.clone(),
+                    reason: format!("overridden by {mod_name}"),
+                });
+            }
             work.insert(
                 target.clone(),
                 WorkItem {
@@ -322,6 +588,8 @@ pub(super) fn prepare_preloader_selection(
             );
         }
     }
+    // The profile's own mods are queued after the library's, so a mod the user
+    // brought in wins a file the library also supplies.
     if let Some((profile_id, sources)) = &profile_mods {
         let profiles = profile
             .map(|p| p.profiles.clone())
@@ -335,10 +603,19 @@ pub(super) fn prepare_preloader_selection(
                     })?;
                 let file = pcf.to_ascii_lowercase();
                 let target = if file == "blood_trail.pcf" {
+                    // Same rule as the library's mods: blood_trail's own slot
+                    // is too small, and npc_fx loads the same systems.
                     "npc_fx.pcf".to_string()
                 } else {
                     file
                 };
+                if let Some(previous) = work.get(&target) {
+                    skipped.push(SkipNotice {
+                        file: target.clone(),
+                        mod_name: previous.mod_name.clone(),
+                        reason: format!("overridden by {}", source.name),
+                    });
+                }
                 work.insert(
                     target.clone(),
                     WorkItem {
@@ -351,6 +628,8 @@ pub(super) fn prepare_preloader_selection(
         }
     }
 
+    // Rebuild the duplicate-carrier files whenever particle mods are in play
+    // and a mod did not already replace them outright.
     if !selection.particle_mods.is_empty() || profile_mods.is_some() {
         let mut roots_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for rel in entries.keys() {
@@ -383,10 +662,11 @@ pub(super) fn prepare_preloader_selection(
         }
     }
 
-    let disguise_parents = if work.is_empty() {
-        BTreeSet::new()
+    // Disguise ground truth for the parent-collision rule.
+    let disguise = if work.is_empty() {
+        None
     } else {
-        get_parent_elements(&decode_baseline(
+        Some(decode_baseline(
             tf2_root,
             data_dir,
             state,
@@ -394,30 +674,65 @@ pub(super) fn prepare_preloader_selection(
             "particles/disguise.pcf",
         )?)
     };
+    let disguise_parents = disguise
+        .as_ref()
+        .map(get_parent_elements)
+        .unwrap_or_default();
     let stock_ceiling = largest_stock_particle(entries);
     let mut touched = BTreeSet::new();
+    let mut patches = Vec::new();
     for item in work.values() {
+        let skip = |reason: String, skipped: &mut Vec<SkipNotice>| {
+            skipped.push(SkipNotice {
+                file: item.target.clone(),
+                mod_name: item.mod_name.clone(),
+                reason,
+            });
+        };
         if item.bytes.len() > stock_ceiling {
+            skip(
+                format!(
+                    "is {} bytes, larger than any stock particle file ({} bytes); not decoded",
+                    item.bytes.len(),
+                    stock_ceiling
+                ),
+                &mut skipped,
+            );
             continue;
         }
-        let Ok(decoded) = decode_pcf(&item.bytes) else {
-            continue;
+        let decoded = match decode_pcf(&item.bytes) {
+            Ok(decoded) => decoded,
+            Err(err) => {
+                skip(format!("could not parse: {}", err.0), &mut skipped);
+                continue;
+            }
         };
         let mut processed = if item.target == "disguise.pcf" {
             update_materials(
-                &decode_baseline(tf2_root, data_dir, state, entries, "particles/disguise.pcf")?,
+                disguise
+                    .as_ref()
+                    .ok_or("particles/disguise.pcf was not decoded")?,
                 &decoded,
             )
         } else if check_parents(&decoded, &disguise_parents) {
+            skip(
+                "redefines spy disguise systems, which must stay stock".into(),
+                &mut skipped,
+            );
             continue;
         } else {
             decoded
         };
-        if remove_duplicate_elements(&mut processed).is_err() {
+        if let Err(err) = remove_duplicate_elements(&mut processed) {
+            skip(format!("could not shrink: {}", err.0), &mut skipped);
             continue;
         }
-        let Ok(encoded) = encode_pcf(&processed) else {
-            continue;
+        let encoded = match encode_pcf(&processed) {
+            Ok(encoded) => encoded,
+            Err(err) => {
+                skip(format!("could not re-encode: {}", err.0), &mut skipped);
+                continue;
+            }
         };
         let mut targets = vec![format!("particles/{}", item.target)];
         let stem = item.target.trim_end_matches(".pcf");
@@ -429,20 +744,47 @@ pub(super) fn prepare_preloader_selection(
         }
         for target in targets {
             let Some(entry) = entries.get(&target) else {
+                skip(
+                    format!("{target} is not part of the stock game"),
+                    &mut skipped,
+                );
                 continue;
             };
-            if entry.preload_len != 0 || encoded.len() > entry.length as usize {
+            if entry.preload_len != 0 {
+                skip(format!("{target} uses an unsupported layout"), &mut skipped);
+                continue;
+            }
+            if encoded.len() > entry.length as usize {
+                skip(
+                    format!(
+                        "{} is {} bytes over the stock budget even after shrinking",
+                        target,
+                        encoded.len() - entry.length as usize
+                    ),
+                    &mut skipped,
+                );
                 continue;
             }
             baseline_entry_bytes(tf2_root, data_dir, state, entries, &target)?;
-            touched.insert(target);
+            let mut padded = encoded.clone();
+            padded.resize(entry.length as usize, b' ');
+            touched.insert(target.clone());
+            patches.push(PlannedPatch {
+                rel: target,
+                owner: item.mod_name.clone(),
+                padded,
+            });
         }
     }
 
+    // Custom content: particle-mod support files plus the selected addons.
+    // Inner paths keep their game-relative shape (materials/…, scripts/…).
     let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
-    for mod_name in &selection.particle_mods {
-        let prefix = format!("mods/particles/{mod_name}/");
+    let copy_zip_tree = |archive: &mut SelectionArchive,
+                         prefix: &str,
+                         custom: &mut BTreeMap<String, Vec<u8>>,
+                         allow: &dyn Fn(&str) -> bool|
+     -> Result<(), String> {
         for index in 0..archive.len() {
             let mut entry = archive
                 .by_index(index)
@@ -451,15 +793,15 @@ pub(super) fn prepare_preloader_selection(
                 continue;
             }
             let path = entry.name().replace('\\', "/");
-            let Some(inner) = path.strip_prefix(&prefix) else {
+            let Some(inner) = path.strip_prefix(prefix) else {
                 continue;
             };
+            // Lowercased once here: the engine looks paths up that way, the
+            // pack writer stores them that way, and every check below (stock
+            // shadowing, relocation, synthesis) compares against lowercase
+            // stock paths.
             let inner = inner.to_ascii_lowercase();
-            if inner.is_empty()
-                || inner.contains("..")
-                || (!(inner.starts_with("materials/") || inner.starts_with("scripts/")))
-                || is_excluded_addon_file(&inner)
-            {
+            if inner.is_empty() || inner.contains("..") || !allow(&inner) {
                 continue;
             }
             let mut bytes = Vec::with_capacity(entry.size() as usize);
@@ -469,47 +811,79 @@ pub(super) fn prepare_preloader_selection(
             scrub_ignorez(&inner, &mut bytes);
             custom.insert(inner, bytes);
         }
+        Ok(())
+    };
+    for mod_name in &selection.particle_mods {
+        copy_zip_tree(
+            &mut archive,
+            &format!("mods/particles/{mod_name}/"),
+            &mut custom,
+            &|inner| {
+                (inner.starts_with("materials/") || inner.starts_with("scripts/"))
+                    && !is_excluded_addon_file(inner)
+            },
+        )?;
     }
+    let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
     for mod_name in &selection.addons {
-        let prefix = format!("mods/addons/{mod_name}/");
-        for index in 0..archive.len() {
-            let mut entry = archive
-                .by_index(index)
-                .map_err(|err| format!("Could not read the mod library: {err}"))?;
-            if entry.is_dir() {
-                continue;
+        let before: BTreeSet<String> = custom.keys().cloned().collect();
+        copy_zip_tree(
+            &mut archive,
+            &format!("mods/addons/{mod_name}/"),
+            &mut custom,
+            &|inner| !is_excluded_addon_file(inner),
+        )?;
+        for rel in custom.keys() {
+            if !before.contains(rel) {
+                addon_owner.insert(rel.clone(), mod_name.clone());
             }
-            let path = entry.name().replace('\\', "/");
-            let Some(inner) = path.strip_prefix(&prefix) else {
-                continue;
-            };
-            let inner = inner.to_ascii_lowercase();
-            if inner.is_empty() || inner.contains("..") || is_excluded_addon_file(&inner) {
-                continue;
-            }
-            let mut bytes = Vec::with_capacity(entry.size() as usize);
-            entry
-                .read_to_end(&mut bytes)
-                .map_err(|err| format!("Could not read {path}: {err}"))?;
-            scrub_ignorez(&inner, &mut bytes);
-            custom.insert(inner.clone(), bytes);
-            addon_owner.insert(inner, mod_name.clone());
         }
     }
+
+    // Files that duplicate an asset handled by another route (particles are
+    // patched in place; sound has no relocation path) would be dead weight or
+    // actively conflict, so drop those and say so. Materials and models stay:
+    // the preloader exists to carry exactly those into Casual.
+    let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
+    // The three official trees are parsed once per plan and shared, instead
+    // of each helper re-reading them.
     let stock_tables = stock_entry_tables(tf2_root);
     for rel in stock_shadowing_paths(&stock_tables, &custom) {
         custom.remove(&rel);
-        addon_owner.remove(&rel);
+        let owner = addon_owner.get(&rel).cloned().unwrap_or_default();
+        *dropped.entry(owner).or_default() += 1;
     }
-    synthesize_missing_vmts(&stock_tables, &mut custom);
-    relocate_model_materials(&mut custom);
-    if !custom.is_empty() {
-        let _packed = write_vpk_v2(&custom);
+    for (mod_name, count) in dropped {
+        skipped.push(SkipNotice {
+            file: format!("{count} file{}", if count == 1 { "" } else { "s" }),
+            mod_name,
+            reason: "duplicates a stock asset execs handles outside tf/custom".into(),
+        });
     }
-    if !custom.is_empty() || !touched.is_empty() {
+    // A texture with no material beside it is a checkerboard in game, so give
+    // every orphan one. This runs before relocation: the stock material it
+    // borrows lives at the texture's original path, and a synthesized one
+    // picks its shader from that path too.
+    let synthesized_vmts = synthesize_missing_vmts(&stock_tables, &mut custom);
+    // Model materials cannot serve from their stock paths, so move them under
+    // the console/ root and repoint the models that reference them.
+    let relocated_model_materials = relocate_model_materials(&mut custom);
+    let custom_vpk = (!custom.is_empty()).then(|| write_vpk_v2(&custom));
+    if custom_vpk.is_some() || !touched.is_empty() {
         preflight_gameinfo_bypass(tf2_root, data_dir, true)?;
     }
-    Ok(touched)
+    Ok(PreloaderPlan {
+        selection: selection.clone(),
+        profile_id: profile.map(|p| p.id.clone()),
+        state: state.clone(),
+        entries: entries.clone(),
+        touched,
+        patches,
+        custom_vpk,
+        skipped,
+        synthesized_vmts,
+        relocated_model_materials,
+    })
 }
 
 pub fn apply_preloader_selection(
@@ -573,6 +947,7 @@ pub fn apply_preloader_selection_with_sampler(
         process_sampler,
         &|| Ok(()),
         None,
+        None,
     )
 }
 
@@ -586,6 +961,34 @@ pub(super) fn apply_preloader_selection_transactional(
     process_sampler: &dyn Fn() -> Vec<String>,
     before_final_state_save: &dyn Fn() -> Result<(), String>,
     profile: Option<&ProfileContext>,
+    prepared: Option<&PreloaderPlan>,
+) -> Result<PreloaderReport, String> {
+    crate::vpk::with_directory_memo(|| {
+        apply_selection_transactional_in_memo(
+            tf2_root,
+            data_dir,
+            zip_path,
+            selection,
+            running_names,
+            process_sampler,
+            before_final_state_save,
+            profile,
+            prepared,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_selection_transactional_in_memo(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+    before_final_state_save: &dyn Fn() -> Result<(), String>,
+    profile: Option<&ProfileContext>,
+    prepared: Option<&PreloaderPlan>,
 ) -> Result<PreloaderReport, String> {
     refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
     recover_transaction(tf2_root, data_dir, running_names, process_sampler)?;
@@ -602,16 +1005,25 @@ pub(super) fn apply_preloader_selection_transactional(
     // Every fallible read/decode and the complete custom VPK build happens
     // while selection A is still installed. A corrupt payload in B therefore
     // cannot uninstall A; the journal below covers only races/I/O failures in
-    // the subsequent write phase.
-    let mut touched_entries = prepare_preloader_selection(
-        tf2_root,
-        data_dir,
-        zip_path,
-        selection,
-        &existing_state,
-        &entries,
-        profile,
-    )?;
+    // the subsequent write phase. A caller's earlier plan is reused only when
+    // it was derived from exactly this state and archive directory.
+    let derived;
+    let plan = match prepared {
+        Some(plan) if plan.derived_from(selection, profile, &existing_state, &entries) => plan,
+        _ => {
+            derived = plan_preloader_selection(
+                tf2_root,
+                data_dir,
+                zip_path,
+                selection,
+                &existing_state,
+                &entries,
+                profile,
+            )?;
+            &derived
+        }
+    };
+    let mut touched_entries = plan.touched.clone();
     touched_entries.extend(existing_state.patched.keys().cloned());
 
     let mut transaction =
@@ -619,8 +1031,7 @@ pub(super) fn apply_preloader_selection_transactional(
     let applied = apply_preloader_selection_inner(
         tf2_root,
         data_dir,
-        zip_path,
-        selection,
+        plan,
         running_names,
         process_sampler,
         before_final_state_save,
@@ -655,12 +1066,12 @@ pub(super) fn apply_preloader_selection_transactional(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The write phase: restore selection A, then write the plan for B. Nothing
+/// here reads the mod sources or decodes a particle file again.
 fn apply_preloader_selection_inner(
     tf2_root: &Path,
     data_dir: &Path,
-    zip_path: &Path,
-    selection: &PreloaderSelection,
+    plan: &PreloaderPlan,
     running_names: &[String],
     process_sampler: &dyn Fn() -> Vec<String>,
     before_final_state_save: &dyn Fn() -> Result<(), String>,
@@ -691,28 +1102,14 @@ fn apply_preloader_selection_inner(
     }
 
     let entries = map_vpk_entries(&vpk_path).map_err(|err| err.message())?;
-
-    // Validate the selection BEFORE the destructive restore pass: a stale UI
-    // selection must fail without having uninstalled the user's mods first.
-    let catalog = selection_catalog(zip_path, selection)?;
-    for name in &selection.addons {
-        if !catalog.addons.iter().any(|addon| &addon.id == name) {
-            return Err(format!("Unknown addon: {name}"));
-        }
+    // The plan's slot sizes and padding came from one exact directory. A
+    // different one now (Steam updating underneath) fails before anything is
+    // restored, leaving selection A installed.
+    if entries != plan.entries {
+        return Err(format!(
+            "{MISC_VPK} changed while the selection was being prepared. Wait for Steam to finish and try again."
+        ));
     }
-    for name in &selection.particle_mods {
-        if !catalog
-            .particle_mods
-            .iter()
-            .any(|particle| &particle.name == name)
-        {
-            return Err(format!("Unknown particle mod: {name}"));
-        }
-    }
-    // Same rule for the profile's own mods: an id the caller passes that no
-    // longer names an installed mod fails here, before anything is touched.
-    let profile_mods =
-        resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods, profile)?;
 
     // Record the current length now, after validation so a refused selection
     // leaves the "game updated" hint alone, and before the first write so
@@ -771,438 +1168,100 @@ fn apply_preloader_selection_inner(
             .map_err(|err| format!("Could not remove the previous {PRELOADER_VPK}: {err}"))?;
     }
 
-    let mut archive = selection_archive(zip_path, selection)?;
-
-    // Particle worklist: selection order, later mods win a contested file.
-    let mut work: BTreeMap<String, WorkItem> = BTreeMap::new();
-    for mod_name in &selection.particle_mods {
-        let prefix = format!("mods/particles/{mod_name}/actual_particles/");
-        for index in 0..archive.len() {
-            let mut entry = archive
-                .by_index(index)
-                .map_err(|err| format!("Could not read the mod library: {err}"))?;
-            let path = entry.name().replace('\\', "/");
-            let Some(file) = path.strip_prefix(&prefix) else {
-                continue;
-            };
-            // The engine looks paths up lowercased; so does every slot below.
-            let file = file.to_ascii_lowercase();
-            if file.contains('/') || !file.ends_with(".pcf") || entry.is_dir() {
-                continue;
+    report.skipped.extend(plan.skipped.iter().cloned());
+    for patch in &plan.patches {
+        let target_rel = &patch.rel;
+        let entry = entries
+            .get(target_rel)
+            .ok_or_else(|| format!("{target_rel} is missing from {MISC_VPK}"))?;
+        let current = read_particle_entry_bounded(&vpk_path, entry)?;
+        let current_is_stock = is_stock(&current, entry);
+        if !current_is_stock {
+            return Err(format!(
+                "{target_rel} changed after the stock preflight; leaving it alone. Wait for Steam to finish and try again."
+            ));
+        }
+        if let Some(patched) = state.patched.get_mut(target_rel) {
+            patched.owner = patch.owner.clone();
+            patched.rel = target_rel.clone();
+            // Still tracked only because an earlier restore could not
+            // finish. If stock bytes have since appeared in place (Steam's
+            // verify), they beat whatever the snapshot holds.
+            if current_is_stock && !patched.pristine {
+                write_snapshot(data_dir, target_rel, &current, true)?;
+                patched.original_sha256 = sha256_hex(&current);
+                patched.pristine = true;
+            } else if !sidecar_path(data_dir, target_rel).is_file() {
+                // A snapshot from before sidecars existed: describe it now
+                // so it can be recognised without state.json.
+                if let Ok(existing) = read_snapshot_bounded(data_dir, target_rel) {
+                    write_snapshot(data_dir, target_rel, &existing, patched.pristine)?;
+                }
             }
-            let mut bytes = Vec::with_capacity(entry.size() as usize);
-            entry
-                .read_to_end(&mut bytes)
-                .map_err(|err| format!("Could not read {path}: {err}"))?;
-            let target = if file == "blood_trail.pcf" {
-                // blood_trail's own slot is too small for any mod; the same
-                // systems also load from npc_fx, which has room.
-                "npc_fx.pcf".to_string()
+        } else {
+            // A snapshot left behind by an interrupted run holds the
+            // pristine bytes while the entry itself may already carry a
+            // patch — an existing snapshot of the right size beats the
+            // current bytes, and only bytes the directory CRC vouches for
+            // beat it in turn.
+            let existing = read_snapshot_bounded(data_dir, target_rel)
+                .ok()
+                .filter(|existing| existing.len() == entry.length as usize);
+            let (original, pristine) = if current_is_stock {
+                (current.clone(), true)
+            } else if let Some(existing) = existing {
+                let pristine = is_stock(&existing, entry);
+                (existing, pristine)
             } else {
-                file.to_string()
+                (current.clone(), false)
             };
-            if let Some(previous) = work.get(&target) {
+            // Written even when the bytes already match: the sidecar is
+            // what lets a later run recognise the snapshot on its own.
+            write_snapshot(data_dir, target_rel, &original, pristine)?;
+            if !pristine {
+                // The entry was modified before execs ever touched it.
+                // Patching goes ahead (refusing would leave the foreign
+                // bytes in place just the same), but the user has to know
+                // that Restore can only reach these bytes, not stock.
                 report.skipped.push(SkipNotice {
-                    file: target.clone(),
-                    mod_name: previous.mod_name.clone(),
-                    reason: format!("overridden by {mod_name}"),
+                    file: target_rel.clone(),
+                    mod_name: String::new(),
+                    reason: "was already modified before execs first patched it (an earlier install or another tool); Restore stock files can only put those bytes back — verify game files in Steam for the true stock file".into(),
                 });
             }
-            work.insert(
-                target.clone(),
-                WorkItem {
-                    target,
-                    mod_name: mod_name.clone(),
-                    bytes,
+            state.patched.insert(
+                target_rel.clone(),
+                PatchedEntry {
+                    owner: patch.owner.clone(),
+                    original_sha256: sha256_hex(&original),
+                    patched_sha256: String::new(),
+                    rel: target_rel.clone(),
+                    pristine,
                 },
             );
         }
+        // Track before writing: a crash mid-patch must leave the entry
+        // marked patched so the next run restores it from the snapshot.
+        save_state(data_dir, &state)?;
+        patch_vpk_entry_if_unchanged(&vpk_path, entry, Some(&current), &patch.padded, || {
+            before_official_write().map_err(VpkError)
+        })
+        .map_err(|err| err.message())?;
+        // Recorded only after the write lands, so a crash mid-patch leaves
+        // it empty and the restore falls back to the size check alone
+        // rather than refusing on bytes that were never fully written.
+        if let Some(patched) = state.patched.get_mut(target_rel) {
+            patched.patched_sha256 = sha256_hex(&patch.padded);
+        }
+        save_state(data_dir, &state)?;
+        report.patched_files.push(target_rel.clone());
     }
 
-    // The profile's own mods are queued after the library's, so a mod the user
-    // brought in wins a file the library also supplies.
-    if let Some((profile_id, sources)) = &profile_mods {
-        let profiles = profile
-            .map(|p| p.profiles.clone())
-            .unwrap_or_else(profiles_dir);
-        for source in sources {
-            for pcf in &source.pcf_files {
-                let bytes = match read_mod_pcf(&profiles, profile_id, &source.mod_id, pcf) {
-                    Ok(Some(bytes)) => bytes,
-                    // The pack went away between the validation above and here,
-                    // or its bytes are unreadable: drop the one file rather than
-                    // failing a run that has already restored the old patches.
-                    Ok(None) | Err(_) => {
-                        report.skipped.push(SkipNotice {
-                            file: pcf.clone(),
-                            mod_name: source.name.clone(),
-                            reason: "is no longer installed on this profile".into(),
-                        });
-                        continue;
-                    }
-                };
-                let file = pcf.to_ascii_lowercase();
-                let target = if file == "blood_trail.pcf" {
-                    // Same rule as the library's mods: blood_trail's own slot is
-                    // too small, and npc_fx loads the same systems.
-                    "npc_fx.pcf".to_string()
-                } else {
-                    file
-                };
-                if let Some(previous) = work.get(&target) {
-                    report.skipped.push(SkipNotice {
-                        file: target.clone(),
-                        mod_name: previous.mod_name.clone(),
-                        reason: format!("overridden by {}", source.name),
-                    });
-                }
-                work.insert(
-                    target.clone(),
-                    WorkItem {
-                        target,
-                        mod_name: source.name.clone(),
-                        bytes,
-                    },
-                );
-            }
-        }
-    }
-
-    // Rebuild the duplicate-carrier files whenever particle mods are in play
-    // and a mod did not already replace them outright.
-    if !selection.particle_mods.is_empty() || profile_mods.is_some() {
-        let mut roots_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for rel in entries.keys() {
-            let Some(name) = rel.strip_prefix("particles/") else {
-                continue;
-            };
-            if name.contains('/') || !name.ends_with(".pcf") || name.ends_with("_dx80.pcf") {
-                continue;
-            }
-            if let Ok(vanilla) = decode_vanilla(tf2_root, &entries, rel) {
-                roots_by_file.insert(name.to_string(), find_root_systems(&vanilla));
-            }
-        }
-        let keep_lists = rebuild_keep_lists(&roots_by_file);
-        for (target, keep) in keep_lists {
-            if work.contains_key(&target) {
-                continue;
-            }
-            let rel = format!("particles/{target}");
-            let vanilla = decode_vanilla(tf2_root, &entries, &rel)?;
-            let rebuilt = extract_elements(&vanilla, &keep).map_err(|err| err.0)?;
-            let bytes = encode_pcf(&rebuilt).map_err(|err| err.0)?;
-            work.insert(
-                target.clone(),
-                WorkItem {
-                    target,
-                    mod_name: "stock rebuild".into(),
-                    bytes,
-                },
-            );
-        }
-    }
-
-    // Disguise ground truth for the parent-collision rule.
-    let disguise_parents = if work.is_empty() {
-        BTreeSet::new()
-    } else {
-        get_parent_elements(&decode_vanilla(
-            tf2_root,
-            &entries,
-            "particles/disguise.pcf",
-        )?)
-    };
-
-    let stock_ceiling = largest_stock_particle(&entries);
-    for item in work.values() {
-        let rel = format!("particles/{}", item.target);
-        let skip = |reason: String, report: &mut PreloaderReport| {
-            report.skipped.push(SkipNotice {
-                file: item.target.clone(),
-                mod_name: item.mod_name.clone(),
-                reason,
-            });
-        };
-
-        if item.bytes.len() > stock_ceiling {
-            skip(
-                format!(
-                    "is {} bytes, larger than any stock particle file ({} bytes); not decoded",
-                    item.bytes.len(),
-                    stock_ceiling
-                ),
-                &mut report,
-            );
-            continue;
-        }
-        let decoded = match decode_pcf(&item.bytes) {
-            Ok(decoded) => decoded,
-            Err(err) => {
-                skip(format!("could not parse: {}", err.0), &mut report);
-                continue;
-            }
-        };
-        let mut processed = if item.target == "disguise.pcf" {
-            update_materials(
-                &decode_vanilla(tf2_root, &entries, "particles/disguise.pcf")?,
-                &decoded,
-            )
-        } else if check_parents(&decoded, &disguise_parents) {
-            skip(
-                "redefines spy disguise systems, which must stay stock".into(),
-                &mut report,
-            );
-            continue;
-        } else {
-            decoded
-        };
-        if let Err(err) = remove_duplicate_elements(&mut processed) {
-            skip(format!("could not shrink: {}", err.0), &mut report);
-            continue;
-        }
-        let encoded = match encode_pcf(&processed) {
-            Ok(encoded) => encoded,
-            Err(err) => {
-                skip(format!("could not re-encode: {}", err.0), &mut report);
-                continue;
-            }
-        };
-
-        let mut targets = vec![rel.clone()];
-        let stem = item.target.trim_end_matches(".pcf");
-        if DX8_TWIN_STEMS.contains(&stem) {
-            let twin = format!("particles/{stem}_dx80.pcf");
-            if entries.contains_key(&twin) {
-                targets.push(twin);
-            }
-        }
-
-        for target_rel in targets {
-            let Some(entry) = entries.get(&target_rel) else {
-                skip(
-                    format!("{target_rel} is not part of the stock game"),
-                    &mut report,
-                );
-                continue;
-            };
-            if entry.preload_len != 0 {
-                skip(
-                    format!("{target_rel} uses an unsupported layout"),
-                    &mut report,
-                );
-                continue;
-            }
-            if encoded.len() > entry.length as usize {
-                skip(
-                    format!(
-                        "{} is {} bytes over the stock budget even after shrinking",
-                        target_rel,
-                        encoded.len() - entry.length as usize
-                    ),
-                    &mut report,
-                );
-                continue;
-            }
-            let mut padded = encoded.clone();
-            padded.resize(entry.length as usize, b' ');
-
-            let current = read_particle_entry_bounded(&vpk_path, entry)?;
-            let current_is_stock = is_stock(&current, entry);
-            if !current_is_stock {
-                return Err(format!(
-                    "{target_rel} changed after the stock preflight; leaving it alone. Wait for Steam to finish and try again."
-                ));
-            }
-            if let Some(patched) = state.patched.get_mut(&target_rel) {
-                patched.owner = item.mod_name.clone();
-                patched.rel = target_rel.clone();
-                // Still tracked only because an earlier restore could not
-                // finish. If stock bytes have since appeared in place (Steam's
-                // verify), they beat whatever the snapshot holds.
-                if current_is_stock && !patched.pristine {
-                    write_snapshot(data_dir, &target_rel, &current, true)?;
-                    patched.original_sha256 = sha256_hex(&current);
-                    patched.pristine = true;
-                } else if !sidecar_path(data_dir, &target_rel).is_file() {
-                    // A snapshot from before sidecars existed: describe it now
-                    // so it can be recognised without state.json.
-                    if let Ok(existing) = read_snapshot_bounded(data_dir, &target_rel) {
-                        write_snapshot(data_dir, &target_rel, &existing, patched.pristine)?;
-                    }
-                }
-            } else {
-                // A snapshot left behind by an interrupted run holds the
-                // pristine bytes while the entry itself may already carry a
-                // patch — an existing snapshot of the right size beats the
-                // current bytes, and only bytes the directory CRC vouches for
-                // beat it in turn.
-                let existing = read_snapshot_bounded(data_dir, &target_rel)
-                    .ok()
-                    .filter(|existing| existing.len() == entry.length as usize);
-                let (original, pristine) = if current_is_stock {
-                    (current.clone(), true)
-                } else if let Some(existing) = existing {
-                    let pristine = is_stock(&existing, entry);
-                    (existing, pristine)
-                } else {
-                    (current.clone(), false)
-                };
-                // Written even when the bytes already match: the sidecar is
-                // what lets a later run recognise the snapshot on its own.
-                write_snapshot(data_dir, &target_rel, &original, pristine)?;
-                if !pristine {
-                    // The entry was modified before execs ever touched it.
-                    // Patching goes ahead (refusing would leave the foreign
-                    // bytes in place just the same), but the user has to know
-                    // that Restore can only reach these bytes, not stock.
-                    report.skipped.push(SkipNotice {
-                        file: target_rel.clone(),
-                        mod_name: String::new(),
-                        reason: "was already modified before execs first patched it (an earlier install or another tool); Restore stock files can only put those bytes back — verify game files in Steam for the true stock file".into(),
-                    });
-                }
-                state.patched.insert(
-                    target_rel.clone(),
-                    PatchedEntry {
-                        owner: item.mod_name.clone(),
-                        original_sha256: sha256_hex(&original),
-                        patched_sha256: String::new(),
-                        rel: target_rel.clone(),
-                        pristine,
-                    },
-                );
-            }
-            // Track before writing: a crash mid-patch must leave the entry
-            // marked patched so the next run restores it from the snapshot.
-            save_state(data_dir, &state)?;
-            patch_vpk_entry_if_unchanged(&vpk_path, entry, Some(&current), &padded, || {
-                before_official_write().map_err(VpkError)
-            })
-            .map_err(|err| err.message())?;
-            // Recorded only after the write lands, so a crash mid-patch leaves
-            // it empty and the restore falls back to the size check alone
-            // rather than refusing on bytes that were never fully written.
-            if let Some(patched) = state.patched.get_mut(&target_rel) {
-                patched.patched_sha256 = sha256_hex(&padded);
-            }
-            save_state(data_dir, &state)?;
-            report.patched_files.push(target_rel);
-        }
-    }
-
-    // Custom content: particle-mod support files plus the selected addons.
-    // Inner paths keep their game-relative shape (materials/…, scripts/…).
-    let mut custom: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    let copy_zip_tree = |archive: &mut SelectionArchive,
-                         prefix: &str,
-                         custom: &mut BTreeMap<String, Vec<u8>>,
-                         allow: &dyn Fn(&str) -> bool|
-     -> Result<(), String> {
-        for index in 0..archive.len() {
-            let mut entry = archive
-                .by_index(index)
-                .map_err(|err| format!("Could not read the mod library: {err}"))?;
-            if entry.is_dir() {
-                continue;
-            }
-            let path = entry.name().replace('\\', "/");
-            let Some(inner) = path.strip_prefix(prefix) else {
-                continue;
-            };
-            // Lowercased once here: the engine looks paths up that way, the
-            // pack writer stores them that way, and every check below (stock
-            // shadowing, relocation, synthesis) compares against lowercase
-            // stock paths.
-            let inner = inner.to_ascii_lowercase();
-            if inner.is_empty() || inner.contains("..") || !allow(&inner) {
-                continue;
-            }
-            let mut bytes = Vec::with_capacity(entry.size() as usize);
-            entry
-                .read_to_end(&mut bytes)
-                .map_err(|err| format!("Could not read {path}: {err}"))?;
-            scrub_ignorez(&inner, &mut bytes);
-            custom.insert(inner, bytes);
-        }
-        Ok(())
-    };
-
-    for mod_name in &selection.particle_mods {
-        copy_zip_tree(
-            &mut archive,
-            &format!("mods/particles/{mod_name}/"),
-            &mut custom,
-            &|inner| {
-                (inner.starts_with("materials/") || inner.starts_with("scripts/"))
-                    && !is_excluded_addon_file(inner)
-            },
-        )?;
-    }
-    let mut addon_owner: BTreeMap<String, String> = BTreeMap::new();
-    for mod_name in &selection.addons {
-        let before: BTreeSet<String> = custom.keys().cloned().collect();
-        copy_zip_tree(
-            &mut archive,
-            &format!("mods/addons/{mod_name}/"),
-            &mut custom,
-            &|inner| !is_excluded_addon_file(inner),
-        )?;
-        for rel in custom.keys() {
-            if !before.contains(rel) {
-                addon_owner.insert(rel.clone(), mod_name.clone());
-            }
-        }
-    }
-
-    // Files that duplicate an asset handled by another route (particles are
-    // patched in place; sound has no relocation path) would be dead weight or
-    // actively conflict, so drop those and say so. Materials and models stay:
-    // the preloader exists to carry exactly those into Casual.
-    let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
-    // The three official trees are parsed once per apply and shared, instead
-    // of each helper re-reading them.
-    let stock_tables = stock_entry_tables(tf2_root);
-    let shadowing = stock_shadowing_paths(&stock_tables, &custom);
-    for rel in shadowing {
-        custom.remove(&rel);
-        let owner = addon_owner.get(&rel).cloned().unwrap_or_default();
-        *dropped.entry(owner).or_default() += 1;
-    }
-    for (mod_name, count) in dropped {
-        report.skipped.push(SkipNotice {
-            file: format!("{count} file{}", if count == 1 { "" } else { "s" }),
-            mod_name,
-            reason: "duplicates a stock asset execs handles outside tf/custom".into(),
-        });
-    }
-
-    // A texture with no material beside it is a checkerboard in game, so give
-    // every orphan one. This runs before relocation: the stock material it
-    // borrows lives at the texture's original path, and a synthesized one
-    // picks its shader from that path too.
-    let synthesized = synthesize_missing_vmts(&stock_tables, &mut custom);
-    if synthesized > 0 {
-        report.synthesized_vmts = synthesized;
-    }
-
-    // Model materials cannot serve from their stock paths, so move them under
-    // the console/ root and repoint the models that reference them.
-    let relocated = relocate_model_materials(&mut custom);
-    if relocated > 0 {
-        report.relocated_model_materials = relocated;
-    }
-
-    if custom.is_empty() {
-        if live_file_exists(tf2_root, &custom_vpk, PRELOADER_VPK)? {
-            before_official_write()?;
-            remove_file_force_within(tf2_root, &custom_vpk)
-                .map_err(|err| format!("Could not remove {PRELOADER_VPK}: {err}"))?;
-        }
-    } else {
-        let packed = write_vpk_v2(&custom);
+    report.synthesized_vmts = plan.synthesized_vmts;
+    report.relocated_model_materials = plan.relocated_model_materials;
+    if let Some(packed) = &plan.custom_vpk {
         before_official_write()?;
-        write_atomic_within(tf2_root, &custom_vpk, &packed)
+        write_atomic_within(tf2_root, &custom_vpk, packed)
             .map_err(|err| format!("Could not write {PRELOADER_VPK}: {err}"))?;
         report.custom_vpk_written = true;
     }
@@ -1210,7 +1269,7 @@ fn apply_preloader_selection_inner(
     // "Uncheck everything, Apply" must not leave an edited official file
     // behind with nothing installed; the bypass only goes on when there is
     // something for it to carry.
-    if !custom.is_empty() || !report.patched_files.is_empty() {
+    if plan.custom_vpk.is_some() || !report.patched_files.is_empty() {
         set_gameinfo_bypass_with_sampler(tf2_root, data_dir, true, running_names, process_sampler)?;
     }
     // Report what actually happened: a gameinfo.txt without the expected
@@ -1227,6 +1286,7 @@ fn apply_preloader_selection_inner(
         });
     }
 
+    let selection = &plan.selection;
     state.schema = 1;
     state.vpk_len = vpk_fingerprint(&vpk_path)?;
     state.addons = selection.addons.clone();
@@ -1260,6 +1320,7 @@ pub(crate) fn apply_preloader_selection_with_final_state_hook(
         running_names,
         process_sampler,
         before_final_state_save,
+        None,
         None,
     )
 }
@@ -1319,6 +1380,17 @@ pub fn revert_preloader(
 }
 
 pub fn revert_preloader_with_sampler(
+    tf2_root: &Path,
+    data_dir: &Path,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+) -> Result<RevertReport, String> {
+    crate::vpk::with_directory_memo(|| {
+        revert_in_memo(tf2_root, data_dir, running_names, process_sampler)
+    })
+}
+
+fn revert_in_memo(
     tf2_root: &Path,
     data_dir: &Path,
     running_names: &[String],
@@ -1424,7 +1496,9 @@ pub fn recover_pending_preloader_with_sampler(
     running_names: &[String],
     process_sampler: &dyn Fn() -> Vec<String>,
 ) -> Result<bool, String> {
-    recover_transaction(tf2_root, data_dir, running_names, process_sampler)
+    crate::vpk::with_directory_memo(|| {
+        recover_transaction(tf2_root, data_dir, running_names, process_sampler)
+    })
 }
 
 /// Remember which profile the shared preload cfg was enabled on, so a later

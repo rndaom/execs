@@ -1,0 +1,169 @@
+{
+  "archivedUtc": "2026-09-22T18:02:10.5245814Z",
+  "scope": "Native explicit export destination confirmation; one read-only process/thread priority snapshot",
+  "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8",
+  "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+  "executableLength": 23442432,
+  "executableVersion": "0.2.0",
+  "sourceCommitRecordedByOperator": "6ff64004c4366084d997dba25a9076f61f46fb71",
+  "nativeSession": {
+    "exitedUtc": "2026-09-22T17:59:55.5499464Z",
+    "launchedUtc": "2026-09-22T17:51:39.747656Z",
+    "appPid": 35100,
+    "exitCode": 0
+  },
+  "captureCount": 2,
+  "captures": [
+    {
+      "image": "07-keyboard-export-path.jpg",
+      "imageSha256": "52EECA94D5822D76738BDC034027F914DC2F14DAEAFD712175260E0A6631C3F8",
+      "imageLength": 55930,
+      "uia": "07-keyboard-export-path.uia.txt",
+      "uiaSha256": "2AC2BBCBF064C9436BED76FD6CD2226003A6AF44100E8276FFA2406D3A2FD0CF"
+    },
+    {
+      "image": "08-keyboard-export-complete.jpg",
+      "imageSha256": "F86D1A34A5C17C9C7D2F2AD2DC3BE261A918FD745E900867D91F05FFC915C3FF",
+      "imageLength": 52350,
+      "uia": "08-keyboard-export-complete.uia.txt",
+      "uiaSha256": "D761A2B9D80A2EFAA3F7FE82D7421CFB7BDEE3E6305E51671D082D235CCEB1B6"
+    }
+  ],
+  "nativeExport": {
+    "expectedPathPresent": true,
+    "payloadsExact": 4,
+    "relocated": false,
+    "archivedAs": "keyboard-path-export-7d3.zip",
+    "sha256": "B72B83E32F47B916390C32B575228BBD8AA6100A3B3828EAB014F6C17D9C3E92",
+    "nativeRelativePath": "exports/keyboard-path-check.zip"
+  },
+  "successfulInputSequence": "Root operator clicked the visible File name field by coordinates, issued a separate type_text with the full path, pressed Tab, verified the settled screenshot/UIA value, then clicked Save.",
+  "precedingAttempt": "The initial batched element click/Ctrl+A/type/Tab did not update the visible input. The earlier E093 default-path outcome is retained; the failed input sequence is not definitively attributed to an application defect.",
+  "completedChecks": {
+    "payloads": [
+      {
+        "path": "tf/cfg/config.cfg",
+        "sourceSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "exportedSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "exact": true
+      },
+      {
+        "path": "tf/cfg/overrides/compat.cfg",
+        "sourceSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "exportedSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "exact": true
+      },
+      {
+        "path": "tf/custom/compat-pack.vpk",
+        "sourceSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "exportedSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "exact": true
+      },
+      {
+        "path": "tf/custom/mastercomfig-base.vpk",
+        "sourceSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "exportedSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "exact": true
+      }
+    ],
+    "originalFilesUnchanged": 20,
+    "originalIndexUnchanged": true,
+    "activeProfileId": null,
+    "onlyAddedFile": "exports/keyboard-path-check.zip"
+  },
+  "priorityObservation": {
+    "checkedUtc": "2026-09-22T17:52:31.700571Z",
+    "threadCount": 46,
+    "currentPriorityRange": "8–15",
+    "basePriority": 8,
+    "scope": "One read-only snapshot after explicitly activating the private inactive-library native window. No priority changed. No TF2, foreground/background comparison, frame-time, WebView2 child-process or UI latency qualification.",
+    "priorityBoostEnabled": true,
+    "allThreadPriorityLevels": "Normal",
+    "processPriorityClass": "Normal"
+  },
+  "archivedMetadata": [
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\request.json",
+      "archivedAs": "metadata/export-path-7d3/request.json",
+      "sourceSha256": "C5E6A68625ADD098975039F3A00AABA597E7BCB74CD44DD71D41465E56EC27A3",
+      "archivedSha256": "0462503051A56B330739838281985D64CE89C7FB529E6609A8615089C590D930",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\export-path-check-plan.json",
+      "archivedAs": "metadata/export-path-7d3/export-path-check-plan.json",
+      "sourceSha256": "A3226004DD23EC1003F34F64114DD726AF9259D98EF1FC576526ACB078B7A865",
+      "archivedSha256": "70BE9BDD3FA367657CB629DFADB186886F04E134F7FE8855901D869B7AA5DFBB",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\inactive-library-baseline.json",
+      "archivedAs": "metadata/export-path-7d3/inactive-library-baseline.json",
+      "sourceSha256": "9A2D2C0B3F995B718C788AECEB81B613E3838A26E7F83A65B902F254F0886A30",
+      "archivedSha256": "74DB0A096D959C7CD49618E4E98074FF5860356862B1B8A9372EC2F20CEA3615",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\inactive-library-sources.json",
+      "archivedAs": "metadata/export-path-7d3/inactive-library-sources.json",
+      "sourceSha256": "E184009B616BD5CF98F00F2E5C57C9E36BB4A4347A439BDB36F30F5ABAFA9496",
+      "archivedSha256": "A28151939548C3F53188A33FDD3910768C55696FDE5BDEDC558F39C03FC2131D",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\bootstrap.json",
+      "archivedAs": "metadata/export-path-7d3/bootstrap.json",
+      "sourceSha256": "317E177C43736D656B452C7A6395D79953A3DCC4B559D9E26AE6E3E16D546912",
+      "archivedSha256": "3D714426EAA869FD3576D1B2E9948A42C6D6C2E8868C786F9E8E6D7417CFAD8C",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\launch.json",
+      "archivedAs": "metadata/export-path-7d3/launch.json",
+      "sourceSha256": "38EFD6EA5AA64AC0B286C54FDB1F8DF50921739B71006A015194C886E6BF8163",
+      "archivedSha256": "738C96B718AE0266E7E912C9DD954738E57FD8FD9768D0749056DCC58777333B",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\exit.json",
+      "archivedAs": "metadata/export-path-7d3/exit.json",
+      "sourceSha256": "06B9BE839BFBD7549712AAD9D332DC950BE510DAAF4FA54BDE9A7C364E805E6B",
+      "archivedSha256": "C478F8C0A98DD465162584165906FC536823AFF08C9077F78523C6500963F0CE",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\webview-processes.json",
+      "archivedAs": "metadata/export-path-7d3/webview-processes.json",
+      "sourceSha256": "E90EC454B63AF8B61F257BCAAEC05C6061834EE2C9EF512F1F95ACF2A9064356",
+      "archivedSha256": "B8B3FA91C29C9F088B040EC8AF53BA78C527AB9E880F2D1B603120E187471341",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\post-export-path-integrity.json",
+      "archivedAs": "metadata/export-path-7d3/post-export-path-integrity.json",
+      "sourceSha256": "9D4643A582A29B51B34D5C0938909BC4F320257448D867F57690DF802612380D",
+      "archivedSha256": "BA3F1097FA83BDA1BF89BFB3621E34E210428566DFD2B55238E70427BC7C219C",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134811-inactivelibrary-55ac7ac8\\process-priority-observation.json",
+      "archivedAs": "metadata/export-path-7d3/process-priority-observation.json",
+      "sourceSha256": "D711BF85C7D05502453033598CE0A97CAA2328A3ECDDDBC63D5C8F2C6632D921",
+      "archivedSha256": "44F2E87281B0A3ACB1841BE638B06A63C46577CA603EFA5E8C27ABC8EE88B20B",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    }
+  ],
+  "qualificationsExcluded": [
+    "performance",
+    "foreground/background comparison",
+    "frame time",
+    "UI latency",
+    "WebView2 child-process priority",
+    "TF2 runtime",
+    "Steam Cloud synchronization",
+    "installer/updater",
+    "new import or activation"
+  ],
+  "archiveMethod": "Read completed historical reports; preserve original source hashes, format archived JSON with repository Biome, verify parsed data equality, and retain exact image/UIA/ZIP hashes. No app launch, current-executable read, fixture mutation or binary-bound validator rerun.",
+  "metadataFormattedUtc": "2026-09-22T18:05:02.9816081Z"
+}

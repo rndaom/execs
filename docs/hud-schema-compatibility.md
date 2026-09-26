@@ -52,6 +52,39 @@ The unit regressions check identity rejection, alias resolution, exact corrected
 targets, repeat adaptation, unavailable presentation metadata, unchanged resource
 bytes, preserved saved values and rejected unsupported edits.
 
+## 2026-09-23 schema audit
+
+The HUD Editor's `Crosshair`/`CustomCrosshair` type now appears as a HUD overlay
+glyph selector. Its allowed glyphs follow the pinned editor picker; the selected
+value is written through the schema's `Files` target. It is separate from TF2's
+engine crosshair and the plain glyph label is not a rendering preview. A
+selected HUD can draw an additional mark, depending on its own enable control
+and the files the game actually mounts.
+
+`Special`, `SpecialParameters`, `Pulse`, `Shadow`, `WriteFile` and unknown
+operation fields are visibly unavailable. Their saved values are retained and
+IPC refuses edits to them. This closes rayshud's silent `rh_val_main_menu_bg`
+background choice; its special background operation is not synthesized.
+
+The pinned e.v.e Plus schema and catalog archive passed the full file-operation
+probe with 52 alternate values, no refused apply, no unchanged alternate, and
+idempotent reapply. Its custom image background remains visibly unavailable
+because execs does not implement that editor conversion. e.v.e Plus now has
+in-app options for the supported controls. The archive revision is
+`2ca73c1227276fa0f6234b0ead9ec4b92ce30d09`, downloaded by immutable
+`legacy.zip` URL and checked against SHA-256
+`3bc50bda8d20ba3ea5d3db16bcf8d9f87ea9a23f9057c0499113af136109baec`.
+The schema remains pinned to Editor commit
+`17bccd15d818d12707ce89574318acbc23c85a9f` (file SHA-256
+`8e2e37b9719ff6cd10da02f82aee97cebe22114d63cbcaf8c56c6308a58287e8`).
+The opt-in probe is `hud_catalog_options::omitted_catalog_schema_file_operation_triage`.
+
+Four overlapping catalog schemas remain unavailable with an ID-specific
+explanation: BerryHUD's archive has multiple HUD roots; HExHUD and Community
+HUD Fixes target absent animation files; SunsetHUD has an unresolved
+`$hh_val_xhair_outline` reference. These findings are from pinned catalog
+revisions and do not claim how a retail TF2 installation renders any option.
+
 ## Integrated Windows verification
 
 The official Rust 1.96.0 toolchain, installed alongside the compiler initially

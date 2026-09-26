@@ -1,0 +1,13 @@
+Command failed: pwsh -NoLogo -NoProfile -NonInteractive -File D:\a\execs\execs\scripts\windows-package-native.ps1 -Action Inspect -Request -
+[31;1mException: [0mD:\a\execs\execs\scripts\windows-package-native.ps1:74[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m  74 | [0m . created -ne $Expected.created)) { [36;1mthrow 'Process identity changed.'[0m }[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mProcess identity changed.[0m
+
+
+[31;1mException: [0mD:\a\execs\execs\scripts\windows-package-native.ps1:74[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m  74 | [0m . created -ne $Expected.created)) { [36;1mthrow 'Process identity changed.'[0m }[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mProcess identity changed.[0m

@@ -1,6 +1,8 @@
 import { Check } from "@phosphor-icons/react";
 import type { ProfileLibraryState } from "../hooks/useProfileLibrary";
 import { Modal } from "./ui/Modal";
+import { OptionTile } from "./ui/OptionTile";
+import { Loading } from "./ui/Spinner";
 
 const STAGES = ["Read ZIP", "Review files", "Save profile"];
 
@@ -12,6 +14,7 @@ export function ProfileImportDialog({
     ProfileLibraryState,
     | "importStage"
     | "importReview"
+    | "selectImportHud"
     | "importedProfile"
     | "dismissImport"
     | "cancelImport"
@@ -26,6 +29,8 @@ export function ProfileImportDialog({
   const complete = stage === "done";
   const needsRepair = (importedProfile?.unsafeCustomFolders?.length ?? 0) > 0;
   const working = stage === "reading" || stage === "saving";
+  const huds = review?.huds ?? [];
+  const needsHudChoice = huds.length > 1 && !huds.includes(review?.selectedHud ?? "");
   const index = stage === "reading" ? 0 : stage === "review" ? 1 : 2;
   const title = complete
     ? "Profile imported"
@@ -47,7 +52,7 @@ export function ProfileImportDialog({
         complete
           ? needsRepair
             ? `${importedProfile?.name ?? review?.name} needs folder repair before switching.`
-            : `${importedProfile?.name ?? review?.name} is ready to use.`
+            : `${importedProfile?.name ?? review?.name} is saved in your library.`
           : "Create a profile from a ZIP."
       }
       className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
@@ -55,13 +60,15 @@ export function ProfileImportDialog({
     >
       <div role="status" aria-live="polite" aria-busy={working} className="mt-5">
         <p className="t-meta text-ink">
-          {stage === "reading"
-            ? "Reading files and checking the archive…"
-            : stage === "saving"
-              ? "Verifying the ZIP and saving your new profile…"
-              : complete
-                ? "All steps done"
-                : "Ready for your review"}
+          {stage === "reading" ? (
+            <Loading>Reading files and checking the archive…</Loading>
+          ) : stage === "saving" ? (
+            <Loading>Verifying the ZIP and saving your new profile…</Loading>
+          ) : complete ? (
+            "All steps done"
+          ) : (
+            "Ready for your review"
+          )}
         </p>
         <div
           role="progressbar"
@@ -73,7 +80,7 @@ export function ProfileImportDialog({
           className="mt-3 h-1 overflow-hidden rounded-pill bg-bg"
         >
           <div
-            className={`h-full rounded-pill bg-ink-muted transition-[width] duration-200 motion-reduce:transition-none ${stage === "reading" ? "animate-pulse motion-reduce:animate-none" : ""}`}
+            className={`h-full rounded-pill bg-ink-muted transition-[width] duration-200 motion-reduce:transition-none`}
             style={{
               width: stage === "reading" ? "25%" : `${((complete ? 3 : index) / 3) * 100}%`,
             }}
@@ -107,13 +114,38 @@ export function ProfileImportDialog({
               {review.skippedFiles > 0 ? ` · ${review.skippedFiles} left out` : ""}
             </p>
             <p className="t-body mt-3 text-ink-muted">
-              Your current profile stays active until you switch.
+              Your TF2 setup stays unchanged until you switch.
             </p>
           </div>
+          {huds.length > 1 ? (
+            <div className="mt-4 border-t border-edge pt-4">
+              <fieldset>
+                <legend className="t-row">Choose the HUD to use</legend>
+                <p className="t-meta mt-2">
+                  Other HUD folders stay in the profile as preserved originals and won’t be loaded
+                  by TF2.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {huds.map((hud, hudIndex) => (
+                    <OptionTile
+                      key={hud}
+                      id={`profile-import-hud-${hudIndex}`}
+                      name="profile-import-hud"
+                      title={<span className="break-all">{hud}</span>}
+                      selected={review.selectedHud === hud}
+                      disabled={running}
+                      onSelect={() => profiles.selectImportHud(hud)}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          ) : null}
           {review.creator ? (
             <p className="t-body mt-4 text-ink-muted">
               Import only if you trust this creator. Their cfg commands run when TF2 loads them.
-              Saved server credentials are kept too; profiles containing them cannot be exported.
+              Saved passwords and remote-console settings are kept too. Review the listed files
+              before sharing an exported profile.
             </p>
           ) : null}
           {review.creator || review.notes.length > 0 || review.warnings.length > 0 ? (
@@ -158,7 +190,7 @@ export function ProfileImportDialog({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={running || (complete && !importedProfile)}
+            disabled={running || (complete ? !importedProfile : needsHudChoice)}
             onClick={() => {
               if (complete && importedProfile) {
                 profiles.dismissImport();

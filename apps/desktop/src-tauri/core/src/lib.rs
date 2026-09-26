@@ -5,18 +5,21 @@ pub mod blob;
 mod cfg_layer;
 pub mod cfg_script;
 pub mod comfig;
+pub mod content_index;
 pub mod crosshair;
 pub mod custom_folders;
 pub mod files_workspace;
 pub mod finder;
 pub mod first_run;
 pub mod hash;
+pub mod health;
 pub mod hitsound;
 pub mod hud;
 pub mod hud_apply;
 pub mod hud_schema_compat;
 mod hud_text_edit;
 pub mod ice;
+pub mod inventory;
 pub mod launch;
 mod managed_cfg;
 pub use managed_cfg::ManagedCfgScope;
@@ -26,14 +29,34 @@ pub mod pcf;
 pub mod preloader;
 pub mod process_lock;
 pub mod profile;
+pub mod profile_compare;
+pub mod restore_points;
 pub mod settings;
 pub mod steam_inf;
+pub mod storage;
 pub mod surface;
 pub mod switch;
+pub mod uninstall;
 pub mod vdf;
 pub mod viewmodel;
-pub mod viewmodel_build;
+pub mod viewmodel_activity;
+pub mod viewmodel_full_mdl;
+pub mod viewmodel_graph;
+pub mod viewmodel_group_selection;
 pub mod viewmodel_groups;
+pub mod viewmodel_inspect;
+pub mod viewmodel_items;
+pub mod viewmodel_pose;
+pub mod viewmodel_pose_values;
+pub mod viewmodel_record_span;
+pub mod viewmodel_rotation_values;
+pub mod viewmodel_scripts;
+pub mod viewmodel_selected_pack;
+pub mod viewmodel_source;
+pub mod viewmodel_transform_preflight;
+pub mod viewmodel_vpk_candidate;
+pub mod viewmodel_weapon_mdl;
+pub mod viewmodel_weights;
 pub mod vpk;
 pub mod vtf_read;
 pub mod wizard;
@@ -83,8 +106,9 @@ pub use hud_apply::{
     schema_view, HudSchema, HudSchemaView, HUD_CFG_PREFIX,
 };
 pub use launch::{
-    get_profile_launch_options, recommended_launch_options, set_profile_launch_options,
-    LaunchWriteReason, SetLaunchResult,
+    get_profile_launch_options, launch_sync_status, recommended_launch_options,
+    set_profile_launch_options, sync_profile_launch_options, LaunchSyncStatus, LaunchWriteReason,
+    SetLaunchResult,
 };
 pub use mods::{
     install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,
@@ -99,7 +123,8 @@ pub use profile::{
     init_library, load_library, load_manifest, profile_mutation_status_to, profiles_dir,
     recover_all_profile_mutations_to, save_current_as, CrosshairRecord, HudRecord, HudSource,
     ProfileError, ProfileFile, ProfileLibrary, ProfileMutationRecoveryState, ProfileSummary,
-    ViewmodelRecord, ViewmodelSource,
+    ViewmodelBuildCatalog, ViewmodelBuildChoice, ViewmodelBuildRecipe, ViewmodelHideMode,
+    ViewmodelRecord, ViewmodelSource, ViewmodelSourceFingerprint, VIEWMODEL_BUILD_RECIPE_SCHEMA,
 };
 pub use settings::{
     execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
@@ -108,30 +133,65 @@ pub use settings::{
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
 pub use viewmodel::{
-    ensure_profile_preload, import_viewmodel_vpk, install_built_viewmodel_pack,
-    profile_has_preload, remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
+    ensure_profile_preload, import_viewmodel_vpk, profile_has_preload,
+    remove_profile_preload_if_unused, remove_viewmodels, set_profile_preload,
     set_viewmodel_preload,
 };
-pub use viewmodel_build::{build_viewmodel_pack_vpk, ViewmodelHideMode, STUDIOMDL_FILE_NAME};
-pub use viewmodel_groups::{ViewmodelGroup, VIEWMODEL_GROUPS};
 pub use wizard::{
     download_urls_for_spec, materialize_wizard_profile, required_wizard_assets, ComfigPreset,
     GitHubAsset, GitHubRelease, OfficialAddon, StartFrom, WizardAsset, WizardResult, WizardSpec,
 };
 pub use zip::{
-    export_profile, export_profile_to, import_profile, import_profile_from,
-    import_reviewed_profile, inspect_profile_import, safe_zip_file_name, ProfileImportReview,
+    export_profile, export_profile_reviewed, export_profile_to, import_profile,
+    import_profile_from, import_reviewed_profile, inspect_profile_export, inspect_profile_import,
+    safe_zip_file_name, ProfileExportReview, ProfileImportReview,
 };
 
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::AtomicU64;
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "execs-core-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+    let prefix = format!("execs-core-{}", std::process::id());
+    create_test_temp_dir_in(&std::env::temp_dir(), &prefix, &NEXT)
 }
+
+#[cfg(test)]
+fn create_test_temp_dir_in(
+    parent: &std::path::Path,
+    prefix: &str,
+    next: &std::sync::atomic::AtomicU64,
+) -> std::path::PathBuf {
+    use std::sync::atomic::Ordering;
+
+    loop {
+        let dir = parent.join(format!("{prefix}-{}", next.fetch_add(1, Ordering::Relaxed)));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return dir,
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => panic!("Could not create test directory {}: {err}", dir.display()),
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_temp_dir_never_reuses_an_existing_counter_path() {
+    use std::sync::atomic::AtomicU64;
+
+    let parent = test_temp_dir();
+    let stale = parent.join("fixture-0");
+    std::fs::create_dir(&stale).unwrap();
+    std::fs::write(stale.join("sentinel"), b"older test run").unwrap();
+
+    let next = AtomicU64::new(0);
+    let fresh = create_test_temp_dir_in(&parent, "fixture", &next);
+    assert_eq!(fresh, parent.join("fixture-1"));
+    assert!(fresh.read_dir().unwrap().next().is_none());
+    assert_eq!(
+        std::fs::read(stale.join("sentinel")).unwrap(),
+        b"older test run"
+    );
+}
+
+#[cfg(test)]
+mod contracts;

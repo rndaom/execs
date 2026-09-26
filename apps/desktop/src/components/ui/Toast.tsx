@@ -16,6 +16,7 @@ import {
   toastLingerMs,
   toastStep,
 } from "../../lib/toast-ui";
+import { Loading } from "./Spinner";
 
 export type ToastApi = {
   /** A write started: arms the delayed "Saving…" pill. */
@@ -147,7 +148,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
       <div
         role="status"
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-12 z-50 flex justify-center px-4 lg:pl-(--sidebar-width)"
+        className="pointer-events-none fixed inset-x-0 bottom-12 z-50 flex justify-center px-4 min-[761px]:pl-(--sidebar-width)"
       >
         {toast ? (
           dismissible ? (
@@ -158,7 +159,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
               data-source={toast.source}
               aria-label={`Dismiss: ${toast.message}`}
               onClick={() => send({ type: "hide", expected: toast })}
-              className="overlay overlay-enter pointer-events-auto max-w-[34rem] border-error/60 px-4 py-2.5 text-left text-[13.5px] leading-5 text-ink"
+              className="overlay enter-fade pointer-events-auto max-w-[34rem] border-error/60 px-4 py-2.5 text-left text-[13.5px] leading-5 text-ink"
             >
               {toast.message}
             </button>
@@ -167,9 +168,9 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
               data-testid="toast"
               data-kind={toast.kind}
               data-source={toast.source}
-              className="overlay overlay-enter pointer-events-auto max-w-[34rem] px-4 py-2.5 text-[13.5px] leading-5 text-ink"
+              className="overlay enter-fade pointer-events-auto max-w-[34rem] px-4 py-2.5 text-[13.5px] leading-5 text-ink"
             >
-              {toast.message}
+              {toast.kind === "saving" ? <Loading>{toast.message}</Loading> : toast.message}
             </p>
           )
         ) : null}

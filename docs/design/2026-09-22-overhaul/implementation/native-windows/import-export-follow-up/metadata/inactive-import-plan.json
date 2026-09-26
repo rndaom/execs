@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "exporterTag": "v0.1.8",
+  "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+  "archiveRelative": "imports/review-multiple-huds-v018.zip",
+  "archiveSha256": "77CC3C6F9DED610E56084F1EF7DDD410DEFE6F04162303054A0CEE274D234727",
+  "selectedHud": "secondhud",
+  "expectedHudRoots": ["fixturehud", "secondhud"],
+  "exportRelative": "exports/native-multiple-huds-v018.zip",
+  "baselineSha256": "7D535BFEB080CC62C3AABE471E4C77EAABE7F5003DB654C2D9BB63C97CA7C794",
+  "sourcesSha256": "BE45D3910D212005EE6B304C35F67CF4AA00E8887722C1FDB2A88D580947E065",
+  "originalIndex": {
+    "schema": 1,
+    "tf2Root": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\tf2-root",
+    "activeProfileId": null,
+    "profiles": [
+      {
+        "id": "ab24b740-19dc-4d52-8e99-a75d3f3334de",
+        "name": "QA inactive - no HUD",
+        "createdAt": "2026-09-22T17:14:12.2139984Z",
+        "updatedAt": "2026-09-22T17:14:12.2139984Z"
+      },
+      {
+        "id": "0d13e5ff-1adf-4606-aa0a-481e72ba253d",
+        "name": "QA inactive - single HUD",
+        "createdAt": "2026-09-22T17:14:12.2268953Z",
+        "updatedAt": "2026-09-22T17:14:12.2268953Z"
+      }
+    ]
+  }
+}

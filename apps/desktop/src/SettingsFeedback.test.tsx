@@ -67,6 +67,12 @@ function Harness() {
           onChangeInstall={noop}
           onLaunch={noop}
           onCancelLaunch={noop}
+          onReviewFiles={noop}
+          onInspectExport={async () => ({
+            revision: "review",
+            credentialLocations: [],
+            customPacks: [],
+          })}
           settings={
             <SettingsHost
               api={api}
@@ -145,13 +151,17 @@ describe("retained settings feedback", () => {
     const save = vi.spyOn(api, "writeManagedCfg");
     await render();
     expect(element("settings-surface-gameplay").hasAttribute("inert")).toBe(true);
-    expect(box.textContent).toContain("Startup settings could not be resolved");
+    expect(box.textContent).toContain(
+      "Cannot derive startup settings after tf/cfg/overrides/autoexec.cfg:1",
+    );
     // Fault-inject a queued input despite the inert UI. The write path must
     // still reject an incomplete snapshot, including a retained-pane flush.
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
     await advance(700);
     expect(save).not.toHaveBeenCalled();
-    expect(toast()).toContain("Startup settings could not be resolved");
+    expect(toast()).toContain(
+      "Cannot derive startup settings after tf/cfg/overrides/autoexec.cfg:1",
+    );
     expect(pending).toBe(true);
   });
 
@@ -190,9 +200,9 @@ describe("retained settings feedback", () => {
     running = true;
     const save = vi.spyOn(api, "writeManagedCfg");
     await render();
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
     expect(toast()).toBe("Draft kept until TF2 closes");
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
     expect(toast()).toBeNull();
     expect(pending).toBe(false);
     running = false;
@@ -203,50 +213,50 @@ describe("retained settings feedback", () => {
   });
 
   it.each([false, true])(
-    "keeps one locked Gameplay draft visible through a first visit to clean Sounds (reverted first: %s)",
+    "keeps one locked Gameplay draft after its notice fades and a visit to clean Sounds (reverted first: %s)",
     async (revertedFirst) => {
       api = createPreviewApi("settings-locked");
       tab = "gameplay";
       running = true;
       const save = vi.spyOn(api, "writeManagedCfg");
       await render();
-      expect(element("gameplay-draw-viewmodel").getAttribute("aria-checked")).toBe("true");
+      expect(element("gameplay-autoreload").getAttribute("aria-checked")).toBe("true");
       if (revertedFirst) {
-        await click("gameplay-draw-viewmodel");
+        await click("gameplay-autoreload");
         expect(toast()).toBe("Draft kept until TF2 closes");
-        await click("gameplay-draw-viewmodel");
+        await click("gameplay-autoreload");
         expect(toast()).toBeNull();
         expect(pending).toBe(false);
       }
-      await click("gameplay-draw-viewmodel");
+      await click("gameplay-autoreload");
       tab = "sounds";
       await render();
       await advance(5000);
       expect(element("settings-surface-gameplay").hidden).toBe(true);
-      expect(toast()).toBe("Draft kept until TF2 closes");
+      expect(toast()).toBeNull();
       expect(pending).toBe(true);
       expect(save).not.toHaveBeenCalled();
       tab = "gameplay";
       await render();
-      expect(element("gameplay-draw-viewmodel").getAttribute("aria-checked")).toBe("false");
-      expect(toast()).toBe("Draft kept until TF2 closes");
+      expect(element("gameplay-autoreload").getAttribute("aria-checked")).toBe("false");
+      expect(toast()).toBeNull();
       expect(pending).toBe(true);
-      await click("gameplay-draw-viewmodel");
+      await click("gameplay-autoreload");
       expect(toast()).toBeNull();
       expect(pending).toBe(false);
       expect(save).not.toHaveBeenCalled();
     },
   );
 
-  it("keeps deferred feedback until every retained pane has reverted its draft", async () => {
+  it("keeps deferred drafts guarded after their notice disappears", async () => {
     running = true;
     await render();
     await click("hud-opt-minmode");
     tab = "gameplay";
     await render();
-    await click("gameplay-draw-viewmodel");
-    await click("gameplay-draw-viewmodel");
-    expect(toast()).toBe("Draft kept until TF2 closes");
+    await click("gameplay-autoreload");
+    await click("gameplay-autoreload");
+    expect(toast()).toBeNull();
     expect(pending).toBe(true);
     tab = "hud";
     await render();
@@ -301,19 +311,19 @@ describe("operation errors across host reloads", () => {
     await render();
     const id = profiles.library?.activeProfileId;
     if (!id) throw new Error("No fixture profile");
-    await act(async () => profiles.exportProfile(id));
+    await act(async () => profiles.exportProfile(id, "review"));
     const readsAfterExport = reads.mock.calls.length;
     revision += 1;
     await render();
     expect(reads.mock.calls.length).toBeGreaterThan(readsAfterExport);
     expect(errors.error).toBe("Export destination is read-only");
-    await act(async () => profiles.exportProfile(id));
+    await act(async () => profiles.exportProfile(id, "review"));
     expect(errors.error).toBe("Export destination is read-only");
     const retry = deferred<string | null>();
     exportCall.mockReturnValueOnce(retry.promise);
     let pendingExport!: Promise<void>;
     await act(async () => {
-      pendingExport = profiles.exportProfile(id);
+      pendingExport = profiles.exportProfile(id, "review");
     });
     expect(errors.error).toBe("Export destination is read-only");
     await act(async () => {

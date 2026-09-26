@@ -18,6 +18,7 @@ use crate::archive::{
     extract_archive, read_dir_entries, read_regular_file_bounded, read_regular_file_bounded_within,
     validate_imported_cfg, ArchiveLimits,
 };
+use crate::content_index::normalize_virtual_path;
 use crate::pcf::MAX_PCF_BYTES;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -28,7 +29,7 @@ use crate::profile::{
 use crate::switch::{live_path, prune_empty_parents};
 use crate::vpk::{
     map_vpk_entries, read_vpk_dir_bytes_filtered, read_vpk_dir_file_filtered_bounded,
-    validate_vpk_dir_bytes,
+    validate_vpk_dir_bytes, validate_vpk_dir_bytes_with_paths, VpkError,
 };
 
 /// One pack's ceiling, and the ceiling on a whole archive: a mod is held in
@@ -67,6 +68,8 @@ const RESERVED_PACK_PREFIXES: [&str; 2] = ["execs-", "mastercomfig"];
 pub enum ModSource {
     /// A file or folder the user picked on their own disk.
     Local,
+    /// A pack found in tf/custom and accepted through profile absorb.
+    External,
     /// Installed from GameBanana; `url` is the mod's profile page, so the UI
     /// can always send the user back to the author.
     Gamebanana { id: u64, url: String },
@@ -75,7 +78,7 @@ pub enum ModSource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModRecord {
-    /// Sanitized id, unique within the profile; also the pack's folder name.
+    /// Stable id, unique within the profile. Imports also use it as the pack name.
     pub id: String,
     /// What the user called it — the archive, folder or GameBanana title.
     pub name: String,
@@ -614,6 +617,57 @@ struct PlannedMod {
     files: Vec<(String, Vec<u8>)>,
 }
 
+fn active_crosshair_script_targets(manifest: &ProfileManifest) -> BTreeSet<String> {
+    if manifest
+        .crosshair
+        .as_ref()
+        .is_none_or(|record| record.inactive)
+    {
+        return BTreeSet::new();
+    }
+    manifest
+        .files
+        .iter()
+        .filter_map(|file| {
+            let key = normalize_virtual_path(&file.path);
+            let member = key.strip_prefix("tf/custom/execs-crosshairs/")?;
+            (member.starts_with("scripts/tf_weapon_") && member.ends_with(".txt"))
+                .then(|| member.to_string())
+        })
+        .collect()
+}
+
+fn refuse_crosshair_script_collision(
+    content: &ModContent,
+    targets: &BTreeSet<String>,
+) -> Result<(), ProfileError> {
+    let conflict = |member: &str| {
+        let key = normalize_virtual_path(member);
+        targets.contains(&key).then_some(key)
+    };
+    match content {
+        ModContent::Vpk(bytes) => {
+            validate_vpk_dir_bytes_with_paths(bytes, &mut |member| {
+                if let Some(path) = conflict(member) {
+                    return Err(VpkError(format!(
+                        "This mod supplies {path}, which is also in the active execs-crosshairs pack. Remove or deactivate that pack before importing this mod."
+                    )));
+                }
+                Ok(())
+            })
+            .map_err(|err| ProfileError::Io(err.message()))?;
+        }
+        ModContent::Tree(entries) => {
+            if let Some(path) = entries.iter().find_map(|(member, _)| conflict(member)) {
+                return Err(ProfileError::Io(format!(
+                    "This mod supplies {path}, which is also in the active execs-crosshairs pack. Remove or deactivate that pack before importing this mod."
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Testable/custom-library form of [`install_mods`]. The aggregate ceiling is
 /// deliberately the same as one archive: the command holds all selected packs
 /// in memory at once, so applying the limit independently to each file picker
@@ -646,6 +700,7 @@ where
     }
 
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    let crosshair_scripts = active_crosshair_script_targets(&manifest);
     let mut taken = taken_pack_identities(tf2_root, &manifest);
     let mut planned = Vec::with_capacity(packs.len());
     let mut selection_budget = ModBatchBudget::default();
@@ -653,6 +708,8 @@ where
 
     for (name, content) in packs {
         selection_budget.add(&content)?;
+        refuse_hud_mod(&content)?;
+        refuse_crosshair_script_collision(&content, &crosshair_scripts)?;
 
         let display = display_name(&name);
         let mut base = mod_id_from_name(&display);
@@ -666,7 +723,6 @@ where
 
         let (pack, files) = match content {
             ModContent::Vpk(bytes) => {
-                validate_vpk_dir_bytes(&bytes).map_err(|err| ProfileError::Io(err.message()))?;
                 let cfgs = read_vpk_dir_bytes_filtered(&bytes, &|path| has_extension(path, "cfg"))
                     .map_err(|err| ProfileError::Io(err.message()))?;
                 for (path, cfg) in cfgs.files {
@@ -751,6 +807,38 @@ where
     detail_from_manifest(profiles_dir, &manifest)
 }
 
+/// HUDs need the one-HUD replacement review, including when a mod picker or
+/// GameBanana supplied their bytes. Detection requires real compatibility data.
+fn refuse_hud_mod(content: &ModContent) -> Result<(), ProfileError> {
+    let hud = match content {
+        ModContent::Tree(entries) => entries.iter().any(|(path, bytes)| {
+            path.rsplit('/')
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("info.vdf"))
+                && crate::hud::is_current_hud_info(bytes)
+        }),
+        ModContent::Vpk(bytes) => {
+            let info =
+                read_vpk_dir_bytes_filtered(bytes, &|path| path.eq_ignore_ascii_case("info.vdf"))
+                    .map_err(|err| ProfileError::Io(err.message()))?;
+            info.files
+                .values()
+                .any(|bytes| crate::hud::is_current_hud_info(bytes))
+        }
+    };
+    if !hud {
+        return Ok(());
+    }
+    let instruction = if matches!(content, ModContent::Vpk(_)) {
+        "Extract this HUD VPK, then choose its extracted folder in HUD → Import HUD. The HUD importer accepts ZIP, 7z, and folders; it cannot import a VPK directly."
+    } else {
+        "Choose this archive or folder again in HUD → Import HUD to review replacing the current HUD."
+    };
+    Err(ProfileError::HudImportRequired(format!(
+        "This selection contains a HUD. No selected files were installed. {instruction}"
+    )))
+}
+
 pub fn remove_mod(
     tf2_root: &Path,
     profile_id: &str,
@@ -789,10 +877,22 @@ where
         .cloned()
         .ok_or_else(|| ProfileError::Io("That mod is not installed on this profile.".into()))?;
 
+    let selected = crate::preloader::selected_profile_particle_mod_ids(profiles_dir, profile_id)?;
+    if selected.iter().any(|selected| selected == &record.id) {
+        return Err(ProfileError::ParticleSourceSelected(record.name));
+    }
+
+    let library = load_library_from(profiles_dir, Some(tf2_root))?;
     let paths: Vec<String> = pack_files(&manifest, &record.pack)
         .into_iter()
         .map(|file| file.path)
         .collect();
+    let removes_selected_hud = crate::hud::selected_hud_pack(&manifest)
+        .is_some_and(|pack| pack.eq_ignore_ascii_case(&record.pack));
+    let needs_hud_review = removes_selected_hud
+        && crate::hud::manifest_hud_packs(&manifest)
+            .iter()
+            .any(|pack| !pack.eq_ignore_ascii_case(&record.pack));
     let id = id.to_string();
     let manifest = mutate_profile_files_to(
         profiles_dir,
@@ -804,10 +904,16 @@ where
         &running,
         move |manifest| {
             manifest.mods.retain(|entry| entry.id != id);
+            if removes_selected_hud {
+                manifest.hud = None;
+                manifest.hud_selected_root = None;
+                // A retained original must not become the sole-root fallback
+                // and silently mount after the selected HUD is removed.
+                manifest.hud_review_pending = needs_hud_review;
+            }
             Ok(())
         },
     )?;
-    let library = load_library_from(profiles_dir, Some(tf2_root))?;
     if library.active_profile_id.as_deref() == Some(profile_id) {
         for path in &paths {
             prune_empty_parents(&live_path(tf2_root, path), tf2_root);
@@ -1012,6 +1118,133 @@ mod tests {
             .clone();
         set_active_profile_to(&profiles, &tf2, &id, unlocked()).unwrap();
         (root, profiles, tf2, id)
+    }
+
+    #[test]
+    fn importing_a_weapon_script_cannot_collide_with_active_crosshair_pack() {
+        let (root, profiles, tf2, id) = setup();
+        let crosshair_path = "tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt";
+        mutate_profile_files_to(
+            &profiles,
+            &tf2,
+            &id,
+            &[(
+                crosshair_path.into(),
+                FileSource::Bytes(b"generated script"),
+            )],
+            &[],
+            ProfileLiveProjection::MirrorIfActive,
+            unlocked(),
+            |manifest| {
+                manifest.crosshair = Some(crate::profile::CrosshairRecord {
+                    id: "execs-crosshairs".into(),
+                    inactive: false,
+                    source_changed: false,
+                    source_scripts_sha256: None,
+                    scale: None,
+                    stock: None,
+                    shape: "cross".into(),
+                    assignments: BTreeMap::new(),
+                    color: None,
+                    library: BTreeMap::new(),
+                    design: None,
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let member = "SCRIPTS/TF_WEAPON_SCATTERGUN.TXT";
+        for (name, content) in [
+            (
+                "loose",
+                ModContent::Tree(vec![(member.into(), b"other script".to_vec())]),
+            ),
+            (
+                "packed",
+                ModContent::Vpk(write_vpk_v1(&BTreeMap::from([(
+                    member.into(),
+                    b"other script".to_vec(),
+                )]))),
+            ),
+        ] {
+            let err = install_mod_to(
+                &profiles,
+                &tf2,
+                &id,
+                name,
+                content,
+                ModSource::Local,
+                unlocked(),
+            )
+            .unwrap_err();
+            assert!(err.message().contains("scripts/tf_weapon_scattergun.txt"));
+            assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+            assert!(!tf2.join(format!("tf/custom/{name}")).exists());
+            assert!(!tf2.join(format!("tf/custom/{name}.vpk")).exists());
+            assert_eq!(
+                fs::read(tf2.join(crosshair_path)).unwrap(),
+                b"generated script"
+            );
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn save_selected_profile_mods(profiles: &Path, tf2: &Path, profile_id: &str, ids: &[&str]) {
+        mutate_profile_files_to(
+            profiles,
+            tf2,
+            profile_id,
+            &[],
+            &[],
+            ProfileLiveProjection::LibraryOnly,
+            unlocked(),
+            |manifest| {
+                manifest.preloader = Some(crate::preloader::PreloaderSelection {
+                    profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+                    ..crate::preloader::PreloaderSelection::default()
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+    }
+
+    fn save_legacy_selected_profile_mods(data_dir: &Path, profile_id: &str, ids: &[&str]) {
+        let state = crate::preloader::PreloaderState {
+            profile_particle_mods: ids.iter().map(|id| (*id).to_string()).collect(),
+            selection_profile: Some(profile_id.to_string()),
+            ..crate::preloader::PreloaderState::default()
+        };
+        fs::create_dir_all(data_dir.join("preloader")).unwrap();
+        fs::write(
+            data_dir.join("preloader/state.json"),
+            serde_json::to_vec_pretty(&state).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn install_particle_mod(
+        profiles: &Path,
+        tf2: &Path,
+        profile_id: &str,
+        name: &str,
+        pcf: &str,
+    ) -> ModRecord {
+        install_mod_to(
+            profiles,
+            tf2,
+            profile_id,
+            name,
+            ModContent::Tree(vec![(format!("particles/{pcf}"), b"pcf".to_vec())]),
+            ModSource::Local,
+            unlocked(),
+        )
+        .unwrap()
+        .mods
+        .into_iter()
+        .find(|record| record.name == name)
+        .unwrap()
     }
 
     fn cleanup(root: &Path) {
@@ -1386,6 +1619,284 @@ mod tests {
             .iter()
             .all(|file| !file.path.starts_with("tf/custom/cool-effects")));
         assert!(!tf2.join("tf/custom/cool-effects").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn legacy_hud_mod_removal_clears_its_record_without_promoting_an_inactive_original() {
+        const INFO: &[u8] = b"\"HUD\" { \"ui_version\" \"3\" }\n";
+        for keep_original in [false, true] {
+            let (root, profiles, tf2, id) = setup();
+            let hud_record = crate::profile::HudRecord {
+                id: "legacy-hud".into(),
+                hash: None,
+                source: crate::profile::HudSource::Local,
+                options: BTreeMap::new(),
+            };
+            mutate_profile_files_to(
+                &profiles,
+                &tf2,
+                &id,
+                &[(
+                    "tf/custom/legacy-hud/info.vdf".into(),
+                    FileSource::Bytes(INFO),
+                )],
+                &[],
+                ProfileLiveProjection::MirrorIfActive,
+                unlocked(),
+                |manifest| {
+                    manifest.hud = Some(hud_record);
+                    manifest.hud_selected_root = Some("legacy-hud".into());
+                    manifest.mods.push(ModRecord {
+                        id: "legacy-hud".into(),
+                        name: "Legacy HUD".into(),
+                        source: ModSource::Local,
+                        pack: "legacy-hud".into(),
+                        files: 1,
+                        bytes: INFO.len() as u64,
+                        installed_at: String::new(),
+                    });
+                    Ok(())
+                },
+            )
+            .unwrap();
+            if keep_original {
+                mutate_profile_files_to(
+                    &profiles,
+                    &tf2,
+                    &id,
+                    &[(
+                        "tf/custom/original-hud/info.vdf".into(),
+                        FileSource::Bytes(INFO),
+                    )],
+                    &[],
+                    ProfileLiveProjection::LibraryOnly,
+                    unlocked(),
+                    |_| Ok(()),
+                )
+                .unwrap();
+            }
+            let before = load_manifest(&profiles, &id).unwrap();
+            assert_eq!(
+                remove_mod_to(&profiles, &tf2, &id, "legacy-hud", ["tf_win64.exe"]).unwrap_err(),
+                ProfileError::GameRunning
+            );
+            assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+            remove_mod_to(&profiles, &tf2, &id, "legacy-hud", unlocked()).unwrap();
+            let after = load_manifest(&profiles, &id).unwrap();
+            assert!(after.hud.is_none());
+            assert!(after.hud_selected_root.is_none());
+            assert!(after.mods.is_empty());
+            assert_eq!(after.hud_review_pending, keep_original);
+            assert!(!tf2.join("tf/custom/legacy-hud/info.vdf").exists());
+            assert!(!tf2.join("tf/custom/original-hud/info.vdf").exists());
+            if keep_original {
+                assert_eq!(
+                    fs::read(exclusive_file_path(
+                        &profiles,
+                        &id,
+                        "tf/custom/original-hud/info.vdf"
+                    ))
+                    .unwrap(),
+                    INFO
+                );
+                assert_eq!(
+                    crate::hud::require_resolved_hud(&after).unwrap_err(),
+                    ProfileError::HudReviewRequired
+                );
+            } else {
+                crate::hud::require_resolved_hud(&after).unwrap();
+            }
+            cleanup(&root);
+        }
+    }
+
+    #[test]
+    fn selected_active_particle_source_is_not_removed_until_selection_changes() {
+        let (root, profiles, tf2, id) = setup();
+        let first = install_particle_mod(&profiles, &tf2, &id, "Particle source A", "a.pcf");
+        let second = install_particle_mod(&profiles, &tf2, &id, "Particle source B", "b.pcf");
+        save_selected_profile_mods(&profiles, &tf2, &id, &[&first.id, &second.id]);
+        let snapshot = root.join("preloader/originals/sentinel");
+        fs::create_dir_all(snapshot.parent().unwrap()).unwrap();
+        fs::write(&snapshot, b"pristine snapshot").unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let first_live = tf2.join("tf/custom").join(&first.pack);
+        let second_live = tf2.join("tf/custom").join(&second.pack);
+
+        let err = remove_mod_to(&profiles, &tf2, &id, &first.id, unlocked()).unwrap_err();
+        assert!(matches!(
+            &err,
+            ProfileError::ParticleSourceSelected(name) if name == "Particle source A"
+        ));
+        assert_eq!(err.code(), "ParticleSourceSelected");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+        assert!(first_live.exists());
+        assert!(second_live.exists());
+
+        save_selected_profile_mods(&profiles, &tf2, &id, &[&second.id]);
+        let detail = remove_mod_to(&profiles, &tf2, &id, &first.id, unlocked()).unwrap();
+        assert_eq!(detail.mods.len(), 1);
+        assert_eq!(detail.mods[0].id, second.id);
+        assert!(!first_live.exists());
+        assert!(second_live.exists());
+        assert_eq!(
+            load_manifest(&profiles, &id)
+                .unwrap()
+                .preloader
+                .unwrap()
+                .profile_particle_mods,
+            vec![second.id]
+        );
+        assert_eq!(fs::read(&snapshot).unwrap(), b"pristine snapshot");
+        cleanup(&root);
+    }
+
+    #[test]
+    fn running_game_precedes_selected_particle_source_removal_guard() {
+        let (root, profiles, tf2, id) = setup();
+        let record =
+            install_particle_mod(&profiles, &tf2, &id, "Locked particle source", "lock.pcf");
+        save_selected_profile_mods(&profiles, &tf2, &id, &[&record.id]);
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = remove_mod_to(&profiles, &tf2, &id, &record.id, ["tf_win64.exe"]).unwrap_err();
+        assert!(matches!(err, ProfileError::GameRunning));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(tf2.join("tf/custom").join(record.pack).exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn legacy_owner_marker_is_guarded_until_the_profile_selection_migrates() {
+        let (root, profiles, tf2, id) = setup();
+        let record =
+            install_particle_mod(&profiles, &tf2, &id, "Legacy particle source", "legacy.pcf");
+        assert!(load_manifest(&profiles, &id).unwrap().preloader.is_none());
+        save_legacy_selected_profile_mods(&root, &id, &[&record.id]);
+        let before = load_manifest(&profiles, &id).unwrap();
+
+        let err = remove_mod_to(&profiles, &tf2, &id, &record.id, unlocked()).unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::ParticleSourceSelected(name) if name == "Legacy particle source"
+        ));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(tf2.join("tf/custom").join(record.pack).exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn installed_owner_selection_is_guarded_when_manifest_capture_is_stale() {
+        let (root, profiles, tf2, id) = setup();
+        let record = install_particle_mod(
+            &profiles,
+            &tf2,
+            &id,
+            "Interrupted capture source",
+            "interrupted.pcf",
+        );
+        // The installed transaction committed the new selection and owner,
+        // but its following profile-manifest capture did not.
+        save_selected_profile_mods(&profiles, &tf2, &id, &[]);
+        save_legacy_selected_profile_mods(&root, &id, &[&record.id]);
+        let before = load_manifest(&profiles, &id).unwrap();
+        assert!(before
+            .preloader
+            .as_ref()
+            .unwrap()
+            .profile_particle_mods
+            .is_empty());
+
+        let err = remove_mod_to(&profiles, &tf2, &id, &record.id, unlocked()).unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::ParticleSourceSelected(name) if name == "Interrupted capture source"
+        ));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(tf2.join("tf/custom").join(record.pack).exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn another_profiles_selected_particle_source_id_does_not_block_inactive_removal() {
+        let (root, profiles, tf2, active_id) = setup();
+        let inactive_id = create_profile_record_to(&profiles, &tf2, "Inactive", unlocked())
+            .unwrap()
+            .profiles
+            .into_iter()
+            .find(|profile| profile.id != active_id)
+            .unwrap()
+            .id;
+        let inactive = install_particle_mod(
+            &profiles,
+            &tf2,
+            &inactive_id,
+            "Shared particle source",
+            "inactive.pcf",
+        );
+        let active = install_particle_mod(
+            &profiles,
+            &tf2,
+            &active_id,
+            "Shared particle source",
+            "active.pcf",
+        );
+        assert_eq!(inactive.id, active.id);
+        save_selected_profile_mods(&profiles, &tf2, &active_id, &[&active.id]);
+        let active_live = tf2.join("tf/custom").join(&active.pack);
+
+        let detail =
+            remove_mod_to(&profiles, &tf2, &inactive_id, &inactive.id, unlocked()).unwrap();
+        assert!(detail.mods.is_empty());
+        assert!(load_manifest(&profiles, &inactive_id)
+            .unwrap()
+            .mods
+            .is_empty());
+        assert_eq!(
+            load_manifest(&profiles, &active_id).unwrap().mods,
+            vec![active.clone()]
+        );
+        assert!(active_live.exists());
+        assert_eq!(
+            load_manifest(&profiles, &active_id)
+                .unwrap()
+                .preloader
+                .unwrap()
+                .profile_particle_mods,
+            vec![active.id]
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn inactive_profiles_own_selected_particle_source_is_not_removed() {
+        let (root, profiles, tf2, active_id) = setup();
+        let inactive_id = create_profile_record_to(&profiles, &tf2, "Inactive", unlocked())
+            .unwrap()
+            .profiles
+            .into_iter()
+            .find(|profile| profile.id != active_id)
+            .unwrap()
+            .id;
+        let inactive = install_particle_mod(
+            &profiles,
+            &tf2,
+            &inactive_id,
+            "Inactive particle source",
+            "inactive.pcf",
+        );
+        save_selected_profile_mods(&profiles, &tf2, &inactive_id, &[&inactive.id]);
+        let before = load_manifest(&profiles, &inactive_id).unwrap();
+
+        let err =
+            remove_mod_to(&profiles, &tf2, &inactive_id, &inactive.id, unlocked()).unwrap_err();
+        assert!(matches!(
+            err,
+            ProfileError::ParticleSourceSelected(name) if name == "Inactive particle source"
+        ));
+        assert_eq!(load_manifest(&profiles, &inactive_id).unwrap(), before);
         cleanup(&root);
     }
 

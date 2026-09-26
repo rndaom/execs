@@ -3,18 +3,125 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use execs_core::{apply_hud_options, extract_hud_archive, parse_hud_schema, HudSchema, HudTree};
 
-fn fixture(hud: &str) -> (HudTree, HudSchema) {
+fn fixture_checked(hud: &str) -> Result<(HudTree, HudSchema), String> {
     let base = PathBuf::from(
         std::env::var_os("EXECS_HUD_AUDIT_FIXTURES").expect("set EXECS_HUD_AUDIT_FIXTURES"),
     );
     let dir = base.join(hud);
-    let tree = extract_hud_archive(&fs::read(dir.join("archive.bin")).unwrap())
-        .unwrap()
+    let bytes = fs::read(dir.join("archive.bin")).map_err(|error| error.to_string())?;
+    let tree = extract_hud_archive(&bytes)
+        .map_err(|error| error.message().to_string())?
         .tree;
-    let mut schema =
-        parse_hud_schema(&fs::read_to_string(dir.join("schema.json")).unwrap()).unwrap();
-    execs_core::hud_schema_compat::adapt_pinned_schema(hud, &mut schema).unwrap();
-    (tree, schema)
+    let raw = fs::read_to_string(dir.join("schema.json")).map_err(|error| error.to_string())?;
+    let mut schema = parse_hud_schema(&raw).map_err(|error| error.message().to_string())?;
+    execs_core::hud_schema_compat::adapt_pinned_schema(hud, &mut schema)
+        .map_err(|error| error.message().to_string())?;
+    Ok((tree, schema))
+}
+
+fn fixture(hud: &str) -> (HudTree, HudSchema) {
+    fixture_checked(hud).unwrap_or_else(|error| panic!("{hud}: {error}"))
+}
+
+/// C3 compatibility triage uses the same parsed schema, extracted archive and
+/// first-party apply path as the supported HUD fixtures above. Its output is a
+/// scoped report: a parsed schema alone is insufficient to enable a catalog ID.
+#[test]
+#[ignore = "requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES"]
+fn omitted_catalog_schema_file_operation_triage() {
+    for hud in ["berryhud", "eve-plus", "hexhud", "hud-fixes", "sunsethud"] {
+        let (original, schema) = match fixture_checked(hud) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("{hud}: archive/schema could not be applied: {error}");
+                continue;
+            }
+        };
+        let mut default = original.clone();
+        let Ok(default_result) = apply_hud_options(&mut default, &schema, hud, &BTreeMap::new())
+        else {
+            let error =
+                apply_hud_options(&mut default, &schema, hud, &BTreeMap::new()).unwrap_err();
+            eprintln!("{hud}: default apply refused: {}", error.message());
+            continue;
+        };
+        let mut checked = 0;
+        let mut refused = Vec::new();
+        let mut unchanged = Vec::new();
+        for control in schema.controls.values().flatten() {
+            if execs_core::hud_schema_compat::unavailable_reason(control).is_some() {
+                continue;
+            }
+            let alternatives: Vec<String> = match control.control_type.to_ascii_lowercase().as_str()
+            {
+                "checkbox" => vec![(!matches!(control.value.as_str(), "true" | "1")).to_string()],
+                "combobox" => control
+                    .options
+                    .iter()
+                    .flatten()
+                    .map(|choice| choice.value.clone())
+                    .collect(),
+                "colorpicker" => vec!["17 91 203 127".into()],
+                "crosshair" | "customcrosshair" => {
+                    vec![if control.value == "Z" { "A" } else { "Z" }.into()]
+                }
+                "number" | "integer" | "integerupdown" => control
+                    .value
+                    .parse::<i32>()
+                    .ok()
+                    .map(|value| vec![(value + 1).to_string()])
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            };
+            for value in alternatives
+                .into_iter()
+                .filter(|value| value != &control.value)
+            {
+                checked += 1;
+                let options = BTreeMap::from([(control.name.clone(), value.clone())]);
+                let mut tree = original.clone();
+                match apply_hud_options(&mut tree, &schema, hud, &options) {
+                    Err(error) => {
+                        refused.push(format!("{}={value}: {}", control.name, error.message()))
+                    }
+                    Ok(result) => {
+                        if tree == default && result == default_result {
+                            unchanged.push(format!("{}={value}", control.name));
+                        }
+                        let once = tree.clone();
+                        if let Err(error) = apply_hud_options(&mut tree, &schema, hud, &options) {
+                            refused.push(format!(
+                                "{}={value} reapply: {}",
+                                control.name,
+                                error.message()
+                            ));
+                        } else if tree != once {
+                            refused.push(format!("{}={value} is not idempotent", control.name));
+                        }
+                    }
+                }
+            }
+        }
+        eprintln!(
+            "{hud}: checked {checked} alternatives, {} refused, {} had no file/cfg effect",
+            refused.len(),
+            unchanged.len()
+        );
+        for issue in refused.iter().chain(unchanged.iter()) {
+            eprintln!("  {issue}");
+        }
+        assert!(checked > 0, "{hud} had no testable alternatives");
+        if hud == "eve-plus" {
+            assert!(
+                refused.is_empty(),
+                "e.v.e Plus has failing schema operations: {refused:?}"
+            );
+            assert!(
+                unchanged.is_empty(),
+                "e.v.e Plus has no-op controls: {unchanged:?}"
+            );
+        }
+    }
 }
 
 #[test]

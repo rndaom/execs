@@ -1,13 +1,19 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { ArrowLeft, GearSix } from "@phosphor-icons/react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AppSettingsPane } from "./AppSettingsPane";
 import { AppFooter } from "./components/AppFooter";
 import { FinderPanel } from "./components/FinderPanel";
+import { HudOwnershipDialog } from "./components/HudOwnershipDialog";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
 import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { Modal } from "./components/ui/Modal";
+import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
+import { useAppPreferences } from "./hooks/useAppPreferences";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useFilesExitGuard } from "./hooks/useFilesExitGuard";
@@ -20,10 +26,11 @@ import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
 import type { Api } from "./lib/api";
-import { invokeErrorMessage } from "./lib/bridge";
+import { invokeErrorMessage, type LaunchSyncStatus } from "./lib/bridge";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
+import { launchSyncAction, launchSyncWarning } from "./lib/launch-ui";
 import { previewSwitchStep } from "./lib/library-ui";
 import {
   type PreviewState,
@@ -49,19 +56,76 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   );
   const settingsPending = settingsDrafts.length > 0;
   const [preloaderRecovery, setPreloaderRecovery] = useState(false);
+  const [hudReviewId, setHudReviewId] = useState<string | null>(null);
+  const [hudReviewBusy, setHudReviewBusy] = useState(false);
+  const [hudReviewRevision, setHudReviewRevision] = useState(0);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const [cancelLaunchOpen, setCancelLaunchOpen] = useState(false);
+  const [launchSync, setLaunchSync] = useState<LaunchSyncStatus | null>(null);
+  const [launchSyncPrompt, setLaunchSyncPrompt] = useState<LaunchSyncStatus | null>(null);
+  const appSettingsButton = useRef<HTMLButtonElement>(null);
+  const appSettingsReturnFocus = useRef<HTMLElement | null>(null);
+  const profileSettings = useRef<HTMLDivElement>(null);
+  const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
     () => previewSettingsTab(preview) ?? "comfig",
   );
+  const navigateSettings = useCallback((tab: SettingsTab) => {
+    setAppSettingsOpen(false);
+    setSettingsTab(tab);
+  }, []);
+  const reviewSettings = useCallback(
+    (tab: SettingsTab) => {
+      navigateSettings(tab);
+      setSettingsReviewRequest((request) => request + 1);
+    },
+    [navigateSettings],
+  );
+  useEffect(() => {
+    if (settingsReviewRequest === 0 || document.querySelector('[aria-modal="true"]')) return;
+    // Review changes routes out of a dialog. Focus after its layout cleanup;
+    // ordinary navigation and Cancel keep their existing focus behavior.
+    const heading = Array.from(
+      profileSettings.current?.querySelectorAll<HTMLElement>("[data-pane-heading]") ?? [],
+    ).find((node) => !node.closest("[hidden], [inert]"));
+    heading?.focus();
+  }, [settingsReviewRequest]);
+  const closeAppSettings = useCallback(() => {
+    setAppSettingsOpen(false);
+    (appSettingsReturnFocus.current ?? appSettingsButton.current)?.focus();
+  }, []);
+  const openAppSettings = useCallback(() => {
+    appSettingsReturnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setAppSettingsOpen(true);
+  }, []);
+  useEffect(() => {
+    if (!appSettingsOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        document.querySelector('[aria-modal="true"]')
+      )
+        return;
+      event.preventDefault();
+      closeAppSettings();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [appSettingsOpen, closeAppSettings]);
 
   const lock = useWriteLock(api);
   const [filesDraftStore] = useState(createFilesDraftStore);
   const lifecycle = useLifecycleStatus(api);
   const progress = useSwitchProgress(api, preview === "switch" ? previewSwitchStep() : null);
+  const appSettings = useAppPreferences(api);
   const update = useAppUpdate(api, {
     setError,
     seedProgress: previewUpdateProgress(preview),
+    checkOnStartup: appSettings.data?.preferences.checkForUpdatesOnStartup ?? null,
   });
   const launchPending = launching || lifecycle.launchingTf2;
   const lifecycleBusy =
@@ -79,14 +143,18 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const filesExit = useFilesExitGuard(
     filesDraftStore,
     lock.running,
-    busy || progress.state.active || update.progress !== null,
+    busy ||
+      hudReviewBusy ||
+      appSettings.saving ||
+      progress.state.active ||
+      update.progress !== null,
     settingsDraftStore,
-    setSettingsTab,
+    reviewSettings,
   );
   const anyBusy =
     busy ||
+    hudReviewBusy ||
     settingsBusy ||
-    settingsPending ||
     launchPending ||
     lifecycleBusy ||
     preloaderRecovery ||
@@ -99,6 +167,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       // A different install must never inherit the previous one's first-run
       // screen, reasons, pack prompt, library or draft name.
       setDraftName("");
+      setAppSettingsOpen(false);
+      setHudReviewId(null);
       profiles.reset();
       firstRun.reset();
       progress.cancel();
@@ -126,6 +196,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     progress,
     setError,
     setBusy,
+    onHudReviewRequired: setHudReviewId,
   });
   const recoveryTargetId = profiles.library?.pendingSwitchProfileId ?? null;
   const pendingPanes = [
@@ -193,6 +264,98 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     surface === "ready" &&
     !creating &&
     showSettingsChrome(profiles.library);
+  // The ready shell (header + library status) fills the window even before a
+  // profile is active, so the empty library view is not an inset card.
+  const readyShellOpen =
+    settingsOpen ||
+    (install.screen === "ready" &&
+      install.confirmed !== null &&
+      surface === "ready" &&
+      !creating &&
+      !appSettingsOpen);
+
+  const activeProfileId = profiles.library?.activeProfileId ?? null;
+  const refreshLaunchSync = useCallback(async (): Promise<LaunchSyncStatus | null> => {
+    if (!activeProfileId) {
+      setLaunchSync(null);
+      return null;
+    }
+    // A failed comparison never blocks launching; it only hides the flag.
+    const status = await api.getLaunchSyncStatus().catch(() => null);
+    setLaunchSync(status);
+    return status;
+  }, [api, activeProfileId]);
+
+  // Steam's copy changes outside execs, so re-check when the window regains
+  // focus as well as after profile, game and launch changes.
+  useEffect(() => {
+    if (lock.running || launchPending) return;
+    void refreshLaunchSync();
+    const onFocus = () => void refreshLaunchSync();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refreshLaunchSync, lock.running, launchPending]);
+
+  function startLaunch(syncSteam: boolean) {
+    setLaunching(true);
+    void api
+      .launchTf2(syncSteam)
+      .then(() => setError(null, "tf2:launch"))
+      .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
+      .finally(() => {
+        setLaunching(false);
+        void lifecycle.refresh();
+        void refreshLaunchSync();
+      });
+  }
+
+  function renderAppPreferences() {
+    return (
+      <AppSettingsPane
+        api={api}
+        settings={appSettings}
+        ready={filesExit.ready}
+        update={update}
+        confirmedRoot={install.confirmed?.path ?? null}
+        backAction={
+          <button type="button" className="btn btn-ghost" onClick={closeAppSettings}>
+            <ArrowLeft size={15} aria-hidden="true" />
+            {settingsOpen ? `Back to ${SETTINGS_TAB_LABELS[settingsTab]}` : "Back to setup"}
+          </button>
+        }
+        onChangeInstall={() =>
+          filesExit.request(() => {
+            setAppSettingsOpen(false);
+            install.change();
+          })
+        }
+        onUninstall={(deleteData, onError) =>
+          filesExit.request(async () => {
+            try {
+              await api.uninstallExecs(deleteData);
+            } catch (err) {
+              onError(invokeErrorMessage(err));
+            }
+          })
+        }
+        uninstallBlockedReason={
+          lock.running
+            ? "Close TF2 before uninstalling."
+            : anyBusy || progress.state.active
+              ? "Wait for the current operation to finish."
+              : null
+        }
+        changeInstallDisabled={anyBusy || lock.running || progress.state.active}
+        changeInstallReason={
+          lock.running
+            ? "Close TF2 before changing the install."
+            : anyBusy
+              ? "Wait for the current operation to finish."
+              : null
+        }
+      />
+    );
+  }
 
   function renderReady(path: string) {
     if (surface === "first-existing") {
@@ -212,7 +375,6 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       return (
         <>
           <SetupWizard
-            title={isCreate ? "New profile" : "Unused install"}
             draftName={draftName}
             preset={firstRun.preset}
             addons={firstRun.addons}
@@ -251,7 +413,9 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
             execs
           </p>
-          <p className="t-body mt-8 text-ink-muted">Checking this install…</p>
+          <p className="t-body mt-8 text-ink-muted">
+            <Loading size={16}>Checking this install…</Loading>
+          </p>
           <button
             type="button"
             onClick={() => filesExit.request(install.change)}
@@ -273,6 +437,12 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           repairFolders: async () => {
             filesExit.request(() => profiles.repairFolders());
           },
+          importProfile: async () => {
+            filesExit.request(() => profiles.importProfile());
+          },
+          reviewDelete: (id) => {
+            filesExit.request(() => profiles.reviewDelete(id));
+          },
         }}
         progress={progress}
         draftName={draftName}
@@ -290,59 +460,88 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           settingsPending
             ? () => filesExit.request(() => {})
             : preloaderRecovery || lifecycle.steamVerification
-              ? () => setSettingsTab("mods")
+              ? () => navigateSettings("mods")
               : undefined
         }
+        launchWarning={launchSyncWarning(launchSync)}
         onLaunch={() => {
           setLaunching(true);
-          void api
-            .launchTf2()
-            .then(() => setError(null, "tf2:launch"))
-            .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
-            .finally(() => {
+          void refreshLaunchSync().then((status) => {
+            const action = launchSyncAction(status);
+            if (action === "ask") {
               setLaunching(false);
-              void lifecycle.refresh();
-            });
+              setLaunchSyncPrompt(status);
+              return;
+            }
+            startLaunch(action === "write-then-launch");
+          });
         }}
         onCancelLaunch={() => {
-          if (
-            !window.confirm(
-              "Cancel the launch, then close Steam completely. Release execs' launch lock now?",
-            )
-          ) {
-            return;
-          }
-          void api
-            .cancelTf2Launch()
-            .then(() => {
-              setError(null, "tf2:cancel-launch");
-              return lifecycle.refresh();
-            })
-            .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
+          setCancelLaunchOpen(true);
         }}
+        onReviewFiles={() => navigateSettings("files")}
+        onInspectExport={(id) => api.inspectProfileExport(id)}
+        onCompareSwitch={(id) => api.compareProfileSwitch(id)}
+        restoreApi={api}
         settings={
           showSettingsChrome(profiles.library) ? (
-            <SettingsLayout tab={settingsTab} onTab={setSettingsTab}>
-              <SettingsHost
-                api={api}
-                filesDraftStore={filesDraftStore}
-                filesSaver={filesExit.saver}
-                filesCloseReady={filesExit.ready}
-                settingsDraftStore={settingsDraftStore}
-                tab={settingsTab}
-                onNavigate={setSettingsTab}
-                running={lock.running}
-                externalBusy={
-                  busy || progress.state.active || recoveryTargetId !== null || lifecycleBusy
-                }
-                refreshKey={profiles.refreshKey}
-                bindSyncRequest={profiles.bindSyncRequest}
-                onBindSyncHandled={profiles.onBindSyncHandled}
-                onBusyChange={setSettingsBusy}
-                onWriteBusyChange={setSettingsWriting}
-                onRecoveryChange={setPreloaderRecovery}
-                onError={setError}
-              />
+            <SettingsLayout
+              tab={settingsTab}
+              page={appSettingsOpen ? "app" : null}
+              onTab={navigateSettings}
+              scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
+              utility={
+                <button
+                  ref={appSettingsButton}
+                  type="button"
+                  data-testid="app-settings-open"
+                  aria-current={appSettingsOpen ? "page" : undefined}
+                  data-active={appSettingsOpen ? "true" : "false"}
+                  className="settings-nav-item"
+                  onClick={openAppSettings}
+                >
+                  <GearSix size={16} aria-hidden="true" />
+                  <span className="settings-nav-label">App settings</span>
+                </button>
+              }
+            >
+              <div ref={profileSettings} hidden={appSettingsOpen}>
+                <SettingsHost
+                  api={api}
+                  visible={!appSettingsOpen}
+                  filesDraftStore={filesDraftStore}
+                  filesSaver={filesExit.saver}
+                  filesCloseReady={filesExit.ready}
+                  settingsDraftStore={settingsDraftStore}
+                  tab={settingsTab}
+                  activeProfileId={profiles.library?.activeProfileId ?? null}
+                  activeProfileName={
+                    profiles.library?.profiles.find(
+                      (profile) => profile.id === profiles.library?.activeProfileId,
+                    )?.name ?? null
+                  }
+                  onNavigate={navigateSettings}
+                  running={lock.running}
+                  externalBusy={
+                    busy ||
+                    hudReviewBusy ||
+                    progress.state.active ||
+                    recoveryTargetId !== null ||
+                    lifecycleBusy
+                  }
+                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}`}
+                  bindSyncRequest={profiles.bindSyncRequest}
+                  onBindSyncHandled={profiles.onBindSyncHandled}
+                  onBusyChange={setSettingsBusy}
+                  onWriteBusyChange={setSettingsWriting}
+                  onRecoveryChange={setPreloaderRecovery}
+                  onHudReviewRequired={setHudReviewId}
+                  onError={setError}
+                  launchSync={launchSync}
+                  onLaunchOptionsSaved={() => void refreshLaunchSync()}
+                />
+              </div>
+              {appSettingsOpen ? renderAppPreferences() : null}
             </SettingsLayout>
           ) : null
         }
@@ -365,6 +564,127 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
       }}
     >
       <ToastProvider>
+        <HudOwnershipDialog
+          api={api}
+          profile={
+            hudReviewId
+              ? {
+                  id: hudReviewId,
+                  name:
+                    profiles.library?.profiles.find((profile) => profile.id === hudReviewId)
+                      ?.name ?? "this profile",
+                }
+              : null
+          }
+          running={lock.running}
+          busy={
+            busy ||
+            settingsBusy ||
+            progress.state.active ||
+            lifecycleBusy ||
+            update.progress !== null
+          }
+          onClose={() => setHudReviewId(null)}
+          onBusyChange={setHudReviewBusy}
+          onApplied={async () => {
+            profiles.setLibrary(await api.getProfileLibrary());
+            setHudReviewRevision((revision) => revision + 1);
+            setHudReviewId(null);
+          }}
+        />
+        <Modal
+          open={cancelLaunchOpen}
+          title="Release the launch lock?"
+          onClose={() => setCancelLaunchOpen(false)}
+        >
+          <p className="t-body text-ink-muted">
+            Cancel the TF2 launch and close Steam completely before continuing. This lets execs
+            resume changes to your setup.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setCancelLaunchOpen(false)}
+            >
+              Keep waiting
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setCancelLaunchOpen(false);
+                void api
+                  .cancelTf2Launch()
+                  .then(() => {
+                    setError(null, "tf2:cancel-launch");
+                    return lifecycle.refresh();
+                  })
+                  .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
+              }}
+            >
+              Release launch lock
+            </button>
+          </div>
+        </Modal>
+        <Modal
+          open={launchSyncPrompt !== null}
+          title="Update Steam's launch options?"
+          testId="launch-sync-review"
+          className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(540px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
+          onClose={() => setLaunchSyncPrompt(null)}
+        >
+          <p className="t-body mt-2 text-ink-muted">
+            Steam has different launch options than this profile, and Steam must be closed to change
+            them. execs will close Steam, write the profile's options, then start Steam and TF2.
+            Downloads and chat pause while Steam restarts.
+          </p>
+          <dl className="t-meta mt-4 grid gap-2">
+            <div>
+              <dt>This profile</dt>
+              <dd className="mt-0.5 break-all text-ink">
+                {launchSyncPrompt?.profileOptions || "No launch options"}
+              </dd>
+            </div>
+            <div>
+              <dt>Steam now</dt>
+              <dd className="mt-0.5 break-all text-ink">
+                {launchSyncPrompt?.steamOptions || "No launch options"}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setLaunchSyncPrompt(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="launch-sync-skip"
+              className="btn btn-ghost"
+              onClick={() => {
+                setLaunchSyncPrompt(null);
+                startLaunch(false);
+              }}
+            >
+              Launch without them
+            </button>
+            <button
+              type="button"
+              data-testid="launch-sync-restart"
+              className="btn btn-primary"
+              onClick={() => {
+                setLaunchSyncPrompt(null);
+                startLaunch(true);
+              }}
+            >
+              Restart Steam and launch
+            </button>
+          </div>
+        </Modal>
         <ReleaseNotes
           api={api}
           release={releaseNotes.release}
@@ -400,12 +720,14 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
 
           <main
             className={`flex min-h-0 w-full flex-1 flex-col ${
-              settingsOpen
+              readyShellOpen
                 ? "items-stretch overflow-hidden"
                 : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
           >
-            {install.screen === "ready" && install.confirmed ? (
+            {appSettingsOpen && !settingsOpen ? (
+              <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
+            ) : install.screen === "ready" && install.confirmed ? (
               renderReady(install.confirmed.path)
             ) : (
               <FinderPanel
@@ -430,7 +752,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   filesExit.request(update.install);
                 },
               }}
-              pinned={settingsOpen}
+              pinned={readyShellOpen}
+              onSettings={settingsOpen ? undefined : openAppSettings}
             />
           </main>
         </div>

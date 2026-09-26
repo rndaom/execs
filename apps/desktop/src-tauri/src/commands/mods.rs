@@ -13,7 +13,9 @@ use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{archive_too_large, blocking, read_bounded_file, with_profile, ActiveContext};
 use crate::error::CommandError;
-use crate::gamebanana::{self, GameBananaCategory, GameBananaPage, GameBananaProfile};
+use crate::gamebanana::{
+    self, GameBananaCategory, GameBananaDownloadVariant, GameBananaPage, GameBananaProfile,
+};
 use crate::WriteGate;
 
 /// Install everything the user picked, and report the profile as it ends up.
@@ -165,18 +167,16 @@ pub async fn remove_mod(
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| {
-        super::preloader::clear_profile_particles_before_mod_removal(&root, &id)?;
-        Ok(execs_core::mods::remove_mod(&root, &profile_id, &id)?)
-    })
-    .await
+    with_profile(move |root, profile_id| Ok(execs_core::mods::remove_mod(&root, &profile_id, &id)?))
+        .await
 }
 
 /// One page of TF2 mods from GameBanana.
 ///
-/// An empty `query` browses the index, which sorts server-side. A non-empty one
-/// searches, and GameBanana's search takes no sort parameter — the page is
-/// sorted here, so a search's ordering only holds within the page on screen.
+/// Browse and name search share the index endpoint, so GameBanana applies the
+/// selected sort and supported filters to the whole result set. `refresh`
+/// bypasses a still-fresh native cache entry without changing the canonical
+/// request URL.
 #[tauri::command]
 pub async fn search_gamebanana_mods(
     query: String,
@@ -184,8 +184,10 @@ pub async fn search_gamebanana_mods(
     category: Option<u64>,
     page: u32,
     include_mature: Option<bool>,
+    refresh: Option<bool>,
 ) -> Result<GameBananaPage, CommandError> {
     let include_mature = include_mature.unwrap_or(false);
+    let refresh = refresh.unwrap_or(false);
     blocking(move || {
         Ok(gamebanana::search_mods(
             &query,
@@ -193,14 +195,26 @@ pub async fn search_gamebanana_mods(
             category,
             page,
             include_mature,
+            refresh,
         )?)
     })
     .await
 }
 
 #[tauri::command]
-pub async fn gamebanana_mod_categories() -> Result<Vec<GameBananaCategory>, CommandError> {
-    blocking(|| Ok(gamebanana::categories()?)).await
+pub async fn gamebanana_mod_categories(
+    refresh: Option<bool>,
+) -> Result<Vec<GameBananaCategory>, CommandError> {
+    blocking(move || Ok(gamebanana::categories(refresh.unwrap_or(false))?)).await
+}
+
+/// Show the author's file names and descriptions before a specific file is
+/// downloaded. The selected id is rechecked against a fresh page at install.
+#[tauri::command]
+pub async fn gamebanana_download_variants(
+    id: u64,
+) -> Result<Vec<GameBananaDownloadVariant>, CommandError> {
+    blocking(move || Ok(gamebanana::download_variants(id)?)).await
 }
 
 /// Download a GameBanana mod and install it into the active profile.
@@ -217,10 +231,11 @@ pub async fn gamebanana_mod_categories() -> Result<Vec<GameBananaCategory>, Comm
 pub async fn install_gamebanana_mod(
     gate: tauri::State<'_, WriteGate>,
     id: u64,
+    file_id: u64,
 ) -> Result<ProfileDetail, CommandError> {
     let (context, profile, packs) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
-        let (profile, packs) = fetch_gamebanana_mod(id)?;
+        let (profile, packs) = fetch_gamebanana_mod(id, file_id)?;
         Ok((ActiveContext::capture(&root, &profile_id), profile, packs))
     })
     .await?;
@@ -244,10 +259,11 @@ pub async fn install_gamebanana_mod(
 /// newest file read into packs.
 fn fetch_gamebanana_mod(
     id: u64,
+    file_id: u64,
 ) -> Result<(GameBananaProfile, Vec<(String, ModContent)>), CommandError> {
     let profile = gamebanana::mod_profile(id)?;
-    let pick = gamebanana::download_url(id)?;
-    let bytes = crate::net::download_bytes(&pick.url, gamebanana::MOD_MAX_BYTES)?;
+    let pick = gamebanana::download_file(id, file_id)?;
+    let bytes = gamebanana::download_pick(&pick)?;
     let packs = packs_from_download(&profile.name, &pick.file_name, bytes)?;
     Ok((profile, packs))
 }

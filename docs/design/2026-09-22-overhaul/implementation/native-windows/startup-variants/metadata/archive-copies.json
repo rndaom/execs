@@ -1,0 +1,391 @@
+{
+  "collectedUtc": "2026-09-22T18:20:09.370856Z",
+  "phase": "Four completed native Windows startup failure cases. Native UI was operated by the root agent; independent validation reads retained records and fixture bytes only.",
+  "files": [
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\Start-IsolatedExecs.ps1",
+      "archivedRelativePath": "reproduction/Start-IsolatedExecs.ps1",
+      "sourceSha256": "C4198DAB6ED06553788BA0FB49A70D205007BC5DFBB1B000D284A6BB5EACA242",
+      "archivedSha256": "C4198DAB6ED06553788BA0FB49A70D205007BC5DFBB1B000D284A6BB5EACA242",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\startup-variants-prepared-20260922.json",
+      "archivedRelativePath": "metadata/prepared-cases.json",
+      "sourceSha256": "147AC3717E8342B19C450B3AFE762CB2CC8A2215C95A582444595D27DB84B932",
+      "archivedSha256": "147AC3717E8342B19C450B3AFE762CB2CC8A2215C95A582444595D27DB84B932",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\startup-variants-preparation-validation-20260922.json",
+      "archivedRelativePath": "metadata/preparation-validation.json",
+      "sourceSha256": "E81D54D4938B8FF946F31479DFB6253C94CBA5330DAA7684388E681BF926BC02",
+      "archivedSha256": "E81D54D4938B8FF946F31479DFB6253C94CBA5330DAA7684388E681BF926BC02",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\request.json",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/request.json",
+      "sourceSha256": "5668F9AA91E75CAB11096ADD52F6E269CAE6AAD0AFFD09D1854A50826291CF66",
+      "archivedSha256": "5F0CF2D44D8BB9CC4E9F3F96CE47D4A279AB8C23F1AD7348D5A8C2FABA562483",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\fixture-originals\\settings.json",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/originals/settings.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\request.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/request.json",
+      "sourceSha256": "C550B1D4DEA3FFBAD2C55FD2E7F0E048E25478FDF75C2E5A3C42AF1BC8E522E1",
+      "archivedSha256": "D4E943F0238C516C36E1382EA40065D157E2486F4E377D45FCF05B5726D214EF",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\fixture-originals\\settings.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/originals/settings.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\fixture-originals\\launching-tf2",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/originals/launching-tf2",
+      "sourceSha256": "9C79ABE04F020B049757B7C73B30AC90D4C487EB536C4BFEB8FDDCEB6AB1361B",
+      "archivedSha256": "9C79ABE04F020B049757B7C73B30AC90D4C487EB536C4BFEB8FDDCEB6AB1361B",
+      "transformation": "None; original marker bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\request.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/request.json",
+      "sourceSha256": "F440763E9D739F61A54107BBB99288E32AE53B3738B917622765EF212C6830E4",
+      "archivedSha256": "C05A0EE2476A64929ACBDEEF34206D4B90CBF02A9B77670EC1CED6BC13FEC1C2",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\fixture-originals\\settings.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/originals/settings.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\fixture-originals\\launching-tf2",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/originals/launching-tf2",
+      "sourceSha256": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E",
+      "archivedSha256": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E",
+      "transformation": "None; original marker bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\fixture-originals\\steam-verification",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/originals/steam-verification",
+      "sourceSha256": "09A844541B3F307BD54A74C6326A6401B131EFA25018388B3E6A60DE3B4C40F4",
+      "archivedSha256": "09A844541B3F307BD54A74C6326A6401B131EFA25018388B3E6A60DE3B4C40F4",
+      "transformation": "None; original marker bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\request.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/request.json",
+      "sourceSha256": "DB4103D1DCC5A765261AFF591D62C4AD5C463938495058BFC5B189DBFFCDC32E",
+      "archivedSha256": "E913236D0AFF30A1439C8C137CE93A4D262548ADC97EAAE951ECB4BFB8F54368",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\fixture-originals\\settings.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/originals/settings.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "archivedSha256": "EBA5594A018426681F10225DCF086363A215C5E7B6CC967678A65FBA5D5637D2",
+      "transformation": "UTF-8 without BOM; LF and final newline; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\fixture-originals\\launching-tf2",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/originals/launching-tf2",
+      "sourceSha256": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E",
+      "archivedSha256": "ED399C832CEBED03A0A000C60140D0A463016EF928B4ADFB8915C3385C83459E",
+      "transformation": "None; original marker bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\startup-variants-native-validation-20260922.json",
+      "archivedRelativePath": "metadata/native-validation.json",
+      "sourceSha256": "BD73A4C4AFEF1D9EA5EE07568308973C2247AC30E1AC6795373D6362A1848C65",
+      "archivedSha256": "97861BD716C18DE28021DFE29E82B063D46C02C90F48220181DE1C5BBF21CFDB",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\Validate-StartupVariants.ps1",
+      "archivedRelativePath": "reproduction/Validate-StartupVariants.ps1",
+      "sourceSha256": "CEBBBAFAEA65934AAC42467AE7AC1079F54ADF3211054CEE531A22CC076EF344",
+      "archivedSha256": "CEBBBAFAEA65934AAC42467AE7AC1079F54ADF3211054CEE531A22CC076EF344",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/bootstrap.json",
+      "sourceSha256": "75FF7CCF05B30EE2FEB6A1419CF009F07CB1A6DE51CD52A737AEF6F7A9191FCE",
+      "archivedSha256": "5D8CA1E3095655A0FE684A6DA39E43266C162AE5B6C554A22233BE07F78EA2A2",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\launch.json",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/launch.json",
+      "sourceSha256": "49E1C0E45AF448ACF145EA05D498EEB3157B90B946A8BB44061ABAEBDFA929B8",
+      "archivedSha256": "697DF078002D4D8A1E9B546A5EB23696F30D6CE52B2C08AA3626E5B838D0345D",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\exit.json",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/exit.json",
+      "sourceSha256": "4C66562A50836C937D4BCB6B4C20F71638877DE41A175B209EBAA627A8C70BE1",
+      "archivedSha256": "8517EC5A5A2F0D86794078BCE152F9BE445E2BC41780F0DA6C22E67D89C95F19",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/webview-processes.json",
+      "sourceSha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945",
+      "archivedSha256": "37517E5F3DC66819F61F5A7BB8ACE1921282415F10551D2DEFA5C3EB0985B570",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/stderr.txt",
+      "sourceSha256": "A02F8D6BD75A19D6127727F9F9EFB6A2A80AEDD39357359C37247E6F36A70766",
+      "archivedSha256": "A02F8D6BD75A19D6127727F9F9EFB6A2A80AEDD39357359C37247E6F36A70766",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-140805-startup-unsetappdata-a342d11b/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\captured-evidence\\01-unset-appdata.jpg",
+      "archivedRelativePath": "01-unset-appdata.jpg",
+      "sourceSha256": "66F67D52DB626A2174280E313D61676790676A32ECD4CE570395F56F4763984D",
+      "archivedSha256": "66F67D52DB626A2174280E313D61676790676A32ECD4CE570395F56F4763984D",
+      "transformation": "None; accepted native JPEG bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\captured-evidence\\01-unset-appdata.uia.txt",
+      "archivedRelativePath": "01-unset-appdata.uia.txt",
+      "sourceSha256": "32B831F7105C9849577164D7A0BA9AA1F2B5F4E2EF15E28BA9AEAB0D758F3252",
+      "archivedSha256": "574EED2D0386590C08200411E09F93F1D0F02E965FD14488A8C9BFA540AB5E06",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b\\captured-evidence\\01-unset-appdata.clipboard.txt",
+      "archivedRelativePath": "01-unset-appdata.clipboard.txt",
+      "sourceSha256": "D8E5833E390D1C987445202D74954810D968C9358137937773284CC57B4658F8",
+      "archivedSha256": "68D9A91E68C767292FB92D17B952834E989904E9969417E3C52C4610A860DE59",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/bootstrap.json",
+      "sourceSha256": "D75A30958FD9216EBFCC874D505852CC3ABB39DED4CF980A0B353E0D7DD3F948",
+      "archivedSha256": "A2D2C554433BB9DD578ABDEE8A9E0B30A736EDFE83D0F8B3DBA9CA58637CE598",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\launch.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/launch.json",
+      "sourceSha256": "F881CAFE62E020C1F3AE1E2DE4BD4932BA42EBB36E2D33D0674F6CC8BCA46EBC",
+      "archivedSha256": "A986B9ADDF1757DFBDB95A7A031E00892B2C9D2F6F4197C6E22C55FE6AB353BF",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\exit.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/exit.json",
+      "sourceSha256": "406A047AF5441280C619B2FB3C0E0D1BFB0798AEB90E2A2D262411B204A5CFE9",
+      "archivedSha256": "60C088A84A952B8B010725EE1D1FDB6F5814BE483E08709F099247B3F8DBD874",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/webview-processes.json",
+      "sourceSha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945",
+      "archivedSha256": "37517E5F3DC66819F61F5A7BB8ACE1921282415F10551D2DEFA5C3EB0985B570",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/stderr.txt",
+      "sourceSha256": "51DA82FEC70AD8D8A0740B7AA7AF0CA1DEB97BD7532A42470A053B044CA4BF35",
+      "archivedSha256": "51DA82FEC70AD8D8A0740B7AA7AF0CA1DEB97BD7532A42470A053B044CA4BF35",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-140806-startup-mismatchedtoken-2256bd28/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\captured-evidence\\02-mismatched-token.jpg",
+      "archivedRelativePath": "02-mismatched-token.jpg",
+      "sourceSha256": "8838133A22999E23A80BD3274876A40EFF8D501780F8D555D5BC757580D05C8A",
+      "archivedSha256": "8838133A22999E23A80BD3274876A40EFF8D501780F8D555D5BC757580D05C8A",
+      "transformation": "None; accepted native JPEG bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\captured-evidence\\02-mismatched-token.uia.txt",
+      "archivedRelativePath": "02-mismatched-token.uia.txt",
+      "sourceSha256": "7800B3359F381ED1A9C19117CFA17D78050ECCE4BB9EE8CF5357CE57B59EB52D",
+      "archivedSha256": "D815FDE1E0764602E2FD85650E8A78DC208027728E5F14B229372CAD7047677A",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28\\captured-evidence\\02-mismatched-token.clipboard.txt",
+      "archivedRelativePath": "02-mismatched-token.clipboard.txt",
+      "sourceSha256": "A5EEF4248FBCD7B710497740E948BA65015C2A86A94AAEA45B472748C0AD7DE9",
+      "archivedSha256": "B1DA12188C7334BD680F5C26533F3846261208D60BD6C624E52712EA34EF10C4",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/bootstrap.json",
+      "sourceSha256": "21FD9A6EFAAB11AB263A0C17AD6A0455E0E07EF55B97C3CA92539287679DF110",
+      "archivedSha256": "8D3C8B374AF20055D3871ABFEB881CCE0612633C72921E0702982A79A733B914",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\launch.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/launch.json",
+      "sourceSha256": "65C76A861FA4E212234CDE673B1292DA44EFE2953FCB6D8F1C2A63165A57D659",
+      "archivedSha256": "BE96DDA3A1F43F5DF7EFB6CD4743CDC18A745EFB326B5C72D90A1421EF480C12",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\exit.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/exit.json",
+      "sourceSha256": "7E624C78DE93C6A29917E64A553F5DF0366015EB55305B04AFA6860AF9DCDFE9",
+      "archivedSha256": "37F977E3507FF019CD133DD7BEC40EDCF293BD5CDC460BD1D3517F5782FAA4E5",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/webview-processes.json",
+      "sourceSha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945",
+      "archivedSha256": "37517E5F3DC66819F61F5A7BB8ACE1921282415F10551D2DEFA5C3EB0985B570",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/stderr.txt",
+      "sourceSha256": "BD45CCBA299F478CF1DBBDB951B6F032106563F0D7313103FFA77A82A063017C",
+      "archivedSha256": "BD45CCBA299F478CF1DBBDB951B6F032106563F0D7313103FFA77A82A063017C",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-140806-startup-multiplemarkers-69512509/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\captured-evidence\\03-multiple-markers.jpg",
+      "archivedRelativePath": "03-multiple-markers.jpg",
+      "sourceSha256": "8A7D5CFE0AE091CA77461E90151BE0AE1063CE1827694C05491A94EDD12C4C65",
+      "archivedSha256": "8A7D5CFE0AE091CA77461E90151BE0AE1063CE1827694C05491A94EDD12C4C65",
+      "transformation": "None; accepted native JPEG bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\captured-evidence\\03-multiple-markers.uia.txt",
+      "archivedRelativePath": "03-multiple-markers.uia.txt",
+      "sourceSha256": "DDE1602605ABFDCE73576EB92DE4008443F72C8D84C16A63ADD4C3028F89F163",
+      "archivedSha256": "3182A5182599F384E0A0D6BFAB20A4228CB7CE4E6C2034F096EBEE398A467E5E",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509\\captured-evidence\\03-multiple-markers.clipboard.txt",
+      "archivedRelativePath": "03-multiple-markers.clipboard.txt",
+      "sourceSha256": "CAC8814D20F085E7CFAD7AE9B1FB55C9B6D68E15238A23CC34118377F6E1D6D1",
+      "archivedSha256": "2E9B4FBBA332AEB1622BE0F56A0DA7623316268A75B8CB21F3C8C09C3AC2A372",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/bootstrap.json",
+      "sourceSha256": "0D0A4453F5CF2C634055783773BEA9349C0E3B20DD10257D2C0E3B3255723D1B",
+      "archivedSha256": "B7631B1435A6A24F3A49C07BD60F4AA590D7984560043334DD1B68FC178CA56F",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\launch.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/launch.json",
+      "sourceSha256": "7E1B70C8452DD498689DDCA87824ED00B85C9E2310FF0901938FD8C53C67B5FB",
+      "archivedSha256": "585A93F09AA53E7ADF51BC0726A2F6B45AA99FAC296D79AA1047021A360E462B",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\exit.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/exit.json",
+      "sourceSha256": "47A0CA54DFF731D2DE926CFC86FE309EF9042FA34BF6C3759CD48411FBEA8262",
+      "archivedSha256": "8B33C6473DB344D14A3FEC4E8FF8FA26A39A3C897318F24FEB35D91984425CCF",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/webview-processes.json",
+      "sourceSha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945",
+      "archivedSha256": "37517E5F3DC66819F61F5A7BB8ACE1921282415F10551D2DEFA5C3EB0985B570",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/stderr.txt",
+      "sourceSha256": "EFBC16E35E17AE5BEA57C03EDFCCE2209EF135E3BBD728023532197B2C59EAF3",
+      "archivedSha256": "EFBC16E35E17AE5BEA57C03EDFCCE2209EF135E3BBD728023532197B2C59EAF3",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\startup-marker-lock.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/startup-marker-lock.json",
+      "sourceSha256": "BDB9BA230DD710A083F33B16E0460015608F05B78076B8158DA0AD9FEEDED18D",
+      "archivedSha256": "64C0A1F997EC9D454934EDC63E2CD935ACE74ED85A0CADD6F87B793845CB9515",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\startup-marker-lock-released.json",
+      "archivedRelativePath": "metadata/20260922-140806-startup-unreadablemarker-569b15f9/startup-marker-lock-released.json",
+      "sourceSha256": "661172720A23912091D106D78F253BF7D229B63BD8D2B0D3E1A0C7BF4320E2A9",
+      "archivedSha256": "C093C956E0D0DEFD4F0685F0962C23D17AB8A80737473854DE39D6E9E42ABE09",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\captured-evidence\\04-unreadable-marker.jpg",
+      "archivedRelativePath": "04-unreadable-marker.jpg",
+      "sourceSha256": "64D644468EF768E9727195C3DFC0AF286355D51FEFE396EC4263FBD69955BF54",
+      "archivedSha256": "64D644468EF768E9727195C3DFC0AF286355D51FEFE396EC4263FBD69955BF54",
+      "transformation": "None; accepted native JPEG bytes retained exactly."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\captured-evidence\\04-unreadable-marker.uia.txt",
+      "archivedRelativePath": "04-unreadable-marker.uia.txt",
+      "sourceSha256": "070184F75F941817C8579688A8C0D36F1B9972D477E7BE1B747B31DC08E002E0",
+      "archivedSha256": "1F6D1F4530EBEB1B14D8B972DBE95CAB68A1799C0CA1548692D48BE645C69117",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9\\captured-evidence\\04-unreadable-marker.clipboard.txt",
+      "archivedRelativePath": "04-unreadable-marker.clipboard.txt",
+      "sourceSha256": "76242ED6154F1BE0C696844EC8A71F9118AD1E04969E1F98CBB0433A231AD5C2",
+      "archivedSha256": "6266FB9279BB0794C2E4936A32A7E099C5A50DB6C202DB8AC3DD72229B230EC5",
+      "transformation": "UTF-8 without BOM; LF and final newline when nonempty; JSON formatted with Biome. Source hashes identify original fixture bytes."
+    }
+  ]
+}

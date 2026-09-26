@@ -1,0 +1,14 @@
+{
+  "appPid": 24480,
+  "exitCode": 0,
+  "exitedUtc": "2026-09-22T18:13:41.8081392Z",
+  "markerSha256Before": "9C79ABE04F020B049757B7C73B30AC90D4C487EB536C4BFEB8FDDCEB6AB1361B",
+  "markerSha256After": "9C79ABE04F020B049757B7C73B30AC90D4C487EB536C4BFEB8FDDCEB6AB1361B",
+  "startupMarkersAfter": [
+    {
+      "name": "launching-tf2",
+      "sha256": "9C79ABE04F020B049757B7C73B30AC90D4C487EB536C4BFEB8FDDCEB6AB1361B"
+    }
+  ],
+  "defaultTauriLocalDataExistsAfter": true
+}

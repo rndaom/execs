@@ -15,10 +15,12 @@ export const PREVIEW_STATES = [
   "confirmed",
   "locked",
   "library",
+  "inactive-library",
   "saved",
   "absorb",
   "switch",
   "import",
+  "profile-import-huds",
   "folder-repair",
   "first-existing",
   "first-unused",
@@ -30,6 +32,7 @@ export const PREVIEW_STATES = [
   "settings-hud",
   "settings-hud-browser",
   "settings-hud-installed",
+  "hud-ownership",
   "settings-crosshair",
   "settings-viewmodels",
   "settings-sounds",
@@ -37,6 +40,7 @@ export const PREVIEW_STATES = [
   "settings-files",
   "settings-launch",
   "settings-locked",
+  "settings-app-failure",
   "update-available",
   "update-installing",
   "release-notes",
@@ -58,10 +62,12 @@ const READY: PreviewState[] = [
   "confirmed",
   "locked",
   "library",
+  "inactive-library",
   "saved",
   "absorb",
   "switch",
   "import",
+  "profile-import-huds",
   "first-existing",
   "first-unused",
   "first-unused-locked",
@@ -72,6 +78,7 @@ const READY: PreviewState[] = [
   "settings-hud",
   "settings-hud-browser",
   "settings-hud-installed",
+  "hud-ownership",
   "settings-crosshair",
   "settings-viewmodels",
   "settings-sounds",
@@ -79,6 +86,7 @@ const READY: PreviewState[] = [
   "settings-files",
   "settings-launch",
   "settings-locked",
+  "settings-app-failure",
   "update-available",
   "update-installing",
   "release-notes",
@@ -132,6 +140,9 @@ export function previewFirstRunReasons(state: PreviewState): string[] {
 }
 
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
+  if (state === "inactive-library") {
+    return { ...previewImportedLibrary(ONE.path), activeProfileId: null };
+  }
   if (state === "folder-repair") {
     const library = previewSavedLibrary(ONE.path);
     return {
@@ -149,6 +160,7 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   }
   if (
     state === "saved" ||
+    state === "profile-import-huds" ||
     state === "absorb" ||
     state === "create" ||
     previewSettingsTab(state) !== null
@@ -177,7 +189,9 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
   switch (state) {
     case "settings-comfig":
     case "folder-repair":
+    case "profile-import-huds":
     case "settings-locked":
+    case "settings-app-failure":
       return "comfig";
     case "settings-binds":
       return "binds";
@@ -186,6 +200,7 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
     case "settings-hud":
     case "settings-hud-browser":
     case "settings-hud-installed":
+    case "hud-ownership":
       return "hud";
     case "settings-crosshair":
       return "crosshair";

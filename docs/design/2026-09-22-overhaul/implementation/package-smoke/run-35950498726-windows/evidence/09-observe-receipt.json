@@ -1,0 +1,74 @@
+{
+  "windows": [
+    {
+      "handle": 131526,
+      "owner": 0,
+      "class": "Tauri Window",
+      "pid": 7212,
+      "visible": true,
+      "title": "execs",
+      "nativePid": 7212
+    },
+    {
+      "handle": 262602,
+      "owner": 0,
+      "class": "com.rndaom.execs-sic",
+      "pid": 7212,
+      "visible": true,
+      "title": "com.rndaom.execs-siw",
+      "nativePid": 7212
+    },
+    {
+      "handle": 1573010,
+      "owner": 0,
+      "class": "Tao Thread Event Target",
+      "pid": 7212,
+      "visible": true,
+      "title": "",
+      "nativePid": 7212
+    }
+  ],
+  "process": {
+    "pid": 7212,
+    "parent": 7516,
+    "executable": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\installed\\execs.exe",
+    "created": "2026-09-24T03:13:37.1926140Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\installed\\execs.exe",
+    "session": 2
+  },
+  "controlsError": null,
+  "nativeDialogControls": [],
+  "at": "2026-09-24T03:14:16.6283084Z",
+  "capture": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\evidence\\04-native-after-save.png",
+  "capturedOwnedForeground": true,
+  "foregroundHandle": 131526,
+  "exportDialogVisible": false,
+  "captureError": null,
+  "requestedPath": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\fixture\\exports\\previous-ui-export.zip",
+  "candidateFiles": [
+    {
+      "label": "exact",
+      "path": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\fixture\\exports\\previous-ui-export.zip",
+      "bytes": null,
+      "exists": false
+    },
+    {
+      "label": "adjacent-appended-zip",
+      "path": "D:\\a\\_temp\\execs-windows-package-PF11Xy\\fixture\\exports\\previous-ui-export.zip.zip",
+      "bytes": null,
+      "exists": false
+    },
+    {
+      "label": "documents-basename",
+      "path": "C:\\Users\\runneradmin\\Documents\\previous-ui-export.zip",
+      "bytes": null,
+      "exists": false
+    },
+    {
+      "label": "documents-appended-zip",
+      "path": "C:\\Users\\runneradmin\\Documents\\previous-ui-export.zip.zip",
+      "bytes": null,
+      "exists": false
+    }
+  ]
+}

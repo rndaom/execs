@@ -1,0 +1,14 @@
+{
+  "root": "D:\\a\\_temp\\execs-windows-package-OfHbbB",
+  "process": {
+    "pid": 5668,
+    "parent": 1852,
+    "executable": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\installed\\execs.exe",
+    "created": "2026-09-24T02:49:47.7995140Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\installed\\execs.exe",
+    "session": 2
+  },
+  "destination": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\fixture\\exports\\previous-ui-export.zip",
+  "capture": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\evidence\\03-native-export-save.png",
+  "observation": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\evidence\\native-save-observations.json"
+}

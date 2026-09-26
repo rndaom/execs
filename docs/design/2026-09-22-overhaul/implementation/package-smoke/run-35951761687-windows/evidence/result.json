@@ -1,0 +1,875 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "scope": "Previous-public NSIS capability proof only; no candidate build or qualification.",
+  "sourceRevision": "04e83db6a3ec0e28bc27b9ada54a9ea7eeb015f8",
+  "workflow": {
+    "runId": "35951761687",
+    "attempt": "1",
+    "event": "pull_request",
+    "eventSha": "04e83db6a3ec0e28bc27b9ada54a9ea7eeb015f8",
+    "pullRequestHead": "065f04cf1f0c528144d3373552dc1089b2e9928c"
+  },
+  "runner": {
+    "os": "win22",
+    "version": "20260913.307.1",
+    "node": "v24.21.0"
+  },
+  "notQualified": [
+    "candidate NSIS/upgrade/import/reopen",
+    "production signed updater",
+    "real updater UI",
+    "interactive installer pages",
+    "standard-user Windows",
+    "screen-reader speech",
+    "Steam/TF2/Cloud"
+  ],
+  "checks": [
+    {
+      "phase": "before-install",
+      "recordedAt": "2026-09-24T03:31:52.134Z",
+      "data": {
+        "files": {
+          "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "553df58bcc29e6a558568b32f862a183dc5e8e1d34cf3d96db3485b9956cfd34",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "e30df247c815c78acce2abe8f7bcfd61ee75e5e4767a5b89fe4ddd32de1216f6",
+          "profiles/index.json": "8305309714d6ad4a8fc6610e028e954a090d84a7a28b9446f5c23311903b7d10",
+          "settings.json": "a78de178dc879126271d7f0870c0a32711402d6d55ff296ab7d4b0ef87adf75c"
+        },
+        "directories": [
+          "profiles",
+          "profiles/blobs",
+          "profiles/blobs/sha256",
+          "profiles/blobs/sha256/ec",
+          "profiles/f20a0001-8d01-4000-8000-000000000001",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+        ]
+      },
+      "live": {
+        "files": {
+          "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+          "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+        },
+        "directories": [
+          "tf",
+          "tf/cfg",
+          "tf/cfg/overrides",
+          "tf/custom"
+        ]
+      },
+      "exported": {
+        "files": {},
+        "directories": []
+      },
+      "originalBytesPreserved": true
+    },
+    {
+      "phase": "after-install",
+      "recordedAt": "2026-09-24T03:31:55.673Z",
+      "data": {
+        "files": {
+          "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "553df58bcc29e6a558568b32f862a183dc5e8e1d34cf3d96db3485b9956cfd34",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "e30df247c815c78acce2abe8f7bcfd61ee75e5e4767a5b89fe4ddd32de1216f6",
+          "profiles/index.json": "8305309714d6ad4a8fc6610e028e954a090d84a7a28b9446f5c23311903b7d10",
+          "settings.json": "a78de178dc879126271d7f0870c0a32711402d6d55ff296ab7d4b0ef87adf75c"
+        },
+        "directories": [
+          "profiles",
+          "profiles/blobs",
+          "profiles/blobs/sha256",
+          "profiles/blobs/sha256/ec",
+          "profiles/f20a0001-8d01-4000-8000-000000000001",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+        ]
+      },
+      "live": {
+        "files": {
+          "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+          "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+        },
+        "directories": [
+          "tf",
+          "tf/cfg",
+          "tf/cfg/overrides",
+          "tf/custom"
+        ]
+      },
+      "exported": {
+        "files": {},
+        "directories": []
+      },
+      "originalBytesPreserved": true,
+      "host": {
+        "sid": "S-1-5-21-2325914565-3525904610-1579391994-500",
+        "user": "runnervmibwwn\\runneradmin",
+        "session": 2,
+        "userInteractive": true,
+        "packageCode": 15700,
+        "groups": [
+          "S-1-5-21-2325914565-3525904610-1579391994-513",
+          "S-1-1-0",
+          "S-1-5-114",
+          "S-1-5-32-544",
+          "S-1-5-32-545",
+          "S-1-5-4",
+          "S-1-2-1",
+          "S-1-5-11",
+          "S-1-5-15",
+          "S-1-5-113",
+          "S-1-2-0",
+          "S-1-5-64-10"
+        ],
+        "playerProcesses": [],
+        "steamRegistry": [],
+        "productLocations": [
+          "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\execs"
+        ]
+      }
+    },
+    {
+      "phase": "genuine-webview-input",
+      "click": {
+        "afterBox": {
+          "bottom": 46.296875,
+          "height": 37.59375,
+          "left": 100.75,
+          "right": 414.21875,
+          "top": 8.703125,
+          "width": 313.46875,
+          "x": 100.75,
+          "y": 8.703125
+        },
+        "events": [
+          {
+            "box": {
+              "bottom": 46.296875,
+              "height": 37.59375,
+              "left": 100.75,
+              "right": 414.21875,
+              "top": 8.703125,
+              "width": 313.46875,
+              "x": 100.75,
+              "y": 8.703125
+            },
+            "onTarget": true,
+            "target": "STRONG:Package smoke - active",
+            "trusted": true,
+            "type": "pointerdown",
+            "x": 257,
+            "y": 27
+          },
+          {
+            "box": {
+              "bottom": 46.296875,
+              "height": 37.59375,
+              "left": 100.75,
+              "right": 414.21875,
+              "top": 8.703125,
+              "width": 313.46875,
+              "x": 100.75,
+              "y": 8.703125
+            },
+            "onTarget": true,
+            "target": "STRONG:Package smoke - active",
+            "trusted": true,
+            "type": "click",
+            "x": 257,
+            "y": 27
+          }
+        ],
+        "expected": {
+          "box": {
+            "bottom": 46.296875,
+            "height": 37.59375,
+            "left": 100.75,
+            "right": 414.21875,
+            "top": 8.703125,
+            "width": 313.46875,
+            "x": 100.75,
+            "y": 8.703125
+          },
+          "height": 749,
+          "hit": true,
+          "width": 1028
+        }
+      },
+      "keyboard": {
+        "key": "Tab",
+        "focus": {
+          "inside": true,
+          "summary": false,
+          "tag": "BUTTON",
+          "text": "New profile"
+        }
+      }
+    },
+    {
+      "phase": "export-click",
+      "trace": {
+        "afterBox": {
+          "bottom": 181.765625,
+          "height": 28,
+          "left": 473.75,
+          "right": 501.75,
+          "top": 153.765625,
+          "width": 28,
+          "x": 473.75,
+          "y": 153.765625
+        },
+        "events": [
+          {
+            "box": {
+              "bottom": 174.046875,
+              "height": 28,
+              "left": 473.75,
+              "right": 501.75,
+              "top": 146.046875,
+              "width": 28,
+              "x": 473.75,
+              "y": 146.046875
+            },
+            "onTarget": true,
+            "target": "path:",
+            "trusted": true,
+            "type": "pointerdown",
+            "x": 487,
+            "y": 160
+          },
+          {
+            "box": {
+              "bottom": 174.046875,
+              "height": 28,
+              "left": 473.75,
+              "right": 501.75,
+              "top": 146.046875,
+              "width": 28,
+              "x": 473.75,
+              "y": 146.046875
+            },
+            "onTarget": true,
+            "target": "path:",
+            "trusted": true,
+            "type": "click",
+            "x": 487,
+            "y": 160
+          }
+        ],
+        "expected": {
+          "box": {
+            "bottom": 174.046875,
+            "height": 28,
+            "left": 473.75,
+            "right": 501.75,
+            "top": 146.046875,
+            "width": 28,
+            "x": 473.75,
+            "y": 146.046875
+          },
+          "height": 749,
+          "hit": true,
+          "width": 1028
+        }
+      }
+    }
+  ],
+  "captures": [
+    {
+      "file": "01-installed-old-app.png",
+      "sha256": "b3075e95fa029193d5a47988f5fdf198c5544ee6dae1bf48029d611ff76a26c3",
+      "state": {
+        "body": "execs\nProfile\nPackage smoke - active\nActive\nfixture-tf2\nLaunch TF2\n\nSETUP\n\nComfig\nBinds\nGameplay\n\nLOOK\n\nHUD\nCrosshair\nViewmodels\nSounds\n\nMORE\n\nMods\nFiles\nLaunch\nComfig\n\nPerformance, visuals and networking, powered by mastercomfig.\n\nPreset\n\nSets the default for every module.\n\nUltra\nMaximum fidelity with the highest system requirements.\nHigh\nHigh visual quality for modern systems.\nMedium\nSelected\nA balanced mix of visual quality and performance.\nLow\nMaximum performance with reduced visual effects.\nShow all presets\nPreset guide\nMedium\n›\nFine-tune modules\nOfficial addons\n0 selected\nNo footsteps\nRemove player footstep sounds.\nNo Pyroland\nDisable Pyroland visual effects.\nNo soundscapes\nRemove ambient map soundscapes.\nNo tutorial\nSkip tutorial hints and prompts.\nLow memory\nReduce memory use on limited systems.\nNull-canceling movement\nKeep opposite movement keys responsive.\nFlat mouse\nUse direct, unaccelerated mouse input.\nTransparent viewmodels\nMake weapon viewmodels transparent.\nPackages and extras\n\nChanges save as you make them.\n\nUpdate packages\nImport comfig-custom…\nOpen extras\n\nUses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is not affiliated with mastercomfig or comfig.app. Support the project through its donate page.\n\nv0.1.8 · Check for updates · Report a bug · Copy diagnostics\n\nFan project — not affiliated with Valve or Steam.",
+        "focused": "<body>\n    <div id=\"root\"><div class=\"flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink\"><main class=\"flex min-h-0 w-full flex-1 flex-col items-stretch overflow-hidden\"><section class=\"flex min-h-0 w-full flex-1 flex-col overflow-hidden\"><header class=\"relative z-40 flex min-h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 sm:px-6\"><div class=\"mr-1 flex shrink-0 items-center gap-2\"><span aria-hidden=\"true\" class=\"size-2 rounded-sm bg-brand\"></span><span class=\"text-[15px] font-semibold tracking-tight text-ink\">execs</span></div><details data-testid=\"profile-library\" class=\"group relative\"><summary class=\"flex cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink hover:bg-panel [&amp;::-webkit-details-marker]:hidden\"><span class=\"hidden text-ink-faint sm:inline\">Profile</span><strong class=\"max-w-40 truncate font-medium text-ink\">Package smoke - active</strong><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" fill=\"c",
+        "height": 749,
+        "href": "http://tauri.localhost/",
+        "menuOpen": false,
+        "native": true,
+        "profile": "Package smoke - active",
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "ready": "complete",
+        "width": 1028
+      },
+      "stableFrames": 3
+    },
+    {
+      "file": "02-old-profile-menu.png",
+      "sha256": "df42834cf992e45b20c01114c280feb81c94f4e30414079fc46434db109be143",
+      "state": {
+        "body": "execs\nProfile\nPackage smoke - active\nActive\n\nProfiles\n\n2 profiles\n\nNew profile\nPackage smoke - active\nCurrent\nPackage smoke - saved HUD\nSwitch\nProfile name\nSave\nImport\nChange install\nfixture-tf2\nLaunch TF2\n\nSETUP\n\nComfig\nBinds\nGameplay\n\nLOOK\n\nHUD\nCrosshair\nViewmodels\nSounds\n\nMORE\n\nMods\nFiles\nLaunch\nComfig\n\nPerformance, visuals and networking, powered by mastercomfig.\n\nPreset\n\nSets the default for every module.\n\nUltra\nMaximum fidelity with the highest system requirements.\nHigh\nHigh visual quality for modern systems.\nMedium\nSelected\nA balanced mix of visual quality and performance.\nLow\nMaximum performance with reduced visual effects.\nShow all presets\nPreset guide\nMedium\n›\nFine-tune modules\nOfficial addons\n0 selected\nNo footsteps\nRemove player footstep sounds.\nNo Pyroland\nDisable Pyroland visual effects.\nNo soundscapes\nRemove ambient map soundscapes.\nNo tutorial\nSkip tutorial hints and prompts.\nLow memory\nReduce memory use on limited systems.\nNull-canceling movement\nKeep opposite movement keys responsive.\nFlat mouse\nUse direct, unaccelerated mouse input.\nTransparent viewmodels\nMake weapon viewmodels transparent.\nPackages and extras\n\nChanges save as you make them.\n\nUpdate packages\nImport comfig-custom…\nOpen extras\n\nUses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is not affiliated with mastercomfig or comfig.app. Support the project through its donate page.\n\nv0.1.8 · Check for updates · Report a bug · Copy diagnostics\n\nFan project — not affiliated with Valve or Steam.",
+        "focused": "<button type=\"button\" data-testid=\"create-new\" class=\"btn btn-primary\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" fill=\"currentColor\" viewBox=\"0 0 256 256\"><path d=\"M228,128a12,12,0,0,1-12,12H140v76a12,12,0,0,1-24,0V140H40a12,12,0,0,1,0-24h76V40a12,12,0,0,1,24,0v76h76A12,12,0,0,1,228,128Z\"></path></svg>New profile</button>",
+        "height": 749,
+        "href": "http://tauri.localhost/",
+        "menuOpen": true,
+        "native": true,
+        "profile": "Package smoke - active",
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "ready": "complete",
+        "width": 1028
+      },
+      "stableFrames": 3
+    },
+    {
+      "file": "failure-last-webview.png",
+      "sha256": "6d56c309f7fba0b584916fe9b7eb443d987a92e37020feb38c04d10ba444e14b",
+      "state": {
+        "body": "execs\nProfile\nPackage smoke - active\nActive\n\nProfiles\n\n2 profiles\n\nNew profile\nPackage smoke - active\nCurrent\nPackage smoke - saved HUD\nSwitch\nProfile name\nSave\nImport\nChange install\nfixture-tf2\nLaunch TF2\n\nWait for the current operation to finish.\n\nSETUP\n\nComfig\nBinds\nGameplay\n\nLOOK\n\nHUD\nCrosshair\nViewmodels\nSounds\n\nMORE\n\nMods\nFiles\nLaunch\nComfig\n\nPerformance, visuals and networking, powered by mastercomfig.\n\nPreset\n\nSets the default for every module.\n\nUltra\nMaximum fidelity with the highest system requirements.\nHigh\nHigh visual quality for modern systems.\nMedium\nSelected\nA balanced mix of visual quality and performance.\nLow\nMaximum performance with reduced visual effects.\nShow all presets\nPreset guide\nMedium\n›\nFine-tune modules\nOfficial addons\n0 selected\nNo footsteps\nRemove player footstep sounds.\nNo Pyroland\nDisable Pyroland visual effects.\nNo soundscapes\nRemove ambient map soundscapes.\nNo tutorial\nSkip tutorial hints and prompts.\nLow memory\nReduce memory use on limited systems.\nNull-canceling movement\nKeep opposite movement keys responsive.\nFlat mouse\nUse direct, unaccelerated mouse input.\nTransparent viewmodels\nMake weapon viewmodels transparent.\nPackages and extras\n\nChanges save as you make them.\n\nWorking…\nImport comfig-custom…\nOpen extras\n\nUses official mastercomfig packages; preset screenshots from mastercomfig (MIT). execs is not affiliated with mastercomfig or comfig.app. Support the project through its donate page.\n\nv0.1.8 · Check for updates · Report a bug · Copy diagnostics\n\nFan project — not affiliated with Valve or Steam.",
+        "focused": "<body>\n    <div id=\"root\"><div class=\"flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink\"><main class=\"flex min-h-0 w-full flex-1 flex-col items-stretch overflow-hidden\"><section class=\"flex min-h-0 w-full flex-1 flex-col overflow-hidden\"><header class=\"relative z-40 flex min-h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 sm:px-6\"><div class=\"mr-1 flex shrink-0 items-center gap-2\"><span aria-hidden=\"true\" class=\"size-2 rounded-sm bg-brand\"></span><span class=\"text-[15px] font-semibold tracking-tight text-ink\">execs</span></div><details data-testid=\"profile-library\" class=\"group relative\" open=\"\"><summary class=\"flex cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink hover:bg-panel [&amp;::-webkit-details-marker]:hidden\"><span class=\"hidden text-ink-faint sm:inline\">Profile</span><strong class=\"max-w-40 truncate font-medium text-ink\">Package smoke - active</strong><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\"",
+        "height": 749,
+        "href": "http://tauri.localhost/",
+        "menuOpen": true,
+        "native": true,
+        "profile": "Package smoke - active",
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "ready": "complete",
+        "width": 1028
+      },
+      "stableFrames": 3
+    }
+  ],
+  "cleanup": [
+    {
+      "alreadyExited": [],
+      "forcedCleanup": [
+        {
+          "pid": 2052,
+          "parent": 4684,
+          "executable": "C:\\Windows\\system32\\conhost.exe",
+          "created": "2026-09-24T03:32:08.3568890Z",
+          "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+          "session": 2
+        },
+        {
+          "pid": 4684,
+          "parent": 7048,
+          "executable": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\downloads\\msedgedriver.exe",
+          "created": "2026-09-24T03:32:08.3505030Z",
+          "commandLine": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\downloads\\msedgedriver.exe --port=59905",
+          "session": 2
+        },
+        {
+          "pid": 5772,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:03.6859460Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=renderer --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --remote-debugging-port=59888 --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=1 --num-raster-threads=2 --enable-main-frame-before-activation --renderer-client-id=5 --js-flags=\"--harmony-weak-refs-with-cleanup-some --expose-gc --ms-user-locale=\" --time-ticks-at-unix-epoch=-1790220071403289 --launch-time-ticks=652279751 --field-trial-handle=3596,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=3580 /prefetch:1",
+          "session": 2
+        },
+        {
+          "pid": 3740,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:03.4050890Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=2332,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=2340 /prefetch:8",
+          "session": 2
+        },
+        {
+          "pid": 4476,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:03.0473110Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=1856,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1936 /prefetch:3",
+          "session": 2
+        },
+        {
+          "pid": 2612,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:02.3043220Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=gpu-process --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAAAAAABgAAEAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA --field-trial-handle=1844,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1836 /prefetch:2",
+          "session": 2
+        },
+        {
+          "pid": 6248,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:31:58.4895580Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=131.0.6778.109 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=131.0.2903.86 --initial-client-data=0x188,0x18c,0x190,0x164,0x104,0x7fffb9826070,0x7fffb982607c,0x7fffb9826088",
+          "session": 2
+        },
+        {
+          "pid": 6132,
+          "parent": 2148,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:31:57.7233820Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=59888 --lang=en-US --mojo-named-platform-channel-pipe=2148.2936.10874550337596951162",
+          "session": 2
+        },
+        {
+          "pid": 2148,
+          "parent": 7048,
+          "executable": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+          "created": "2026-09-24T03:31:56.7539540Z",
+          "commandLine": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+          "session": 2
+        }
+      ]
+    },
+    {
+      "restored": true,
+      "entries": 4
+    }
+  ],
+  "host": {
+    "sid": "S-1-5-21-2325914565-3525904610-1579391994-500",
+    "user": "runnervmibwwn\\runneradmin",
+    "session": 2,
+    "userInteractive": true,
+    "packageCode": 15700,
+    "groups": [
+      "S-1-5-21-2325914565-3525904610-1579391994-513",
+      "S-1-1-0",
+      "S-1-5-114",
+      "S-1-5-32-544",
+      "S-1-5-32-545",
+      "S-1-5-4",
+      "S-1-2-1",
+      "S-1-5-11",
+      "S-1-5-15",
+      "S-1-5-113",
+      "S-1-2-0",
+      "S-1-5-64-10"
+    ],
+    "playerProcesses": [],
+    "steamRegistry": [],
+    "productLocations": []
+  },
+  "versions": {
+    "version": "0.2.0",
+    "previousVersion": "0.1.8",
+    "historySha256": "25f7e7633e9be25a380a59662a75b6247fddde606b7613124689959dd2cee9f0",
+    "temporaryHeadingRehearsal": true
+  },
+  "publicPackage": {
+    "kind": "nsis",
+    "path": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\downloads\\execs_0.1.8_x64-setup.exe",
+    "name": "execs_0.1.8_x64-setup.exe",
+    "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe",
+    "bytes": 6460740,
+    "sha256": "8a3795c315f08d12b65a7c725235bc9a989115a3a353c65f2930588d382c6268",
+    "signatureVerified": true,
+    "release": {
+      "assets": [
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020219",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:42Z",
+          "digest": "sha256:06ec406e829601ae259e0fa4d2b1d4cc90c9fd76f7b56477e1e78165e4bcb0e7",
+          "downloadCount": 14,
+          "id": "RA_kwDOT5ircc4ic-N7",
+          "label": "execs_0.1.8_amd64.AppImage",
+          "name": "execs_0.1.8_amd64.AppImage",
+          "size": 100592120,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:46Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.AppImage"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020302",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:46Z",
+          "digest": "sha256:439e76fdebc318307a6399d6649fda9db6878020ae3b8660ea96e1ee41d5d922",
+          "downloadCount": 14,
+          "id": "RA_kwDOT5ircc4ic-PO",
+          "label": "execs_0.1.8_amd64.AppImage.sig",
+          "name": "execs_0.1.8_amd64.AppImage.sig",
+          "size": 416,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:46Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.AppImage.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020175",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:40Z",
+          "digest": "sha256:bb6f3628cee4dbbb37a093c4ef4bbb25c3ce6fbf64f4a3f775a39af454e99231",
+          "downloadCount": 13,
+          "id": "RA_kwDOT5ircc4ic-NP",
+          "label": "execs_0.1.8_amd64.deb",
+          "name": "execs_0.1.8_amd64.deb",
+          "size": 13220524,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:40Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.deb"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020205",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:41Z",
+          "digest": "sha256:892f07293c809397cd7610c7b363261b81d5cd7ace7baa5a32e9050ebf924020",
+          "downloadCount": 14,
+          "id": "RA_kwDOT5ircc4ic-Nt",
+          "label": "execs_0.1.8_amd64.deb.sig",
+          "name": "execs_0.1.8_amd64.deb.sig",
+          "size": 408,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:41Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.deb.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578025792",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:19:28Z",
+          "digest": "sha256:8a3795c315f08d12b65a7c725235bc9a989115a3a353c65f2930588d382c6268",
+          "downloadCount": 13,
+          "id": "RA_kwDOT5ircc4ic_lA",
+          "label": "execs_0.1.8_x64-setup.exe",
+          "name": "execs_0.1.8_x64-setup.exe",
+          "size": 6460740,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:19:29Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578025817",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:19:29Z",
+          "digest": "sha256:0178d084a15be9b28b0367587fefc50fec383d63c1689359502bd6f892ad0a7a",
+          "downloadCount": 12,
+          "id": "RA_kwDOT5ircc4ic_lZ",
+          "label": "execs_0.1.8_x64-setup.exe.sig",
+          "name": "execs_0.1.8_x64-setup.exe.sig",
+          "size": 416,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:19:29Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578036775",
+          "contentType": "application/json",
+          "createdAt": "2026-09-21T02:26:02Z",
+          "digest": "sha256:d6c872b45cc7d9c9a7a74af89cd8b65046af49d7c86b03ceaa43ff84ddf3b619",
+          "downloadCount": 75,
+          "id": "RA_kwDOT5ircc4idCQn",
+          "label": "",
+          "name": "latest.json",
+          "size": 3352,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:26:03Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/latest.json"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578036823",
+          "contentType": "application/json",
+          "createdAt": "2026-09-21T02:26:05Z",
+          "digest": "sha256:8bfe346043ce34638d7a048d48daad985a23de70e7ced8d382ac8066072c3ff1",
+          "downloadCount": 1,
+          "id": "RA_kwDOT5ircc4idCRX",
+          "label": "",
+          "name": "release-commit.json",
+          "size": 83,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:26:05Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/release-commit.json"
+        }
+      ],
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-21T02:26:18Z",
+      "tagName": "v0.1.8"
+    }
+  },
+  "fixture": {
+    "provenance": {
+      "exporterTag": "v0.1.8",
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "archives": [
+        {
+          "name": "no-hud",
+          "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
+        },
+        {
+          "name": "single-hud",
+          "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9"
+        }
+      ],
+      "authored": "Schema-1 library index, profile IDs/names, settings and disposable TF2 root; source export manifests and payload bytes are unchanged except the named library identity fields."
+    },
+    "childEnv": {
+      "APPDATA": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\roaming",
+      "LOCALAPPDATA": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\local",
+      "XDG_DATA_HOME": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\data",
+      "XDG_CONFIG_HOME": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\config"
+    },
+    "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+    "activeProfileName": "Package smoke - active"
+  },
+  "installer": {
+    "code": 0,
+    "signal": null,
+    "exitedAt": "2026-09-24T03:31:53.925Z",
+    "destination": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed"
+  },
+  "installed": {
+    "path": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+    "sha256": "171df823a15b3f08e871dfc75bd098a9b1954bf30c0913ee81049edd3a06914c",
+    "noticeSha256": "4bc661f74c34dbbf71693e5faf2fe086812d8a85d4e3df3c3cfc8fee5fb56b22"
+  },
+  "policy": {
+    "entries": 4,
+    "port": 59888,
+    "applied": true,
+    "userData": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview"
+  },
+  "webview": {
+    "version": "131.0.2903.86",
+    "versionEndpoint": {
+      "Browser": "Edg/131.0.2903.86",
+      "Protocol-Version": "1.3",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+      "V8-Version": "13.1.20.7",
+      "WebKit-Version": "537.36 (@cf5bf303997cad93d7a0bede234d3c3dc01cc63d)",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:59888/devtools/browser/4efeaa04-2a11-43d8-80f3-428e1abe885c"
+    },
+    "observation": {
+      "version": "0.1.8",
+      "process": {
+        "pid": 2148,
+        "parent": 7048,
+        "executable": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+        "created": "2026-09-24T03:31:56.7539540Z",
+        "commandLine": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+        "session": 2
+      },
+      "uiDiagnostics": null,
+      "processes": [
+        {
+          "pid": 2148,
+          "parent": 7048,
+          "executable": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+          "created": "2026-09-24T03:31:56.7539540Z",
+          "commandLine": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+          "session": 2
+        },
+        {
+          "pid": 6132,
+          "parent": 2148,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:31:57.7233820Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=59888 --lang=en-US --mojo-named-platform-channel-pipe=2148.2936.10874550337596951162",
+          "session": 2
+        },
+        {
+          "pid": 6248,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:31:58.4895580Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=131.0.6778.109 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=131.0.2903.86 --initial-client-data=0x188,0x18c,0x190,0x164,0x104,0x7fffb9826070,0x7fffb982607c,0x7fffb9826088",
+          "session": 2
+        },
+        {
+          "pid": 2612,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:02.3043220Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=gpu-process --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAAAAAABgAAEAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA --field-trial-handle=1844,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1836 /prefetch:2",
+          "session": 2
+        },
+        {
+          "pid": 4476,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:03.0473110Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=1856,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1936 /prefetch:3",
+          "session": 2
+        },
+        {
+          "pid": 3740,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:03.4050890Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=2332,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=2340 /prefetch:8",
+          "session": 2
+        },
+        {
+          "pid": 5772,
+          "parent": 6132,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T03:32:03.6859460Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=renderer --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --remote-debugging-port=59888 --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=1 --num-raster-threads=2 --enable-main-frame-before-activation --renderer-client-id=5 --js-flags=\"--harmony-weak-refs-with-cleanup-some --expose-gc --ms-user-locale=\" --time-ticks-at-unix-epoch=-1790220071403289 --launch-time-ticks=652279751 --field-trial-handle=3596,i,17190892494190679156,2850808237440432748,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=3580 /prefetch:1",
+          "session": 2
+        }
+      ],
+      "packageCode": 15700,
+      "windows": [],
+      "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+      "listeners": [
+        {
+          "address": "127.0.0.1",
+          "port": 59888,
+          "pid": 6132
+        }
+      ]
+    },
+    "driver": {
+      "path": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\downloads\\msedgedriver.exe",
+      "version": "131.0.2903.86",
+      "sha256": "C34A6B22814A18599F2A67BEF922BA879AE44158F216D4D2DF797D293F545665",
+      "signer": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+      "signature": "Valid",
+      "url": "https://msedgedriver.microsoft.com/131.0.2903.86/edgedriver_win64.zip",
+      "archiveSha256": "16ad3ea073e26f0000d1315e0a851eeb44b2754c66d47652e265cce5dea662af"
+    }
+  },
+  "capabilities": {
+    "acceptInsecureCerts": false,
+    "browserName": "webview2",
+    "browserVersion": "131.0.2903.86",
+    "fedcm:accounts": true,
+    "ms:edgeOptions": {
+      "debuggerAddress": "127.0.0.1:59888"
+    },
+    "msedge": {
+      "msedgedriverVersion": "131.0.2903.86 (cf5bf303997cad93d7a0bede234d3c3dc01cc63d)"
+    },
+    "pageLoadStrategy": "normal",
+    "platformName": "",
+    "proxy": {},
+    "setWindowRect": false,
+    "strictFileInteractability": false,
+    "timeouts": {
+      "implicit": 0,
+      "pageLoad": 300000,
+      "script": 30000
+    },
+    "unhandledPromptBehavior": "dismiss and notify",
+    "webauthn:extension:credBlob": true,
+    "webauthn:extension:largeBlob": true,
+    "webauthn:extension:minPinLength": true,
+    "webauthn:extension:prf": true,
+    "webauthn:virtualAuthenticators": true
+  },
+  "error": {
+    "message": "Command failed: C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoLogo -NoProfile -NonInteractive -Sta -ExecutionPolicy RemoteSigned -File D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1 -Action Save -Request D:\\a\\_temp\\execs-windows-package-QHTPg7\\requests\\08-save.json\nNative Save button did not receive keyboard focus.\r\nAt D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1:418 char:50\r\n+ ... ardFocus) { throw 'Native Save button did not receive keyboard focus. ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Native Save but...keyboard focus.:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Native Save button did not receive keyboard focus.\r\n \r\n",
+    "stack": "Error: Command failed: C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoLogo -NoProfile -NonInteractive -Sta -ExecutionPolicy RemoteSigned -File D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1 -Action Save -Request D:\\a\\_temp\\execs-windows-package-QHTPg7\\requests\\08-save.json\nNative Save button did not receive keyboard focus.\r\nAt D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1:418 char:50\r\n+ ... ardFocus) { throw 'Native Save button did not receive keyboard focus. ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Native Save but...keyboard focus.:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Native Save button did not receive keyboard focus.\r\n \r\n\n    at genericNodeError (node:internal/errors:986:15)\n    at wrappedFn (node:internal/errors:540:14)\n    at checkExecSyncError (node:child_process:942:11)\n    at execFileSync (node:child_process:978:15)\n    at execute (file:///D:/a/execs/execs/scripts/windows-package-smoke.mjs:301:22)\n    at native (file:///D:/a/execs/execs/scripts/windows-package-smoke.mjs:335:21)\n    at main (file:///D:/a/execs/execs/scripts/windows-package-smoke.mjs:637:25)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+  },
+  "finalPreservation": {
+    "recordedAt": "2026-09-24T03:32:24.186Z",
+    "data": {
+      "files": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "553df58bcc29e6a558568b32f862a183dc5e8e1d34cf3d96db3485b9956cfd34",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "e30df247c815c78acce2abe8f7bcfd61ee75e5e4767a5b89fe4ddd32de1216f6",
+        "profiles/index.json": "8305309714d6ad4a8fc6610e028e954a090d84a7a28b9446f5c23311903b7d10",
+        "settings.json": "a78de178dc879126271d7f0870c0a32711402d6d55ff296ab7d4b0ef87adf75c"
+      },
+      "directories": [
+        "profiles",
+        "profiles/blobs",
+        "profiles/blobs/sha256",
+        "profiles/blobs/sha256/ec",
+        "profiles/f20a0001-8d01-4000-8000-000000000001",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+      ]
+    },
+    "live": {
+      "files": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "directories": [
+        "tf",
+        "tf/cfg",
+        "tf/cfg/overrides",
+        "tf/custom"
+      ]
+    },
+    "exported": {
+      "files": {},
+      "directories": []
+    },
+    "originalBytesPreserved": true
+  },
+  "finalErrors": [
+    "Command failed: C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoLogo -NoProfile -NonInteractive -Sta -ExecutionPolicy RemoteSigned -File D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1 -Action Save -Request D:\\a\\_temp\\execs-windows-package-QHTPg7\\requests\\08-save.json\nNative Save button did not receive keyboard focus.\r\nAt D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1:418 char:50\r\n+ ... ardFocus) { throw 'Native Save button did not receive keyboard focus. ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Native Save but...keyboard focus.:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Native Save button did not receive keyboard focus.\r\n \r\n"
+  ]
+}

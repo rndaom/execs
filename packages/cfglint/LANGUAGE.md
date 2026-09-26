@@ -26,8 +26,10 @@ produce nonblocking catalog-availability information. Declaring an alias or bind
 does not execute its payload. Safety scans inspect dormant payloads, whereas startup
 inference follows only resolved startup commands and definitions available in order.
 Unknown startup implementations invalidate effective settings rather than pretending
-to know plugin effects. Catalogued comfig aliases require an inspected definition for
-startup inference. A supported builtin has no modeled setting effect.
+to know plugin effects. An unevenly quoted alias definition remains an advisory
+finding, but it does not invalidate unrelated startup settings until the alias is
+invoked. Catalogued comfig aliases require an inspected definition for startup
+inference. A supported builtin has no modeled setting effect.
 
 `safetyComplete` describes inspection of the supplied source set and deferred
 payloads. Missing exec sources (even allowlisted engine files), cycles, ambiguous
@@ -58,20 +60,20 @@ Primary evidence (reviewed September 20, 2026):
 
 Block means an explicit execs Save/import-review restriction, not a syntax judgment.
 Advisory provided files demote blocks to warnings without changing the category.
-Export credentials are also refused independently by native export validation;
-these frontend changes do not weaken that gate. `self` means personal authoring;
+Credentials in cfg source are saved unchanged and get a line-specific sharing
+warning without exposing their values through findings or summaries. `self` means personal authoring;
 `provided` means untrusted imported/review content. Syntax/argument findings do not
 strip source or offer an automatic Fix all.
 
 | Rule | Purpose/evidence | Self / provided | Example and counterexample |
 |---|---|---|---|
 | connect-redirect | execs imported redirection policy; engine connect command | warn / block | `connect host` joins when run; personal copy no longer accuses another author |
-| rcon-password | execs credential Save/export policy | block / block | `password secret`, `rcon_password secret`; only engine-managed top-level unset `password`, empty, or `0` is exempt; messages never include values |
+| rcon-password | local credential sharing advice | warn / warn | `password secret`, `rcon_password secret`; unset `password`, empty, or `0` is quiet; messages never include values |
 | console-lockout | execs recoverability policy, engine default binds | block / block | `unbind escape`, `con_enable 0`, compound/alias ESCAPE payload; engine-managed con_enable and exact menu restore are exempt |
 | alias-shadow | execs reviewed-command identity policy | block / block | `alias exec ...`, `alias +attack ...`; a new local alias or redefining a comfig alias is allowed |
 | unbindall | bind-table reset vs deferred destructive payload | top-level warn; deferred self warn / provided block | `unbindall; bind w +forward` is normal reset; engine-managed prologue exempt |
 | exec-external | bounded resolver cannot inspect target | warn / block | `exec absent`; resolved cfg has no finding; allowlisted file suppresses finding but still means incomplete coverage |
-| disruptive-bind | session-ending command on key press | gameplay self warn / provided block; other keys warn | `bind w quit`; server `restart` is not classified as client disruption |
+| disruptive-bind | session-ending command on key press | gameplay self warn / provided block; other keys warn; dormant personal aliases quiet | `bind w quit`; `alias q "quit"` is only a definition; server `restart` is not classified as client disruption |
 | disruptive-immediate | command runs when its containing cfg executes | warn / warn | top-level quit; a dormant file is not claimed to execute at startup |
 | chat-bind | imported chat disclosure | none / warn | personal `bind f "say hello"` is routine; imported payload remains disclosed |
 | kill-bind | gameplay key effect, not a ban | warn / warn | `bind mouse4 kill`; non-gameplay `bind f9 kill` is quiet |
@@ -83,14 +85,14 @@ strip source or offer an automatic Fix all.
 | syntax-quote | malformed quote/recovery concern | warn / warn | unterminated payload; quoted semicolon and literal backslash are valid model tokens |
 | argument-count/number/range/choice | sourced schema only | warn / warn | voicemenu arity, fov_desired banana/999; fov_desired query is quiet |
 | runtime-restriction | pinned cheat flag, runtime context | info / info | cheat-gated assignment; no VAC claim |
-| exec-cycle/depth, alias-depth/budget | bounded traversal, incomplete inspection | warn / warn | recursive payload or depth/fanout cap; ordinary finite aliases are inspected |
+| exec-cycle/depth, alias-depth/budget | bounded traversal, incomplete inspection | warn / warn | active exec recursion or depth/fanout cap; a deferred `alias ali "exec overrides/alias.cfg"` is not itself an exec cycle |
 | analysis-budget | total command/exec work cap | warn / block | very wide fanout; imported incomplete scans remain refused |
 | execution-search-path | ambiguous mounted path identity | warn / warn | case-colliding roots prevent inference |
 | execution-incomplete/unsupported | startup source/state unavailable | warn / warn | missing exec, unknown implementation, toggle needing engine state; clear effective maps |
 
 Changes to severity are deliberately narrow: routine self mouse/chat advice is removed;
 exact self menu restoration is allowed; the unsourced net-extreme rule is removed.
-Provided/imported restrictions and credential/export protection remain separate.
+Credential source remains inspectable and saveable, with explicit sharing advice.
 
 Read-only installed evidence for the exact menu restore: app 440, ClientVersion
 10828683, `tf/cfg/config_default.cfg` line 51 binds ESCAPE to `escape`; file SHA-256

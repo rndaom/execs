@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "name": "Package smoke - saved HUD",
+  "launchOptions": "-novid -nojoy",
+  "files": [
+    {
+      "path": "tf/cfg/config.cfg",
+      "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/autoexec.cfg",
+      "sha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/compat.cfg",
+      "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+      "sha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/compat-pack.vpk",
+      "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/fixturehud/info.vdf",
+      "sha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/fixturehud/resource/ui/layout.res",
+      "sha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/mastercomfig-base.vpk",
+      "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+      "storage": "shared"
+    }
+  ],
+  "hud": {
+    "id": "fixturehud",
+    "source": "local",
+    "options": {
+      "compact": "1"
+    }
+  },
+  "mods": [
+    {
+      "id": "compat-pack",
+      "name": "Compatibility pack",
+      "source": {
+        "kind": "local"
+      },
+      "pack": "compat-pack.vpk",
+      "files": 1,
+      "bytes": 170,
+      "installedAt": "2026-09-20T00:00:00Z"
+    }
+  ],
+  "id": "f20a0001-8d01-4000-8000-000000000002",
+  "tf2Root": "D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\fixture-tf2"
+}

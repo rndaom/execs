@@ -1,6 +1,5 @@
 mod comfig_fetch;
 mod commands;
-mod crosshair_fetch;
 mod error;
 mod gamebanana;
 mod hitsound_fetch;
@@ -8,7 +7,7 @@ mod hud_fetch;
 mod hud_stats;
 mod mods_fetch;
 mod net;
-mod viewmodel_fetch;
+mod startup_error;
 
 /// Isolated release verification; absent from ordinary application builds.
 #[cfg(feature = "release-probes")]
@@ -626,7 +625,7 @@ pub fn run() {
             // helper can reach the legacy infallible accessor. Keep it a clean
             // startup failure instead of a delayed panic on the first profile
             // operation.
-            eprintln!("{error}");
+            startup_error::show(&error, None);
             return;
         }
     };
@@ -635,7 +634,7 @@ pub fn run() {
         Err(error) => {
             // Failing closed is safer than accepting writes while Steam may
             // still be replacing official archives.
-            eprintln!("execs could not start: {error}");
+            startup_error::show(&error, Some(&data_dir.join(DURABLE_OPERATION_DIR)));
             return;
         }
     };
@@ -656,6 +655,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            commands::inventory::get_inventory,
+            commands::inventory::get_inventory_icons,
             commands::finder::scan_tf2_installs,
             commands::finder::browse_tf2_root,
             commands::finder::confirm_tf2_root,
@@ -664,8 +665,27 @@ pub fn run() {
             commands::library::get_profile_library,
             commands::library::init_profile_library,
             commands::library::save_current_as,
+            commands::library::rename_profile,
+            commands::library::duplicate_profile,
+            commands::library::delete_profile,
+            commands::compare::compare_profile_switch,
+            commands::restore_points::list_restore_points,
+            commands::restore_points::create_restore_point,
+            commands::restore_points::delete_restore_point,
+            commands::restore_points::set_restore_point_retention,
+            commands::restore_points::compare_restore_point,
+            commands::restore_points::restore_restore_point,
+            commands::app_settings::get_app_settings,
+            commands::app_settings::set_app_preferences,
+            commands::app_settings::get_storage_usage,
+            commands::app_settings::clear_download_caches,
+            commands::uninstall::get_uninstall_info,
+            commands::uninstall::uninstall_execs,
             commands::library::switch_profile,
+            commands::library::review_retired_casual_profile,
+            commands::library::clear_retired_casual_profile,
             commands::library::export_profile,
+            commands::library::inspect_profile_export,
             commands::library::import_profile,
             commands::library::confirm_profile_import,
             commands::library::cancel_profile_import,
@@ -689,6 +709,7 @@ pub fn run() {
             commands::comfig::import_comfig_custom,
             commands::launch::recommended_launch_options,
             commands::launch::launch_tf2,
+            commands::launch::get_launch_sync_status,
             commands::launch::cancel_tf2_launch,
             commands::launch::get_profile_launch_options,
             commands::launch::set_profile_launch_options,
@@ -696,38 +717,43 @@ pub fn run() {
             commands::lifecycle::install_app_update,
             commands::hud::get_hud_catalog,
             commands::hud::get_hud_state,
+            commands::hud::get_hud_ownership,
+            commands::hud::select_profile_hud,
             commands::hud::get_hud_album,
             commands::hud::get_hud_stats,
             commands::hud::install_hud,
             commands::hud::match_hud_catalog,
             commands::hud::update_hud,
+            commands::hud::return_to_stock_hud,
             commands::hud::get_hud_schema,
             commands::hud::apply_hud_options,
             commands::crosshair::apply_crosshairs,
-            commands::crosshair::fetch_community_crosshair,
-            commands::crosshair::fetch_community_crosshair_previews,
             commands::crosshair::get_pack_crosshair_previews,
             commands::crosshair::get_stock_crosshair_sprites,
+            commands::crosshair::get_crosshair_content_sources,
+            commands::crosshair::get_crosshair_source_status,
             commands::crosshair::remove_crosshairs,
             commands::crosshair::deactivate_crosshairs,
             commands::viewmodel::build_viewmodel_pack,
+            commands::viewmodel::build_selected_viewmodel_pack,
             commands::viewmodel::import_viewmodels,
+            commands::viewmodel::get_viewmodel_source_catalog,
             commands::viewmodel::remove_viewmodels,
-            commands::viewmodel::set_viewmodel_preload,
             commands::viewmodel::viewmodel_build_available,
             commands::viewmodel::viewmodel_preview_image,
             commands::hitsound::hitsound_bytes,
             commands::hitsound::list_stock_hitsounds,
-            commands::hitsound::comfig_hitsound_index,
+            commands::hitsound::get_hitsound_sources,
             commands::hitsound::pick_hitsound_file,
             commands::hitsound::apply_hitsounds,
+            commands::hitsound::apply_hitsounds_with_settings,
             commands::hitsound::remove_hitsounds,
             commands::open_embedded_page,
             commands::diagnostics::get_diagnostics,
+            commands::health::get_install_health,
             commands::preloader::get_preloader_status,
             commands::preloader::recover_preloader,
             commands::preloader::get_default_mods,
-            commands::preloader::download_default_mods,
             commands::preloader::apply_preloader_mods,
             commands::preloader::set_gameinfo_bypass,
             commands::preloader::revert_preloader,
@@ -742,6 +768,7 @@ pub fn run() {
             commands::mods::remove_mod,
             commands::mods::search_gamebanana_mods,
             commands::mods::gamebanana_mod_categories,
+            commands::mods::gamebanana_download_variants,
             commands::mods::install_gamebanana_mod,
         ])
         .setup(move |app| {
@@ -836,6 +863,68 @@ mod startup_tests {
     fn missing_platform_data_directory_is_a_clear_startup_error() {
         let error = startup_data_dir_preflight(Err("APPDATA is unset".into())).unwrap_err();
         assert_eq!(error, "execs could not start: APPDATA is unset");
+    }
+
+    #[test]
+    fn normal_startup_does_not_create_maintenance_state() {
+        let dir = temp_dir("normal-preflight");
+        assert_eq!(startup_data_dir_preflight(Ok(dir.clone())).unwrap(), dir);
+        assert_eq!(restored_operation(&dir).unwrap(), None);
+        assert!(!dir.join("maintenance").exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn corrupt_mismatched_and_multiple_markers_are_preserved_on_failure() {
+        let dir = temp_dir("invalid-preflight");
+        let maintenance = dir.join("maintenance");
+        std::fs::create_dir_all(&maintenance).unwrap();
+        let launch = maintenance.join("launching-tf2");
+        for bytes in [
+            b"not a marker".to_vec(),
+            b"0\n".to_vec(),
+            (0x400 | ExclusiveOperation::SteamVerification as u64)
+                .to_string()
+                .into_bytes(),
+        ] {
+            std::fs::write(&launch, &bytes).unwrap();
+            assert!(restored_operation(&dir).is_err());
+            assert_eq!(std::fs::read(&launch).unwrap(), bytes);
+        }
+        let launch_bytes = (0x500 | ExclusiveOperation::LaunchingTf2 as u64).to_string();
+        let repair_bytes = (0x600 | ExclusiveOperation::SteamVerification as u64).to_string();
+        std::fs::write(&launch, &launch_bytes).unwrap();
+        let repair = maintenance.join("steam-verification");
+        std::fs::write(&repair, &repair_bytes).unwrap();
+        assert!(restored_operation(&dir)
+            .unwrap_err()
+            .contains("more than one"));
+        assert_eq!(std::fs::read_to_string(&launch).unwrap(), launch_bytes);
+        assert_eq!(std::fs::read_to_string(&repair).unwrap(), repair_bytes);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unreadable_marker_refuses_startup_without_replacing_it() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = temp_dir("unreadable-preflight");
+        let maintenance = dir.join("maintenance");
+        std::fs::create_dir_all(&maintenance).unwrap();
+        let marker = maintenance.join("launching-tf2");
+        let bytes = (0x500 | ExclusiveOperation::LaunchingTf2 as u64).to_string();
+        std::fs::write(&marker, &bytes).unwrap();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&marker)
+            .unwrap();
+        assert!(restored_operation(&dir)
+            .unwrap_err()
+            .contains("could not read"));
+        drop(held);
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), bytes);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

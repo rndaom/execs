@@ -1,6 +1,7 @@
 import { UploadSimple } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Alert } from "../components/ui/Alert";
+import { AutosaveActivity } from "../hooks/useAutosave";
 import { CROSSHAIR_CANVAS_SIZE } from "../lib/crosshair-ui";
 
 /** A 100 MB PNG decodes into the webview; `accept` is only a hint. */
@@ -50,49 +51,77 @@ export function PngImportField({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  const active = useContext(AutosaveActivity);
+  const generation = useRef(0);
+  const decoding = useRef<{ image: HTMLImageElement; url: string } | null>(null);
+
+  const cancelRead = useCallback(() => {
+    generation.current += 1;
+    if (decoding.current) {
+      decoding.current.image.onload = null;
+      decoding.current.image.onerror = null;
+      URL.revokeObjectURL(decoding.current.url);
+      decoding.current = null;
+    }
+  }, []);
+
+  useEffect(() => cancelRead, [cancelRead]);
+  useEffect(() => {
+    if (!active || locked) {
+      cancelRead();
+      setPending(null);
+    }
+  }, [active, locked, cancelRead]);
 
   function reset() {
-    setPending((current) => {
-      if (current) {
-        URL.revokeObjectURL(current.url);
-      }
-      return null;
-    });
+    cancelRead();
+    setPending(null);
   }
 
   async function accept(file: File) {
     reset();
+    const request = generation.current;
     setError(null);
     if (file.size > MAX_PNG_BYTES) {
       setError(`That PNG is ${(file.size / (1024 * 1024)).toFixed(1)} MB; the limit is 2 MB.`);
       return;
     }
-    const head = new Uint8Array(await file.slice(0, PNG_MAGIC.length).arrayBuffer());
-    if (PNG_MAGIC.some((byte, index) => head[index] !== byte)) {
-      setError("That is not a PNG file.");
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      const { naturalWidth: width, naturalHeight: height } = image;
-      if (width === CROSSHAIR_CANVAS_SIZE && height === CROSSHAIR_CANVAS_SIZE) {
-        const pixels = rasterize(image, width, height);
-        URL.revokeObjectURL(url);
-        if (pixels) {
-          onImport(pixels);
-        } else {
-          setError("Could not read that PNG.");
-        }
+    try {
+      const head = new Uint8Array(await file.slice(0, PNG_MAGIC.length).arrayBuffer());
+      if (generation.current !== request) return;
+      if (PNG_MAGIC.some((byte, index) => head[index] !== byte)) {
+        setError("That is not a PNG file.");
         return;
       }
-      setPending({ image, url, width, height });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      setError("That PNG could not be decoded.");
-    };
-    image.src = url;
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      decoding.current = { image, url };
+      image.onload = () => {
+        if (generation.current !== request) return;
+        const { naturalWidth: width, naturalHeight: height } = image;
+        if (width === CROSSHAIR_CANVAS_SIZE && height === CROSSHAIR_CANVAS_SIZE) {
+          const pixels = rasterize(image, width, height);
+          cancelRead();
+          if (pixels) {
+            onImport(pixels);
+          } else {
+            setError("Could not read that PNG.");
+          }
+          return;
+        }
+        setPending({ image, url, width, height });
+      };
+      image.onerror = () => {
+        if (generation.current !== request) return;
+        cancelRead();
+        setError("That PNG could not be decoded.");
+      };
+      image.src = url;
+    } catch {
+      if (generation.current !== request) return;
+      cancelRead();
+      setError("Could not read that PNG.");
+    }
   }
 
   return (

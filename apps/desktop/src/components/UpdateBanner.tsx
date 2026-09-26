@@ -27,7 +27,7 @@ export function UpdateBanner({ update, blocked }: { update: AppUpdateState; bloc
             type="button"
             data-testid="app-update-install"
             onClick={() => void update.install()}
-            disabled={blocked}
+            disabled={blocked || update.checking}
             className="btn btn-primary"
           >
             {INSTALL_LABEL}

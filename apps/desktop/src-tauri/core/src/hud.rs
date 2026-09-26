@@ -23,26 +23,38 @@ use crate::hash::{remove_dir_within, remove_file_force_within, validate_file_wit
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
     exclusive_file_path, is_file_safe_rel_path, load_library_from, load_manifest,
-    mutate_profile_files_to, mutate_profile_files_with_live_renames_to, normalize_rel_path,
-    profiles_dir, save_manifest, FileSource, HudRecord, HudSource, ProfileError, ProfileFile,
-    ProfileLiveProjection, ProfileLiveRename, ProfileManifest,
+    mutate_profile_files_to, mutate_profile_files_with_live_renames_checked_to,
+    mutate_profile_files_with_live_renames_to, normalize_rel_path, profiles_dir, save_manifest,
+    FileSource, HudRecord, HudSource, ProfileError, ProfileFile, ProfileLiveProjection,
+    ProfileLiveRename, ProfileManifest,
 };
 use crate::settings::execs_data_dir;
 use crate::surface::{is_stock_custom_pack, HUD_BACKUP_CONTAINER};
 use crate::switch::prune_empty_parents;
 use crate::vdf::parse_vdf;
 
+#[path = "hud_ownership.rs"]
+mod ownership;
+pub use ownership::{
+    get_hud_ownership_to, select_profile_hud_to, HudOwnershipCandidate, HudOwnershipReview,
+};
+pub(crate) use ownership::{
+    inspect_hud_roots_from_files_root, inspect_hud_roots_with_sources, inspect_profile_hud_roots,
+    refuse_hud_vpk, refuse_profile_hud_vpks, require_resolved_hud, require_resolved_live_huds,
+};
+
 pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
     "rayshud",
     "budhud",
     "flawhud",
+    "eve-plus",
     "m0rehud",
     "kbnhud",
     "hypnotize-hud",
     "hypnotizehud",
 ];
 
-const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db/main";
+const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db";
 const MAX_HUD_CATALOG_CACHE_BYTES: u64 = 16 * 1024 * 1024;
 const CURRENT_HUD_UI_VERSION: u32 = 3;
 
@@ -182,6 +194,8 @@ pub struct HudCatalogEntry {
     pub id: String,
     pub name: String,
     pub author: String,
+    #[serde(default)]
+    pub contributors: Vec<String>,
     pub repo: String,
     pub hash: String,
     pub github: bool,
@@ -274,32 +288,43 @@ pub fn is_hud_marker(rel: &str) -> bool {
     after == "info.vdf" || after.starts_with("resource/ui/")
 }
 
-/// A folder is a HUD when it carries `info.vdf` or `resource/ui/`, spelled in
-/// any case: `Info.vdf` and `Resource/UI` are common, and on Linux a
-/// case-sensitive `join("info.vdf")` misses them.
+/// A complete compatible HUD declares UI version 3 in info.vdf, in any case.
 pub fn is_hud_dir(path: &Path) -> bool {
-    if dir_entry_ignore_case(path, "info.vdf").is_some_and(|file| file.is_file()) {
-        return true;
-    }
-    dir_entry_ignore_case(path, "resource")
-        .filter(|dir| dir.is_dir())
-        .and_then(|dir| dir_entry_ignore_case(&dir, "ui"))
-        .is_some_and(|dir| dir.is_dir())
+    is_hud_dir_checked(path).unwrap_or(false)
 }
 
-/// The path of `dir/<name>` with whatever ASCII case it has on disk.
-fn dir_entry_ignore_case(dir: &Path, name: &str) -> Option<PathBuf> {
-    let entries = fs::read_dir(dir).ok()?;
-    entries
-        .flatten()
-        .find(|entry| {
-            fs::symlink_metadata(entry.path()).is_ok_and(|meta| !metadata_is_link(&meta))
-                && entry
-                    .file_name()
-                    .to_string_lossy()
-                    .eq_ignore_ascii_case(name)
-        })
-        .map(|entry| entry.path())
+fn is_hud_dir_checked(path: &Path) -> Result<bool, ProfileError> {
+    let mut found = None;
+    for entry in fs::read_dir(path).map_err(|err| ProfileError::Io(err.to_string()))? {
+        let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("info.vdf")
+        {
+            continue;
+        }
+        if found.is_some() {
+            return Err(ProfileError::Io(
+                "HUD metadata has conflicting filename casing.".into(),
+            ));
+        }
+        let bytes = read_regular_file_bounded(&entry.path(), 1024 * 1024)?
+            .ok_or_else(|| ProfileError::Io("HUD info.vdf exceeds the inspection limit.".into()))?;
+        found = Some(is_current_hud_info(&bytes));
+    }
+    Ok(found.unwrap_or(false))
+}
+
+pub(crate) fn is_current_hud_info(bytes: &[u8]) -> bool {
+    std::str::from_utf8(bytes).ok().and_then(parse_ui_version) == Some(CURRENT_HUD_UI_VERSION)
+}
+
+pub(crate) fn manifest_hud_packs(manifest: &ProfileManifest) -> Vec<String> {
+    manifest
+        .hud_roots
+        .clone()
+        .unwrap_or_else(|| hud_packs(&manifest.files))
 }
 
 pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
@@ -320,10 +345,17 @@ pub fn hud_packs(files: &[ProfileFile]) -> Vec<String> {
 
 /// A legacy profile may contain multiple HUD trees. Its selected record wins;
 /// a sole imported folder can still resolve an older catalog-only record.
-/// Without a matching record, use a stable choice independent of another
-/// profile's live HUD and of filesystem enumeration order.
+/// Multiple roots without a reviewed selection require an explicit choice.
 pub(crate) fn selected_hud_pack(manifest: &ProfileManifest) -> Option<String> {
-    let mut packs = hud_packs(&manifest.files);
+    let packs = manifest_hud_packs(manifest);
+    if let Some(selected) = &manifest.hud_selected_root {
+        if let Some(pack) = packs
+            .iter()
+            .find(|pack| pack.eq_ignore_ascii_case(selected))
+        {
+            return Some(pack.clone());
+        }
+    }
     if let Some(record) = &manifest.hud {
         if let Some(folder) = manifest_hud_folder_resolved(&manifest.files, &record.id) {
             let key = pack_key(&format!("tf/custom/{folder}"))?;
@@ -332,15 +364,14 @@ pub(crate) fn selected_hud_pack(manifest: &ProfileManifest) -> Option<String> {
             }
         }
     }
-    packs.sort_by_key(|pack| (pack.to_ascii_lowercase(), pack.clone()));
-    packs.into_iter().next()
+    (packs.len() == 1).then(|| packs[0].clone())
 }
 
 /// Extra legacy HUDs remain readable/exportable in the library, but are not
 /// projected to TF2 or classified as deleted merely because they are absent.
 pub(crate) fn inactive_hud_packs(manifest: &ProfileManifest) -> Vec<String> {
     let selected = selected_hud_pack(manifest);
-    hud_packs(&manifest.files)
+    manifest_hud_packs(manifest)
         .into_iter()
         .filter(|pack| {
             selected
@@ -366,34 +397,50 @@ pub struct LiveHud {
 /// A leading dash does not disable a Source search root: `foo` and `-foo`
 /// can both load. Preserve both entries so replacement handles every tree.
 pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
+    live_hud_names_checked(tf2_root).unwrap_or_default()
+}
+
+pub(crate) fn live_hud_names_checked(tf2_root: &Path) -> Result<Vec<LiveHud>, ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
-    let Ok(meta) = fs::symlink_metadata(&custom) else {
-        return Vec::new();
+    let meta = match fs::symlink_metadata(&custom) {
+        Ok(meta) => meta,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(ProfileError::Io(err.to_string())),
     };
     if metadata_is_link(&meta) || !meta.is_dir() {
-        return Vec::new();
+        return Err(ProfileError::Io(
+            "The custom folder is linked or unreadable.".into(),
+        ));
     }
-    if validate_dir_within(tf2_root, &custom).is_err() {
-        return Vec::new();
-    }
-    let Ok(entries) = fs::read_dir(&custom) else {
-        return Vec::new();
-    };
+    validate_dir_within(tf2_root, &custom).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let entries = fs::read_dir(&custom).map_err(|err| ProfileError::Io(err.to_string()))?;
     let mut huds: Vec<LiveHud> = Vec::new();
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = entry.map_err(|err| ProfileError::Io(err.to_string()))?;
         let path = entry.path();
-        let Ok(meta) = fs::symlink_metadata(&path) else {
-            continue;
-        };
-        if metadata_is_link(&meta)
-            || !meta.is_dir()
-            || validate_dir_within(tf2_root, &path).is_err()
-            || !is_hud_dir(&path)
-        {
-            continue;
-        }
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') || is_stock_custom_pack(&name) {
+            continue;
+        }
+        let meta = fs::symlink_metadata(&path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if metadata_is_link(&meta) {
+            return Err(ProfileError::Io(format!(
+                "Cannot inspect linked custom pack {name}."
+            )));
+        }
+        if !meta.is_dir() {
+            if !meta.is_file() {
+                return Err(ProfileError::Io(format!(
+                    "Cannot inspect non-regular custom pack {name}."
+                )));
+            }
+            if name.to_ascii_lowercase().ends_with(".vpk") {
+                refuse_hud_vpk(&path, None)?;
+            }
+            continue;
+        }
+        validate_dir_within(tf2_root, &path).map_err(|err| ProfileError::Io(err.to_string()))?;
+        if !is_hud_dir_checked(&path)? {
             continue;
         }
         let key = name.to_ascii_lowercase();
@@ -404,7 +451,7 @@ pub fn live_hud_names(tf2_root: &Path) -> Vec<LiveHud> {
     }
     // Stable presentation order; both names retain distinct identities.
     huds.sort_by_key(|hud| hud.name.starts_with('-'));
-    huds
+    Ok(huds)
 }
 
 /// Just the identities, deduped, for callers comparing against a manifest.
@@ -437,6 +484,7 @@ pub fn schema_file_name(id: &str) -> Option<&'static str> {
         "rayshud" => Some("rayshud.json"),
         "budhud" => Some("budhud.json"),
         "flawhud" => Some("flawhud.json"),
+        "eve-plus" => Some("eve-plus.json"),
         "m0rehud" => Some("m0rehud-classic.json"),
         "kbnhud" => Some("kbnhud.json"),
         "hypnotize-hud" | "hypnotizehud" => Some("hypnotize-hud.json"),
@@ -498,7 +546,20 @@ pub fn github_repo_parts(repo: &str) -> Option<(String, String)> {
     Some((owner.to_string(), name.to_string()))
 }
 
-pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, ProfileError> {
+pub fn catalog_entry_from_json(
+    id: &str,
+    raw: &str,
+    tree_sha: &str,
+) -> Result<HudCatalogEntry, ProfileError> {
+    if tree_sha.len() != 40
+        || !tree_sha
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(ProfileError::Io(
+            "Invalid hud-db revision for HUD art.".into(),
+        ));
+    }
     #[derive(Deserialize)]
     struct RawSocial {
         #[serde(default)]
@@ -508,6 +569,8 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
     struct RawHud {
         name: String,
         author: String,
+        #[serde(default)]
+        contributors: Vec<String>,
         repo: String,
         hash: serde_json::Value,
         #[serde(default)]
@@ -538,7 +601,7 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         .resources
         .iter()
         .filter(|name| is_safe_screenshot_name(name))
-        .map(|name| format!("{RAW_HUD_DB}/hud-resources/{id}/{name}.webp"))
+        .map(|name| format!("{RAW_HUD_DB}/{tree_sha}/hud-resources/{id}/{name}.webp"))
         .collect();
     let banner = screenshots.first().cloned();
     let album = parsed
@@ -552,6 +615,7 @@ pub fn catalog_entry_from_json(id: &str, raw: &str) -> Result<HudCatalogEntry, P
         id,
         name: parsed.name,
         author: parsed.author,
+        contributors: parsed.contributors,
         repo,
         hash,
         flags: parsed.flags,
@@ -566,8 +630,8 @@ pub fn catalog_cache_dir() -> PathBuf {
 }
 
 pub fn catalog_cache_file(dir: &Path) -> PathBuf {
-    // v3: entries gained the install kind; old caches are ignored and refetched.
-    dir.join("catalog-v3.json")
+    // v4: entries carry upstream contributor attribution; reload old caches.
+    dir.join("catalog-v4.json")
 }
 
 pub fn load_catalog_cache_from(dir: &Path) -> Option<HudCatalogCache> {
@@ -812,6 +876,33 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    install_hud_pack_with_cfgs_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        tree,
+        record,
+        cfg_writes,
+        running_names,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn install_hud_pack_with_cfgs_checked_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    tree: &HudTree,
+    record: HudRecord,
+    cfg_writes: &[(String, Vec<u8>)],
+    running_names: I,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
@@ -831,6 +922,7 @@ where
     }
 
     let manifest = load_manifest(profiles_dir, profile_id)?;
+    refuse_profile_hud_vpks(profiles_dir, &manifest)?;
     let mut exec_stems = Vec::with_capacity(cfg_writes.len());
     for (rel, bytes) in cfg_writes {
         let path = normalize_rel_path(rel)?;
@@ -852,12 +944,13 @@ where
     if let Some((path, bytes)) = &autoexec {
         batch.push((path.clone(), FileSource::Bytes(bytes)));
     }
-    let previous = hud_packs(&manifest.files);
+    let previous = manifest_hud_packs(&manifest);
     let mut remove: Vec<String> = manifest
         .files
         .iter()
         .filter(|file| {
-            pack_key(&file.path).is_some_and(|pack| previous.iter().any(|hud| hud == &pack))
+            pack_key(&file.path)
+                .is_some_and(|pack| previous.iter().any(|hud| hud.eq_ignore_ascii_case(&pack)))
         })
         .map(|file| file.path.clone())
         .collect();
@@ -888,9 +981,24 @@ where
         Vec::new()
     };
 
+    let cfg_paths: Vec<String> = batch
+        .iter()
+        .map(|(path, _)| path.clone())
+        .chain(remove.iter().cloned())
+        .collect();
+    ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
+    ownership::preserve_library_hud_originals(profiles_dir, &manifest, &previous)?;
+    let recheck = || {
+        ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
+        if let Some(precommit) = precommit {
+            precommit()?;
+        }
+        Ok(())
+    };
+
     let mut stored = record;
     stored.id = id.clone();
-    let manifest = mutate_profile_files_with_live_renames_to(
+    let manifest = mutate_profile_files_with_live_renames_checked_to(
         profiles_dir,
         tf2_root,
         profile_id,
@@ -900,10 +1008,118 @@ where
         &running,
         move |manifest| {
             manifest.hud = Some(stored);
+            manifest.hud_roots = Some(vec![id.clone()]);
+            manifest.hud_selected_root = Some(id.clone());
+            manifest.hud_review_pending = false;
+            manifest.mods.retain(|record| {
+                !previous
+                    .iter()
+                    .any(|pack| pack.eq_ignore_ascii_case(&record.pack))
+            });
             Ok(())
         },
+        Some(&recheck),
     )?;
 
+    if active {
+        for path in &remove {
+            prune_empty_parents(&live_path(tf2_root, path), tf2_root);
+        }
+    }
+    detail_from_manifest(profiles_dir, &manifest)
+}
+
+/// Return a profile to TF2's own HUD. This is HUD install without a new HUD:
+/// the profile's HUD folders (every root of a legacy multi-HUD profile), its
+/// managed option cfgs and their autoexec exec lines leave the profile in one
+/// recoverable transaction, and the HUD record clears. On the active profile,
+/// mounted HUD folders move beneath the backup container with any untracked
+/// files, so nothing is deleted and no earlier HUD is reactivated. Other packs,
+/// cfg settings and preload selections stay as they are.
+pub fn return_to_stock_hud_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    refuse_profile_hud_vpks(profiles_dir, &manifest)?;
+    let previous = manifest_hud_packs(&manifest);
+    let mut remove: Vec<String> = manifest
+        .files
+        .iter()
+        .filter(|file| {
+            is_managed_hud_cfg(&file.path)
+                || pack_key(&file.path)
+                    .is_some_and(|pack| previous.iter().any(|hud| hud.eq_ignore_ascii_case(&pack)))
+        })
+        .map(|file| file.path.clone())
+        .collect();
+    remove.sort();
+    remove.dedup();
+    let autoexec = prepare_hud_autoexec_update(profiles_dir, tf2_root, profile_id, &manifest, &[])?;
+    let active = load_library_from(profiles_dir, Some(tf2_root))?
+        .active_profile_id
+        .as_deref()
+        == Some(profile_id);
+    let live_renames = if active {
+        plan_live_hud_renames(tf2_root, &[])?
+    } else {
+        Vec::new()
+    };
+    if manifest.hud.is_none()
+        && previous.is_empty()
+        && remove.is_empty()
+        && autoexec.is_none()
+        && live_renames.is_empty()
+    {
+        return detail_from_manifest(profiles_dir, &manifest);
+    }
+
+    let batch: Vec<(String, FileSource<'_>)> = autoexec
+        .iter()
+        .map(|(path, bytes)| (path.clone(), FileSource::Bytes(bytes)))
+        .collect();
+    let cfg_paths: Vec<String> = batch
+        .iter()
+        .map(|(path, _)| path.clone())
+        .chain(remove.iter().cloned())
+        .collect();
+    ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
+    ownership::preserve_library_hud_originals(profiles_dir, &manifest, &previous)?;
+    let recheck =
+        || ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths);
+    let manifest = mutate_profile_files_with_live_renames_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &batch,
+        &remove,
+        &live_renames,
+        &running,
+        |manifest| {
+            manifest.hud = None;
+            manifest.hud_roots = Some(Vec::new());
+            manifest.hud_selected_root = None;
+            manifest.hud_review_pending = false;
+            manifest.mods.retain(|record| {
+                !previous
+                    .iter()
+                    .any(|pack| pack.eq_ignore_ascii_case(&record.pack))
+            });
+            Ok(())
+        },
+        Some(&recheck),
+    )?;
     if active {
         for path in &remove {
             prune_empty_parents(&live_path(tf2_root, path), tf2_root);
@@ -1031,6 +1247,14 @@ where
         &running,
         move |manifest| {
             manifest.hud = Some(stored);
+            if let Some(roots) = &mut manifest.hud_roots {
+                for root in roots {
+                    if root.eq_ignore_ascii_case(&folder) {
+                        *root = id.clone();
+                    }
+                }
+            }
+            manifest.hud_selected_root = Some(id.clone());
             Ok(())
         },
     )?;
@@ -1059,6 +1283,22 @@ fn load_hud_tree_from_manifest(
     manifest: &ProfileManifest,
     folder: &str,
 ) -> Result<HudTree, ProfileError> {
+    load_hud_tree_from_manifest_with_limit(
+        profiles_dir,
+        profile_id,
+        manifest,
+        folder,
+        MAX_HUD_TOTAL_BYTES,
+    )
+}
+
+fn load_hud_tree_from_manifest_with_limit(
+    profiles_dir: &Path,
+    profile_id: &str,
+    manifest: &ProfileManifest,
+    folder: &str,
+    byte_limit: u64,
+) -> Result<HudTree, ProfileError> {
     let mut tree = HudTree::default();
     let mut total = 0u64;
     for file in &manifest.files {
@@ -1071,7 +1311,7 @@ fn load_hud_tree_from_manifest(
             )));
         }
         let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
-        let remaining = MAX_HUD_TOTAL_BYTES.saturating_sub(total);
+        let remaining = byte_limit.saturating_sub(total);
         let read_cap = remaining.min(MAX_HUD_ENTRY_BYTES);
         let Some(bytes) = read_regular_file_bounded_within(profiles_dir, &source, read_cap)? else {
             if remaining < MAX_HUD_ENTRY_BYTES {
@@ -1089,7 +1329,7 @@ fn load_hud_tree_from_manifest(
         total = total
             .checked_add(bytes.len() as u64)
             .ok_or_else(|| ProfileError::Io("That profile's HUD is too large to edit.".into()))?;
-        if total > MAX_HUD_TOTAL_BYTES {
+        if total > byte_limit {
             return Err(ProfileError::Io(
                 "That profile's HUD is too large to edit.".into(),
             ));
@@ -1442,7 +1682,7 @@ fn profile_detail_fallback(
     detail_from_manifest(profiles_dir, &manifest)
 }
 
-fn is_managed_hud_cfg(path: &str) -> bool {
+pub(crate) fn is_managed_hud_cfg(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     if !lower.ends_with(".cfg") {
         return false;
@@ -1535,10 +1775,16 @@ fn plan_live_hud_renames(
                     path.display()
                 )));
             }
+            if !metadata_is_link(&meta)
+                && meta.is_file()
+                && name.to_ascii_lowercase().ends_with(".vpk")
+            {
+                refuse_hud_vpk(&path, None)?;
+            }
             continue;
         }
         validate_dir_within(tf2_root, &path).map_err(|err| ProfileError::Io(err.to_string()))?;
-        if is_target || is_hud_dir(&path) {
+        if is_target || is_hud_dir_checked(&path)? {
             huds.push(LiveHud {
                 key: name.to_ascii_lowercase(),
                 name,
@@ -1845,6 +2091,7 @@ pub(crate) fn normalize_hud_rel(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const CATALOG_SHA: &str = "1111111111111111111111111111111111111111";
 
     /// A three-file HUD inside a wrapper folder, written with py7zr (LZMA2).
     const HUD_MIN_7Z: &[u8] = include_bytes!("../fixtures/hud-min.7z");
@@ -1863,63 +2110,72 @@ mod tests {
     ];
 
     /// Opt-in real-package regression; see docs/hud-import-0.1.6.md.
-    #[test]
-    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
-    fn pinned_catalog_huds_install_update_and_preserve_payloads() {
+    fn verify_pinned_catalog_hud(name: &str, expected: &str) {
         let archives =
             PathBuf::from(std::env::var_os("EXECS_HUD_FIXTURES").expect("EXECS_HUD_FIXTURES"));
-        for (name, expected) in [
-            (
-                "hypnotizehud",
-                "73e8ed011c9b912eeb5bdbbae61c6539e14f9f61ddcc7171d2c542995504c241",
-            ),
-            (
-                "kinhud",
-                "6e851dd05357817f3fe1046ef1285069c71787b2bf6160ca90d4e9a1d710e9d0",
-            ),
-            (
-                "m0re-rockz",
-                "5c8a7022d73b6521dd6fd3f269644f4d0723a6db46dfd021b386dc4830c6bba9",
-            ),
-        ] {
-            let bytes = fs::read(archives.join(format!("{name}.zip"))).unwrap();
-            assert_eq!(crate::hash::sha256_hex(&bytes), expected);
-            let tree = extract_hud_archive(&bytes).unwrap().tree;
-            let dir = crate::test_temp_dir();
-            // Exercise transaction staging beyond MAX_PATH even with a short temp root.
-            let profiles = dir.join("profile-library-".repeat(8)).join("profiles");
-            let root = tf2_root(&dir);
-            let library =
-                create_profile_record_to(&profiles, &root, "Catalog fixture", unlocked()).unwrap();
-            let id = &library.profiles[0].id;
-            set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
-            let record = HudRecord {
-                id: name.into(),
-                hash: None,
-                source: HudSource::HudDb,
-                options: BTreeMap::new(),
-            };
-            for _ in 0..2 {
-                install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked())
-                    .unwrap();
-                let manifest = load_manifest(&profiles, id).unwrap();
-                for (path, payload) in &tree.files {
-                    let rel = format!("tf/custom/{name}/{path}");
-                    assert_eq!(fs::read(root.join(&rel)).unwrap(), *payload, "live {rel}");
-                    assert_eq!(
-                        fs::read(crate::profile::exclusive_file_path(&profiles, id, &rel)).unwrap(),
-                        *payload,
-                        "library {rel}"
-                    );
-                    assert!(manifest.files.iter().any(|file| file.path == rel));
-                }
-                assert!(manifest
-                    .files
-                    .iter()
-                    .all(|file| crate::profile::is_profile_ownable_rel_path(&file.path)));
+        let bytes = fs::read(archives.join(format!("{name}.zip"))).unwrap();
+        assert_eq!(crate::hash::sha256_hex(&bytes), expected);
+        let tree = extract_hud_archive(&bytes).unwrap().tree;
+        let dir = crate::test_temp_dir();
+        // Exercise transaction staging beyond MAX_PATH even with a short temp root.
+        let profiles = dir.join("profile-library-".repeat(8)).join("profiles");
+        let root = tf2_root(&dir);
+        let library =
+            create_profile_record_to(&profiles, &root, "Catalog fixture", unlocked()).unwrap();
+        let id = &library.profiles[0].id;
+        set_active_profile_to(&profiles, &root, id, unlocked()).unwrap();
+        let record = HudRecord {
+            id: name.into(),
+            hash: None,
+            source: HudSource::HudDb,
+            options: BTreeMap::new(),
+        };
+        for _ in 0..2 {
+            install_hud_pack_to(&profiles, &root, id, &tree, record.clone(), unlocked()).unwrap();
+            let manifest = load_manifest(&profiles, id).unwrap();
+            for (path, payload) in &tree.files {
+                let rel = format!("tf/custom/{name}/{path}");
+                assert_eq!(fs::read(root.join(&rel)).unwrap(), *payload, "live {rel}");
+                assert_eq!(
+                    fs::read(crate::profile::exclusive_file_path(&profiles, id, &rel)).unwrap(),
+                    *payload,
+                    "library {rel}"
+                );
+                assert!(manifest.files.iter().any(|file| file.path == rel));
             }
-            cleanup(&dir);
+            assert!(manifest
+                .files
+                .iter()
+                .all(|file| crate::profile::is_profile_ownable_rel_path(&file.path)));
         }
+        cleanup(&dir);
+    }
+
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_hud_hypnotizehud_install_update_and_preserve_payloads() {
+        verify_pinned_catalog_hud(
+            "hypnotizehud",
+            "73e8ed011c9b912eeb5bdbbae61c6539e14f9f61ddcc7171d2c542995504c241",
+        );
+    }
+
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_hud_kinhud_install_update_and_preserve_payloads() {
+        verify_pinned_catalog_hud(
+            "kinhud",
+            "6e851dd05357817f3fe1046ef1285069c71787b2bf6160ca90d4e9a1d710e9d0",
+        );
+    }
+
+    #[test]
+    #[ignore = "requires pinned archives in EXECS_HUD_FIXTURES"]
+    fn pinned_catalog_hud_m0re_rockz_install_update_and_preserve_payloads() {
+        verify_pinned_catalog_hud(
+            "m0re-rockz",
+            "5c8a7022d73b6521dd6fd3f269644f4d0723a6db46dfd021b386dc4830c6bba9",
+        );
     }
 
     #[test]
@@ -2542,21 +2798,24 @@ mod tests {
     fn catalog_entry_marks_github_and_toonhud() {
         let rays = catalog_entry_from_json(
             "rayshud",
-            r#"{"name":"rayshud","author":"raysfire","repo":"https://github.com/raysfire/rayshud","hash":"abc123","resources":["banner"]}"#,
+            r#"{"name":"rayshud","author":"raysfire","contributors":["CriticalFlaw"],"repo":"https://github.com/raysfire/rayshud","hash":"abc123","resources":["banner"]}"#,
+            CATALOG_SHA,
         )
         .unwrap();
         assert!(rays.github);
+        assert_eq!(rays.contributors, vec!["CriticalFlaw"]);
         assert_eq!(
             hud_zip_url(&rays.repo, &rays.hash).as_deref(),
             Some("https://codeload.github.com/raysfire/rayshud/legacy.zip/abc123")
         );
         assert_eq!(
             rays.banner.as_deref(),
-            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/rayshud/banner.webp")
+            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/rayshud/banner.webp")
         );
         let toon = catalog_entry_from_json(
             "toonhud",
             r#"{"name":"ToonHUD","author":"toonhud","repo":"https://toonhud.com/","hash":"11.4"}"#,
+            CATALOG_SHA,
         )
         .unwrap();
         assert!(!toon.github);
@@ -2570,18 +2829,19 @@ mod tests {
         let entry = catalog_entry_from_json(
             "budhud",
             r#"{"name":"budhud","author":"whisker","repo":"https://github.com/rbjaxter/budhud","hash":"def456","resources":["https://youtu.be/abc","menu","hud-minmode"],"social":{"album":"https://imgur.com/a/vsxPG"}}"#,
+            CATALOG_SHA,
         )
         .unwrap();
         // The first resource is a video URL — the banner must skip it.
         assert_eq!(
             entry.banner.as_deref(),
-            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/menu.webp")
+            Some("https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/budhud/menu.webp")
         );
         assert_eq!(
             entry.screenshots,
             vec![
-                "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/menu.webp",
-                "https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/budhud/hud-minmode.webp",
+                "https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/budhud/menu.webp",
+                "https://raw.githubusercontent.com/mastercomfig/hud-db/1111111111111111111111111111111111111111/hud-resources/budhud/hud-minmode.webp",
             ]
         );
         assert_eq!(entry.album.as_deref(), Some("https://imgur.com/a/vsxPG"));
@@ -2602,7 +2862,7 @@ mod tests {
             &root,
             &id,
             "tf/custom/oldhud/info.vdf",
-            b"old\n",
+            info_vdf(),
             unlocked(),
         )
         .unwrap();
@@ -2611,12 +2871,13 @@ mod tests {
             &root,
             &id,
             "tf/custom/oldhud/info.vdf",
-            b"old\n",
+            info_vdf(),
             unlocked(),
             WriteOwnedOptions::default(),
         )
         .unwrap();
         fs::create_dir_all(root.join("tf/custom/stray/resource/ui")).unwrap();
+        fs::write(root.join("tf/custom/stray/info.vdf"), info_vdf()).unwrap();
         fs::write(
             root.join("tf/custom/stray/resource/ui/hudlayout.res"),
             b"x\n",
@@ -3262,21 +3523,25 @@ mod tests {
                 &root,
                 &id,
                 "tf/custom/grape-oxide/info.vdf",
-                b"older recorded HUD\n",
+                b"\"HUD\" { \"ui_version\" \"3\" } // older recorded HUD\n",
                 unlocked(),
             )
             .unwrap();
             let legacy = root.join("tf/custom/-grape-oxide");
             fs::create_dir_all(&legacy).unwrap();
-            fs::write(legacy.join("info.vdf"), b"legacy oxide bytes\n").unwrap();
+            fs::write(
+                legacy.join("info.vdf"),
+                b"\"HUD\" { \"ui_version\" \"3\" } // legacy oxide bytes\n",
+            )
+            .unwrap();
             fs::create_dir_all(root.join("tf/custom/-colly-hud")).unwrap();
             fs::write(
                 root.join("tf/custom/-colly-hud/info.vdf"),
-                b"older Colly update\n",
+                b"\"HUD\" { \"ui_version\" \"3\" } // older Colly update\n",
             )
             .unwrap();
             fs::create_dir_all(root.join("tf/custom/external")).unwrap();
-            fs::write(root.join("tf/custom/external/info.vdf"), b"external HUD\n").unwrap();
+            fs::write(root.join("tf/custom/external/info.vdf"), info_vdf()).unwrap();
             if ignored {
                 let mut manifest = load_manifest(&profiles, &id).unwrap();
                 manifest.ignored_packs.push("grape-oxide".into());
@@ -3299,11 +3564,11 @@ mod tests {
             assert!(root.join("tf/custom/-colly-hud").exists());
             assert_eq!(
                 fs::read(root.join("tf/custom/-colly-hud/info.vdf")).unwrap(),
-                b"older Colly update\n"
+                b"\"HUD\" { \"ui_version\" \"3\" } // older Colly update\n"
             );
             assert_eq!(
                 fs::read(preserved_hud(&root, "-grape-oxide").join("info.vdf")).unwrap(),
-                b"legacy oxide bytes\n"
+                b"\"HUD\" { \"ui_version\" \"3\" } // legacy oxide bytes\n"
             );
             assert!(root.join("tf/custom/external/info.vdf").is_file());
             assert!(root.join("tf/custom/colly-hud/info.vdf").is_file());
@@ -3325,10 +3590,21 @@ mod tests {
         )
         .unwrap();
         let old_rel = "tf/custom/-execs-oldhud/info.vdf";
-        put_exclusive_file_to(&profiles, &root, &id, old_rel, b"library HUD\n", unlocked())
-            .unwrap();
+        put_exclusive_file_to(
+            &profiles,
+            &root,
+            &id,
+            old_rel,
+            b"\"HUD\" { \"ui_version\" \"3\" } // library HUD\n",
+            unlocked(),
+        )
+        .unwrap();
         fs::create_dir_all(root.join("tf/custom/-execs-oldhud")).unwrap();
-        fs::write(root.join(old_rel), b"edited old HUD\n").unwrap();
+        fs::write(
+            root.join(old_rel),
+            b"\"HUD\" { \"ui_version\" \"3\" } // edited old HUD\n",
+        )
+        .unwrap();
         let result = crate::absorb::absorb_owned_to(
             &profiles,
             &root,
@@ -3343,9 +3619,12 @@ mod tests {
         assert_eq!(live_hud_names(&root).len(), 2);
         assert_eq!(
             fs::read(exclusive_file_path(&profiles, &id, old_rel)).unwrap(),
-            b"edited old HUD\n"
+            b"\"HUD\" { \"ui_version\" \"3\" } // edited old HUD\n"
         );
-        assert_eq!(fs::read(root.join(old_rel)).unwrap(), b"edited old HUD\n");
+        assert_eq!(
+            fs::read(root.join(old_rel)).unwrap(),
+            b"\"HUD\" { \"ui_version\" \"3\" } // edited old HUD\n"
+        );
         assert!(load_manifest(&profiles, &id)
             .unwrap()
             .files
@@ -3847,7 +4126,10 @@ mod tests {
         assert!(is_hud_dir(&by_info));
         let by_ui = dir.join("ByUi");
         fs::create_dir_all(by_ui.join("Resource").join("UI")).unwrap();
-        assert!(is_hud_dir(&by_ui));
+        assert!(
+            !is_hud_dir(&by_ui),
+            "UI fragments alone are not a complete HUD"
+        );
         let neither = dir.join("Neither");
         fs::create_dir_all(neither.join("materials")).unwrap();
         assert!(!is_hud_dir(&neither));
@@ -3881,6 +4163,146 @@ mod tests {
 
     /// Installing a HUD prunes the previous HUD's managed option cfgs from the
     /// profile and the live tree; whoever applies options writes the new set.
+    #[test]
+    fn return_to_stock_removes_only_the_hud_and_keeps_its_untracked_bytes() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/custom/mypack/materials/a.vmt",
+            b"pack\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/cfg/autoexec.cfg",
+            b"bind f +duck\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        install_hud_pack_with_cfgs_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            &[(
+                "tf/cfg/execs_hud_rays.cfg".into(),
+                b"cl_hud_minmode 1\n".to_vec(),
+            )],
+            unlocked(),
+        )
+        .unwrap();
+        let autoexec = fs::read_to_string(root.join("tf/cfg/autoexec.cfg")).unwrap();
+        assert!(autoexec.contains("execs_hud_rays"));
+        fs::write(root.join("tf/custom/rayshud/my-notes.txt"), b"mine\n").unwrap();
+
+        let detail = return_to_stock_hud_to(&profiles, &root, &id, unlocked()).unwrap();
+        assert!(detail.hud.is_none());
+        assert!(!detail
+            .files
+            .iter()
+            .any(|file| file.path.starts_with("tf/custom/rayshud/")
+                || file.path == "tf/cfg/execs_hud_rays.cfg"));
+        assert!(detail
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/mypack/materials/a.vmt"));
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(manifest.hud_roots, Some(Vec::new()));
+        assert_eq!(manifest.hud_selected_root, None);
+        let autoexec = fs::read_to_string(root.join("tf/cfg/autoexec.cfg")).unwrap();
+        assert!(autoexec.contains("bind f +duck"));
+        assert!(!autoexec.contains("execs_hud_rays"));
+        assert!(!root.join("tf/cfg/execs_hud_rays.cfg").exists());
+        assert!(!root.join("tf/custom/rayshud").exists());
+        assert!(preserved_hud(&root, "rayshud")
+            .join("my-notes.txt")
+            .is_file());
+        assert!(root.join("tf/custom/mypack/materials/a.vmt").is_file());
+
+        // A second request is a no-op, and a later switch back projects no HUD.
+        let again = return_to_stock_hud_to(&profiles, &root, &id, unlocked()).unwrap();
+        assert_eq!(again.files, detail.files);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn return_to_stock_on_an_inactive_profile_leaves_tf2_alone() {
+        let dir = test_temp_dir();
+        let (profiles, root, active) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &active,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let library = create_profile_record_to(&profiles, &root, "Spare", unlocked()).unwrap();
+        let spare = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id != active)
+            .unwrap()
+            .id
+            .clone();
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &spare,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let live_hud = fs::read(root.join("tf/custom/rayshud/info.vdf")).unwrap();
+
+        let detail = return_to_stock_hud_to(&profiles, &root, &spare, unlocked()).unwrap();
+        assert!(detail.hud.is_none());
+        assert_eq!(
+            fs::read(root.join("tf/custom/rayshud/info.vdf")).unwrap(),
+            live_hud
+        );
+        assert!(load_manifest(&profiles, &active).unwrap().hud.is_some());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn return_to_stock_refuses_while_tf2_runs() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let running = if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        };
+        assert_eq!(
+            return_to_stock_hud_to(&profiles, &root, &id, [running]).unwrap_err(),
+            ProfileError::GameRunning
+        );
+        assert!(load_manifest(&profiles, &id).unwrap().hud.is_some());
+        assert!(root.join("tf/custom/rayshud/info.vdf").is_file());
+        cleanup(&dir);
+    }
+
     #[test]
     fn install_prunes_stale_hud_option_cfgs() {
         let dir = test_temp_dir();

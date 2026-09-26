@@ -11,6 +11,7 @@ import {
   type CrosshairFile,
   clampGameplay,
   type GameplaySettings,
+  isStockCrosshairFile,
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
@@ -80,6 +81,8 @@ export function CrosshairControls({
   custom = false,
   preview,
   scene,
+  customContent,
+  previewActions,
 }: {
   draft: GameplaySettings;
   patch: (update: Partial<GameplaySettings>) => void;
@@ -87,12 +90,18 @@ export function CrosshairControls({
   custom?: boolean;
   preview?: ReactNode;
   scene?: ReactNode;
+  customContent?: ReactNode;
+  previewActions?: ReactNode;
 }) {
   // TF2 tints the drawn crosshair by cl_crosshair_red/green/blue at full
   // opacity. There is no alpha cvar — cl_crosshair_alpha is CS:GO's, and TF2
   // logs it as an unknown command.
   const color = `rgb(${draft.cl_crosshair_red}, ${draft.cl_crosshair_green}, ${draft.cl_crosshair_blue})`;
   const primitives = stockCrosshairPrimitives(draft.cl_crosshair_file);
+  const externalFile = !isStockCrosshairFile(draft.cl_crosshair_file);
+  const fileLabel = isStockCrosshairFile(draft.cl_crosshair_file)
+    ? STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]
+    : `External: ${draft.cl_crosshair_file}`;
   const sprite =
     draft.cl_crosshair_file === "" ? null : (sprites?.[draft.cl_crosshair_file] ?? null);
   const renderedSize = stockCrosshairRenderedSize(draft.cl_crosshair_scale);
@@ -101,18 +110,22 @@ export function CrosshairControls({
     <section data-testid="stock-crosshair-settings" className="min-w-0">
       {/* Lead with the decision: file, scale and colour on the left, the live
           preview pinned at 360px on the right. */}
-      <div className="hero-row crosshair-hero">
+      <div className="pane-split items-start">
         <div className="min-w-0">
-          <h2 className="t-section">{custom ? "Custom crosshair" : "In-game crosshair"}</h2>
+          {customContent ?? (
+            <h2 className="t-section">{custom ? "Custom crosshair" : "In-game crosshair"}</h2>
+          )}
 
-          <div className="mt-5 flex min-w-0 flex-col gap-6">
+          <div
+            className={`flex min-w-0 flex-col gap-4 ${custom ? "mt-5 border-t border-edge pt-4" : "mt-4"}`}
+          >
             {!custom ? (
               <fieldset>
                 <legend className="t-row">Crosshair</legend>
                 <div
                   data-testid="stock-crosshair-file"
                   data-value={draft.cl_crosshair_file}
-                  className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8"
+                  className="mt-3 grid grid-cols-4 gap-2"
                 >
                   {CROSSHAIR_FILES.map((file) => {
                     const selected = draft.cl_crosshair_file === file;
@@ -163,8 +176,28 @@ export function CrosshairControls({
                       </label>
                     );
                   })}
+                  {externalFile ? (
+                    <label className="thumb thumb-selected col-span-2" title={fileLabel}>
+                      <input
+                        aria-label={fileLabel}
+                        type="radio"
+                        name="stock-crosshair-file"
+                        data-testid="stock-crosshair-external"
+                        checked
+                        readOnly
+                        className="sr-only"
+                      />
+                      <span
+                        className="thumb-art grid place-items-center text-[11px] text-ink-faint"
+                        aria-hidden="true"
+                      >
+                        External material
+                      </span>
+                      <span className="thumb-label truncate">{fileLabel}</span>
+                    </label>
+                  ) : null}
                 </div>
-                <p className="t-meta mt-2">{STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}</p>
+                <p className="t-meta mt-2">{fileLabel}</p>
               </fieldset>
             ) : null}
 
@@ -178,6 +211,7 @@ export function CrosshairControls({
             />
 
             <ColorPicker
+              compact
               color={[draft.cl_crosshair_red, draft.cl_crosshair_green, draft.cl_crosshair_blue]}
               onChange={([cl_crosshair_red, cl_crosshair_green, cl_crosshair_blue]) =>
                 patch({ cl_crosshair_red, cl_crosshair_green, cl_crosshair_blue })
@@ -186,12 +220,12 @@ export function CrosshairControls({
           </div>
         </div>
 
-        <div className="hero-preview self-start">
+        <div className="min-w-0 self-start">
           {preview ?? (
             <div
               data-testid="stock-crosshair-preview"
               role="img"
-              aria-label={`Preview of ${STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]} at scale ${draft.cl_crosshair_scale}`}
+              aria-label={`Preview of ${fileLabel} at scale ${draft.cl_crosshair_scale}`}
               className="surface relative grid aspect-video w-full place-items-center overflow-hidden bg-bg"
               style={{ containerType: "inline-size" }}
             >
@@ -218,7 +252,9 @@ export function CrosshairControls({
                 />
               ) : (
                 <p className="t-meta relative max-w-48 rounded-md bg-bg/80 px-3 py-2 text-center">
-                  Each weapon draws its own crosshair.
+                  {externalFile
+                    ? "External material preview unavailable. Your selection is preserved."
+                    : "Each weapon draws its own crosshair."}
                 </p>
               )}
               <span className="eyebrow absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5">
@@ -227,15 +263,9 @@ export function CrosshairControls({
             </div>
           )}
           <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-ink-faint">
-            <span>
-              {custom
-                ? "Custom · size applies to every weapon"
-                : STOCK_CROSSHAIR_LABELS[draft.cl_crosshair_file]}
-            </span>
-            <span className="tnum">
-              {draft.cl_crosshair_red}, {draft.cl_crosshair_green}, {draft.cl_crosshair_blue}
-            </span>
+            <span>{custom ? "Custom · size applies to every weapon" : fileLabel}</span>
           </div>
+          {previewActions}
         </div>
       </div>
     </section>

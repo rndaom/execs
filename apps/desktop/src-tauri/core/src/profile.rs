@@ -23,6 +23,14 @@ use crate::process_lock::{live_process_names, refuse_if_running_among, WriteLock
 use crate::settings::execs_data_dir;
 use crate::surface::{inventory_live_surface_with, is_global_custom_file, is_stock_custom_entry};
 
+#[path = "profile_delete.rs"]
+mod deletion;
+pub use deletion::delete_profile_to;
+
+#[path = "profile_duplicate.rs"]
+mod duplication;
+pub use duplication::duplicate_profile_to;
+
 pub const LIBRARY_SCHEMA: u32 = 1;
 pub const SHARED_VPK_NAME: &str = "mastercomfig-base.vpk";
 pub const MAX_PROFILE_REL_PATH_BYTES: usize = 4096;
@@ -104,6 +112,12 @@ pub enum ProfileError {
     InvalidPath,
     InvalidName,
     NoConfirmedRoot,
+    ParticleSourceSelected(String),
+    HudReviewRequired,
+    HudLiveReviewRequired,
+    HudImportRequired(String),
+    KeptPackHandoff(Vec<String>),
+    PendingLiveHandoff,
     Io(String),
 }
 
@@ -130,6 +144,12 @@ impl ProfileError {
             Self::InvalidPath => "InvalidPath",
             Self::InvalidName => "InvalidName",
             Self::NoConfirmedRoot => "NoConfirmedRoot",
+            Self::ParticleSourceSelected(_) => "ParticleSourceSelected",
+            Self::HudReviewRequired => "HudReviewRequired",
+            Self::HudLiveReviewRequired => "HudLiveReviewRequired",
+            Self::HudImportRequired(_) => "HudImportRequired",
+            Self::KeptPackHandoff(_) => "KeptPackHandoff",
+            Self::PendingLiveHandoff => "PendingLiveHandoff",
             Self::Io(_) => "Io",
         }
     }
@@ -169,6 +189,16 @@ impl ProfileError {
             Self::InvalidPath => "That file path is not allowed in a profile.".into(),
             Self::InvalidName => "Give the profile a name.".into(),
             Self::NoConfirmedRoot => "Confirm a TF2 install first.".into(),
+            Self::ParticleSourceSelected(name) => format!(
+                "{name} is still saved as a Casual particle source on this profile. Deselect it and choose Apply mods, or Restore stock files, before removing its source pack."
+            ),
+            Self::HudReviewRequired | Self::HudLiveReviewRequired => "This setup contains more than one HUD. Review which HUD to keep before continuing. Original files will be preserved outside mounted HUD folders.".into(),
+            Self::HudImportRequired(message) => message.clone(),
+            Self::KeptPackHandoff(packs) => format!(
+                "These kept packs are still installed: {}. Capture them in this profile before switching, or remove them from TF2 yourself.",
+                packs.join(", ")
+            ),
+            Self::PendingLiveHandoff => "The deleted profile's setup is still installed. Use Save current as… to capture it before switching profiles.".into(),
             Self::Io(err) => format!("Could not update the profile library: {err}"),
         }
     }
@@ -205,6 +235,11 @@ pub struct LibraryIndex {
     /// retry. Additive so schema-1 libraries remain compatible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_switch: Option<SwitchJournal>,
+    /// Deleting the active profile with Keep installed leaves live bytes that
+    /// no remaining manifest owns. A switch must wait for an explicit snapshot
+    /// of that setup; otherwise it can leak into or be replaced by the target.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pending_live_handoff: bool,
     pub profiles: Vec<ProfileSummary>,
 }
 
@@ -265,6 +300,14 @@ pub struct HudRecord {
 #[serde(rename_all = "camelCase")]
 pub struct CrosshairRecord {
     pub id: String,
+    /// Accepted external changes to this pack make the saved design/source
+    /// identity unverified until the player builds or removes it again.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub source_changed: bool,
+    /// Digest of the installed TF2 weapon-script source used at Build time.
+    /// Legacy records have no source identity and require a fresh Build.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_scripts_sha256: Option<String>,
     /// Missing on old profiles means the custom pack is active.
     #[serde(default)]
     pub inactive: bool,
@@ -302,17 +345,151 @@ pub struct CrosshairStockSettings {
 pub enum ViewmodelSource {
     Compiled,
     Imported,
+    /// Built from independently read files in the player's TF2 install.
+    StockBuilt,
+}
+
+pub const VIEWMODEL_BUILD_RECIPE_SCHEMA: u32 = 1;
+const MAX_VIEWMODEL_RECIPE_CHOICES: usize = 2048;
+const MAX_VIEWMODEL_RECIPE_FINGERPRINTS: usize = 1024;
+const MAX_VIEWMODEL_SOURCE_ID_BYTES: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ViewmodelHideMode {
+    Full,
+    Weapon,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelBuildCatalog {
+    pub patch_version: String,
+    pub catalog_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelBuildChoice {
+    pub group_id: String,
+    pub mode: ViewmodelHideMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelSourceFingerprint {
+    /// Canonical identifier for a source member, not a path to open directly.
+    pub id: String,
+    pub sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ViewmodelBuildRecipe {
+    pub schema: u32,
+    pub catalog: ViewmodelBuildCatalog,
+    pub choices: Vec<ViewmodelBuildChoice>,
+    /// Exact input digests recorded by the future local builder. Catalog
+    /// identity alone does not bind installed item, script, or MDL bytes.
+    pub source_fingerprints: Vec<ViewmodelSourceFingerprint>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewmodelRecord {
     pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub source_changed: bool,
     pub source: ViewmodelSource,
     #[serde(default)]
     pub preload: bool,
     #[serde(default)]
     pub options: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_recipe: Option<ViewmodelBuildRecipe>,
+}
+
+fn is_lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_viewmodel_source_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_VIEWMODEL_SOURCE_ID_BYTES
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'/' | b'.' | b'_' | b'-')
+        })
+        && value
+            .split('/')
+            .all(|component| !component.is_empty() && component != "." && component != "..")
+}
+
+impl ViewmodelRecord {
+    /// Validate metadata only. The installed-source builder must separately
+    /// recompute these identities before using a recipe, and verify the VPK.
+    pub fn validate_build_recipe(&self) -> Result<(), &'static str> {
+        let recipe = match (self.source, self.build_recipe.as_ref()) {
+            (ViewmodelSource::StockBuilt, Some(recipe)) => recipe,
+            (ViewmodelSource::StockBuilt, None) => {
+                return Err("stock-built Viewmodels record has no build recipe")
+            }
+            (_, Some(_)) => {
+                return Err("legacy Viewmodels record must not claim a stock build recipe")
+            }
+            (_, None) => return Ok(()),
+        };
+        if recipe.schema != VIEWMODEL_BUILD_RECIPE_SCHEMA {
+            return Err("unsupported Viewmodels build recipe schema");
+        }
+        if recipe.catalog.patch_version.is_empty()
+            || recipe.catalog.patch_version.len() > 128
+            || !recipe
+                .catalog
+                .patch_version
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            || !is_lower_sha256(&recipe.catalog.catalog_sha256)
+        {
+            return Err("invalid Viewmodels build catalog identity");
+        }
+        if recipe.choices.is_empty() || recipe.choices.len() > MAX_VIEWMODEL_RECIPE_CHOICES {
+            return Err("invalid Viewmodels build choice count");
+        }
+        let mut prior_group_id = "";
+        for choice in &recipe.choices {
+            let Some((class, digest)) = choice.group_id.split_once('/') else {
+                return Err("invalid Viewmodels build group ID");
+            };
+            if !crate::viewmodel_vpk_candidate::CLASSES.contains(&class)
+                || !is_lower_sha256(digest)
+                || choice.group_id.as_str() <= prior_group_id
+            {
+                return Err("invalid or repeated Viewmodels build group ID");
+            }
+            prior_group_id = &choice.group_id;
+        }
+        if recipe.source_fingerprints.is_empty()
+            || recipe.source_fingerprints.len() > MAX_VIEWMODEL_RECIPE_FINGERPRINTS
+        {
+            return Err("invalid Viewmodels source fingerprint count");
+        }
+        let mut prior_source_id = "";
+        for source in &recipe.source_fingerprints {
+            if !valid_viewmodel_source_id(&source.id)
+                || !is_lower_sha256(&source.sha256)
+                || source.id.as_str() <= prior_source_id
+            {
+                return Err("invalid or repeated Viewmodels source fingerprint");
+            }
+            prior_source_id = &source.id;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -336,6 +513,17 @@ pub struct ProfileManifest {
     pub files: Vec<ProfileFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hud: Option<HudRecord>,
+    /// Validated UI-version-3 roots. None is an older manifest awaiting local
+    /// inspection; an empty list means ordinary info.vdf files are not HUDs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hud_roots: Option<Vec<String>>,
+    /// Exact retained folder selected during a multi-HUD import or migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hud_selected_root: Option<String>,
+    /// Import preserves approved cfg bytes. A different HUD needs an explicit
+    /// option reset before activation, performed by the HUD replacement journal.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hud_review_pending: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crosshair: Option<CrosshairRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -530,6 +718,13 @@ fn checked_mutation_journal_path(
     profiles_dir: &Path,
     profile_id: &str,
 ) -> Result<Option<PathBuf>, ProfileError> {
+    // A missing library directory has no mutation journal. Keep its indexed
+    // record readable so the owner can remove that broken entry explicitly.
+    match fs::symlink_metadata(profile_dir(profiles_dir, profile_id)) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(ProfileError::Io(error.to_string())),
+        Ok(_) => {}
+    }
     validated_profile_root(profiles_dir, profile_id)?;
     let path = mutation_journal_file(profiles_dir, profile_id);
     match fs::symlink_metadata(&path) {
@@ -1201,6 +1396,9 @@ where
             launch_sync_pending: false,
             files,
             hud: None,
+            hud_roots: None,
+            hud_selected_root: None,
+            hud_review_pending: false,
             crosshair: None,
             viewmodel: None,
             hitsound: None,
@@ -1222,6 +1420,13 @@ where
             ));
         }
         manifest.name = normalize_name(&manifest.name)?;
+        if manifest.hud_roots.is_none() {
+            manifest.hud_roots = Some(crate::hud::inspect_hud_roots_from_files_root(
+                profiles_dir,
+                &staged_profile.join("files"),
+                &manifest,
+            )?);
+        }
         validate_manifest_files(&manifest)?;
         let mut summary = summary;
         summary.name.clone_from(&manifest.name);
@@ -1381,10 +1586,11 @@ where
             },
             None,
         )?;
+        clear_live_handoff_after_snapshot_to(profiles_dir, tf2_root, &profile_id, &running)?;
         return load_library_from(profiles_dir, Some(tf2_root));
     }
 
-    create_populated_profile_to(
+    let library = create_populated_profile_to(
         profiles_dir,
         tf2_root,
         &name,
@@ -1397,7 +1603,30 @@ where
             manifest.launch_sync_pending = false;
             Ok(())
         },
-    )
+    )?;
+    let snapshot_id = &library
+        .profiles
+        .last()
+        .ok_or(ProfileError::UnknownProfile)?
+        .id;
+    clear_live_handoff_after_snapshot_to(profiles_dir, tf2_root, snapshot_id, &running)?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
+fn clear_live_handoff_after_snapshot_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    snapshot_id: &str,
+    running_names: &[String],
+) -> Result<(), ProfileError> {
+    let index = usable_index(profiles_dir, tf2_root)?;
+    if index.pending_live_handoff {
+        // A new-profile wizard may have temporarily claimed the active id
+        // after deletion. The reviewed Save current as… snapshot must own the
+        // retained live setup before releasing the handoff gate.
+        set_active_profile_to(profiles_dir, tf2_root, snapshot_id, running_names)?;
+    }
+    Ok(())
 }
 
 pub fn put_exclusive_file_to<I, S>(
@@ -1616,6 +1845,38 @@ where
     S: AsRef<str>,
     F: FnOnce(&mut ProfileManifest) -> Result<(), ProfileError>,
 {
+    mutate_profile_files_with_live_renames_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        puts,
+        remove_paths,
+        live_renames,
+        running_names,
+        edit_manifest,
+        None,
+    )
+}
+
+/// A reviewed HUD replacement rechecks its exact source evidence after
+/// rollback snapshots are prepared and immediately before journal publication.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mutate_profile_files_with_live_renames_checked_to<I, S, F>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    puts: &[(String, FileSource<'_>)],
+    remove_paths: &[String],
+    live_renames: &[ProfileLiveRename],
+    running_names: I,
+    edit_manifest: F,
+    precommit: Option<&dyn Fn() -> Result<(), ProfileError>>,
+) -> Result<ProfileManifest, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+    F: FnOnce(&mut ProfileManifest) -> Result<(), ProfileError>,
+{
     Ok(mutate_profile_files_impl(
         profiles_dir,
         tf2_root,
@@ -1627,7 +1888,7 @@ where
         false,
         running_names,
         edit_manifest,
-        None,
+        precommit,
     )?
     .manifest)
 }
@@ -1659,7 +1920,7 @@ where
     refuse_writes(running_names)?;
     recover_profile_mutation_to(profiles_dir, tf2_root, profile_id)?;
     let mut index = usable_index(profiles_dir, tf2_root)?;
-    let mut manifest = load_manifest(profiles_dir, profile_id)?;
+    let mut manifest = load_manifest_raw(profiles_dir, profile_id)?;
     let old_manifest = manifest.clone();
     let old_index = index.clone();
     let transaction_id = crate::hash::random_token();
@@ -1777,6 +2038,20 @@ where
     if let Err(err) = edit_manifest(&mut manifest) {
         let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
         return Err(err);
+    }
+    let hud_roots = crate::hud::inspect_hud_roots_with_sources(profiles_dir, &manifest, |file| {
+        if portable_path_key(&file.path).is_ok_and(|key| requested.contains(&key)) {
+            mutation_file_path(profiles_dir, profile_id, &transaction_id, "new", &file.path)
+        } else {
+            exclusive_file_path(profiles_dir, profile_id, &file.path)
+        }
+    });
+    match hud_roots {
+        Ok(roots) => manifest.hud_roots = Some(roots),
+        Err(err) => {
+            let _ = cleanup_transaction_root(profiles_dir, profile_id, &transaction_id);
+            return Err(err);
+        }
     }
     if manifest.schema != old_manifest.schema
         || manifest.id != old_manifest.id
@@ -2020,7 +2295,8 @@ fn mutation_committed_as_requested(
     Ok(current_summary == expected_summary
         && current_index.active_profile_id == expected_index.active_profile_id
         && current_index.interrupted_profile_id == expected_index.interrupted_profile_id
-        && current_index.pending_switch == expected_index.pending_switch)
+        && current_index.pending_switch == expected_index.pending_switch
+        && current_index.pending_live_handoff == expected_index.pending_live_handoff)
 }
 
 fn merge_profile_index_delta(
@@ -2071,12 +2347,18 @@ fn merge_profile_index_delta(
     merge_field!(active_profile_id);
     merge_field!(interrupted_profile_id);
     merge_field!(pending_switch);
+    merge_field!(pending_live_handoff);
     Ok(changed)
 }
 
 fn validate_manifest_files(manifest: &ProfileManifest) -> Result<(), ProfileError> {
     if let Some(selection) = &manifest.preloader {
         selection.validate()?;
+    }
+    if let Some(viewmodel) = &manifest.viewmodel {
+        viewmodel
+            .validate_build_recipe()
+            .map_err(|message| ProfileError::Io(message.into()))?;
     }
     if manifest.files.len() > MAX_PROFILE_FILES {
         return Err(ProfileError::Io(
@@ -3119,6 +3401,43 @@ where
     load_library_from(profiles_dir, Some(tf2_root))
 }
 
+/// Rename a saved profile. Only its display name changes: the id, files,
+/// shared blobs, records and active tracking stay as they are, and nothing in
+/// TF2 is touched. The ordinary profile transaction writes the manifest and
+/// the index together, so an interrupted rename recovers to one name. Names
+/// follow creation rules (trimmed, 1-80 characters, duplicates allowed) and,
+/// like imported names, may not contain control characters.
+pub fn rename_profile_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    name: &str,
+    running_names: I,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let name = normalize_name(name)?;
+    if name.chars().any(char::is_control) {
+        return Err(ProfileError::InvalidName);
+    }
+    mutate_profile_files_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &[],
+        &[],
+        ProfileLiveProjection::LibraryOnly,
+        running_names,
+        |manifest| {
+            manifest.name = name;
+            Ok(())
+        },
+    )?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
 pub fn set_active_profile_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -3142,6 +3461,7 @@ where
     // A completed switch has finished any Remove step a failed one left.
     index.interrupted_profile_id = None;
     index.pending_switch = None;
+    index.pending_live_handoff = false;
     write_json_within(profiles_dir, &index_file(profiles_dir), &index)?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
@@ -3177,6 +3497,13 @@ pub(crate) fn pending_switch_to(
     tf2_root: &Path,
 ) -> Result<Option<SwitchJournal>, ProfileError> {
     Ok(usable_index(profiles_dir, tf2_root)?.pending_switch)
+}
+
+pub(crate) fn pending_live_handoff_to(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+) -> Result<bool, ProfileError> {
+    Ok(usable_index(profiles_dir, tf2_root)?.pending_live_handoff)
 }
 
 /// Publish recovery state before the first destructive switch operation.
@@ -3300,7 +3627,14 @@ pub fn load_manifest(
             "An interrupted profile update must be recovered before this profile is read.".into(),
         ));
     }
-    load_manifest_raw(profiles_dir, profile_id)
+    let mut manifest = load_manifest_raw(profiles_dir, profile_id)?;
+    if manifest.hud_roots.is_none() {
+        manifest.hud_roots = Some(crate::hud::inspect_profile_hud_roots(
+            profiles_dir,
+            &manifest,
+        )?);
+    }
+    Ok(manifest)
 }
 
 fn load_manifest_raw(
@@ -3331,6 +3665,11 @@ fn load_manifest_raw(
         return Err(ProfileError::Io(
             "profile manifest id does not match its directory".into(),
         ));
+    }
+    if let Some(viewmodel) = &manifest.viewmodel {
+        viewmodel
+            .validate_build_recipe()
+            .map_err(|message| ProfileError::Io(message.into()))?;
     }
     manifest.tf2_root = user_path_string(Path::new(&manifest.tf2_root));
     Ok(manifest)
@@ -3589,6 +3928,9 @@ pub fn profile_mutation_status_to(
     profiles_dir: &Path,
     tf2_root: &Path,
 ) -> Result<ProfileMutationRecoveryState, ProfileError> {
+    if let Some(state) = deletion::deletion_status_to(profiles_dir, tf2_root)? {
+        return Ok(state);
+    }
     let pending = scan_profile_mutations_to(profiles_dir, tf2_root)?;
     if pending.iter().any(|(_, committed)| !committed) {
         Ok(ProfileMutationRecoveryState::Prepared)
@@ -3609,6 +3951,15 @@ where
     S: AsRef<str>,
 {
     refuse_writes(running_names)?;
+    if deletion::deletion_status_to(profiles_dir, tf2_root)?.is_some() {
+        if !scan_profile_mutations_to(profiles_dir, tf2_root)?.is_empty() {
+            return Err(ProfileError::Io(
+                "Profile deletion and profile update recovery are both pending. No files were changed."
+                    .into(),
+            ));
+        }
+        deletion::recover_deletion_to(profiles_dir, tf2_root)?;
+    }
     // Validate every journal before the first recovery write. A corrupt or
     // linked later record therefore fails closed without partially recovering
     // an earlier profile and then allowing unrelated commands to proceed.
@@ -4322,6 +4673,7 @@ fn init_unlocked(profiles_dir: &Path, tf2_root: &Path) -> Result<LibraryIndex, P
                 active_profile_id: None,
                 interrupted_profile_id: None,
                 pending_switch: None,
+                pending_live_handoff: false,
                 profiles: Vec::new(),
             };
             write_json_within(profiles_dir, &index_file(profiles_dir), &index)?;
@@ -4612,6 +4964,156 @@ mod tests {
     use super::*;
     use crate::blob::blob_path;
     use std::fs;
+
+    fn stock_built_record() -> ViewmodelRecord {
+        ViewmodelRecord {
+            id: "execs-viewmodels".into(),
+            source_changed: false,
+            source: ViewmodelSource::StockBuilt,
+            preload: false,
+            options: BTreeMap::new(),
+            build_recipe: Some(ViewmodelBuildRecipe {
+                schema: VIEWMODEL_BUILD_RECIPE_SCHEMA,
+                catalog: ViewmodelBuildCatalog {
+                    patch_version: "10828683".into(),
+                    catalog_sha256: "a".repeat(64),
+                },
+                choices: vec![ViewmodelBuildChoice {
+                    group_id: format!("scout/{}", "b".repeat(64)),
+                    mode: ViewmodelHideMode::Weapon,
+                }],
+                source_fingerprints: vec![ViewmodelSourceFingerprint {
+                    id: "models/weapons/c_models/c_scout_animations.mdl".into(),
+                    sha256: "c".repeat(64),
+                }],
+            }),
+        }
+    }
+
+    #[test]
+    fn legacy_viewmodel_records_keep_their_exact_json_shape() {
+        let compiled = r#"{"id":"execs-viewmodels","source":"compiled","preload":true,"options":{"hidden":"1,2"}}"#;
+        let record: ViewmodelRecord = serde_json::from_str(compiled).unwrap();
+        assert_eq!(record.source, ViewmodelSource::Compiled);
+        assert_eq!(record.build_recipe, None);
+        assert!(record.validate_build_recipe().is_ok());
+        assert_eq!(serde_json::to_string(&record).unwrap(), compiled);
+
+        let imported =
+            r#"{"id":"execs-viewmodels","source":"imported","preload":false,"options":{}}"#;
+        let record: ViewmodelRecord = serde_json::from_str(imported).unwrap();
+        assert_eq!(record.source, ViewmodelSource::Imported);
+        assert_eq!(record.build_recipe, None);
+        assert!(record.validate_build_recipe().is_ok());
+        assert_eq!(serde_json::to_string(&record).unwrap(), imported);
+    }
+
+    #[test]
+    fn stock_built_viewmodel_recipe_round_trips_and_is_bounded() {
+        let record = stock_built_record();
+        assert!(record.validate_build_recipe().is_ok());
+        let json = serde_json::to_value(&record).unwrap();
+        assert_eq!(json["source"], "stockBuilt");
+        assert_eq!(json["buildRecipe"]["schema"], 1);
+        assert_eq!(json["buildRecipe"]["choices"][0]["mode"], "weapon");
+        assert_eq!(
+            serde_json::from_value::<ViewmodelRecord>(json.clone()).unwrap(),
+            record
+        );
+
+        let mut invalid = record.clone();
+        invalid.build_recipe = None;
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.source = ViewmodelSource::Compiled;
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.build_recipe.as_mut().unwrap().schema = 2;
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .catalog
+            .catalog_sha256 = "A".repeat(64);
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        let choice = invalid.build_recipe.as_ref().unwrap().choices[0].clone();
+        invalid.build_recipe.as_mut().unwrap().choices.push(choice);
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.build_recipe.as_mut().unwrap().source_fingerprints[0].id = "../other".into();
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .source_fingerprints
+            .clear();
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        let source = invalid.build_recipe.as_ref().unwrap().source_fingerprints[0].clone();
+        invalid
+            .build_recipe
+            .as_mut()
+            .unwrap()
+            .source_fingerprints
+            .push(source);
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut invalid = record.clone();
+        invalid.build_recipe.as_mut().unwrap().choices =
+            vec![
+                record.build_recipe.as_ref().unwrap().choices[0].clone();
+                MAX_VIEWMODEL_RECIPE_CHOICES + 1
+            ];
+        assert!(invalid.validate_build_recipe().is_err());
+
+        let mut unknown = json;
+        unknown["buildRecipe"]["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<ViewmodelRecord>(unknown).is_err());
+    }
+
+    #[test]
+    fn profile_load_refuses_an_invalid_stock_build_recipe() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let profile_id = Uuid::new_v4().to_string();
+        fs::create_dir_all(profile_dir(&profiles, &profile_id)).unwrap();
+        let mut manifest = serde_json::json!({
+            "schema": LIBRARY_SCHEMA,
+            "id": profile_id,
+            "name": "Built pack",
+            "tf2Root": dir.to_string_lossy(),
+            "launchOptions": "",
+            "files": [],
+            "viewmodel": stock_built_record(),
+        });
+        fs::write(
+            manifest_file(&profiles, &profile_id),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(load_manifest_raw(&profiles, &profile_id).is_ok());
+
+        manifest["viewmodel"]["buildRecipe"]["schema"] = serde_json::json!(2);
+        fs::write(
+            manifest_file(&profiles, &profile_id),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(load_manifest_raw(&profiles, &profile_id).is_err());
+        cleanup(&dir);
+    }
 
     fn unlocked() -> [&'static str; 1] {
         ["bash"]
@@ -5584,6 +6086,61 @@ mod tests {
     }
 
     #[test]
+    fn legacy_hud_journal_recovers_before_any_hud_metadata_is_hydrated() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("profiles");
+        let root = dir.join("tf2");
+        let id = create_profile_record_to(&profiles, &root, "Legacy", unlocked())
+            .unwrap()
+            .profiles[0]
+            .id
+            .clone();
+        let rel = "tf/custom/legacy/info.vdf";
+        let old = b"\"HUD\" { \"ui_version\" \"3\" } // original\n";
+        let new = b"\"HUD\" { \"ui_version\" \"3\" } // update\n";
+        put_exclusive_file_to(&profiles, &root, &id, rel, old, unlocked()).unwrap();
+        let mut old_manifest = load_manifest(&profiles, &id).unwrap();
+        old_manifest.hud_roots = None;
+        old_manifest.hud_selected_root = None;
+        old_manifest.hud_review_pending = false;
+        write_json(&manifest_file(&profiles, &id), &old_manifest).unwrap();
+        let mut new_manifest = old_manifest.clone();
+        new_manifest.files[0].sha256 = sha256_hex(new);
+        let token = "0123456789abcdef0123456789abcdef";
+        let staged = mutation_file_path(&profiles, &id, token, "new", rel);
+        write_atomic_within(&profiles, &staged, new).unwrap();
+        let journal = ProfileMutationJournal {
+            transaction_id: token.into(),
+            profile_id: id.clone(),
+            old_manifest: old_manifest.clone(),
+            new_manifest,
+            file_changes: Vec::new(),
+            live_changes: Vec::new(),
+            live_renames: Vec::new(),
+            old_index: None,
+            new_index: None,
+            touched_paths: vec![rel.into()],
+            committed: false,
+        };
+        write_json(&mutation_journal_file(&profiles, &id), &journal).unwrap();
+        let destination = exclusive_file_path(&profiles, &id, rel);
+        let backup = mutation_file_path(&profiles, &id, token, "old", rel);
+        move_file_within(&profiles, &destination, &backup).unwrap();
+        assert!(
+            !destination.exists(),
+            "Restart begins with metadata temporarily absent"
+        );
+        recover_profile_mutation_to(&profiles, &root, &id).unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), old);
+        assert_eq!(load_manifest_raw(&profiles, &id).unwrap(), old_manifest);
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().hud_roots,
+            Some(vec!["legacy".into()])
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
     fn recovering_one_profile_never_restores_a_stale_full_library_index() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
@@ -6155,6 +6712,242 @@ mod tests {
         let root = dir.join("Team Fortress 2");
         let err = create_profile_record_to(&profiles, &root, "   ", unlocked()).unwrap_err();
         assert_eq!(err, ProfileError::InvalidName);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rename_changes_only_the_name_of_an_active_or_inactive_profile() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +forward
+",
+        );
+        write_live(
+            &root.join("tf/custom/pack/materials/a.vmt"),
+            "pack
+",
+        );
+        crate::cfg_layer::write_test_base(&root);
+        write_live(
+            &root.join("tf/steam.inf"),
+            "appID=440
+",
+        );
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let active = library.profiles[0].id.clone();
+        let library = create_profile_record_to(&profiles, &root, "Spare", unlocked()).unwrap();
+        let inactive = library
+            .profiles
+            .iter()
+            .find(|profile| profile.name == "Spare")
+            .unwrap()
+            .id
+            .clone();
+        let before = load_manifest(&profiles, &active).unwrap();
+        let live = snapshot_tree(&root);
+
+        let library =
+            rename_profile_to(&profiles, &root, &active, "  Casual ✨ 日本  ", unlocked()).unwrap();
+        assert_eq!(library.active_profile_id.as_deref(), Some(active.as_str()));
+        let renamed = library.profiles.iter().find(|p| p.id == active).unwrap();
+        assert_eq!(renamed.name, "Casual ✨ 日本");
+        let after = load_manifest(&profiles, &active).unwrap();
+        assert_eq!(after.name, "Casual ✨ 日本");
+        assert_eq!(after.files, before.files);
+        assert_eq!(after.launch_options, before.launch_options);
+        assert_eq!(snapshot_tree(&root), live);
+
+        // Inactive profiles rename the same way, and names may repeat as at creation.
+        let library = rename_profile_to(&profiles, &root, &inactive, "Main", unlocked()).unwrap();
+        assert_eq!(library.profiles.len(), 2);
+        assert_eq!(load_manifest(&profiles, &inactive).unwrap().name, "Main");
+        // A restart reads the same names from disk.
+        let reloaded = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(reloaded, library);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn rename_refuses_bad_names_unknown_profiles_and_a_running_game() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        let library = create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
+        let id = library.profiles[0].id.clone();
+        for bad in ["", "   ", "tab	name", &"x".repeat(81)] {
+            assert_eq!(
+                rename_profile_to(&profiles, &root, &id, bad, unlocked()).unwrap_err(),
+                ProfileError::InvalidName,
+                "{bad:?}"
+            );
+        }
+        assert!(rename_profile_to(&profiles, &root, &id, &"é".repeat(80), unlocked()).is_ok());
+        assert!(rename_profile_to(
+            &profiles,
+            &root,
+            "00000000-0000-4000-8000-000000000000",
+            "Other",
+            unlocked()
+        )
+        .is_err());
+        assert_eq!(
+            rename_profile_to(&profiles, &root, &id, "Other", [tf2_name()]).unwrap_err(),
+            ProfileError::GameRunning
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap().name, "é".repeat(80));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn duplicate_copies_a_saved_profile_without_touching_tf2_or_the_active_profile() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +forward
+",
+        );
+        write_live(
+            &root.join("tf/custom/pack/materials/a.vmt"),
+            "pack
+",
+        );
+        crate::cfg_layer::write_test_base(&root);
+        write_live(
+            &root.join("tf/steam.inf"),
+            "appID=440
+",
+        );
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions {
+                launch_options: Some("-novid"),
+                cloud_config: None,
+            },
+        )
+        .unwrap();
+        let source = library.profiles[0].id.clone();
+        mutate_profile_files_to(
+            &profiles,
+            &root,
+            &source,
+            &[],
+            &[],
+            ProfileLiveProjection::LibraryOnly,
+            unlocked(),
+            |manifest| {
+                manifest.ignored_packs = vec!["kept-pack".into()];
+                manifest.preloader = Some(crate::preloader::PreloaderSelection::default());
+                Ok(())
+            },
+        )
+        .unwrap();
+        // Unabsorbed live drift is not part of the saved profile.
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +jump
+",
+        );
+        let live = snapshot_tree(&root);
+        let before = load_manifest(&profiles, &source).unwrap();
+
+        let library =
+            duplicate_profile_to(&profiles, &root, &source, "Main copy", unlocked()).unwrap();
+        assert_eq!(library.profiles.len(), 2);
+        assert_eq!(library.active_profile_id.as_deref(), Some(source.as_str()));
+        let copy = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id != source)
+            .unwrap();
+        assert_eq!(copy.name, "Main copy");
+        let duplicate = load_manifest(&profiles, &copy.id).unwrap();
+        assert_eq!(duplicate.files, before.files);
+        assert_eq!(duplicate.launch_options, "-novid");
+        assert!(duplicate.launch_sync_pending);
+        assert_eq!(duplicate.ignored_packs, vec!["kept-pack".to_string()]);
+        assert_eq!(duplicate.preloader, before.preloader);
+        assert_eq!(duplicate.mods, before.mods);
+        for file in &duplicate.files {
+            if file.storage == FileStorage::Exclusive {
+                assert_eq!(
+                    fs::read(exclusive_file_path(&profiles, &copy.id, &file.path)).unwrap(),
+                    fs::read(exclusive_file_path(&profiles, &source, &file.path)).unwrap(),
+                );
+            }
+        }
+        assert_eq!(load_manifest(&profiles, &source).unwrap(), before);
+        assert_eq!(snapshot_tree(&root), live);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn duplicate_leaves_no_profile_when_a_saved_file_is_damaged_or_tf2_runs() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(
+            &root.join("tf/cfg/config.cfg"),
+            "bind w +forward
+",
+        );
+        crate::cfg_layer::write_test_base(&root);
+        write_live(
+            &root.join("tf/steam.inf"),
+            "appID=440
+",
+        );
+        let library = save_current_as_to(
+            &profiles,
+            &root,
+            "Main",
+            unlocked(),
+            SaveCurrentOptions::default(),
+        )
+        .unwrap();
+        let source = library.profiles[0].id.clone();
+        assert_eq!(
+            duplicate_profile_to(&profiles, &root, &source, "Copy", [tf2_name()]).unwrap_err(),
+            ProfileError::GameRunning
+        );
+        assert_eq!(
+            duplicate_profile_to(&profiles, &root, &source, "  ", unlocked()).unwrap_err(),
+            ProfileError::InvalidName
+        );
+        fs::write(
+            exclusive_file_path(&profiles, &source, "tf/cfg/config.cfg"),
+            "tampered
+",
+        )
+        .unwrap();
+        let err = duplicate_profile_to(&profiles, &root, &source, "Copy", unlocked()).unwrap_err();
+        assert!(
+            matches!(err, ProfileError::Io(ref message) if message.contains("no longer matches"))
+        );
+        let after = load_library_from(&profiles, Some(&root)).unwrap();
+        assert_eq!(after.profiles.len(), 1);
+        let dirs: Vec<_> = fs::read_dir(&profiles)
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != &source && !name.starts_with('.') && name != "blobs")
+            .collect();
+        assert!(dirs.is_empty(), "left behind: {dirs:?}");
         cleanup(&dir);
     }
 

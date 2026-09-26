@@ -3,7 +3,6 @@ import type {
   CatalogParticleMod,
   GameBananaCategory,
   GameBananaMod,
-  GameBananaSort,
   ModRecord,
   ModSource,
   ModsCatalog,
@@ -11,7 +10,9 @@ import type {
   PreloaderReport,
   PreloaderStatusPayload,
 } from "./bridge";
-import { compactCount } from "./hud-ui";
+
+/** Handled native review and obsolete profile results do not offer a card retry. */
+export type ModInstallResult = boolean | "review-required" | "superseded";
 
 /** Credit shown on the pane; the mechanism and default library come from
  * cueki's casual-pre-loader, rebuilt natively for execs. */
@@ -75,6 +76,110 @@ export function repairReadyForConfirmation(status: PreloaderStatusPayload | null
   return status !== null && status.status.untrackedModified.length === 0;
 }
 
+/** One mod that supplies a particle file, in the order Apply queues it. */
+export type ParticleProvider = {
+  key: string;
+  label: string;
+  group: "library" | "profile";
+};
+
+/** A particle file two or more selected mods supply; the last provider wins it. */
+export type ParticleConflict = {
+  file: string;
+  providers: ParticleProvider[];
+  winner: ParticleProvider;
+};
+
+/**
+ * The stock slot a mod's PCF patches, matching the native planner: names are
+ * lowercased, and blood_trail patches npc_fx because its own slot is too small.
+ */
+export function particleTarget(file: string): string {
+  const name = (file.replace(/\\/g, "/").split("/").pop() ?? file).toLowerCase();
+  return name === "blood_trail.pcf" ? "npc_fx.pcf" : name;
+}
+
+/**
+ * Files that more than one selected mod supplies, in file order. Apply queues
+ * library particles in selection order and then the profile's own mods in
+ * selection order; each file is replaced whole by the last one, never merged.
+ */
+export function particleConflicts(
+  selection: Pick<ModSelection, "particleMods" | "profileParticleMods">,
+  libraryMods: readonly Pick<CatalogParticleMod, "name" | "pcfFiles">[],
+  profileSources: readonly ParticleSource[],
+): ParticleConflict[] {
+  const queued: { provider: ParticleProvider; files: readonly string[] }[] = [
+    ...selection.particleMods.map((name) => ({
+      provider: {
+        key: `library:${name}`,
+        label: name.replace(/_/g, " "),
+        group: "library" as const,
+      },
+      files: libraryMods.find((mod) => mod.name === name)?.pcfFiles ?? [],
+    })),
+    ...selection.profileParticleMods.map((id) => {
+      const source = profileSources.find((candidate) => candidate.modId === id);
+      return {
+        provider: { key: `profile:${id}`, label: source?.name ?? id, group: "profile" as const },
+        files: source?.pcfFiles ?? [],
+      };
+    }),
+  ];
+  const byFile = new Map<string, ParticleProvider[]>();
+  for (const { provider, files } of queued) {
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith(".pcf")) continue;
+      const target = particleTarget(file);
+      const providers = (byFile.get(target) ?? []).filter((entry) => entry.key !== provider.key);
+      byFile.set(target, [...providers, provider]);
+    }
+  }
+  return [...byFile.entries()]
+    .filter(([, providers]) => providers.length > 1)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([file, providers]) => ({ file, providers, winner: providers[providers.length - 1] }));
+}
+
+/**
+ * Whether reordering the draft can make this provider win. Profile mods are
+ * always queued after library particles, so a library provider cannot beat one.
+ */
+export function canPreferParticleProvider(
+  conflict: ParticleConflict,
+  provider: ParticleProvider,
+): boolean {
+  if (provider.key === conflict.winner.key) return false;
+  return provider.group === "profile" || conflict.providers.every((p) => p.group === "library");
+}
+
+/** Move one provider to the end of its list so it wins the files it shares. */
+export function preferParticleProvider<T extends ModSelection>(selection: T, key: string): T {
+  const [group, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  const moveLast = (list: string[]) =>
+    list.includes(id) ? [...list.filter((entry) => entry !== id), id] : list;
+  return group === "library"
+    ? { ...selection, particleMods: moveLast(selection.particleMods) }
+    : { ...selection, profileParticleMods: moveLast(selection.profileParticleMods) };
+}
+
+/** What the player can do about a file Apply left stock. */
+export function particleSkipAdvice(reason: string): string {
+  if (/over the stock budget|larger than any stock particle file/.test(reason)) {
+    return "It is too large for TF2's file slot, so the stock file stays. A lighter version of the mod may fit.";
+  }
+  if (reason.startsWith("overridden by ")) {
+    return `${reason.slice("overridden by ".length)} supplies this file instead.`;
+  }
+  if (reason.includes("spy disguise")) {
+    return "The stock file stays so disguises keep working.";
+  }
+  if (/could not (parse|shrink|re-encode)/.test(reason)) {
+    return "The stock file stays. The mod's file may be damaged or made for another game version.";
+  }
+  return "The stock file stays.";
+}
+
 export function toggleName(list: string[], name: string): string[] {
   return list.includes(name) ? list.filter((entry) => entry !== name) : [...list, name];
 }
@@ -125,13 +230,9 @@ export function visibleModSelection(
     : { ...selection, profileParticleMods: kept };
 }
 
-/** Order-insensitive identity of a selection, for drafts and comparisons. */
+/** Later sources win overlaps, so changing priority is a real unapplied draft. */
 export function serializeModSelection(selection: ModSelection): string {
-  return JSON.stringify([
-    [...selection.addons].sort(),
-    [...selection.particleMods].sort(),
-    [...selection.profileParticleMods].sort(),
-  ]);
+  return JSON.stringify([selection.addons, selection.particleMods, selection.profileParticleMods]);
 }
 
 /** Selection differs from what's installed → the Apply button lights up. */
@@ -140,6 +241,24 @@ export function selectionDirty(
   selection: ModSelection,
 ): boolean {
   return serializeModSelection(installedModSelection(status)) !== serializeModSelection(selection);
+}
+
+export const DIRECT_FLAT_TEXTURES_ID = "Flat Textures v1";
+export const DIRECT_DEVELOPER_TEXTURES_ID = "Developer Textures Overhaul v2";
+export const DIRECT_BURNING_OVERLAY_ID = "No Burning Overlay";
+export const DIRECT_SENTRY_OVERLAY_ID = "No Sentry Shield Overlay";
+
+function needsCuekiLibrary(selection: ModSelection): boolean {
+  return (
+    selection.particleMods.length > 0 ||
+    selection.addons.some(
+      (addon) =>
+        addon !== DIRECT_FLAT_TEXTURES_ID &&
+        addon !== DIRECT_DEVELOPER_TEXTURES_ID &&
+        addon !== DIRECT_BURNING_OVERLAY_ID &&
+        addon !== DIRECT_SENTRY_OVERLAY_ID,
+    )
+  );
 }
 
 /**
@@ -156,7 +275,7 @@ export function modsApplyEnabled(
   if (!status || status.recoveryRequired === true) {
     return false;
   }
-  if (!status.modsCached && (selection.addons.length > 0 || selection.particleMods.length > 0)) {
+  if (!status.modsCached && needsCuekiLibrary(selection)) {
     return false;
   }
   return selectionDirty(status, selection) || status.status.stale === true;
@@ -174,12 +293,8 @@ export function modsStatusLine(
   if (status?.recoveryRequired) {
     return "Finish interrupted recovery first";
   }
-  if (
-    status &&
-    !status.modsCached &&
-    (selection.addons.length > 0 || selection.particleMods.length > 0)
-  ) {
-    return "Download the mod library first";
+  if (status && !status.modsCached && needsCuekiLibrary(selection)) {
+    return "Saved library source unavailable on this device — remove those choices or restore the verified cache";
   }
   if (selectionDirty(status, selection)) {
     return "Unsaved changes";
@@ -228,15 +343,9 @@ export function summarizeReport(report: PreloaderReport): string {
 // Your mods
 // ---------------------------------------------------------------------------
 
-/** Above this, removing a pack asks first — it is a long download to redo. */
-export const MOD_CONFIRM_BYTES = 50 * 1024 * 1024;
-
-export function modNeedsRemoveConfirm(mod: ModRecord): boolean {
-  return mod.bytes > MOD_CONFIRM_BYTES;
-}
-
 export function modSourceLabel(source: ModSource): string {
-  return source.kind === "gamebanana" ? "GameBanana" : "Local";
+  if (source.kind === "gamebanana") return "GameBanana";
+  return source.kind === "external" ? "External" : "Local";
 }
 
 /** The page a pack came from, when it has one. */
@@ -247,7 +356,7 @@ export function modSourceUrl(source: ModSource): string | null {
   return source.kind === "gamebanana" ? `https://gamebanana.com/mods/${source.id}` : null;
 }
 
-/** "Local · 12 MB" — where it came from, then how big it is. */
+/** Where a pack came from, then how big it is. */
 export function modMetaLine(mod: ModRecord): string {
   return `${modSourceLabel(mod.source)} · ${formatModBytes(mod.bytes)}`;
 }
@@ -271,92 +380,6 @@ export function isGameBananaInstalled(mods: ModRecord[], id: number): boolean {
 // GameBanana browser
 // ---------------------------------------------------------------------------
 
-export const GAMEBANANA_SORTS: { id: GameBananaSort; label: string }[] = [
-  { id: "downloads", label: "Downloads" },
-  { id: "likes", label: "Likes" },
-  { id: "views", label: "Views" },
-  { id: "updated", label: "Updated" },
-  { id: "new", label: "New" },
-];
-
-/** How long the search input waits before it asks GameBanana. */
-export const GAMEBANANA_SEARCH_DEBOUNCE_MS = 400;
-
-/**
- * Order what is loaded. A search cannot be ordered server-side (documented on
- * the Rust side), so the pill has to mean the same thing either way.
- */
-export function sortGameBananaMods(
-  records: GameBananaMod[],
-  sort: GameBananaSort,
-): GameBananaMod[] {
-  const byName = (a: GameBananaMod, b: GameBananaMod) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
-  const sorted = [...records];
-  switch (sort) {
-    case "downloads":
-      // Withheld counts sink rather than pretending to be zero.
-      sorted.sort((a, b) => (b.downloads ?? -1) - (a.downloads ?? -1) || byName(a, b));
-      break;
-    case "likes":
-      sorted.sort((a, b) => b.likes - a.likes || byName(a, b));
-      break;
-    case "views":
-      sorted.sort((a, b) => b.views - a.views || byName(a, b));
-      break;
-    case "updated":
-      sorted.sort((a, b) => b.updatedAt - a.updatedAt || byName(a, b));
-      break;
-    default:
-      sorted.sort((a, b) => b.addedAt - a.addedAt || byName(a, b));
-  }
-  return sorted;
-}
-
-export type GameBananaPager = {
-  label: string;
-  pageCount: number | null;
-  hasPrevious: boolean;
-  hasNext: boolean;
-};
-
-/**
- * One page at a time, with an honest label: GameBanana does not always say how
- * many there are, and "Page 3 of ?" is worse than "Page 3". Without a count the
- * only thing that ends the run is the page saying it is the last one.
- */
-export function gameBananaPager(
-  page: number,
-  total: number,
-  perPage: number,
-  complete: boolean,
-): GameBananaPager {
-  const pageCount = perPage > 0 && total > 0 ? Math.ceil(total / perPage) : null;
-  return {
-    label: pageCount === null ? `Page ${page}` : `Page ${page} of ${pageCount}`,
-    pageCount,
-    hasPrevious: page > 1,
-    hasNext: !complete && (pageCount === null || page < pageCount),
-  };
-}
-
-/** The cache key one loaded page belongs to. */
-export function gameBananaPageKey(
-  query: string,
-  sort: GameBananaSort,
-  category: number | null,
-  page: number,
-  includeMature: boolean,
-): string {
-  return [
-    query.trim().toLowerCase(),
-    sort,
-    category ?? "all",
-    page,
-    includeMature ? "mature" : "sfw",
-  ].join(" ");
-}
-
 /** Where the mature-content choice is remembered, like the disclosures. */
 export const MATURE_STORAGE_KEY = "execs.gamebanana.mature";
 
@@ -379,43 +402,6 @@ export function writeMaturePreference(include: boolean): void {
   } catch {
     // Remembering it is a convenience, not a requirement.
   }
-}
-
-const DAY_SECONDS = 86_400;
-
-/** "today", "3 days ago", "2 months ago" — terse, sentence case. */
-export function relativeDate(unixSeconds: number, now: number = Date.now()): string {
-  const elapsed = Math.floor(now / 1000) - Math.floor(unixSeconds);
-  if (elapsed < DAY_SECONDS) {
-    return "today";
-  }
-  const days = Math.floor(elapsed / DAY_SECONDS);
-  if (days === 1) {
-    return "yesterday";
-  }
-  if (days < 7) {
-    return `${days} days ago`;
-  }
-  if (days < 35) {
-    const weeks = Math.floor(days / 7);
-    return weeks === 1 ? "a week ago" : `${weeks} weeks ago`;
-  }
-  if (days < 365) {
-    const months = Math.floor(days / 30);
-    return months === 1 ? "a month ago" : `${months} months ago`;
-  }
-  const years = Math.floor(days / 365);
-  return years === 1 ? "a year ago" : `${years} years ago`;
-}
-
-/** "▲ 1.2k · 340 downloads · Updated 3 days ago". */
-export function gameBananaMetaLine(mod: GameBananaMod, now: number = Date.now()): string {
-  const parts = [`▲ ${compactCount(mod.likes)}`];
-  if (mod.downloads !== null) {
-    parts.push(`${compactCount(mod.downloads)} downloads`);
-  }
-  parts.push(`Updated ${relativeDate(mod.updatedAt, now)}`);
-  return parts.join(" · ");
 }
 
 /** Above this many categories the tail folds behind "More" — no dropdowns. */
@@ -460,9 +446,11 @@ export const PREVIEW_PROFILE_MODS: ModRecord[] = [
 ];
 
 export const PREVIEW_GAMEBANANA_CATEGORIES: GameBananaCategory[] = [
-  { id: 4737, name: "Skins" },
-  { id: 5225, name: "Effects" },
-  { id: 5064, name: "Sounds" },
+  { id: 7951, name: "Skins" },
+  { id: 1090, name: "Effects" },
+  { id: 2774, name: "Game files" },
+  { id: 587, name: "Textures" },
+  { id: 1644, name: "GUIs" },
 ];
 
 /** A 1×1 neutral pixel — one card in the fixtures has a picture. */
@@ -477,12 +465,15 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Clean Rocket Trails",
     author: "sparkplug",
     category: "Effects",
-    categoryId: 5225,
+    categoryId: 1090,
+    subCategory: null,
+    route: "mod",
     likes: 1_284,
     views: 92_400,
     downloads: 41_300,
     updatedAt: Math.floor(Date.UTC(2026, 7, 28) / 1000),
     addedAt: Math.floor(Date.UTC(2025, 2, 3) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 8, 2) / 1000),
     thumb: PREVIEW_THUMB,
     url: "https://gamebanana.com/mods/618734",
     mature: false,
@@ -492,12 +483,15 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Flat Scattergun",
     author: "beancan",
     category: "Skins",
-    categoryId: 4737,
+    categoryId: 7951,
+    subCategory: null,
+    route: "mod",
     likes: 861,
     views: 60_120,
     downloads: 22_940,
     updatedAt: Math.floor(Date.UTC(2026, 8, 1) / 1000) - 6 * HOUR,
     addedAt: Math.floor(Date.UTC(2026, 5, 19) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 8, 1) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/602110",
     mature: true,
@@ -507,12 +501,15 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Muted Hit Markers",
     author: "quietkid",
     category: "Sounds",
-    categoryId: 5064,
+    categoryId: 2774,
+    subCategory: null,
+    route: "mod",
     likes: 402,
     views: 18_770,
     downloads: null,
     updatedAt: Math.floor(Date.UTC(2026, 6, 12) / 1000),
     addedAt: Math.floor(Date.UTC(2024, 10, 2) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 8, 2) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/590884",
     mature: false,
@@ -522,12 +519,15 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "No Explosion Smoke",
     author: "sparkplug",
     category: "Effects",
-    categoryId: 5225,
+    categoryId: 1090,
+    subCategory: null,
+    route: "mod",
     likes: 2_940,
     views: 210_500,
     downloads: 118_600,
     updatedAt: Math.floor(Date.UTC(2026, 3, 5) / 1000),
     addedAt: Math.floor(Date.UTC(2023, 1, 14) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 3, 5) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/577301",
     mature: false,
@@ -537,12 +537,15 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Vintage Sniper Rifle",
     author: "oldworks",
     category: "Skins",
-    categoryId: 4737,
+    categoryId: 7951,
+    subCategory: null,
+    route: "mod",
     likes: 178,
     views: 9_310,
     downloads: 4_220,
     updatedAt: Math.floor(Date.UTC(2025, 11, 22) / 1000),
     addedAt: Math.floor(Date.UTC(2025, 9, 30) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2026, 0, 3) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/561442",
     mature: true,
@@ -552,16 +555,83 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     name: "Softer Footsteps",
     author: "quietkid",
     category: "Sounds",
-    categoryId: 5064,
+    categoryId: 2774,
+    subCategory: null,
+    route: "mod",
     likes: 96,
     views: 5_400,
     downloads: 1_870,
     updatedAt: Math.floor(Date.UTC(2024, 4, 9) / 1000),
     addedAt: Math.floor(Date.UTC(2024, 4, 9) / 1000),
+    modifiedAt: Math.floor(Date.UTC(2024, 4, 10) / 1000),
     thumb: null,
     url: "https://gamebanana.com/mods/540019",
     mature: false,
   },
+  {
+    id: 700_100,
+    name: "Copper HUD",
+    author: "hudmaker",
+    category: "GUIs",
+    categoryId: 1644,
+    subCategory: "HUDs",
+    route: "hud",
+    likes: 155,
+    views: 9_800,
+    downloads: 1_500,
+    addedAt: Math.floor(Date.UTC(2026, 7, 14) / 1000),
+    updatedAt: null,
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/mods/700100",
+    mature: false,
+  },
+  {
+    id: 700_101,
+    name: "Class menu backgrounds",
+    author: "menuartist",
+    category: "GUIs",
+    categoryId: 1644,
+    subCategory: "Menus",
+    route: "manual",
+    likes: 70,
+    views: 3_000,
+    downloads: 540,
+    addedAt: Math.floor(Date.UTC(2026, 7, 10) / 1000),
+    updatedAt: null,
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/mods/700101",
+    mature: false,
+  },
+  ...Array.from({ length: 18 }, (_, index): GameBananaMod => {
+    const categories = [
+      { name: "Skins", id: 7951 },
+      { name: "Effects", id: 1090 },
+      { name: "Game files", id: 2774 },
+      { name: "Textures", id: 587 },
+    ];
+    const category = categories[index % categories.length];
+    const addedAt = Math.floor(Date.UTC(2026, 8, 19 - index) / 1000);
+    return {
+      id: 700_000 + index,
+      name: `Preview mod ${String(index + 1).padStart(2, "0")}`,
+      author: `creator${(index % 5) + 1}`,
+      category: category.name,
+      categoryId: category.id,
+      subCategory: null,
+      route: "mod",
+      likes: index % 6 === 0 ? null : 240 - index * 7,
+      views: index % 5 === 0 ? null : 8_000 - index * 113,
+      downloads: index % 4 === 0 ? null : 4_000 - index * 97,
+      addedAt,
+      updatedAt: index % 3 === 0 ? null : addedAt + HOUR,
+      modifiedAt: index % 4 === 0 ? null : addedAt + 2 * HOUR,
+      thumb: null,
+      url: `https://gamebanana.com/mods/${700_000 + index}`,
+      mature: false,
+    };
+  }),
 ];
 
 export const PREVIEW_PARTICLE_SOURCES: ParticleSource[] = [
@@ -606,50 +676,45 @@ export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
 
 const PREVIEW_ADDONS: CatalogAddon[] = [
   {
-    id: "No Burning Overlay",
-    name: "No Burning Overlay",
-    kind: "Misc",
-    description: "Removes first person burning effect while on fire.",
-    fileCount: 3,
-    bytes: 41_200,
-    hasSound: false,
-  },
-  {
-    id: "No Sentry Shield Overlay",
-    name: "No Sentry Shield Overlay",
-    kind: "Misc",
-    description: "Removes the opaque shield for wrangled sentries.",
-    fileCount: 5,
-    bytes: 88_000,
-    hasSound: false,
-  },
-  {
-    id: "Ultimate Visual Fix Pack",
-    name: "Ultimate Visual Fix Pack",
+    id: DIRECT_DEVELOPER_TEXTURES_ID,
+    name: DIRECT_DEVELOPER_TEXTURES_ID,
     kind: "Texture",
-    description: "Fixes various visual bugs.",
-    fileCount: 577,
-    bytes: 24_800_000,
+    description:
+      "FPS_Engineer rework; earlier pack reuploaded by ayrtonSilna, original maker unidentified.",
+    fileCount: 996,
+    bytes: 55_750_859,
     hasSound: false,
   },
-];
-
-const PREVIEW_PARTICLES: CatalogParticleMod[] = [
   {
-    name: "Square_Series",
-    pcfFiles: ["explosion.pcf", "muzzle_flash.pcf", "rockettrail.pcf"],
-    fileCount: 61,
-    bytes: 9_400_000,
+    id: DIRECT_FLAT_TEXTURES_ID,
+    name: DIRECT_FLAT_TEXTURES_ID,
+    kind: "Texture",
+    description: "Original GameBanana file by flewvar; textures credited to JarateKing.",
+    fileCount: 3_143,
+    bytes: 337_882,
+    hasSound: false,
   },
   {
-    name: "TF2_Classic",
-    pcfFiles: ["rockettrail.pcf", "stickybomb.pcf"],
-    fileCount: 18,
-    bytes: 2_100_000,
+    id: DIRECT_BURNING_OVERLAY_ID,
+    name: DIRECT_BURNING_OVERLAY_ID,
+    kind: "Texture",
+    description: "Original Square Series GameBanana file submitted by ghytd.",
+    fileCount: 2,
+    bytes: 175_232,
+    hasSound: false,
+  },
+  {
+    id: DIRECT_SENTRY_OVERLAY_ID,
+    name: DIRECT_SENTRY_OVERLAY_ID,
+    kind: "Texture",
+    description: "Original Square Series GameBanana file submitted by ghytd.",
+    fileCount: 4,
+    bytes: 175_509,
+    hasSound: false,
   },
 ];
 
 export const PREVIEW_MODS_CATALOG: ModsCatalog = {
   addons: PREVIEW_ADDONS,
-  particleMods: PREVIEW_PARTICLES,
+  particleMods: [],
 };

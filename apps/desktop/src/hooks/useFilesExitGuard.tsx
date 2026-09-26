@@ -25,9 +25,17 @@ export function useFilesExitGuard(
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
   function request(next: () => void | Promise<void>, native = false) {
     if (action.current || saving.current) return;
-    if (store.dirty().length === 0 && settings.getSnapshot().length === 0 && !operationBusy) {
+    const current = latest.current;
+    const pendingSettings = settings.getSnapshot();
+    if (
+      store.dirty().length === 0 &&
+      pendingSettings.length === 0 &&
+      !current.busy &&
+      !settings.isWriting()
+    ) {
       void Promise.resolve()
         .then(next)
         .catch((err) => {
@@ -43,10 +51,10 @@ export function useFilesExitGuard(
     if (
       native &&
       store.dirty().length === 0 &&
-      !running &&
-      !busy &&
-      settings.getSnapshot().length > 0 &&
-      settings.getSnapshot().every((entry) => entry.save && !entry.save.locked)
+      !current.running &&
+      !current.busy &&
+      pendingSettings.length > 0 &&
+      pendingSettings.every((entry) => entry.save && !entry.save.locked)
     ) {
       void finish(true, true);
     }
@@ -118,6 +126,7 @@ export function useFilesExitGuard(
   const drafts = store.dirty();
   const hasSettings = settingsDrafts.length > 0;
   const hasDrafts = drafts.length > 0 || hasSettings;
+  const hasExplicitDrafts = settingsDrafts.some((entry) => !entry.save);
   const panes = [...new Set(settingsDrafts.map((entry) => entry.tab))];
   return {
     saver,
@@ -135,15 +144,18 @@ export function useFilesExitGuard(
               : "Finish current operation?"
         }
         description={
-          hasDrafts
-            ? "Save your edits before continuing, or explicitly discard them."
-            : "Continue once the current operation has finished."
+          hasExplicitDrafts
+            ? "Apply changes from their panes, or discard them before continuing."
+            : hasDrafts
+              ? "Save your edits before continuing, or explicitly discard them."
+              : "Continue once the current operation has finished."
         }
         onClose={cancel}
+        initialFocusRef={cancelButton}
         testId="files-exit-guard"
         className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto"
       >
-        <ul className="t-meta text-ink-muted">
+        <ul className="t-meta mt-3 space-y-2 text-ink-muted [overflow-wrap:anywhere]">
           {drafts.map((draft) => (
             <li key={JSON.stringify([draft.profile, draft.path])}>{draft.path}</li>
           ))}
@@ -166,7 +178,7 @@ export function useFilesExitGuard(
                 {onOpenPane ? (
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className={`btn ${entries.some((entry) => !entry.save) ? "btn-primary" : "btn-ghost"}`}
                     disabled={working}
                     onClick={() => {
                       cancel();
@@ -191,15 +203,17 @@ export function useFilesExitGuard(
         {running && hasDrafts ? (
           <p className="t-body mt-3">Close TF2 to save. Your drafts are kept.</p>
         ) : null}
-        <div className="mt-5 flex gap-3">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={working || (running && hasDrafts) || operationBusy}
-            onClick={() => void finish(true)}
-          >
-            {working ? "Continuing…" : hasDrafts ? "Save and continue" : "Continue"}
-          </button>
+        <div className="mt-5 flex flex-wrap justify-end gap-3">
+          {!hasExplicitDrafts ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={working || (running && hasDrafts) || operationBusy}
+              onClick={() => void finish(true)}
+            >
+              {working ? "Continuing…" : hasDrafts ? "Save and continue" : "Continue"}
+            </button>
+          ) : null}
           {hasDrafts ? (
             <button
               type="button"
@@ -210,7 +224,13 @@ export function useFilesExitGuard(
               Discard and continue
             </button>
           ) : null}
-          <button type="button" className="btn btn-ghost" disabled={working} onClick={cancel}>
+          <button
+            ref={cancelButton}
+            type="button"
+            className="btn btn-ghost"
+            disabled={working}
+            onClick={cancel}
+          >
             Cancel
           </button>
         </div>

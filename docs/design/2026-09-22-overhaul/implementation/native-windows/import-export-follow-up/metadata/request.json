@@ -1,0 +1,22 @@
+{
+  "scenario": "InactiveImport",
+  "executable": "G:\\Projects\\execs\\apps\\desktop\\src-tauri\\target\\release\\execs.exe",
+  "executableSha256": "E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65",
+  "executableLength": 23442432,
+  "executableModifiedUtc": "2026-09-22T17:07:36.3580140Z",
+  "executableProductVersion": "0.2.0",
+  "helperExecutable": "C:\\Users\\Random\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe",
+  "helperExecutableSha256": "362A356CE7F0940EC74F73A8FC2C990A2CC24A38A11C90BBD8ECA947110AD139",
+  "markerSha256": null,
+  "inactiveFixture": {
+    "root": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\tf2-root",
+    "profileIds": ["ab24b740-19dc-4d52-8e99-a75d3f3334de", "0d13e5ff-1adf-4606-aa0a-481e72ba253d"],
+    "reviewArchive": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\imports\\review-multiple-huds-v018.zip",
+    "reviewArchiveSha256": "77CC3C6F9DED610E56084F1EF7DDD410DEFE6F04162303054A0CEE274D234727"
+  },
+  "inactiveImport": {
+    "planSha256": "43AA00655014706BF0DA83768D316552506C6A2E592BB1A0876492F1B847D23D",
+    "planRelative": "inactive-import-plan.json"
+  },
+  "preparedUtc": "2026-09-22T17:14:12.3340969Z"
+}

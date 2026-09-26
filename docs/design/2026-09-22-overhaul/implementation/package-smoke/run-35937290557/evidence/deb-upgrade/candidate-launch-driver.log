@@ -1,0 +1,4 @@
+
+(execs:21209): dbind-WARNING **: 00:24:32.422: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+
+(execs:21209): Gtk-CRITICAL **: 00:24:35.545: gtk_widget_event: assertion 'WIDGET_REALIZED_FOR_EVENT (widget, event)' failed

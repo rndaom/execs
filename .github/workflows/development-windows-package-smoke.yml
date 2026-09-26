@@ -1,0 +1,55 @@
+name: Windows package capability (previous public only)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/development-windows-package-smoke.yml
+      - scripts/windows-package-*
+      - scripts/package-smoke-fixture.mjs
+      - scripts/fixtures/package-smoke-v018.json
+      - scripts/development-package-guard.mjs
+      - scripts/linux-native-*.mjs
+      - scripts/release-version.mjs
+      - scripts/verify-release.mjs
+      - docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/no-hud/exported-by-v0.1.8.zip
+      - apps/desktop/src-tauri/tauri.conf.json
+      - CHANGELOG.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: development-windows-package-capability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  previous-public-capability:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test containment, authentic archive and failure boundaries
+        run: node --test scripts/windows-package-*.test.mjs
+      - name: Authentic old NSIS, production WebView2, native export and normal close
+        timeout-minutes: 12
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/windows-package-smoke.mjs
+      - name: Retain capability evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-previous-public-capability-${{ github.sha }}
+          path: ${{ runner.temp }}/execs-windows-package-*/evidence/
+          if-no-files-found: warn
+          retention-days: 7

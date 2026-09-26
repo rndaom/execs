@@ -12,6 +12,7 @@ export const SETTINGS_TABS = [
   "mods",
   "files",
   "launch",
+  "inventory",
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
@@ -27,6 +28,7 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   mods: "Mods",
   files: "Files",
   launch: "Launch",
+  inventory: "Inventory",
 };
 
 /**
@@ -37,6 +39,9 @@ export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] 
   { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
   { label: "Look", tabs: ["hud", "crosshair", "viewmodels", "sounds"] },
   { label: "More", tabs: ["mods", "files", "launch"] },
+  ...(import.meta.env.DEV
+    ? [{ label: "Steam", tabs: ["inventory"] as readonly SettingsTab[] }]
+    : []),
 ];
 
 export function showSettingsChrome(library: ProfileLibrary | null): boolean {

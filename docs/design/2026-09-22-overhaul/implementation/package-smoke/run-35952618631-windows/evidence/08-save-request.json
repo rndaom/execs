@@ -1,0 +1,14 @@
+{
+  "root": "D:\\a\\_temp\\execs-windows-package-tol2LK",
+  "process": {
+    "pid": 7984,
+    "parent": 7808,
+    "executable": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+    "created": "2026-09-24T03:44:08.4124760Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+    "session": 2
+  },
+  "destination": "D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\exports\\previous-ui-export.zip",
+  "capture": "D:\\a\\_temp\\execs-windows-package-tol2LK\\evidence\\03-native-export-save.png",
+  "observation": "D:\\a\\_temp\\execs-windows-package-tol2LK\\evidence\\native-save-observations.json"
+}

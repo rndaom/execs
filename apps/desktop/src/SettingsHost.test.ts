@@ -8,6 +8,7 @@ import { SettingsHost } from "./SettingsHost";
 
 const capture = vi.hoisted(() => ({
   panes: {} as Record<string, any>,
+  status: null as any,
   toast: {
     deferDraft: vi.fn(),
     resolveDraft: vi.fn(),
@@ -19,12 +20,15 @@ const capture = vi.hoisted(() => ({
 vi.mock("./components/ui/Toast", () => ({ useToast: () => capture.toast }));
 vi.mock("./hooks/useAppStatus", () => ({
   useAppStatus: () => ({ error: null }),
-  AppStatusProvider: ({ children }: any) => children,
+  AppStatusProvider: ({ children, value }: any) => {
+    capture.status = value;
+    return children;
+  },
 }));
 vi.mock("./GameplayPane", () => ({
   GameplayPane: (p: any) => {
     capture.panes.gameplay = p;
-    return null;
+    return h("div", { "data-testid": "gameplay-mock", "data-profile": p.profileId });
   },
 }));
 vi.mock("./LaunchPane", () => ({
@@ -45,7 +49,12 @@ vi.mock("./HudPane", () => ({
     return null;
   },
 }));
-vi.mock("./ComfigPane", () => ({ ComfigPane: () => null }));
+vi.mock("./ComfigPane", () => ({
+  ComfigPane: (p: any) => {
+    capture.panes.comfig = p;
+    return null;
+  },
+}));
 vi.mock("./BindsPane", () => ({
   BindsPane: (p: any) => {
     capture.panes.binds = p;
@@ -54,7 +63,12 @@ vi.mock("./BindsPane", () => ({
 }));
 vi.mock("./FilesPane", () => ({ FilesPane: () => null }));
 vi.mock("./ModsPane", () => ({ ModsPane: () => null }));
-vi.mock("./SoundsPane", () => ({ SoundsPane: () => null }));
+vi.mock("./SoundsPane", () => ({
+  SoundsPane: (p: any) => {
+    capture.panes.sounds = p;
+    return null;
+  },
+}));
 vi.mock("./ViewmodelPane", () => ({ ViewmodelPane: () => null }));
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost" });
@@ -91,6 +105,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   capture.panes = {};
+  capture.status = null;
   api = {
     getFilesContext: vi.fn(async () => {
       const d = await api.getActiveProfileDetail();
@@ -107,12 +122,15 @@ beforeEach(() => {
     getComfigState: vi.fn(async () => null),
     getProfileLaunchOptions: vi.fn(async () => "-novid"),
     getStockCrosshairSprites: vi.fn(async () => ({})),
+    getCrosshairContentSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
+    getCrosshairSourceStatus: vi.fn(async () => ({ state: "none" })),
     getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
     getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
     getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),
     getHudSchema: vi.fn(async () => null),
     writeOwnedFile: vi.fn(async () => ({})),
     writeManagedCfg: vi.fn(async () => ({})),
+    applyHitsoundsWithSettings: vi.fn(async () => ({})),
   };
   props = {
     api,
@@ -176,6 +194,18 @@ describe("settings snapshot integrity", () => {
     await render({ tab: "crosshair" });
     expect(api.getStockCrosshairSprites).toHaveBeenCalledTimes(2);
     expect(capture.panes.crosshair.stockSprites).toEqual({});
+  });
+
+  it("refreshes the saved crosshair source check on each visit", async () => {
+    api.getCrosshairSourceStatus
+      .mockResolvedValueOnce({ state: "unverified" })
+      .mockResolvedValueOnce({ state: "current" });
+    await render({ tab: "crosshair" });
+    expect(capture.panes.crosshair.sourceStatus).toEqual({ state: "unverified" });
+    await render({ tab: "gameplay" });
+    await render({ tab: "crosshair" });
+    expect(api.getCrosshairSourceStatus).toHaveBeenCalledTimes(2);
+    expect(capture.panes.crosshair.sourceStatus).toEqual({ state: "current" });
   });
   it("publishes the new profile identity only with its complete cfg seed", async () => {
     const path = "tf/cfg/execs_gameplay.cfg";
@@ -254,6 +284,43 @@ describe("settings snapshot integrity", () => {
       expect(container.textContent).not.toContain("Could not read settings");
     },
   );
+  it("adopts a sensitivity changed in TF2's options after the game closes", async () => {
+    const gameplay = "tf/cfg/execs_gameplay.cfg";
+    const managed = "fov_desired 90\nsensitivity 3\nzoom_sensitivity_ratio 1\n";
+    const source = {
+      profileId: "A",
+      root: "fixture",
+      layer: "vanilla",
+      sha256: "old",
+      librarySha256: "old",
+    };
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "A",
+      layer: "vanilla",
+      files: [{ path: "tf/cfg/config.cfg" }, { path: gameplay }],
+      launchOptions: "",
+    });
+    let current = managed;
+    api.readProfileFile.mockImplementation(async (path: string) =>
+      path === gameplay
+        ? { path, text: current, source }
+        : { path, text: 'sensitivity "2.2"\nzoom_sensitivity_ratio "1"\n' },
+    );
+    api.writeOwnedFile.mockImplementation(async (_path: string, text: string) => {
+      current = text;
+      return {};
+    });
+    await render();
+    expect(api.writeOwnedFile).not.toHaveBeenCalled();
+
+    await render({ refreshKey: 2, bindSyncRequest: 1 });
+    expect(api.writeOwnedFile).toHaveBeenCalledWith(
+      gameplay,
+      "fov_desired 90\nsensitivity 2.2\nzoom_sensitivity_ratio 1\n",
+      source,
+    );
+    expect(capture.panes.gameplay.managedText).toContain("sensitivity 2.2");
+  });
   it("refuses unknown initial cfg bytes instead of mounting default controls", async () => {
     api.getActiveProfileDetail.mockResolvedValue({
       id: "A",
@@ -265,6 +332,72 @@ describe("settings snapshot integrity", () => {
     await render();
     expect(capture.panes.gameplay).toBeUndefined();
     expect(container.textContent).toContain("Retry loading settings");
+  });
+  it("keeps Comfig and Launch usable when an unrelated CFG cannot be read", async () => {
+    const path = "tf/cfg/oversized.cfg";
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "A",
+      layer: "vanilla",
+      files: [{ path }],
+      launchOptions: "-novid",
+    });
+    api.readProfileFile.mockRejectedValue(new Error("unreadable"));
+    api.setProfileLaunchOptions = vi.fn(async () => ({
+      launchOptions: "-novid",
+      steamWrite: "written",
+    }));
+    api.setComfigModules = vi.fn(async () => ({}));
+    await render({ tab: "gameplay", onNavigate: vi.fn() });
+    expect(capture.panes.gameplay).toBeUndefined();
+    expect(container.textContent).toContain(path);
+    expect(container.textContent).toContain("Review in Files");
+    expect(container.textContent).toContain("Copy affected file path");
+    await render({ tab: "comfig" });
+    await act(async () =>
+      expect(capture.panes.comfig.onApplyModules({ lod: "high" })).resolves.toBe(true),
+    );
+    expect(api.setComfigModules).toHaveBeenCalledWith({ lod: "high" });
+    const onLaunchOptionsSaved = vi.fn();
+    const launchSync = {
+      profileOptions: "-novid",
+      steamOptions: "",
+      inSync: false,
+      steamRunning: true,
+    };
+    await render({ tab: "launch", launchSync, onLaunchOptionsSaved });
+    expect(capture.status.running).toBe(false);
+    expect(capture.panes.launch.steamSync).toBe(launchSync);
+    await act(async () => expect(capture.panes.launch.onSave()).resolves.toBe(true));
+    expect(api.setProfileLaunchOptions).toHaveBeenCalledOnce();
+    // Steam's copy is re-read after the save rather than inferred from it.
+    expect(onLaunchOptionsSaved).toHaveBeenCalledOnce();
+  });
+  it("uses the selected HUD projection in Gameplay startup inference", async () => {
+    const contents: Record<string, string> = {
+      "tf/cfg/autoexec.cfg": "exec hud_settings",
+      "tf/custom/hud-a/cfg/hud_settings.cfg": "viewmodel_fov 45",
+      "tf/custom/hud-b/cfg/hud_settings.cfg": "viewmodel_fov 70",
+    };
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "A",
+      layer: "vanilla",
+      launchOptions: "",
+      name: "A",
+      files: [
+        ...Object.keys(contents).map((path) => ({ path })),
+        { path: "tf/custom/hud-a/info.vdf" },
+        { path: "tf/custom/hud-b/info.vdf" },
+      ],
+      hudRoots: ["hud-a", "hud-b"],
+      selectedHudRoot: "hud-b",
+    });
+    api.readProfileFile.mockImplementation(async (path: string) => ({
+      path,
+      text: contents[path] ?? null,
+    }));
+    await render({ tab: "gameplay" });
+    expect(capture.panes.gameplay.effective.viewmodel_fov).toBe("70");
+    expect(capture.status.running).toBe(false);
   });
   it("ignores a late superseded profile read", async () => {
     await render();
@@ -290,6 +423,8 @@ describe("settings snapshot integrity", () => {
   });
   it("serializes managed writes and sends profile identity to the atomic backend operation", async () => {
     await render({ tab: "binds" });
+    capture.toast.startSave.mockClear();
+    capture.toast.finishSave.mockClear();
     const pending = deferred<any>();
     api.writeManagedCfg.mockReturnValueOnce(pending.promise).mockResolvedValue({});
     let first!: Promise<boolean>;
@@ -312,6 +447,29 @@ describe("settings snapshot integrity", () => {
       ["tf/cfg/execs_gameplay.cfg", "fov_desired 75", "A", "gameplay"],
     ]);
     expect(api.writeOwnedFile).not.toHaveBeenCalled();
+    expect(capture.toast.startSave).not.toHaveBeenCalled();
+    expect(capture.toast.finishSave).not.toHaveBeenCalled();
+  });
+  it("saves sound settings and changed files through one native command", async () => {
+    await render({ tab: "sounds" });
+    const pack = { hit: { change: "clear" }, kill: { change: "keep" } };
+    await act(async () => {
+      expect(await capture.panes.sounds.onSave("tf_dingaling_volume 0.7\n", pack)).toBe(true);
+    });
+    expect(api.applyHitsoundsWithSettings).toHaveBeenCalledWith(
+      "tf/cfg/execs_gameplay.cfg",
+      "tf_dingaling_volume 0.7\n",
+      "A",
+      pack.hit,
+      pack.kill,
+    );
+    expect(api.writeManagedCfg).not.toHaveBeenCalled();
+
+    api.applyHitsoundsWithSettings.mockRejectedValueOnce(new Error("source unavailable"));
+    await act(async () => {
+      expect(await capture.panes.sounds.onSave("tf_dingaling_volume 0.9\n", pack)).toBe(false);
+    });
+    expect(api.writeManagedCfg).not.toHaveBeenCalled();
   });
   it("does not publish cfg seeds when later comfig loading fails", async () => {
     await render();
@@ -325,6 +483,26 @@ describe("settings snapshot integrity", () => {
     await render({ refreshKey: 2 });
     expect(capture.panes.gameplay.profileId).toBe("A");
     expect(container.textContent).toContain("comfig unavailable");
+  });
+  it("hides the previous profile's panes when the selected profile fails to load", async () => {
+    await render({ activeProfileId: "A", activeProfileName: "Alpha" });
+    expect(requiredElement('[data-testid="gameplay-mock"]').getAttribute("data-profile")).toBe("A");
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "B",
+      layer: "vanilla",
+      files: [],
+      launchOptions: "-nojoy",
+    });
+    api.getComfigState.mockRejectedValueOnce(new Error("comfig unavailable"));
+    await render({ activeProfileId: "B", activeProfileName: "Beta", refreshKey: 2 });
+    expect(container.querySelector('[data-testid="gameplay-mock"]')).toBeNull();
+    expect(container.textContent).toContain("Beta: comfig unavailable");
+    const retry = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Retry loading settings",
+    );
+    expect(retry).toBeDefined();
+    await act(async () => retry?.click());
+    expect(requiredElement('[data-testid="gameplay-mock"]').getAttribute("data-profile")).toBe("B");
   });
   it("rejects a retained save callback after active profile identity changes", async () => {
     await render();
@@ -375,6 +553,7 @@ describe("settings snapshot integrity", () => {
     api.getComfigState.mockReturnValueOnce(reloading.promise);
     await act(async () => saving.resolve({ launchOptions: "-nojoy", steamWrite: "steam-running" }));
     expect(surface().hasAttribute("inert")).toBe(false);
+    expect(capture.status.running).toBe(false);
     await act(async () => {
       reloading.resolve(null);
       await result;

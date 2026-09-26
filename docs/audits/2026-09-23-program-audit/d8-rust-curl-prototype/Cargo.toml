@@ -1,0 +1,7 @@
+[package]
+name = "d8-curl-prototype"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+curl = { version = "=0.4.50", features = ["static-curl"] }

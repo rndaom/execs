@@ -58,7 +58,7 @@ beforeEach(() => {
     files: [{ path }],
     launchOptions: "",
     crosshair: { id: "execs-crosshairs", shape: "cross", assignments: {} },
-    hitsound: { hit: { name: "quack", source: "community", boost: 0 } },
+    hitsound: { hit: { name: "own.wav", source: "file", token: "a".repeat(32), boost: 0 } },
   };
   comfig = { preset: "medium", modules: {}, addons: [] };
   api = {
@@ -71,11 +71,24 @@ beforeEach(() => {
     readProfileFile: vi.fn(async () => ({ path, text: cfg })),
     getComfigState: vi.fn(async () => comfig),
     getStockCrosshairSprites: vi.fn(async () => ({})),
+    getCrosshairContentSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
+    getCrosshairSourceStatus: vi.fn(async () => ({ state: "none" })),
     getPackCrosshairPreviews: vi.fn(async () => ({})),
     listStockHitsounds: vi.fn(async () => []),
-    comfigHitsoundIndex: vi.fn(async () => [
-      { hash: "next-hash", name: "Next sound", kind: "hit" },
-    ]),
+    getHitsoundSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
+    pickHitsoundFile: vi.fn(async () => ({
+      token: "b".repeat(32),
+      name: "Next sound.wav",
+      converted: false,
+      info: {
+        formatTag: 1,
+        channels: 1,
+        sampleRate: 44100,
+        bitsPerSample: 16,
+        dataBytes: 2,
+        durationMs: 1,
+      },
+    })),
     writeManagedCfg: vi.fn(async (_path: string, text: string) => {
       cfg = text;
       return detail;
@@ -104,13 +117,22 @@ beforeEach(() => {
             hit: {
               ...detail.hitsound.hit,
               boost: hit.boost,
-              ...(hit.pick.kind === "comfig" ? { name: hit.pick.name, source: "comfig" } : {}),
+              ...(hit.pick.kind === "file"
+                ? { name: hit.pick.name, source: "file", token: hit.pick.token }
+                : {}),
             },
           },
         };
       }
       return detail;
     }),
+    applyHitsoundsWithSettings: vi.fn(
+      async (_path: string, text: string, _id: string, hit: any) => {
+        cfg = text;
+        const apply = api.applyHitsounds.getMockImplementation();
+        return apply(hit);
+      },
+    ),
     setComfigPreset: vi.fn(async (preset: string) => {
       comfig = { ...comfig, preset };
       return detail;
@@ -259,22 +281,26 @@ describe("sound acknowledgements through the real host", () => {
     "saves a newer %s edit after an older boost lands",
     async (field) => {
       const pending = deferred<any>();
-      const apply = api.applyHitsounds.getMockImplementation();
-      api.applyHitsounds.mockImplementationOnce(async (...args: any[]) => {
+      const apply = api.applyHitsoundsWithSettings.getMockImplementation();
+      api.applyHitsoundsWithSettings.mockImplementationOnce(async (...args: any[]) => {
         await pending.promise;
         return apply(...args);
       });
+      if (field === "source") vi.stubGlobal("__TAURI_INTERNALS__", {});
       await render({ tab: "sounds" });
       await click('[data-testid="sounds-hit-boost-6"]');
       await elapsed();
-      expect(api.applyHitsounds).toHaveBeenCalledTimes(1);
+      expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(1);
       if (field === "volume") await input("#sounds-hit-volume", "40");
       if (field === "pitch") {
         await click('[data-testid="sounds-advanced"] summary');
         await input("#sounds-hit-pitch-min", "80");
       }
       if (field === "boost") await click('[data-testid="sounds-hit-boost-12"]');
-      if (field === "source") await click('[data-testid="sounds-assign-hit-comfig:next-hash"]');
+      if (field === "source") {
+        await click('[data-testid="sounds-choose-file"]');
+        await click(`[data-testid="sounds-assign-hit-own:${"b".repeat(32)}"]`);
+      }
       await act(async () => pending.resolve(null));
       if (field === "volume")
         expect(element<HTMLInputElement>("#sounds-hit-volume").value).toBe("40");
@@ -283,24 +309,29 @@ describe("sound acknowledgements through the real host", () => {
       if (field === "boost")
         expect(element<HTMLInputElement>('[data-testid="sounds-hit-boost-12"]').checked).toBe(true);
       if (field === "source")
-        expect(element('[data-testid="sounds-hit-name"]').textContent).toBe("Next sound");
+        expect(element('[data-testid="sounds-hit-name"]').textContent).toBe("Next sound.wav");
       await elapsed();
-      expect(api.writeManagedCfg).toHaveBeenCalledTimes(2);
+      expect(api.writeManagedCfg).toHaveBeenCalledTimes(
+        field === "volume" || field === "pitch" ? 1 : 0,
+      );
+      expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(
+        field === "volume" || field === "pitch" ? 1 : 2,
+      );
       if (field === "volume") expect(cfg).toContain("tf_dingaling_volume 0.4\n");
       if (field === "pitch") expect(cfg).toContain("tf_dingaling_pitchmindmg 80\n");
-      if (field === "boost") expect(api.applyHitsounds.mock.calls[1][0].boost).toBe(12);
+      if (field === "boost") expect(api.applyHitsoundsWithSettings.mock.calls[1][3].boost).toBe(12);
       if (field === "source")
-        expect(api.applyHitsounds.mock.calls[1][0].pick).toEqual({
-          kind: "comfig",
-          hash: "next-hash",
-          name: "Next sound",
+        expect(api.applyHitsoundsWithSettings.mock.calls[1][3].pick).toEqual({
+          kind: "file",
+          token: "b".repeat(32),
+          name: "Next sound.wav",
         });
       expect(props.onPendingChange).toHaveBeenLastCalledWith(false);
     },
   );
 
   it("keeps a failed boost retryable and discards its draft on a profile switch", async () => {
-    api.applyHitsounds.mockRejectedValueOnce(new Error("pack refused"));
+    api.applyHitsoundsWithSettings.mockRejectedValueOnce(new Error("pack refused"));
     await render({ tab: "sounds" });
     await click('[data-testid="sounds-hit-boost-6"]');
     await elapsed();
@@ -308,7 +339,7 @@ describe("sound acknowledgements through the real host", () => {
     await render({ running: true });
     await render({ running: false });
     await elapsed();
-    expect(api.applyHitsounds).toHaveBeenCalledTimes(2);
+    expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(2);
     await render({ running: true });
     await input("#sounds-hit-volume", "40");
     detail = { ...detail, id: "B", hitsound: null };
@@ -317,7 +348,7 @@ describe("sound acknowledgements through the real host", () => {
     expect(element<HTMLInputElement>("#sounds-hit-volume").value).toBe("90");
     await render({ running: false });
     await elapsed();
-    expect(api.writeManagedCfg).toHaveBeenCalledTimes(2);
+    expect(api.writeManagedCfg).not.toHaveBeenCalled();
   });
 });
 
@@ -327,7 +358,7 @@ describe("Comfig saved selections", () => {
     await render({ tab: "comfig" });
     await click("#comfig-preset-high");
     expect(element<HTMLInputElement>("#comfig-preset-medium").checked).toBe(true);
-    expect(element('img[alt*="preset"]').getAttribute("alt")).toContain("Medium preset");
+    expect(element('[aria-label="Selected preset details"] h3').textContent).toBe("Medium");
     await render({ refreshKey: 2, tab: "gameplay" });
     await render({ tab: "comfig" });
     expect(element<HTMLInputElement>("#comfig-preset-medium").checked).toBe(true);
@@ -340,7 +371,6 @@ describe("Comfig saved selections", () => {
     api.setComfigModules.mockRejectedValueOnce(new Error("cfg write failed"));
     api.setComfigAddons.mockRejectedValueOnce(new Error("addon failed"));
     await render({ tab: "comfig" });
-    await click('[data-testid="comfig-modules"] summary');
     const modules = [...document.querySelectorAll<HTMLElement>('[data-testid^="comfig-module-"]')];
     const first = modules[0];
     const second = modules[1];

@@ -7,9 +7,13 @@ import {
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
   type HudSort,
+  hudAuthorCopy,
   hudCatalogControls,
+  hudDisplayName,
   hudOptionsDirty,
+  hudOverlayCrosshairState,
   hudPageLinks,
+  hudSchemaUnavailableReason,
   hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
@@ -104,6 +108,63 @@ describe("hud catalog helpers", () => {
   it("round-trips HUD color strings", () => {
     expect(parseHudRgba("0 153 255 255")).toEqual({ r: 0, g: 153, b: 255, a: 255 });
     expect(formatHudRgba(0, 153, 255, 128)).toBe("0 153 255 128");
+  });
+
+  it("distinguishes a HUD overlay's saved enable state from an uncertain source", () => {
+    const schema = {
+      author: "fixture",
+      sections: [
+        {
+          name: "Crosshair",
+          controls: [
+            {
+              name: "rh_toggle_xhair_enable",
+              label: "Toggle",
+              controlType: "checkbox",
+              value: "false",
+              choices: [],
+            },
+            {
+              name: "rh_val_xhair_style",
+              label: "Style",
+              controlType: "crosshair",
+              value: "<",
+              choices: [],
+            },
+          ],
+        },
+      ],
+    };
+    expect(hudOverlayCrosshairState("rayshud", schema, {})).toBe("disabled");
+    expect(hudOverlayCrosshairState("rayshud", schema, { rh_toggle_xhair_enable: "true" })).toBe(
+      "enabled",
+    );
+    expect(hudOverlayCrosshairState("hypnotizehud", schema, {})).toBe("possible");
+    const unsupported = {
+      ...schema,
+      sections: [
+        {
+          ...schema.sections[0],
+          controls: [
+            { ...schema.sections[0].controls[0], unavailableReason: "unsupported" },
+            schema.sections[0].controls[1],
+          ],
+        },
+      ],
+    };
+    expect(
+      hudOverlayCrosshairState("rayshud", unsupported, { rh_toggle_xhair_enable: "true" }),
+    ).toBe("possible");
+    expect(hudOverlayCrosshairState("rayshud", null, {})).toBe("none");
+  });
+
+  it("explains why overlapping catalog HUDs have no editor controls yet", () => {
+    expect(hudSchemaUnavailableReason("berryhud")).toContain("multiple HUD roots");
+    expect(hudSchemaUnavailableReason("hexhud")).toContain("missing");
+    expect(hudSchemaUnavailableReason("hud-fixes")).toContain("missing");
+    expect(hudSchemaUnavailableReason("sunsethud")).toContain("unresolved");
+    expect(hudSchemaUnavailableReason("eve-plus")).toContain("No in-app options");
+    expect(hudSchemaUnavailableReason("unknown")).toContain("No in-app options");
   });
 });
 
@@ -272,7 +333,7 @@ describe("hud sorting", () => {
       "hud-0",
     ]);
     expect(sortHudCatalog(catalog, metrics, "updated").map((entry) => entry.id)).toEqual(["hud-0"]);
-    expect(hudStatCopy(values[0])).toBe("0 downloads · 0 views · updated Feb 2024");
+    expect(hudStatCopy(values[0])).toBe("0 downloads · 0 views · listing activity Feb 2024");
     expect(hudStatCopy(values[2])).toBeNull();
     expect(hudStatCopy(values[3])).toBeNull();
   });
@@ -303,12 +364,21 @@ describe("hud sorting", () => {
   });
 
   it("describes what is known in one line", () => {
-    expect(hudStatCopy(stats.rayshud)).toBe("398k downloads · 1.2M views · updated Jan 2026");
-    expect(hudStatCopy({ updated: "2024-03-02" })).toBe("updated Mar 2024");
+    expect(hudStatCopy(stats.rayshud)).toBe(
+      "398k downloads · 1.2M views · listing activity Jan 2026",
+    );
+    expect(hudStatCopy({ updated: "2024-03-02" })).toBe("listing activity Mar 2024");
     expect(hudStatCopy(undefined)).toBeNull();
     expect(hudStatCopy({})).toBeNull();
     expect(compactCount(999)).toBe("999");
     expect(compactCount(12_345)).toBe("12k");
     expect(compactCount(12_345_678)).toBe("12M");
+  });
+
+  it("does not present an uncredited HUD creator as a person named Unknown", () => {
+    expect(hudAuthorCopy({ author: "Unknown" })).toBe("Creator uncredited");
+    expect(hudAuthorCopy({ author: "raysfire" })).toBe("by raysfire");
+    expect(hudDisplayName({ name: "512561891" })).toBe("Untitled HUD");
+    expect(hudDisplayName({ name: "7HUD" })).toBe("7HUD");
   });
 });
