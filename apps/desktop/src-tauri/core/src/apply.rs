@@ -749,8 +749,10 @@ mod tests {
                 ManagedCfgScope::Gameplay,
                 ManagedCfgScope::Crosshair,
                 ManagedCfgScope::Sounds,
+                ManagedCfgScope::Viewmodels,
             ],
             [
+                ManagedCfgScope::Viewmodels,
                 ManagedCfgScope::Sounds,
                 ManagedCfgScope::Crosshair,
                 ManagedCfgScope::Gameplay,
@@ -766,13 +768,16 @@ mod tests {
             for scope in scopes {
                 let submitted = match scope {
                     ManagedCfgScope::Gameplay => {
-                        b"fov_desired 90; cl_crosshair_scale 1; tf_dingaling_volume 1".as_slice()
+                        b"fov_desired 90; cl_crosshair_scale 1; tf_dingaling_volume 1; viewmodel_fov 1".as_slice()
                     }
                     ManagedCfgScope::Crosshair => {
-                        b"fov_desired 10; cl_crosshair_scale 50; tf_dingaling_volume 1".as_slice()
+                        b"fov_desired 10; cl_crosshair_scale 50; tf_dingaling_volume 1; viewmodel_fov 1".as_slice()
                     }
                     ManagedCfgScope::Sounds => {
-                        b"fov_desired 10; cl_crosshair_scale 1; tf_dingaling_volume 0.5".as_slice()
+                        b"fov_desired 10; cl_crosshair_scale 1; tf_dingaling_volume 0.5; viewmodel_fov 1".as_slice()
+                    }
+                    ManagedCfgScope::Viewmodels => {
+                        b"fov_desired 10; cl_crosshair_scale 1; tf_dingaling_volume 1; viewmodel_fov 70".as_slice()
                     }
                 };
                 write_scoped_managed_cfg_to(
@@ -787,7 +792,8 @@ mod tests {
                 .unwrap();
             }
             let result = fs::read_to_string(root.join(path)).unwrap();
-            assert_eq!(result.lines().count(), 3);
+            assert_eq!(result.lines().count(), 4);
+            assert!(result.contains("viewmodel_fov 70\n"));
             assert!(result.contains("fov_desired 90\n"));
             assert!(result.contains("cl_crosshair_scale 50\n"));
             assert!(result.contains("tf_dingaling_volume 0.5\n"));

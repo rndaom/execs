@@ -9,6 +9,7 @@ import {
   GAMEPLAY_HEADER,
   GAMEPLAY_STEM,
   gameplayPath,
+  managedCfgScopeOf,
   parseSensitivityInput,
   SENSITIVITY_MAX,
   seedGameplay,
@@ -349,5 +350,29 @@ describe("comfort options", () => {
     ).toBe(managed);
     // Lines the managed file does not set are never added.
     expect(syncGameOptionsFromConfig(managed, 'hud_combattext "0"\n')).toBe(managed);
+  });
+});
+
+describe("managed cfg scopes", () => {
+  it("gives every managed cvar to exactly one pane", () => {
+    expect(managedCfgScopeOf("viewmodel_fov")).toBe("viewmodels");
+    expect(managedCfgScopeOf("R_DrawViewModel")).toBe("viewmodels");
+    expect(managedCfgScopeOf("tf_use_min_viewmodels")).toBe("viewmodels");
+    expect(managedCfgScopeOf("cl_flipviewmodels")).toBe("viewmodels");
+    expect(managedCfgScopeOf("fov_desired")).toBe("gameplay");
+    expect(managedCfgScopeOf("hud_combattext")).toBe("gameplay");
+    expect(managedCfgScopeOf("cl_crosshair_scale")).toBe("crosshair");
+    expect(managedCfgScopeOf("tf_dingaling_volume")).toBe("sounds");
+    expect(managedCfgScopeOf("bind")).toBeNull();
+    for (const name of Object.keys(defaultGameplay())) {
+      expect(managedCfgScopeOf(name), name).not.toBeNull();
+    }
+  });
+
+  it("keeps Gameplay and Viewmodels drafts from acknowledging each other's lines", () => {
+    const settings = { ...defaultGameplay(), viewmodel_fov: 70, fov_desired: 80 };
+    expect(serializeGameplayScope(settings, "gameplay")).not.toContain("viewmodel_fov");
+    expect(serializeGameplayScope(settings, "viewmodels")).toContain("viewmodel_fov");
+    expect(serializeGameplayScope(settings, "viewmodels")).not.toContain("fov_desired");
   });
 });

@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Viewmodels is now the one place for viewmodel FOV, Draw viewmodel, Min viewmodels,
+  left-handed and transparent viewmodels, above the per-weapon choices. Gameplay links there.
 - Gameplay has Medigun auto-heal, damage numbers, combined damage numbers and healing numbers,
   grouped with auto reload and fast switch under Weapons and Combat feedback. Your current values
   are kept, and changes made in TF2's own options are picked up after the game closes.
