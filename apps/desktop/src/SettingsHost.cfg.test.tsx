@@ -17,7 +17,19 @@ vi.mock("./BindsPane", () => ({ BindsPane: () => null }));
 vi.mock("./FilesPane", () => ({ FilesPane: () => <p>Files remain available</p> }));
 vi.mock("./ModsPane", () => ({ ModsPane: () => null }));
 vi.mock("./SoundsPane", () => ({ SoundsPane: () => null }));
-vi.mock("./ViewmodelPane", () => ({ ViewmodelPane: () => null }));
+// The Viewmodels builder is out of scope; its real in-game cvar controls are not.
+vi.mock("./ViewmodelPane", async () => {
+  const { ViewmodelSettings } = await import("./ViewmodelSettings");
+  return {
+    ViewmodelPane: ({
+      profileId,
+      settings,
+    }: {
+      profileId: string | null;
+      settings?: Omit<import("./ViewmodelSettings").ViewmodelSettingsProps, "profileId">;
+    }) => (settings ? <ViewmodelSettings profileId={profileId} {...settings} /> : null),
+  };
+});
 
 let node: HTMLDivElement;
 let root: Root;
@@ -61,6 +73,7 @@ function fixture(
     getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
     getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),
     getHudSchema: vi.fn(async () => null),
+    getPreloaderStatus: vi.fn(async () => null),
     writeManagedCfg,
   } as unknown as Api;
   const render = async (tab: SettingsTab = "gameplay") => {
@@ -95,7 +108,7 @@ function control<T extends HTMLElement>(selector: string): T {
 }
 
 describe("real Gameplay save preserves cfg settings", () => {
-  it("discloses Launch and class CFG overrides without blocking Gameplay edits", async () => {
+  it("discloses Launch and class CFG overrides without blocking Viewmodels edits", async () => {
     const { render, onNavigate, writeManagedCfg } = fixture(
       {
         "tf/cfg/config.cfg": "viewmodel_fov 70\n",
@@ -104,7 +117,7 @@ describe("real Gameplay save preserves cfg settings", () => {
       "vanilla",
       "+exec personal +viewmodel_fov 110",
     );
-    await render();
+    await render("viewmodels");
     const notice = control<HTMLElement>('[data-testid="conditional-cfg-sources"]');
     expect(notice.textContent).toContain("Launch +exec personal");
     expect(notice.textContent).toContain("Launch +viewmodel_fov");
@@ -116,8 +129,10 @@ describe("real Gameplay save preserves cfg settings", () => {
     expect(onNavigate).toHaveBeenCalledWith("files");
     await act(async () => buttons.find((button) => button.textContent?.includes("+exec"))?.click());
     expect(onNavigate).toHaveBeenCalledWith("launch");
-    expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(false);
-    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    expect(control('[data-testid="settings-surface-viewmodels"]').hasAttribute("inert")).toBe(
+      false,
+    );
+    await act(async () => control('[data-testid="viewmodel-min"]').click());
     await act(async () => vi.advanceTimersByTimeAsync(701));
     expect(writeManagedCfg).toHaveBeenCalledOnce();
   });
@@ -125,12 +140,12 @@ describe("real Gameplay save preserves cfg settings", () => {
   it("clears a quiet autosave failure after its next successful Gameplay write", async () => {
     const { render, writeManagedCfg } = fixture({ "tf/cfg/config.cfg": "viewmodel_fov 70\n" });
     writeManagedCfg.mockRejectedValueOnce(new Error("Disk read only"));
-    await render();
-    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    await render("viewmodels");
+    await act(async () => control('[data-testid="viewmodel-min"]').click());
     await act(async () => vi.advanceTimersByTimeAsync(701));
     expect(node.textContent).toContain("Disk read only");
 
-    const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
+    const fov = control<HTMLInputElement>("#viewmodel-fov");
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (!setValue) throw new Error("Input value setter is unavailable");
     await act(async () => {
@@ -158,9 +173,9 @@ describe("real Gameplay save preserves cfg settings", () => {
         },
         layer,
       );
-      await render();
-      expect(control<HTMLInputElement>("#gameplay-viewmodel-fov").value).toBe("100");
-      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await render("viewmodels");
+      expect(control<HTMLInputElement>("#viewmodel-fov").value).toBe("100");
+      await act(async () => control('[data-testid="viewmodel-min"]').click());
       await act(async () => vi.advanceTimersByTimeAsync(701));
       expect(writeManagedCfg).toHaveBeenCalledOnce();
       expect(writeManagedCfg.mock.calls[0][0]).toBe(`tf/cfg/${prefix}execs_gameplay.cfg`);
@@ -184,7 +199,7 @@ describe("real Gameplay save preserves cfg settings", () => {
       await render();
       expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(true);
       expect(node.textContent).toContain("custom pack overrides");
-      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await act(async () => control('[data-testid="gameplay-autoreload"]').click());
       await act(async () => vi.advanceTimersByTimeAsync(701));
       expect(writeManagedCfg).not.toHaveBeenCalled();
     },
@@ -202,7 +217,7 @@ describe("real Gameplay save preserves cfg settings", () => {
     await render();
     expect(control('[data-testid="settings-surface-gameplay"]').hasAttribute("inert")).toBe(true);
     expect(node.textContent).toContain("Save current as…");
-    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    await act(async () => control('[data-testid="gameplay-autoreload"]').click());
     await act(async () => vi.advanceTimersByTimeAsync(701));
     expect(writeManagedCfg).not.toHaveBeenCalled();
     await render("files");
@@ -223,13 +238,11 @@ describe("real Gameplay save preserves cfg settings", () => {
         "tf/cfg/optional.cfg": "r_drawviewmodel 0\n",
         "tf/cfg/medic.cfg": "r_drawviewmodel 0\n",
       });
-      await render();
-      expect(control('[data-testid="gameplay-draw-viewmodel"]').getAttribute("aria-checked")).toBe(
-        "true",
-      );
+      await render("viewmodels");
+      expect(control('[data-testid="viewmodel-draw"]').getAttribute("aria-checked")).toBe("true");
       await act(async () => vi.advanceTimersByTimeAsync(701));
       expect(writeManagedCfg).not.toHaveBeenCalled();
-      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await act(async () => control('[data-testid="viewmodel-min"]').click());
       await act(async () => vi.advanceTimersByTimeAsync(701));
       expect(writeManagedCfg).toHaveBeenCalledTimes(1);
       expect(writeManagedCfg.mock.calls[0][1]).toContain("r_drawviewmodel 1\n");
@@ -247,14 +260,14 @@ describe("real Gameplay save preserves cfg settings", () => {
       const { render, writeManagedCfg } = fixture({
         [path]: `viewmodel_fov ${value}\n`,
       });
-      await render();
-      const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
+      await render("viewmodels");
+      const fov = control<HTMLInputElement>("#viewmodel-fov");
       expect(fov.min).toBe("1");
       expect(fov.max).toBe("179");
       expect(fov.step).toBe("1");
       expect(fov.value).toBe(String(Math.min(179, Math.max(1, Math.round(value)))));
       expect(fov.closest("div")?.textContent).toContain(`${value}°`);
-      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await act(async () => control('[data-testid="viewmodel-min"]').click());
       await act(async () => vi.advanceTimersByTimeAsync(701));
       expect(writeManagedCfg.mock.calls[0][1]).toContain(`viewmodel_fov ${value}\n`);
     },
@@ -269,8 +282,8 @@ describe("real Gameplay save preserves cfg settings", () => {
     "selects whole viewmodel FOV values when the slider moves to %s",
     async (selected, expected) => {
       const { render, writeManagedCfg } = fixture({ "tf/cfg/config.cfg": "viewmodel_fov 45\n" });
-      await render();
-      const fov = control<HTMLInputElement>("#gameplay-viewmodel-fov");
+      await render("viewmodels");
+      const fov = control<HTMLInputElement>("#viewmodel-fov");
       expect(fov.step).toBe("1");
       const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       if (!setValue) throw new Error("Input value setter is unavailable");
@@ -296,8 +309,8 @@ describe("real Gameplay save preserves cfg settings", () => {
         },
         layer,
       );
-      await render();
-      await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+      await render("viewmodels");
+      await act(async () => control('[data-testid="viewmodel-min"]').click());
       await act(async () => vi.advanceTimersByTimeAsync(701));
       expect(writeManagedCfg.mock.calls[0][1]).toContain(
         `r_drawviewmodel ${layer === "comfig" ? 0 : 1}\n`,
@@ -317,7 +330,7 @@ describe("real Gameplay save preserves cfg settings", () => {
     await act(async () => control<HTMLButtonElement>('[data-testid="review-startup-cfg"]').click());
     expect(onNavigate).toHaveBeenCalledWith("files");
     // Even a dispatched event that bypasses native inert cannot write partial maps.
-    await act(async () => control('[data-testid="gameplay-min-viewmodels"]').click());
+    await act(async () => control('[data-testid="gameplay-autoreload"]').click());
     await act(async () => vi.advanceTimersByTimeAsync(701));
     expect(writeManagedCfg).not.toHaveBeenCalled();
     await render("files");

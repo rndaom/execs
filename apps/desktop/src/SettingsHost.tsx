@@ -47,7 +47,7 @@ import {
 } from "./lib/files-drafts";
 import { cfgHudFolder } from "./lib/files-reference";
 import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/files-ui";
-import { gameplayPath, seedGameplay } from "./lib/gameplay-ui";
+import { gameplayPath } from "./lib/gameplay-ui";
 import { hudOverlayCrosshairState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
@@ -167,10 +167,6 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
-  const [drawViewmodelDraft, setDrawViewmodelDraft] = useState<{
-    profileId: string;
-    shown: boolean;
-  } | null>(null);
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   /** Rejects obsolete profile snapshots. */
   const loadRequest = useRef(0);
@@ -262,7 +258,7 @@ export function SettingsHost({
   const conditionalSources = useMemo(
     () =>
       Object.fromEntries(
-        ["binds", "gameplay", "crosshair", "sounds"].map((pane) => [
+        ["binds", "gameplay", "viewmodels", "crosshair", "sounds"].map((pane) => [
           pane,
           conditionalCfgSources(files, launchSeed, pane, detail ?? undefined),
         ]),
@@ -318,7 +314,6 @@ export function SettingsHost({
         setSteamWrite(null);
         setModsPayload(null);
       }
-      setDrawViewmodelDraft(null);
       launchSeedRef.current = nextLaunch;
       detailRef.current = next;
       setDetail(next);
@@ -741,7 +736,7 @@ export function SettingsHost({
   async function writeManaged(
     path: string,
     text: string,
-    scope?: "gameplay" | "crosshair" | "sounds",
+    scope?: "gameplay" | "crosshair" | "sounds" | "viewmodels",
   ) {
     if (!profileId) throw new Error("Select a profile before saving.");
     if (!cfgComplete.current) throw new Error(cfgReason.current ?? CFG_INCOMPLETE_MESSAGE);
@@ -852,25 +847,13 @@ export function SettingsHost({
 
     if (tab === "gameplay") {
       const path = gameplayPath(layer);
-      const canUseComfigAddons = canUseTransparentViewmodels(detail?.layer ?? null);
       return (
         <GameplayPane
           profileId={profileId}
           layer={layer}
           effective={maps.effective}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
-          transparentViewmodels={comfig.addons.includes("transparent-viewmodels")}
-          canUseComfigAddons={canUseComfigAddons}
-          onOpenComfig={() => onNavigate?.("comfig")}
-          onDrawViewmodelChange={(shown) => {
-            if (profileId) setDrawViewmodelDraft({ profileId, shown });
-          }}
-          onToggleTransparentViewmodels={() => {
-            const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
-            void write(async () => {
-              await api.setComfigAddons(addons);
-            });
-          }}
+          onOpenViewmodels={() => onNavigate?.("viewmodels")}
           onSave={(gameplayText) =>
             write(
               async () => {
@@ -1036,21 +1019,35 @@ export function SettingsHost({
     }
 
     if (tab === "viewmodels") {
-      const gameplayText = files.find((file) => file.path === gameplayPath(layer))?.text ?? "";
-      const globalViewmodelsShown =
-        maps.complete && !filesLimited
-          ? drawViewmodelDraft?.profileId === profileId
-            ? drawViewmodelDraft.shown
-            : seedGameplay(gameplayText, maps.effective).r_drawviewmodel === 1
-          : null;
+      const path = gameplayPath(layer);
       return (
         <ViewmodelPane
           active={paneActive}
           profileId={profileId}
           record={detail?.viewmodel ?? null}
-          globalViewmodelsShown={globalViewmodelsShown}
+          settings={{
+            effective: maps.effective,
+            managedText: files.find((file) => file.path === path)?.text ?? "",
+            cfgReady: maps.complete && !filesLimited,
+            transparentViewmodels: comfig.addons.includes("transparent-viewmodels"),
+            canUseComfigAddons: canUseTransparentViewmodels(detail?.layer ?? null),
+            onOpenComfig: () => onNavigate?.("comfig"),
+            onToggleTransparentViewmodels: () => {
+              const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
+              void write(async () => {
+                await api.setComfigAddons(addons);
+              });
+            },
+            onSave: (gameplayText) =>
+              write(
+                async () => {
+                  await writeManaged(path, gameplayText, "viewmodels");
+                },
+                undefined,
+                { quiet: true },
+              ),
+          }}
           profilePreload={modsPayload?.profilePreload ?? null}
-          onOpenGameplay={() => onNavigate?.("gameplay")}
           loadCatalog={api.getViewmodelSourceCatalog}
           onImport={(preload) => {
             return write(

@@ -17,9 +17,6 @@ function renderGameplay() {
         layer: "comfig",
         effective: {},
         managedText: 'cl_crosshair_file ""\ncl_crosshair_scale 32\n',
-        transparentViewmodels: false,
-        canUseComfigAddons: true,
-        onToggleTransparentViewmodels: () => undefined,
         onSave: async () => undefined,
       }),
     ),
@@ -56,13 +53,13 @@ function renderCrosshair(running = false, managedText?: string, custom = false) 
 }
 
 describe("crosshair settings placement", () => {
-  it("keeps default crosshair controls out of Gameplay but offers transparent viewmodels", () => {
+  it("keeps default crosshair and viewmodel controls out of Gameplay", () => {
     const markup = renderGameplay();
 
     expect(markup).toContain('data-testid="settings-gameplay"');
     expect(markup).not.toContain("stock-crosshair-settings");
     expect(markup).not.toContain("gameplay-crosshair-file");
-    expect(markup).toContain('data-testid="gameplay-transparent-viewmodels"');
+    expect(markup).not.toContain('data-testid="gameplay-transparent-viewmodels"');
     // Gameplay saves as you change it: no bar, no button, no lock message.
     expect(markup).not.toContain('data-testid="gameplay-apply"');
     expect(markup).not.toContain("Save gameplay");

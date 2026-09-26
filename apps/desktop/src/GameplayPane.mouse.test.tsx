@@ -34,9 +34,6 @@ async function render(overrides: Partial<GameplayPaneProps> = {}) {
         layer="comfig"
         effective={{ sensitivity: "2.3456" }}
         managedText=""
-        transparentViewmodels={false}
-        canUseComfigAddons
-        onToggleTransparentViewmodels={() => undefined}
         onSave={async () => undefined}
         {...overrides}
       />,

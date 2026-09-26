@@ -59,7 +59,6 @@ let focused: boolean;
 let visible: boolean;
 let now: number;
 const getCatalog = vi.mocked(getViewmodelSourceCatalog);
-const openGameplay = vi.fn();
 const importPack = vi.fn();
 const removePack = vi.fn();
 let buildPack: (request: ViewmodelBuildRequest) => Promise<boolean>;
@@ -83,7 +82,6 @@ beforeEach(() => {
   );
   getCatalog.mockReset();
   getCatalog.mockResolvedValue(catalog);
-  openGameplay.mockReset();
   importPack.mockReset();
   removePack.mockReset();
   buildPack = vi.fn(async () => true);
@@ -105,9 +103,16 @@ async function render(profilePreload: boolean | null = true, globalShown = true)
           active={paneActive}
           profileId={profileId}
           record={record}
-          globalViewmodelsShown={globalShown}
+          settings={{
+            effective: {},
+            managedText: `r_drawviewmodel ${globalShown ? 1 : 0}\n`,
+            cfgReady: true,
+            transparentViewmodels: false,
+            canUseComfigAddons: true,
+            onToggleTransparentViewmodels: () => undefined,
+            onSave: async () => undefined,
+          }}
           profilePreload={profilePreload}
-          onOpenGameplay={openGameplay}
           loadCatalog={getCatalog}
           onImport={importPack}
           onBuild={buildPack}
@@ -134,7 +139,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(box.textContent).toContain("Import VPK");
     expect(box.textContent).not.toContain("being prepared for 0.2.0");
     expect(box.textContent).not.toContain("Casual preload");
-    expect(box.textContent).toContain("Draw viewmodel is off in Gameplay");
+    expect(box.textContent).toContain("Every viewmodel is hidden in game");
     expect(box.textContent).toContain("Scattergun");
     expect(box.querySelector('[data-testid="viewmodel-section-primary"]')?.textContent).toContain(
       "Primary",
@@ -153,8 +158,6 @@ describe("Viewmodels source-derived draft", () => {
     expect(box.querySelector("img")).toBeNull();
     await click('[data-testid="viewmodel-import"]');
     expect(importPack).toHaveBeenCalledWith(false);
-    await click('[data-testid="viewmodel-global-status"] button');
-    expect(openGameplay).toHaveBeenCalledOnce();
   });
 
   it("keeps a previously built profile record visible and read only", async () => {
