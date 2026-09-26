@@ -28,6 +28,7 @@ pub mod pcf;
 pub mod preloader;
 pub mod process_lock;
 pub mod profile;
+pub mod profile_compare;
 pub mod settings;
 pub mod steam_inf;
 pub mod storage;
