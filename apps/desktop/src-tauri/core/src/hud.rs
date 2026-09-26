@@ -1029,6 +1029,105 @@ where
     detail_from_manifest(profiles_dir, &manifest)
 }
 
+/// Return a profile to TF2's own HUD. This is HUD install without a new HUD:
+/// the profile's HUD folders (every root of a legacy multi-HUD profile), its
+/// managed option cfgs and their autoexec exec lines leave the profile in one
+/// recoverable transaction, and the HUD record clears. On the active profile,
+/// mounted HUD folders move beneath the backup container with any untracked
+/// files, so nothing is deleted and no earlier HUD is reactivated. Other packs,
+/// cfg settings and preload selections stay as they are.
+pub fn return_to_stock_hud_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running_names
+        .into_iter()
+        .map(|name| name.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    refuse_profile_hud_vpks(profiles_dir, &manifest)?;
+    let previous = manifest_hud_packs(&manifest);
+    let mut remove: Vec<String> = manifest
+        .files
+        .iter()
+        .filter(|file| {
+            is_managed_hud_cfg(&file.path)
+                || pack_key(&file.path)
+                    .is_some_and(|pack| previous.iter().any(|hud| hud.eq_ignore_ascii_case(&pack)))
+        })
+        .map(|file| file.path.clone())
+        .collect();
+    remove.sort();
+    remove.dedup();
+    let autoexec = prepare_hud_autoexec_update(profiles_dir, tf2_root, profile_id, &manifest, &[])?;
+    let active = load_library_from(profiles_dir, Some(tf2_root))?
+        .active_profile_id
+        .as_deref()
+        == Some(profile_id);
+    let live_renames = if active {
+        plan_live_hud_renames(tf2_root, &[])?
+    } else {
+        Vec::new()
+    };
+    if manifest.hud.is_none()
+        && previous.is_empty()
+        && remove.is_empty()
+        && autoexec.is_none()
+        && live_renames.is_empty()
+    {
+        return detail_from_manifest(profiles_dir, &manifest);
+    }
+
+    let batch: Vec<(String, FileSource<'_>)> = autoexec
+        .iter()
+        .map(|(path, bytes)| (path.clone(), FileSource::Bytes(bytes)))
+        .collect();
+    let cfg_paths: Vec<String> = batch
+        .iter()
+        .map(|(path, _)| path.clone())
+        .chain(remove.iter().cloned())
+        .collect();
+    ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
+    ownership::preserve_library_hud_originals(profiles_dir, &manifest, &previous)?;
+    let recheck =
+        || ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths);
+    let manifest = mutate_profile_files_with_live_renames_checked_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        &batch,
+        &remove,
+        &live_renames,
+        &running,
+        |manifest| {
+            manifest.hud = None;
+            manifest.hud_roots = Some(Vec::new());
+            manifest.hud_selected_root = None;
+            manifest.hud_review_pending = false;
+            manifest.mods.retain(|record| {
+                !previous
+                    .iter()
+                    .any(|pack| pack.eq_ignore_ascii_case(&record.pack))
+            });
+            Ok(())
+        },
+        Some(&recheck),
+    )?;
+    if active {
+        for path in &remove {
+            prune_empty_parents(&live_path(tf2_root, path), tf2_root);
+        }
+    }
+    detail_from_manifest(profiles_dir, &manifest)
+}
+
 pub fn match_hud_catalog(
     tf2_root: &Path,
     profile_id: &str,
@@ -4064,6 +4163,146 @@ mod tests {
 
     /// Installing a HUD prunes the previous HUD's managed option cfgs from the
     /// profile and the live tree; whoever applies options writes the new set.
+    #[test]
+    fn return_to_stock_removes_only_the_hud_and_keeps_its_untracked_bytes() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/custom/mypack/materials/a.vmt",
+            b"pack\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        write_owned_file_to(
+            &profiles,
+            &root,
+            &id,
+            "tf/cfg/autoexec.cfg",
+            b"bind f +duck\n",
+            unlocked(),
+            WriteOwnedOptions::default(),
+        )
+        .unwrap();
+        install_hud_pack_with_cfgs_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            &[(
+                "tf/cfg/execs_hud_rays.cfg".into(),
+                b"cl_hud_minmode 1\n".to_vec(),
+            )],
+            unlocked(),
+        )
+        .unwrap();
+        let autoexec = fs::read_to_string(root.join("tf/cfg/autoexec.cfg")).unwrap();
+        assert!(autoexec.contains("execs_hud_rays"));
+        fs::write(root.join("tf/custom/rayshud/my-notes.txt"), b"mine\n").unwrap();
+
+        let detail = return_to_stock_hud_to(&profiles, &root, &id, unlocked()).unwrap();
+        assert!(detail.hud.is_none());
+        assert!(!detail
+            .files
+            .iter()
+            .any(|file| file.path.starts_with("tf/custom/rayshud/")
+                || file.path == "tf/cfg/execs_hud_rays.cfg"));
+        assert!(detail
+            .files
+            .iter()
+            .any(|file| file.path == "tf/custom/mypack/materials/a.vmt"));
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(manifest.hud_roots, Some(Vec::new()));
+        assert_eq!(manifest.hud_selected_root, None);
+        let autoexec = fs::read_to_string(root.join("tf/cfg/autoexec.cfg")).unwrap();
+        assert!(autoexec.contains("bind f +duck"));
+        assert!(!autoexec.contains("execs_hud_rays"));
+        assert!(!root.join("tf/cfg/execs_hud_rays.cfg").exists());
+        assert!(!root.join("tf/custom/rayshud").exists());
+        assert!(preserved_hud(&root, "rayshud")
+            .join("my-notes.txt")
+            .is_file());
+        assert!(root.join("tf/custom/mypack/materials/a.vmt").is_file());
+
+        // A second request is a no-op, and a later switch back projects no HUD.
+        let again = return_to_stock_hud_to(&profiles, &root, &id, unlocked()).unwrap();
+        assert_eq!(again.files, detail.files);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn return_to_stock_on_an_inactive_profile_leaves_tf2_alone() {
+        let dir = test_temp_dir();
+        let (profiles, root, active) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &active,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let library = create_profile_record_to(&profiles, &root, "Spare", unlocked()).unwrap();
+        let spare = library
+            .profiles
+            .iter()
+            .find(|profile| profile.id != active)
+            .unwrap()
+            .id
+            .clone();
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &spare,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let live_hud = fs::read(root.join("tf/custom/rayshud/info.vdf")).unwrap();
+
+        let detail = return_to_stock_hud_to(&profiles, &root, &spare, unlocked()).unwrap();
+        assert!(detail.hud.is_none());
+        assert_eq!(
+            fs::read(root.join("tf/custom/rayshud/info.vdf")).unwrap(),
+            live_hud
+        );
+        assert!(load_manifest(&profiles, &active).unwrap().hud.is_some());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn return_to_stock_refuses_while_tf2_runs() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let running = if cfg!(windows) {
+            "tf_win64.exe"
+        } else {
+            "tf_linux64"
+        };
+        assert_eq!(
+            return_to_stock_hud_to(&profiles, &root, &id, [running]).unwrap_err(),
+            ProfileError::GameRunning
+        );
+        assert!(load_manifest(&profiles, &id).unwrap().hud.is_some());
+        assert!(root.join("tf/custom/rayshud/info.vdf").is_file());
+        cleanup(&dir);
+    }
+
     #[test]
     fn install_prunes_stale_hud_option_cfgs() {
         let dir = test_temp_dir();
