@@ -9,6 +9,8 @@ User-facing changes only. The release workflow publishes the matching
 
 - The Sounds library now chooses for one slot at a time. Browse from the hit or kill sound, then
   preview and use a sound from a simpler list.
+- Viewmodels can show all, hide all, or hide everything except melee across every class at once.
+  You see exactly what changes first, can undo it, and nothing is written until you build.
 - Viewmodels is now the one place for viewmodel FOV, Draw viewmodel, Min viewmodels,
   left-handed and transparent viewmodels, above the per-weapon choices. Gameplay links there.
 - Gameplay has Medigun auto-heal, damage numbers, combined damage numbers and healing numbers,
