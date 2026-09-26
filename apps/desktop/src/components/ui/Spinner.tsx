@@ -1,32 +1,11 @@
 import type { ReactNode } from "react";
+import { EMBLEM_QUADRANT_PATH, EMBLEM_TILT } from "../../lib/tf2-emblem";
 
 /*
- * A flat redraw of the Team Fortress 2 emblem: a disc cut into four quadrants
- * by a slightly tilted cross around a round centre. One quadrant is computed
- * and turned four times, so the mark is exactly four-fold symmetric and a
- * quarter turn loops without a seam.
+ * A flat redraw of the Team Fortress 2 emblem. The geometry lives in
+ * lib/tf2-emblem; one quadrant is turned four times, so the mark is exactly
+ * four-fold symmetric and a quarter turn loops without a seam.
  */
-const OUTER = 11;
-const INNER = 4.5;
-const HALF_GAP = 1.6;
-const TILT = 7;
-
-const QUADRANT_PATH = (() => {
-  const innerSide = Math.sqrt(INNER * INNER - HALF_GAP * HALF_GAP);
-  const outerSide = Math.sqrt(OUTER * OUTER - HALF_GAP * HALF_GAP);
-  const n = (value: number) => value.toFixed(3);
-  // Along the horizontal gap, around the outer rim, back along the vertical
-  // gap, then the concave arc of the centre hole.
-  return [
-    `M${n(innerSide)} ${n(HALF_GAP)}`,
-    `L${n(outerSide)} ${n(HALF_GAP)}`,
-    `A${OUTER} ${OUTER} 0 0 1 ${n(HALF_GAP)} ${n(outerSide)}`,
-    `L${n(HALF_GAP)} ${n(innerSide)}`,
-    `A${INNER} ${INNER} 0 0 0 ${n(innerSide)} ${n(HALF_GAP)}`,
-    "Z",
-  ].join("");
-})();
-
 /** The TF2 emblem as a flat, single-colour mark. */
 export function Tf2Mark({
   size = 24,
@@ -49,9 +28,9 @@ export function Tf2Mark({
       aria-hidden={title ? undefined : true}
       focusable="false"
     >
-      <g transform={`rotate(${TILT})`} fill="currentColor">
+      <g transform={`rotate(${EMBLEM_TILT})`} fill="currentColor">
         {[0, 90, 180, 270].map((turn) => (
-          <path key={turn} d={QUADRANT_PATH} transform={`rotate(${turn})`} />
+          <path key={turn} d={EMBLEM_QUADRANT_PATH} transform={`rotate(${turn})`} />
         ))}
       </g>
     </svg>

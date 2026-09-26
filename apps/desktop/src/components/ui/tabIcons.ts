@@ -17,9 +17,9 @@ import type { SettingsTab } from "../../lib/settings-ui";
 
 export type TabIcon = ComponentType<{ size?: number; weight?: "regular" | "bold" }>;
 
-/** One icon per pane, shared by the sidebar and the Overview rows. */
+/** One icon per pane, shared by the sidebar and the Home profile details. */
 export const SETTINGS_TAB_ICONS: Record<SettingsTab, TabIcon> = {
-  overview: House,
+  home: House,
   comfig: SlidersHorizontal,
   binds: Keyboard,
   gameplay: GameController,

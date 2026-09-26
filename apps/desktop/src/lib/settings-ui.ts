@@ -2,7 +2,7 @@ import type { ProfileLibrary } from "./bridge";
 import { canWrite } from "./write-gate";
 
 export const SETTINGS_TABS = [
-  "overview",
+  "home",
   "comfig",
   "binds",
   "gameplay",
@@ -19,7 +19,7 @@ export const SETTINGS_TABS = [
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
-  overview: "Overview",
+  home: "Home",
   comfig: "Comfig",
   binds: "Binds",
   gameplay: "Gameplay",
@@ -34,12 +34,12 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
 };
 
 /**
- * The sidebar opens with the Overview, then three short groups instead of one
+ * The sidebar opens with Home, then three short groups instead of one
  * long list: what you set up, how it looks, and everything else. A group with
  * no label shows no heading.
  */
 export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
-  { label: "", tabs: ["overview"] },
+  { label: "", tabs: ["home"] },
   { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
   { label: "Look", tabs: ["hud", "crosshair", "viewmodels", "sounds"] },
   { label: "More", tabs: ["mods", "files", "launch"] },

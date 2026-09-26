@@ -141,3 +141,21 @@ export function overviewRows(input: OverviewInput): OverviewRow[] {
     { tab: "launch", label: "Launch", value: launch(settings) },
   ];
 }
+
+/**
+ * The one line under the profile name on Home: the three things people ask
+ * about first. The full list stays one fold away.
+ */
+export function homeHighlights(rows: OverviewRow[]): string {
+  const value = (tab: SettingsTab) => rows.find((row) => row.tab === tab)?.value;
+  const graphics = value("comfig")?.split(" · ")[0];
+  const hud = value("hud");
+  const binds = value("binds");
+  return [
+    graphics,
+    hud === undefined ? undefined : hud === "TF2 default" ? "Default HUD" : `${hud} HUD`,
+    binds === "Needs review" ? undefined : binds,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+}

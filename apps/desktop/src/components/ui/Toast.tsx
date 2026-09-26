@@ -35,6 +35,8 @@ export type ToastApi = {
   resolveDraft: (source: string) => void;
   /** Explicitly discarding a failed draft resolves its feedback only. */
   clearSource: (source: string) => void;
+  /** A quiet autosave landed: no message, only the execs dot acknowledges it. */
+  noteQuietSave: () => void;
   dismiss: () => void;
 };
 
@@ -51,6 +53,7 @@ const NO_TOAST: ToastApi = {
   deferDraft: () => undefined,
   resolveDraft: () => undefined,
   clearSource: () => undefined,
+  noteQuietSave: () => undefined,
   dismiss: () => undefined,
 };
 
@@ -64,6 +67,16 @@ type SlotRegistry = {
   status: (element: HTMLElement | null) => void;
   alert: (element: HTMLElement | null) => void;
 };
+
+/** What saving is doing right now, for the header's execs dot. */
+export type SaveActivity = { kind: "saving" | "saved" | null; saved: number };
+
+const SaveActivityContext = createContext<SaveActivity>({ kind: null, saved: 0 });
+
+/** The execs dot breathes while a change saves and pops once when it lands. */
+export function useSaveActivity(): SaveActivity {
+  return useContext(SaveActivityContext);
+}
 
 const SlotContext = createContext<SlotRegistry>({
   status: () => undefined,
@@ -104,6 +117,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
   const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
   const [alertSlot, setAlertSlot] = useState<HTMLElement | null>(null);
   const slots = useMemo<SlotRegistry>(() => ({ status: setStatusSlot, alert: setAlertSlot }), []);
+  const [savedCount, setSavedCount] = useState(0);
   const toast = feedback.toast;
   const [inFlight, setInFlight] = useState<Record<string, number>>({});
 
@@ -137,6 +151,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
       deferDraft: (source) => send({ type: "defer", source }),
       resolveDraft: (source) => send({ type: "resolve-draft", source }),
       clearSource: (source) => send({ type: "clear-source", source }),
+      noteQuietSave: () => setSavedCount((count) => count + 1),
       dismiss: () => send({ type: "hide" }),
     }),
     [send, changeInFlight],
@@ -152,6 +167,18 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
     const timer = window.setTimeout(() => send({ type: "slow" }), TOAST_SAVING_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [activeSaves, send]);
+
+  // Every completion is a fresh toast object, so each one counts once.
+  useEffect(() => {
+    if (toast?.kind === "saved") setSavedCount((count) => count + 1);
+  }, [toast]);
+  const activity = useMemo<SaveActivity>(
+    () => ({
+      kind: toast?.kind === "saving" || toast?.kind === "saved" ? toast.kind : null,
+      saved: savedCount,
+    }),
+    [toast, savedCount],
+  );
 
   const linger = toastLingerMs(toast);
   useEffect(() => {
@@ -223,7 +250,9 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
 
   return (
     <ToastContext.Provider value={api}>
-      <SlotContext.Provider value={slots}>{children}</SlotContext.Provider>
+      <SaveActivityContext.Provider value={activity}>
+        <SlotContext.Provider value={slots}>{children}</SlotContext.Provider>
+      </SaveActivityContext.Provider>
       {slot && message ? createPortal(message, slot) : null}
       {/* Without a header (onboarding, single-pane tests) the message keeps
           its own quiet spot over the content column. */}

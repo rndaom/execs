@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileDetail } from "./bridge";
-import { type OverviewInput, overviewRows } from "./overview-ui";
+import { homeHighlights, type OverviewInput, overviewRows } from "./home-ui";
 
 const detail: ProfileDetail = {
   id: "p1",
@@ -99,5 +99,19 @@ describe("overviewRows", () => {
       Binds: "No keys bound",
       Launch: "None",
     });
+  });
+});
+
+describe("homeHighlights", () => {
+  it("names the preset, HUD and binds in one line", () => {
+    expect(homeHighlights(overviewRows(input()))).toBe(
+      "Medium preset · rayshud HUD · 2 keys bound",
+    );
+  });
+
+  it("leaves out what could not be read", () => {
+    expect(homeHighlights(overviewRows(input({ settingsComplete: false })))).toBe(
+      "Medium preset · rayshud HUD",
+    );
   });
 });

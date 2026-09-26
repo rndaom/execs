@@ -9,6 +9,7 @@ import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
+import { type HomeNotice, HomePane } from "./HomePane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { useHudResources } from "./hooks/useHudResources";
@@ -51,17 +52,16 @@ import {
 import { cfgHudFolder } from "./lib/files-reference";
 import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
+import { homeHighlights, overviewRows } from "./lib/home-ui";
 import { hudOverlayCrosshairState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
-import { overviewRows } from "./lib/overview-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { type CfgText, readSettingsSnapshot } from "./lib/settings-loading";
 import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import { prefetchViewmodelCatalog } from "./lib/viewmodel-catalog-cache";
 import { ModsPane } from "./ModsPane";
-import { type OverviewNotice, OverviewPane } from "./OverviewPane";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
@@ -578,8 +578,10 @@ export function SettingsHost({
         if (started) toast.cancelSave(copy?.source);
         return false;
       }
-      if (options?.quiet) toast.clearSource(copy?.source ?? "default");
-      else toast.finishSave(copy?.success, copy?.source);
+      if (options?.quiet) {
+        toast.clearSource(copy?.source ?? "default");
+        toast.noteQuietSave();
+      } else toast.finishSave(copy?.success, copy?.source);
       return true;
     } catch (err) {
       // A failure before picker completion did not reserve a save counter.
@@ -808,9 +810,9 @@ export function SettingsHost({
         options,
       );
     }
-    if (tab === "overview") {
+    if (tab === "home") {
       const cfgReadable = !filesLimited && maps.complete;
-      const notices: OverviewNotice[] = [];
+      const notices: HomeNotice[] = [];
       if (!cfgReadable && onNavigate) {
         notices.push({
           id: "cfg",
@@ -840,17 +842,22 @@ export function SettingsHost({
           });
         }
       }
+      const rows = overviewRows({
+        detail,
+        comfig,
+        effective: maps.effective,
+        binds: maps.binds,
+        settingsComplete: cfgReadable,
+        launchOptions: detail?.launchOptions ?? "",
+      });
       return (
-        <OverviewPane
-          rows={overviewRows({
-            detail,
-            comfig,
-            effective: maps.effective,
-            binds: maps.binds,
-            settingsComplete: cfgReadable,
-            launchOptions: detail?.launchOptions ?? "",
-          })}
+        <HomePane
+          profileId={profileId}
+          profileName={activeProfileName ?? detail?.name ?? null}
+          highlights={homeHighlights(rows)}
+          rows={rows}
           notices={notices}
+          active={paneActive}
           onOpen={(target) => onNavigate?.(target)}
         />
       );

@@ -174,6 +174,22 @@ describe("pane scroll retention", () => {
     expect(viewport().scrollTop).toBe(40);
   });
 
+  it("marks panes with waiting changes with the execs dot", async () => {
+    await act(async () => {
+      root.render(
+        <SettingsLayout tab="comfig" changed={new Set(["binds", "files"])} onTab={() => undefined}>
+          <Content tab="comfig" />
+        </SettingsLayout>,
+      );
+    });
+    expect(box.querySelector('[data-testid="settings-tab-binds-changed"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid="settings-tab-files-changed"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid="settings-tab-comfig-changed"]')).toBeNull();
+    expect(box.querySelector('[data-testid="settings-tab-binds"]')?.textContent).toContain(
+      "has unsaved changes",
+    );
+  });
+
   it("releases its layout observer on unmount", async () => {
     await render("comfig");
     await act(async () => root.render(null));

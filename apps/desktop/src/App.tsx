@@ -1,5 +1,5 @@
 import { ArrowLeft, GearSix } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppSettingsPane } from "./AppSettingsPane";
 import { AppFooter } from "./components/AppFooter";
 import { FinderPanel } from "./components/FinderPanel";
@@ -71,7 +71,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const profileSettings = useRef<HTMLDivElement>(null);
   const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
-    () => previewSettingsTab(preview) ?? "overview",
+    () => previewSettingsTab(preview) ?? "home",
   );
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
@@ -200,6 +200,20 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     onHudReviewRequired: setHudReviewId,
   });
   const recoveryTargetId = profiles.library?.pendingSwitchProfileId ?? null;
+  // The execs dot marks panes whose changes have not reached the profile yet:
+  // a settings draft still waiting (debounce, TF2 running, failure) or
+  // unsaved Files edits.
+  const filesVersion = useSyncExternalStore(filesDraftStore.subscribe, filesDraftStore.getVersion);
+  const changedProfileId = profiles.library?.activeProfileId ?? null;
+  const changedTabs = useMemo(() => {
+    const tabs = new Set<SettingsTab>(
+      settingsDrafts
+        .filter((entry) => entry.profile === changedProfileId)
+        .map((entry) => entry.tab),
+    );
+    if (filesVersion >= 0 && filesDraftStore.hasDirty(changedProfileId)) tabs.add("files");
+    return tabs;
+  }, [settingsDrafts, filesVersion, filesDraftStore, changedProfileId]);
   const pendingPanes = [
     ...new Set(settingsDrafts.map((entry) => SETTINGS_TAB_LABELS[entry.tab])),
   ].join(", ");
@@ -488,6 +502,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout
               tab={settingsTab}
+              changed={changedTabs}
               page={appSettingsOpen ? "app" : null}
               onTab={navigateSettings}
               scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}

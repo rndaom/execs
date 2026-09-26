@@ -233,3 +233,30 @@ describe("source-bound retained documents", () => {
     expect(store.dirty()).toEqual([]);
   });
 });
+
+describe("unsaved Files work for the sidebar", () => {
+  it("notifies once the set of edited files changes, per profile", async () => {
+    const store = createFilesDraftStore();
+    let calls = 0;
+    const stop = store.subscribe(() => {
+      calls += 1;
+    });
+    store.read("a", "tf/cfg/autoexec.cfg", "echo hi");
+    await Promise.resolve();
+    expect(calls).toBe(0);
+    expect(store.hasDirty("a")).toBe(false);
+    const before = store.getVersion();
+    store.edit("a", "tf/cfg/autoexec.cfg", "echo changed");
+    store.edit("a", "tf/cfg/autoexec.cfg", "echo changed again");
+    await Promise.resolve();
+    expect(calls).toBe(1);
+    expect(store.getVersion()).toBe(before + 1);
+    expect(store.hasDirty("a")).toBe(true);
+    expect(store.hasDirty("b")).toBe(false);
+    store.discard("a", "tf/cfg/autoexec.cfg");
+    await Promise.resolve();
+    expect(calls).toBe(2);
+    expect(store.hasDirty("a")).toBe(false);
+    stop();
+  });
+});

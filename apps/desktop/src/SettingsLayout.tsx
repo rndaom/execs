@@ -1,4 +1,4 @@
-import { Component, createRef, type ReactNode } from "react";
+import { Component, createRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { SETTINGS_TAB_ICONS } from "./components/ui/tabIcons";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
@@ -122,6 +122,7 @@ export function SettingsLayout({
   scrollIdentity = null,
   utility,
   page = null,
+  changed,
 }: {
   tab: SettingsTab;
   children?: ReactNode;
@@ -132,11 +133,58 @@ export function SettingsLayout({
   utility?: ReactNode;
   /** A global page can share the shell without becoming a profile pane. */
   page?: "app" | null;
+  /** Panes with changes that have not reached the profile yet. */
+  changed?: ReadonlySet<SettingsTab>;
 }) {
+  const nav = useRef<HTMLElement | null>(null);
+  const activeTab = page === null ? tab : null;
+  const [indicator, setIndicator] = useState<{
+    top: number;
+    height: number;
+    ready: boolean;
+  } | null>(null);
+
+  // One highlight travels to the active item; the first placement snaps.
+  useLayoutEffect(() => {
+    const root = nav.current;
+    if (!root) return;
+    const place = () => {
+      const item = activeTab
+        ? root.querySelector<HTMLElement>(`[data-testid="settings-tab-${activeTab}"]`)
+        : null;
+      if (!item) {
+        setIndicator(null);
+        return;
+      }
+      setIndicator((current) => ({
+        top: item.offsetTop,
+        height: item.offsetHeight,
+        ready: current !== null,
+      }));
+    };
+    place();
+    // Item heights only change with the window's breakpoints.
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [activeTab]);
+
   return (
     <div data-testid="settings-panes" className="settings-shell">
       <aside className="settings-sidebar">
-        <nav className="settings-nav" aria-label="Settings">
+        <nav
+          ref={nav}
+          className="settings-nav"
+          aria-label="Settings"
+          data-indicator={indicator ? "true" : undefined}
+        >
+          {indicator ? (
+            <span
+              aria-hidden="true"
+              className="settings-nav-indicator"
+              data-ready={indicator.ready ? "true" : "false"}
+              style={{ transform: `translateY(${indicator.top}px)`, height: indicator.height }}
+            />
+          ) : null}
           {SETTINGS_TAB_GROUPS.map((group) => (
             <div key={group.label} className="settings-nav-group">
               {group.label ? (
@@ -158,11 +206,18 @@ export function SettingsLayout({
                     onClick={() => onTab(item)}
                     className="settings-nav-item"
                   >
-                    {active ? <span aria-hidden="true" className="settings-nav-marker" /> : null}
                     <span aria-hidden="true" className="shrink-0">
                       <Icon size={16} weight="regular" />
                     </span>
                     <span className="settings-nav-label">{SETTINGS_TAB_LABELS[item]}</span>
+                    {changed?.has(item) ? (
+                      <span
+                        data-testid={`settings-tab-${item}-changed`}
+                        className="settings-nav-change"
+                      >
+                        <span className="sr-only">, has unsaved changes</span>
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}

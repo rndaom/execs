@@ -12,9 +12,13 @@ User-facing changes only. The release workflow publishes the matching
   emblem, and Viewmodels and Crosshair class tabs show TF2's class emblems read from your own game
   files. execs follows your system's reduced-motion setting, or your own Reduce preference in App
   settings.
-- execs opens on an Overview of your profile: graphics preset, HUD, crosshair, viewmodels, sounds,
-  gameplay, binds, mods and launch options at a glance, each one click from where you change it,
-  plus anything that needs attention.
+- execs opens on Home: your profile's name over the TF2 emblem drawn in dots that ease aside
+  under your pointer, one line naming its preset, HUD and binds, anything that needs attention,
+  and the full setup one fold away with a link to each part.
+- The orange execs dot now means "a change": it breathes while a change saves and pops when it is
+  saved, and marks any pane whose changes are still waiting, such as Files edits you have not
+  saved. The sidebar highlight, tab underlines and choice buttons glide to your selection, and
+  folds open smoothly.
 - Calmer panes: Comfig leads with presets and addons and folds module fine-tuning away with a
   count of what you changed; notes about class cfgs and launch options that can change a pane's
   values fold below its controls.
