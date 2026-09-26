@@ -673,6 +673,8 @@ pub fn run() {
             commands::app_settings::set_app_preferences,
             commands::app_settings::get_storage_usage,
             commands::app_settings::clear_download_caches,
+            commands::uninstall::get_uninstall_info,
+            commands::uninstall::uninstall_execs,
             commands::library::switch_profile,
             commands::library::review_retired_casual_profile,
             commands::library::clear_retired_casual_profile,

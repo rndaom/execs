@@ -8,6 +8,7 @@ import type {
 } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 import type { ProfileComparison } from "./switch-compare-ui";
+import type { UninstallInfo } from "./uninstall-ui";
 
 export type InventoryItem = {
   id: string;
@@ -206,6 +207,14 @@ export function deleteProfile(id: string, keepInstalled: boolean): Promise<Profi
 
 export function compareProfileSwitch(targetId: string): Promise<ProfileComparison> {
   return call("compare_profile_switch", { targetId });
+}
+
+export function getUninstallInfo(): Promise<UninstallInfo> {
+  return call("get_uninstall_info");
+}
+
+export function uninstallExecs(deleteData: boolean): Promise<{ closing: boolean }> {
+  return call("uninstall_execs", { deleteData });
 }
 
 export function getAppSettings(): Promise<AppSettingsPayload> {

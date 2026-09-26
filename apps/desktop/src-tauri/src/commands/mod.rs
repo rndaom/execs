@@ -18,6 +18,7 @@ pub mod lifecycle;
 pub mod mods;
 pub mod preloader;
 pub mod shared;
+pub mod uninstall;
 pub mod viewmodel;
 
 use tauri::{AppHandle, Manager};
