@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- The Sounds library now chooses for one slot at a time. Browse from the hit or kill sound, then
+  preview and use a sound from a simpler list.
 - Gameplay has Medigun auto-heal, damage numbers, combined damage numbers and healing numbers,
   grouped with auto reload and fast switch under Weapons and Combat feedback. Your current values
   are kept, and changes made in TF2's own options are picked up after the game closes.
