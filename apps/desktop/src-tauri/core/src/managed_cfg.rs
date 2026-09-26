@@ -26,6 +26,8 @@ impl ManagedCfgScope {
                     | b"cl_flipviewmodels"
                     | b"cl_autoreload"
                     | b"hud_fastswitch"
+                    | b"sensitivity"
+                    | b"zoom_sensitivity_ratio"
             ),
             Self::Crosshair => matches!(
                 name.as_slice(),
@@ -310,6 +312,50 @@ mod tests {
             .unwrap();
             assert_eq!(scalar(&changed, "cl_autoreload").as_deref(), Some("0"));
             assert_eq!(scalar(&changed, "hud_fastswitch").as_deref(), Some("2"));
+        }
+    }
+
+    #[test]
+    fn mouse_sensitivity_belongs_to_gameplay_and_keeps_its_exact_decimals() {
+        let original = b"sensitivity 3
+cl_crosshair_scale 43
+tf_dingaling_volume 0.4
+";
+        let changed = merge_scope(
+            original,
+            b"sensitivity 2.3456
+zoom_sensitivity_ratio 0.793471
+cl_crosshair_scale 10
+",
+            ManagedCfgScope::Gameplay,
+        )
+        .unwrap();
+        assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("2.3456"));
+        assert_eq!(
+            scalar(&changed, "zoom_sensitivity_ratio").as_deref(),
+            Some("0.793471")
+        );
+        assert_eq!(
+            scalar(&changed, "cl_crosshair_scale").as_deref(),
+            Some("43")
+        );
+        assert_eq!(
+            scalar(&changed, "tf_dingaling_volume").as_deref(),
+            Some("0.4")
+        );
+
+        // Crosshair and Sounds saves never rewrite the player's sensitivity.
+        for scope in [ManagedCfgScope::Crosshair, ManagedCfgScope::Sounds] {
+            let changed = merge_scope(
+                original,
+                b"sensitivity 9
+cl_crosshair_scale 50
+tf_dingaling_volume 0.8
+",
+                scope,
+            )
+            .unwrap();
+            assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("3"));
         }
     }
 

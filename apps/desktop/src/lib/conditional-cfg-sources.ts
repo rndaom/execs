@@ -15,6 +15,8 @@ const GAMEPLAY_CVARS = new Set([
   "cl_flipviewmodels",
   "cl_autoreload",
   "hud_fastswitch",
+  "sensitivity",
+  "zoom_sensitivity_ratio",
 ]);
 
 const CROSSHAIR_CVARS = new Set([

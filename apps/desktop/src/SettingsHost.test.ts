@@ -284,6 +284,43 @@ describe("settings snapshot integrity", () => {
       expect(container.textContent).not.toContain("Could not read settings");
     },
   );
+  it("adopts a sensitivity changed in TF2's options after the game closes", async () => {
+    const gameplay = "tf/cfg/execs_gameplay.cfg";
+    const managed = "fov_desired 90\nsensitivity 3\nzoom_sensitivity_ratio 1\n";
+    const source = {
+      profileId: "A",
+      root: "fixture",
+      layer: "vanilla",
+      sha256: "old",
+      librarySha256: "old",
+    };
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "A",
+      layer: "vanilla",
+      files: [{ path: "tf/cfg/config.cfg" }, { path: gameplay }],
+      launchOptions: "",
+    });
+    let current = managed;
+    api.readProfileFile.mockImplementation(async (path: string) =>
+      path === gameplay
+        ? { path, text: current, source }
+        : { path, text: 'sensitivity "2.2"\nzoom_sensitivity_ratio "1"\n' },
+    );
+    api.writeOwnedFile.mockImplementation(async (_path: string, text: string) => {
+      current = text;
+      return {};
+    });
+    await render();
+    expect(api.writeOwnedFile).not.toHaveBeenCalled();
+
+    await render({ refreshKey: 2, bindSyncRequest: 1 });
+    expect(api.writeOwnedFile).toHaveBeenCalledWith(
+      gameplay,
+      "fov_desired 90\nsensitivity 2.2\nzoom_sensitivity_ratio 1\n",
+      source,
+    );
+    expect(capture.panes.gameplay.managedText).toContain("sensitivity 2.2");
+  });
   it("refuses unknown initial cfg bytes instead of mounting default controls", async () => {
     api.getActiveProfileDetail.mockResolvedValue({
       id: "A",
