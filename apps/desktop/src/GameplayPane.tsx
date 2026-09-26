@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -14,9 +14,11 @@ import {
   FLIP_VIEWMODELS_NOTE,
   FOV_MAX,
   FOV_MIN,
+  formatCvarNumber,
   type GameplayLayer,
   type GameplaySettings,
   gameplayPath,
+  parseSensitivityInput,
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
@@ -125,6 +127,34 @@ export function GameplayPane({
           </p>
         </aside>
       </div>
+
+      <PaneSection
+        id="gameplay-mouse"
+        title="Mouse"
+        description="Changes made in TF2’s options are picked up after the game closes."
+        as="fieldset"
+      >
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <NumberField
+            id="gameplay-sensitivity"
+            testId="gameplay-sensitivity"
+            label="Sensitivity"
+            description="TF2’s default is 3."
+            value={draft.sensitivity}
+            resetKey={profileId}
+            onChange={(sensitivity) => patch({ sensitivity })}
+          />
+          <NumberField
+            id="gameplay-zoom-sensitivity"
+            testId="gameplay-zoom-sensitivity"
+            label="Zoomed sensitivity ratio"
+            description="Multiplies sensitivity while scoped. TF2’s default is 1."
+            value={draft.zoom_sensitivity_ratio}
+            resetKey={profileId}
+            onChange={(zoom_sensitivity_ratio) => patch({ zoom_sensitivity_ratio })}
+          />
+        </div>
+      </PaneSection>
 
       <div className="section pane-split">
         <PaneSection id="gameplay-viewmodels" title="Viewmodels and weapons" as="fieldset" first>
@@ -292,6 +322,84 @@ function SliderRow({
         <span>{min}</span>
         <span>{max}</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Exact decimal entry. The text the player types is kept while it is being
+ * edited; only a valid number reaches the draft, so nothing is rounded.
+ */
+function NumberField({
+  id,
+  testId,
+  label,
+  description,
+  value,
+  resetKey,
+  onChange,
+}: {
+  id: string;
+  testId: string;
+  label: string;
+  description?: string;
+  value: number;
+  /** A different profile replaces whatever was typed. */
+  resetKey: string | null;
+  onChange: (value: number) => void;
+}) {
+  const [text, setText] = useState(() => formatCvarNumber(value));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new profile or an outside value change replaces typed text.
+  useEffect(() => {
+    setText((current) => {
+      const parsed = parseSensitivityInput(current);
+      return parsed.value === value ? current : formatCvarNumber(value);
+    });
+  }, [value, resetKey]);
+  const parsed = parseSensitivityInput(text);
+  const describedBy = [
+    description ? `${id}-description` : null,
+    parsed.problem ? `${id}-problem` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className="min-w-0">
+      <label htmlFor={id} className="t-row block">
+        {label}
+      </label>
+      {description ? (
+        <p id={`${id}-description`} className="t-meta mt-1">
+          {description}
+        </p>
+      ) : null}
+      <input
+        id={id}
+        data-testid={testId}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        spellCheck={false}
+        value={text}
+        aria-invalid={parsed.problem ? true : undefined}
+        aria-describedby={describedBy || undefined}
+        onChange={(event) => {
+          setText(event.target.value);
+          const next = parseSensitivityInput(event.target.value);
+          if (next.value !== null) onChange(next.value);
+        }}
+        onBlur={() => {
+          if (parsed.value !== null) setText(formatCvarNumber(parsed.value));
+        }}
+        className={`field tnum mt-2 block w-40 px-3 py-2 text-[15px] text-ink focus:outline-none ${
+          parsed.problem ? "border-warn/70" : ""
+        }`}
+      />
+      {parsed.problem ? (
+        <p id={`${id}-problem`} role="alert" className="t-meta mt-1.5 text-warn">
+          {parsed.problem} The saved value stays {formatCvarNumber(value)}.
+        </p>
+      ) : null}
     </div>
   );
 }

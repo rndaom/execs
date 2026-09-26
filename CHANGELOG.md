@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Improved
 
+- Gameplay has mouse sensitivity and zoomed sensitivity fields that keep exact decimals. A value
+  changed in TF2's own options is picked up after the game closes instead of being reset.
 - Return to TF2's stock HUD from the HUD pane. The HUD and its options leave the profile; its
   folder is kept in a backup, and your other mods and settings stay the same.
 - Duplicate any saved profile from its menu to experiment on a copy. The copy is not switched in

@@ -23,6 +23,10 @@ export const FOV_MAX = 90;
 /** TF2's viewmodel ConVar limits are independent of world FOV and menu limits. */
 export const VIEWMODEL_FOV_MIN = 0.1;
 export const VIEWMODEL_FOV_MAX = 179.9;
+/** Neither mouse cvar has a documented range; this only rejects typos. */
+export const SENSITIVITY_MAX = 1000;
+/** Mouse cvars that follow TF2's own options after an in-game change. */
+export const GAME_SYNCED_CVARS = ["sensitivity", "zoom_sensitivity_ratio"] as const;
 export const CROSSHAIR_SCALE_MIN = 16;
 export const CROSSHAIR_SCALE_MAX = 64;
 export const COLOR_MIN = 0;
@@ -62,6 +66,9 @@ export type GameplaySettings = {
   cl_autoreload: GameplayToggle;
   /** Preserve controller/custom modes until the player explicitly changes this control. */
   hud_fastswitch: number;
+  /** Kept at full precision; never rounded through a slider. */
+  sensitivity: number;
+  zoom_sensitivity_ratio: number;
   cl_crosshair_file: CrosshairFile;
   cl_crosshair_scale: number;
   cl_crosshair_red: number;
@@ -126,6 +133,8 @@ export function defaultGameplay(): GameplaySettings {
     cl_flipviewmodels: corpusToggle("cl_flipviewmodels", 0),
     cl_autoreload: corpusToggle("cl_autoreload", 1),
     hud_fastswitch: corpusNumber("hud_fastswitch", 0),
+    sensitivity: corpusFloat("sensitivity", 3),
+    zoom_sensitivity_ratio: corpusFloat("zoom_sensitivity_ratio", 1),
     cl_crosshair_file: "",
     cl_crosshair_scale: corpusNumber("cl_crosshair_scale", 32),
     cl_crosshair_red: corpusNumber("cl_crosshair_red", 200),
@@ -175,6 +184,8 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
     cl_flipviewmodels: settings.cl_flipviewmodels ? 1 : 0,
     cl_autoreload: settings.cl_autoreload ? 1 : 0,
     hud_fastswitch: Number.isFinite(settings.hud_fastswitch) ? settings.hud_fastswitch : 0,
+    sensitivity: positiveOr(settings.sensitivity, 3),
+    zoom_sensitivity_ratio: positiveOr(settings.zoom_sensitivity_ratio, 1),
     cl_crosshair_file: parseCrosshairFile(settings.cl_crosshair_file),
     cl_crosshair_scale: clampInt(
       settings.cl_crosshair_scale,
@@ -256,6 +267,8 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `cl_flipviewmodels ${next.cl_flipviewmodels}`,
     `cl_autoreload ${next.cl_autoreload}`,
     `hud_fastswitch ${next.hud_fastswitch}`,
+    `sensitivity ${formatCvarNumber(next.sensitivity)}`,
+    `zoom_sensitivity_ratio ${formatCvarNumber(next.zoom_sensitivity_ratio)}`,
     `cl_crosshair_file ${file}`,
     `cl_crosshair_scale ${next.cl_crosshair_scale}`,
     `cl_crosshair_red ${next.cl_crosshair_red}`,
@@ -303,6 +316,8 @@ export function serializeGameplayScope(
         "cl_flipviewmodels",
         "cl_autoreload",
         "hud_fastswitch",
+        "sensitivity",
+        "zoom_sensitivity_ratio",
       ].includes(name);
     }),
   );
@@ -353,6 +368,13 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   if (fastswitch !== undefined) {
     const value = Number(fastswitch.trim());
     if (Number.isFinite(value)) next.hud_fastswitch = value;
+  }
+  for (const name of GAME_SYNCED_CVARS) {
+    const raw = read(name);
+    if (raw !== undefined) {
+      const value = Number(String(raw).trim());
+      if (Number.isFinite(value) && value > 0) next[name] = value;
+    }
   }
   const file = read("cl_crosshair_file");
   if (file !== undefined) {
@@ -416,6 +438,60 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
     }
   }
   return clampGameplay(next);
+}
+
+function positiveOr(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** Plain decimal text for a cfg: 2.35 stays "2.35", never "2.35e+0" or rounded. */
+export function formatCvarNumber(value: number): string {
+  const text = String(value);
+  if (!/e/i.test(text)) return text;
+  return value.toFixed(12).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/**
+ * What a typed sensitivity means, or why it cannot be saved. Accepts plain
+ * decimals only, so "2.35" keeps exactly the digits the player typed.
+ */
+export function parseSensitivityInput(
+  raw: string,
+): { value: number; problem: null } | { value: null; problem: string } {
+  const text = raw.trim();
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(text)) {
+    return { value: null, problem: "Enter a number, like 2.5." };
+  }
+  const value = Number(text);
+  if (!(value > 0)) return { value: null, problem: "Use a number above 0." };
+  if (value > SENSITIVITY_MAX) {
+    return { value: null, problem: `Use ${SENSITIVITY_MAX} or less.` };
+  }
+  return { value, problem: null };
+}
+
+/**
+ * After a game session, TF2's own options may have changed the mouse cvars
+ * in config.cfg. The managed Gameplay cfg runs later and would put the old
+ * values back, so its matching lines follow config.cfg. Only lines the
+ * managed file already sets change; every other byte stays.
+ */
+export function syncMouseFromConfig(managedText: string, configText: string): string {
+  const config: Record<string, string> = {};
+  for (const [name, value] of Object.entries(parseCvarMap(configText))) {
+    config[name.toLowerCase()] = value;
+  }
+  let next = managedText;
+  for (const name of GAME_SYNCED_CVARS) {
+    const value = Number(String(config[name] ?? "").trim());
+    if (config[name] === undefined || !Number.isFinite(value) || value <= 0) continue;
+    const line = new RegExp(`^([ \\t]*)${name}[ \\t]+[^\\r\\n]*$`, "gim");
+    next = next.replace(line, (whole, indent: string) => {
+      const current = Number(whole.trim().split(/\s+/)[1]?.replace(/"/g, ""));
+      return current === value ? whole : `${indent}${name} ${formatCvarNumber(value)}`;
+    });
+  }
+  return next;
 }
 
 function parseIntish(raw: string, fallback: number): number {

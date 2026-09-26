@@ -5,12 +5,16 @@ import {
   ensureAutoexecExecLine,
   FOV_MAX,
   FOV_MIN,
+  formatCvarNumber,
   GAMEPLAY_HEADER,
   GAMEPLAY_STEM,
   gameplayPath,
+  parseSensitivityInput,
+  SENSITIVITY_MAX,
   seedGameplay,
   serializeGameplay,
   serializeGameplayScope,
+  syncMouseFromConfig,
 } from "./gameplay-ui";
 
 describe("gameplay clamp", () => {
@@ -213,5 +217,78 @@ describe("autoexec exec line", () => {
     expect(ensureAutoexecExecLine("", GAMEPLAY_STEM, "comfig")).toBe(
       "exec overrides/execs_gameplay // execs:managed\n",
     );
+  });
+});
+
+describe("mouse sensitivity", () => {
+  it("keeps exact decimals from cfg and writes them back unrounded", () => {
+    const seeded = seedGameplay("", { sensitivity: "2.3456", zoom_sensitivity_ratio: "0.793471" });
+    expect(seeded.sensitivity).toBe(2.3456);
+    expect(seeded.zoom_sensitivity_ratio).toBe(0.793471);
+    const text = serializeGameplay(seeded);
+    expect(text).toContain("\nsensitivity 2.3456\n");
+    expect(text).toContain("\nzoom_sensitivity_ratio 0.793471\n");
+    // The managed file wins over config.cfg, as for every Gameplay value.
+    expect(seedGameplay("sensitivity 1.5\n", { sensitivity: "3" }).sensitivity).toBe(1.5);
+  });
+
+  it("uses TF2's defaults and ignores values that are not positive numbers", () => {
+    expect(defaultGameplay().sensitivity).toBe(3);
+    expect(defaultGameplay().zoom_sensitivity_ratio).toBe(1);
+    expect(seedGameplay("", { sensitivity: "0", zoom_sensitivity_ratio: "abc" }).sensitivity).toBe(
+      3,
+    );
+    expect(clampGameplay({ ...defaultGameplay(), sensitivity: -1 }).sensitivity).toBe(3);
+  });
+
+  it("belongs to the Gameplay scope only", () => {
+    const settings = { ...defaultGameplay(), sensitivity: 2.5 };
+    expect(serializeGameplayScope(settings, "gameplay")).toContain("sensitivity");
+    expect(serializeGameplayScope(settings, "crosshair")).not.toContain("sensitivity");
+    expect(serializeGameplayScope(settings, "sounds")).not.toContain("sensitivity");
+  });
+
+  it("formats numbers as plain cfg decimals", () => {
+    expect(formatCvarNumber(2.35)).toBe("2.35");
+    expect(formatCvarNumber(3)).toBe("3");
+    expect(formatCvarNumber(0.0000001)).toBe("0.0000001");
+  });
+
+  it("accepts only plain positive decimals up to the limit", () => {
+    expect(parseSensitivityInput(" 2.35 ")).toEqual({ value: 2.35, problem: null });
+    expect(parseSensitivityInput(".5").value).toBe(0.5);
+    expect(parseSensitivityInput("3.").value).toBe(3);
+    expect(parseSensitivityInput("").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("2,5").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("1e3").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("-1").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("0").problem).toBe("Use a number above 0.");
+    expect(parseSensitivityInput(String(SENSITIVITY_MAX + 1)).problem).toBe("Use 1000 or less.");
+  });
+});
+
+describe("mouse sync after a game session", () => {
+  const managed =
+    "// execs gameplay — managed, do not edit by hand\r\nfov_desired 90\r\nsensitivity 3\r\nzoom_sensitivity_ratio 1\r\ncl_crosshair_scale 32\r\n";
+
+  it("follows a sensitivity changed in TF2's options and keeps every other byte", () => {
+    const next = syncMouseFromConfig(
+      managed,
+      'sensitivity "2.2"\nzoom_sensitivity_ratio "0.793471"\n',
+    );
+    expect(next).toBe(
+      "// execs gameplay — managed, do not edit by hand\r\nfov_desired 90\r\nsensitivity 2.2\r\nzoom_sensitivity_ratio 0.793471\r\ncl_crosshair_scale 32\r\n",
+    );
+  });
+
+  it("changes nothing when the values already match or config.cfg has none", () => {
+    expect(syncMouseFromConfig(managed, 'sensitivity "3.000000"\n')).toBe(managed);
+    expect(syncMouseFromConfig(managed, "bind w +forward\n")).toBe(managed);
+    expect(syncMouseFromConfig(managed, 'sensitivity "0"\n')).toBe(managed);
+  });
+
+  it("never adds mouse lines the managed file did not already set", () => {
+    const without = "fov_desired 90\n";
+    expect(syncMouseFromConfig(without, 'sensitivity "2"\n')).toBe(without);
   });
 });
