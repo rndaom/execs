@@ -24,6 +24,7 @@ import type {
 } from "./lib/bridge";
 import { openExternal } from "./lib/bridge";
 import {
+  canPreferParticleProvider,
   DIRECT_BURNING_OVERLAY_ID,
   DIRECT_DEVELOPER_TEXTURES_ID,
   DIRECT_FLAT_TEXTURES_ID,
@@ -36,6 +37,9 @@ import {
   modsApplyEnabled,
   modsStatusLine,
   PRELOADER_CREDIT,
+  particleConflicts,
+  particleSkipAdvice,
+  preferParticleProvider,
   REPAIR_TIMEOUT_MS,
   type RepairState,
   repairActionDisabled,
@@ -174,6 +178,12 @@ export function ModsPane({
         fileCount: 0,
         bytes: 0,
       },
+  );
+  // Same queue order as the native planner, so the named winner is the one Apply writes.
+  const particleOverlaps = particleConflicts(
+    selection,
+    [...savedLibraryParticles, ...(catalog?.particleMods ?? [])],
+    particleSources,
   );
   const [task, setTask] = useState<ModsTask>("browse");
   useEffect(() => {
@@ -661,10 +671,7 @@ export function ModsPane({
                       }
                     >
                       <div>
-                        <p className="t-meta mt-2">
-                          Stock files are backed up before patching. Later picks win overlapping
-                          files.
-                        </p>
+                        <p className="t-meta mt-2">Stock files are backed up before patching.</p>
                         <ul className="mt-3 list-none p-0">
                           {savedLibraryParticles.map((mod) => (
                             <ParticleRow
@@ -719,6 +726,63 @@ export function ModsPane({
                           }
                         />
                       ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {particleOverlaps.length > 0 ? (
+                  <div data-testid="mods-particle-conflicts" className="mt-6">
+                    <h3 className="eyebrow">Overlapping files</h3>
+                    <p className="t-meta mt-1">
+                      Each particle file comes whole from one mod; overlapping files are not merged.
+                    </p>
+                    <ul className="mt-3 list-none p-0">
+                      {particleOverlaps.map((conflict) => {
+                        const others = conflict.providers.filter(
+                          (provider) => provider.key !== conflict.winner.key,
+                        );
+                        const blocked = others.some(
+                          (provider) => !canPreferParticleProvider(conflict, provider),
+                        );
+                        return (
+                          <li
+                            key={conflict.file}
+                            data-testid={`mods-particle-conflict-${conflict.file}`}
+                            className="border-b border-edge py-2.5 last:border-b-0"
+                          >
+                            <p className="t-row break-all">{conflict.file}</p>
+                            <p className="t-meta mt-0.5">
+                              <span className="text-ink">{conflict.winner.label}</span> wins over{" "}
+                              {others.map((provider) => provider.label).join(", ")}
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap gap-2">
+                              {others
+                                .filter((provider) => canPreferParticleProvider(conflict, provider))
+                                .map((provider) => (
+                                  <button
+                                    key={provider.key}
+                                    type="button"
+                                    className="btn btn-quiet px-2 py-1 text-[12.5px]"
+                                    disabled={busy}
+                                    aria-label={`Use ${provider.label} for ${conflict.file}`}
+                                    onClick={() =>
+                                      setSelection((current) =>
+                                        preferParticleProvider(current, provider.key),
+                                      )
+                                    }
+                                  >
+                                    Use {provider.label}
+                                  </button>
+                                ))}
+                            </div>
+                            {blocked ? (
+                              <p className="t-meta mt-1">
+                                Particles from your own mods always win over library particles.
+                              </p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ) : null}
@@ -819,6 +883,7 @@ export function ModsPane({
                     <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
                       {notice.file}
                       {notice.modName ? ` (${notice.modName})` : ""} — {notice.reason}
+                      <span className="block">{particleSkipAdvice(notice.reason)}</span>
                     </li>
                   ))}
                 </ul>
@@ -832,6 +897,7 @@ export function ModsPane({
                   <li key={`${notice.modName}-${notice.file}-${notice.reason}`}>
                     {notice.file}
                     {notice.modName ? ` (${notice.modName})` : ""} — {notice.reason}
+                    <span className="block">{particleSkipAdvice(notice.reason)}</span>
                   </li>
                 ))}
               </ul>

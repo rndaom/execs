@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  canPreferParticleProvider,
   DIRECT_BURNING_OVERLAY_ID,
   DIRECT_DEVELOPER_TEXTURES_ID,
   DIRECT_FLAT_TEXTURES_ID,
@@ -20,6 +21,10 @@ import {
   PREVIEW_GAMEBANANA_RECORDS,
   PREVIEW_MODS_STATUS,
   PREVIEW_PROFILE_MODS,
+  particleConflicts,
+  particleSkipAdvice,
+  particleTarget,
+  preferParticleProvider,
   REPAIR_POLL_MS,
   REPAIR_SLOW_POLL_MS,
   readMaturePreference,
@@ -333,5 +338,97 @@ describe("gamebanana browser", () => {
     expect(foldCategories(many).shown).toHaveLength(4);
     expect(foldCategories(many).hidden).toHaveLength(3);
     expect(foldCategories(many.slice(0, 5)).hidden).toEqual([]);
+  });
+});
+
+describe("particle file overlaps", () => {
+  const library = [
+    { name: "Square_Series", pcfFiles: ["RocketTrail.pcf", "explosion.pcf"] },
+    { name: "Old_Trails", pcfFiles: ["rockettrail.pcf", "blood_trail.pcf"] },
+  ];
+  const sources = [
+    { modId: "gb-1", name: "Clean Rocket Trails", pcfFiles: ["rockettrail.pcf"] },
+    { modId: "gb-2", name: "Blood Mod", pcfFiles: ["npc_fx.pcf", "Explosion.pcf"] },
+  ];
+
+  it("maps files to the same stock slot the native planner patches", () => {
+    expect(particleTarget("RocketTrail.pcf")).toBe("rockettrail.pcf");
+    expect(particleTarget("particles/blood_trail.pcf")).toBe("npc_fx.pcf");
+  });
+
+  it("names every provider in queue order and the last one as the winner", () => {
+    const conflicts = particleConflicts(
+      {
+        particleMods: ["Square_Series", "Old_Trails"],
+        profileParticleMods: ["gb-2", "gb-1"],
+      },
+      library,
+      sources,
+    );
+    expect(
+      conflicts.map((conflict) => [
+        conflict.file,
+        conflict.providers.map((provider) => provider.label),
+        conflict.winner.label,
+      ]),
+    ).toEqual([
+      ["explosion.pcf", ["Square Series", "Blood Mod"], "Blood Mod"],
+      ["npc_fx.pcf", ["Old Trails", "Blood Mod"], "Blood Mod"],
+      [
+        "rockettrail.pcf",
+        ["Square Series", "Old Trails", "Clean Rocket Trails"],
+        "Clean Rocket Trails",
+      ],
+    ]);
+    // A single provider, or one mod listing a file twice, is not an overlap.
+    expect(
+      particleConflicts({ particleMods: [], profileParticleMods: ["gb-1"] }, library, [
+        { modId: "gb-1", name: "Twice", pcfFiles: ["a.pcf", "A.pcf"] },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("reorders the draft explicitly and never promises a library win over a profile mod", () => {
+    const selection = {
+      addons: [],
+      particleMods: ["Square_Series", "Old_Trails"],
+      profileParticleMods: ["gb-1"],
+    };
+    const [rockets] = particleConflicts(selection, library, sources).filter(
+      (conflict) => conflict.file === "rockettrail.pcf",
+    );
+    const [square, old] = rockets.providers;
+    expect(canPreferParticleProvider(rockets, square)).toBe(false);
+    expect(canPreferParticleProvider(rockets, rockets.winner)).toBe(false);
+
+    const libraryOnly = particleConflicts(
+      { particleMods: ["Square_Series", "Old_Trails"], profileParticleMods: [] },
+      library,
+      sources,
+    )[0];
+    expect(canPreferParticleProvider(libraryOnly, libraryOnly.providers[0])).toBe(true);
+    expect(preferParticleProvider(selection, square.key).particleMods).toEqual([
+      "Old_Trails",
+      "Square_Series",
+    ]);
+    expect(preferParticleProvider(selection, old.key)).toEqual(selection);
+    const two = { ...selection, profileParticleMods: ["gb-1", "gb-2"] };
+    expect(preferParticleProvider(two, "profile:gb-1").profileParticleMods).toEqual([
+      "gb-2",
+      "gb-1",
+    ]);
+  });
+
+  it("explains each kind of skipped file", () => {
+    expect(
+      particleSkipAdvice("particles/x.pcf is 223 bytes over the stock budget even after shrinking"),
+    ).toContain("too large");
+    expect(particleSkipAdvice("overridden by Clean Rocket Trails")).toBe(
+      "Clean Rocket Trails supplies this file instead.",
+    );
+    expect(particleSkipAdvice("redefines spy disguise systems, which must stay stock")).toContain(
+      "disguises",
+    );
+    expect(particleSkipAdvice("could not parse: bad header")).toContain("damaged");
   });
 });
