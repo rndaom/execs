@@ -12,6 +12,7 @@ pub mod files_workspace;
 pub mod finder;
 pub mod first_run;
 pub mod hash;
+pub mod health;
 pub mod hitsound;
 pub mod hud;
 pub mod hud_apply;

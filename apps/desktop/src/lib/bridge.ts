@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppPreferences, AppSettingsPayload } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
+import type { InstallHealth } from "./health-ui";
 
 export type InventoryItem = {
   id: string;
@@ -1359,6 +1360,10 @@ export async function getAppVersion(): Promise<string> {
 /** Version, OS, TF2 folder, active profile and the crash-log tail, as text for a bug report. */
 export function getDiagnostics(): Promise<string> {
   return call<string>("get_diagnostics");
+}
+
+export function getInstallHealth(): Promise<InstallHealth> {
+  return call("get_install_health");
 }
 
 /** How long the update feed gets to answer before the footer says so; the

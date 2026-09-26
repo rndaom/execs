@@ -1,5 +1,6 @@
 import { ArrowSquareOut, Copy, FolderOpen, Info } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
+import { InstallHealthPanel } from "./components/InstallHealth";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -275,6 +276,14 @@ export function AppSettingsPane({
               </span>
             </button>
           </div>
+        </SettingsSection>
+
+        <SettingsSection
+          id="app-health"
+          title="Health"
+          description="What execs can check on this computer, without changing anything."
+        >
+          <InstallHealthPanel api={api} />
         </SettingsSection>
 
         <SettingsSection id="app-support" title="Support">
