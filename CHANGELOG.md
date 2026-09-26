@@ -11,6 +11,8 @@ User-facing changes only. The release workflow publishes the matching
   afterwards; an older binding for it no longer comes back.
 - Viewmodels can show all, hide all, or hide everything except melee across every class at once.
   You see exactly what changes first, can undo it, and nothing is written until you build.
+- The Sounds library now chooses for one slot at a time. Browse from the hit or kill sound, then
+  preview and use a sound from a simpler list.
 - Viewmodels is now the one place for viewmodel FOV, Draw viewmodel, Min viewmodels,
   left-handed and transparent viewmodels, above the per-weapon choices. Gameplay links there.
 - Casual setup shows which particle mod wins each file two of your mods both change, before you

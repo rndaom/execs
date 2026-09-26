@@ -136,9 +136,8 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
     if (!own) throw new Error("Own WAV row did not load");
     const buttons = [...own.querySelectorAll("button")];
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Play Own Pop.wav (Your file)",
-      "Assign Own Pop.wav (Your file) as hit sound",
-      "Assign Own Pop.wav (Your file) as kill sound",
+      "Preview Own Pop.wav (Your file)",
+      "Use Own Pop.wav (Your file) for hits",
     ]);
     expect(buttons[1].disabled).toBe(false);
     for (const button of buttons) {
@@ -333,6 +332,87 @@ it("shows a dormant saved WAV and restores it without rewriting the sound pack",
     expect(onSave).toHaveBeenCalledOnce();
     expect(onSave.mock.calls[0]?.[1]).toBeNull();
     expect(onSave.mock.calls[0]?.[0]).toContain("tf_dingalingaling_effect 0");
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("browses for the slot that asked and keeps focus on the chosen sound", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const api = {
+    listStockHitsounds: async () => ["hitsound"],
+    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
+  } as unknown as Api;
+  const button = (testId: string) => {
+    const found = box.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+    if (!found) throw new Error(`Missing ${testId}`);
+    return found;
+  };
+  try {
+    await act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            effective={{}}
+            managedText=""
+            onSave={async () => true}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    // No sort or source filters compete with the role and search.
+    expect(box.querySelector('[data-testid^="sounds-sort-"]')).toBeNull();
+    expect(box.querySelector('[data-testid="sounds-source-own"]')).toBeNull();
+    expect(button("sounds-hit-browse").getAttribute("aria-label")).toBe("Browse sounds for hits");
+
+    await act(async () => button("sounds-kill-browse").click());
+    expect(document.activeElement).toBe(box.querySelector('[data-testid="sounds-search"]'));
+    expect(box.querySelector('[data-testid="sounds-assign-hit-stock:1"]')).toBeNull();
+    const use = button("sounds-assign-kill-stock:1");
+    expect(use.getAttribute("aria-label")).toBe("Use Electro (Built into TF2) for kills");
+    use.focus();
+    await act(async () => use.click());
+    expect(box.querySelector('[data-testid="sounds-kill-name"]')?.textContent).toBe("Electro");
+    expect(use.getAttribute("aria-pressed")).toBe("true");
+    expect(use.textContent).toBe("Selected");
+    // Choosing does not disable the button, so keyboard focus stays in place.
+    expect(document.activeElement).toBe(use);
+    expect(box.querySelector('[data-testid="sounds-hit-name"]')?.textContent).not.toBe("Electro");
+
+    // The other slot's choice is named on its row.
+    await act(async () => button("sounds-target-hit").click());
+    expect(box.querySelector('[data-testid="sounds-row-stock:1"]')?.textContent).toContain(
+      "Kill sound",
+    );
+
+    const search = box.querySelector<HTMLInputElement>('[data-testid="sounds-search"]');
+    if (!search) throw new Error("Missing search");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        search,
+        "zzz",
+      );
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(box.textContent).toContain("No sounds match “zzz”.");
   } finally {
     await act(async () => root.unmount());
     box.remove();

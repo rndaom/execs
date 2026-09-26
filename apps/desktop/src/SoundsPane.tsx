@@ -60,11 +60,8 @@ import {
   pageSoundLibrary,
   parseSoundPageJump,
   SOUND_LIBRARY_PAGE_SIZE,
-  SOUND_SORTS,
   SOUND_SOURCE_LABELS,
   type SoundLibraryEntry,
-  type SoundSort,
-  type SoundSourceId,
   soundAccessibleNames,
   soundPageLinks,
   stockEntries,
@@ -75,17 +72,19 @@ const SLOT_TITLES: Record<HitsoundKind, string> = {
   kill: "Kill sound",
 };
 
-const SOURCE_FILTERS: { id: SoundSourceId | "all"; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "stock", label: "Stock" },
-  { id: "own", label: "Yours" },
+const TARGET_OPTIONS: { id: HitsoundKind; label: string }[] = [
+  { id: "hit", label: "Hit sound" },
+  { id: "kill", label: "Kill sound" },
 ];
+
+/** Plural nouns for accessible names: "Use Electro for hits". */
+const ROLE_NOUNS: Record<HitsoundKind, string> = { hit: "hits", kill: "kills" };
 
 /**
  * The Sounds pane: a hit sound and a kill sound, each an on/off, the chosen
  * sound with a play button, and a volume; pitch-by-damage and the repeat
  * delay fold under Advanced. Below sits the library of built-in effects and
- * user-picked WAVs. Files go into the profile's sound pack; the cvars ride the
+ * user-picked WAVs, always choosing for one slot at a time. Files go into the profile's sound pack; the cvars ride the
  * same managed gameplay cfg the Crosshair pane writes.
  */
 export function SoundsPane({
@@ -137,10 +136,9 @@ export function SoundsPane({
   const player = useSoundPlayer(api, JSON.stringify([profileId, record]));
   const canAudition = isTauri();
 
-  // Library state.
+  // Library state. The library always chooses for one slot.
+  const [target, setTarget] = useState<HitsoundKind>("hit");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SoundSort>("name-asc");
-  const [source, setSource] = useState<SoundSourceId | "all">("all");
   const [page, setPage] = useState(0);
   const [picked, setPicked] = useState<PickedHitsound | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
@@ -223,10 +221,8 @@ export function SoundsPane({
     () => [...(picked ? [ownEntry(picked)] : []), ...stockEntries()],
     [picked],
   );
-  const rows = useMemo(
-    () => filterSoundLibrary(library, query, sort, source === "all" ? null : new Set([source])),
-    [library, query, sort, source],
-  );
+  // Your own WAV first, then built-in effects by name.
+  const rows = useMemo(() => filterSoundLibrary(library, query, "source", null), [library, query]);
   useEffect(() => {
     const lastPage = Math.max(0, Math.ceil(rows.length / SOUND_LIBRARY_PAGE_SIZE) - 1);
     setPage((current) => Math.min(current, lastPage));
@@ -283,7 +279,6 @@ export function SoundsPane({
           forgetSoundUrl({ kind: "file", token: picked.token, name: picked.name });
         }
         setPicked(next);
-        setSource("all");
         setQuery("");
         setPage(0);
       }
@@ -333,8 +328,9 @@ export function SoundsPane({
             onPlay={(choice) => toggle(kind, choice)}
             onChange={(update) => patchSlot(kind, update)}
             onBrowse={() => {
+              setTarget(kind);
               searchRef.current?.focus();
-              searchRef.current?.scrollIntoView({ block: "center" });
+              searchRef.current?.scrollIntoView?.({ block: "center" });
             }}
           />
         ))}
@@ -548,15 +544,12 @@ export function SoundsPane({
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Segmented
-            label="Source"
+            label="Choosing for"
             size="sm"
-            testIdPrefix="sounds-source"
-            options={SOURCE_FILTERS}
-            value={source}
-            onChange={(next) => {
-              setSource(next);
-              setPage(0);
-            }}
+            testIdPrefix="sounds-target"
+            options={TARGET_OPTIONS}
+            value={target}
+            onChange={setTarget}
           />
           <label className="relative block min-w-40 flex-1">
             <span className="sr-only">Search sounds</span>
@@ -577,17 +570,6 @@ export function SoundsPane({
               className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
             />
           </label>
-          <Segmented
-            label="Sort"
-            size="sm"
-            testIdPrefix="sounds-sort"
-            options={SOUND_SORTS}
-            value={sort}
-            onChange={(next) => {
-              setSort(next);
-              setPage(0);
-            }}
-          />
         </div>
 
         <p className="t-meta mt-2">Built-in effects come from your TF2 install.</p>
@@ -605,12 +587,12 @@ export function SoundsPane({
 
         <ul data-testid="sounds-library" className="mt-2 list-none p-0">
           {paged.entries.map((entry) => {
-            const hitChoice = entry.choiceFor("hit");
-            const killChoice = entry.choiceFor("kill");
-            const hitPick = entry.pickFor("hit");
-            const playable = canAudition && stockAvailable(entry, "hit");
-            const isHit = sameChoice(draft.hit.choice, hitChoice);
-            const isKill = sameChoice(draft.kill.choice, killChoice);
+            const choice = entry.choiceFor(target);
+            const pick = entry.pickFor(target);
+            const playable = canAudition && stockAvailable(entry, target);
+            const selected = sameChoice(draft[target].choice, choice);
+            const otherKind = target === "hit" ? "kill" : "hit";
+            const inOther = sameChoice(draft[otherKind].choice, entry.choiceFor(otherKind));
             const clipName = accessibleNames.get(entry.id) ?? entry.label;
             return (
               <li
@@ -619,10 +601,11 @@ export function SoundsPane({
                 className="row min-h-11 gap-3 border-b border-edge px-1 py-1.5 last:border-b-0"
               >
                 <PlayButton
+                  verb="Preview"
                   clipName={clipName}
-                  playing={player.playing === soundKey(hitPick)}
+                  playing={player.playing === soundKey(pick)}
                   disabled={!playable}
-                  onClick={() => toggle("hit", hitChoice)}
+                  onClick={() => toggle(target, choice)}
                 />
                 <span className="flex min-w-0 flex-1 items-baseline gap-3">
                   <span className="max-w-[60%] shrink-0 truncate text-[13px] font-medium text-ink">
@@ -631,34 +614,23 @@ export function SoundsPane({
                   <span className="t-meta truncate">
                     {SOUND_SOURCE_LABELS[entry.source]}
                     {entry.meta ? ` · ${entry.meta}` : ""}
+                    {inOther ? ` · ${SLOT_TITLES[otherKind]}` : ""}
                   </span>
                 </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  <AssignButton
-                    label="Hit"
-                    accessibleLabel={`Assign ${clipName} as hit sound`}
-                    active={isHit}
-                    disabled={locked}
-                    testId={`sounds-assign-hit-${entry.id}`}
-                    onClick={() => assign("hit", entry)}
-                  />
-                  <AssignButton
-                    label="Kill"
-                    accessibleLabel={`Assign ${clipName} as kill sound`}
-                    active={isKill}
-                    disabled={locked}
-                    testId={`sounds-assign-kill-${entry.id}`}
-                    onClick={() => assign("kill", entry)}
-                  />
-                </span>
+                <AssignButton
+                  label={selected ? "Selected" : "Use"}
+                  accessibleLabel={`Use ${clipName} for ${ROLE_NOUNS[target]}`}
+                  active={selected}
+                  disabled={locked}
+                  testId={`sounds-assign-${target}-${entry.id}`}
+                  onClick={() => assign(target, entry)}
+                />
               </li>
             );
           })}
           {rows.length === 0 ? (
             <li className="py-8 text-center">
-              <p className="t-row">
-                {source === "own" && !picked ? "Add a WAV to make it yours." : "No sounds match."}
-              </p>
+              <p className="t-row">No sounds match “{query.trim()}”.</p>
             </li>
           ) : null}
         </ul>
@@ -868,8 +840,9 @@ function SoundSlot({
         </div>
         <button
           type="button"
+          data-testid={`sounds-${kind}-browse`}
           onClick={onBrowse}
-          aria-label={`Browse ${title.toLowerCase()}s`}
+          aria-label={`Browse sounds for ${ROLE_NOUNS[kind]}`}
           className="btn btn-ghost shrink-0 text-[12.5px]"
         >
           Browse
@@ -918,12 +891,14 @@ function SoundSlot({
 }
 
 function PlayButton({
+  verb = "Play",
   clipName,
   playing,
   disabled = false,
   testId,
   onClick,
 }: {
+  verb?: string;
   clipName: string;
   playing: boolean;
   disabled?: boolean;
@@ -934,7 +909,7 @@ function PlayButton({
     <button
       type="button"
       data-testid={testId}
-      aria-label={`${playing ? "Stop" : "Play"} ${clipName}`}
+      aria-label={`${playing ? "Stop" : verb} ${clipName}`}
       aria-pressed={playing}
       disabled={disabled}
       title={disabled ? "Needs the desktop app." : undefined}
@@ -968,8 +943,10 @@ function AssignButton({
       data-active={active ? "true" : "false"}
       aria-label={accessibleLabel}
       aria-pressed={active}
-      disabled={disabled || active}
-      onClick={onClick}
+      disabled={disabled}
+      onClick={() => {
+        if (!active) onClick();
+      }}
       className={`btn px-2.5 py-1 text-[12.5px] ${
         active
           ? "text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
