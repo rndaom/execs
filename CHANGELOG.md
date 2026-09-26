@@ -12,9 +12,8 @@ User-facing changes only. The release workflow publishes the matching
   emblem, and Viewmodels and Crosshair class tabs show TF2's class emblems read from your own game
   files. execs follows your system's reduced-motion setting, or your own Reduce preference in App
   settings.
-- execs opens on Home: your profile's name over the TF2 emblem drawn in dots that ease aside
-  under your pointer, one line naming its preset, HUD and binds, anything that needs attention,
-  and the full setup one fold away with a link to each part.
+- A quiet dot field sits behind every page: the TF2 emblem in orange dots, anchored in the bottom
+  right corner. Where your pointer passes over it, the dots gently swell and warm, then settle.
 - The orange execs dot now means "a change": it breathes while a change saves and pops when it is
   saved, and marks any pane whose changes are still waiting, such as Files edits you have not
   saved. The sidebar highlight, tab underlines and choice buttons glide to your selection, and

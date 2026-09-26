@@ -1,4 +1,5 @@
 import { Component, createRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { DotBackdrop } from "./components/DotBackdrop";
 import { SETTINGS_TAB_ICONS } from "./components/ui/tabIcons";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
@@ -226,9 +227,12 @@ export function SettingsLayout({
         </nav>
         {utility ? <div className="settings-utility">{utility}</div> : null}
       </aside>
-      <PaneScrollRegion tab={page ?? tab} scrollIdentity={scrollIdentity}>
-        {children}
-      </PaneScrollRegion>
+      <div className="settings-workspace">
+        <DotBackdrop />
+        <PaneScrollRegion tab={page ?? tab} scrollIdentity={scrollIdentity}>
+          {children}
+        </PaneScrollRegion>
+      </div>
     </div>
   );
 }

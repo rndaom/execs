@@ -9,7 +9,6 @@ import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
-import { type HomeNotice, HomePane } from "./HomePane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { useHudResources } from "./hooks/useHudResources";
@@ -52,7 +51,6 @@ import {
 import { cfgHudFolder } from "./lib/files-reference";
 import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/files-ui";
 import { gameplayPath } from "./lib/gameplay-ui";
-import { homeHighlights, overviewRows } from "./lib/home-ui";
 import { hudOverlayCrosshairState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
@@ -810,59 +808,6 @@ export function SettingsHost({
         options,
       );
     }
-    if (tab === "home") {
-      const cfgReadable = !filesLimited && maps.complete;
-      const notices: HomeNotice[] = [];
-      if (!cfgReadable && onNavigate) {
-        notices.push({
-          id: "cfg",
-          message: filesLimited
-            ? (cfgReadProblem ?? CFG_INCOMPLETE_MESSAGE)
-            : (maps.reason ?? CFG_INCOMPLETE_MESSAGE),
-          action: "Review in Files",
-          onAction: () => {
-            if (maps.issue)
-              setFilesReviewTarget({ id: ++filesReviewSequence.current, ...maps.issue });
-            onNavigate("files");
-          },
-        });
-      }
-      const changed: [SettingsTab, boolean | undefined, string][] = [
-        ["crosshair", detail?.crosshair?.sourceChanged, "Crosshair files changed outside execs."],
-        ["viewmodels", detail?.viewmodel?.sourceChanged, "Viewmodel files changed outside execs."],
-        ["sounds", detail?.hitsound?.sourceChanged, "Sound files changed outside execs."],
-      ];
-      for (const [target, flagged, message] of changed) {
-        if (flagged && onNavigate) {
-          notices.push({
-            id: target,
-            message,
-            action: `Open ${SETTINGS_TAB_LABELS[target]}`,
-            onAction: () => onNavigate(target),
-          });
-        }
-      }
-      const rows = overviewRows({
-        detail,
-        comfig,
-        effective: maps.effective,
-        binds: maps.binds,
-        settingsComplete: cfgReadable,
-        launchOptions: detail?.launchOptions ?? "",
-      });
-      return (
-        <HomePane
-          profileId={profileId}
-          profileName={activeProfileName ?? detail?.name ?? null}
-          highlights={homeHighlights(rows)}
-          rows={rows}
-          notices={notices}
-          active={paneActive}
-          onOpen={(target) => onNavigate?.(target)}
-        />
-      );
-    }
-
     if (tab === "comfig") {
       return (
         <ComfigPane

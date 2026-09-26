@@ -2,6 +2,7 @@ import { ArrowLeft, GearSix } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppSettingsPane } from "./AppSettingsPane";
 import { AppFooter } from "./components/AppFooter";
+import { DotBackdrop } from "./components/DotBackdrop";
 import { FinderPanel } from "./components/FinderPanel";
 import { HudOwnershipDialog } from "./components/HudOwnershipDialog";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
@@ -71,7 +72,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const profileSettings = useRef<HTMLDivElement>(null);
   const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
-    () => previewSettingsTab(preview) ?? "home",
+    () => previewSettingsTab(preview) ?? "comfig",
   );
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
@@ -735,12 +736,13 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           />
 
           <main
-            className={`flex min-h-0 w-full flex-1 flex-col ${
+            className={`relative flex min-h-0 w-full flex-1 flex-col ${
               readyShellOpen
                 ? "items-stretch overflow-hidden"
-                : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
+                : "onboard-main mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
           >
+            {readyShellOpen ? null : <DotBackdrop />}
             {appSettingsOpen && !settingsOpen ? (
               <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
             ) : install.screen === "ready" && install.confirmed ? (

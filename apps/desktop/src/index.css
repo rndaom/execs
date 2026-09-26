@@ -1431,122 +1431,6 @@ a:focus-visible,
 }
 
 @layer components {
-  /* Home: the profile over the TF2 emblem in dots, then one quiet column. */
-  .home {
-    display: flex;
-    min-height: 100%;
-    flex-direction: column;
-    align-items: center;
-    padding-block: 8px 24px;
-  }
-
-  .home-hero {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .dot-emblem,
-  .dot-emblem > canvas {
-    display: block;
-    flex: none;
-  }
-
-  .home-name {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 4px;
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 1.2;
-    letter-spacing: -0.025em;
-    color: var(--color-ink);
-  }
-
-  /* The execs dot: the same mark as the wordmark's. */
-  .home-dot {
-    width: 10px;
-    height: 10px;
-    flex: none;
-    border-radius: var(--radius-pill);
-    background: var(--color-brand);
-  }
-
-  .home-column {
-    width: 100%;
-    max-width: 640px;
-  }
-
-  .home-list {
-    border-top: 1px solid var(--color-edge);
-  }
-
-  .home-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    min-height: 46px;
-    padding: 10px 8px;
-    border-bottom: 1px solid var(--color-edge);
-    text-align: left;
-    transition: background-color var(--motion) ease;
-  }
-
-  .home-row:hover {
-    background: var(--color-panel);
-  }
-
-  .home-row-icon {
-    display: inline-flex;
-    flex: none;
-    color: var(--color-ink-faint);
-  }
-
-  .home-row-label {
-    flex: none;
-    width: 110px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-ink);
-  }
-
-  .home-row-value {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--color-ink-muted);
-  }
-
-  .home-row-caret {
-    flex: none;
-    color: var(--color-ink-faint);
-    transition:
-      transform var(--motion-move) var(--ease-out),
-      color var(--motion) ease;
-  }
-
-  .home-row:hover .home-row-caret {
-    transform: translateX(3px);
-    color: var(--color-ink-muted);
-  }
-
-  .home-notice {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 8px 8px 12px;
-    border: 1px solid color-mix(in srgb, var(--color-warn) 45%, transparent);
-    border-radius: var(--radius-lg);
-    color: var(--color-ink);
-  }
-}
-
-@layer components {
   .comfig-presets {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -1747,5 +1631,42 @@ a:focus-visible,
   /* A tile's orange dot arrives with the selection. */
   .tile-check {
     animation: dot-arrive var(--motion-move) var(--ease-out) backwards;
+  }
+}
+
+@layer components {
+  /* The dot field sits behind the workspace; content scrolls over it. */
+  .settings-workspace {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .settings-workspace > .settings-scroll {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dot-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    animation: enter-fade 900ms ease backwards;
+  }
+
+  /* First-run screens: the page's own content sits above the field. */
+  .onboard-main > :not(.dot-backdrop) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dot-backdrop > canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 }

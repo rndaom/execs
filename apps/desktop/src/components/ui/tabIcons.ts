@@ -3,7 +3,6 @@ import {
   Crosshair,
   FolderOpen,
   GameController,
-  House,
   Keyboard,
   Monitor,
   Package,
@@ -17,9 +16,8 @@ import type { SettingsTab } from "../../lib/settings-ui";
 
 export type TabIcon = ComponentType<{ size?: number; weight?: "regular" | "bold" }>;
 
-/** One icon per pane, shared by the sidebar and the Home profile details. */
+/** One icon per pane, shared by the sidebar and pane headings. */
 export const SETTINGS_TAB_ICONS: Record<SettingsTab, TabIcon> = {
-  home: House,
   comfig: SlidersHorizontal,
   binds: Keyboard,
   gameplay: GameController,

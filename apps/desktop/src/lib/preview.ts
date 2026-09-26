@@ -26,7 +26,6 @@ export const PREVIEW_STATES = [
   "first-unused",
   "first-unused-locked",
   "create",
-  "settings-home",
   "settings-comfig",
   "settings-binds",
   "settings-gameplay",
@@ -73,7 +72,6 @@ const READY: PreviewState[] = [
   "first-unused",
   "first-unused-locked",
   "create",
-  "settings-home",
   "settings-comfig",
   "settings-binds",
   "settings-gameplay",
@@ -189,8 +187,6 @@ export function previewCreating(state: PreviewState): boolean {
 
 export function previewSettingsTab(state: PreviewState): SettingsTab | null {
   switch (state) {
-    case "settings-home":
-      return "home";
     case "settings-comfig":
     case "folder-repair":
     case "profile-import-huds":

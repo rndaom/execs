@@ -36,8 +36,8 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 ### Development preview
 
 <p align="center">
-  <img src="docs/media/development-home.png" width="49%" alt="Home: the TF2 emblem drawn in orange dots above the profile name and its preset, HUD and binds, in browser preview data">
-  <img src="docs/media/development-comfig.png" width="49%" alt="Comfig pane with presets and official addons, module fine-tuning folded away, in browser preview data">
+  <img src="docs/media/development-comfig.png" width="49%" alt="Comfig pane with presets and official addons over the dot-field backdrop, in browser preview data">
+  <img src="docs/media/development-gameplay.png" width="49%" alt="Gameplay pane with field of view, mouse sensitivity and weapon options over the dot-field backdrop, in browser preview data">
 </p>
 
 ## Install
