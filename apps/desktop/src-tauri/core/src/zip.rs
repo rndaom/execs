@@ -501,6 +501,7 @@ where
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn import_profile_with_review_and_source<I, S, R>(
     profiles_dir: &Path,
     tf2_root: &Path,
