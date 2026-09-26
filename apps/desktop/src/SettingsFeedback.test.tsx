@@ -156,7 +156,7 @@ describe("retained settings feedback", () => {
     );
     // Fault-inject a queued input despite the inert UI. The write path must
     // still reject an incomplete snapshot, including a retained-pane flush.
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
     await advance(700);
     expect(save).not.toHaveBeenCalled();
     expect(toast()).toContain(
@@ -200,9 +200,9 @@ describe("retained settings feedback", () => {
     running = true;
     const save = vi.spyOn(api, "writeManagedCfg");
     await render();
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
     expect(toast()).toBe("Draft kept until TF2 closes");
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
     expect(toast()).toBeNull();
     expect(pending).toBe(false);
     running = false;
@@ -220,15 +220,15 @@ describe("retained settings feedback", () => {
       running = true;
       const save = vi.spyOn(api, "writeManagedCfg");
       await render();
-      expect(element("gameplay-draw-viewmodel").getAttribute("aria-checked")).toBe("true");
+      expect(element("gameplay-autoreload").getAttribute("aria-checked")).toBe("true");
       if (revertedFirst) {
-        await click("gameplay-draw-viewmodel");
+        await click("gameplay-autoreload");
         expect(toast()).toBe("Draft kept until TF2 closes");
-        await click("gameplay-draw-viewmodel");
+        await click("gameplay-autoreload");
         expect(toast()).toBeNull();
         expect(pending).toBe(false);
       }
-      await click("gameplay-draw-viewmodel");
+      await click("gameplay-autoreload");
       tab = "sounds";
       await render();
       await advance(5000);
@@ -238,10 +238,10 @@ describe("retained settings feedback", () => {
       expect(save).not.toHaveBeenCalled();
       tab = "gameplay";
       await render();
-      expect(element("gameplay-draw-viewmodel").getAttribute("aria-checked")).toBe("false");
+      expect(element("gameplay-autoreload").getAttribute("aria-checked")).toBe("false");
       expect(toast()).toBeNull();
       expect(pending).toBe(true);
-      await click("gameplay-draw-viewmodel");
+      await click("gameplay-autoreload");
       expect(toast()).toBeNull();
       expect(pending).toBe(false);
       expect(save).not.toHaveBeenCalled();
@@ -254,8 +254,8 @@ describe("retained settings feedback", () => {
     await click("hud-opt-minmode");
     tab = "gameplay";
     await render();
-    await click("gameplay-draw-viewmodel");
-    await click("gameplay-draw-viewmodel");
+    await click("gameplay-autoreload");
+    await click("gameplay-autoreload");
     expect(toast()).toBeNull();
     expect(pending).toBe(true);
     tab = "hud";

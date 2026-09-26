@@ -7,12 +7,8 @@ export type ConditionalCfgSource =
 
 const GAMEPLAY_CVARS = new Set([
   "fov_desired",
-  "viewmodel_fov",
-  "tf_use_min_viewmodels",
-  "r_drawviewmodel",
   "r_drawtracers_firstperson",
   "r_drawtracers",
-  "cl_flipviewmodels",
   "cl_autoreload",
   "hud_fastswitch",
   "sensitivity",
@@ -21,6 +17,13 @@ const GAMEPLAY_CVARS = new Set([
   "hud_combattext",
   "hud_combattext_batching",
   "hud_combattext_healing",
+]);
+
+const VIEWMODEL_CVARS = new Set([
+  "viewmodel_fov",
+  "r_drawviewmodel",
+  "tf_use_min_viewmodels",
+  "cl_flipviewmodels",
 ]);
 
 const CROSSHAIR_CVARS = new Set([
@@ -50,6 +53,8 @@ function relevantCvars(tab: string): Set<string> | null {
   switch (tab) {
     case "gameplay":
       return GAMEPLAY_CVARS;
+    case "viewmodels":
+      return VIEWMODEL_CVARS;
     case "crosshair":
       return CROSSHAIR_CVARS;
     case "sounds":
@@ -75,7 +80,7 @@ export function conditionalCfgSources(
   tab: string,
   hudProjection?: { hudRoots?: readonly string[]; selectedHudRoot?: string | null },
 ): ConditionalCfgSource[] {
-  if (!["binds", "gameplay", "crosshair", "sounds"].includes(tab)) return [];
+  if (!["binds", "gameplay", "viewmodels", "crosshair", "sounds"].includes(tab)) return [];
   const sources: ConditionalCfgSource[] = [];
   const cvars = relevantCvars(tab);
   const groups = launchOptionGroups(launchOptions);
