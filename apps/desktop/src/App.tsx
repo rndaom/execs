@@ -1,13 +1,15 @@
 import { ArrowLeft, GearSix } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppSettingsPane } from "./AppSettingsPane";
 import { AppFooter } from "./components/AppFooter";
+import { DotBackdrop } from "./components/DotBackdrop";
 import { FinderPanel } from "./components/FinderPanel";
 import { HudOwnershipDialog } from "./components/HudOwnershipDialog";
 import { ReadyPanel } from "./components/ReadyPanel/ReadyPanel";
 import { ReleaseNotes } from "./components/ReleaseNotes";
 import { SwitchProgressList } from "./components/SwitchProgressList";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ClassIconProvider } from "./components/ui/ClassIcon";
 import { Modal } from "./components/ui/Modal";
 import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
@@ -199,6 +201,20 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     onHudReviewRequired: setHudReviewId,
   });
   const recoveryTargetId = profiles.library?.pendingSwitchProfileId ?? null;
+  // The execs dot marks panes whose changes have not reached the profile yet:
+  // a settings draft still waiting (debounce, TF2 running, failure) or
+  // unsaved Files edits.
+  const filesVersion = useSyncExternalStore(filesDraftStore.subscribe, filesDraftStore.getVersion);
+  const changedProfileId = profiles.library?.activeProfileId ?? null;
+  const changedTabs = useMemo(() => {
+    const tabs = new Set<SettingsTab>(
+      settingsDrafts
+        .filter((entry) => entry.profile === changedProfileId)
+        .map((entry) => entry.tab),
+    );
+    if (filesVersion >= 0 && filesDraftStore.hasDirty(changedProfileId)) tabs.add("files");
+    return tabs;
+  }, [settingsDrafts, filesVersion, filesDraftStore, changedProfileId]);
   const pendingPanes = [
     ...new Set(settingsDrafts.map((entry) => SETTINGS_TAB_LABELS[entry.tab])),
   ].join(", ");
@@ -487,6 +503,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           showSettingsChrome(profiles.library) ? (
             <SettingsLayout
               tab={settingsTab}
+              changed={changedTabs}
               page={appSettingsOpen ? "app" : null}
               onTab={navigateSettings}
               scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
@@ -719,16 +736,19 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
           />
 
           <main
-            className={`flex min-h-0 w-full flex-1 flex-col ${
+            className={`relative flex min-h-0 w-full flex-1 flex-col ${
               readyShellOpen
                 ? "items-stretch overflow-hidden"
-                : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
+                : "onboard-main mx-auto items-center justify-start overflow-y-auto px-10 py-14"
             }`}
           >
+            {readyShellOpen ? null : <DotBackdrop />}
             {appSettingsOpen && !settingsOpen ? (
               <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
             ) : install.screen === "ready" && install.confirmed ? (
-              renderReady(install.confirmed.path)
+              <ClassIconProvider api={api} installPath={install.confirmed.path}>
+                {renderReady(install.confirmed.path)}
+              </ClassIconProvider>
             ) : (
               <FinderPanel
                 scanning={install.scanning}
@@ -744,17 +764,22 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
               />
             )}
 
-            <AppFooter
-              api={api}
-              update={{
-                ...update,
-                install: async () => {
-                  filesExit.request(update.install);
-                },
-              }}
-              pinned={readyShellOpen}
-              onSettings={settingsOpen ? undefined : openAppSettings}
-            />
+            {/* The ready shell has App settings in its sidebar, which holds the
+                version, update check, support and notices. First-run screens
+                keep this footer as their way there. */}
+            {readyShellOpen ? null : (
+              <AppFooter
+                api={api}
+                update={{
+                  ...update,
+                  install: async () => {
+                    filesExit.request(update.install);
+                  },
+                }}
+                pinned={false}
+                onSettings={settingsOpen ? undefined : openAppSettings}
+              />
+            )}
           </main>
         </div>
       </ToastProvider>

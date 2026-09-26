@@ -32,8 +32,9 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
 };
 
 /**
- * The sidebar reads as three short groups instead of one nine-item list:
- * what you set up, how it looks, and everything else.
+ * The sidebar reads as three short groups instead of one long list: what you
+ * set up, how it looks, and everything else. A group with no label shows no
+ * heading.
  */
 export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
   { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },

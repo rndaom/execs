@@ -4,7 +4,8 @@ import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
-import { Loading } from "./components/ui/Spinner";
+import { Disclosure } from "./components/ui/Disclosure";
+import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
@@ -575,8 +576,10 @@ export function SettingsHost({
         if (started) toast.cancelSave(copy?.source);
         return false;
       }
-      if (options?.quiet) toast.clearSource(copy?.source ?? "default");
-      else toast.finishSave(copy?.success, copy?.source);
+      if (options?.quiet) {
+        toast.clearSource(copy?.source ?? "default");
+        toast.noteQuietSave();
+      } else toast.finishSave(copy?.success, copy?.source);
       return true;
     } catch (err) {
       // A failure before picker completion did not reserve a save counter.
@@ -1495,14 +1498,12 @@ export function SettingsHost({
         </div>
       ) : null}
       {identityPending && !shownLoadError ? (
-        <p data-testid="settings-profile-loading">
+        <LoadingState testId="settings-profile-loading">
           Loading settings for {activeProfileName ?? "the selected profile"}…
-        </p>
+        </LoadingState>
       ) : null}
       {!profileId && loading && !identityPending ? (
-        <p>
-          <Loading>Loading settings…</Loading>
-        </p>
+        <LoadingState>Loading settings…</LoadingState>
       ) : null}
       {!identityPending && !filesLimited && !maps.complete && usesCfgState(tab) ? (
         <div role="alert" className="mb-4 text-warn">
@@ -1558,21 +1559,35 @@ export function SettingsHost({
           {!identityPending && profileId && visible && tab === paneTab && provenance ? (
             <CfgOverridesAlert provenance={provenance} onOpen={openCfgSource} />
           ) : null}
+          {filesLimited && usesCfgState(paneTab) && cfgSnapshotProfileId !== profileId ? (
+            <p data-testid="settings-cfg-unavailable" className="t-meta">
+              CFG controls are unavailable until the listed file can be read.
+            </p>
+          ) : (
+            pane(paneTab, visible && tab === paneTab)
+          )}
           {!identityPending &&
           profileId &&
           visible &&
           tab === paneTab &&
           (conditionalSources[paneTab]?.length ?? 0) > 0 ? (
-            <aside
-              data-testid="conditional-cfg-sources"
-              aria-label="Other CFG sources"
-              className="pane-note mb-5"
+            <Disclosure
+              profileId={profileId}
+              storageKey={`conditional-cfg-sources-${paneTab}`}
+              testId="conditional-cfg-sources"
+              className="mt-8"
+              summary={
+                <span className="t-row">
+                  Class cfgs and launch options that can change these (
+                  {conditionalSources[paneTab].length})
+                </span>
+              }
             >
-              <p>
-                These controls show inspected startup CFG values. Launch commands and class CFG
-                lines below may change the game result; launch command order needs TF2 validation.
+              <p className="t-meta mt-2">
+                These controls show the values your startup cfgs set. The lines below can set them
+                again when you play a class or launch TF2.
               </p>
-              <ul className="mt-2 space-y-1">
+              <ul className="t-meta mt-2 space-y-1">
                 {conditionalSources[paneTab].slice(0, 6).map((source) => (
                   <li key={JSON.stringify(source)}>
                     {onNavigate ? (
@@ -1603,17 +1618,12 @@ export function SettingsHost({
                 ))}
               </ul>
               {conditionalSources[paneTab].length > 6 ? (
-                <p className="mt-1">And {conditionalSources[paneTab].length - 6} more sources.</p>
+                <p className="t-meta mt-1">
+                  And {conditionalSources[paneTab].length - 6} more sources.
+                </p>
               ) : null}
-            </aside>
+            </Disclosure>
           ) : null}
-          {filesLimited && usesCfgState(paneTab) && cfgSnapshotProfileId !== profileId ? (
-            <p data-testid="settings-cfg-unavailable" className="t-meta">
-              CFG controls are unavailable until the listed file can be read.
-            </p>
-          ) : (
-            pane(paneTab, visible && tab === paneTab)
-          )}
           {!identityPending && profileId && visible && tab === paneTab && provenance ? (
             <CfgSourcesDetails
               profileId={profileId}

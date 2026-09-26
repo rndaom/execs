@@ -2,6 +2,7 @@ import { Check, Copy, Play } from "@phosphor-icons/react";
 import { type ReactNode, useId } from "react";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { formatInstallLabel } from "../../lib/finder-ui";
+import { SaveStatusSlot, useSaveActivity } from "../ui/Toast";
 
 /**
  * The app chrome: wordmark, profile switcher, install folder, and either a
@@ -37,12 +38,20 @@ export function ReadyHeader({
   onCancelLaunch: () => void;
 }) {
   const { feedback, copy } = useCopyFeedback();
+  const activity = useSaveActivity();
   const reasonId = useId();
 
   return (
     <header className="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 max-sm:h-auto max-sm:min-h-14 max-sm:flex-wrap max-sm:gap-y-2 max-sm:py-2 sm:px-6">
       <div className="mr-1 flex shrink-0 items-center gap-2">
-        <span aria-hidden="true" className="size-2.5 rounded-full bg-brand" />
+        {/* A fresh node per completed save replays the pop exactly once. */}
+        <span
+          key={`dot-${activity.saved}`}
+          aria-hidden="true"
+          data-saving={activity.kind === "saving" ? "true" : undefined}
+          data-pop={activity.saved > 0 ? "true" : undefined}
+          className="brand-dot size-2.5 rounded-full bg-brand"
+        />
         <span className="text-[18px] font-semibold tracking-tight text-ink">execs</span>
       </div>
 
@@ -73,13 +82,16 @@ export function ReadyHeader({
         </button>
       </div>
 
+      {/* Quiet save progress sits just before the launch controls. */}
+      <SaveStatusSlot className="mr-1 ml-auto" />
+
       {running ? (
-        <div className="t-meta ml-auto flex shrink-0 items-center gap-2">
+        <div className="t-meta flex shrink-0 items-center gap-2">
           <span className="size-2 rounded-full bg-warn" aria-hidden="true" />
           <span className="hidden sm:inline">Game running</span>
         </div>
       ) : (
-        <div className="ml-auto flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
+        <div className="flex min-w-0 items-center justify-end gap-2 max-sm:flex-none">
           {launchWarning && !launching && !disabled ? (
             <p
               data-testid="launch-sync-warning"

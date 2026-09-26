@@ -921,6 +921,14 @@ export async function getStockCrosshairSprites(): Promise<Record<string, StockCr
   return call<Record<string, StockCrosshairSprite>>("get_stock_crosshair_sprites");
 }
 
+/**
+ * TF2's class emblems decoded from the user's own game files, keyed by class
+ * id. Classes whose emblem cannot be read are absent.
+ */
+export async function getClassIcons(): Promise<Record<string, StockCrosshairSprite>> {
+  return call<Record<string, StockCrosshairSprite>>("get_class_icons");
+}
+
 /** Installed custom-pack candidates that could replace Valve's stock art. */
 export async function getCrosshairContentSources(): Promise<ContentIndex> {
   return call<ContentIndex>("get_crosshair_content_sources");

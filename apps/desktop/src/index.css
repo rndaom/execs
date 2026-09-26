@@ -167,16 +167,28 @@ a:focus-visible,
   /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
 }
 
-/* The loading cog. Reduced motion stops it through the global rules above. */
+/* The TF2 emblem steps through quarter turns; its four-fold symmetry makes
+   each step land where the last began. Reduced motion stops it through the
+   global rules above. */
 .spinner {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
   color: var(--color-brand);
-  animation: spinner-turn 1.4s linear infinite;
+  animation: spinner-tick 900ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-@keyframes spinner-turn {
+.spinner > svg {
+  display: block;
+}
+
+@keyframes spinner-tick {
+  from {
+    transform: rotate(0deg);
+  }
   to {
-    transform: rotate(1turn);
+    transform: rotate(90deg);
   }
 }
 
@@ -373,13 +385,42 @@ a:focus-visible,
     background: var(--color-panel-raised);
   }
 
-  .settings-nav-marker {
+  /* One flat highlight travels to the active item: the raised surface plus
+     the orange edge mark, moved as a single piece. */
+  .settings-nav-item {
+    z-index: 1;
+  }
+
+  .settings-nav[data-indicator="true"] .settings-nav-item[data-active="true"] {
+    background: transparent;
+  }
+
+  .settings-nav-indicator {
+    position: absolute;
+    top: 0;
+    left: 8px;
+    right: 8px;
+    z-index: 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-panel-raised);
+    pointer-events: none;
+    transition:
+      transform var(--motion-move) var(--ease-out),
+      height var(--motion-move) var(--ease-out);
+  }
+
+  .settings-nav-indicator::before {
+    content: "";
     position: absolute;
     inset-block: 7px;
     left: -8px;
     width: 3px;
     border-radius: 0 2px 2px 0;
     background: var(--color-brand);
+  }
+
+  .settings-nav-indicator[data-ready="false"] {
+    transition: none;
   }
 
   .settings-utility {
@@ -715,7 +756,12 @@ a:focus-visible,
       padding-inline: 6px;
     }
 
-    .settings-nav-marker {
+    .settings-nav-indicator {
+      left: 6px;
+      right: 6px;
+    }
+
+    .settings-nav-indicator::before {
       left: -6px;
     }
 
@@ -968,6 +1014,7 @@ a:focus-visible,
      Native radio semantics with a quiet segmented surface and selected ring. */
 
   .segmented {
+    position: relative;
     display: inline-flex;
     flex-wrap: wrap;
     gap: 2px;
@@ -981,8 +1028,34 @@ a:focus-visible,
   }
 
   .segmented-item {
+    position: relative;
+    z-index: 1;
     display: flex;
     min-width: 0;
+  }
+
+  .segmented-thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-panel-raised);
+    box-shadow: inset 0 0 0 1px var(--color-brand);
+    pointer-events: none;
+    transition:
+      transform var(--motion-move) var(--ease-out),
+      width var(--motion-move) var(--ease-out),
+      height var(--motion-move) var(--ease-out),
+      box-shadow var(--motion) ease;
+  }
+
+  .segmented-thumb[data-neutral="true"] {
+    box-shadow: inset 0 0 0 1px var(--color-edge-strong);
+  }
+
+  .segmented-thumb[data-ready="false"] {
+    transition: none;
   }
 
   .segmented-label {
@@ -1011,12 +1084,16 @@ a:focus-visible,
   }
 
   .segmented-label[data-selected="true"] {
-    background: var(--color-panel-raised);
     color: var(--color-ink);
+  }
+
+  /* Until the thumb is measured (first paint, tests) the label carries it. */
+  .segmented:not([data-thumb="true"]) .segmented-label[data-selected="true"] {
+    background: var(--color-panel-raised);
     box-shadow: inset 0 0 0 1px var(--color-brand);
   }
 
-  .segmented-label[data-selected="true"][data-neutral="true"] {
+  .segmented:not([data-thumb="true"]) .segmented-label[data-selected="true"][data-neutral="true"] {
     box-shadow: inset 0 0 0 1px var(--color-edge-strong);
   }
 
@@ -1031,6 +1108,7 @@ a:focus-visible,
   }
 
   .class-tabs {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     gap: 0 4px;
@@ -1038,6 +1116,9 @@ a:focus-visible,
   }
 
   .class-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     min-height: 36px;
     padding: 8px 12px;
     border-bottom: 2px solid transparent;
@@ -1055,8 +1136,27 @@ a:focus-visible,
   }
 
   .class-tab[aria-selected="true"] {
-    border-bottom-color: var(--color-brand);
     font-weight: 600;
+  }
+
+  .class-tabs:not([data-indicator="true"]) .class-tab[aria-selected="true"] {
+    border-bottom-color: var(--color-brand);
+  }
+
+  .class-tabs-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    background: var(--color-brand);
+    pointer-events: none;
+    transition:
+      transform var(--motion-move) var(--ease-out),
+      width var(--motion-move) var(--ease-out);
+  }
+
+  .class-tabs-indicator[data-ready="false"] {
+    transition: none;
   }
 
   .switch {
@@ -1299,5 +1399,274 @@ a:focus-visible,
 
   .disclosure[open] > :not(summary) {
     animation: enter-fade var(--motion) ease backwards;
+  }
+}
+
+@layer components {
+  /* A whole-surface wait: the emblem over one line of status, centred in the
+     space the content will take. */
+  .loading-state {
+    display: flex;
+    min-height: min(56vh, 460px);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+  }
+
+  /* A TF2 class emblem from the player's install, filled with the text colour. */
+  .class-emblem {
+    display: inline-block;
+    flex: none;
+    background-color: currentColor;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+  }
+
+  .class-tab[aria-selected="true"] > .class-emblem {
+    color: var(--color-brand);
+  }
+}
+
+@layer components {
+  .comfig-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+  }
+
+  @media (min-width: 900px) {
+    .comfig-addons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 32px;
+    }
+  }
+}
+
+/* Two columns: the left cell of the last row drops its hairline too. Unlayered
+   so it wins over the row's own border utility. */
+@media (min-width: 900px) {
+  .comfig-addons > :nth-last-child(2):nth-child(odd) {
+    border-bottom-width: 0;
+  }
+}
+
+@layer components {
+  /* Save progress lives in the header as one quiet line of text. */
+  .save-status-slot {
+    display: inline-flex;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .save-status {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 22rem;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--color-ink-muted);
+  }
+
+  .save-status-floating,
+  .save-alert-floating {
+    pointer-events: auto;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-lg);
+    background: var(--color-panel-raised);
+    padding: 8px 14px;
+  }
+
+  /* A failed save: a strip under the header, like the TF2-running notice. */
+  .save-alert {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    background: color-mix(in srgb, var(--color-error) 8%, var(--color-bg));
+    font-size: 13.5px;
+    line-height: 1.45;
+    text-align: left;
+    color: var(--color-ink);
+  }
+
+  .save-alert-floating {
+    max-width: 34rem;
+    border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
+  }
+}
+
+@layer components {
+  /* Menu rows: the profile menu uses the same flat row as context menus. */
+  .menu-row {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    gap: 10px;
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    font-size: 13.5px;
+    color: var(--color-ink-muted);
+    text-align: left;
+    transition:
+      background-color var(--motion) ease,
+      color var(--motion) ease;
+  }
+
+  .menu-row:hover,
+  button.menu-row:focus-visible {
+    background: var(--color-edge);
+    color: var(--color-ink);
+  }
+
+  button.menu-row:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  .menu-row-current,
+  .menu-row-current:hover {
+    background: transparent;
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+}
+
+@keyframes dot-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes dot-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+@layer components {
+  /* The execs dot: it breathes only while a change is saving and pops once
+     when one lands. At rest it is still. */
+  .brand-dot[data-pop="true"] {
+    animation: dot-pop 420ms var(--ease-out);
+  }
+
+  .brand-dot[data-saving="true"] {
+    animation: dot-breathe 1.1s ease-in-out infinite;
+  }
+}
+
+@layer components {
+  /* The execs dot on a pane whose changes have not reached the profile yet. */
+  .settings-nav-change {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    margin-left: auto;
+    border-radius: var(--radius-pill);
+    background: var(--color-brand);
+    animation: dot-arrive var(--motion-move) var(--ease-out) backwards;
+  }
+}
+
+@keyframes dot-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-nav-change {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    margin-left: 0;
+  }
+}
+
+/* Folds open and close smoothly where the engine can size to content
+   (Chromium/WebView2); elsewhere they switch instantly. Reduced motion
+   removes the transition through the global rules. */
+:root {
+  interpolate-size: allow-keywords;
+}
+
+.disclosure::details-content {
+  height: 0;
+  overflow: clip;
+  transition:
+    height var(--motion-move) var(--ease-out),
+    content-visibility var(--motion-move) allow-discrete;
+}
+
+.disclosure[open]::details-content {
+  height: auto;
+}
+
+@layer components {
+  /* A tile's orange dot arrives with the selection. */
+  .tile-check {
+    animation: dot-arrive var(--motion-move) var(--ease-out) backwards;
+  }
+}
+
+@layer components {
+  /* The dot field sits behind the workspace; content scrolls over it. */
+  .settings-workspace {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .settings-workspace > .settings-scroll {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dot-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    animation: enter-fade 900ms ease backwards;
+  }
+
+  /* First-run screens: the page's own content sits above the field. */
+  .onboard-main > :not(.dot-backdrop) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dot-backdrop > canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 }

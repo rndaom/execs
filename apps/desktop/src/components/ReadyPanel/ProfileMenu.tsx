@@ -187,11 +187,11 @@ export function ProfileMenu({
         ) : null}
       </summary>
 
-      <div ref={panelRef} className="profile-menu-panel overlay p-4 text-left">
-        <div className="flex items-start justify-between gap-4 border-b border-edge pb-3">
-          <div>
+      <div ref={panelRef} className="profile-menu-panel overlay p-1.5 text-left">
+        <div className="flex items-center justify-between gap-4 px-2.5 pt-1.5 pb-2">
+          <div className="min-w-0">
             <p className="t-row">Profiles</p>
-            <p data-testid="profile-library-status" className="t-meta mt-1">
+            <p data-testid="profile-library-status" className="t-meta">
               {library ? libraryStatusCopy(library) : <Loading>Loading profiles…</Loading>}
             </p>
           </div>
@@ -204,21 +204,21 @@ export function ProfileMenu({
               onClick={onCreateNew}
               disabled={controlsBusy || running || recoveryPending}
               title={running ? "Close TF2 to create a profile." : undefined}
-              className="btn btn-primary"
+              className="btn btn-ghost"
             >
-              <Plus size={14} weight="bold" />
+              <Plus size={14} />
               New profile
             </button>
           ) : null}
         </div>
         {showCreate && running ? (
-          <p data-testid="create-new-locked" className="mt-2 text-[12px] text-ink-faint">
+          <p data-testid="create-new-locked" className="px-2.5 pb-2 text-[12px] text-ink-faint">
             Close TF2 to create a profile.
           </p>
         ) : null}
 
         {library && library.profiles.length > 0 ? (
-          <ul className="mt-2 max-h-52 overflow-y-auto">
+          <ul className="max-h-60 overflow-y-auto border-t border-edge py-1">
             {library.profiles.map((profile) => {
               const active = library.activeProfileId === profile.id;
               const unsafeFolders = (profile.unsafeCustomFolders?.length ?? 0) > 0;
@@ -229,12 +229,7 @@ export function ProfileMenu({
                 !controlsBusy &&
                 (!recoveryPending || profile.id === recoveryTargetId);
               return (
-                <li
-                  key={profile.id}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13.5px] transition-colors duration-150 ${
-                    active ? "" : "hover:bg-panel"
-                  }`}
-                >
+                <li key={profile.id} className={`menu-row ${active ? "menu-row-current" : ""}`}>
                   {renaming?.id === profile.id ? (
                     <RenameForm
                       current={profile.name}
@@ -271,14 +266,14 @@ export function ProfileMenu({
                         data-testid="profile-name"
                         disabled={!canSwitch}
                         onClick={() => onSwitch(profile.id)}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+                        className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:cursor-default"
                       >
                         <span
                           className={`size-2 shrink-0 rounded-full ${
                             active ? "bg-brand" : "bg-edge-strong"
                           }`}
                         />
-                        <span className="min-w-0 flex-1 truncate text-ink">{profile.name}</span>
+                        <span className="min-w-0 flex-1 truncate">{profile.name}</span>
                         <span className="text-[12px] text-ink-faint">
                           {unsafeFolders ? "Needs repair" : active ? "Current" : "Switch"}
                         </span>
@@ -313,9 +308,9 @@ export function ProfileMenu({
                             });
                           }}
                           disabled={controlsBusy || recoveryPending}
-                          className="rounded-md p-2 text-ink-muted hover:bg-panel-raised hover:text-ink disabled:opacity-40"
+                          className="rounded-md p-1.5 text-ink-faint hover:bg-edge hover:text-ink disabled:opacity-40"
                         >
-                          <DotsThreeVertical size={18} weight="bold" />
+                          <DotsThreeVertical size={16} weight="bold" />
                         </button>
                       ) : null}
                     </>
@@ -328,7 +323,7 @@ export function ProfileMenu({
 
         {library && !library.rootMismatch && !running ? (
           <form
-            className="mt-3 flex gap-2 border-t border-edge pt-3"
+            className="flex gap-2 border-t border-edge px-1 py-2"
             onSubmit={(event) => {
               event.preventDefault();
               onSave();
@@ -343,7 +338,7 @@ export function ProfileMenu({
               onChange={(event) => onDraftName(event.target.value)}
               placeholder="Save current as…"
               disabled={controlsBusy || recoveryPending}
-              className="field min-w-0 flex-1 px-3 py-2 text-[13.5px] text-ink placeholder:text-ink-faint focus:outline-none"
+              className="input min-w-0 flex-1 text-[13.5px] placeholder:text-ink-faint"
             />
             <button type="submit" disabled={!canSave} className="btn btn-ghost">
               Save
@@ -351,7 +346,7 @@ export function ProfileMenu({
           </form>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-edge pt-3">
+        <div className="border-t border-edge pt-1">
           <button
             type="button"
             data-testid="profile-import"
@@ -363,18 +358,18 @@ export function ProfileMenu({
               onImport();
             }}
             disabled={!canImport}
-            className="btn btn-ghost"
+            className="menu-row w-full"
           >
-            <UploadSimple size={15} />
-            Import
+            <UploadSimple size={15} aria-hidden="true" />
+            Import profile…
           </button>
           <button
             type="button"
             onClick={onChangeInstall}
             disabled={controlsBusy || recoveryPending}
-            className="btn btn-ghost"
+            className="menu-row w-full"
           >
-            <FolderOpen size={15} />
+            <FolderOpen size={15} aria-hidden="true" />
             Change install
           </button>
         </div>
