@@ -15,6 +15,7 @@ import {
   STIR_PUSH,
   stepStir,
 } from "../lib/dot-field";
+import { prefersReducedMotion } from "../lib/motion";
 
 /**
  * A stirred dot brightens a little, a hint of movement rather than a glow:
@@ -41,12 +42,7 @@ const EMPTY_FIELD: FieldLayout = {
 
 type Box = { x0: number; y0: number; x1: number; y1: number };
 
-function reducedMotion() {
-  return (
-    document.documentElement.dataset.motion === "reduce" ||
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
+const reducedMotion = prefersReducedMotion;
 
 function token(name: string, fallback: string) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();

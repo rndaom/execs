@@ -258,7 +258,7 @@ export function CrosshairControls({
                 </p>
               )}
               <span className="eyebrow absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5">
-                1280 × 720 reference
+                1280 × 720 reference · not game footage
               </span>
             </div>
           )}

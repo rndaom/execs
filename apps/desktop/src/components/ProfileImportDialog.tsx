@@ -1,5 +1,6 @@
 import { Check } from "@phosphor-icons/react";
 import type { ProfileLibraryState } from "../hooks/useProfileLibrary";
+import { Caret } from "./ui/Caret";
 import { Modal } from "./ui/Modal";
 import { OptionTile } from "./ui/OptionTile";
 import { Loading } from "./ui/Spinner";
@@ -149,8 +150,9 @@ export function ProfileImportDialog({
             </p>
           ) : null}
           {review.creator || review.notes.length > 0 || review.warnings.length > 0 ? (
-            <details className="mt-4 border-t border-edge pt-4">
+            <details className="fold mt-4 border-t border-edge pt-4">
               <summary className="t-body cursor-pointer text-ink">
+                <Caret fold />
                 {review.warnings.length > 0
                   ? `Config checks flagged ${review.warnings.length} ${review.warnings.length === 1 ? "file" : "files"}`
                   : "Import details"}

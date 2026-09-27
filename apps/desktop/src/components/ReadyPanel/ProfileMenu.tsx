@@ -1,10 +1,4 @@
-import {
-  CaretDown,
-  DotsThreeVertical,
-  FolderOpen,
-  Plus,
-  UploadSimple,
-} from "@phosphor-icons/react";
+import { DotsThree, FolderOpen, Plus, UploadSimple } from "@phosphor-icons/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ProfileLibrary } from "../../lib/bridge";
 import {
@@ -17,6 +11,7 @@ import {
   PROFILE_NAME_MAX,
   profileNameProblem,
 } from "../../lib/library-ui";
+import { Caret } from "../ui/Caret";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
 import { Loading } from "../ui/Spinner";
 /**
@@ -179,7 +174,7 @@ export function ProfileMenu({
         <strong className="max-w-40 truncate font-medium text-ink">
           {activeProfile?.name ?? "Profiles"}
         </strong>
-        <CaretDown size={13} className="profile-menu-caret text-ink-faint" />
+        <Caret />
         {activeProfile ? (
           <span data-testid="profile-active" className="badge hidden md:inline-flex">
             Active
@@ -229,7 +224,16 @@ export function ProfileMenu({
                 !controlsBusy &&
                 (!recoveryPending || profile.id === recoveryTargetId);
               return (
-                <li key={profile.id} className={`menu-row ${active ? "menu-row-current" : ""}`}>
+                <li
+                  key={profile.id}
+                  className={`menu-row ${active ? "menu-row-current" : ""}`}
+                  // Right-click opens the same actions as the row's ⋯ button.
+                  onContextMenu={(event) => {
+                    if (!showExport || controlsBusy || recoveryPending || renaming) return;
+                    event.preventDefault();
+                    setActions({ id: profile.id, x: event.clientX, y: event.clientY });
+                  }}
+                >
                   {renaming?.id === profile.id ? (
                     <RenameForm
                       current={profile.name}
@@ -310,7 +314,7 @@ export function ProfileMenu({
                           disabled={controlsBusy || recoveryPending}
                           className="rounded-md p-1.5 text-ink-faint hover:bg-edge hover:text-ink disabled:opacity-40"
                         >
-                          <DotsThreeVertical size={16} weight="bold" />
+                          <DotsThree size={16} weight="bold" aria-hidden="true" />
                         </button>
                       ) : null}
                     </>

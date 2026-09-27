@@ -218,7 +218,7 @@ export function AppSettingsPane({
               : update.checkMessage ||
                 (update.available
                   ? `execs ${releaseVersionCopy(update.available.version)} is available. Install when you’re ready.`
-                  : "Updates install only when you choose Install.")}
+                  : null)}
           </p>
         </SettingsSection>
 

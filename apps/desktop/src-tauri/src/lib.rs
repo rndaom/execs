@@ -8,6 +8,7 @@ mod hud_stats;
 mod mods_fetch;
 mod net;
 mod startup_error;
+mod steam_items_fetch;
 
 /// Isolated release verification; absent from ordinary application builds.
 #[cfg(feature = "release-probes")]
@@ -657,6 +658,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::inventory::get_inventory,
             commands::inventory::get_inventory_icons,
+            commands::inventory::get_inventory_steam_items,
+            commands::inventory::get_inventory_steam_image,
+            commands::inventory::get_inventory_capabilities,
+            commands::inventory::apply_inventory_layout,
+            commands::inventory::craft_inventory,
+            commands::inventory::operations::prepare_inventory_operation,
+            commands::inventory::operations::execute_inventory_operation,
+            commands::inventory::operations::reconcile_inventory_operation,
             commands::finder::scan_tf2_installs,
             commands::finder::browse_tf2_root,
             commands::finder::confirm_tf2_root,
@@ -743,6 +752,7 @@ pub fn run() {
             commands::viewmodel::viewmodel_build_available,
             commands::viewmodel::viewmodel_preview_image,
             commands::hitsound::hitsound_bytes,
+            commands::hitsound::comfig_hitsound_index,
             commands::hitsound::list_stock_hitsounds,
             commands::hitsound::get_hitsound_sources,
             commands::hitsound::pick_hitsound_file,

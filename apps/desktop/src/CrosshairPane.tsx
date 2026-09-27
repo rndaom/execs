@@ -411,14 +411,10 @@ export function CrosshairPane({
               </div>
               {source === "builtin" ? (
                 <p className="t-meta mb-4">
-                  Select a shape, then Customize shape to make an editable copy. Saved copies appear
-                  in Saved library.
+                  Customize shape makes an editable copy in Saved library.
                 </p>
               ) : source === "designs" ? (
-                <p className="t-meta mb-4">
-                  Your saved designs and imported crosshairs. Design your own starts a new one;
-                  select a design to edit it.
-                </p>
+                <p className="t-meta mb-4">Select a design to edit it.</p>
               ) : null}
               {editingDesign ? (
                 <CrosshairDesigner
@@ -524,7 +520,7 @@ export function CrosshairPane({
                   <p className="t-meta mt-1">
                     {editingDesign
                       ? "Save to library to use this design."
-                      : `${Object.keys(draft.assignments).length} weapon overrides · size ${controls.draft.cl_crosshair_scale}`}
+                      : `${Object.keys(draft.assignments).length} weapon ${Object.keys(draft.assignments).length === 1 ? "override" : "overrides"} · size ${controls.draft.cl_crosshair_scale}`}
                   </p>
                 </div>
               </div>

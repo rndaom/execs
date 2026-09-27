@@ -49,8 +49,8 @@ export function ViewmodelPane({
         title="Viewmodels"
         actions={
           record ? (
-            <span data-testid="viewmodel-pack-status" className="badge">
-              {previouslyBuilt ? "Previous build" : locallyBuilt ? "Built" : "Imported"}
+            <span data-testid="viewmodel-pack-status" className="badge" title={packLabel}>
+              {previouslyBuilt ? "Previous build" : locallyBuilt ? "Built pack" : "Imported pack"}
             </span>
           ) : null
         }

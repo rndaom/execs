@@ -11,7 +11,9 @@ import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
+import { AutosaveActivity } from "./hooks/useAutosave";
 import { useHudResources } from "./hooks/useHudResources";
+import { useInventoryDraftGuard } from "./hooks/useInventoryDraftGuard";
 import type { SetOperationError } from "./hooks/useOperationErrors";
 import { InventoryPane } from "./InventoryPane";
 import { LaunchPane } from "./LaunchPane";
@@ -184,6 +186,7 @@ export function SettingsHost({
 
   const [localSettingsDraftStore] = useState(createSettingsDraftStore);
   const settingsDraftStore = suppliedSettingsDraftStore ?? localSettingsDraftStore;
+  const inventoryDraftGuard = useInventoryDraftGuard(settingsDraftStore);
   useEffect(
     () => settingsDraftStore.registerWriteGuard(() => settingsBusyQueue.active),
     [settingsDraftStore, settingsBusyQueue],
@@ -1526,12 +1529,15 @@ export function SettingsHost({
       ) : null}
       {import.meta.env.DEV ? (
         <div hidden={!visible || tab !== "inventory"}>
-          <InventoryPane
-            api={api}
-            active={visible && tab === "inventory"}
-            running={running}
-            busy={busy || externalBusy}
-          />
+          <AutosaveActivity.Provider value={visible && tab === "inventory"}>
+            <InventoryPane
+              {...inventoryDraftGuard}
+              api={api}
+              active={visible && tab === "inventory"}
+              running={running}
+              busy={busy || externalBusy}
+            />
+          </AutosaveActivity.Provider>
         </div>
       ) : null}
       {[...visited.current.tabs].map((paneTab) => (

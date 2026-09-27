@@ -1,5 +1,8 @@
-//! Steam transport used only inside a dedicated development helper process.
-use crate::protocol;
+//! Steam transport used only inside a dedicated, bounded development helper process.
+use crate::{
+    operation::{OperationRequest, OperationResult, Session},
+    protocol,
+};
 use base64::Engine;
 
 use libloading::Library;
@@ -145,6 +148,28 @@ fn refuse_game(system: &mut System) -> Result<()> {
 }
 
 pub fn read_inventory(path: &std::path::Path) -> Result<protocol::Snapshot> {
+    run(path, None)
+}
+
+pub fn operate_inventory(path: &std::path::Path, request: OperationRequest) -> OperationResult {
+    let mut session = match Session::new(request) {
+        Ok(session) => session,
+        Err(message) => return OperationResult::failed(false, message),
+    };
+    match run(path, Some(&mut session)) {
+        Ok(snapshot) => match session.confirm(&snapshot) {
+            Ok(Some(result)) => result,
+            Ok(None) => OperationResult::failed(
+                true,
+                "The inventory outcome could not be confirmed. Do not repeat the operation.",
+            ),
+            Err(message) => OperationResult::failed(true, message),
+        },
+        Err(error) => OperationResult::failed(session.sent, error.to_string()),
+    }
+}
+
+fn run(path: &std::path::Path, operation: Option<&mut Session>) -> Result<protocol::Snapshot> {
     if !cfg!(target_arch = "x86_64") {
         return Err("Inventory access currently requires x64".into());
     }
@@ -168,10 +193,14 @@ pub fn read_inventory(path: &std::path::Path) -> Result<protocol::Snapshot> {
     // SAFETY: the operator supplies the installed Valve library, not downloaded code.
     // Symbol signatures follow the Steamworks headers. All pointers are checked
     // before dereference; every interface and function remains within DLL lifetime.
-    unsafe { connect(path, &mut system) }
+    unsafe { connect(path, &mut system, operation) }
 }
 
-unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protocol::Snapshot> {
+unsafe fn connect(
+    path: &std::path::Path,
+    system: &mut System,
+    mut operation: Option<&mut Session>,
+) -> Result<protocol::Snapshot> {
     let library = Library::new(path)?;
     let init = library.get::<unsafe extern "C" fn() -> bool>(b"SteamAPI_Init\0")?;
     let shutdown = *library.get::<unsafe extern "C" fn()>(b"SteamAPI_Shutdown\0")?;
@@ -216,6 +245,12 @@ unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protoco
     if steam_id == 0 {
         return Err("Steam returned an empty account identity".into());
     }
+    if operation
+        .as_ref()
+        .is_some_and(|s| s.steam_id() != steam_id.to_string())
+    {
+        return Err("Signed-in Steam account differs from the reviewed account".into());
+    }
     eprintln!("Connected to the existing Steam session.");
     let get_gc =
         library.get::<GetInterface>(b"SteamAPI_ISteamClient_GetISteamGenericInterface\0")?;
@@ -238,8 +273,10 @@ unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protoco
     let mut last_hello = None;
     let mut welcomed = false;
     let mut snapshot = None;
+    let mut last_refresh = None;
     let mut account_presentation = (None, None);
-    while started.elapsed() < Duration::from_secs(30) {
+    let deadline = Duration::from_secs(if operation.is_some() { 45 } else { 30 });
+    while started.elapsed() < deadline {
         refuse_game(system)?;
         callbacks();
         if account_presentation.1.is_none() {
@@ -251,7 +288,6 @@ unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protoco
         if !welcomed && last_hello.is_none_or(|at: Instant| at.elapsed() >= Duration::from_secs(5))
         {
             // Empty CMsgClientHello inside the standard eight-byte protobuf envelope.
-            // No inventory-changing message is implemented by this executable.
             let kind = protocol::PROTOBUF | 4006;
             let mut hello = kind.to_le_bytes().to_vec();
             hello.extend(0u32.to_le_bytes());
@@ -311,19 +347,98 @@ unsafe fn connect(path: &std::path::Path, system: &mut System) -> Result<protoco
                         steam_id,
                     )?);
                 }
+                21..=23 | 26 if operation.is_some() => {
+                    let body = protocol::payload(kind, &bytes)?;
+                    let state = operation.as_deref_mut().unwrap();
+                    if state.sent {
+                        state.observe(kind & !protocol::PROTOBUF, body)?;
+                    } else {
+                        protocol::changes(kind & !protocol::PROTOBUF, body, steam_id)?;
+                        // Never mutate from a snapshot invalidated by an event received later.
+                        snapshot = None;
+                        let request = protocol::account_refresh(steam_id);
+                        if (gc_api.send)(
+                            gc,
+                            protocol::PROTOBUF | 28,
+                            request.as_ptr().cast(),
+                            request.len() as u32,
+                        ) != 0
+                        {
+                            return Err("Preflight cache refresh failed".into());
+                        }
+                        last_refresh = Some(Instant::now());
+                    }
+                }
+                1003 if operation.as_ref().is_some_and(|s| s.sent) => {
+                    if kind & protocol::PROTOBUF != 0 {
+                        return Err("Unexpected protobuf craft response".into());
+                    }
+                    let body = crate::operation_wire::binary_payload(&bytes)?;
+                    operation.as_deref_mut().unwrap().observe(1003, body)?;
+                }
+                25 if operation.is_some() => {
+                    return Err("Inventory cache subscription ended".into())
+                }
                 4008 => return Err("Coordinator ended the session".into()),
                 _ => {}
             }
         }
+        // Do not send against a snapshot while already queued SO updates remain.
+        // The next bounded iteration rechecks game/account and the total deadline.
+        let mut queued_size = 0;
+        if operation.is_some() && (gc_api.available)(gc, &mut queued_size) {
+            continue;
+        }
         if welcomed {
-            if let Some(mut snapshot) = snapshot {
+            if let Some(mut current) = snapshot.take() {
                 if !logged_on(user) || identity(user) != steam_id {
                     return Err("Account changed before completion".into());
                 }
-                snapshot.persona_name = account_presentation.0;
-                snapshot.avatar = account_presentation.1;
-                return Ok(snapshot);
+                current.persona_name = account_presentation.0.clone();
+                current.avatar = account_presentation.1.clone();
+                if let Some(state) = operation.as_deref_mut() {
+                    if !state.sent {
+                        refuse_game(system)?;
+                        if !logged_on(user) || identity(user) != steam_id {
+                            return Err("Steam account changed before send".into());
+                        }
+                        let (kind, bytes) = state.prepare_send(&current)?;
+                        // Exactly one mutation send. Even an SDK send error is an unknown outcome.
+                        let result =
+                            (gc_api.send)(gc, kind, bytes.as_ptr().cast(), bytes.len() as u32);
+                        if result != 0 {
+                            return Err(format!(
+                                "Inventory operation send returned {result}; outcome unknown"
+                            )
+                            .into());
+                        }
+                        last_refresh = None;
+                    } else {
+                        if state.confirm(&current)?.is_some() {
+                            return Ok(current);
+                        }
+                        snapshot = Some(current);
+                    }
+                } else {
+                    return Ok(current);
+                }
             }
+        }
+        if welcomed
+            && operation.as_ref().is_some_and(|s| s.sent)
+            && last_refresh.is_none_or(|at: Instant| at.elapsed() >= Duration::from_secs(2))
+        {
+            let request = protocol::account_refresh(steam_id);
+            let result = (gc_api.send)(
+                gc,
+                protocol::PROTOBUF | 28,
+                request.as_ptr().cast(),
+                request.len() as u32,
+            );
+            if result != 0 {
+                return Err(format!("Post-operation refresh failed ({result})").into());
+            }
+            last_refresh = Some(Instant::now());
         }
         std::thread::sleep(Duration::from_millis(100));
     }

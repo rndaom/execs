@@ -1,9 +1,10 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: Fault-injection doubles deliberately expose incomplete IPC payloads and pane props.
 // The host and hooks are real; child panes expose their props and IPC is fault-injected.
 import { JSDOM } from "jsdom";
-import { act, createElement as h } from "react";
+import { act, createElement as h, useContext } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AutosaveActivity } from "./hooks/useAutosave";
 import { SettingsHost } from "./SettingsHost";
 
 const capture = vi.hoisted(() => ({
@@ -70,6 +71,12 @@ vi.mock("./SoundsPane", () => ({
   },
 }));
 vi.mock("./ViewmodelPane", () => ({ ViewmodelPane: () => null }));
+vi.mock("./InventoryPane", () => ({
+  InventoryPane: (p: any) => {
+    capture.panes.inventory = { ...p, activity: useContext(AutosaveActivity) };
+    return null;
+  },
+}));
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost" });
 Object.assign(globalThis, {
@@ -151,6 +158,17 @@ afterEach(async () => {
 });
 
 describe("settings snapshot integrity", () => {
+  it("deactivates inventory modal handlers when the retained pane is hidden", async () => {
+    await render({ tab: "inventory" });
+    expect(capture.panes.inventory.activity).toBe(true);
+    await render({ tab: "gameplay" });
+    expect(capture.panes.inventory.activity).toBe(false);
+    await render({ tab: "inventory", visible: false });
+    expect(capture.panes.inventory.activity).toBe(false);
+    await render({ visible: true });
+    expect(capture.panes.inventory.activity).toBe(true);
+  });
+
   it("binds a retained HUD options callback to its original HUD identity", async () => {
     api.getHudState.mockResolvedValue({
       profileId: "A",

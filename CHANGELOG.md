@@ -9,6 +9,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Development Inventory: a TF2-style ten-by-five backpack with direct drag/drop, Ctrl/Shift selection, cross-page dragging, Undo/Redo and compact item inspection. Sorting by name, quality or type rearranges actual draft slots for reviewed Steam Apply, with protected items kept in place. Hold a dragged item or group over either page arrow to keep turning pages, then drop on the chosen page. Search, quality and sort sit in one toolbar row; dragging previews exactly where items land, and page turns, sorts and moves animate into place. With a public Steam inventory, items show TF2's own renders, so painted weapons, war paints and killstreak kits look as they do in game, and Inspect reads like TF2's item panel with Valve's description lines. Renamed items keep their original name in view and description tags show on hover and in Inspect. Development builds support reviewed Steam moves, metal crafting in batches (such as fifteen scrap into five reclaimed), random hat crafting from three refined metal with a reveal of the hat Steam picked, and single-item deletion, with native checks and recovery for unconfirmed outcomes; the separate test backpack simulates these actions. Protected favorites and saved layouts remain account-owned. Inventory remains hidden in release builds pending live/platform qualification.
 - A refreshed look across every pane: warm dark surfaces, TF2 orange for selections, clearer
   type, less repeated text, consistent dialogs and restrained motion. Loading shows a flat TF2
   emblem, and Viewmodels and Crosshair class tabs show TF2's class emblems read from your own game
@@ -21,6 +22,12 @@ User-facing changes only. The release workflow publishes the matching
   saved, and marks any pane whose changes are still waiting, such as Files edits you have not
   saved. The sidebar highlight, tab underlines and choice buttons glide to your selection, and
   folds open smoothly.
+- The comfig.app hit and kill sound library is back in Sounds, with favorites, a source filter
+  (All, Favorites, Built into TF2, comfig.app) and a Suggested sort that lists sounds made for the
+  slot you are choosing first. comfig.app sounds can be boosted again.
+- Consistent controls: every dropdown, fold and HUD option list uses the same caret, more-actions
+  buttons look alike, and Inventory items and profiles open their actions on right-click. Repeated
+  and decorative notes were trimmed across Crosshair, Sounds, Viewmodels, App settings and first run.
 - Calmer panes: Comfig leads with presets and addons and folds module fine-tuning away with a
   count of what you changed; notes about class cfgs and launch options that can change a pane's
   values fold below its controls.

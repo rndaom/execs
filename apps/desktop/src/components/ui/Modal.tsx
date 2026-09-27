@@ -50,6 +50,7 @@ export function Modal({
   open,
   title,
   description,
+  hideTitle = false,
   role = "dialog",
   scrim = true,
   testId,
@@ -62,6 +63,9 @@ export function Modal({
   open: boolean;
   title: ReactNode;
   description?: ReactNode;
+  /** Keep the title and description for assistive technology only, when the
+   * body draws its own heading. */
+  hideTitle?: boolean;
   role?: "dialog" | "alertdialog";
   /** Dim the page behind the sheet. Off for corner prompts. */
   scrim?: boolean;
@@ -218,11 +222,11 @@ export function Modal({
         tabIndex={-1}
         className={`overlay overlay-enter p-4 text-left ${className}`.trim()}
       >
-        <p id={titleId} className="t-section">
+        <p id={titleId} className={hideTitle ? "sr-only" : "t-section"}>
           {title}
         </p>
         {description ? (
-          <p id={descriptionId} className="t-meta mt-1">
+          <p id={descriptionId} className={hideTitle ? "sr-only" : "t-meta mt-1"}>
             {description}
           </p>
         ) : null}
