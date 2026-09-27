@@ -233,8 +233,13 @@ export function createStir(count: number): Stir {
   };
 }
 
-/** The pointer moved to (x, y), in the surface's CSS px, at `now` ms. */
-export function movePointer(pointer: StirPointer, x: number, y: number, now: number): void {
+/**
+ * The pointer moved to (x, y), in the surface's CSS px, at `now` ms. Returns
+ * false for a move that goes nowhere: engines repeat the pointer's position
+ * after scrolling and layout, and that must not stir the field.
+ */
+export function movePointer(pointer: StirPointer, x: number, y: number, now: number): boolean {
+  if (pointer.over && x === pointer.x && y === pointer.y) return false;
   const gap = now - pointer.movedAt;
   if (!pointer.over || gap > MOVING) {
     // Arriving, or moving again after a rest: no speed from the jump.
@@ -249,6 +254,7 @@ export function movePointer(pointer: StirPointer, x: number, y: number, now: num
   pointer.y = y;
   pointer.movedAt = now;
   pointer.over = true;
+  return true;
 }
 
 export function leavePointer(pointer: StirPointer): void {

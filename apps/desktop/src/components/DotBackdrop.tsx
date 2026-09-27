@@ -256,8 +256,8 @@ export function DotBackdrop() {
         onLeave();
         return;
       }
-      movePointer(pointer, x, y, event.timeStamp || performance.now());
-      wake();
+      // The frame clock, not the event's: both must share one timeline.
+      if (movePointer(pointer, x, y, performance.now())) wake();
     }
 
     function onLeave() {

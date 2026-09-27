@@ -190,6 +190,20 @@ describe("the pointer stir", () => {
     expect(stir.active).toEqual([]);
   });
 
+  it("ignores a repeated position, so scrolling under a resting pointer lets it settle", () => {
+    const { layout, stir, pointer, now } = stirred(800, 560);
+    let time = now;
+    let frames = 0;
+    // Engines repeat the pointer's position after scrolling and layout.
+    for (; frames < 200; frames += 1) {
+      time += 16;
+      expect(movePointer(pointer, pointer.x, pointer.y, time)).toBe(false);
+      if (!stepStir(layout, stir, pointer, time, 16)) break;
+    }
+    expect(frames).toBeLessThan(130);
+    expect(stir.active).toEqual([]);
+  });
+
   it("takes no speed from the jump when the pointer arrives", () => {
     const pointer = createPointer();
     movePointer(pointer, 10, 10, 100);
