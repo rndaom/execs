@@ -467,9 +467,10 @@ a:focus-visible,
     padding: 24px var(--content-pad) 32px;
   }
 
+  /* The editor takes the full width; its title keeps every pane's position. */
   .settings-content[data-pane="files"] {
     max-width: none;
-    padding: 16px;
+    padding: 24px var(--content-pad) 16px;
   }
 
   .settings-pane {
@@ -1250,14 +1251,51 @@ a:focus-visible,
     color: var(--color-ink);
   }
 
-  .disclosure-caret {
-    display: inline-block;
+  /* ---- Caret ------------------------------------------------------------
+     One size, weight and colour for every chooser and fold (ui/Caret). */
+  .caret {
+    flex: none;
     color: var(--color-ink-faint);
     transition: transform var(--motion-move) var(--ease-reversible);
   }
-
-  .disclosure[open] > summary .disclosure-caret {
+  .caret-menu[data-open],
+  [aria-expanded="true"] > .caret-menu,
+  details[open] > summary .caret-menu {
+    transform: rotate(180deg);
+  }
+  .caret-fold[data-open],
+  details[open] > summary .caret-fold {
     transform: rotate(90deg);
+  }
+
+  /* A small inline fold inside text: the app caret, never the browser's marker. */
+  .fold > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* A native select keeps its keyboard and screen reader behaviour but shows
+     the app caret instead of the platform arrow. */
+  .select-field {
+    position: relative;
+    display: grid;
+    min-width: 0;
+  }
+  .select-field > select {
+    appearance: none;
+    padding-right: 28px;
+  }
+  .select-field > .caret {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    translate: 0 -50%;
+    pointer-events: none;
   }
 
   .disclosure[open] > :not(summary) {
@@ -1303,6 +1341,28 @@ a:focus-visible,
     z-index: 30;
     width: 300px;
     padding: 12px;
+  }
+
+  /* A sound row's favorite star: quiet until chosen, then solid ink. */
+  .sound-favorite {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    color: var(--color-ink-faint);
+    transition:
+      color var(--motion) ease,
+      background-color var(--motion) ease;
+  }
+  .sound-favorite:hover {
+    background: var(--color-panel-raised);
+    color: var(--color-ink);
+  }
+  .sound-favorite[aria-pressed="true"] {
+    color: var(--color-ink);
   }
 
   .inventory-icon-button {

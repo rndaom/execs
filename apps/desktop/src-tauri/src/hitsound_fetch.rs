@@ -1,13 +1,265 @@
-//! Hold the user's own picked WAVs while they audition and install them.
-//! Core stays network-free. Retired remote catalogs have no fetch path.
+//! comfig.app's hits library, fetched on demand, and the user's own picked
+//! WAVs held while they audition and install them. Core stays network-free.
+//! The TF2Hitsounds catalog stays retired and has no fetch path.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use crate::net::{self, MIB};
+use crate::net::{self, RemoteSource, Verify, MIB};
 
 const WAV_MAX_BYTES: u64 = 8 * MIB;
+
+fn cache_dir() -> Result<PathBuf, String> {
+    Ok(execs_core::try_execs_data_dir()?.join("hitsound-cache"))
+}
+
+// ---------------------------------------------------------------------------
+// comfig.app hits library
+// ---------------------------------------------------------------------------
+
+/// The hits index lives in the comfig-app repo (MIT); pinned so the list
+/// never shifts under a profile that references an entry by id.
+const COMFIG_INDEX_COMMIT: &str = "0dd0b076d93f5eb77974dfa72280813425130367";
+const COMFIG_INDEX_URL: &str =
+    "https://raw.githubusercontent.com/mastercomfig/comfig-app/0dd0b076d93f5eb77974dfa72280813425130367/src/ssg/hitsounds.json";
+const COMFIG_INDEX_MAX_BYTES: u64 = 4 * MIB;
+/// The audio host. Its 128-hex object key looks like SHA-512, but live bytes
+/// do not hash to that value (the service transcodes uploads before serving
+/// them), so it is an opaque immutable id rather than a delivered-byte digest.
+const COMFIG_HITS_BASE: &str = "https://hits.comfig.app";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComfigHitsound {
+    pub name: String,
+    pub hash: String,
+    /// Which list the uploader filed it under; either slot still accepts it.
+    pub kind: execs_core::HitsoundKind,
+    /// Position in comfig.app's own list, for its order.
+    pub order: usize,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ComfigIndexRaw {
+    #[serde(default)]
+    hitsounds: Vec<ComfigIndexEntry>,
+    #[serde(default)]
+    killsounds: Vec<ComfigIndexEntry>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ComfigIndexEntry {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    hash: String,
+}
+
+fn valid_comfig_hash(hash: &str) -> bool {
+    hash.len() == 128
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// The whole library, from the pinned index (cached by commit).
+pub fn fetch_comfig_index() -> Result<Vec<ComfigHitsound>, String> {
+    let cached = cache_dir()?.join(format!("comfig-index-{COMFIG_INDEX_COMMIT}.json"));
+    let bytes = net::download_pinned_validated_for(
+        COMFIG_INDEX_URL,
+        &cached,
+        Verify::Magic(b"{"),
+        COMFIG_INDEX_MAX_BYTES,
+        RemoteSource::GitHubRaw,
+        validate_comfig_index,
+    )?;
+    Ok(comfig_entries(parse_comfig_index(&bytes)?))
+}
+
+fn parse_comfig_index(bytes: &[u8]) -> Result<ComfigIndexRaw, String> {
+    serde_json::from_slice(bytes)
+        .map_err(|err| format!("Could not read the comfig.app hits index ({err})"))
+}
+
+fn validate_comfig_index(bytes: &[u8]) -> Result<(), String> {
+    if comfig_entries(parse_comfig_index(bytes)?).is_empty() {
+        return Err("The comfig.app hits index contained no usable sounds.".into());
+    }
+    Ok(())
+}
+
+fn comfig_entries(raw: ComfigIndexRaw) -> Vec<ComfigHitsound> {
+    let mut out = Vec::with_capacity(raw.hitsounds.len() + raw.killsounds.len());
+    let mut seen = std::collections::BTreeSet::new();
+    for (list, kind) in [
+        (raw.hitsounds, execs_core::HitsoundKind::Hit),
+        (raw.killsounds, execs_core::HitsoundKind::Kill),
+    ] {
+        for entry in list {
+            let hash = entry.hash.trim().to_ascii_lowercase();
+            if !valid_comfig_hash(&hash) || !seen.insert(hash.clone()) {
+                continue;
+            }
+            let name = comfig_display_name(&entry.name);
+            if name.is_empty() {
+                continue;
+            }
+            let order = out.len();
+            out.push(ComfigHitsound {
+                name,
+                hash,
+                kind,
+                order,
+            });
+        }
+    }
+    out
+}
+
+/// Upstream names are upload file names; show them without the extension
+/// and with separators turned back into spaces.
+fn comfig_display_name(raw: &str) -> String {
+    let stem = raw
+        .trim()
+        .trim_end_matches(".wav")
+        .trim_end_matches(".WAV")
+        .trim_end_matches(".mp3");
+    let spaced: String = stem
+        .chars()
+        .filter(|c| !c.is_control())
+        .map(|c| if c == '_' || c == '-' { ' ' } else { c })
+        .collect();
+    spaced
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(120)
+        .collect()
+}
+
+/// One comfig.app sound by its exact 128-hex immutable object id.
+pub fn fetch_comfig_wav(hash: &str) -> Result<Vec<u8>, String> {
+    let hash = hash.trim().to_ascii_lowercase();
+    if !valid_comfig_hash(&hash) {
+        return Err("Unknown comfig.app sound.".into());
+    }
+    let cached = cache_dir()?.join(format!("comfig-{hash}.wav"));
+    let url = format!("{COMFIG_HITS_BASE}/{hash}.wav");
+    net::download_pinned_validated_for_timeout(
+        &url,
+        &cached,
+        Verify::Magic(b"RIFF"),
+        WAV_MAX_BYTES,
+        RemoteSource::ComfigHits,
+        Some(Duration::from_secs(30)),
+        validate_comfig_wav,
+    )
+    .map_err(|err| {
+        err.replace(
+            "The download failed verification.",
+            "comfig.app did not return a WAV for that sound.",
+        )
+    })
+}
+
+/// comfig's corpus is MS-ADPCM produced by an encoder that writes a nominal
+/// (and often noncanonical) byte-rate field. Source/Windows decoders ignore
+/// that field, so validate every structural value needed to safely decode the
+/// blocks without falsely rejecting the live library.
+fn validate_comfig_wav(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("The downloaded file is not a RIFF/WAVE file.".into());
+    }
+    let declared = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+    let end = declared
+        .checked_add(8)
+        .filter(|end| *end <= bytes.len())
+        .ok_or("The downloaded WAV is truncated.")?;
+    let mut at = 12usize;
+    let mut layout: Option<(usize, usize, usize)> = None;
+    let mut data = None;
+    while at + 8 <= end {
+        let id = &bytes[at..at + 4];
+        let size = u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap()) as usize;
+        let start = at + 8;
+        let chunk_end = start
+            .checked_add(size)
+            .filter(|chunk_end| *chunk_end <= end)
+            .ok_or("The downloaded WAV has a truncated chunk.")?;
+        if id == b"fmt " {
+            let fmt = &bytes[start..chunk_end];
+            if fmt.len() < 22 || u16::from_le_bytes(fmt[..2].try_into().unwrap()) != 2 {
+                return Err("The comfig.app sound is not MS-ADPCM.".into());
+            }
+            let channels = usize::from(u16::from_le_bytes(fmt[2..4].try_into().unwrap()));
+            let sample_rate = u32::from_le_bytes(fmt[4..8].try_into().unwrap());
+            let block_align = usize::from(u16::from_le_bytes(fmt[12..14].try_into().unwrap()));
+            let bits = u16::from_le_bytes(fmt[14..16].try_into().unwrap());
+            let extension = usize::from(u16::from_le_bytes(fmt[16..18].try_into().unwrap()));
+            let samples_per_block =
+                usize::from(u16::from_le_bytes(fmt[18..20].try_into().unwrap()));
+            let coefficients = usize::from(u16::from_le_bytes(fmt[20..22].try_into().unwrap()));
+            let extension_end = 18usize
+                .checked_add(extension)
+                .ok_or("Invalid WAV extension.")?;
+            let coefficient_end = 22usize
+                .checked_add(
+                    coefficients
+                        .checked_mul(4)
+                        .ok_or("Invalid WAV coefficients.")?,
+                )
+                .ok_or("Invalid WAV coefficients.")?;
+            let header = channels.checked_mul(7).ok_or("Invalid WAV channels.")?;
+            if !(1..=2).contains(&channels)
+                || ![11_025, 22_050, 44_100].contains(&sample_rate)
+                || bits != 4
+                || extension < 4
+                || extension_end > fmt.len()
+                || coefficients == 0
+                || coefficients > 256
+                || coefficient_end > extension_end
+                || block_align < header
+            {
+                return Err("The comfig.app sound has an invalid MS-ADPCM format.".into());
+            }
+            let payload_nibbles = (block_align - header)
+                .checked_mul(2)
+                .ok_or("Invalid WAV block size.")?;
+            if !payload_nibbles.is_multiple_of(channels)
+                || samples_per_block != 2 + payload_nibbles / channels
+            {
+                return Err("The comfig.app sound has an invalid MS-ADPCM block layout.".into());
+            }
+            layout = Some((channels, block_align, coefficients));
+        } else if id == b"data" {
+            data = Some(&bytes[start..chunk_end]);
+        }
+        at = chunk_end
+            .checked_add(size & 1)
+            .filter(|next| *next <= end)
+            .ok_or("The downloaded WAV has invalid padding.")?;
+    }
+    if at != end {
+        return Err("The downloaded WAV has a truncated chunk header.".into());
+    }
+    let (channels, block_align, coefficients) =
+        layout.ok_or("The downloaded WAV has no format chunk.")?;
+    let data = data
+        .filter(|data| !data.is_empty())
+        .ok_or("The downloaded WAV is empty.")?;
+    if !data.len().is_multiple_of(block_align)
+        || data.chunks_exact(block_align).any(|block| {
+            block[..channels]
+                .iter()
+                .any(|value| usize::from(*value) >= coefficients)
+        })
+    {
+        return Err("The comfig.app sound has invalid MS-ADPCM data.".into());
+    }
+    Ok(())
+}
 
 /// Where a picked-and-prepared user file waits between the file dialog and
 /// Apply. Tokens are random and the directory is app data, so the frontend
@@ -130,6 +382,63 @@ mod tests {
     #[cfg(windows)]
     fn unlink_dir(link: &Path) {
         std::fs::remove_dir(link).unwrap();
+    }
+
+    #[test]
+    fn comfig_index_entries_are_deduped_validated_ordered_and_named_for_people() {
+        let raw = ComfigIndexRaw {
+            hitsounds: vec![
+                ComfigIndexEntry {
+                    name: "quake_3-hit.wav".into(),
+                    hash: "A".repeat(128),
+                },
+                ComfigIndexEntry {
+                    name: "dupe.wav".into(),
+                    hash: "a".repeat(128),
+                },
+                ComfigIndexEntry {
+                    name: "bad".into(),
+                    hash: "zz".into(),
+                },
+            ],
+            killsounds: vec![
+                ComfigIndexEntry {
+                    name: "  Kill  Bell .WAV".into(),
+                    hash: "b".repeat(128),
+                },
+                ComfigIndexEntry {
+                    name: "old short id.wav".into(),
+                    hash: "c".repeat(64),
+                },
+            ],
+        };
+        let entries = comfig_entries(raw);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "quake 3 hit");
+        assert_eq!(entries[0].hash, "a".repeat(128));
+        assert_eq!(entries[0].kind, execs_core::HitsoundKind::Hit);
+        assert_eq!(entries[1].name, "Kill Bell");
+        assert_eq!(entries[1].kind, execs_core::HitsoundKind::Kill);
+        assert_eq!((entries[0].order, entries[1].order), (0, 1));
+        assert!(fetch_comfig_wav("../x").is_err());
+    }
+
+    #[test]
+    fn comfig_object_ids_are_exact_128_hex_values() {
+        assert!(valid_comfig_hash(&"a".repeat(128)));
+        assert!(!valid_comfig_hash(&"a".repeat(127)));
+        assert!(!valid_comfig_hash(&"A".repeat(128)));
+        assert!(!valid_comfig_hash(&"g".repeat(128)));
+    }
+
+    #[test]
+    #[ignore = "live network regression"]
+    fn live_comfig_index_and_first_sound_are_usable() {
+        let index = fetch_comfig_index().unwrap();
+        assert!(index.len() > 1000);
+        let bytes = fetch_comfig_wav(&index[0].hash).unwrap();
+        validate_comfig_wav(&bytes).unwrap();
+        execs_core::prepare_hitsound_wav(&bytes).unwrap();
     }
 
     #[test]

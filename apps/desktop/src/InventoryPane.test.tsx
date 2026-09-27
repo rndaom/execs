@@ -1301,3 +1301,30 @@ it("crafts a random hat from three refined metal and shows the hat Steam picked"
     expect(box.querySelector('[aria-label="Crafted hats"]')).toBeNull();
   });
 });
+
+it("opens item actions on right-click for the selection it lands in", async () => {
+  await fixtureInteraction(async ({ box }) => {
+    const tile = element(box, '[aria-label="Scrap Metal, Unique, slot 4"]');
+    await act(async () =>
+      tile.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 40,
+          clientY: 40,
+        }),
+      ),
+    );
+    const menu = element(document.body, '[role="menu"][aria-label="Item actions"]');
+    const labels = [...menu.querySelectorAll('[role="menuitem"]')].map((entry) =>
+      entry.textContent?.trim(),
+    );
+    expect(labels).toEqual(["Inspect", "Favorite", "Protect", "Craft…", "Delete…", "Move to…"]);
+    expect(element(box, '[aria-label="Backpack organizer"]').textContent).toContain("1 selected");
+    const inspect = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (entry) => entry.textContent?.trim() === "Inspect",
+    );
+    await act(async () => inspect?.click());
+    expect(box.querySelector('[aria-label="Item details"]')?.textContent).toContain("Slot 4");
+  });
+});

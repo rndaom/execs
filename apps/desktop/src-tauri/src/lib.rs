@@ -752,6 +752,7 @@ pub fn run() {
             commands::viewmodel::viewmodel_build_available,
             commands::viewmodel::viewmodel_preview_image,
             commands::hitsound::hitsound_bytes,
+            commands::hitsound::comfig_hitsound_index,
             commands::hitsound::list_stock_hitsounds,
             commands::hitsound::get_hitsound_sources,
             commands::hitsound::pick_hitsound_file,

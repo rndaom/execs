@@ -1095,6 +1095,21 @@ export type HitsoundKind = "hit" | "kill";
 
 export type HitsoundSource = "community" | "file" | "comfig";
 
+/** One comfig.app hits-library entry from the pinned index. */
+export type ComfigHitsound = {
+  name: string;
+  hash: string;
+  /** Which list the uploader filed it under; either slot accepts it. */
+  kind: HitsoundKind;
+  /** Position in comfig.app's own list. */
+  order: number;
+};
+
+/** comfig.app's hits library (pinned index, cached). */
+export async function comfigHitsoundIndex(): Promise<ComfigHitsound[]> {
+  return call<ComfigHitsound[]>("comfig_hitsound_index");
+}
+
 export type HitsoundEntry = {
   name: string;
   source: HitsoundSource;

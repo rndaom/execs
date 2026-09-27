@@ -1,7 +1,6 @@
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
-  CaretDown,
   CaretLeft,
   CaretRight,
   Cube,
@@ -25,6 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Caret } from "./components/ui/Caret";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "./components/ui/ContextMenu";
 import { Modal } from "./components/ui/Modal";
 import { Loading, LoadingState, Spinner } from "./components/ui/Spinner";
@@ -123,7 +123,7 @@ function PageField({
   );
 }
 
-type MenuState = { kind: "quality" | "sort" | "more"; x: number; y: number };
+type MenuState = { kind: "quality" | "sort" | "more" | "item"; x: number; y: number };
 type DropPreview = { slot: number; valid: boolean; landing: Set<number>; reason: string | null };
 type Hover = { id: string; left: number; top: number; below: boolean };
 
@@ -1035,6 +1035,25 @@ export function InventoryPane({
         onDragOver={(event) => allowDrop(event, position)}
         onDragLeave={(event) => leaveDrop(event, position)}
         onDrop={(event) => dropItems(event, position)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          if (retainedDragSource) return;
+          cancelHover();
+          // Right-click acts on the selection it lands in, otherwise on this item alone.
+          if (!selectedIds.includes(entry.id)) {
+            setSelectedIds([entry.id]);
+            selectionAnchor.current = entry.id;
+          }
+          setSelected(entry.id);
+          const box = event.currentTarget.getBoundingClientRect();
+          // A keyboard menu key reports no pointer position; open beside the tile.
+          const keyboard = event.clientX === 0 && event.clientY === 0;
+          setMenu({
+            kind: "item",
+            x: keyboard ? box.left + box.width / 2 : event.clientX,
+            y: keyboard ? box.bottom : event.clientY,
+          });
+        }}
         onPointerEnter={(event) => showHover(event.currentTarget, entry.id)}
         onPointerLeave={cancelHover}
         onPointerDown={cancelHover}
@@ -1517,7 +1536,7 @@ export function InventoryPane({
                   ? "All qualities"
                   : (QUALITY_NAMES[quality] ?? `Quality ${quality}`)}
               </span>
-              <CaretDown size={12} aria-hidden="true" />
+              <Caret />
             </button>
             <button
               type="button"
@@ -1531,7 +1550,7 @@ export function InventoryPane({
             >
               <SortAscending size={15} aria-hidden="true" />
               <span>Sort</span>
-              <CaretDown size={12} aria-hidden="true" />
+              <Caret />
             </button>
             <span className="flex-1" />
             <div className="flex items-center gap-1">
@@ -1582,7 +1601,7 @@ export function InventoryPane({
               title="More"
               onClick={(event) => openMenu("more", event.currentTarget)}
             >
-              <DotsThree size={18} weight="bold" aria-hidden="true" />
+              <DotsThree size={16} weight="bold" aria-hidden="true" />
             </button>
           </div>
           {stale ? (
@@ -1828,7 +1847,9 @@ export function InventoryPane({
                   ? "Filter quality"
                   : menu.kind === "sort"
                     ? "Sort backpack"
-                    : "More inventory actions"
+                    : menu.kind === "item"
+                      ? "Item actions"
+                      : "More inventory actions"
               }
               position={menu}
               onClose={() => setMenu(null)}
@@ -1870,6 +1891,73 @@ export function InventoryPane({
                         </span>
                       </ContextMenuItem>
                     ))}
+                </>
+              ) : menu.kind === "item" ? (
+                <>
+                  <ContextMenuItem
+                    disabled={!item || selectedIds.length !== 1}
+                    onSelect={() => {
+                      setMenu(null);
+                      setDetailsOpen(true);
+                    }}
+                  >
+                    Inspect
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={!selectedItems.length || !!preferences.storageError}
+                    onSelect={() => {
+                      setMenu(null);
+                      setFlag(
+                        "favorite",
+                        selectedItems.map((entry) => entry.id),
+                        !allFavorite,
+                      );
+                    }}
+                  >
+                    {allFavorite ? "Remove favorite" : "Favorite"}
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={!selectedItems.length || !!preferences.storageError}
+                    onSelect={() => {
+                      setMenu(null);
+                      setFlag(
+                        "protect",
+                        selectedItems.map((entry) => entry.id),
+                        !allProtected,
+                      );
+                    }}
+                  >
+                    {allProtected ? "Remove protection" : "Protect"}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    disabled={!selectedItems.length || disabledOperation}
+                    onSelect={() => {
+                      setMenu(null);
+                      setMode("craft");
+                    }}
+                  >
+                    Craft…
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={selectedIds.length !== 1 || disabledOperation}
+                    onSelect={() => {
+                      setMenu(null);
+                      setMode("delete");
+                    }}
+                  >
+                    Delete…
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    disabled={!selectedIds.length || !canArrange}
+                    onSelect={() => {
+                      setMenu(null);
+                      setMoveOpen(true);
+                    }}
+                  >
+                    Move to…
+                  </ContextMenuItem>
                 </>
               ) : menu.kind === "sort" ? (
                 SORTS.map((sort) => (

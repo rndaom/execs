@@ -99,11 +99,7 @@ export function FirstRunExisting({
                 Save current setup
               </button>
             </div>
-            <p className="t-meta mt-2">
-              {running
-                ? "Close TF2 to save your current setup."
-                : "The saved profile keeps these files as they are."}
-            </p>
+            {running ? <p className="t-meta mt-2">Close TF2 to save your current setup.</p> : null}
           </div>
         </div>
       </form>

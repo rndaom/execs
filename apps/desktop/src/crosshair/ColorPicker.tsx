@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { Caret } from "../components/ui/Caret";
 import { hexToRgb, rgbToHex } from "../lib/color";
 import { hsvToRgb, rgbToHsv } from "../lib/crosshair-color";
 import type { CrosshairColor } from "../lib/crosshair-ui";
@@ -116,8 +117,11 @@ export function ColorPicker({
           Enter six hex digits, for example #00ff80.
         </p>
       ) : null}
-      <details className="mt-3 t-meta">
-        <summary className="cursor-pointer">Saturation and brightness</summary>
+      <details className="fold mt-3 t-meta">
+        <summary className="cursor-pointer hover:text-ink">
+          <Caret fold />
+          Saturation and brightness
+        </summary>
         <label className="mt-2 block">
           Saturation
           <input

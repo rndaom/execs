@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sameChoice } from "./hitsound-ui";
 import { repairReadyForConfirmation } from "./mods-ui";
 import {
+  comfigEntries,
   filterSoundLibrary,
   ownEntry,
   pageSoundLibrary,
@@ -29,32 +30,68 @@ describe("sound library", () => {
   const library = [OWN, ...stockEntries()];
 
   it("searches by name across stock and user sources, case-insensitively", () => {
-    const rows = filterSoundLibrary(library, "percussion", "name-asc", null);
+    const rows = filterSoundLibrary(library, "percussion", "name-asc");
     expect(rows.map((row) => row.label)).toEqual(["Percussion"]);
-    expect(filterSoundLibrary(library, "DING", "name-asc", null).map((row) => row.label)).toEqual([
+    expect(filterSoundLibrary(library, "DING", "name-asc").map((row) => row.label)).toEqual([
       "Default ding",
       "My Ding.wav",
     ]);
   });
 
-  it("sorts by name both ways and by source order", () => {
-    const asc = filterSoundLibrary(library, "", "name-asc", null).map((row) => row.label);
+  it("sorts by name both ways and suggests by source order", () => {
+    const asc = filterSoundLibrary(library, "", "name-asc").map((row) => row.label);
     expect(asc).toEqual(
       [...asc].sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }),
       ),
     );
-    const desc = filterSoundLibrary(library, "", "name-desc", null).map((row) => row.label);
+    const desc = filterSoundLibrary(library, "", "name-desc").map((row) => row.label);
     expect(desc).toEqual([...asc].reverse());
-    const bySource = filterSoundLibrary(library, "", "source", null).map((row) => row.source);
+    const bySource = filterSoundLibrary(library, "", "suggested").map((row) => row.source);
     const firstIndexOf = (source: (typeof bySource)[number]) => bySource.indexOf(source);
     expect(firstIndexOf("own")).toBeLessThan(firstIndexOf("stock"));
     expect(new Set(bySource)).toEqual(new Set(["own", "stock"]));
   });
 
-  it("filters to the source the player selected", () => {
-    expect(filterSoundLibrary(library, "", "name-asc", new Set(["own"]))).toEqual([OWN]);
-    expect(filterSoundLibrary(library, "", "name-asc", new Set(["stock"]))).toHaveLength(9);
+  it("filters by source and favorites, keeping your own file at hand", () => {
+    const stockOnly = filterSoundLibrary(library, "", "name-asc", { filter: "stock" });
+    expect(stockOnly).toHaveLength(10);
+    expect(stockOnly).toContain(OWN);
+    const favorites = new Set([OWN.id]);
+    expect(filterSoundLibrary(library, "", "name-asc", { filter: "favorites", favorites })).toEqual(
+      [OWN],
+    );
+    expect(filterSoundLibrary(library, "", "name-asc", { filter: "favorites" })).toEqual([]);
+  });
+
+  it("suggests comfig.app uploads made for the slot being chosen first, in comfig order", () => {
+    const comfig = comfigEntries([
+      { name: "Zed kill", hash: "c".repeat(128), kind: "kill", order: 0 },
+      { name: "Beta hit", hash: "b".repeat(128), kind: "hit", order: 1 },
+      { name: "Alpha hit", hash: "a".repeat(128), kind: "hit", order: 2 },
+    ]);
+    const all = [...comfig, ...library];
+    const forHits = filterSoundLibrary(all, "", "suggested", { target: "hit" });
+    expect(forHits[0]).toBe(OWN);
+    expect(forHits.slice(-3).map((row) => row.label)).toEqual([
+      "Beta hit",
+      "Alpha hit",
+      "Zed kill",
+    ]);
+    const forKills = filterSoundLibrary(all, "", "suggested", { target: "kill" });
+    expect(forKills.slice(-3).map((row) => row.label)).toEqual([
+      "Zed kill",
+      "Beta hit",
+      "Alpha hit",
+    ]);
+    expect(
+      filterSoundLibrary(all, "", "name-asc", { filter: "comfig" }).map((r) => r.label),
+    ).toEqual(["Alpha hit", "Beta hit", "My Ding.wav", "Zed kill"]);
+    expect(comfig[0].pickFor("hit")).toEqual({
+      kind: "comfig",
+      hash: "c".repeat(128),
+      name: "Zed kill",
+    });
   });
 
   it("gives every slot a choice and a pick per row", () => {

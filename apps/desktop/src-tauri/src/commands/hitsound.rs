@@ -48,7 +48,7 @@ pub enum HitsoundPick {
     Installed { slot: HitsoundKind },
     /// One of the engine's own sounds, by file stem, from the user's VPK.
     Stock { stem: String },
-    /// Retained for old IPC callers; new catalog reads are refused.
+    /// A comfig.app hits-library entry by its opaque 128-hex object id.
     Comfig { hash: String, name: String },
 }
 
@@ -68,8 +68,8 @@ fn retired_boost_error() -> CommandError {
 
 fn require_boostable_source(source: HitsoundSource) -> Result<(), CommandError> {
     match source {
-        HitsoundSource::File => Ok(()),
-        HitsoundSource::Community | HitsoundSource::Comfig => Err(retired_boost_error()),
+        HitsoundSource::File | HitsoundSource::Comfig => Ok(()),
+        HitsoundSource::Community => Err(retired_boost_error()),
     }
 }
 
@@ -83,10 +83,7 @@ fn pick_bytes(
             let _ = name;
             Err(retired_catalog_error())
         }
-        HitsoundPick::Comfig { hash, name } => {
-            let _ = (hash, name);
-            Err(retired_catalog_error())
-        }
+        HitsoundPick::Comfig { hash, .. } => Ok(crate::hitsound_fetch::fetch_comfig_wav(hash)?),
         HitsoundPick::File { token, .. } => Ok(crate::hitsound_fetch::read_picked(token)?),
         HitsoundPick::Installed { slot } => {
             execs_core::stored_hitsound(&execs_core::profiles_dir(), profile_id, *slot)
@@ -115,6 +112,13 @@ pub async fn hitsound_bytes(pick: HitsoundPick) -> Result<tauri::ipc::Response, 
     })
     .await?;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// comfig.app's hits library (pinned index, cached), for the browsable list.
+#[tauri::command]
+pub async fn comfig_hitsound_index(
+) -> Result<Vec<crate::hitsound_fetch::ComfigHitsound>, CommandError> {
+    blocking(|| Ok(crate::hitsound_fetch::fetch_comfig_index()?)).await
 }
 
 /// The stock hit/kill sound stems present in the user's sound VPK.
@@ -233,8 +237,13 @@ fn resolve_change(
             let boost = execs_core::clamp_boost_db(boost);
             let (entry, raw) =
                 match &pick {
-                    HitsoundPick::Community { .. } | HitsoundPick::Comfig { .. } => {
+                    HitsoundPick::Community { .. } => {
                         return Err(retired_catalog_error());
+                    }
+                    HitsoundPick::Comfig { name, hash } => {
+                        let mut entry = HitsoundEntry::new(name.clone(), HitsoundSource::Comfig);
+                        entry.hash = Some(hash.clone());
+                        (entry, pick_bytes(root, profile_id, &pick)?)
                     }
                     HitsoundPick::File { name, token } => {
                         let mut entry = HitsoundEntry::new(name.clone(), HitsoundSource::File);
@@ -280,7 +289,15 @@ fn installed_source(
         }
     };
     let raw = match entry.source {
-        HitsoundSource::Community | HitsoundSource::Comfig => return Err(retired_boost_error()),
+        HitsoundSource::Community => return Err(retired_boost_error()),
+        // A boosted comfig.app sound goes back to the original upload.
+        HitsoundSource::Comfig => match entry.hash.as_deref() {
+            Some(hash) => crate::hitsound_fetch::fetch_comfig_wav(hash)
+                .or_else(|err| installed().ok_or(CommandError::unknown(err)))?,
+            None => installed().ok_or_else(|| {
+                CommandError::unknown("Pick this sound from the library again to change its boost.")
+            })?,
+        },
         HitsoundSource::File => entry
             .token
             .as_deref()
@@ -392,15 +409,10 @@ mod tests {
     #[test]
     fn retired_catalog_picks_refuse_preview_and_install_before_any_fetch_or_cache_read() {
         let root = Path::new("unused");
-        for pick in [
-            HitsoundPick::Community {
+        {
+            let pick = HitsoundPick::Community {
                 name: "quack".into(),
-            },
-            HitsoundPick::Comfig {
-                hash: "a".repeat(128),
-                name: "Saved upload".into(),
-            },
-        ] {
+            };
             assert_eq!(
                 pick_bytes(root, "unused", &pick).unwrap_err().code,
                 "SourceUnavailable"
@@ -421,11 +433,21 @@ mod tests {
     #[test]
     fn saved_catalog_sources_keep_their_wav_but_cannot_be_reencoded() {
         assert!(require_boostable_source(HitsoundSource::File).is_ok());
-        for source in [HitsoundSource::Community, HitsoundSource::Comfig] {
-            let err = require_boostable_source(source).unwrap_err();
-            assert_eq!(err.code, "SourceUnavailable");
-            assert!(err.message.contains("Keep its current boost"));
-        }
+        // comfig.app sounds re-encode from the original upload again.
+        assert!(require_boostable_source(HitsoundSource::Comfig).is_ok());
+        let err = require_boostable_source(HitsoundSource::Community).unwrap_err();
+        assert_eq!(err.code, "SourceUnavailable");
+        assert!(err.message.contains("Keep its current boost"));
+        // An invalid comfig id is refused before any network or cache read.
+        assert!(pick_bytes(
+            Path::new("unused"),
+            "unused",
+            &HitsoundPick::Comfig {
+                hash: "../x".into(),
+                name: "Bad".into(),
+            },
+        )
+        .is_err());
         assert!(matches!(
             resolve_change(Path::new("unused"), "unused", HitsoundSlotChange::Keep),
             Ok(HitsoundChange::Keep)

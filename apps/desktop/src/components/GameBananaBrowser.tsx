@@ -22,6 +22,7 @@ import {
 import { GameBananaCard, type GameBananaInstallState } from "./GameBananaCard";
 import { GameBananaPagination } from "./GameBananaPagination";
 import { Alert } from "./ui/Alert";
+import { Caret } from "./ui/Caret";
 import { Modal } from "./ui/Modal";
 import { Segmented } from "./ui/Segmented";
 import { Loading } from "./ui/Spinner";
@@ -161,7 +162,8 @@ export function GameBananaBrowser({
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Search and its actions first; what to browse and in which order below. */}
+      <div className="flex items-center gap-2">
         <label className="relative block min-w-48 flex-1">
           <span className="sr-only">Search GameBanana</span>
           <MagnifyingGlass
@@ -183,6 +185,35 @@ export function GameBananaBrowser({
             className="field w-full py-2 pr-3 pl-9 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
           />
         </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="mods-gb-filters-toggle"
+            className={`btn btn-ghost px-2.5 ${filtersOpen || browser.includeMature ? "ring-1 ring-brand" : ""}`}
+            aria-label={
+              browser.includeMature ? "Content filters; mature content included" : "Content filters"
+            }
+            aria-expanded={filtersOpen}
+            aria-controls="mods-gb-content-filters"
+            title="Content filters"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <SlidersHorizontal size={16} />
+          </button>
+          <button
+            type="button"
+            data-testid="mods-gb-refresh"
+            className="btn btn-ghost px-2.5"
+            aria-label="Refresh GameBanana results"
+            title="Refresh results"
+            disabled={browser.loading}
+            onClick={browser.refresh}
+          >
+            <ArrowClockwise size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {categories.length > 0 ? (
           <Segmented
             label="Category"
@@ -213,31 +244,6 @@ export function GameBananaBrowser({
             onChange={browser.setSort}
           />
         </div>
-        <button
-          type="button"
-          data-testid="mods-gb-filters-toggle"
-          className={`btn btn-ghost px-2.5 ${filtersOpen || browser.includeMature ? "ring-1 ring-brand" : ""}`}
-          aria-label={
-            browser.includeMature ? "Content filters; mature content included" : "Content filters"
-          }
-          aria-expanded={filtersOpen}
-          aria-controls="mods-gb-content-filters"
-          title="Content filters"
-          onClick={() => setFiltersOpen(!filtersOpen)}
-        >
-          <SlidersHorizontal size={16} />
-        </button>
-        <button
-          type="button"
-          data-testid="mods-gb-refresh"
-          className="btn btn-ghost px-2.5"
-          aria-label="Refresh GameBanana results"
-          title="Refresh results"
-          disabled={browser.loading}
-          onClick={browser.refresh}
-        >
-          <ArrowClockwise size={16} />
-        </button>
       </div>
 
       {filtersOpen ? (
@@ -334,8 +340,11 @@ export function GameBananaBrowser({
             ) : null}
           </div>
           {scopeNote ? (
-            <details className="t-meta mt-2">
-              <summary className="w-fit cursor-pointer text-ink-muted">About these results</summary>
+            <details className="fold t-meta mt-2">
+              <summary className="w-fit cursor-pointer text-ink-muted hover:text-ink">
+                <Caret fold />
+                About these results
+              </summary>
               <p className="mt-1 max-w-[76ch]">{scopeNote}</p>
             </details>
           ) : null}

@@ -7,7 +7,7 @@ import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import { SoundsPane } from "./SoundsPane";
 
-it("retries a failed stock read and offers only stock and user WAV sources", async () => {
+it("retries a failed stock read and offers comfig.app but not the retired TF2Hitsounds pack", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Audio",
@@ -25,6 +25,9 @@ it("retries a failed stock read and offers only stock and user WAV sources", asy
     .mockRejectedValueOnce(new Error("Game archive unavailable"))
     .mockResolvedValue(["hitsound"]);
   const api = {
+    comfigHitsoundIndex: async () => [
+      { name: "Bell", hash: "b".repeat(128), kind: "hit", order: 0 },
+    ],
     listStockHitsounds: stock,
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
@@ -45,10 +48,11 @@ it("retries a failed stock read and offers only stock and user WAV sources", asy
         </AppStatusProvider>,
       ),
     );
-    expect(box.querySelector('[data-testid^="sounds-row-comfig:"]')).toBeNull();
+    expect(
+      box.querySelector(`[data-testid="sounds-row-comfig:${"b".repeat(128)}"]`),
+    ).not.toBeNull();
     expect(box.querySelector('[data-testid^="sounds-row-community:"]')).toBeNull();
     expect(box.textContent).not.toContain("TF2Hitsounds");
-    expect(box.textContent).not.toContain("comfig.app");
     expect(box.textContent).toContain("Game archive unavailable");
     const stockBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
     expect(stockBoost?.disabled).toBe(true);
@@ -68,7 +72,7 @@ it("retries a failed stock read and offers only stock and user WAV sources", asy
   }
 });
 
-it("keeps a legacy saved sound playable while only user files enter the new library", async () => {
+it("keeps a retired TF2Hitsounds sound playable without offering its catalog", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "Audio",
@@ -85,6 +89,7 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
   const root = createRoot(box);
   const hitsoundBytes = vi.fn(() => new Promise<ArrayBuffer>(() => {}));
   const api = {
+    comfigHitsoundIndex: async () => [],
     listStockHitsounds: async () => ["hitsound"],
     pickHitsoundFile: async () => ({
       token: "a".repeat(32),
@@ -112,7 +117,7 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
             <SoundsPane
               api={api}
               profileId="A"
-              record={{ hit: { name: "Bubble Pop", source: "comfig", hash: "A" } }}
+              record={{ hit: { name: "Bubble Pop", source: "community" } }}
               layer="vanilla"
               effective={{}}
               managedText=""
@@ -124,9 +129,9 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
       ),
     );
     expect(box.querySelector('[data-testid="sounds-retired-source"]')?.textContent).toContain(
-      "saved WAV remains in the profile",
+      "It still plays",
     );
-    expect(box.querySelector('[data-testid^="sounds-row-comfig:"]')).toBeNull();
+    expect(box.querySelector('[data-testid^="sounds-row-community:"]')).toBeNull();
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[data-testid="sounds-choose-file"]')?.click(),
     );
@@ -137,9 +142,10 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
     const buttons = [...own.querySelectorAll("button")];
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
       "Preview Own Pop.wav (Your file)",
+      "Favorite Own Pop.wav (Your file)",
       "Use Own Pop.wav (Your file) for hits",
     ]);
-    expect(buttons[1].disabled).toBe(false);
+    expect(buttons[2].disabled).toBe(false);
     for (const button of buttons) {
       expect(button.tabIndex).toBe(0);
       button.focus();
@@ -154,7 +160,7 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
       "Kill sound volume",
     );
     expect(box.querySelector('[data-testid="sounds-hit-play"]')?.getAttribute("aria-label")).toBe(
-      "Play Bubble Pop (hit sound, comfig.app · saved by execs)",
+      "Play Bubble Pop (hit sound, Community pack · saved by execs)",
     );
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[data-testid="sounds-hit-play"]')?.click(),
@@ -162,7 +168,7 @@ it("keeps a legacy saved sound playable while only user files enter the new libr
     expect(hitsoundBytes).toHaveBeenLastCalledWith({ kind: "installed", slot: "hit" });
     const customBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
     expect(customBoost?.disabled).toBe(true);
-    expect(box.textContent).toContain("This saved catalog sound keeps its current boost.");
+    expect(box.textContent).toContain("Saved catalog sounds keep their boost.");
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -184,6 +190,7 @@ it("discloses competing mounted sound paths without claiming a playback winner",
   document.body.append(box);
   const root = createRoot(box);
   const api = {
+    comfigHitsoundIndex: async () => [],
     listStockHitsounds: async () => ["hitsound"],
     getHitsoundSources: async () => ({
       hits: {
@@ -247,6 +254,7 @@ it("keeps the selected sound visible after an autosave failure", async () => {
   const root = createRoot(box);
   const onSave = vi.fn(async () => false);
   const api = {
+    comfigHitsoundIndex: async () => [],
     listStockHitsounds: async () => ["hitsound"],
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
@@ -297,6 +305,7 @@ it("shows a dormant saved WAV and restores it without rewriting the sound pack",
   const root = createRoot(box);
   const onSave = vi.fn(async (_text: string, _pack: unknown) => true);
   const api = {
+    comfigHitsoundIndex: async () => [],
     listStockHitsounds: async () => ["hitsound"],
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
@@ -353,6 +362,7 @@ it("browses for the slot that asked and keeps focus on the chosen sound", async 
   document.body.append(box);
   const root = createRoot(box);
   const api = {
+    comfigHitsoundIndex: async () => [],
     listStockHitsounds: async () => ["hitsound"],
     getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
   } as unknown as Api;
@@ -378,9 +388,9 @@ it("browses for the slot that asked and keeps focus on the chosen sound", async 
         </AppStatusProvider>,
       ),
     );
-    // No sort or source filters compete with the role and search.
-    expect(box.querySelector('[data-testid^="sounds-sort-"]')).toBeNull();
-    expect(box.querySelector('[data-testid="sounds-source-own"]')).toBeNull();
+    // One source filter and one sort sit under the role and search.
+    expect(box.querySelector('[data-testid="sounds-sort-suggested"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid="sounds-filter-all"]')).not.toBeNull();
     expect(button("sounds-hit-browse").getAttribute("aria-label")).toBe("Browse sounds for hits");
 
     await act(async () => button("sounds-kill-browse").click());
@@ -416,6 +426,65 @@ it("browses for the slot that asked and keeps focus on the chosen sound", async 
   } finally {
     await act(async () => root.unmount());
     box.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("stars comfig.app sounds into Favorites and filters by source", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  window.localStorage.removeItem("execs.sounds.favorites");
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const bell = `comfig:${"b".repeat(128)}`;
+  const api = {
+    comfigHitsoundIndex: async () => [
+      { name: "Bell", hash: "b".repeat(128), kind: "hit", order: 0 },
+      { name: "Horn", hash: "c".repeat(128), kind: "kill", order: 1 },
+    ],
+    listStockHitsounds: async () => ["hitsound"],
+    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
+  } as unknown as Api;
+  const click = async (testId: string) =>
+    act(async () => box.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.click());
+  const rows = () =>
+    [...box.querySelectorAll('[data-testid="sounds-library"] > li[data-testid]')].map((row) =>
+      row.getAttribute("data-testid"),
+    );
+  try {
+    await act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            effective={{}}
+            managedText=""
+            onSave={async () => true}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    expect(
+      box.querySelector(`[data-testid="sounds-row-comfig:${"c".repeat(128)}"]`)?.textContent,
+    ).toContain("uploaded as a kill sound");
+    await click(`sounds-favorite-${bell}`);
+    expect(JSON.parse(window.localStorage.getItem("execs.sounds.favorites") ?? "[]")).toEqual([
+      bell,
+    ]);
+    await click("sounds-filter-favorites");
+    expect(rows()).toEqual([`sounds-row-${bell}`]);
+    await click("sounds-filter-comfig");
+    expect(rows()).toHaveLength(2);
+    await click("sounds-filter-stock");
+    expect(rows().every((id) => id?.startsWith("sounds-row-stock:"))).toBe(true);
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    window.localStorage.removeItem("execs.sounds.favorites");
     vi.unstubAllGlobals();
   }
 });

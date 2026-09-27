@@ -36,14 +36,6 @@
   }
 }
 
-.profile-menu-caret {
-  transition: transform var(--motion-move) var(--ease-reversible);
-}
-
-details[open] > summary .profile-menu-caret {
-  transform: rotate(180deg);
-}
-
 details[open] > .profile-menu-panel {
   animation: profile-menu-reveal var(--motion-move) var(--ease-out) backwards;
 }

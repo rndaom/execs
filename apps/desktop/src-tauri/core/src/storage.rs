@@ -107,6 +107,8 @@ fn classify(data_dir: &Path, path: &Path) -> StorageGroupId {
         "crosshair-cache" | "studio" => StorageGroupId::Retired,
         // Your picked WAVs are the sources Boost re-encodes from.
         "hitsound-cache/picked" => StorageGroupId::Protected,
+        // comfig.app sounds and their index re-download on use.
+        _ if name.starts_with("hitsound-cache/comfig-") => StorageGroupId::Downloads,
         // Retired sound catalog downloads next to the picked folder.
         _ if name.starts_with("hitsound-cache/") => StorageGroupId::Retired,
         // Recovery journals, preloader originals and state, and the legacy
@@ -312,8 +314,9 @@ mod tests {
         let dir = fixture();
         let report = inspect_storage(&dir).unwrap();
         assert_eq!(group(&report, StorageGroupId::Profiles).bytes, 300);
-        assert_eq!(group(&report, StorageGroupId::Downloads).bytes, 1380);
-        assert_eq!(group(&report, StorageGroupId::Retired).bytes, 120);
+        // The comfig.app index is a download again; the other two remain retired.
+        assert_eq!(group(&report, StorageGroupId::Downloads).bytes, 1400);
+        assert_eq!(group(&report, StorageGroupId::Retired).bytes, 100);
         assert_eq!(group(&report, StorageGroupId::Logs).bytes, 5);
         assert_eq!(group(&report, StorageGroupId::RestorePoints).bytes, 11);
         assert_eq!(
@@ -322,7 +325,7 @@ mod tests {
         );
         assert_eq!(group(&report, StorageGroupId::Other).bytes, 12);
         assert_eq!(report.clearable_bytes, 1500);
-        assert_eq!(report.total_bytes, 300 + 11 + 1380 + 120 + 5 + 553 + 12);
+        assert_eq!(report.total_bytes, 300 + 11 + 1400 + 100 + 5 + 553 + 12);
         assert!(!report.partial);
         fs::remove_dir_all(dir).unwrap();
     }

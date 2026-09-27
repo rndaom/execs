@@ -1000,6 +1000,41 @@ export function createPreviewApi(state: PreviewState): Api {
     async hitsoundBytes() {
       throw notInPreview("Auditioning sounds");
     },
+    async comfigHitsoundIndex() {
+      // Preview data: invented names and ids in comfig.app's shape.
+      const names = [
+        "Soft click",
+        "Glass tap",
+        "Bubble pop",
+        "Arcade coin",
+        "Wood block",
+        "Snare hit",
+        "Retro blip",
+        "Chime",
+        "Clap",
+        "Whistle",
+        "Laser zap",
+        "Metal clang",
+        "Piano note",
+        "Bass drop",
+        "Cowbell",
+        "Squeak",
+        "Rim shot",
+        "Cash register",
+        "Victory horn",
+        "Air horn",
+        "Crowd cheer",
+        "Level up",
+        "Final bell",
+        "Record scratch",
+      ];
+      return names.map((name, order) => ({
+        name,
+        hash: order.toString(16).padStart(2, "0").repeat(64),
+        kind: order < 16 ? ("hit" as const) : ("kill" as const),
+        order,
+      }));
+    },
     async listStockHitsounds() {
       // Every stock effect is "present" in preview; nothing can play anyway.
       const { STOCK_HITSOUND_EFFECTS } = await import("./hitsound-ui");

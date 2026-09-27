@@ -129,11 +129,7 @@ export function ViewmodelSettings({
             description={OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]}
             checked={transparentViewmodels}
             disabled={addonLocked || !canUseComfigAddons}
-            note={
-              canUseComfigAddons
-                ? "A mastercomfig addon, also shown in Comfig. Applies when you select it."
-                : "Available with a Comfig profile."
-            }
+            note={canUseComfigAddons ? undefined : "Available with a Comfig profile."}
             onChange={() => onToggleTransparentViewmodels()}
           />
           {onOpenComfig ? (

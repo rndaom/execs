@@ -20,6 +20,12 @@ User-facing changes only. The release workflow publishes the matching
   saved, and marks any pane whose changes are still waiting, such as Files edits you have not
   saved. The sidebar highlight, tab underlines and choice buttons glide to your selection, and
   folds open smoothly.
+- The comfig.app hit and kill sound library is back in Sounds, with favorites, a source filter
+  (All, Favorites, Built into TF2, comfig.app) and a Suggested sort that lists sounds made for the
+  slot you are choosing first. comfig.app sounds can be boosted again.
+- Consistent controls: every dropdown, fold and HUD option list uses the same caret, more-actions
+  buttons look alike, and Inventory items and profiles open their actions on right-click. Repeated
+  and decorative notes were trimmed across Crosshair, Sounds, Viewmodels, App settings and first run.
 - Calmer panes: Comfig leads with presets and addons and folds module fine-tuning away with a
   count of what you changed; notes about class cfgs and launch options that can change a pane's
   values fold below its controls.

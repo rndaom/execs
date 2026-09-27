@@ -1,6 +1,6 @@
-import { CaretRight } from "@phosphor-icons/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { draftRecordKey } from "../../hooks/useSeededDraft";
+import { Caret } from "./Caret";
 
 const PREFIX = "execs.disclosure.";
 
@@ -86,9 +86,7 @@ export function Disclosure({
       className={`disclosure ${className}`.trim()}
     >
       <summary>
-        <span aria-hidden="true" className="disclosure-caret">
-          <CaretRight size={14} weight="bold" />
-        </span>
+        <Caret fold />
         {summary}
       </summary>
       {children}
