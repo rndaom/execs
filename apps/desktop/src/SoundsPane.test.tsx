@@ -488,3 +488,80 @@ it("stars comfig.app sounds into Favorites and filters by source", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it("keeps a remembered preview level and mute in the dock", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  window.localStorage.removeItem("execs.sounds.preview");
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const api = {
+    comfigHitsoundIndex: async () => [],
+    listStockHitsounds: async () => ["hitsound"],
+    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
+  } as unknown as Api;
+  const render = () =>
+    act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            effective={{}}
+            managedText=""
+            onSave={async () => true}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+  const output = () => box.querySelector('output[for="sounds-preview-volume"]')?.textContent;
+  try {
+    await render();
+    expect(output()).toBe("50%");
+    expect(
+      box.querySelector<HTMLButtonElement>('[data-testid="sounds-preview-stop"]')?.disabled,
+    ).toBe(true);
+    const slider = box.querySelector<HTMLInputElement>('[data-testid="sounds-preview-volume"]');
+    if (!slider) throw new Error("Missing preview volume");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(slider, "20");
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(output()).toBe("20%");
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="sounds-preview-mute"]')?.click(),
+    );
+    expect(output()).toBe("0%");
+    expect(JSON.parse(window.localStorage.getItem("execs.sounds.preview") ?? "{}")).toEqual({
+      volume: 20,
+      muted: true,
+    });
+    await act(async () => root.unmount());
+    const again = createRoot(box);
+    await act(async () =>
+      again.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            effective={{}}
+            managedText=""
+            onSave={async () => true}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    expect(output()).toBe("0%");
+    await act(async () => again.unmount());
+  } finally {
+    box.remove();
+    window.localStorage.removeItem("execs.sounds.preview");
+    vi.unstubAllGlobals();
+  }
+});

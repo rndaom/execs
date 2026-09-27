@@ -42,6 +42,9 @@ on the updated revision; the earlier failed runs remain part of the record.
 - Commit `c9169a76` restores the production comfig.app sound library and changes
   shared controls. This is an additional production delta requiring refreshed
   package evidence even while Inventory remains development-only.
+- A later owner request adds a Sounds preview volume dock (preview level, mute
+  and Stop; previews only, never TF2's cvars or files). The owner tried it in the
+  development app. It is part of the same production delta.
 - The private draft still targets `8e77a221`; public v0.1.8 remains latest.
   All four product version files agree on 0.2.0. The release branch has the
   required nonempty 0.2.0 changelog section and passes the version guard; `main`
