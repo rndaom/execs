@@ -45,7 +45,10 @@ Valve's own item renders and description lines for a public Steam inventory
 the original name, description tags, a TF2-style Inspect panel, batched metal
 crafting and Valve's premium-only random hat recipe with a reveal. Those crafts
 were exercised only in the simulator; a read-only test fetched the owner's real
-inventory art through the app's network client.
+inventory art through the app's network client. The owner then tested live
+crafting in the development app and reported that it works. Which recipes and
+counts were used was not specified, and Linux and packaged builds remain
+untested.
 
 ## Remaining delta before shipping Inventory
 

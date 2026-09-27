@@ -37,7 +37,7 @@ After testing the latest development app, the owner reported “Okay, I think it
 
 After the owner's review, the Inventory reads Valve's own item renders and descriptions for a public inventory, because TF2 draws painted weapons, war paints and kits as live 3D renders that installed files cannot reproduce (a painted weapon's pattern is a UV sheet or a compositing tree, not an icon). 172 of 321 installed painted weapon definitions keep their texture in per-weapon compositor definitions, so the former swatch was missing for them; Valve's renders replace that path. Two 4096-pixel pattern layers that previously exceeded the fallback limits now decode from a small mip.
 
-A read-only opt-in test fetched the owner's public inventory (1,347 items, one page) through the app's own network client and cached real 192 and 360 pixel renders. The installed schema resolves random hat recipe 6 (premium only, three Refined Metal, `craft_class` hat) with its hat definition list. Batch crafting and the hat reveal were exercised only in the simulator; no live item was crafted, moved or deleted.
+A read-only opt-in test fetched the owner's public inventory (1,347 items, one page) through the app's own network client and cached real 192 and 360 pixel renders. The installed schema resolves random hat recipe 6 (premium only, three Refined Metal, `craft_class` hat) with its hat definition list. Batch crafting and the hat reveal were first exercised only in the simulator; agents crafted, moved and deleted no live item. The owner then tested live crafting in the development app on September 27 and reported that it works; the recipes and counts used were not specified.
 
 ## Local validation record
 
