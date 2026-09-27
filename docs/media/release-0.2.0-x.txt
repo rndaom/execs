@@ -1,0 +1,6 @@
+execs 0.2.0 is out.
+
+A calmer, clearer execs for your TF2 setup: compare a profile before you switch, keep restore points, hide viewmodels weapon by weapon, and see which cfg line sets each value.
+
+Update in-app or download:
+https://github.com/rndaom/execs/releases/tag/v0.2.0

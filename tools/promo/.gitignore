@@ -1,2 +1,5 @@
 node_modules/
 out/
+capture/*.local.json
+public/local/
+public/captures/*.png

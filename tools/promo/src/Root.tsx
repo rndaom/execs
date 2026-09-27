@@ -1,5 +1,7 @@
-import { Composition } from "remotion";
-import { PROMO_DURATION_FRAMES, PROMO_FPS, Promo, timeline } from "./Promo";
+import { Composition, Still } from "remotion";
+import { Promo } from "./Promo";
+import { Announcement, Poster } from "./Stills";
+import { DURATION, FPS } from "./timing";
 
 export function Root() {
   return (
@@ -7,20 +9,15 @@ export function Root() {
       <Composition
         id="Promo"
         component={Promo}
-        durationInFrames={PROMO_DURATION_FRAMES}
-        fps={PROMO_FPS}
+        durationInFrames={DURATION}
+        fps={FPS}
         width={1920}
         height={1080}
       />
-      {/* Same timeline at 24 fps: the README GIF. Rendered at 800 px wide. */}
-      <Composition
-        id="PromoGif"
-        component={Promo}
-        durationInFrames={timeline(24).total}
-        fps={24}
-        width={1920}
-        height={1080}
-      />
+      {/* The README's stand-in for the video until GitHub hosts the MP4. */}
+      <Still id="Poster" component={Poster} width={1920} height={1080} />
+      {/* The release announcement graphic for social posts. */}
+      <Still id="Announcement" component={Announcement} width={1600} height={900} />
     </>
   );
 }

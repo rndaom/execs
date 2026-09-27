@@ -74,7 +74,10 @@ build profile content. A user-initiated profile ZIP export copies the profile's
 packs, which may contain game-derived bytes or third-party content. The player
 controls whether to share that ZIP. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)
 tracks unresolved rights questions, including the proposed use of stock models
-in a replacement Viewmodels builder. execs is a fan project and is not
+in a replacement Viewmodels builder. The promo video and README screenshots in
+`docs/media` show the TF2 emblem and TF2's class emblems as the app displays
+them; the class emblem images are decoded from a local install when the media is
+rendered and are not stored in the repository. execs is a fan project and is not
 affiliated with Valve.
 
 ## Packaged notices
