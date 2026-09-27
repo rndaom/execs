@@ -43,8 +43,8 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locke
 
 ## Ground rules
 
-`AGENTS.md` is the product spec. The rules under "Integrity rules" are not
-negotiable: the app writes only `tf/custom/`, `tf/cfg/overrides/` (or the
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the product spec. The rules under
+"Integrity rules" are not negotiable: the app writes only `tf/custom/`, `tf/cfg/overrides/` (or the
 vanilla user cfg files) and the Steam Cloud copy of `config.cfg`, never while
 the game is running, with the single documented exception for the Mods pane.
 
@@ -58,9 +58,10 @@ same commit.
 ## Commits
 
 Use your own git identity. Do not add `Co-authored-by` trailers for agents
-or tools. Cloud Agent runs may append one via a managed hook; run
-`git config --local core.hooksPath .githooks` (see `.githooks/commit-msg`)
-and disable that managed hook before committing. See `AGENTS.md` Gotchas.
+or tools. Enable the repository commit hook with
+`git config --local core.hooksPath .githooks` (see `.githooks/commit-msg`).
+Local assistant instructions and settings are ignored; durable product decisions
+belong in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Releases
 

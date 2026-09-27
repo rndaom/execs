@@ -1,6 +1,6 @@
 //! Viewmodel pack import and saved-pack management + Casual itemtest preload.
 //! This module never edits gameinfo.txt or official VPKs — the preloader
-//! module owns those (snapshot-first, revertible; see AGENTS.md).
+//! module owns those (snapshot-first, revertible; see docs/ARCHITECTURE.md).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -650,7 +650,7 @@ where
     // The preload cfg is shared with the mods preloader. Removing the
     // viewmodel pack must leave it alone while patched particles or addon
     // content are still installed, or those mods silently stop working on
-    // Casual (AGENTS.md: "unless a viewmodel pack still uses it" — this is
+    // Casual (docs/ARCHITECTURE.md: "unless a viewmodel pack still uses it" — this is
     // the mirror of that rule).
     let keep_preload = preload_is_wanted(data_dir, tf2_root).map_err(ProfileError::Io)?;
     let before = load_manifest(profiles_dir, profile_id)?;
@@ -2431,7 +2431,7 @@ mod tests {
         data
     }
 
-    /// AGENTS.md: full revert removes the preload cfg "unless a viewmodel pack
+    /// docs/ARCHITECTURE.md: full revert removes the preload cfg "unless a viewmodel pack
     /// still uses it" — and the mirror, which this covers: removing the
     /// viewmodel pack must not remove it while the mods preloader wants it.
     #[test]

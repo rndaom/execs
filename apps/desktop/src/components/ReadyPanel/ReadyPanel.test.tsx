@@ -145,6 +145,42 @@ it("opens the existing profiles menu and focuses a saved profile without activat
   expect(props.profiles.switchProfile).toHaveBeenCalledExactlyOnceWith("preview-1");
 });
 
+it("closes profile actions before the Profiles menu and restores each opener on Escape", async () => {
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
+  await render();
+  await act(async () => choose()?.click());
+  const opener = box.querySelector<HTMLButtonElement>('[data-testid="profile-actions"]');
+  expect(opener).not.toBeNull();
+  await act(async () => {
+    opener?.focus();
+    opener?.click();
+  });
+  const actions = document.querySelector('[role="menu"][aria-label="Profile actions"]');
+  expect(actions?.contains(document.activeElement)).toBe(true);
+  const escapeEvent = new KeyboardEvent("keydown", {
+    key: "Escape",
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => document.activeElement?.dispatchEvent(escapeEvent));
+  await act(async () => {
+    for (const callback of frames.splice(0)) callback(0);
+  });
+  expect(document.querySelector('[role="menu"][aria-label="Profile actions"]')).toBeNull();
+  expect(menu()?.open).toBe(true);
+  expect(document.activeElement).toBe(opener);
+  expect(escapeEvent.defaultPrevented).toBe(true);
+
+  await act(async () =>
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(menu()?.open).toBe(false);
+  expect(document.activeElement).toBe(menu()?.querySelector("summary"));
+});
+
 it("focuses a saved profile's repair action when that profile cannot be switched", async () => {
   const library = props.profiles.library as ProfileLibrary;
   library.profiles[0].unsafeCustomFolders = ["materials"];

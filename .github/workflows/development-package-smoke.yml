@@ -13,11 +13,13 @@ on:
       - scripts/verify-release.mjs
       - scripts/appimage-host-libraries.mjs
       - scripts/third-party-notices.mjs
+      - scripts/third-party-supplemental.json
       - scripts/linux-notices.py
       - apps/desktop/**
       - packages/cfglint/**
       - pnpm-lock.yaml
       - CHANGELOG.md
+      - THIRD_PARTY.md
 
 permissions:
   contents: read

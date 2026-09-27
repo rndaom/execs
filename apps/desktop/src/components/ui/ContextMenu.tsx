@@ -50,7 +50,11 @@ export function ContextMenu({
       if (!element.contains(event.target as Node)) close.current();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close.current();
+      if (event.key !== "Escape") return;
+      // Dismiss this menu without also dismissing its owning popover or dialog.
+      event.preventDefault();
+      event.stopPropagation();
+      close.current();
     };
     window.addEventListener("pointerdown", closeOutside, true);
     window.addEventListener("keydown", closeOnEscape, true);

@@ -6,7 +6,7 @@ maintainers.
 
 ## Start here
 
-- [AGENTS.md](../AGENTS.md): the working spec. It records every durable product and
+- [ARCHITECTURE.md](ARCHITECTURE.md): the working spec. It records every durable product and
   integrity decision in present tense.
 - [CONTRIBUTING.md](../CONTRIBUTING.md): setup, checks and how changes land.
 - [RELEASE.md](RELEASE.md): what counts as a public release, versioning and the ship checklist.
@@ -24,8 +24,12 @@ maintainers.
 
 ## Records
 
+Current release review: [September 27, 2026 audit](audits/2026-09-27-release-readiness/README.md)
+and [0.2.0 readiness](release-0.2.0-readiness.md).
+
 These are dated evidence. They describe what was true when written and are kept
-unchanged for provenance; AGENTS.md is authoritative when they differ.
+unchanged for provenance, including references to the former tracked AGENTS.md.
+[ARCHITECTURE.md](ARCHITECTURE.md) is authoritative when they differ.
 
 - `release-*.md`, `forwardport-0.1.4.md`, `creator-import-0.1.6.md`, `hud-import-0.1.6.md`,
   `hud-paths-0.1.6.md` and `files-native-0.1.7.md`: validation records for past releases.
