@@ -24,11 +24,14 @@ export function useTf2Install(
     setError,
     setBusy,
     onChanged,
+    onConfirmed,
   }: {
     setError: SetOperationError;
     setBusy: (busy: boolean) => void;
     /** Leaving for the finder must clear every install-scoped screen. */
     onChanged: () => void;
+    /** Runs in the same update that publishes a newly confirmed install. */
+    onConfirmed?: () => void;
   },
 ): Tf2InstallState {
   const [screen, setScreen] = useState<Screen>("finder");
@@ -104,6 +107,7 @@ export function useTf2Install(
     setBusy(true);
     try {
       const stored = await api.confirmTf2Root(selected);
+      onConfirmed?.();
       setConfirmed(stored);
       setScreen("ready");
       setError(null, "install:confirm");
@@ -115,7 +119,7 @@ export function useTf2Install(
     } finally {
       setBusy(false);
     }
-  }, [api, selected, setError, setBusy]);
+  }, [api, selected, setError, setBusy, onConfirmed]);
 
   const change = useCallback(() => {
     setScreen("finder");

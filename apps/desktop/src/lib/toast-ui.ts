@@ -41,8 +41,11 @@ export const SAVED_MESSAGE = "Saved";
 export const DEFERRED_MESSAGE = "Draft kept until TF2 closes";
 
 export type ToastEvent =
-  /** A save has been running longer than `TOAST_SAVING_DELAY_MS`. */
-  | { type: "slow" }
+  /**
+   * A save has been running longer than `TOAST_SAVING_DELAY_MS`. `message`
+   * names the work when it is more than a save ("Installing HUD…").
+   */
+  | { type: "slow"; message?: string }
   /** A write finished; `message` names what happened when it was not a save. */
   | { type: "done"; message?: string; source?: string }
   | { type: "fail"; message: string; source?: string }
@@ -112,7 +115,7 @@ export function toastStep(state: ToastState, event: ToastEvent): ToastState {
       // retry actually succeeding.
       return state.toast?.kind === "error"
         ? state
-        : { ...state, toast: { kind: "saving", message: SAVING_MESSAGE } };
+        : { ...state, toast: { kind: "saving", message: event.message ?? SAVING_MESSAGE } };
     case "defer": {
       // A pending source announces once. The notice fades, while its draft
       // remains tracked until it is saved or discarded.

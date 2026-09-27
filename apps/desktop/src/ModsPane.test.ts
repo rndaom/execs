@@ -84,7 +84,7 @@ describe("ModsPane profile particle containment", () => {
     ).toBeNull();
     const saved = button("mods-particle-square-series");
     expect(saved.getAttribute("aria-checked")).toBe("true");
-    expect(document.body.textContent).toContain("New library choices and downloads are paused");
+    expect(document.body.textContent).toContain("New library choices are no longer offered");
 
     await act(async () => saved.click());
     expect(saved.getAttribute("aria-checked")).toBe("false");

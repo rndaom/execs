@@ -573,9 +573,9 @@ export function ModsPane({
           <PaneSection title="Casual selection" description="Choose sources, then Apply mods.">
             {savedLibraryAddons.length + savedLibraryParticles.length > 0 ? (
               <p className="t-meta mt-4">
-                Saved cueki library choices remain visible and can be removed. They can be reapplied
-                only while their original verified library cache is on this device. New library
-                choices and downloads are paused while the source-asset rights are unresolved.
+                Your saved cueki library choices still show here and can be removed. They can be
+                reapplied only while their original download is still on this device. New library
+                choices are no longer offered.
               </p>
             ) : (
               <p className="t-meta mt-4">

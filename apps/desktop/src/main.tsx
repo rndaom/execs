@@ -20,7 +20,7 @@ const preview: PreviewState =
 resolveApi(preview).then((api) => {
   createRoot(root).render(
     <StrictMode>
-      <App api={api} preview={preview} />
+      <App api={api} preview={preview} bootSplash />
     </StrictMode>,
   );
 });

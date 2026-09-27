@@ -5,7 +5,7 @@ use std::path::Path;
 
 use execs_core::{HudCatalogEntry, HudSchemaView, HudUiState, ProfileDetail};
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{
@@ -119,24 +119,65 @@ pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
     .await
 }
 
+/// The real stages of a catalog install or update, in order. The pane shows
+/// exactly these; it never invents a step or a percentage.
+pub const HUD_INSTALL_PROGRESS_EVENT: &str = "hud-install-progress";
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum HudInstallStep {
+    /// Waiting for the download (resolving the author's host included).
+    Downloading,
+    /// Unpacking the archive and checking it is one UI version 3 HUD.
+    Checking,
+    /// Writing the HUD into the profile and `tf/custom` under the write gate.
+    Installing,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HudInstallProgress {
+    id: String,
+    step: HudInstallStep,
+}
+
+fn hud_progress(app: &AppHandle, id: &str) -> impl Fn(HudInstallStep) {
+    let app = app.clone();
+    let id = id.to_string();
+    move |step| {
+        let _ = app.emit(
+            HUD_INSTALL_PROGRESS_EVENT,
+            HudInstallProgress {
+                id: id.clone(),
+                step,
+            },
+        );
+    }
+}
+
 /// Download outside the write gate so autosave and absorb can continue.
 /// Check TF2 before downloading; core checks again under the gate before writing.
 #[tauri::command]
 pub async fn install_hud(
     gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
     id: String,
 ) -> Result<ProfileDetail, CommandError> {
-    let (context, initial_hud, fetched) = with_profile(move |root, profile_id| {
+    let progress = hud_progress(&app, &id);
+    let (context, initial_hud, fetched, progress) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
+        let fetched = fetch_hud_from_catalog(&id, false, &progress)?;
         Ok((
             ActiveContext::capture(&root, &profile_id),
             manifest.hud,
-            fetch_hud_from_catalog(&id, false)?,
+            fetched,
+            progress,
         ))
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
+    progress(HudInstallStep::Installing);
     with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_hud_unchanged(
@@ -351,24 +392,31 @@ pub async fn return_to_stock_hud(
 /// Same shape as `install_hud`: the download runs before the gate, the
 /// install under it, and the options the record already carries survive.
 #[tauri::command]
-pub async fn update_hud(gate: tauri::State<'_, WriteGate>) -> Result<ProfileDetail, CommandError> {
-    let (context, initial_hud, fetched) = with_profile(|root, profile_id| {
+pub async fn update_hud(
+    gate: tauri::State<'_, WriteGate>,
+    app: AppHandle,
+) -> Result<ProfileDetail, CommandError> {
+    let (context, initial_hud, fetched, progress) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
         let manifest = active_manifest(&profile_id)?;
         let status = execs_core::resolve_hud(&manifest)
             .ok_or_else(|| CommandError::unknown("Install a HUD first."))?;
+        let progress = hud_progress(&app, &status.record.id);
+        let fetched = fetch_hud_from_catalog(
+            &status.record.id,
+            execs_core::schema_supported(&status.record.id) && !status.record.options.is_empty(),
+            &progress,
+        )?;
         Ok((
             ActiveContext::capture(&root, &profile_id),
             status.record.clone(),
-            fetch_hud_from_catalog(
-                &status.record.id,
-                execs_core::schema_supported(&status.record.id)
-                    && !status.record.options.is_empty(),
-            )?,
+            fetched,
+            progress,
         ))
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
+    progress(HudInstallStep::Installing);
     with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_hud_unchanged(
@@ -498,14 +546,20 @@ struct FetchedHud {
     schema: Option<execs_core::HudSchema>,
 }
 
-fn fetch_hud_from_catalog(id: &str, include_schema: bool) -> Result<FetchedHud, CommandError> {
+fn fetch_hud_from_catalog(
+    id: &str,
+    include_schema: bool,
+    progress: &dyn Fn(HudInstallStep),
+) -> Result<FetchedHud, CommandError> {
     let entry = crate::hud_fetch::catalog_entry(id)?;
     if !entry.install.installable() {
         return Err(CommandError::unknown(
             crate::hud_fetch::no_download_message(),
         ));
     }
+    progress(HudInstallStep::Downloading);
     let bytes = crate::hud_fetch::fetch_hud_archive(&entry)?;
+    progress(HudInstallStep::Checking);
     let extracted = execs_core::extract_hud_archive(&bytes).map_err(hud_input_error)?;
     let schema = if include_schema {
         let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;

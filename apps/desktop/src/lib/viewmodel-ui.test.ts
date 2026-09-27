@@ -8,16 +8,23 @@ import {
   viewmodelCatalogRevision,
   viewmodelChoiceChanges,
   viewmodelClasses,
+  viewmodelClassLayout,
+  viewmodelClassSummary,
   viewmodelDraftBuildRequest,
+  viewmodelExceptions,
   viewmodelGroupItemNames,
   viewmodelGroupLabel,
   viewmodelGroupsForClass,
+  viewmodelInspectChoice,
   viewmodelItemName,
   viewmodelPresetChoices,
   viewmodelRowItemNames,
   viewmodelRowLabel,
   viewmodelRowsForClass,
   viewmodelSectionsForClass,
+  viewmodelSlotChoice,
+  viewmodelWithRows,
+  viewmodelWithSlot,
 } from "./viewmodel-ui";
 
 const catalog: ViewmodelSourceCatalog = {
@@ -329,7 +336,8 @@ describe("whole-profile viewmodel presets", () => {
       "scout/one": "weapon",
       "scout/two": "weapon",
       "scout/bat": "weapon",
-      "scout/bat-inspect": "weapon",
+      // Inspect animations are only ever shown or hidden.
+      "scout/bat-inspect": "full",
       "soldier/one": "weapon",
     });
     expect(viewmodelPresetChoices(withMelee, "keep-melee", "full")).toEqual({
@@ -355,5 +363,74 @@ describe("whole-profile viewmodel presets", () => {
       ["soldier/one", "shown", "full"],
     ]);
     expect(viewmodelChoiceChanges(withMelee, after, after)).toEqual([]);
+  });
+});
+
+describe("slot-level viewmodel choices", () => {
+  const group = (
+    id: string,
+    schemaName: string,
+    slot: string,
+    extra: Partial<ViewmodelSourceCatalog["groups"][number]> = {},
+  ) => ({
+    id,
+    class: "scout",
+    items: [{ id: Number(id.replace(/\D/g, "")) || 1, schemaName, slot }],
+    animations: [id],
+    overlaps: [],
+    teamVariantsDiffer: false,
+    ...extra,
+  });
+  const scout: ViewmodelSourceCatalog = {
+    ...catalog,
+    groups: [
+      group("scout/1", "TF_WEAPON_SCATTERGUN", "primary"),
+      group("scout/2", "The Force-a-Nature", "primary"),
+      group("scout/3", "The Shortstop", "primary"),
+      group("scout/4", "TF_WEAPON_BAT", "melee"),
+      group("scout/5", "TF_WEAPON_SPELLBOOK", "action"),
+      group("scout/6", "TF_WEAPON_SCATTERGUN", "primary", { inspect: true }),
+      group("scout/7", "TF_WEAPON_BAT", "melee", { inspect: true }),
+    ],
+  };
+  const layout = viewmodelClassLayout(scout, "scout");
+  const primary = layout.slots[0].rows;
+
+  it("lays a class out as slots, extras and one inspect line", () => {
+    expect(layout.slots.map((slot) => [slot.id, slot.rows.length])).toEqual([
+      ["primary", 3],
+      ["melee", 1],
+    ]);
+    expect(layout.other.map((row) => row.id)).toEqual(["scout/5"]);
+    expect(layout.inspect.map((row) => row.id)).toEqual(["scout/6", "scout/7"]);
+  });
+
+  it("reads a slot from most of its weapons and moves only the weapons that follow it", () => {
+    expect(viewmodelSlotChoice({}, primary)).toBe("shown");
+    let choices = viewmodelWithSlot({}, primary, "full");
+    expect(choices).toEqual({ "scout/1": "full", "scout/2": "full", "scout/3": "full" });
+    choices = viewmodelWithRows(choices, [primary[2]], "shown");
+    expect(viewmodelSlotChoice(choices, primary)).toBe("full");
+    expect(viewmodelExceptions(choices, layout).map((row) => row.id)).toEqual(["scout/3"]);
+    // The Shortstop set on its own stays shown when Primary changes.
+    choices = viewmodelWithSlot(choices, primary, "weapon");
+    expect(choices).toEqual({ "scout/1": "weapon", "scout/2": "weapon" });
+    // A tie goes to the stock weapon.
+    expect(viewmodelSlotChoice({ "scout/1": "full" }, primary.slice(0, 2))).toBe("full");
+  });
+
+  it("treats inspect as one shown or hidden line and summarizes each class", () => {
+    expect(viewmodelInspectChoice({}, layout.inspect)).toBe("shown");
+    expect(viewmodelInspectChoice({ "scout/6": "full" }, layout.inspect)).toBe("mixed");
+    const choices = viewmodelWithRows(
+      viewmodelWithSlot({}, primary, "full"),
+      layout.inspect,
+      "full",
+    );
+    expect(viewmodelInspectChoice(choices, layout.inspect)).toBe("full");
+    expect(viewmodelClassSummary({}, layout)).toBeNull();
+    expect(viewmodelClassSummary(viewmodelWithRows(choices, [primary[2]], "shown"), layout)).toBe(
+      "Primary hidden, Inspect hidden, Shortstop shown",
+    );
   });
 });

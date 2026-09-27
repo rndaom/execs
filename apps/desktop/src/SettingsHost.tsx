@@ -87,6 +87,7 @@ export function SettingsHost({
   onBusyChange,
   onWriteBusyChange,
   onPendingChange,
+  onSettledChange,
   onRecoveryChange,
   onError,
   onNavigate,
@@ -113,6 +114,8 @@ export function SettingsHost({
   onBusyChange: (busy: boolean) => void;
   onWriteBusyChange?: (busy: boolean) => void;
   onPendingChange?: (pending: boolean) => void;
+  /** True once the selected profile's settings have loaded or failed to load. */
+  onSettledChange?: (settled: boolean) => void;
   onRecoveryChange?: (recovery: boolean) => void;
   onError: SetOperationError;
   onNavigate?: (tab: SettingsTab) => void;
@@ -243,6 +246,11 @@ export function SettingsHost({
   // Part of every pane's draft key: switching profiles must discard the drafts
   // on screen, even when the two profiles hold identical content.
   const profileId = detail?.id ?? null;
+  // Whether the workspace shows a pane rather than a whole-surface wait.
+  const settled = !(identityPending && !shownLoadError) && !(!profileId && loading);
+  useEffect(() => {
+    onSettledChange?.(settled);
+  }, [settled, onSettledChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Profile changes invalidate guidance from the previous import attempt.
   useEffect(() => setModsHudImportRequired(null), [profileId]);
   const hud = useHudResources(
@@ -537,7 +545,7 @@ export function SettingsHost({
   async function runWrite(
     // biome-ignore lint/suspicious/noConfusingVoidType: Ordinary write callbacks return void; null explicitly means a cancelled picker.
     work: () => Promise<void | null>,
-    copy?: { success?: string; failure?: string; source?: string },
+    copy?: { success?: string; failure?: string; source?: string; pending?: string },
     options?: {
       picker?: boolean;
       quiet?: boolean;
@@ -557,7 +565,7 @@ export function SettingsHost({
     // Picker commands include the native dialog. They must not say Saving
     // while the player is still choosing, or complete when no file was chosen.
     let started = !options?.picker && !options?.quiet;
-    if (started) toast.startSave(copy?.source);
+    if (started) toast.startSave(copy?.source, copy?.pending);
     try {
       const applied = await settingsBusyQueue.run(async () => {
         if (
@@ -569,7 +577,7 @@ export function SettingsHost({
         }
         if ((await work()) === null) return false;
         if (!started && !options?.quiet) {
-          toast.startSave(copy?.source);
+          toast.startSave(copy?.source, copy?.pending);
           started = true;
         }
         await reload();
@@ -784,7 +792,7 @@ export function SettingsHost({
     function write(
       // biome-ignore lint/suspicious/noConfusingVoidType: null preserves native picker cancellation through the pane wrapper.
       work: () => Promise<void | null>,
-      copy?: { success?: string; failure?: string },
+      copy?: { success?: string; failure?: string; pending?: string },
       options?: {
         picker?: boolean;
         quiet?: boolean;
@@ -928,7 +936,11 @@ export function SettingsHost({
                 await api.installHud(id);
                 await hud.reloadLocal();
               },
-              { success: "HUD installed", failure: "Could not install" },
+              {
+                success: "HUD installed",
+                failure: "Could not install",
+                pending: "Installing HUD…",
+              },
             );
           }}
           onReturnToStock={() =>
@@ -937,18 +949,22 @@ export function SettingsHost({
                 await api.returnToStockHud();
                 await hud.reloadLocal();
               },
-              { success: "Stock HUD restored", failure: "Could not remove the HUD" },
+              {
+                success: "Stock HUD restored",
+                failure: "Could not remove the HUD",
+                pending: "Removing HUD…",
+              },
             )
           }
-          onUpdate={() => {
-            void write(
+          onUpdate={() =>
+            write(
               async () => {
                 await api.updateHud();
                 await hud.reloadLocal();
               },
-              { success: "HUD updated", failure: "Could not update" },
-            );
-          }}
+              { success: "HUD updated", failure: "Could not update", pending: "Updating HUD…" },
+            )
+          }
           onMatch={(id) => {
             void write(
               async () => {
@@ -1184,7 +1200,7 @@ export function SettingsHost({
                   await refreshModsStatus().catch(() => {});
                 }
               },
-              { success: "Mods applied", failure: "Could not apply" },
+              { success: "Mods applied", failure: "Could not apply", pending: "Applying mods…" },
             );
           }}
           onToggleBypass={(enabled) => {
@@ -1310,7 +1326,7 @@ export function SettingsHost({
                 if ((await api.importModArchive()) === null) return null;
                 await refreshModsStatus().catch(() => {});
               },
-              { success: "Mod imported", failure: "Could not import" },
+              { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
               { picker: true },
             );
           }}
@@ -1321,7 +1337,7 @@ export function SettingsHost({
                 if ((await api.importModFolder()) === null) return null;
                 await refreshModsStatus().catch(() => {});
               },
-              { success: "Mod imported", failure: "Could not import" },
+              { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
               { picker: true },
             );
           }}
@@ -1332,7 +1348,7 @@ export function SettingsHost({
                 // Removing a pack can take its particle sources with it.
                 await refreshModsStatus().catch(() => {});
               },
-              { success: "Mod removed", failure: "Could not remove" },
+              { success: "Mod removed", failure: "Could not remove", pending: "Removing mod…" },
             );
           }}
           // Awaited by the card, so "Installing…" lasts exactly as long as the
@@ -1345,7 +1361,11 @@ export function SettingsHost({
                 await api.installGameBananaMod(id, fileId);
                 await refreshModsStatus().catch(() => {});
               },
-              { success: "Mod installed", failure: "Could not install" },
+              {
+                success: "Mod installed",
+                failure: "Could not install",
+                pending: "Installing mod…",
+              },
               {
                 onHandledFailure: (reason) => {
                   handled = reason;

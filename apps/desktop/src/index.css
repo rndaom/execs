@@ -248,8 +248,10 @@ a:focus-visible,
 
 @layer components {
   /* ---- Motion -----------------------------------------------------------
-     Finite local transitions only. No entrance waits, looping progress,
-     background animation, permanent will-change or decorative GPU work. */
+     Finite local transitions only: no looping progress beyond a spinner
+     during real work, background animation, permanent will-change or
+     decorative GPU work. Screens enter in order (lib/entrance.ts), and a real
+     result may hold a short beat on screen; reduced motion removes both. */
 
   .enter-fade {
     animation: enter-fade var(--motion) ease backwards;
@@ -2094,7 +2096,12 @@ a:focus-visible,
 
 @layer components {
   /* A whole-surface wait: the emblem over one line of status, centred in the
-     space the content will take. */
+     space the content will take. It fades in after a short delay, so a read
+     that finishes quickly never flashes a spinner. */
+  .loading-state.enter-fade {
+    animation: enter-fade 240ms ease 160ms backwards;
+  }
+
   .loading-state {
     display: flex;
     min-height: min(56vh, 460px);
@@ -2365,4 +2372,65 @@ a:focus-visible,
   .dot-backdrop > .dot-backdrop-clearing {
     image-rendering: pixelated;
   }
+}
+
+@layer components {
+  /* The execs wordmark, sized in em so every copy has the same shape. */
+  .wordmark {
+    display: inline-flex;
+    margin: 0;
+    align-items: center;
+    gap: 0.444em;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    white-space: nowrap;
+    color: var(--color-ink);
+  }
+
+  .wordmark-dot {
+    width: 0.556em;
+    height: 0.556em;
+    flex: none;
+    border-radius: var(--radius-pill);
+    background: var(--color-brand);
+  }
+
+  /* Onboarding progress: a finished step fills its line toward the next. */
+  .onboarding-step-fill {
+    position: absolute;
+    inset: 0;
+    background: var(--color-brand);
+    transform-origin: left center;
+    animation: inventory-arm 520ms var(--ease-out) backwards;
+  }
+
+  .onboarding-step-done {
+    animation: dot-arrive var(--motion-move) var(--ease-out) backwards;
+  }
+
+  /* Found installs arrive one after another (delays set inline). */
+  .finder-row {
+    animation:
+      enter-fade 280ms ease backwards,
+      menu-in 320ms var(--ease-out) backwards;
+  }
+
+  /* A confirmed install: the choice lands, then setup continues. */
+  .finder-confirmed {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink);
+    animation:
+      enter-fade var(--motion) ease backwards,
+      menu-in var(--motion-move) var(--ease-out) backwards;
+  }
+}
+
+/* The screen's own wordmark waits while the startup wordmark travels to it. */
+[data-wordmark-held] {
+  opacity: 0;
 }

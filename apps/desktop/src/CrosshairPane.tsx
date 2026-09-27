@@ -202,7 +202,10 @@ export function CrosshairPane({
   const [customScale, setCustomScale] = useState(
     record?.scale ?? controls.draft.cl_crosshair_scale,
   );
-  const pendingPack = dirty || mode !== activeMode || designerDirty;
+  // Custom edits count only while Custom is showing: In-game mode has no Build
+  // pack action, so a shape picked before switching back must not leave the
+  // pane waiting on a change the player cannot see or apply.
+  const pendingPack = mode !== activeMode || (mode === "custom" && (dirty || designerDirty));
   useExplicitDraft(pendingPack);
   function discardPack() {
     setDesignerOpen(false);

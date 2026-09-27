@@ -334,6 +334,15 @@ describe("0.1.4 crosshair workflow", () => {
     await act(async () => button?.click());
     expect(deactivate).toHaveBeenCalledTimes(1);
   });
+  it("does not leave an unbuilt custom shape pending after returning to the active in-game mode", async () => {
+    record = null;
+    await render();
+    await click('[data-testid="crosshair-mode-custom"]');
+    await click('[data-testid="crosshair-shape-dot"]');
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
+    await click('[data-testid="crosshair-mode-stock"]');
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), false);
+  });
   it("keeps unbuilt controls after a rejected build", async () => {
     build.mockRejectedValueOnce(new Error("disk refused"));
     await render();

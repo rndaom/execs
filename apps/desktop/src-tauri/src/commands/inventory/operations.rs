@@ -133,11 +133,12 @@ pub(super) fn eligibility_input(item: &InventoryItem) -> EligibilityInput<'_> {
     }
 }
 
+/// The reviewed backpack is unchanged when the account, capacity and every
+/// item's complete bytes match. Steam's cache version is not compared: it
+/// advances on each connection even when no item changed, and the operation
+/// helper rebinds to the version it reads just before sending.
 fn same_baseline(expected: &Snapshot, actual: &Snapshot) -> bool {
-    if expected.steam_id != actual.steam_id
-        || expected.capacity != actual.capacity
-        || expected.cache_version != actual.cache_version
-    {
+    if expected.steam_id != actual.steam_id || expected.capacity != actual.capacity {
         return false;
     }
     let mut expected = expected.items.clone();
@@ -635,17 +636,19 @@ mod tests {
     }
 
     #[test]
-    fn baseline_binds_account_version_and_complete_item_bytes() {
+    fn baseline_binds_account_capacity_and_complete_item_bytes() {
         let baseline = snapshot();
         let mut changed = baseline.clone();
         changed.persona_name = Some("New name".into());
         changed.items.reverse();
+        // A new Steam connection advances the cache version without item changes.
+        changed.cache_version = Some("42".into());
         assert!(same_baseline(&baseline, &changed));
         for change in 0..4 {
             let mut changed = baseline.clone();
             match change {
                 0 => changed.steam_id.push('1'),
-                1 => changed.cache_version = Some("42".into()),
+                1 => changed.capacity += 1,
                 2 => changed.items[0].raw_item.push(0),
                 _ => changed.items[0].position = 3,
             }

@@ -75,6 +75,7 @@ export function ViewmodelPane({
       <ViewmodelBuilder
         key={profileId ?? "no-profile"}
         active={active}
+        profileId={profileId}
         profilePreload={profilePreload}
         savedRecipe={locallyBuilt ? record?.buildRecipe : undefined}
         locked={locked}
