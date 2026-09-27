@@ -175,6 +175,7 @@ The main window enables native page zoom with Ctrl + Plus / Minus and Ctrl + 0. 
 - Linux AppImages use the host Wayland libraries with the host EGL drivers. The before-bundle hook installs a project-local output plugin wrapper that removes only bundled Wayland libraries after deployment and before packaging/signing; keep the artifact check in installer smoke.
 
 - Viewmodel compiler launches use Windows `CREATE_NO_WINDOW`; redirecting stdout/stderr alone still flashes a console for each class.
+- Release builds enforce `tauri.conf.json`'s CSP; `tauri dev` and the browser preview do not (`devCsp` is null). Tauri adds a nonce to every inline `<style>` in `index.html`, and a nonce makes browsers ignore `'unsafe-inline'`, which blocks the styles CodeMirror injects at runtime and leaves the Files editor unstyled. Keep startup styles in the linked `src/boot.css`; `lib/boot-ui.test.ts` refuses an inline `<style>`.
 
 - Launching the real game for a test must not pass video flags (`-w`, `-h`, `-windowed`, `-noborder`, `-fullscreen`, `-dxlevel`): Source persists them into `HKCU\Software\Valve\Source\tf\Settings`. `-condebug` is fine; `-console` persists `con_enable`.
 - An isolated `-game` directory does not isolate Steam Cloud: retail TF2 can still overwrite the account's `440/remote/cfg/config.cfg`. Do not use it as a player-state sandbox. Keep native verification in disposable core fixtures unless Cloud isolation is independently established; any approved real-game test must retain exact original bytes as well as hashes before launch.
