@@ -1658,15 +1658,21 @@ a:focus-visible,
     animation: enter-fade 900ms ease backwards;
   }
 
-  /* First-run screens: the page's own content sits above the field. */
-  .onboard-main > :not(.dot-backdrop) {
-    position: relative;
-    z-index: 1;
+  .dot-backdrop > canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
   }
 
-  .dot-backdrop > canvas {
-    display: block;
+  .dot-backdrop > .dot-backdrop-field {
     width: 100%;
     height: 100%;
+  }
+
+  /* One pixel per dot, placed and sized with the field in code. Scaling it up
+     without smoothing keeps every cleared cell solid page colour. */
+  .dot-backdrop > .dot-backdrop-clearing {
+    image-rendering: pixelated;
   }
 }

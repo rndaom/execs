@@ -738,52 +738,57 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             }
           />
 
-          <main
-            className={`relative flex min-h-0 w-full flex-1 flex-col ${
-              readyShellOpen
-                ? "items-stretch overflow-hidden"
-                : "onboard-main mx-auto items-center justify-start overflow-y-auto px-10 py-14"
-            }`}
-          >
-            {readyShellOpen ? null : <DotBackdrop />}
-            {appSettingsOpen && !settingsOpen ? (
-              <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
-            ) : install.screen === "ready" && install.confirmed ? (
-              <ClassIconProvider api={api} installPath={install.confirmed.path}>
-                {renderReady(install.confirmed.path)}
-              </ClassIconProvider>
-            ) : (
-              <FinderPanel
-                scanning={install.scanning}
-                installs={install.installs}
-                selected={install.selected}
-                error={error}
-                onDismissError={dismissError}
-                canConfirm={confirmEnabled(install.selected, install.scanning || busy)}
-                busy={busy}
-                onSelect={install.select}
-                onBrowse={() => void install.browse()}
-                onConfirm={() => void install.confirm()}
-              />
-            )}
+          {/* Pages without the sidebar keep the dot field anchored to the
+              window while their content scrolls; the sidebar's workspace
+              holds its own. */}
+          <div className="relative flex min-h-0 w-full flex-1 flex-col">
+            {sidebarShown ? null : <DotBackdrop />}
+            <main
+              className={`relative flex min-h-0 w-full flex-1 flex-col ${
+                readyShellOpen
+                  ? "items-stretch overflow-hidden"
+                  : "mx-auto items-center justify-start overflow-y-auto px-10 py-14"
+              }`}
+            >
+              {appSettingsOpen && !settingsOpen ? (
+                <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
+              ) : install.screen === "ready" && install.confirmed ? (
+                <ClassIconProvider api={api} installPath={install.confirmed.path}>
+                  {renderReady(install.confirmed.path)}
+                </ClassIconProvider>
+              ) : (
+                <FinderPanel
+                  scanning={install.scanning}
+                  installs={install.installs}
+                  selected={install.selected}
+                  error={error}
+                  onDismissError={dismissError}
+                  canConfirm={confirmEnabled(install.selected, install.scanning || busy)}
+                  busy={busy}
+                  onSelect={install.select}
+                  onBrowse={() => void install.browse()}
+                  onConfirm={() => void install.confirm()}
+                />
+              )}
 
-            {/* The ready shell has App settings in its sidebar, which holds the
-                version, update check, support and notices. First-run screens
-                keep this footer as their way there. */}
-            {sidebarShown ? null : (
-              <AppFooter
-                api={api}
-                update={{
-                  ...update,
-                  install: async () => {
-                    filesExit.request(update.install);
-                  },
-                }}
-                pinned={readyShellOpen}
-                onSettings={settingsOpen ? undefined : openAppSettings}
-              />
-            )}
-          </main>
+              {/* The ready shell has App settings in its sidebar, which holds the
+                  version, update check, support and notices. First-run screens
+                  keep this footer as their way there. */}
+              {sidebarShown ? null : (
+                <AppFooter
+                  api={api}
+                  update={{
+                    ...update,
+                    install: async () => {
+                      filesExit.request(update.install);
+                    },
+                  }}
+                  pinned={readyShellOpen}
+                  onSettings={settingsOpen ? undefined : openAppSettings}
+                />
+              )}
+            </main>
+          </div>
         </div>
       </ToastProvider>
     </AppStatusProvider>

@@ -2,7 +2,7 @@
  * The TF2 emblem as geometry: a disc cut into four quadrants by a slightly
  * tilted cross around a round centre. Units are emblem units with the centre
  * at the origin and an outer radius of 11. The spinner draws it as a path;
- * the Home dot field samples it point by point.
+ * the backdrop's dot field samples it point by point.
  */
 export const EMBLEM_OUTER = 11;
 export const EMBLEM_INNER = 4.5;
